@@ -1,5 +1,5 @@
 -- HON / Supabase durable outbox worker role
--- Run after HON migrations through 0021 have completed. Replace the placeholder
+-- Run after HON migrations through 0029 have completed. Replace the placeholder
 -- with a freshly generated base64url password; do not save it in Git.
 ROLLBACK;
 BEGIN;
@@ -42,15 +42,17 @@ GRANT USAGE ON SCHEMA hon TO hon_outbox_worker;
 ALTER ROLE hon_outbox_worker SET search_path = hon, pg_catalog;
 
 -- No direct HON table, sequence, schema, role, migration, or extension access.
--- The worker has only the two reviewed security-definer delivery functions.
+-- The worker receives a leased immutable envelope only through fixed functions.
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA hon FROM hon_outbox_worker;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA hon FROM hon_outbox_worker;
 REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA hon FROM hon_outbox_worker;
 REVOKE USAGE ON TYPE hon.outbox_delivery_outcome FROM PUBLIC;
 GRANT USAGE ON TYPE hon.outbox_delivery_outcome TO hon_outbox_worker;
 REVOKE EXECUTE ON FUNCTION hon.claim_outbox_delivery_batch(integer, integer) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION hon.record_outbox_delivery_result(uuid, uuid, hon.outbox_delivery_outcome, jsonb, integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION hon.reconcile_expired_outbox_leases(integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION hon.record_outbox_delivery_result_v2(uuid, uuid, hon.outbox_delivery_outcome, jsonb, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.claim_outbox_delivery_batch(integer, integer) TO hon_outbox_worker;
-GRANT EXECUTE ON FUNCTION hon.record_outbox_delivery_result(uuid, uuid, hon.outbox_delivery_outcome, jsonb, integer) TO hon_outbox_worker;
+GRANT EXECUTE ON FUNCTION hon.reconcile_expired_outbox_leases(integer) TO hon_outbox_worker;
+GRANT EXECUTE ON FUNCTION hon.record_outbox_delivery_result_v2(uuid, uuid, hon.outbox_delivery_outcome, jsonb, integer) TO hon_outbox_worker;
 
 COMMIT;

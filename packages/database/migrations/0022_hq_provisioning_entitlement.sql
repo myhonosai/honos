@@ -2,7 +2,14 @@ BEGIN;
 
 -- The original bootstrap signature is retired from the runtime role. The new
 -- signature makes an explicit commercial tier part of the atomic tenant setup.
-REVOKE EXECUTE ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, text, text, uuid, uuid) FROM hon_runtime;
+-- A clean migration run may precede provisioning the restricted runtime role.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    REVOKE EXECUTE ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, text, text, uuid, uuid) FROM hon_runtime;
+  END IF;
+END;
+$$;
 
 CREATE FUNCTION hon.provision_school_from_hq(
   p_external_subject text,

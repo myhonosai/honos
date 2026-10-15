@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Get, Headers, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { CommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
@@ -12,13 +12,13 @@ import { ActionEngineService } from './action-engine.service.js';
 export class ActionReviewController {
   constructor(private readonly database: RuntimeDatabaseService, private readonly actions: ActionEngineService) {}
 
-  private async reviewContext(organizationId: string, schoolId: string, request: HonRequest): Promise<CommandContext> {
+  private async reviewContext(organizationId: string, schoolId: string, request: HonRequest, idempotencyKey?: string): Promise<CommandContext> {
     const identity = request.honIdentity;
     if (!identity) throw new ForbiddenException('HON identity context is missing.');
     const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'action.approve');
     if (!scope || scope.organizationId !== organizationId) throw new ForbiddenException('HON Action Engine review is not authorized for this school.');
     const requestId = randomUUID();
-    return { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey: `review:${requestId}`, source: 'HUMAN_UI' };
+    return { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey: idempotencyKey ?? `review:${requestId}`, source: 'HUMAN_UI' };
   }
 
   @Get(':actionRequestId')
@@ -38,9 +38,14 @@ export class ActionReviewController {
     @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
     @Param('actionRequestId', new ParseUUIDPipe()) actionRequestId: string,
     @Body() input: ActionDecisionDto,
+    @Headers('idempotency-key') idempotencyHeader: string | undefined,
     @Req() request: HonRequest,
   ) {
-    const context = await this.reviewContext(organizationId, schoolId, request);
+    const idempotencyKey = idempotencyHeader?.trim();
+    if (!idempotencyKey || idempotencyKey.length > 200) {
+      throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REQUIRED', detail: 'Action review requires an Idempotency-Key header of at most 200 characters.' });
+    }
+    const context = await this.reviewContext(organizationId, schoolId, request, idempotencyKey);
     const decision = input.reason === undefined
       ? { actionRequestId, decision: input.decision }
       : { actionRequestId, decision: input.decision, reason: input.reason };

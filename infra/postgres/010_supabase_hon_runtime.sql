@@ -82,10 +82,12 @@ REVOKE USAGE ON TYPE
   hon.ai_modality,
   hon.plan_tier
 FROM hon_runtime, PUBLIC;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
-  hon.organizations,
+-- The runtime role does not administer tenant topology, commercial tier,
+-- Action policy, identity, IAM, or parent-access grants. Existing/future
+-- mutations in those areas use fixed SECURITY DEFINER procedures or a later
+-- reviewed domain command boundary.
+GRANT SELECT ON TABLE
   hon.organization_entitlements,
-  hon.schools,
   hon.people,
   hon.families,
   hon.family_members,
@@ -93,24 +95,37 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   hon.crm_pipelines,
   hon.crm_pipeline_stages,
   hon.crm_leads,
-  hon.crm_activities,
   hon.billing_accounts,
   hon.memberships,
-  hon.invoices,
-  hon.payment_attempts,
+  hon.membership_payment_schedules,
   hon.action_policies,
   hon.action_requests,
-  hon.action_approvals,
-  hon.work_items,
-  hon.ai_usage_ledger
+  hon.idempotency_records,
+  hon.principal_interface_preferences
 TO hon_runtime;
--- Audit evidence and the transactional outbox are append-only to normal runtime
--- code. Dispatch/update work will use a separately reviewed worker boundary.
-GRANT SELECT, INSERT ON TABLE hon.audit_events, hon.outbox_events TO hon_runtime;
-GRANT SELECT, INSERT, UPDATE ON TABLE hon.idempotency_records TO hon_runtime;
-GRANT SELECT, INSERT, UPDATE ON TABLE hon.principal_interface_preferences TO hon_runtime;
-GRANT SELECT, INSERT, UPDATE ON TABLE hon.membership_payment_schedules TO hon_runtime;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA hon TO hon_runtime;
+GRANT INSERT ON TABLE
+  hon.people,
+  hon.families,
+  hon.family_members,
+  hon.student_profiles,
+  hon.crm_pipelines,
+  hon.crm_pipeline_stages,
+  hon.crm_leads,
+  hon.billing_accounts,
+  hon.memberships,
+  hon.membership_payment_schedules,
+  hon.action_requests,
+  hon.action_approvals,
+  hon.audit_events,
+  hon.outbox_events,
+  hon.idempotency_records,
+  hon.principal_interface_preferences
+TO hon_runtime;
+GRANT UPDATE ON TABLE
+  hon.action_requests,
+  hon.idempotency_records,
+  hon.principal_interface_preferences
+TO hon_runtime;
 GRANT USAGE ON TYPE
   hon.principal_type,
   hon.membership_status,
@@ -138,6 +153,7 @@ REVOKE ALL ON FUNCTION hon.require_tenant_context() FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_authorized_scope(text, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_hq_operator_scope(text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_parent_family_scope(text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.principal_has_school_permission(uuid, uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, hon.plan_tier, text, text, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.current_organization_id() TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.current_school_id() TO hon_runtime;
@@ -145,6 +161,7 @@ GRANT EXECUTE ON FUNCTION hon.require_tenant_context() TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_authorized_scope(text, uuid, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_hq_operator_scope(text, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_parent_family_scope(text, uuid) TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.principal_has_school_permission(uuid, uuid, uuid, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, hon.plan_tier, text, text, uuid, uuid) TO hon_runtime;
 
 -- Safe future-migration defaults for objects created by the privileged `postgres`

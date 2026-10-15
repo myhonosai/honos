@@ -126,6 +126,18 @@ function actionFailure(error: unknown): never {
 export class ActionEngineService {
   constructor(private readonly database: RuntimeDatabaseService) {}
 
+  private async hasLivePermission(
+    client: import('pg').PoolClient,
+    context: CommandContext,
+    permissionCode: string,
+  ): Promise<boolean> {
+    const result = await client.query<{ allowed: boolean }>(
+      `SELECT hon.principal_has_school_permission($1::uuid, $2::uuid, $3::uuid, $4) AS allowed`,
+      [context.principalId, context.organizationId, context.schoolId, permissionCode],
+    );
+    return result.rows[0]?.allowed === true;
+  }
+
   /** Returns the exact immutable proposal a separately authorized human must review. */
   async getForReview(context: CommandContext, actionRequestId: string): Promise<ActionRequestReview> {
     return this.database.withTenantTransaction(context, async (client) => {
@@ -159,6 +171,9 @@ export class ActionEngineService {
 
     const normalizedHash = payloadHash(input.normalizedPayload);
     return this.database.withTenantTransaction(context, async (client) => {
+      if (!await this.hasLivePermission(client, context, registeredAction.requiredPermission)) {
+        throw new ForbiddenException({ code: 'PERMISSION_DENIED', detail: 'The registered action permission is no longer active in this school.' });
+      }
       const entitlementResult = await client.query<OrganizationEntitlementRow>(
         `SELECT tier::text AS tier
          FROM hon.organization_entitlements
@@ -343,6 +358,9 @@ export class ActionEngineService {
       if (!registeredAction || registeredAction.requiredPermission !== request.required_permission) {
         throw new ForbiddenException({ code: 'POLICY_BLOCKED', detail: 'HON cannot execute an unregistered or mismatched action proposal.' });
       }
+      if (!await this.hasLivePermission(client, context, registeredAction.requiredPermission)) {
+        throw new ForbiddenException({ code: 'PERMISSION_DENIED', detail: 'The action requestor no longer has this school permission.' });
+      }
       const entitlementResult = await client.query<OrganizationEntitlementRow>(
         `SELECT tier::text AS tier FROM hon.organization_entitlements
          WHERE organization_id=$1 AND status='ACTIVE' AND effective_from<=now() AND (effective_until IS NULL OR effective_until>now())`, [context.organizationId],
@@ -425,6 +443,39 @@ export class ActionEngineService {
     input: ActionApprovalInput,
   ): Promise<ActionApprovalSummary> {
     return this.database.withTenantTransaction(context, async (client) => {
+      const decisionFingerprint = payloadHash({
+        actionRequestId: input.actionRequestId,
+        decision: input.decision,
+        reason: input.reason ?? null,
+      });
+      const reservation = await client.query<{ id: string }>(
+        `INSERT INTO hon.idempotency_records (
+           organization_id, school_id, principal_id, idempotency_key, request_fingerprint, status, expires_at
+         ) VALUES ($1, $2, $3, $4, $5, 'IN_PROGRESS', now() + interval '24 hours')
+         ON CONFLICT (organization_id, school_id, principal_id, idempotency_key) DO NOTHING
+         RETURNING id`,
+        [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey, decisionFingerprint],
+      );
+      if (!reservation.rowCount) {
+        const existingResult = await client.query<{
+          request_fingerprint: string;
+          status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+          response_body: ActionApprovalSummary | null;
+        }>(
+          `SELECT request_fingerprint, status, response_body
+           FROM hon.idempotency_records
+           WHERE organization_id = $1 AND school_id = $2 AND principal_id = $3 AND idempotency_key = $4
+           FOR UPDATE`,
+          [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey],
+        );
+        const existing = existingResult.rows[0];
+        if (!existing) throw new Error('HON approval idempotency record unexpectedly missing after lock acquisition.');
+        if (existing.request_fingerprint !== decisionFingerprint) {
+          throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', detail: 'The idempotency key was already used for a different action decision.' });
+        }
+        if (existing.status === 'COMPLETED' && existing.response_body) return existing.response_body;
+        throw new ConflictException({ code: 'IDEMPOTENCY_IN_PROGRESS', detail: 'The matching action review is already being processed.' });
+      }
       const requestResult = await client.query<PendingActionRequestRow>(
         `SELECT id, requested_by_principal_id, action_code, payload_hash, policy_version, approval_expires_at, status
          FROM hon.action_requests
@@ -447,6 +498,7 @@ export class ActionEngineService {
         [context.organizationId, context.schoolId, request.action_code],
       );
       const activePolicy = policy.rows[0];
+      const reviewerHasPermission = await this.hasLivePermission(client, context, 'action.approve');
       try {
         validateApprovalBinding({
           actionRequestId: request.id,
@@ -462,7 +514,7 @@ export class ActionEngineService {
           normalizedPayloadHash: request.payload_hash,
           policyVersion: activePolicy?.policy_version ?? 0,
           now: new Date(),
-          reviewerHasPermission: true,
+          reviewerHasPermission,
         });
       } catch (error) {
         throw new ConflictException({ code: 'POLICY_BLOCKED', detail: error instanceof Error ? error.message : 'HON could not bind this approval safely.' });
@@ -502,7 +554,14 @@ export class ActionEngineService {
                    $5::uuid, $6::uuid, $7::jsonb)`,
         [randomUUID(), context.organizationId, context.schoolId, request.id, context.correlationId, context.requestId, JSON.stringify(eventPayload)],
       );
-      return { actionRequestId: request.id, status: result.status, actionCode: request.action_code, reviewedAt: result.updated_at.toISOString() };
+      const response = { actionRequestId: request.id, status: result.status, actionCode: request.action_code, reviewedAt: result.updated_at.toISOString() };
+      await client.query(
+        `UPDATE hon.idempotency_records
+         SET status = 'COMPLETED', response_status = 200, response_body = $5::jsonb
+         WHERE organization_id = $1 AND school_id = $2 AND principal_id = $3 AND idempotency_key = $4`,
+        [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey, JSON.stringify(response)],
+      );
+      return response;
     });
   }
 }
