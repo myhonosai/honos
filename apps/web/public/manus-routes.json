@@ -115,6 +115,14 @@
     {
       "path": "/parent/journey",
       "title": "HON | Family Student Journey"
+    },
+    {
+      "path": "/parent/testing",
+      "title": "HON | Family testing interest"
+    },
+    {
+      "path": "/staff/testing/registrations",
+      "title": "HON | Human testing registration reviews"
     }
   ]
 }

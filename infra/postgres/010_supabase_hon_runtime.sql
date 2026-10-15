@@ -201,6 +201,7 @@ GRANT USAGE ON TYPE
   hon.curriculum_lifecycle,
   hon.testing_event_status,
   hon.testing_candidate_result,
+  hon.testing_registration_interest_status,
   hon.promotion_decision_status,
   hon.schedule_item_status,
   -- Cast by the class-booking capacity decision and booking insert.
@@ -230,6 +231,11 @@ REVOKE ALL ON FUNCTION hon.resolve_authorized_scope(text, uuid, text) FROM PUBLI
 REVOKE ALL ON FUNCTION hon.resolve_hq_operator_scope(text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_parent_family_scope(text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_parent_journey_scopes(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.resolve_testing_registration_review_scopes(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_staff_testing_registrations(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.mutate_staff_testing_registration_decision(text,uuid,jsonb,text,uuid,uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.principal_has_school_permission(uuid, uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, hon.plan_tier, text, text, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.current_organization_id() TO hon_runtime;
@@ -239,6 +245,11 @@ GRANT EXECUTE ON FUNCTION hon.resolve_authorized_scope(text, uuid, text) TO hon_
 GRANT EXECUTE ON FUNCTION hon.resolve_hq_operator_scope(text, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_parent_family_scope(text, uuid) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_parent_journey_scopes(text) TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.resolve_testing_registration_review_scopes(text) TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.read_staff_testing_registrations(text) TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.mutate_staff_testing_registration_decision(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.principal_has_school_permission(uuid, uuid, uuid, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, hon.plan_tier, text, text, uuid, uuid) TO hon_runtime;
 

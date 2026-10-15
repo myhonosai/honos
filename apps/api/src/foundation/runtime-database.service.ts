@@ -275,6 +275,15 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows;
   }
 
+  async resolveTestingRegistrationReviewScopes(externalSubject: string): Promise<ResolvedPrincipalScope[]> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<ResolvedPrincipalScope>(
+      `SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId"
+       FROM hon.resolve_testing_registration_review_scopes($1)`, [externalSubject],
+    );
+    return result.rows;
+  }
+
   async provisionSchoolFromHq(command: HqSchoolProvisioningCommand): Promise<HqSchoolProvisioningResult> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<HqSchoolProvisioningResult>(

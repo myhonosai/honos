@@ -111,6 +111,8 @@ const expectedRlsTables = [
   'student_profiles',
   'testing_candidates',
   'testing_events',
+  'testing_registration_command_receipts',
+  'testing_registration_interests',
   'promotion_decisions',
   'work_items',
 ].sort();

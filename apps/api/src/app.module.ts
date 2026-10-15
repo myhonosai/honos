@@ -75,6 +75,9 @@ import { TestingCandidateGradeController } from './testing/testing-candidate-gra
 import { TestingCandidateService } from './testing/testing-candidate.service.js';
 import { PromotionDecisionController } from './testing/promotion-decision.controller.js';
 import { PromotionDecisionService } from './testing/promotion-decision.service.js';
+import { ParentTestingRegistrationController, StaffTestingRegistrationController } from './testing/testing-registration.controller.js';
+import { TestingRegistrationService } from './testing/testing-registration.service.js';
+import { TestingRegistrationHumanUiGuard } from './testing/testing-registration-human-ui.guard.js';
 import { ProgramController } from './programs/program.controller.js';
 import { ProgramService } from './programs/program.service.js';
 import { ClassSessionController } from './schedule/class-session.controller.js';
@@ -188,6 +191,8 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     TestingCandidateController,
     TestingCandidateGradeController,
     PromotionDecisionController,
+    ParentTestingRegistrationController,
+    StaffTestingRegistrationController,
     InterfaceThemeController,
     MembershipController,
     BillingAccountController,
@@ -249,6 +254,8 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,
+    TestingRegistrationService,
+    TestingRegistrationHumanUiGuard,
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
