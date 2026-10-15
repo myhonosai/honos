@@ -65,6 +65,18 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'UPDATE') AS can_update_ai_usage_ledger,
   has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'DELETE') AS can_delete_ai_usage_ledger;
 
+-- Operational reporting has no revenue calculation. It reads only aggregate
+-- invoice status and payment-attempt state, so each billing input is SELECT-only.
+SELECT
+  has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS can_read_invoices,
+  has_table_privilege('hon_runtime', 'hon.invoices', 'INSERT') AS can_insert_invoices,
+  has_table_privilege('hon_runtime', 'hon.invoices', 'UPDATE') AS can_update_invoices,
+  has_table_privilege('hon_runtime', 'hon.invoices', 'DELETE') AS can_delete_invoices,
+  has_table_privilege('hon_runtime', 'hon.payment_attempts', 'SELECT') AS can_read_payment_attempts,
+  has_table_privilege('hon_runtime', 'hon.payment_attempts', 'INSERT') AS can_insert_payment_attempts,
+  has_table_privilege('hon_runtime', 'hon.payment_attempts', 'UPDATE') AS can_update_payment_attempts,
+  has_table_privilege('hon_runtime', 'hon.payment_attempts', 'DELETE') AS can_delete_payment_attempts;
+
 -- 4) RLS is enabled and forced on every operational table.
 SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
 FROM pg_class c

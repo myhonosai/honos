@@ -101,6 +101,10 @@ GRANT SELECT ON TABLE
   hon.billing_accounts,
   hon.memberships,
   hon.membership_payment_schedules,
+  -- Operations reporting needs aggregate-only invoice/payment-attempt counts;
+  -- do not grant any billing mutation privilege to the runtime role.
+  hon.invoices,
+  hon.payment_attempts,
   hon.action_policies,
   hon.action_requests,
   -- AI economics is a read-only aggregate projection; never grant ledger writes.

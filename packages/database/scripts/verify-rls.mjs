@@ -130,13 +130,35 @@ try {
       || runtimeLedgerPrivileges.can_delete) {
       throw new Error('hon_runtime AI usage ledger privileges are not the required SELECT-only minimum.');
     }
+
+    const runtimeOperationsReportingPrivileges = (await client.query(`
+      SELECT
+        has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS invoices_can_select,
+        has_table_privilege('hon_runtime', 'hon.invoices', 'INSERT') AS invoices_can_insert,
+        has_table_privilege('hon_runtime', 'hon.invoices', 'UPDATE') AS invoices_can_update,
+        has_table_privilege('hon_runtime', 'hon.invoices', 'DELETE') AS invoices_can_delete,
+        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'SELECT') AS payments_can_select,
+        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'INSERT') AS payments_can_insert,
+        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'UPDATE') AS payments_can_update,
+        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'DELETE') AS payments_can_delete
+    `)).rows[0];
+    if (!runtimeOperationsReportingPrivileges?.invoices_can_select
+      || runtimeOperationsReportingPrivileges.invoices_can_insert
+      || runtimeOperationsReportingPrivileges.invoices_can_update
+      || runtimeOperationsReportingPrivileges.invoices_can_delete
+      || !runtimeOperationsReportingPrivileges.payments_can_select
+      || runtimeOperationsReportingPrivileges.payments_can_insert
+      || runtimeOperationsReportingPrivileges.payments_can_update
+      || runtimeOperationsReportingPrivileges.payments_can_delete) {
+      throw new Error('hon_runtime operational reporting billing privileges are not the required SELECT-only minimum.');
+    }
   }
 
   const context = await client.query("SELECT hon.current_organization_id() AS organization_id, hon.current_school_id() AS school_id");
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, SELECT-only AI-ledger runtime access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
 } finally {
   await client.end();
 }
