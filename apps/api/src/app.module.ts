@@ -51,6 +51,8 @@ import { ClassBookingController } from './schedule/class-booking.controller.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
 import { KnowledgeArticleController } from './knowledge/knowledge-article.controller.js';
 import { KnowledgeArticleService } from './knowledge/knowledge-article.service.js';
+import { ParentFamilyKnowledgeController } from './knowledge/parent-family-knowledge.controller.js';
+import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledge.service.js';
 
 @Module({
   controllers: [
@@ -71,6 +73,7 @@ import { KnowledgeArticleService } from './knowledge/knowledge-article.service.j
     AttendanceController,
     ClassBookingController,
     KnowledgeArticleController,
+    ParentFamilyKnowledgeController,
     TestingEventController,
     TestingCandidateController,
     TestingCandidateGradeController,
@@ -100,6 +103,7 @@ import { KnowledgeArticleService } from './knowledge/knowledge-article.service.j
     AttendanceService,
     ClassBookingService,
     KnowledgeArticleService,
+    ParentFamilyKnowledgeService,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,

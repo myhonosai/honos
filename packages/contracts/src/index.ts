@@ -523,6 +523,11 @@ export type {
   ParentFamilyScheduleBooking,
 } from './parent-family-schedule.js';
 
+export type {
+  ParentFamilyKnowledge,
+  ParentFamilyKnowledgeArticle,
+} from './parent-family-knowledge.js';
+
 export * from './knowledge-articles.js';
 
 export interface RegisteredAction {
