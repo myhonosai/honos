@@ -34,6 +34,8 @@ import { TestingEventController } from './testing/testing-event.controller.js';
 import { TestingEventService } from './testing/testing-event.service.js';
 import { ProgramController } from './programs/program.controller.js';
 import { ProgramService } from './programs/program.service.js';
+import { ClassSessionController } from './schedule/class-session.controller.js';
+import { ClassSessionService } from './schedule/class-session.service.js';
 
 @Module({
   controllers: [
@@ -48,6 +50,7 @@ import { ProgramService } from './programs/program.service.js';
     PipelineController,
     CurriculumController,
     ProgramController,
+    ClassSessionController,
     TestingEventController,
     InterfaceThemeController,
     MembershipController,
@@ -68,6 +71,7 @@ import { ProgramService } from './programs/program.service.js';
     CurriculumService,
     CurriculumRankService,
     ProgramService,
+    ClassSessionService,
     TestingEventService,
     ActionEngineService,
     InterfaceThemeService,

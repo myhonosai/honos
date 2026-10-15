@@ -265,6 +265,37 @@ export interface ProgramSummary {
   createdAt: string;
 }
 
+export const CLASS_SESSION_BOOKING_POLICIES = [
+  'WALK_IN',
+  'OPTIONAL_BOOKING',
+  'REQUIRED_BOOKING',
+] as const;
+export type ClassSessionBookingPolicy = (typeof CLASS_SESSION_BOOKING_POLICIES)[number];
+
+export interface CreateClassSessionInput {
+  programId: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: number;
+  bookingPolicy: ClassSessionBookingPolicy;
+  roomName?: string | undefined;
+}
+
+export interface ClassSessionSummary {
+  id: string;
+  programId: string;
+  name: string;
+  roomName?: string | undefined;
+  startsAt: string;
+  endsAt: string;
+  capacity: number;
+  bookingPolicy: ClassSessionBookingPolicy;
+  status: ScheduleItemStatus;
+  version: number;
+  createdAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;
