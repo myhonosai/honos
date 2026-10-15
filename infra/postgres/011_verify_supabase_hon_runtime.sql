@@ -49,6 +49,14 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.planned_absence_requests', 'DELETE') AS can_delete_planned_absence_requests,
   has_type_privilege('hon_runtime', 'hon.planned_absence_request_status', 'USAGE') AS can_use_planned_absence_status;
 
+-- Durable work-item commands need RLS-bound list/create/transition operations,
+-- never deletion or direct access to the principal directory.
+SELECT
+  has_table_privilege('hon_runtime', 'hon.work_items', 'SELECT') AS can_read_work_items,
+  has_table_privilege('hon_runtime', 'hon.work_items', 'INSERT') AS can_create_work_items,
+  has_table_privilege('hon_runtime', 'hon.work_items', 'UPDATE') AS can_transition_work_items,
+  has_table_privilege('hon_runtime', 'hon.work_items', 'DELETE') AS can_delete_work_items;
+
 -- 4) RLS is enabled and forced on every operational table.
 SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
 FROM pg_class c

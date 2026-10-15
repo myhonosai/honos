@@ -95,11 +95,20 @@ try {
   }
   if (appendOnlyPolicies.length !== 2) throw new Error('Append-only policies are missing for HON audit/outbox tables.');
 
+  const workItemPolicies = (await client.query(`
+    SELECT cmd
+    FROM pg_policies
+    WHERE schemaname = 'hon' AND tablename = 'work_items'
+  `)).rows.map((row) => row.cmd);
+  if (!workItemPolicies.includes('ALL')) {
+    throw new Error('Work-item tenant-isolation RLS policy is missing.');
+  }
+
   const context = await client.query("SELECT hon.current_organization_id() AS organization_id, hon.current_school_id() AS school_id");
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item tenant isolation, and cleared connection context.`);
 } finally {
   await client.end();
 }

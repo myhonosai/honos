@@ -57,6 +57,8 @@ import { KnowledgeArticleController } from './knowledge/knowledge-article.contro
 import { KnowledgeArticleService } from './knowledge/knowledge-article.service.js';
 import { ParentFamilyKnowledgeController } from './knowledge/parent-family-knowledge.controller.js';
 import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledge.service.js';
+import { WorkItemController } from './work-items/work-item.controller.js';
+import { WorkItemService } from './work-items/work-item.service.js';
 
 @Module({
   controllers: [
@@ -80,6 +82,7 @@ import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledg
     PlannedAbsenceReviewController,
     KnowledgeArticleController,
     ParentFamilyKnowledgeController,
+    WorkItemController,
     TestingEventController,
     TestingCandidateController,
     TestingCandidateGradeController,
@@ -112,6 +115,7 @@ import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledg
     PlannedAbsenceReviewService,
     KnowledgeArticleService,
     ParentFamilyKnowledgeService,
+    WorkItemService,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,

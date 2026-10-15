@@ -118,7 +118,8 @@ GRANT SELECT ON TABLE
   hon.class_session_instructors,
   hon.attendance_records,
   hon.knowledge_articles,
-  hon.planned_absence_requests
+  hon.planned_absence_requests,
+  hon.work_items
 TO hon_runtime;
 GRANT INSERT ON TABLE
   hon.people,
@@ -150,7 +151,8 @@ GRANT INSERT ON TABLE
   hon.class_session_instructors,
   hon.attendance_records,
   hon.knowledge_articles,
-  hon.planned_absence_requests
+  hon.planned_absence_requests,
+  hon.work_items
 TO hon_runtime;
 -- Staff booking creation needs RLS-bound duplicate/capacity reads and inserts,
 -- but no direct UPDATE/DELETE privilege on bookings. Keep this explicit so the
@@ -163,7 +165,9 @@ GRANT UPDATE ON TABLE
   -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.
   hon.knowledge_articles,
   -- Human staff review is the sole mutable planned-absence transition; no DELETE privilege is granted.
-  hon.planned_absence_requests
+  hon.planned_absence_requests,
+  -- Durable human work-item transitions require no identity-directory access.
+  hon.work_items
 TO hon_runtime;
 GRANT USAGE ON TYPE
   hon.principal_type,

@@ -588,6 +588,7 @@ export type {
 } from './parent-family-knowledge.js';
 
 export * from './knowledge-articles.js';
+export * from './work-items.js';
 
 export interface RegisteredAction {
   code: string;

@@ -21,6 +21,7 @@
     "db:test-booking": "pnpm --filter @hon/database db:test-booking",
     "db:test-knowledge": "pnpm --filter @hon/database db:test-knowledge",
     "db:test-planned-absence": "pnpm --filter @hon/database db:test-planned-absence",
+    "db:test-work-items": "pnpm --filter @hon/database db:test-work-items",
     "db:test-parent-schedule": "pnpm --filter @hon/database db:test-parent-schedule",
     "db:test-parent-knowledge": "pnpm --filter @hon/database db:test-parent-knowledge",
     "db:check": "pnpm --filter @hon/database check:migrations"
