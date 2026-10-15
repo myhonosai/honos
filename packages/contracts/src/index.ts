@@ -327,6 +327,32 @@ export interface AttendanceRecordSummary {
   updatedAt: string;
 }
 
+export const TESTING_CANDIDATE_RESULTS = [
+  'PENDING',
+  'PASSED',
+  'DEFERRED',
+  'NOT_PASSED',
+  'WITHDRAWN',
+] as const;
+export type TestingCandidateResult = (typeof TESTING_CANDIDATE_RESULTS)[number];
+
+export interface RegisterTestingCandidateInput {
+  studentCurriculumEnrollmentId: string;
+  targetRankId: string;
+  instructorNotes?: string | undefined;
+}
+
+export interface TestingCandidateSummary {
+  id: string;
+  testingEventId: string;
+  studentCurriculumEnrollmentId: string;
+  targetRankId: string;
+  result: TestingCandidateResult;
+  instructorNotes?: string | undefined;
+  version: number;
+  createdAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;
