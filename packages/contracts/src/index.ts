@@ -242,6 +242,22 @@ export interface MembershipSummary {
   createdAt: string;
 }
 
+/** Human activation accepts only the version observed by the operator. */
+export interface ActivateMembershipInput {
+  expectedVersion: number;
+}
+
+/** Activation can return only the schema-supported ACTIVE membership state. */
+export interface ActivatedMembershipSummary {
+  id: string;
+  billingAccountId: string;
+  participantPersonId: string;
+  planCode: string;
+  state: 'ACTIVE';
+  version: number;
+  createdAt: string;
+}
+
 export interface CreateBillingAccountInput {
   responsiblePersonId: string;
   currency?: string;

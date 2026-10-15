@@ -211,13 +211,27 @@ try {
       || runtimeOperationsReportingPrivileges.payments_can_delete) {
       throw new Error('hon_runtime billing privileges are not exact invoice SELECT/INSERT/UPDATE and payment SELECT-only minima.');
     }
+
+    const runtimeMembershipPrivileges = (await client.query(`
+      SELECT
+        has_table_privilege('hon_runtime', 'hon.memberships', 'SELECT') AS can_select,
+        has_table_privilege('hon_runtime', 'hon.memberships', 'INSERT') AS can_insert,
+        has_table_privilege('hon_runtime', 'hon.memberships', 'UPDATE') AS can_update,
+        has_table_privilege('hon_runtime', 'hon.memberships', 'DELETE') AS can_delete
+    `)).rows[0];
+    if (!runtimeMembershipPrivileges?.can_select
+      || !runtimeMembershipPrivileges.can_insert
+      || !runtimeMembershipPrivileges.can_update
+      || runtimeMembershipPrivileges.can_delete) {
+      throw new Error('hon_runtime membership privileges are not the required SELECT/INSERT/UPDATE and no-DELETE minimum.');
+    }
   }
 
   const context = await client.query("SELECT hon.current_organization_id() AS organization_id, hon.current_school_id() AS school_id");
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, and cleared connection context.`);
 } finally {
   await client.end();
 }
