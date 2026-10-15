@@ -83,6 +83,10 @@
     {
       "path": "/community",
       "title": "Private human HON owner community"
+    },
+    {
+      "path": "/staff/action-center/approvals",
+      "title": "HON | Human Action Approvals"
     }
   ]
 }

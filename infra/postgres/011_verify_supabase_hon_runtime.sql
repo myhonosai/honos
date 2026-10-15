@@ -734,3 +734,44 @@ DO $$ DECLARE t text; f record; r record; b boolean; trigger_name text; trigger_
   END LOOP;
  END LOOP;
 END $$;
+
+-- Human Action Engine approvals: exact new read/lock function minima, immutable
+-- intent/evidence, boolean-only tenant-bound CRM target revalidation, and
+-- qualified school-bound evidence SELECT. No execution grant.
+DO $$ DECLARE f record; t record; p record; b boolean; priv text; trigger_name text; trigger_type integer;
+BEGIN
+ FOR f IN SELECT * FROM (VALUES
+ ('hon.require_human_action_review(text,uuid)',true,true,false),
+ ('hon.human_action_reviewer()',true,true,false),
+ ('hon.crm_lead_target_is_current(uuid,uuid)',true,true,true),
+ ('hon.guard_action_review_immutability()',false,false,false)) v(signature,can_execute,is_definer,boolean_result) LOOP
+ SELECT x.prosecdef=f.is_definer AND x.provolatile='v' AND x.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (NOT f.boolean_result OR x.prorettype='bool'::regtype) AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+ AND has_function_privilege('hon_runtime',x.oid,'EXECUTE')=f.can_execute
+ AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(x.proacl,acldefault('f',x.proowner))) a WHERE a.grantee<>x.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+ INTO b FROM pg_proc x JOIN pg_roles o ON o.oid=x.proowner WHERE x.oid=f.signature::regprocedure;
+ IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe action approval function %',f.signature; END IF;
+ END LOOP;
+ FOR t IN SELECT * FROM (VALUES ('action_requests',ARRAY['SELECT','INSERT','UPDATE']),('action_approvals',ARRAY['SELECT','INSERT']),('action_policies',ARRAY['SELECT'])) v(name,privileges) LOOP
+ SELECT c.relrowsecurity AND c.relforcerowsecurity
+ AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.privilege_type<>ALL(t.privileges) OR a.is_grantable))
+ AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+ INTO b FROM pg_class c WHERE c.oid=('hon.'||t.name)::regclass;
+ IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe action approval table %',t.name; END IF;
+ FOREACH priv IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
+ IF has_table_privilege('hon_runtime','hon.'||t.name,priv) IS DISTINCT FROM (priv=ANY(t.privileges)) THEN RAISE EXCEPTION 'Wrong approval minimum %.%',t.name,priv; END IF;
+ END LOOP;
+ IF (SELECT count(*) FROM pg_policy WHERE polrelid=('hon.'||t.name)::regclass)<>(CASE WHEN t.name='action_approvals' THEN 2 ELSE 1 END) THEN RAISE EXCEPTION 'Wrong approval policy count %',t.name; END IF;
+ SELECT polpermissive AND polcmd='*'
+ AND regexp_replace(pg_get_expr(polqual,polrelid),'[[:space:]()]','','g')='organization_id=hon.current_organization_idANDschool_id=hon.current_school_id'
+ AND regexp_replace(pg_get_expr(polwithcheck,polrelid),'[[:space:]()]','','g')='organization_id=hon.current_organization_idANDschool_id=hon.current_school_id'
+ INTO b FROM pg_policy WHERE polrelid=('hon.'||t.name)::regclass AND polname=t.name||'_tenant_isolation';
+ IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe action approval tenant policy %',t.name; END IF;
+ END LOOP;
+ SELECT NOT polpermissive AND polcmd='r' AND regexp_replace(pg_get_expr(polqual,polrelid),'[[:space:]()]','','g')='hon.human_action_reviewer'
+ INTO b FROM pg_policy WHERE polrelid='hon.action_approvals'::regclass AND polname='action_approvals_qualified_read';
+ IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe qualified approval evidence policy'; END IF;
+ FOR t IN SELECT * FROM (VALUES('action_requests','action_request_immutable',27),('action_requests','action_request_no_truncate',34),('action_approvals','action_approval_immutable',27),('action_approvals','action_approval_no_truncate',34)) v(name,trig,kind) LOOP
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t.name)::regclass AND tgname=t.trig AND tgtype=t.kind AND tgfoid='hon.guard_action_review_immutability()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe action approval trigger %.%',t.name,t.trig; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.action_approvals'::regclass AND conname='action_approvals_request_tenant_fk' AND contype='f' AND convalidated) THEN RAISE EXCEPTION 'Missing scoped approval proposal FK'; END IF;
+END $$;

@@ -48,7 +48,7 @@ import { HqOnboardingController } from './hq/hq-onboarding.controller.js';
 import { HqOnboardingService } from './hq/hq-onboarding.service.js';
 import { PersonController } from './people/person.controller.js';
 import { PersonService } from './people/person.service.js';
-import { ActionReviewController } from './action/action-review.controller.js';
+import { ActionReviewController, ActionApprovalWorkbenchController } from './action/action-review.controller.js';
 import { FamilyController } from './families/family.controller.js';
 import { FamilyService } from './families/family.service.js';
 import { ParentStudentJourneyController } from './families/parent-student-journey.controller.js';
@@ -180,7 +180,7 @@ import { CommunityHumanUiGuard } from './community/community.dto.js';
     HqController,
     HqOnboardingController,
     HqAiProviderController,
-    ActionReviewController,
+    ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [
     CommunityService, CommunityHumanUiGuard,

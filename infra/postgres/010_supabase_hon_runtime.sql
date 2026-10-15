@@ -419,6 +419,10 @@ GRANT EXECUTE ON FUNCTION hon.resolve_public_form_scope(text,text),hon.read_publ
 -- Human owner community: deny all direct data access; precise boundaries only.
 REVOKE ALL ON hon.community_verifications,hon.community_organizations,hon.community_members,hon.community_profiles,hon.community_content,hon.community_versions,hon.community_requests,hon.community_events FROM hon_runtime, PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.resolve_community_scope(text,uuid),hon.read_community_profile(text),hon.mutate_community(text,text,uuid,jsonb,text,uuid),hon.read_community(text,text,uuid,uuid,uuid),hon.read_community_history(text,uuid,integer) TO hon_runtime;
+-- Human Action Engine evidence read only; existing request writes are unchanged.
+GRANT SELECT ON hon.action_approvals TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.require_human_action_review(text,uuid),hon.human_action_reviewer(),hon.crm_lead_target_is_current(uuid,uuid) TO hon_runtime;
+REVOKE ALL ON FUNCTION hon.guard_action_review_immutability() FROM hon_runtime, PUBLIC;
 COMMIT;
 
 -- Future HON migrations must explicitly grant the exact table/sequence/function

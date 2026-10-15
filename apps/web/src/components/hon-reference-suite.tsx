@@ -14,7 +14,7 @@ import styles from './hon-reference-suite.module.css';
 
 type ReferenceScreen = keyof typeof HON_REFERENCE_SCREEN_STATES;
 
-const schoolNavigation = ['Home', 'AI Team', 'Students', 'Programs', 'Leads', 'Attendance', 'Schedule', 'Billing', 'Messages', 'Documents', 'Reports', 'Community', 'Settings'];
+const schoolNavigation = ['Home', 'AI Team', 'Students', 'Programs', 'Leads', 'Attendance', 'Schedule', 'Billing', 'Messages', 'Documents', 'Reports', 'Community', 'Action Center', 'Settings'];
 const hqNavigation = ['Home', 'AI Team', 'AI Providers', 'Schools', 'Onboarding', 'Growth', 'Customer Success', 'Finance', 'Product', 'Support', 'Analytics', 'Settings'];
 
 const schoolMetrics = [
@@ -62,10 +62,10 @@ function AgentPortrait({ agent, selected, onSelect, status = 'Ready' }: { agent:
 function Sidebar({ mode }: { mode: 'school' | 'hq' }): React.ReactElement {
   const navigation = mode === 'hq' ? hqNavigation : schoolNavigation;
   return <aside className={`${styles.sidebar} ${mode === 'hq' ? styles.hqSidebar : ''}`}>
-    <Mark />
-    <nav aria-label={mode === 'hq' ? 'HON HQ navigation' : 'HON school navigation'}>
-      {navigation.map((item, index) => <a className={index === 0 ? styles.activeNav : ''} href={mode !== 'hq' && item === 'Community' ? '/community' : mode === 'hq' && item === 'AI Providers' ? '/hq/ai-providers' : index === 0 ? '#' : `#${item.toLowerCase().replaceAll(' ', '-')}`} key={item}><span>{String(index + 1).padStart(2, '0')}</span>{item}</a>)}
-    </nav>
+	<Mark />
+	<nav aria-label={mode === 'hq' ? 'HON HQ navigation' : 'HON school navigation'}>
+	  {navigation.map((item, index) => <a className={index === 0 ? styles.activeNav : ''} href={mode !== 'hq' && item === 'Community' ? '/community' : mode !== 'hq' && item === 'Action Center' ? '/staff/action-center/approvals' : mode === 'hq' && item === 'AI Providers' ? '/hq/ai-providers' : index === 0 ? '#' : `#${item.toLowerCase().replaceAll(' ', '-')}`} key={item}><span>{String(index + 1).padStart(2, '0')}</span>{item}</a>)}
+	</nav>
     <div className={styles.sidebarFooter}><span className={styles.liveDot} />{mode === 'hq' ? 'Separate HQ authorization' : 'School context required for live work'}</div>
   </aside>;
 }

@@ -49,6 +49,7 @@
     "db:test-automation-rules": "pnpm --filter @hon/database db:test-automation-rules",
     "db:test-crm-follow-ups": "pnpm --filter @hon/database db:test-crm-follow-ups",
     "db:test-billing-renewals": "pnpm --filter @hon/database db:test-billing-renewals",
-    "db:test-community": "pnpm --filter @hon/database db:test-community"
+    "db:test-community": "pnpm --filter @hon/database db:test-community",
+    "db:test-action-approvals": "pnpm --filter @hon/database db:test-action-approvals"
   }
 }
