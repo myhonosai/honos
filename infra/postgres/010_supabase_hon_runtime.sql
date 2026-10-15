@@ -139,6 +139,8 @@ GRANT INSERT ON TABLE
  hon.crm_pipeline_stages,
  hon.crm_leads,
  hon.crm_appointments,
+ -- Human invoice drafts are create-only; issue/payment transitions remain unavailable.
+ hon.invoices,
  hon.billing_accounts,
  hon.memberships,
   hon.membership_payment_schedules,

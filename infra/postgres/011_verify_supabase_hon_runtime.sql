@@ -75,8 +75,9 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'UPDATE') AS can_update_ai_usage_ledger,
   has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'DELETE') AS can_delete_ai_usage_ledger;
 
--- Operational reporting has no revenue calculation. It reads only aggregate
--- invoice status and payment-attempt state, so each billing input is SELECT-only.
+-- Human invoice drafting needs only invoice SELECT/INSERT. Reporting reads
+-- invoice/payment-attempt state; invoice issue, provider, and payment mutations
+-- remain unavailable to the runtime role.
 SELECT
   has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS can_read_invoices,
   has_table_privilege('hon_runtime', 'hon.invoices', 'INSERT') AS can_insert_invoices,

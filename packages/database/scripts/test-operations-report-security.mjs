@@ -115,11 +115,11 @@ try {
       has_table_privilege(current_user, 'hon.payment_attempts', 'UPDATE') AS payments_can_update,
       has_table_privilege(current_user, 'hon.payment_attempts', 'DELETE') AS payments_can_delete
   `)).rows[0];
-  assert(billingGrants?.invoices_can_select && !billingGrants?.invoices_can_insert
+  assert(billingGrants?.invoices_can_select && billingGrants?.invoices_can_insert
     && !billingGrants?.invoices_can_update && !billingGrants?.invoices_can_delete
     && billingGrants?.payments_can_select && !billingGrants?.payments_can_insert
     && !billingGrants?.payments_can_update && !billingGrants?.payments_can_delete,
-  'hon_runtime reporting billing inputs are not the required SELECT-only minimum.');
+  'hon_runtime billing grants are not exact invoice SELECT/INSERT and payment SELECT-only minima.');
 
   const defaultRange = normalizeOperationsReportRange({});
   assert(new Date(defaultRange.to).getTime() - new Date(defaultRange.from).getTime() === 30 * 24 * 60 * 60 * 1000,
@@ -384,7 +384,7 @@ try {
   assert(clearedContext.rows[0]?.organization_id === null && clearedContext.rows[0]?.school_id === null,
     'Operations reporting fixture left tenant context on a pooled runtime connection.');
 
-  console.log('Verified reporting.view scope, forced RLS, SELECT-only invoice/payment runtime access, exact aggregate accuracy, bounded time semantics, cross-school invisibility, and no raw operational data exposure.');
+  console.log('Verified reporting.view scope, forced RLS, invoice SELECT/INSERT plus payment SELECT-only runtime access, exact aggregate accuracy, bounded time semantics, cross-school invisibility, and no raw operational data exposure.');
 } finally {
   try {
     await database.onModuleDestroy();

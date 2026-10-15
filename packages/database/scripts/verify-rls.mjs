@@ -202,14 +202,14 @@ try {
         has_table_privilege('hon_runtime', 'hon.payment_attempts', 'DELETE') AS payments_can_delete
     `)).rows[0];
     if (!runtimeOperationsReportingPrivileges?.invoices_can_select
-      || runtimeOperationsReportingPrivileges.invoices_can_insert
+      || !runtimeOperationsReportingPrivileges.invoices_can_insert
       || runtimeOperationsReportingPrivileges.invoices_can_update
       || runtimeOperationsReportingPrivileges.invoices_can_delete
       || !runtimeOperationsReportingPrivileges.payments_can_select
       || runtimeOperationsReportingPrivileges.payments_can_insert
       || runtimeOperationsReportingPrivileges.payments_can_update
       || runtimeOperationsReportingPrivileges.payments_can_delete) {
-      throw new Error('hon_runtime operational reporting billing privileges are not the required SELECT-only minimum.');
+      throw new Error('hon_runtime billing privileges are not exact invoice SELECT/INSERT and payment SELECT-only minima.');
     }
   }
 
@@ -217,7 +217,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice SELECT/INSERT plus payment and AI-ledger SELECT-only reporting access, and cleared connection context.`);
 } finally {
   await client.end();
 }

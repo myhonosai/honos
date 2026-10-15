@@ -19,6 +19,8 @@ import { MembershipController } from './billing/membership.controller.js';
 import { MembershipService } from './billing/membership.service.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
+import { InvoiceController } from './billing/invoice.controller.js';
+import { InvoiceService } from './billing/invoice.service.js';
 import { HqController } from './hq/hq.controller.js';
 import { IdentityController } from './foundation/identity.controller.js';
 import { PipelineController } from './crm/pipeline.controller.js';
@@ -108,6 +110,7 @@ import { CommunicationMessageService } from './communication/communication-messa
     InterfaceThemeController,
     MembershipController,
     BillingAccountController,
+    InvoiceController,
     HqController,
     HqOnboardingController,
     ActionReviewController,
@@ -147,6 +150,7 @@ import { CommunicationMessageService } from './communication/communication-messa
     InterfaceThemeService,
     MembershipService,
     BillingAccountService,
+    InvoiceService,
     HqOnboardingService,
   ],
 })
