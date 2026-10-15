@@ -113,7 +113,6 @@ GRANT SELECT ON TABLE
   hon.class_templates,
   hon.class_sessions,
   hon.class_session_instructors,
-  hon.class_bookings,
   hon.attendance_records
 TO hon_runtime;
 GRANT INSERT ON TABLE
@@ -144,9 +143,12 @@ GRANT INSERT ON TABLE
   hon.class_templates,
   hon.class_sessions,
   hon.class_session_instructors,
-  hon.class_bookings,
   hon.attendance_records
 TO hon_runtime;
+-- Staff booking creation needs RLS-bound duplicate/capacity reads and inserts,
+-- but no direct UPDATE/DELETE privilege on bookings. Keep this explicit so the
+-- runtime setup remains fail-closed when scheduling features evolve.
+GRANT SELECT, INSERT ON TABLE hon.class_bookings TO hon_runtime;
 GRANT UPDATE ON TABLE
   hon.action_requests,
   hon.idempotency_records,
@@ -174,6 +176,7 @@ GRANT USAGE ON TYPE
   hon.testing_candidate_result,
   hon.promotion_decision_status,
   hon.schedule_item_status,
+  -- Cast by the class-booking capacity decision and booking insert.
   hon.class_booking_status,
   hon.attendance_status
 TO hon_runtime;

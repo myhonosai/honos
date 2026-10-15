@@ -296,6 +296,52 @@ export interface ClassSessionSummary {
   createdAt: string;
 }
 
+/** The only staff-selectable booking intents. Source and actor are server-derived. */
+export const CLASS_BOOKING_KINDS = [
+  'REGULAR',
+  'TRIAL',
+  'MAKEUP',
+  'PRIVATE_LESSON',
+  'EVENT',
+] as const;
+export type ClassBookingKind = (typeof CLASS_BOOKING_KINDS)[number];
+
+export const CLASS_BOOKING_STATUSES = [
+  'BOOKED',
+  'WAITLISTED',
+  'CANCELLED',
+  'CHECKED_IN',
+  'NO_SHOW',
+] as const;
+export type ClassBookingStatus = (typeof CLASS_BOOKING_STATUSES)[number];
+
+export type ClassBookingSource = 'STAFF' | 'PARENT_APP' | 'AUTOMATION' | 'INTEGRATION';
+
+export interface CreateClassBookingInput {
+  studentProfileId: string;
+  bookingKind: ClassBookingKind;
+}
+
+/**
+ * Capacity metadata is a snapshot of the session decision made atomically
+ * with this command. WALK_IN may have activeSeatCount above sessionCapacity.
+ */
+export interface ClassBookingSummary {
+  id: string;
+  classSessionId: string;
+  studentProfileId: string;
+  bookingKind: ClassBookingKind;
+  status: ClassBookingStatus;
+  source: ClassBookingSource;
+  bookedAt: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  sessionCapacity: number;
+  bookingPolicy: ClassSessionBookingPolicy;
+  activeSeatCount: number;
+}
+
 export const ATTENDANCE_STATUSES = [
   'PRESENT',
   'LATE',
