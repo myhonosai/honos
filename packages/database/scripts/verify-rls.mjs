@@ -14,6 +14,9 @@ const expectedRlsTables = [
   'crm_leads',
   'crm_pipeline_stages',
   'crm_pipelines',
+  'curricula',
+  'curriculum_ranks',
+  'curriculum_requirements',
   'families',
   'family_access_grants',
   'family_members',
@@ -33,7 +36,11 @@ const expectedRlsTables = [
   'principal_role_grants',
   'roles',
   'schools',
+  'student_curriculum_enrollments',
   'student_profiles',
+  'testing_candidates',
+  'testing_events',
+  'promotion_decisions',
   'work_items',
 ].sort();
 

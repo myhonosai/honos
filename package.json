@@ -17,6 +17,7 @@
     "db:verify-rls": "pnpm --filter @hon/database db:verify-rls",
     "db:test-security": "pnpm --filter @hon/database db:test-security",
     "db:test-outbox": "pnpm --filter @hon/database db:test-outbox",
+    "db:test-curriculum": "pnpm --filter @hon/database db:test-curriculum",
     "db:check": "pnpm --filter @hon/database check:migrations"
   }
 }
