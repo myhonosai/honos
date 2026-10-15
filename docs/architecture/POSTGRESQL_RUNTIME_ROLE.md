@@ -34,3 +34,7 @@ The Action Engine’s safety chain depends on PostgreSQL enforcing the same scho
 ## Supabase development database
 
 For the Supabase development database, execute `infra/postgres/010_supabase_hon_runtime.sql` through the Supabase SQL Editor, then run `infra/postgres/011_verify_supabase_hon_runtime.sql`. The complete password-handling, Session Pooler, grant, and verification procedure is in `SUPABASE_RUNTIME_ROLE_SETUP.md`. The application uses the Session Pooler URL only through the protected `HON_RUNTIME_DATABASE_URL` value; the migration URL remains out of application runtime.
+
+## AI planning minimum
+
+`hon.ai_invocation_plans` has forced tenant SELECT RLS and SELECT-only runtime privileges; the immutable plan table is never directly writable by runtime. `plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)` and `require_ai_invocation_plan_access()` are the only new fixed SECURITY DEFINER EXECUTE grants. They repeat live human/exact permission/active Complete gates; the planner manually scopes the locked durable item and consumes HQ approval metadata internally, returning a sanitized choice/no-choice. Internal validators/summary/trigger functions and every HQ provider/config table remain inaccessible. No actual AI-ledger writes or outbox consumer capability is added. Run `pnpm db:test-ai-plans` and `pnpm db:verify-rls`; see [AI Invocation Planning](AI_INVOCATION_PLANNING.md).

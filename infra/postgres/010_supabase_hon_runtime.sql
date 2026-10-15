@@ -112,6 +112,8 @@ GRANT SELECT ON TABLE
   hon.action_requests,
   -- AI economics is a read-only aggregate projection; never grant ledger writes.
   hon.ai_usage_ledger,
+  -- Plans are immutable snapshots; only the fixed planning definer appends.
+  hon.ai_invocation_plans,
   hon.idempotency_records,
   hon.principal_interface_preferences,
   hon.curricula,
@@ -236,6 +238,21 @@ GRANT EXECUTE ON FUNCTION hon.resolve_hq_operator_scope(text, text) TO hon_runti
 GRANT EXECUTE ON FUNCTION hon.resolve_parent_family_scope(text, uuid) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.principal_has_school_permission(uuid, uuid, uuid, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, hon.plan_tier, text, text, uuid, uuid) TO hon_runtime;
+
+-- Decision-only tenant planning and authenticated HQ control-plane boundaries.
+-- Never grant direct access to HQ provider/config/credential-reference tables.
+REVOKE ALL ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),
+  hon.require_ai_invocation_plan_access(), hon.hq_ai_control_plane_read(text),
+  hon.hq_ai_control_plane_write(text, text, jsonb, uuid, uuid),
+  hon.hq_ai_routing_registry(text, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),
+  hon.require_ai_invocation_plan_access(), hon.hq_ai_control_plane_read(text),
+  hon.hq_ai_control_plane_write(text, text, jsonb, uuid, uuid),
+  hon.hq_ai_routing_registry(text, uuid) TO hon_runtime;
+-- Internal validators/projections and immutability trigger remain non-executable.
+REVOKE ALL ON FUNCTION hon.validate_ai_invocation_plan_input(jsonb),
+  hon.ai_invocation_plan_summary(uuid), hon.reject_ai_invocation_plan_mutation()
+  FROM hon_runtime, PUBLIC;
 
 -- Safe future-migration defaults for objects created by the privileged `postgres`
 -- migration role. New objects receive no runtime or PUBLIC access until their

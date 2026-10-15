@@ -74,4 +74,8 @@ Integration fixtures, provider updates, and evidence are isolated in a **rolled-
 
 ## Deferred activation work
 
-Reviewed secret-store custody/rotation, code-owned endpoint adapters, observed health/error classification, provider/model capability verification, tenant decision-only authorization resolver, budget reservation/customer-credit accounting, safe execution/revalidation/UNKNOWN handling, retry/circuit policy, media delivery/storage, and execution workers remain unimplemented. Conventional HON remains independent of provider availability.
+Reviewed secret-store custody/rotation, code-owned endpoint adapters, observed health/error classification, provider/model capability verification, budget reservation/customer-credit accounting, safe execution/revalidation/UNKNOWN handling, retry/circuit policy, media delivery/storage, and execution workers remain unimplemented. Conventional HON remains independent of provider availability.
+
+## Delivered next dependency: tenant decision-only plans
+
+[Durable AI Invocation Planning](AI_INVOCATION_PLANNING.md) now supplies the separately scoped tenant planning boundary in migrations 0054–0056. It does not expose this HQ registry or any credential reference/configuration to schools, and does not alter HQ preview semantics. The internal human/Complete-only planner selects only HEALTHY approved TEXT/TOKEN candidates, persists an immutable estimate snapshot with audit/outbox/replay, and cannot execute providers/tools, consume credits, write actual usage or change work state. Tenant planning denies degraded candidates even if this HQ preview policy allows them. HQ catalog/policy/provider tables retain zero direct runtime grants and forced deny-all RLS.

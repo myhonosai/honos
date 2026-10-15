@@ -70,3 +70,5 @@ export function assertEntityInScope(entity: TenantScopedEntity, scope: TenantSco
     throw new Error('TENANT_SCOPE_DENIED');
   }
 }
+
+export * from './ai-invocation-planning.js';

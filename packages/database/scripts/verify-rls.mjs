@@ -9,6 +9,7 @@ const expectedRlsTables = [
   'action_requests',
   'ai_team_presentation_preferences',
   'ai_usage_ledger',
+  'ai_invocation_plans',
   'audit_events',
   'attendance_records',
   'billing_accounts',
@@ -124,6 +125,9 @@ try {
     throw new Error('AI usage ledger tenant-isolation RLS policy is missing.');
   }
 
+  const planPolicies = (await client.query("SELECT cmd FROM pg_policies WHERE schemaname='hon' AND tablename='ai_invocation_plans'")).rows;
+  if (planPolicies.length !== 1 || planPolicies[0].cmd !== 'SELECT') throw new Error('Invocation plans must have only scoped SELECT policy; append is definer-only.');
+
   const runtimeRole = (await client.query(`SELECT EXISTS (
     SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
   ) AS exists`)).rows[0];
@@ -139,6 +143,15 @@ try {
         SELECT has_table_privilege('hon_runtime', $1, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed
       `, [`hon.${table}`])).rows[0];
       if (access?.allowed) throw new Error(`hon_runtime has forbidden direct HQ AI privileges on ${table}.`);
+    }
+    const planAccess = (await client.query("SELECT has_table_privilege('hon_runtime','hon.ai_invocation_plans','SELECT') AS read,has_table_privilege('hon_runtime','hon.ai_invocation_plans','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS mutate")).rows[0];
+    if (!planAccess.read || planAccess.mutate) throw new Error('Invocation plans require exact SELECT-only runtime access.');
+    for (const signature of ['hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)', 'hon.require_ai_invocation_plan_access()']) {
+      const f = (await client.query("SELECT p.prosecdef,p.proconfig,r.rolsuper,r.rolbypassrls,has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS execute FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure", [signature])).rows[0];
+      if (!f?.execute || !f.prosecdef || !f.proconfig?.includes('search_path=pg_catalog, hon') || !(f.rolsuper || f.rolbypassrls)) throw new Error(`Unsafe planning boundary: ${signature}`);
+    }
+    for (const signature of ['hon.validate_ai_invocation_plan_input(jsonb)','hon.ai_invocation_plan_summary(uuid)','hon.reject_ai_invocation_plan_mutation()']) {
+      if ((await client.query("SELECT has_function_privilege('hon_runtime',$1,'EXECUTE') AS allowed", [signature])).rows[0].allowed) throw new Error(`Forbidden runtime planning helper: ${signature}`);
     }
     const runtimeLedgerPrivileges = (await client.query(`
       SELECT
@@ -265,7 +278,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item, immutable decision-only AI plans and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, and cleared connection context.`);
 } finally {
   await client.end();
 }

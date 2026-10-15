@@ -115,3 +115,16 @@ ROLLBACK;
 -- transaction-local context clears after completion. The AI usage fixture also
 -- proves SELECT-only ledger access, active-tier credit calculation, and a
 -- cross-school ledger row remains invisible.
+
+-- 7) Decision-only AI planning: SELECT and the two fixed functions are true;
+-- all direct plan writes and all HQ provider/config table privileges are false.
+SELECT has_table_privilege('hon_runtime','hon.ai_invocation_plans','SELECT') AS can_read_plans,
+  has_table_privilege('hon_runtime','hon.ai_invocation_plans','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS can_mutate_plans,
+  has_function_privilege('hon_runtime','hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)','EXECUTE') AS can_plan,
+  has_function_privilege('hon_runtime','hon.require_ai_invocation_plan_access()','EXECUTE') AS can_check_plan_access;
+SELECT table_name, has_table_privilege('hon_runtime','hon.' || table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_config_access
+FROM unnest(ARRAY['hq_ai_provider_connections','hq_ai_model_catalog','hq_ai_routing_policies','hq_ai_routing_candidates','hq_ai_control_requests','hq_ai_control_audit','hq_ai_control_outbox']) AS table_name;
+SELECT signature, has_function_privilege('hon_runtime',signature,'EXECUTE') AS forbidden_helper_execution
+FROM unnest(ARRAY['hon.validate_ai_invocation_plan_input(jsonb)','hon.ai_invocation_plan_summary(uuid)','hon.reject_ai_invocation_plan_mutation()']) AS signature;
+-- pnpm db:test-ai-plans additionally proves live human/Complete gates, replay,
+-- optimistic state/version, immutable plans, atomic evidence and no execution.

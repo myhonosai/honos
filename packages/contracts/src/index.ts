@@ -1,3 +1,4 @@
+export * from './ai-invocation-plan.js';
 export * from './ai-provider.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;

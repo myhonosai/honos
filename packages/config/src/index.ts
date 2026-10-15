@@ -51,6 +51,7 @@ export const INCLUDED_AI_CREDITS: Record<HonTier, number> = {
 };
 
 export const ACTION_CATALOG: readonly RegisteredAction[] = [
+  { code: 'ai.invocation.plan', requiredPermission: 'ai.invocation.plan', minimumTier: 'COMPLETE', platformAuthorityFloor: 'RESTRICTED', riskClass: 'MODERATE' },
   { code: 'program.create', requiredPermission: 'program.manage', minimumTier: 'ESSENTIAL', platformAuthorityFloor: 'CONFIRM', riskClass: 'MODERATE' },
   { code: 'schedule.session.create', requiredPermission: 'schedule.session.manage', minimumTier: 'ESSENTIAL', platformAuthorityFloor: 'CONFIRM', riskClass: 'MODERATE' },
   { code: 'attendance.record', requiredPermission: 'attendance.record', minimumTier: 'ESSENTIAL', platformAuthorityFloor: 'AUTO', riskClass: 'SENSITIVE' },
@@ -166,3 +167,5 @@ export function tierIncludesFeature(tier: HonTier, feature: string): boolean {
 }
 
 export { AI_TEAM_CATALOG, aiTeamAgentDefinition } from './ai-team-catalog.js';
+
+export { AI_INVOCATION_PLANNING_LIMITS, AI_INVOCATION_PLANNING_TASKS } from './ai-invocation-planning.js';

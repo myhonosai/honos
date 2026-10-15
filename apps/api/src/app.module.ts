@@ -65,6 +65,8 @@ import { ParentFamilyKnowledgeController } from './knowledge/parent-family-knowl
 import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledge.service.js';
 import { WorkItemController } from './work-items/work-item.controller.js';
 import { WorkItemService } from './work-items/work-item.service.js';
+import { AiInvocationPlanController } from './ai/ai-invocation-plan.controller.js';
+import { AiInvocationPlanService } from './ai/ai-invocation-plan.service.js';
 import { AiUsageController } from './ai/ai-usage.controller.js';
 import { AiUsageService } from './ai/ai-usage.service.js';
 import { AiTeamController } from './ai-team/ai-team.controller.js';
@@ -104,6 +106,7 @@ import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
     ParentFamilyKnowledgeController,
     WorkItemController,
     AiUsageController,
+    AiInvocationPlanController,
     AiTeamController,
     OperationsReportController,
     CommunicationConsentController,
@@ -146,6 +149,7 @@ import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
     ParentFamilyKnowledgeService,
     WorkItemService,
     AiUsageService,
+    AiInvocationPlanService,
     AiTeamService,
     OperationsReportService,
     CommunicationConsentService,

@@ -33,3 +33,7 @@ Human review is itself consequential. `POST .../decision` requires an `Idempoten
 `CrmLeadActionTool` is the first internal typed adapter. It validates a model-produced CRM lead payload against the same `CreateLeadDto` contract used by the conventional API; creates a governed `crm.lead.create` proposal; waits when Confirm policy applies; otherwise enters the execution boundary; invokes the normal `LeadService.create()` command with the Action Request ID; and records a verified lead result. There is intentionally no public generic Action Engine “execute this payload” endpoint.
 
 The next dependency is a registered ordinary-domain-service executor for each supported action. A separate reviewed worker capability will handle post-commit outbox publication; the tenant request role has append-only access to event evidence.
+
+## Invocation planning is not an executable action
+
+The exact `ai.invocation.plan` catalog metadata is Complete-only and `RESTRICTED`; both human and AI proposal-gateway calls are rejected before an Action Request is written, even if school/agent/dynamic-risk settings ask for AUTO. The dedicated internal human-UI metadata planner is not an Action Engine caller or registered tool adapter. Its `PLANNED` record, successful persistence audit and `ai.invocation.planned` outbox event confer no provider/tool/approval authority. See [AI Invocation Planning](AI_INVOCATION_PLANNING.md).

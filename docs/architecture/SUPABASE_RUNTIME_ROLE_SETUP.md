@@ -33,3 +33,9 @@ PostgreSQL role grants and RLS are complementary: table grants permit a role to 
 [1]: https://supabase.com/docs/guides/database/postgres/roles "Supabase Postgres Roles"
 [2]: https://supabase.com/docs/guides/database/connecting-to-postgres "Supabase Connect to your database"
 [3]: https://supabase.com/docs/guides/database/postgres/row-level-security "Supabase Row Level Security"
+
+## Decision-only AI planning grants (0054–0056)
+
+After applying migrations, existing roles receive exact plan SELECT and fixed planning/access EXECUTE grants from the additive migrations; do not rerun role creation or grant broad HQ configuration access. The canonical runtime SQL and companion verifier include `hon.ai_invocation_plans`, `hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)` and `hon.require_ai_invocation_plan_access()`. Plan INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER, internal helper EXECUTE, direct HQ config/credential table grants, and actual AI-ledger mutations must remain false. Current invoice/membership conventional commands have their separately reviewed INSERT/UPDATE grants; this planner grants no billing rights.
+
+Run `pnpm db:verify-rls` and `pnpm db:test-ai-plans` in addition to the full database suite. Planning integration fixtures and global provider state changes are rollback-only. No new environment key, credential or worker is required. Details: [AI Invocation Planning](AI_INVOCATION_PLANNING.md).
