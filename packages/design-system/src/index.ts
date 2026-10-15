@@ -27,3 +27,4 @@ export const honTokens = {
 export type HonStatus = 'VERIFIED' | 'WAITING' | 'NEEDS_ATTENTION' | 'UNAVAILABLE';
 
 export * from './interface-themes.js';
+export * from './ai-environment.js';

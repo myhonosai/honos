@@ -1,11 +1,10 @@
-import { HqControlPlane } from '../../components/hq-control-plane';
-import '../hq.css';
+import { HonReferenceSuite } from '../../components/hon-reference-suite';
 
 export const metadata = {
-  title: 'HON HQ | Growth & Operations',
-  description: 'The privileged HON Growth & Operations control plane.',
+  title: 'HON HQ | AI Command Center',
+  description: 'HON HQ design reference: the privileged, AI-native operating environment for the HON company.',
 };
 
 export default function HqPage(): React.ReactElement {
-  return <HqControlPlane />;
+  return <HonReferenceSuite screen="hq" />;
 }

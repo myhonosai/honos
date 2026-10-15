@@ -89,30 +89,30 @@ honplatform/
 | **Mission-control technical** | 0.05 | Dense operational telemetry with matrix-like interfaces and restrained glow. |
 | **Calm operations atelier** | 0.04 | Warm stone surfaces, generous whitespace, and quiet progressive disclosure. |
 
-### Selected direction — Calm operations atelier with semantic signal paths
+### Locked direction — HON AI-native operating environment
 
-- **Design movement:** A refined operations console that combines martial-arts discipline with modern hospitality SaaS; it is calm by default and visually decisive only when an action, risk, or approval needs attention.
-- **Core principles:** One primary job per view; operational state is explicit; hierarchy beats decoration; conventional navigation remains primary even when AI assistance is available.
-- **Color philosophy:** Deep ink/navy supports focus and security-sensitive context; mist/light surfaces make dense tables readable; teal identifies trusted/available system pathways; gold identifies approval/review; coral identifies blocked/failed conditions. Belt-inspired accents are reserved for progression and not used as generic decoration.
-- **Layout paradigm:** A persistent left operational rail with a contextual command lane and content that moves between concise overview, focused table/workspace, and right-side detail panel—rather than a grid of unrelated dashboard cards.
-- **Signature elements:** A compact HON monogram mark; thin teal system-path rule; a visible context capsule showing organization/school/role; clear action-status chips that distinguish working, waiting for approval, failed, and complete.
-- **Interaction philosophy:** Fast deterministic controls first. AI is a visible assistant surface that explains what it can do, produces structured proposed actions, and never replaces menus, filters, forms, or direct record work.
-- **Animation:** Short 160–220ms transition/opacity movement for drawers, status changes, and command responses. No fake “thinking” loops; active motion requires a real request/work state.
-- **Typography system:** Plus Jakarta Sans for navigation/headlines and Inter for operational body/table text; JetBrains Mono only for request IDs, tool/action labels, and technical diagnostics.
-- **Brand essence:** The operating system that lets martial-arts schools run normally, automate intelligently, and delegate safely. **Disciplined, welcoming, trustworthy.**
-- **Brand voice:** “Your next best action is ready.” “Review exactly what HON will do before it does it.”
-- **Wordmark and logo:** A compact black belt loop forming an abstract H/O mark, paired with a geometric HON wordmark; no generic martial-arts iconography.
-- **Signature brand color:** HON Signal Teal, used solely for trusted navigation, verified status, and safe automation paths.
+The supplied HON Complete, HON HQ, HON Core, Parent/Eian, and mobile reference boards now remove broad visual discretion. HON must not become a generic CRM/admin template with a chatbot sidebar. Conventional modules remain fully available, but **Complete** and **HQ** place a visibly present, conversational AI team at the center of the operating experience.
 
-### User-selectable operating views
+- **Design movement:** Cinematic martial-arts command center with a disciplined, bright operational core; it pairs a premium dark AI environment with accessible high-clarity school-management surfaces.
+- **Core principles:** AI team presence precedes dashboard density; conversation and voice/text command are the primary Complete/HQ interaction; business context frames the conversation rather than competing with it; conventional controls are always reachable and fully useful during AI/provider failure.
+- **Color philosophy:** HON midnight/navy creates protected command space; electric sapphire is the Alex/Eian signal; teal represents safe active operation; violet represents creative/delegated work; gold represents review/approval; coral remains for risk or failure. Core and Parent/Eian use mist/white surfaces with these colors only as clear signals.
+- **Layout paradigm:** A compact left rail anchors conventional navigation; the central field is a living AI command surface with a selected employee, work-state, voice/text lane, and contextual action proposals. The surrounding orbit holds only the business signals relevant to the current ask.
+- **Signature elements:** Recognizable HON wordmark; distinct AI employee portraits with color/aura identity; work-state lozenges (Ready, Thinking, Working, Waiting for Approval, Completed, Needs Attention); a bright, speaking/listening command lane that visibly falls back to text.
+- **Interaction philosophy:** A user can speak/type to a selected employee, switch employees within the same conversation, inspect collaboration/work states, and enter exact approval surfaces. Reference interactions demonstrate this state without claiming live automation before a scoped tenant and durable work backend exist.
+- **Animation:** Ambient aura/presence is subtle and decorative only. Pulse, waveform, progress, and state transitions activate exclusively from an actual interaction/demo state; no fake claim that a real agent is working. Use 160–220ms state transitions and respect reduced-motion preferences.
+- **Typography system:** Plus Jakarta Sans drives the expressive command hierarchy; Inter provides operational clarity; JetBrains Mono labels AI/team state, tool/action context, and approvals. Mobile preserves the same hierarchy at touch-first scale.
+- **Brand essence:** The governed AI operating system that puts a martial-arts school’s team and next best action in one trusted command environment. **Capable, warm, disciplined.**
+- **Brand voice:** “Your AI team is on it.” “See the exact action HON will take before you approve it.”
+- **Wordmark and logo:** Bold geometric HON letterforms with a compact, energetic martial-arts mark; the wordmark lives confidently in dark command headers and remains crisp on bright Core/Parent surfaces.
+- **Signature brand color:** **HON Signal Blue** — a bright sapphire reserved for the active AI command, speaking/listening state, and selected command path.
 
-The supplied Ideal OS and HON references establish a product requirement for three selectable, not merely responsive, operating views. The selected view changes presentation only; it never changes tenant scope, entitlement, navigation availability, action authority, or data visibility.
+### Design-system checkpoint and representative screens
 
-1. **Operations Light** is the approachable bright school-control surface: modular navigation, clear cards, small semantic color accents, and quick contextual actions.
-2. **Operations Dark** is the low-light operational console: a denser dark workspace with the same conventional functions, high-contrast statuses, and focused work visibility.
-3. **AI Office** is the Complete-tier team experience: visible Alex/Chad/Maya/Marcus/Jordan/Claire/Lena roles, real work/approval states, a text-first command lane, and optional voice controls. It makes no claim that an AI employee is working unless a durable work item exists.
+Before broad production screen expansion, the reusable design-system tokens/components establish typography, spacing, navigation, cards/surfaces, iconography, AI employee presentation/aura, voice/text interaction, approval surfaces, work-state, charts, mobile states, empty/loading/error states, and responsive behavior. All three presentation modes consume the same components and domain state.
 
-Views are keyboard-accessible, preserve the same information architecture, and use exact data/status surfaces instead of illustrative dashboard metrics. The visual references guide light/dark palette, modular navigation, and the friendly but disciplined AI-team presentation; they do not become a second application architecture.
+Five high-fidelity, working **design-reference** screens are the approval boundary: **HON Complete Home / AI Command Center**, **HON HQ Home / AI Command Center**, **HON Core Home**, **Parent App Home + Eian**, and **Mobile HON Complete**. They use clearly identified representative data and interaction to demonstrate hierarchy, selected-agent switching, command/voice state, and contextual approvals. They do not fabricate an actual tenant action or propagate unapproved visual direction across the rest of the product.
+
+The retained presentation modes are: (1) **Big-Button / Phone Style** for touch-first simplified operation, (2) **Modern HON Style** for the balanced AI-native daily school environment, and (3) **Classic / Agency-Platform Style** for higher-density conventional administration. A mode changes only presentation—not tenant scope, API, permission, tier, action authority, or data.
 
 ## Initial dependency graph
 
