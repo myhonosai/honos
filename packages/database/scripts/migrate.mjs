@@ -46,6 +46,11 @@ try {
         || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_campaign_runtime') throw new Error('Campaign aliases require the exact disposable localhost database.');
       sql = sql.replaceAll('hon_runtime', 'hon_campaign_runtime');
     }
+    if (new URL(databaseUrl).username === 'hon_community_owner') {
+      const runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? ''); const owner = new URL(databaseUrl);
+      if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_community_validation' || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_community_runtime') throw new Error('Community aliases require exact disposable localhost database.');
+      sql = sql.replaceAll('hon_runtime', 'hon_community_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_renewal_owner') {
       const runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? ''); const owner = new URL(databaseUrl);
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_renewal_validation' || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_renewal_runtime') throw new Error('Renewal aliases require exact disposable localhost database.');

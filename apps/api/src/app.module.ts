@@ -120,8 +120,13 @@ import { RenewalController } from './billing/renewal.controller.js';
 import { RenewalService } from './billing/renewal.service.js';
 import { RenewalHumanUiGuard } from './billing/renewal.dto.js';
 
+import { CommunityController } from './community/community.controller.js';
+import { CommunityService } from './community/community.service.js';
+import { CommunityHumanUiGuard } from './community/community.dto.js';
+
 @Module({
   controllers: [
+    CommunityController,
     RenewalController,
     FollowUpController,
     AutomationRuleController,
@@ -178,6 +183,7 @@ import { RenewalHumanUiGuard } from './billing/renewal.dto.js';
     ActionReviewController,
   ],
   providers: [
+    CommunityService, CommunityHumanUiGuard,
     RenewalService, RenewalHumanUiGuard,
     FollowUpService, FollowUpHumanUiGuard,
     AutomationRuleService, AutomationRuleHumanUiGuard,

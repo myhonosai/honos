@@ -79,6 +79,10 @@
     {
       "path": "/staff/billing/renewals",
       "title": "Human membership renewal reviews"
+    },
+    {
+      "path": "/community",
+      "title": "Private human HON owner community"
     }
   ]
 }

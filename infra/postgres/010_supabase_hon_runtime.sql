@@ -415,6 +415,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA hon REVOKE USAGE ON TYPES F
 
 -- Exact public forms ingress; never grant PUBLIC or Supabase client execution.
 GRANT EXECUTE ON FUNCTION hon.resolve_public_form_scope(text,text),hon.read_public_forms(text),hon.mutate_public_form(text,text,uuid,jsonb,text,uuid,uuid),hon.read_published_form(text),hon.submit_public_form(text,jsonb,text) TO hon_runtime;
+
+-- Human owner community: deny all direct data access; precise boundaries only.
+REVOKE ALL ON hon.community_verifications,hon.community_organizations,hon.community_members,hon.community_profiles,hon.community_content,hon.community_versions,hon.community_requests,hon.community_events FROM hon_runtime, PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.resolve_community_scope(text,uuid),hon.read_community_profile(text),hon.mutate_community(text,text,uuid,jsonb,text,uuid),hon.read_community(text,text,uuid,uuid,uuid),hon.read_community_history(text,uuid,integer) TO hon_runtime;
 COMMIT;
 
 -- Future HON migrations must explicitly grant the exact table/sequence/function

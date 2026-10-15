@@ -871,3 +871,5 @@ export * from './automation-rules.js';
 export * from './crm-follow-ups.js';
 
 export * from './billing-renewals.js';
+
+export * from './community.js';
