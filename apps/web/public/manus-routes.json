@@ -87,6 +87,10 @@
     {
       "path": "/staff/action-center/approvals",
       "title": "HON | Human Action Approvals"
+    },
+    {
+      "path": "/staff/voice",
+      "title": "HON | Complete Voice Handoff"
     }
   ]
 }

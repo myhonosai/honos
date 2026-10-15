@@ -875,3 +875,5 @@ export * from './billing-renewals.js';
 export * from './community.js';
 
 export * from './action-approvals.js';
+
+export * from './voice.js';

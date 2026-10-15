@@ -1,3 +1,5 @@
+import { VoiceController, VoiceHumanUiGuard } from './voice/voice.controller.js';
+import { VoiceService } from './voice/voice.service.js';
 import { StaffPublicFormController, PublishedFormController, PublicFormHumanUiGuard } from './marketing/public-form.controller.js';
 import { PublicFormService } from './marketing/public-form.service.js';
 import { CampaignController } from './marketing/campaign.controller.js';
@@ -126,6 +128,7 @@ import { CommunityHumanUiGuard } from './community/community.dto.js';
 
 @Module({
   controllers: [
+    VoiceController,
     CommunityController,
     RenewalController,
     FollowUpController,
@@ -183,6 +186,7 @@ import { CommunityHumanUiGuard } from './community/community.dto.js';
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [
+    VoiceService, VoiceHumanUiGuard,
     CommunityService, CommunityHumanUiGuard,
     RenewalService, RenewalHumanUiGuard,
     FollowUpService, FollowUpHumanUiGuard,

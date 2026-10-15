@@ -185,3 +185,6 @@ export * from './crm-follow-ups.js';
 export * from './billing-renewals.js';
 
 export * from './community.js';
+
+/** Inert human handoff only; deliberately absent from the Action/Tool catalog. */
+export const VOICE_SESSION_POLICY = { permission: 'ai.voice.interact', tier: 'COMPLETE', lifetimeSeconds: 1800, maxDraftCharacters: 500, providerExecutionEnabled: false } as const;

@@ -423,6 +423,11 @@ GRANT EXECUTE ON FUNCTION hon.resolve_community_scope(text,uuid),hon.read_commun
 GRANT SELECT ON hon.action_approvals TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.require_human_action_review(text,uuid),hon.human_action_reviewer(),hon.crm_lead_target_is_current(uuid,uuid) TO hon_runtime;
 REVOKE ALL ON FUNCTION hon.guard_action_review_immutability() FROM hon_runtime, PUBLIC;
+-- Complete voice handoff: private tables/helpers; only two fixed entrypoints.
+REVOKE ALL ON hon.voice_sessions,hon.voice_session_requests FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.guard_voice_history(),hon.require_voice_actor(text),hon.require_voice_references(uuid,uuid,uuid),hon.voice_session_snapshot(uuid) FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_voice_session(text,uuid),hon.mutate_voice_session(text,text,uuid,jsonb,uuid,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.read_voice_session(text,uuid),hon.mutate_voice_session(text,text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
 COMMIT;
 
 -- Future HON migrations must explicitly grant the exact table/sequence/function

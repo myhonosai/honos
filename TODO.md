@@ -229,3 +229,11 @@ Evidence: fresh guarded 80-migration reset of `localhost:5432/hon_renewal_valida
 - [ ] Real server derives verified human/school/organization; no cross-tenant/HQ/parent/nonhuman/delegated access, no self approval; live current permissions/resolution/entitlement/policy/expiry/requester revalidation and exact displayed proposal binding, idempotency/concurrency/atomic redacted audit/inert outbox. No generic SQL/tool/directory access.
 - [ ] Existing Action Engine schema/services only, forced RLS/precise ACL, additive migration/contracts/tests/docs/plan and canonical SQL/JS verifiers; no LLM/provider invocation/new execution tool or payment/refund/membership/marketing/communication external effects. No executor/consumer invocation.
 - [ ] Full disposable-local scope/self/expired/revoked/binding/redaction/no-fake-success/no-execution tests and workspace validation; commit/push origin main and report evidence/caveats.
+
+## Complete voice/text handoff foundation (after `7cd8eaa`)
+- [x] Exact active Complete, human school/actor scope and `ai.voice.interact`; deny HQ/parent/public/AI/nonhuman/delegated use. Approved human-selected catalog ID only; no invocation, authority, configuration change or Eian/family voice.
+- [x] Create/exact read/status/mark-fallback/end with REQUESTED, VOICE_CONNECTING, VOICE_UNAVAILABLE, TEXT_FALLBACK, ENDED; guarded forward versions, UUID retries, concurrency/expiry/live revocation locks, forced deny-all RLS/ACL, atomic redacted audit/inert outbox.
+- [x] Minimal resume/work/action/approval context by stable scoped IDs only, no raw payloads/credentials/audio/transcript; bounded user-owned safe draft states text does not send a command. Health/permission observation is only a redacted reason code, never success.
+- [x] Trusted `/staff/voice` navigation/manifest/UI with explicit unavailable/offline/error evidence, resume/text fallback and no fake mic/provider connection. Canonical runtime/verifiers, additive migration/contracts/config/API/tests/docs; denial/replay/redaction/zero execution/domain changes/audit rollback; fresh disposable-local proof and clean root validation passed; commit/push origin/main.
+
+Details: [Complete Voice/Text Handoff Foundation](COMPLETE_VOICE_HANDOFF.md). No remote database/provider/microphone/LLM/action execution was used or activated.

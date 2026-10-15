@@ -775,3 +775,43 @@ BEGIN
  END LOOP;
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.action_approvals'::regclass AND conname='action_approvals_request_tenant_fk' AND contype='f' AND convalidated) THEN RAISE EXCEPTION 'Missing scoped approval proposal FK'; END IF;
 END $$;
+
+-- Complete voice handoff: two human entrypoints only, private references/drafts.
+DO $$ DECLARE f record; t text; b boolean; x record;
+BEGIN
+ FOR f IN SELECT * FROM (VALUES
+ ('hon.guard_voice_history()',false,false),('hon.require_voice_actor(text)',false,true),
+ ('hon.require_voice_references(uuid,uuid,uuid)',false,true),('hon.voice_session_snapshot(uuid)',false,true),
+ ('hon.read_voice_session(text,uuid)',true,true),('hon.mutate_voice_session(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true)) v(signature,can_execute,is_definer) LOOP
+ SELECT p.prosecdef=f.is_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+ AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime' AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+ AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+ INTO b FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+ IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe voice function %',f.signature; END IF;
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['voice_sessions','voice_session_requests'] LOOP
+ SELECT c.relrowsecurity AND c.relforcerowsecurity
+ AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+ AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND acl.grantee<>c.relowner)
+ AND NOT has_table_privilege('hon_runtime',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+ AND NOT has_any_column_privilege('hon_runtime',c.oid,'SELECT,INSERT,UPDATE,REFERENCES')
+ INTO b FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+ IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe private voice table %',t; END IF;
+ IF (SELECT count(*) FROM pg_policy WHERE polrelid=('hon.'||t)::regclass)<>1 THEN RAISE EXCEPTION 'Unsafe voice policy count %',t; END IF;
+ SELECT polpermissive AND polcmd='*' AND pg_get_expr(polqual,polrelid)='false' AND pg_get_expr(polwithcheck,polrelid)='false'
+ INTO b FROM pg_policy WHERE polrelid=('hon.'||t)::regclass AND polname=t||'_deny_all';
+ IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe deny-all voice policy %',t; END IF;
+ END LOOP;
+ FOR x IN SELECT * FROM (VALUES
+ ('voice_sessions','voice_session_guard',27),('voice_sessions','voice_session_no_truncate',34),
+ ('voice_session_requests','voice_request_guard',27),('voice_session_requests','voice_request_no_truncate',34)) v(tab,trig,kind) LOOP
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||x.tab)::regclass AND tgname=x.trig AND tgtype=x.kind AND tgfoid='hon.guard_voice_history()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe voice trigger %',x.trig; END IF;
+ END LOOP;
+ FOR x IN SELECT * FROM (VALUES
+ ('voice_sessions','schools'),('voice_sessions','work_items'),('voice_sessions','action_requests'),
+ ('voice_sessions','action_approvals'),('voice_sessions','voice_sessions'),('voice_session_requests','voice_sessions')) v(tab,ref) LOOP
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=('hon.'||x.tab)::regclass AND confrelid=('hon.'||x.ref)::regclass AND contype='f' AND convalidated AND NOT condeferrable AND array_length(conkey,1)>=2) THEN RAISE EXCEPTION 'Missing voice scope FK %.%',x.tab,x.ref; END IF;
+ END LOOP;
+ IF (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid='hon.voice_sessions'::regclass AND attnum>0 AND NOT attisdropped)<>ARRAY['id','organization_id','school_id','actor_principal_id','agent_catalog_id','work_item_id','action_request_id','approval_id','resume_session_id','state','reason_code','version','draft_text','created_at','updated_at','expires_at']
+ OR (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid='hon.voice_session_requests'::regclass AND attnum>0 AND NOT attisdropped)<>ARRAY['organization_id','school_id','actor_principal_id','idempotency_key','request_fingerprint','session_id','receipt_version','created_at'] THEN RAISE EXCEPTION 'Expanded voice data surface'; END IF;
+END $$;
