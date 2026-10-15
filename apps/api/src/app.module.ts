@@ -78,6 +78,9 @@ import { TestingCandidateGradeController } from './testing/testing-candidate-gra
 import { TestingCandidateService } from './testing/testing-candidate.service.js';
 import { PromotionDecisionController } from './testing/promotion-decision.controller.js';
 import { PromotionDecisionService } from './testing/promotion-decision.service.js';
+import { TestingCertificateController } from './testing/testing-certificate.controller.js';
+import { TestingCertificateService } from './testing/testing-certificate.service.js';
+import { TestingCertificateHumanUiGuard } from './testing/testing-certificate.dto.js';
 import { ParentTestingRegistrationController, StaffTestingRegistrationController } from './testing/testing-registration.controller.js';
 import { TestingRegistrationService } from './testing/testing-registration.service.js';
 import { TestingRegistrationHumanUiGuard } from './testing/testing-registration-human-ui.guard.js';
@@ -209,6 +212,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     TestingCandidateController,
     TestingCandidateGradeController,
     PromotionDecisionController,
+    TestingCertificateController,
     ParentTestingRegistrationController,
     StaffTestingRegistrationController,
     InterfaceThemeController,
@@ -279,6 +283,8 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,
+    TestingCertificateService,
+    TestingCertificateHumanUiGuard,
     TestingRegistrationService,
     TestingRegistrationHumanUiGuard,
     ActionEngineService,

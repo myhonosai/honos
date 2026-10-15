@@ -1189,3 +1189,75 @@ BEGIN
   END IF;
 END $$;
 -- End Retention Review Signals verification.
+
+
+-- Human testing certificate exact verification: private forced-RLS tables,
+-- inert local evidence only, and precisely scope/read/issue runtime functions.
+DO $$
+DECLARE expected record; t text; r text; safe boolean;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY['testing_certificates','testing_certificate_requests','testing_certificate_outbox']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls)
+      AND owner_role.rolname <> 'hon_runtime'
+      AND NOT EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = c.oid)
+      AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) AS acl WHERE acl.grantee <> c.relowner)
+      AND NOT EXISTS (SELECT 1 FROM pg_attribute AS a CROSS JOIN LATERAL aclexplode(a.attacl) AS acl
+                      WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND acl.grantee <> c.relowner)
+    INTO safe
+    FROM pg_class AS c JOIN pg_roles AS owner_role ON owner_role.oid = c.relowner
+    WHERE c.oid = ('hon.' || t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe testing certificate private table: %', t; END IF;
+  END LOOP;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'hon.testing_certificate_outbox'::regclass
+      AND conname = 'testing_certificate_outbox_execution_allowed_check'
+      AND contype = 'c' AND convalidated
+      AND pg_get_constraintdef(oid) = 'CHECK ((NOT execution_allowed))') THEN
+    RAISE EXCEPTION 'Testing certificate outbox must stay inert';
+  END IF;
+
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.testing_certificate_safe_text(text,integer)',false,false),
+    ('hon.guard_testing_certificate_history()',false,false),
+    ('hon.testing_certificate_permission(uuid,uuid,uuid,text)',false,true),
+    ('hon.resolve_testing_certificate_scope(text,uuid)',true,true),
+    ('hon.require_testing_certificate_actor(text,text)',false,true),
+    ('hon.lock_testing_certificate_actor(text,text,boolean)',false,true),
+    ('hon.testing_certificate_projection(uuid)',false,true),
+    ('hon.guard_testing_certificate_insert()',false,true),
+    ('hon.guard_testing_certificate_dependency()',false,true),
+    ('hon.guard_testing_certificate_promotion_delete()',false,true),
+    ('hon.read_testing_certificate(text,uuid)',true,true),
+    ('hon.issue_testing_certificate(text,uuid,jsonb,text,uuid,uuid)',true,true)
+  ) AS x(signature, runtime_execute, security_definer) LOOP
+    SELECT p.prosecdef = expected.security_definer
+      AND p.provolatile = 'v'
+      AND p.proconfig = ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls)
+      AND owner_role.rolname <> 'hon_runtime'
+      AND has_function_privilege('hon_runtime', p.oid, 'EXECUTE') = expected.runtime_execute
+      AND NOT EXISTS (
+        SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl
+        WHERE acl.grantee <> p.proowner
+          AND (acl.grantee <> (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime')
+               OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type <> 'EXECUTE')
+      )
+    INTO safe
+    FROM pg_proc AS p JOIN pg_roles AS owner_role ON owner_role.oid = p.proowner
+    WHERE p.oid = expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe testing certificate function: %', expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+      IF has_function_privilege(r, expected.signature, 'EXECUTE') THEN
+        RAISE EXCEPTION 'Client testing certificate function execution: %.%', r, expected.signature;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  IF NOT EXISTS (SELECT 1 FROM hon.permissions WHERE code = 'testing.certificate.read' AND is_sensitive AND is_staff_assignable)
+    OR NOT EXISTS (SELECT 1 FROM hon.permissions WHERE code = 'testing.certificate.issue' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'Testing certificate permission registry is unsafe';
+  END IF;
+END $$;
+-- End Human testing certificate exact verification.

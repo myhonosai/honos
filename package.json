@@ -63,6 +63,8 @@
     "db:setup-parent-journey": "pnpm --filter @hon/database db:setup-parent-journey",
     "db:setup-marketing-assistant": "pnpm --filter @hon/database db:setup-marketing-assistant",
     "db:test-marketing-assistant": "pnpm --filter @hon/database db:test-marketing-assistant",
+    "db:test-testing-certificates": "pnpm --filter @hon/database db:test-testing-certificates",
+    "db:setup-testing-certificates": "pnpm --filter @hon/database db:setup-testing-certificates",
     "db:test-marketing-assistant-verifier": "pnpm --filter @hon/database db:test-marketing-assistant-verifier"
   }
 }

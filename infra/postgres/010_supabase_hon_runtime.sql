@@ -590,3 +590,47 @@ DO $$ DECLARE r text; f record; BEGIN
       hon.read_retention_review_signals(text, uuid) TO hon_runtime;
   END IF;
 END $$;
+
+
+-- Human testing certificates: private immutable school records only. The runtime
+-- receives exactly scope/read/issue function execution; no table, column, helper,
+-- provider, Action Engine, delivery, or directory privilege is introduced.
+DO $$
+DECLARE r text; t text; a text; f record;
+BEGIN
+  FOR f IN
+    SELECT p.oid::regprocedure AS signature
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'hon' AND p.proname LIKE '%testing_certificate%'
+  LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f.signature);
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['testing_certificates','testing_certificate_requests','testing_certificate_outbox'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+    FOR a IN SELECT attname FROM pg_attribute WHERE attrelid = format('hon.%I', t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC', a, t);
+    END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    FOREACH t IN ARRAY ARRAY['testing_certificates','testing_certificate_requests','testing_certificate_outbox'] LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r);
+      FOR a IN SELECT attname FROM pg_attribute WHERE attrelid = format('hon.%I', t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I', a, t, r);
+      END LOOP;
+    END LOOP;
+    FOR f IN
+      SELECT p.oid::regprocedure AS signature
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'hon' AND p.proname LIKE '%testing_certificate%'
+    LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f.signature, r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION
+      hon.resolve_testing_certificate_scope(text,uuid),
+      hon.read_testing_certificate(text,uuid),
+      hon.issue_testing_certificate(text,uuid,jsonb,text,uuid,uuid)
+    TO hon_runtime;
+  END IF;
+END $$;

@@ -10,6 +10,13 @@ export interface ResolvedPrincipalScope {
   schoolId: string;
 }
 
+interface TestingCertificateRuntimeContext extends TenantTransactionContext {
+  externalSubject: string;
+  source: 'HUMAN_UI';
+  idempotencyKey: string;
+  correlationId: string;
+}
+
 export interface ResolvedHqOperatorScope {
   principalId: string;
   hqRole: 'HON_HQ_OWNER' | 'HON_HQ_OPERATOR' | 'HON_HQ_SUPPORT';
@@ -178,6 +185,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_retention_review_scope($1,$2::uuid)', [externalSubject, schoolId],
     )).rows[0];
   }
+  async resolveTestingCertificateScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_testing_certificate_scope($1,$2::uuid)', [externalSubject, schoolId],
+    )).rows[0];
+  }
   async resolveCommunityScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(
@@ -276,6 +289,35 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
         'SELECT hon.read_retention_review_signals($1,$2::uuid) AS data', [context.externalSubject, membershipId],
       );
       if (!result.rows[0]) throw new Error('HON Retention Review Signals projection did not return a result.');
+      return result.rows[0].data;
+    });
+  }
+
+  async readTestingCertificate(
+    context: TestingCertificateRuntimeContext, testingCandidateId: string,
+  ): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.source]);
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'");
+      const result = await client.query<{ data: unknown }>(
+        'SELECT hon.read_testing_certificate($1,$2::uuid) AS data', [context.externalSubject, testingCandidateId],
+      );
+      if (!result.rows[0]) throw new Error('HON testing certificate projection did not return a result.');
+      return result.rows[0].data;
+    });
+  }
+
+  async issueTestingCertificate(
+    context: TestingCertificateRuntimeContext, testingCandidateId: string, input: object,
+  ): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.source]);
+      await client.query("SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'");
+      const result = await client.query<{ data: unknown }>(
+        'SELECT hon.issue_testing_certificate($1,$2::uuid,$3::jsonb,$4,$5::uuid,$6::uuid) AS data',
+        [context.externalSubject, testingCandidateId, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId],
+      );
+      if (!result.rows[0]) throw new Error('HON testing certificate issue did not return a receipt.');
       return result.rows[0].data;
     });
   }

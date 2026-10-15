@@ -59,6 +59,8 @@
     "db:setup-parent-journey": "node scripts/setup-parent-journey-validation.mjs",
     "db:setup-marketing-assistant": "node scripts/setup-marketing-assistant-validation.mjs",
     "db:test-marketing-assistant": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketing-assistant-integrity.mjs",
+    "db:test-testing-certificates": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-testing-certificate-integrity.mjs",
+    "db:setup-testing-certificates": "node scripts/setup-testing-certificate-validation.mjs",
     "db:test-marketing-assistant-verifier": "node scripts/test-marketing-assistant-verifier.mjs"
   },
   "dependencies": {

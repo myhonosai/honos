@@ -141,6 +141,10 @@
       "title": "HON | Human testing registration reviews"
     },
     {
+      "path": "/staff/testing/certificates",
+      "title": "HON | Human-issued testing certificates"
+    },
+    {
       "path": "/staff/marketing/assistant",
       "title": "Human Campaign Planning"
     }

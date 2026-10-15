@@ -1,5 +1,6 @@
 import { marketingAssistantTables, verifyMarketingAssistantSecurity } from './marketing-assistant-security.mjs';
 import { achievementTables, verifyAchievementSecurity } from './achievement-security.mjs';
+import { testingCertificateTables, verifyTestingCertificateSecurity } from './testing-certificate-security.mjs';
 import { marketplaceTables, verifyMarketplaceSecurity } from './marketplace-security.mjs';
 import { humanWorkTables, verifyHumanWorkSecurity } from './human-work-security.mjs';
 import { voiceTables, verifyVoiceSecurity } from './voice-security.mjs';
@@ -28,6 +29,7 @@ if (runtimeRoleName !== 'hon_runtime') {
 const expectedRlsTables = [
   ...marketingAssistantTables,
   ...achievementTables,
+  ...testingCertificateTables,
   ...marketplaceTables,
   ...humanWorkTables,
   ...voiceTables,
@@ -163,6 +165,7 @@ await client.connect();
 try {
   await verifyMarketingAssistantSecurity(client, runtimeRoleName);
   await verifyAchievementSecurity(client,runtimeRoleName);
+  await verifyTestingCertificateSecurity(client, runtimeRoleName);
   await verifyMarketplaceSecurity(client, runtimeRoleName);
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
