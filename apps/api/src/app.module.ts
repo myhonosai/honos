@@ -29,9 +29,12 @@ import { FamilyService } from './families/family.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
 import { CurriculumController } from './curriculum/curriculum.controller.js';
 import { CurriculumService } from './curriculum/curriculum.service.js';
+import { CurriculumRankService } from './curriculum/curriculum-rank.service.js';
+import { TestingEventController } from './testing/testing-event.controller.js';
+import { TestingEventService } from './testing/testing-event.service.js';
 
 @Module({
-  controllers: [HealthController, ReadinessController, FoundationController, SessionContextController, IdentityController, PersonController, FamilyController, LeadController, PipelineController, CurriculumController, InterfaceThemeController, MembershipController, BillingAccountController, HqController, HqOnboardingController, ActionReviewController],
-  providers: [RuntimeDatabaseService, ManusIdentityService, HonIdentityGuard, PersonService, FamilyService, LeadService, CrmLeadActionTool, PipelineService, CurriculumService, ActionEngineService, InterfaceThemeService, MembershipService, BillingAccountService, HqOnboardingService],
+  controllers: [HealthController, ReadinessController, FoundationController, SessionContextController, IdentityController, PersonController, FamilyController, LeadController, PipelineController, CurriculumController, TestingEventController, InterfaceThemeController, MembershipController, BillingAccountController, HqController, HqOnboardingController, ActionReviewController],
+  providers: [RuntimeDatabaseService, ManusIdentityService, HonIdentityGuard, PersonService, FamilyService, LeadService, CrmLeadActionTool, PipelineService, CurriculumService, CurriculumRankService, TestingEventService, ActionEngineService, InterfaceThemeService, MembershipService, BillingAccountService, HqOnboardingService],
 })
 export class AppModule {}

@@ -225,6 +225,25 @@ export interface CurriculumSummary {
   createdAt: string;
 }
 
+export interface CreateCurriculumRankInput {
+  name: string;
+  progressionOrder: number;
+  displayColor?: string;
+  exposureRequirement?: Record<string, unknown>;
+  masteryRequirement?: Record<string, unknown>;
+  promotionRequirement?: Record<string, unknown>;
+}
+
+export interface CurriculumRankSummary {
+  id: string;
+  curriculumId: string;
+  name: string;
+  progressionOrder: number;
+  displayColor?: string | undefined;
+  version: number;
+  createdAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;
