@@ -20,7 +20,7 @@ const ids = Object.fromEntries(
   [
     'organization', 'schoolA', 'schoolB', 'user', 'principal', 'ownerRole',
     'personA', 'personB', 'pipelineA', 'pipelineB', 'stageA', 'stageB', 'leadA', 'leadB',
-    'foreignAppointment', 'localScheduledAppointment',
+    'foreignAppointment', 'localScheduledAppointment', 'localConsultationAppointment',
   ].map((key) => [key, randomUUID()]),
 );
 const externalSubject = `crm-trial-appointment-${randomUUID()}`;
@@ -231,8 +231,17 @@ try {
          starts_at, ends_at, location, notes, created_by_principal_id
        ) VALUES (
          $1, $2, $3, $4, 'TRIAL', 'SCHEDULED', $5, $6, 'Studio A', 'Unchanged schedule note', $7
-       )`,
+      )`,
       [ids.localScheduledAppointment, ids.organization, ids.schoolA, ids.leadA, startsAt.toISOString(), endsAt.toISOString(), ids.principal],
+    );
+    await administrator.query(
+      `INSERT INTO hon.crm_appointments (
+         id, organization_id, school_id, crm_lead_id, appointment_type, status,
+         starts_at, ends_at, created_by_principal_id
+       ) VALUES (
+         $1, $2, $3, $4, 'CONSULTATION', 'SCHEDULED', $5, $6, $7
+       )`,
+      [ids.localConsultationAppointment, ids.organization, ids.schoolA, ids.leadA, startsAt.toISOString(), endsAt.toISOString(), ids.principal],
     );
     await administrator.query('COMMIT');
   } catch (error) {
@@ -295,6 +304,10 @@ try {
     ids.organization, ids.schoolA, first.data.id, `outcome-terminal-${randomUUID()}`,
     outcomeFor('NO_SHOW', outcome.data.version), request, responseCapture(),
   ), 'A terminal CRM appointment accepted another trial outcome.');
+  await expectStatus(409, () => outcomeController.record(
+    ids.organization, ids.schoolA, ids.localConsultationAppointment, `outcome-consultation-${randomUUID()}`,
+    outcomeFor('COMPLETED', 1), request, responseCapture(),
+  ), 'A same-school consultation accepted a trial-only outcome command.');
   await expectStatus(404, () => outcomeController.record(
     ids.organization, ids.schoolA, ids.foreignAppointment, `outcome-foreign-${randomUUID()}`,
     outcomeFor('CANCELLED', 1), request, responseCapture(),
@@ -456,6 +469,7 @@ try {
       (SELECT version FROM hon.crm_appointments WHERE id = $3::uuid) AS appointment_version,
       (SELECT notes FROM hon.crm_appointments WHERE id = $3::uuid) AS appointment_notes,
       (SELECT status::text FROM hon.crm_appointments WHERE id = $4::uuid) AS stale_appointment_status,
+      (SELECT status::text FROM hon.crm_appointments WHERE id = $5::uuid) AS consultation_appointment_status,
       (SELECT count(*)::integer FROM hon.class_bookings WHERE organization_id = $1) AS bookings,
       (SELECT count(*)::integer FROM hon.families WHERE organization_id = $1) AS families,
       (SELECT count(*)::integer FROM hon.student_profiles WHERE organization_id = $1) AS students,
@@ -464,8 +478,8 @@ try {
       (SELECT count(*)::integer FROM hon.crm_activities WHERE organization_id = $1) AS activities,
       (SELECT count(*)::integer FROM hon.ai_usage_ledger WHERE organization_id = $1) AS ai_usage,
       (SELECT count(*)::integer FROM hon.action_requests WHERE organization_id = $1) AS action_requests
-  `, [ids.organization, ids.leadA, first.data.id, ids.localScheduledAppointment]);
-  assert(evidence.rows[0]?.appointments === 3
+  `, [ids.organization, ids.leadA, first.data.id, ids.localScheduledAppointment, ids.localConsultationAppointment]);
+  assert(evidence.rows[0]?.appointments === 4
     && evidence.rows[0]?.schedule_audits === 1 && evidence.rows[0]?.outcome_audits === 1
     && evidence.rows[0]?.schedule_outbox === 1 && evidence.rows[0]?.outcome_outbox === 1
     && evidence.rows[0]?.audit_outcome_notes === 'Trial completed successfully.'
@@ -474,8 +488,9 @@ try {
   assert(evidence.rows[0]?.lead_status === 'OPEN' && evidence.rows[0]?.lead_pipeline_id === ids.pipelineA
     && evidence.rows[0]?.appointment_type === 'TRIAL' && evidence.rows[0]?.appointment_status === 'COMPLETED'
     && evidence.rows[0]?.appointment_version === 2 && evidence.rows[0]?.appointment_notes === 'First visit; parent will attend.'
-    && evidence.rows[0]?.stale_appointment_status === 'SCHEDULED',
-  'Trial outcome altered lead/pipeline state, appointment type/schedule notes, or a stale appointment.');
+    && evidence.rows[0]?.stale_appointment_status === 'SCHEDULED'
+    && evidence.rows[0]?.consultation_appointment_status === 'SCHEDULED',
+  'Trial outcome altered lead/pipeline state, appointment type/schedule notes, or a protected consultation.');
   assert(evidence.rows[0]?.bookings === 0 && evidence.rows[0]?.families === 0 && evidence.rows[0]?.students === 0
     && evidence.rows[0]?.enrollments === 0 && evidence.rows[0]?.memberships === 0 && evidence.rows[0]?.activities === 0
     && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,

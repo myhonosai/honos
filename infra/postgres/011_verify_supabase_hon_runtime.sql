@@ -40,6 +40,16 @@ SELECT has_function_privilege(
   'EXECUTE'
 ) AS can_resolve_hq_operator_scope;
 
+-- Conventional trial scheduling/outcome commands need exact RLS-bound CRUD
+-- subset access. DELETE must stay unavailable.
+SELECT
+  has_table_privilege('hon_runtime', 'hon.crm_appointments', 'SELECT') AS can_read_crm_appointments,
+  has_table_privilege('hon_runtime', 'hon.crm_appointments', 'INSERT') AS can_create_crm_appointments,
+  has_table_privilege('hon_runtime', 'hon.crm_appointments', 'UPDATE') AS can_update_crm_appointments,
+  has_table_privilege('hon_runtime', 'hon.crm_appointments', 'DELETE') AS can_delete_crm_appointments,
+  has_type_privilege('hon_runtime', 'hon.crm_appointment_type', 'USAGE') AS can_use_crm_appointment_type,
+  has_type_privilege('hon_runtime', 'hon.crm_appointment_status', 'USAGE') AS can_use_crm_appointment_status;
+
 -- Parent requests require SELECT/INSERT; the separate human staff review
 -- command requires the only allowed UPDATE transition. DELETE must remain false.
 SELECT

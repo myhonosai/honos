@@ -45,6 +45,12 @@ try {
   assert(posture.rows[0]?.relrowsecurity && posture.rows[0]?.relforcerowsecurity,
     'knowledge_articles must enable and force row-level security.');
 
+  const obsoleteParentPermission = await administrator.query(
+    "SELECT 1 FROM hon.permissions WHERE code = 'knowledge.parent.read'",
+  );
+  assert(obsoleteParentPermission.rowCount === 0,
+    'Parent-safe knowledge must be authorized by family scope, not a dead staff-only permission.');
+
   const privileges = await runtime.query(`
     SELECT
       has_table_privilege(current_user, 'hon.knowledge_articles', 'SELECT') AS can_select,

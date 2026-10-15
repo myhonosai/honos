@@ -83,23 +83,26 @@ REVOKE USAGE ON TYPE
   hon.plan_tier,
   hon.knowledge_article_audience,
   hon.knowledge_article_lifecycle,
-  hon.planned_absence_request_status
+  hon.planned_absence_request_status,
+  hon.crm_appointment_type,
+  hon.crm_appointment_status
 FROM hon_runtime, PUBLIC;
 -- The runtime role does not administer tenant topology, commercial tier,
 -- Action policy, identity, IAM, or parent-access grants. Existing/future
 -- mutations in those areas use fixed SECURITY DEFINER procedures or a later
 -- reviewed domain command boundary.
 GRANT SELECT ON TABLE
-  hon.organization_entitlements,
-  hon.people,
-  hon.families,
-  hon.family_members,
-  hon.student_profiles,
-  hon.crm_pipelines,
-  hon.crm_pipeline_stages,
-  hon.crm_leads,
-  hon.billing_accounts,
-  hon.memberships,
+ hon.organization_entitlements,
+ hon.people,
+ hon.families,
+ hon.family_members,
+ hon.student_profiles,
+ hon.crm_pipelines,
+ hon.crm_pipeline_stages,
+ hon.crm_leads,
+ hon.crm_appointments,
+ hon.billing_accounts,
+ hon.memberships,
   hon.membership_payment_schedules,
   -- Operations reporting needs aggregate-only invoice/payment-attempt counts;
   -- do not grant any billing mutation privilege to the runtime role.
@@ -128,15 +131,16 @@ GRANT SELECT ON TABLE
   hon.work_items
 TO hon_runtime;
 GRANT INSERT ON TABLE
-  hon.people,
-  hon.families,
-  hon.family_members,
-  hon.student_profiles,
-  hon.crm_pipelines,
-  hon.crm_pipeline_stages,
-  hon.crm_leads,
-  hon.billing_accounts,
-  hon.memberships,
+ hon.people,
+ hon.families,
+ hon.family_members,
+ hon.student_profiles,
+ hon.crm_pipelines,
+ hon.crm_pipeline_stages,
+ hon.crm_leads,
+ hon.crm_appointments,
+ hon.billing_accounts,
+ hon.memberships,
   hon.membership_payment_schedules,
   hon.action_requests,
   hon.action_approvals,
@@ -165,10 +169,12 @@ TO hon_runtime;
 -- runtime setup remains fail-closed when scheduling features evolve.
 GRANT SELECT, INSERT ON TABLE hon.class_bookings TO hon_runtime;
 GRANT UPDATE ON TABLE
-  hon.action_requests,
-  hon.idempotency_records,
-  hon.principal_interface_preferences,
-  -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.
+ hon.action_requests,
+ hon.idempotency_records,
+ hon.principal_interface_preferences,
+ -- The conventional trial outcome command is a version-checked lifecycle update.
+ hon.crm_appointments,
+ -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.
   hon.knowledge_articles,
   -- Human staff review is the sole mutable planned-absence transition; no DELETE privilege is granted.
   hon.planned_absence_requests,
@@ -202,7 +208,9 @@ GRANT USAGE ON TYPE
   hon.attendance_status,
   hon.knowledge_article_audience,
   hon.knowledge_article_lifecycle,
-  hon.planned_absence_request_status
+  hon.planned_absence_request_status,
+  hon.crm_appointment_type,
+  hon.crm_appointment_status
 TO hon_runtime;
 
 -- Keep function execution explicit rather than granting every current/future

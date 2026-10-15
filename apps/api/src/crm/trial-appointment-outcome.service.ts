@@ -158,6 +158,12 @@ export class TrialAppointmentOutcomeService {
       if (!CRM_APPOINTMENT_STATUSES.includes(current.status)) {
         throw new Error('HON CRM appointment query returned an invalid status.');
       }
+      if (current.appointmentType !== 'TRIAL') {
+        throw new ConflictException({
+          code: 'CRM_APPOINTMENT_NOT_TRIAL',
+          detail: 'Only a TRIAL appointment can have a trial outcome recorded.',
+        });
+      }
 
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (
@@ -228,6 +234,7 @@ export class TrialAppointmentOutcomeService {
              updated_at = now()
          WHERE id = $1::uuid
            AND status = 'SCHEDULED'::hon.crm_appointment_status
+           AND appointment_type = 'TRIAL'::hon.crm_appointment_type
            AND version = $3
          RETURNING
            id,
