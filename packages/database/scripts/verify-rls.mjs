@@ -10,7 +10,10 @@ import { readFile } from 'node:fs/promises';
 
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS verification.');
-const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username : 'hon_runtime';
+// Supabase Session Pooler usernames are emitted as `role.project_ref`, while
+// PostgreSQL role grants and SECURITY DEFINER ACLs remain attached to `role`.
+// Local disposable validation aliases do not contain a dot and pass unchanged.
+const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username.split('.', 1)[0] : 'hon_runtime';
 if (!['hon_marketing_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {

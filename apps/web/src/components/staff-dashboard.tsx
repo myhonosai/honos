@@ -87,7 +87,7 @@ export function StaffDashboard(): React.ReactElement {
   }
 
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
     <section className={styles.scopeSection} aria-labelledby="scope-heading">

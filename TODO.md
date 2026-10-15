@@ -293,3 +293,11 @@ Details: [Human Testing Registration Interest](docs/architecture/HUMAN_TESTING_R
 - [x] Recreate the guarded local fixture and pass integrity (12 groups, zero external provider calls), deliberate-drift verifier, full RLS verification, canonical 011, and all root check/test/migration/build gates. Local commit/push is authorized; production/Supabase migration and paid inference remain unperformed.
 
 Details: [Marketing Assistant architecture](docs/architecture/MARKETING_ASSISTANT.md). Never request a key or call OpenRouter during local verification; no production/Supabase database, provider, publishing/delivery, messaging, spend, payment or downstream consumer was contacted/activated.
+
+## Deterministic School Command Center checkpoint
+
+- [x] Reuse the existing staff dashboard, CRM, trials, testing, billing, Action Engine approval, and durable-work foundations to deliver an optional conventional single-school Command Center. It must work when AI/providers are unavailable and remain a read-only navigation surface rather than a second CRM or execution system.
+- [x] Return only fixed aggregate/status facts under verified direct HUMAN_USER, exact school `reporting.view`, active selected school and Essential/Core/Complete entitlement. New leads/trials/testing/approvals/work/term-end/paid-invoice facts use transparent bounded UTC semantics; unavailable inquiry/attendance-decline/trial-conversion/revenue categories remain explicit and never become invented zeroes.
+- [x] Derive a stable deterministic daily briefing and optional explained same-origin navigation cards from the returned facts only. Cards never mutate data, invoke Action Engine/provider/AI/automation, send communication, publish, or execute financial/membership work.
+- [x] Deliver authenticated no-index `/staff/command-center` with known school selector IDs that grant no authority, clear unavailable/error states, browser-local hide/restore preferences for sections and recommendation cards, and unchanged three-mode presentation/permission/tier semantics.
+- [x] Prove RLS/runtime ACL posture, no PUBLIC/client execute, direct scope/tier/identity revocation, forged GUC denial, PII/raw field rejection, exact window/count semantics, deterministic cards, zero side effects, full checks, documentation and checkpoint push.

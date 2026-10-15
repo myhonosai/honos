@@ -3,6 +3,7 @@ export * from './marketing-campaigns.js';
 export * from './revenue-planning.js';
 export * from './search.js';
 export * from './staff-roles.js';
+export * from './command-center.js';
 export * from './ai-invocation-plan.js';
 export * from './curriculum-progress.js';
 export * from './lead-import.js';

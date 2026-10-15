@@ -283,6 +283,16 @@ GRANT EXECUTE ON FUNCTION hon.mutate_document(text,text,text,uuid,jsonb,text,uui
 REVOKE ALL ON FUNCTION hon.search_school(text,uuid,uuid,text,text[],uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.search_school(text,uuid,uuid,text,text[],uuid) TO hon_runtime;
 
+-- Deterministic school Command Center: one aggregate-only projection. It adds
+-- no table access and accepts no caller-provided tenant/principal GUC authority.
+REVOKE ALL ON FUNCTION hon.read_school_command_center(text,uuid,uuid) FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.read_school_command_center(text,uuid,uuid) FROM %I',r);
+ END LOOP;
+END $$;
+GRANT EXECUTE ON FUNCTION hon.read_school_command_center(text,uuid,uuid) TO hon_runtime;
+
 -- Private human lead imports: no table access, no validator/applier execution.
 REVOKE ALL ON TABLE hon.lead_import_batches,hon.lead_import_rows,
   hon.lead_import_evidence,hon.lead_import_requests FROM hon_runtime, PUBLIC;

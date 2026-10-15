@@ -1,4 +1,4 @@
-.page { max-width: 1200px; margin: 0 auto; padding: 40px 24px 80px; color: #e7eef9; font-family: var(--font-body, Arial, sans-serif); }
+.page { min-height: 100vh; margin: 0; padding: 40px max(24px, calc((100vw - 1200px) / 2 + 24px)) 80px; background: radial-gradient(circle at 84% 0%, rgba(44, 111, 151, .22), transparent 34%), #071426; color: #e7eef9; font-family: var(--font-body, Arial, sans-serif); }
 .page nav { display: flex; flex-wrap: wrap; gap: 12px 22px; margin-bottom: 34px; }
 .page a { color: #98dce2; }
 .page a:focus-visible, .page button:focus-visible, .page input:focus-visible { outline: 3px solid #86d8d0; outline-offset: 3px; }
@@ -24,6 +24,8 @@
 .verified code { color: inherit; }
 .empty { margin-top: 26px; padding: 18px 20px; border: 1px solid #435a77; border-radius: 12px; background: #172335; }
 .empty p { margin: 7px 0 0; color: #c1d0e0; line-height: 1.5; }
+.empty button, .queueSection > button, .unavailable > button, .notice > button { margin-top: 14px; width: fit-content; border: 1px solid #4b7890; border-radius: 7px; padding: 8px 11px; background: #10273a; color: #bceff0; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.empty button:hover, .queueSection > button:hover, .unavailable > button:hover, .notice > button:hover { border-color: #86d8d0; background: #164050; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 26px; }
 .card { display: flex; min-width: 0; flex-direction: column; border: 1px solid #35586a; border-radius: 14px; padding: 22px; background: #122b38; }
 .card header p, .unavailable > span { margin: 0; color: #8ad6d0; font-size: 11px; font-weight: 800; letter-spacing: .11em; }

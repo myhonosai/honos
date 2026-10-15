@@ -113,6 +113,10 @@
       "title": "HON | Staff Operations Dashboard"
     },
     {
+      "path": "/staff/command-center",
+      "title": "HON | School Command Center"
+    },
+    {
       "path": "/parent/journey",
       "title": "HON | Family Student Journey"
     },

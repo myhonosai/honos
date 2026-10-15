@@ -110,6 +110,8 @@ import { CommunicationConsentController } from './communication/communication-co
 import { CommunicationConsentService } from './communication/communication-consent.service.js';
 import { OperationsSummaryController } from './reports/operations-summary.controller.js';
 import { OperationsSummaryService } from './reports/operations-summary.service.js';
+import { CommandCenterController } from './reports/command-center.controller.js';
+import { CommandCenterService } from './reports/command-center.service.js';
 import { CommunicationMessageController } from './communication/communication-message.controller.js';
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
@@ -189,6 +191,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     AiTeamController,
     OperationsReportController,
     OperationsSummaryController,
+    CommandCenterController,
     CommunicationConsentController,
     CommunicationMessageController,
     TestingEventController,
@@ -256,6 +259,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     AiTeamService,
     OperationsReportService,
     OperationsSummaryService,
+    CommandCenterService,
     CommunicationConsentService,
     CommunicationMessageService,
     TestingEventService,

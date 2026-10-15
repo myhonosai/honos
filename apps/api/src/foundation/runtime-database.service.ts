@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
@@ -220,6 +220,22 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     );
     const row = result.rows[0];
     if (!row) throw new Error('HON operations summary projection did not return a result.');
+    return row.data;
+  }
+
+  async readSchoolCommandCenter(
+    externalSubject: string, organizationId: string, schoolId: string,
+  ): Promise<SchoolCommandCenterProjection> {
+    await this.assertRuntimePosture();
+    // The fixed SECURITY DEFINER projection independently resolves the verified
+    // human, selected school, exact reporting.view, and live entitlement. Do not
+    // establish caller-controlled tenant/principal GUCs for this aggregate read.
+    const result = await this.getPool().query<{ data: SchoolCommandCenterProjection }>(
+      'SELECT hon.read_school_command_center($1,$2::uuid,$3::uuid) AS data',
+      [externalSubject, organizationId, schoolId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error('HON Command Center projection did not return a result.');
     return row.data;
   }
 
