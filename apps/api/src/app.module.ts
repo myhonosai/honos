@@ -92,6 +92,8 @@ import { TestingScorecardHumanUiGuard } from './testing/testing-scorecard.dto.js
 import { ParentTestingRegistrationController, StaffTestingRegistrationController } from './testing/testing-registration.controller.js';
 import { TestingRegistrationService } from './testing/testing-registration.service.js';
 import { TestingRegistrationHumanUiGuard } from './testing/testing-registration-human-ui.guard.js';
+import { ParentTestingStatusController, ParentTestingStatusReadGuard } from './testing/parent-testing-status.controller.js';
+import { ParentTestingStatusService } from './testing/parent-testing-status.service.js';
 import { ProgramController } from './programs/program.controller.js';
 import { ProgramService } from './programs/program.service.js';
 import { ClassSessionController } from './schedule/class-session.controller.js';
@@ -226,6 +228,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     TestingScorecardController,
     ParentTestingRegistrationController,
     StaffTestingRegistrationController,
+    ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
     BillingAccountController,
@@ -304,6 +307,8 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     TestingScorecardHumanUiGuard,
     TestingRegistrationService,
     TestingRegistrationHumanUiGuard,
+    ParentTestingStatusService,
+    ParentTestingStatusReadGuard,
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,

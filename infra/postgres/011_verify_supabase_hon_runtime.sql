@@ -380,6 +380,42 @@ WHERE n.nspname='hon' AND c.relname IN('billing_accounts','memberships','invoice
 -- ambiguity/revocation, relationship insufficiency, zero writes and no provider
 -- or collection activity on an explicitly disposable local database.
 
+-- 13c) Parent testing status: one selector-free, read-only current-family
+-- projection. Runtime gets only EXECUTE; no client execution, caller GUC, or
+-- scorecard/evaluation/certificate table privilege is added.
+SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+  has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+  position('current_setting' IN pg_get_functiondef(p.oid)) = 0 AS no_caller_guc_authority,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute
+FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+WHERE p.oid='hon.read_parent_testing_status(text)'::regprocedure;
+DO $$
+DECLARE role_name text; projection record;
+BEGIN
+  SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+    has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+    position('current_setting' IN pg_get_functiondef(p.oid)) = 0 AS no_caller_guc,
+    NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+      WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS closed
+  INTO projection FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+  WHERE p.oid='hon.read_parent_testing_status(text)'::regprocedure;
+  IF projection.prosecdef IS DISTINCT FROM true OR projection.provolatile <> 'v'
+    OR projection.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+    OR projection.trusted_owner IS DISTINCT FROM true OR projection.runtime_execute IS DISTINCT FROM true
+    OR projection.no_caller_guc IS DISTINCT FROM true OR projection.closed IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Unsafe parent testing status projection ACL or definition';
+  END IF;
+  FOR role_name IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+    IF has_function_privilege(role_name,'hon.read_parent_testing_status(text)','EXECUTE') THEN
+      RAISE EXCEPTION 'Client parent testing status execute: %', role_name;
+    END IF;
+  END LOOP;
+END $$;
+-- Local disposable proof: pnpm db:test-parent-testing-status. It verifies one
+-- current-family scope, status-only redaction, payer-safe certificate visibility,
+-- cross-family denial, evaluator exclusion, and zero side effects.
+
 -- 14) Deterministic revenue planning: exactly two runtime functions, no tables,
 -- columns, helper EXECUTE, PUBLIC/client/HQ or directory access. All rows below
 -- must match_expected; the executable assertion block fails on drift.

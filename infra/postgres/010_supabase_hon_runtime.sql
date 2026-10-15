@@ -232,6 +232,7 @@ REVOKE ALL ON FUNCTION hon.resolve_hq_operator_scope(text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_parent_family_scope(text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_parent_journey_scopes(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_billing_view(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_parent_testing_status(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_testing_registration_review_scopes(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) FROM PUBLIC;
@@ -250,6 +251,10 @@ GRANT EXECUTE ON FUNCTION hon.resolve_parent_journey_scopes(text) TO hon_runtime
 -- SELECT privileges are unchanged for reviewed staff reads; this grants no
 -- provider, method/token, invoice/payment mutation, or collection capability.
 GRANT EXECUTE ON FUNCTION hon.read_parent_billing_view(text) TO hon_runtime;
+-- Parent testing status is a single selector-free read-only projection. It adds
+-- no scorecard/certificate/table grants and cannot mutate registration, payment,
+-- grading, promotion, messaging, providers, AI, Action Engine, voice, or automation.
+GRANT EXECUTE ON FUNCTION hon.read_parent_testing_status(text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_testing_registration_review_scopes(text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) TO hon_runtime;
