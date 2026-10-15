@@ -29,6 +29,10 @@
       "title": "HON | Family Billing Observations"
     },
     {
+      "path": "/parent/planned-absences",
+      "title": "HON | Planned absence history"
+    },
+    {
       "path": "/complete-mobile",
       "title": "HON Complete Mobile"
     },

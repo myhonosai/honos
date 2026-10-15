@@ -72,6 +72,8 @@ import { ParentFamilyScheduleController } from './families/parent-family-schedul
 import { ParentFamilyScheduleService } from './families/parent-family-schedule.service.js';
 import { ParentPlannedAbsenceController } from './families/parent-planned-absence.controller.js';
 import { ParentPlannedAbsenceService } from './families/parent-planned-absence.service.js';
+import { ParentPlannedAbsenceHistoryController, ParentPlannedAbsenceHistoryReadGuard } from './families/parent-planned-absence-history.controller.js';
+import { ParentPlannedAbsenceHistoryService } from './families/parent-planned-absence-history.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
 import { CurriculumController } from './curriculum/curriculum.controller.js';
 import { CurriculumService } from './curriculum/curriculum.service.js';
@@ -198,6 +200,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     ParentStudentJourneyController,
     ParentFamilyScheduleController,
     ParentPlannedAbsenceController,
+    ParentPlannedAbsenceHistoryController,
     LeadController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
@@ -274,6 +277,8 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     ParentStudentJourneyService,
     ParentFamilyScheduleService,
     ParentPlannedAbsenceService,
+    ParentPlannedAbsenceHistoryService,
+    ParentPlannedAbsenceHistoryReadGuard,
     LeadService,
     TrialAppointmentService,
     TrialAppointmentOutcomeService,

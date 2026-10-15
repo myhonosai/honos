@@ -76,7 +76,7 @@ describe('one strictly normalized HON session', () => {
     expect(() => verifySession(signed({ ...claims, ...patch }), config, now)).toThrow();
   });
   it('rejects forged, tampered, unsigned, wrong-key, expired and wrong-header sessions', () => {
-    const token = issueSession(identity, config);
+    const token = issueSession(identity, config, now);
     expect(() => verifySession(signed(claims, 'attacker-key'), config)).toThrow(AuthValidationError);
     expect(() => verifySession(token.replace(/.$/, token.endsWith('a') ? 'b' : 'a'), config)).toThrow();
     expect(() => verifySession(jwt.sign(claims, '', { algorithm: 'none' }), config)).toThrow();
