@@ -32,9 +32,48 @@ import { CurriculumService } from './curriculum/curriculum.service.js';
 import { CurriculumRankService } from './curriculum/curriculum-rank.service.js';
 import { TestingEventController } from './testing/testing-event.controller.js';
 import { TestingEventService } from './testing/testing-event.service.js';
+import { ProgramController } from './programs/program.controller.js';
+import { ProgramService } from './programs/program.service.js';
 
 @Module({
-  controllers: [HealthController, ReadinessController, FoundationController, SessionContextController, IdentityController, PersonController, FamilyController, LeadController, PipelineController, CurriculumController, TestingEventController, InterfaceThemeController, MembershipController, BillingAccountController, HqController, HqOnboardingController, ActionReviewController],
-  providers: [RuntimeDatabaseService, ManusIdentityService, HonIdentityGuard, PersonService, FamilyService, LeadService, CrmLeadActionTool, PipelineService, CurriculumService, CurriculumRankService, TestingEventService, ActionEngineService, InterfaceThemeService, MembershipService, BillingAccountService, HqOnboardingService],
+  controllers: [
+    HealthController,
+    ReadinessController,
+    FoundationController,
+    SessionContextController,
+    IdentityController,
+    PersonController,
+    FamilyController,
+    LeadController,
+    PipelineController,
+    CurriculumController,
+    ProgramController,
+    TestingEventController,
+    InterfaceThemeController,
+    MembershipController,
+    BillingAccountController,
+    HqController,
+    HqOnboardingController,
+    ActionReviewController,
+  ],
+  providers: [
+    RuntimeDatabaseService,
+    ManusIdentityService,
+    HonIdentityGuard,
+    PersonService,
+    FamilyService,
+    LeadService,
+    CrmLeadActionTool,
+    PipelineService,
+    CurriculumService,
+    CurriculumRankService,
+    ProgramService,
+    TestingEventService,
+    ActionEngineService,
+    InterfaceThemeService,
+    MembershipService,
+    BillingAccountService,
+    HqOnboardingService,
+  ],
 })
 export class AppModule {}

@@ -244,6 +244,27 @@ export interface CurriculumRankSummary {
   createdAt: string;
 }
 
+export const SCHEDULE_ITEM_STATUSES = ['DRAFT', 'SCHEDULED', 'CANCELLED', 'COMPLETED'] as const;
+export type ScheduleItemStatus = (typeof SCHEDULE_ITEM_STATUSES)[number];
+
+export interface CreateProgramInput {
+  name: string;
+  description?: string | undefined;
+  minimumAgeMonths?: number | undefined;
+  maximumAgeMonths?: number | undefined;
+}
+
+export interface ProgramSummary {
+  id: string;
+  name: string;
+  description?: string | undefined;
+  minimumAgeMonths?: number | undefined;
+  maximumAgeMonths?: number | undefined;
+  status: ScheduleItemStatus;
+  version: number;
+  createdAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;
