@@ -36,6 +36,8 @@ import { ProgramController } from './programs/program.controller.js';
 import { ProgramService } from './programs/program.service.js';
 import { ClassSessionController } from './schedule/class-session.controller.js';
 import { ClassSessionService } from './schedule/class-session.service.js';
+import { AttendanceController } from './schedule/attendance.controller.js';
+import { AttendanceService } from './schedule/attendance.service.js';
 
 @Module({
   controllers: [
@@ -51,6 +53,7 @@ import { ClassSessionService } from './schedule/class-session.service.js';
     CurriculumController,
     ProgramController,
     ClassSessionController,
+    AttendanceController,
     TestingEventController,
     InterfaceThemeController,
     MembershipController,
@@ -72,6 +75,7 @@ import { ClassSessionService } from './schedule/class-session.service.js';
     CurriculumRankService,
     ProgramService,
     ClassSessionService,
+    AttendanceService,
     TestingEventService,
     ActionEngineService,
     InterfaceThemeService,

@@ -296,6 +296,37 @@ export interface ClassSessionSummary {
   createdAt: string;
 }
 
+export const ATTENDANCE_STATUSES = [
+  'PRESENT',
+  'LATE',
+  'EXCUSED_ABSENCE',
+  'UNEXCUSED_ABSENCE',
+  'MAKEUP',
+] as const;
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
+
+export interface RecordAttendanceInput {
+  studentProfileId: string;
+  status: AttendanceStatus;
+  note?: string | undefined;
+  /** Required when changing an attendance record already present for the session/student pair. */
+  expectedVersion?: number | undefined;
+}
+
+export interface AttendanceRecordSummary {
+  id: string;
+  classSessionId: string;
+  studentProfileId: string;
+  classBookingId?: string | undefined;
+  status: AttendanceStatus;
+  recordedByPrincipalId?: string | undefined;
+  recordedAt: string;
+  note?: string | undefined;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;
