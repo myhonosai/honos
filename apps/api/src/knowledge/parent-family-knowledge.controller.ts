@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
-import type { HonRequest } from '../foundation/manus-identity.service.js';
+import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { ParentFamilyKnowledgeService } from './parent-family-knowledge.service.js';
 

@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
 import type { CommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
-import type { HonRequest } from '../foundation/manus-identity.service.js';
+import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { ApproveKnowledgeArticleDto, CreateKnowledgeArticleDto } from './knowledge-article.dto.js';
 import { KnowledgeArticleService } from './knowledge-article.service.js';

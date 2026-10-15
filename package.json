@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "pnpm --filter @hon/web dev",
     "dev:api": "pnpm --filter @hon/api start:dev",
-    "prepare:workspace": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/design-system build",
+    "prepare:workspace": "pnpm --filter @hon/auth build && pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/design-system build",
     "build": "pnpm prepare:workspace && pnpm -r --if-present build",
     "check": "pnpm prepare:workspace && pnpm -r --if-present check",
     "test": "pnpm prepare:workspace && pnpm -r --if-present test",

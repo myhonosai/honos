@@ -1,7 +1,7 @@
 import { Body, ConflictException, Controller, ForbiddenException, Headers, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
-import type { HonRequest } from '../foundation/manus-identity.service.js';
+import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { ProvisionOrganizationDto } from './provision-organization.dto.js';
 import { HqOnboardingService } from './hq-onboarding.service.js';

@@ -2,7 +2,7 @@ import { Body, ConflictException, Controller, ForbiddenException, Get, Headers, 
 import { randomUUID } from 'node:crypto';
 import type { CommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
-import type { HonRequest } from '../foundation/manus-identity.service.js';
+import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { ActionDecisionDto } from './action-decision.dto.js';
 import { ActionEngineService } from './action-engine.service.js';

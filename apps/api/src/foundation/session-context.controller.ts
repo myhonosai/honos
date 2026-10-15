@@ -1,7 +1,7 @@
 import { Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Req, UseGuards } from '@nestjs/common';
 import { RuntimeDatabaseService } from './runtime-database.service.js';
 import { HonIdentityGuard } from './hon-identity.guard.js';
-import type { HonRequest } from './manus-identity.service.js';
+import type { HonRequest } from './hon-identity.service.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId')
 @UseGuards(HonIdentityGuard)

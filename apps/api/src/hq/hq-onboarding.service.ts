@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
-import type { AuthenticatedIdentity } from '../foundation/manus-identity.service.js';
+import type { AuthenticatedIdentity } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { HonTier } from '@hon/contracts';
 

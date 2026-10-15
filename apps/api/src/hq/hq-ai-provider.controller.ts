@@ -1,7 +1,7 @@
 import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import type { AiControlPlaneKind } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
-import type { HonRequest } from '../foundation/manus-identity.service.js';
+import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { HqAiProviderService } from './hq-ai-provider.service.js';
 

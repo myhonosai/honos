@@ -1,6 +1,6 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { HonIdentityGuard } from './hon-identity.guard.js';
-import type { HonRequest } from './manus-identity.service.js';
+import type { HonRequest } from './hon-identity.service.js';
 
 @Controller('identity')
 @UseGuards(HonIdentityGuard)

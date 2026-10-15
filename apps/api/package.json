@@ -6,7 +6,8 @@
     "build": "nest build",
     "check": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/main.js",
-    "start:dev": "nest start --watch"
+    "start:dev": "nest start --watch",
+    "test": "pnpm build && node --test test/*.test.cjs"
   },
   "dependencies": {
     "@hon/config": "workspace:*",
@@ -18,17 +19,16 @@
     "@nestjs/platform-express": "^11.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
-    "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "@hon/auth": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
     "@types/express": "^5.0.1",
-    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
     "ts-node": "^10.9.2",

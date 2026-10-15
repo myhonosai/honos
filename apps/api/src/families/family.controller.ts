@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { CommandContext } from '@hon/contracts';
 import type { Response } from 'express';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
-import type { HonRequest } from '../foundation/manus-identity.service.js';
+import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { AddFamilyMemberDto, CreateFamilyDto } from './family.dto.js';
 import { FamilyService } from './family.service.js';

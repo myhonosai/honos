@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { FoundationController } from './foundation/foundation.controller.js';
 import { HonIdentityGuard } from './foundation/hon-identity.guard.js';
-import { ManusIdentityService } from './foundation/manus-identity.service.js';
+import { HonIdentityService } from './foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from './foundation/runtime-database.service.js';
 import { SessionContextController } from './foundation/session-context.controller.js';
 import { HealthController } from './health/health.controller.js';
@@ -126,7 +126,7 @@ import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
   ],
   providers: [
     RuntimeDatabaseService,
-    ManusIdentityService,
+    HonIdentityService,
     HonIdentityGuard,
     PersonService,
     FamilyService,
