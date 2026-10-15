@@ -30,6 +30,8 @@ import { ParentStudentJourneyController } from './families/parent-student-journe
 import { ParentStudentJourneyService } from './families/parent-student-journey.service.js';
 import { ParentFamilyScheduleController } from './families/parent-family-schedule.controller.js';
 import { ParentFamilyScheduleService } from './families/parent-family-schedule.service.js';
+import { ParentPlannedAbsenceController } from './families/parent-planned-absence.controller.js';
+import { ParentPlannedAbsenceService } from './families/parent-planned-absence.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
 import { CurriculumController } from './curriculum/curriculum.controller.js';
 import { CurriculumService } from './curriculum/curriculum.service.js';
@@ -65,6 +67,7 @@ import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledg
     FamilyController,
     ParentStudentJourneyController,
     ParentFamilyScheduleController,
+    ParentPlannedAbsenceController,
     LeadController,
     PipelineController,
     CurriculumController,
@@ -93,6 +96,7 @@ import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledg
     FamilyService,
     ParentStudentJourneyService,
     ParentFamilyScheduleService,
+    ParentPlannedAbsenceService,
     LeadService,
     CrmLeadActionTool,
     PipelineService,

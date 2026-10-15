@@ -38,6 +38,7 @@ const expectedRlsTables = [
   'outbox_events',
   'payment_attempts',
   'people',
+  'planned_absence_requests',
   'principal_interface_preferences',
   'principal_role_grants',
   'programs',

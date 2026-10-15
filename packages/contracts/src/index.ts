@@ -342,6 +342,35 @@ export interface ClassBookingSummary {
   activeSeatCount: number;
 }
 
+/** Parent/Eian planned absence requests are reviewable records, not attendance or booking mutations. */
+export const PLANNED_ABSENCE_REQUEST_STATUSES = [
+  'SUBMITTED',
+  'APPROVED',
+  'DECLINED',
+  'CANCELLED',
+] as const;
+export type PlannedAbsenceRequestStatus = (typeof PLANNED_ABSENCE_REQUEST_STATUSES)[number];
+
+export interface CreatePlannedAbsenceRequestInput {
+  studentProfileId: string;
+  startsAt: string;
+  endsAt: string;
+  reason?: string | undefined;
+}
+
+/** The parent command response deliberately omits reviewer and other-family data. */
+export interface PlannedAbsenceRequestSummary {
+  id: string;
+  studentProfileId: string;
+  startsAt: string;
+  endsAt: string;
+  reason?: string | undefined;
+  status: PlannedAbsenceRequestStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const ATTENDANCE_STATUSES = [
   'PRESENT',
   'LATE',

@@ -40,6 +40,13 @@ SELECT has_function_privilege(
   'EXECUTE'
 ) AS can_resolve_hq_operator_scope;
 
+SELECT
+  has_table_privilege('hon_runtime', 'hon.planned_absence_requests', 'SELECT') AS can_read_planned_absence_requests,
+  has_table_privilege('hon_runtime', 'hon.planned_absence_requests', 'INSERT') AS can_submit_planned_absence_requests,
+  has_table_privilege('hon_runtime', 'hon.planned_absence_requests', 'UPDATE') AS can_review_planned_absence_requests,
+  has_table_privilege('hon_runtime', 'hon.planned_absence_requests', 'DELETE') AS can_delete_planned_absence_requests,
+  has_type_privilege('hon_runtime', 'hon.planned_absence_request_status', 'USAGE') AS can_use_planned_absence_status;
+
 -- 4) RLS is enabled and forced on every operational table.
 SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
 FROM pg_class c

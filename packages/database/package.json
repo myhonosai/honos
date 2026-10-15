@@ -17,6 +17,7 @@
     "db:test-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-knowledge-integrity.mjs",
     "db:test-parent-schedule": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-schedule-security.mjs",
     "db:test-parent-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-knowledge-security.mjs",
+    "db:test-planned-absence": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-planned-absence-integrity.mjs",
     "bootstrap:hq-owner": "node scripts/bootstrap-hq-owner.mjs",
     "check:migrations": "node scripts/verify-migrations.mjs"
   },
