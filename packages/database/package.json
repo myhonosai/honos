@@ -42,7 +42,8 @@
     "db:test-marketing-campaigns": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketing-campaign-integrity.mjs && node scripts/test-marketing-campaign-verifier.mjs",
     "db:test-public-forms": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-public-lead-forms.mjs && node scripts/test-public-form-verifier.mjs",
     "db:test-staff-availability": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-availability-integrity.mjs",
-    "db:test-automation-rules": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-automation-rule-integrity.mjs"
+    "db:test-automation-rules": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-automation-rule-integrity.mjs",
+    "db:test-crm-follow-ups": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-follow-up-integrity.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

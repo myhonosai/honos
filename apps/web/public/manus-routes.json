@@ -71,6 +71,10 @@
     {
       "path": "/staff/automation/rules",
       "title": "HON Staff | Automation Configuration Only"
+    },
+    {
+      "path": "/staff/crm/follow-ups",
+      "title": "Human CRM follow-ups"
     }
   ]
 }

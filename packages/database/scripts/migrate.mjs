@@ -46,6 +46,13 @@ try {
         || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_campaign_runtime') throw new Error('Campaign aliases require the exact disposable localhost database.');
       sql = sql.replaceAll('hon_runtime', 'hon_campaign_runtime');
     }
+    if (new URL(databaseUrl).username === 'hon_followup_owner') {
+      const runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      const owner = new URL(databaseUrl);
+      if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_followup_validation'
+        || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_followup_runtime') throw new Error('Follow-up aliases require the exact disposable localhost database.');
+      sql = sql.replaceAll('hon_runtime', 'hon_followup_runtime');
+    }
     await client.query(sql);
     await client.query('INSERT INTO hon.schema_migrations (filename) VALUES ($1)', [file]);
     console.log(`Applied ${file}`);

@@ -113,8 +113,13 @@ import { AutomationRuleController } from './automation-rules/automation-rule.con
 import { AutomationRuleService } from './automation-rules/automation-rule.service.js';
 import { AutomationRuleHumanUiGuard } from './automation-rules/automation-rule.dto.js';
 
+import { FollowUpController } from './crm/follow-up.controller.js';
+import { FollowUpService } from './crm/follow-up.service.js';
+import { FollowUpHumanUiGuard } from './crm/follow-up.dto.js';
+
 @Module({
   controllers: [
+    FollowUpController,
     AutomationRuleController,
     StaffAvailabilityController,
     StaffPublicFormController, PublishedFormController,
@@ -169,6 +174,7 @@ import { AutomationRuleHumanUiGuard } from './automation-rules/automation-rule.d
     ActionReviewController,
   ],
   providers: [
+    FollowUpService, FollowUpHumanUiGuard,
     AutomationRuleService, AutomationRuleHumanUiGuard,
     StaffAvailabilityService, StaffAvailabilityHumanUiGuard,
     PublicFormService, PublicFormHumanUiGuard,
