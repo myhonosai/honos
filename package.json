@@ -63,6 +63,7 @@
     "db:test-parent-billing": "pnpm --filter @hon/database db:test-parent-billing",
     "db:test-parent-testing-status": "pnpm --filter @hon/database db:test-parent-testing-status",
     "db:test-parent-planned-absence-history": "pnpm --filter @hon/database db:test-parent-planned-absence-history",
+    "db:test-parent-message-history": "pnpm --filter @hon/database db:test-parent-message-history",
     "db:setup-parent-journey": "pnpm --filter @hon/database db:setup-parent-journey",
     "db:setup-marketing-assistant": "pnpm --filter @hon/database db:setup-marketing-assistant",
     "db:test-marketing-assistant": "pnpm --filter @hon/database db:test-marketing-assistant",

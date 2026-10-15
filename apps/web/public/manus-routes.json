@@ -33,6 +33,10 @@
       "title": "HON | Planned absence history"
     },
     {
+      "path": "/parent/messages",
+      "title": "HON | School message history"
+    },
+    {
       "path": "/complete-mobile",
       "title": "HON Complete Mobile"
     },

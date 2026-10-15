@@ -234,6 +234,7 @@ REVOKE ALL ON FUNCTION hon.resolve_parent_journey_scopes(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_billing_view(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_testing_status(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_planned_absence_history(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_parent_message_history(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_testing_registration_review_scopes(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) FROM PUBLIC;
@@ -259,6 +260,9 @@ GRANT EXECUTE ON FUNCTION hon.read_parent_testing_status(text) TO hon_runtime;
 -- Fixed guardian-family planned-absence history only. It grants no request,
 -- review, schedule, booking, attendance, makeup, message, or table capability.
 GRANT EXECUTE ON FUNCTION hon.read_parent_planned_absence_history(text) TO hon_runtime;
+-- Parent message history returns only receipt-evidence-unavailable. It grants
+-- no queue, delivery, recipient, sender, provider, or message-content access.
+GRANT EXECUTE ON FUNCTION hon.read_parent_message_history(text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_testing_registration_review_scopes(text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) TO hon_runtime;

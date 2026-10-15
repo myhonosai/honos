@@ -154,6 +154,6 @@ export function ParentHome(): React.ReactElement {
       {familyAccessLost && <section className={s.error} role="alert"><strong>Family access unavailable</strong><p>{journey.message}</p><Link href="/auth/login" prefetch={false}>Sign in again</Link></section>}
     </div>
     {!familyAccessLost && <ParentHomeCards journey={journey} testing={testing} billing={billing} plannedAbsences={plannedAbsences} />}
-    <footer className={s.footer}>Messages are intentionally not shown because no parent-safe message read is currently available. Every destination independently verifies its own family scope. Presentation choices are visual only and do not change access, data, or actions.</footer>
+    <footer className={s.footer}>Messages are intentionally not linked from Home until independently provable receipt evidence exists; queue intent is never presented as received content. Every destination independently verifies its own family scope. Presentation choices are visual only and do not change access, data, or actions.</footer>
   </div></main>;
 }

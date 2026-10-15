@@ -456,6 +456,31 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /**
+   * The fixed projection resolves its own exact current guardian-family scope.
+   * Repeatable-read + READ ONLY makes queue, consent, provider, audit, outbox,
+   * action, AI, voice, automation, and payment mutation impossible here.
+   */
+  async readParentMessageHistory(externalSubject: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '3s'");
+      const result = await client.query<{ data: unknown }>(
+        'SELECT hon.read_parent_message_history($1) AS data', [externalSubject],
+      );
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HON parent message-history projection did not return a result.');
+      return result.rows[0].data;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * The fixed database projection resolves its own exact current guardian-family
    * scope. A repeatable-read, read-only transaction prevents accidental audit,
    * outbox, provider, or billing mutation effects at this boundary.
