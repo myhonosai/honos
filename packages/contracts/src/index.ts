@@ -336,10 +336,29 @@ export const TESTING_CANDIDATE_RESULTS = [
 ] as const;
 export type TestingCandidateResult = (typeof TESTING_CANDIDATE_RESULTS)[number];
 
+/** Results an instructor may record for an already registered candidate. */
+export const TESTING_CANDIDATE_GRADE_RESULTS = [
+  'PASSED',
+  'DEFERRED',
+  'NOT_PASSED',
+  'WITHDRAWN',
+] as const;
+export type TestingCandidateGradeResult = (typeof TESTING_CANDIDATE_GRADE_RESULTS)[number];
+
 export interface RegisterTestingCandidateInput {
   studentCurriculumEnrollmentId: string;
   targetRankId: string;
   instructorNotes?: string | undefined;
+}
+
+/**
+ * A human instructor's version-checked assessment of a testing candidate.
+ * This records the assessment only; promotion remains a separate workflow.
+ */
+export interface GradeTestingCandidateInput {
+  result: TestingCandidateGradeResult;
+  instructorNotes?: string | undefined;
+  expectedVersion: number;
 }
 
 export interface TestingCandidateSummary {

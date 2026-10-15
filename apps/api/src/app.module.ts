@@ -33,6 +33,7 @@ import { CurriculumRankService } from './curriculum/curriculum-rank.service.js';
 import { TestingEventController } from './testing/testing-event.controller.js';
 import { TestingEventService } from './testing/testing-event.service.js';
 import { TestingCandidateController } from './testing/testing-candidate.controller.js';
+import { TestingCandidateGradeController } from './testing/testing-candidate-grade.controller.js';
 import { TestingCandidateService } from './testing/testing-candidate.service.js';
 import { ProgramController } from './programs/program.controller.js';
 import { ProgramService } from './programs/program.service.js';
@@ -58,6 +59,7 @@ import { AttendanceService } from './schedule/attendance.service.js';
     AttendanceController,
     TestingEventController,
     TestingCandidateController,
+    TestingCandidateGradeController,
     InterfaceThemeController,
     MembershipController,
     BillingAccountController,
