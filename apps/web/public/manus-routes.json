@@ -121,6 +121,10 @@
       "title": "HON | School Health Score"
     },
     {
+      "path": "/staff/teaching-studio",
+      "title": "HON | Human Teaching Studio"
+    },
+    {
       "path": "/parent/journey",
       "title": "HON | Family Student Journey"
     },

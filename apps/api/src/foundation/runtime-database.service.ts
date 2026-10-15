@@ -166,6 +166,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_achievement_scope($1,$2::uuid)', [externalSubject, schoolId],
     )).rows[0];
   }
+  async resolveTeachingStudioScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_teaching_studio_scope($1,$2::uuid)', [externalSubject, schoolId],
+    )).rows[0];
+  }
   async resolveCommunityScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

@@ -1093,3 +1093,45 @@ BEGIN
  END IF;
 END $$;
 -- End Marketing Assistant verification.
+
+-- Teaching Studio exact verification: human-only bounded authoring has private
+-- forced-RLS state and only three runtime callable boundaries.
+DO $$ DECLARE t text; f record; r record; b boolean; trigger_name text; trigger_type integer; BEGIN
+ FOR t IN SELECT unnest(ARRAY['teaching_lesson_plans','teaching_lesson_plan_revisions','teaching_resources','teaching_resource_revisions','instructor_assessments','instructor_assessment_revisions','teaching_studio_requests']) LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND a.grantee<>c.relowner)
+  INTO b FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Teaching Studio private table %',t; END IF;
+  FOR trigger_name,trigger_type IN SELECT * FROM (VALUES('teaching_studio_immutable',27),('teaching_studio_no_truncate',34)) v(n,k) LOOP
+   IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname=trigger_name AND tgtype=trigger_type AND tgfoid='hon.guard_teaching_studio_history()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe Teaching Studio trigger %.%',t,trigger_name; END IF;
+  END LOOP;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.guard_teaching_studio_history()',false,false),
+  ('hon.teaching_studio_text(text,integer,boolean,boolean)',false,false),
+  ('hon.teaching_studio_permission(uuid,uuid,uuid,text)',false,true),
+  ('hon.resolve_teaching_studio_scope(text,uuid)',true,true),
+  ('hon.require_teaching_studio_actor(text,text)',false,true),
+  ('hon.lock_teaching_studio_actor(text,text,boolean)',false,true),
+  ('hon.validate_teaching_studio_input(text,jsonb)',false,false),
+  ('hon.teaching_lesson_projection(uuid,integer)',false,true),
+  ('hon.teaching_resource_projection(uuid,integer)',false,true),
+  ('hon.teaching_assessment_projection(uuid,integer)',false,true),
+  ('hon.read_teaching_studio(text,text,uuid,uuid,integer)',true,true),
+  ('hon.mutate_teaching_studio(text,text,uuid,uuid,jsonb,text,uuid,uuid)',true,true)
+ ) v(signature,can_execute,is_definer) LOOP
+  SELECT p.prosecdef=f.is_definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO b FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Teaching Studio function %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP IF has_function_privilege(r.rolname,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Forbidden client Teaching Studio function %',r.rolname; END IF; END LOOP;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='teaching.studio.read' AND is_sensitive AND is_staff_assignable)
+  OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='teaching.lesson.manage' AND is_sensitive AND is_staff_assignable)
+  OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='teaching.resource.manage' AND is_sensitive AND is_staff_assignable)
+  OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='teaching.assessment.record' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Unsafe Teaching Studio permission registry'; END IF;
+END $$;
+-- End Teaching Studio verification.

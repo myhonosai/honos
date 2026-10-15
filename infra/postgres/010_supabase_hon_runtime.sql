@@ -540,3 +540,24 @@ GRANT EXECUTE ON FUNCTION hon.read_marketing_invocation(text,uuid),hon.begin_mar
 -- It adds no direct source-table privilege, provider capability, or write path.
 REVOKE ALL ON FUNCTION hon.read_school_health_score(text,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.read_school_health_score(text,uuid,uuid) TO hon_runtime;
+
+-- Teaching Studio human foundation: private plan/resource/assessment tables and
+-- helpers remain unavailable. Only fixed direct-human scope/read/write boundaries
+-- execute; no student directory, parent, HQ, AI, Action Engine, or provider grant.
+DO $$ DECLARE r text; t text; a text; f record; BEGIN
+ FOREACH t IN ARRAY ARRAY['teaching_lesson_plans','teaching_lesson_plan_revisions','teaching_resources','teaching_resource_revisions','instructor_assessments','instructor_assessment_revisions','teaching_studio_requests'] LOOP
+  EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t); END LOOP;
+ END LOOP;
+ FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%teaching_studio%' OR p.proname LIKE 'teaching_%') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f.signature);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r); END LOOP;
+ END LOOP;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  FOREACH t IN ARRAY ARRAY['teaching_lesson_plans','teaching_lesson_plan_revisions','teaching_resources','teaching_resource_revisions','instructor_assessments','instructor_assessment_revisions','teaching_studio_requests'] LOOP
+   EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+   FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r); END LOOP;
+  END LOOP;
+ END LOOP;
+END $$;
+GRANT EXECUTE ON FUNCTION hon.resolve_teaching_studio_scope(text,uuid),hon.read_teaching_studio(text,text,uuid,uuid,integer),hon.mutate_teaching_studio(text,text,uuid,uuid,jsonb,text,uuid,uuid) TO hon_runtime;

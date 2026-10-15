@@ -144,10 +144,14 @@ import { CommunityHumanUiGuard } from './community/community.dto.js';
 import { AchievementsController, ParentAchievementsController } from './achievements/achievements.controller.js';
 import { AchievementsService } from './achievements/achievements.service.js';
 import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
+import { TeachingStudioController } from './teaching-studio/teaching-studio.controller.js';
+import { TeachingStudioService } from './teaching-studio/teaching-studio.service.js';
+import { TeachingStudioHumanUiGuard } from './teaching-studio/teaching-studio.dto.js';
 
 @Module({
   controllers: [
     AchievementsController, ParentAchievementsController,
+    TeachingStudioController,
     VoiceController,
     MarketplaceController,
     CommunityController,
@@ -214,6 +218,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
   ],
   providers: [
     AchievementsService, AchievementHumanUiGuard,
+    TeachingStudioService, TeachingStudioHumanUiGuard,
     ParentJourneyViewService, ParentJourneyReadGuard,
     VoiceService, VoiceHumanUiGuard,
     MarketplaceService, MarketplaceHumanUiGuard,
