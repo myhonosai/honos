@@ -468,3 +468,59 @@ BEGIN
   OR EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000075')
   OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000075') THEN RAISE EXCEPTION 'Unsafe public form intake principal'; END IF;
 END $$;
+
+-- Human staff planning exact verification: three boundaries, no tables or directory.
+DO $$ DECLARE t text; f record; b record; r text; expected record;
+BEGIN
+ FOR t IN SELECT unnest(ARRAY['staff_profiles','staff_planning_revisions','staff_planning_requests']) LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (owner.rolsuper OR owner.rolbypassrls)
+   AND NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) safe
+  INTO b FROM pg_class c JOIN pg_roles owner ON owner.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe staff planning private table: %',t; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_table_privilege(r,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege(r,'hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Client staff table access: %',r; END IF;
+  END LOOP;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.resolve_staff_availability_scope(text,text)',true,true),
+  ('hon.save_staff_planning_revision(text,uuid,text,jsonb,text,uuid,uuid)',true,true),
+  ('hon.read_staff_availability(text,uuid,text,integer)',true,true),
+  ('hon.guard_staff_planning_history()',false,false),
+  ('hon.validate_staff_planning_input(text,jsonb)',false,false),
+  ('hon.staff_member_eligible(uuid,uuid,uuid)',false,true),
+  ('hon.staff_has_planning_permission(uuid,uuid,uuid,text)',false,true),
+  ('hon.require_staff_planning_actor(text,uuid,text)',false,true),
+  ('hon.lock_staff_planning_actor(text,uuid,text)',false,true),
+  ('hon.staff_revision_summary(uuid,text,integer)',false,true),
+  ('hon.guard_staff_profile_insert()',false,true),
+  ('hon.guard_staff_revision_insert()',false,true)
+ ) e(signature,can_execute,definer) LOOP
+  SELECT (owner.rolsuper OR owner.rolbypassrls) AND p.prosecdef=f.definer AND p.provolatile='v'
+   AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE')) safe
+  INTO b FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe staff planning function: %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client staff function access: %',r; END IF;
+  END LOOP;
+ END LOOP;
+ FOR t IN SELECT unnest(ARRAY['staff_profiles','staff_planning_revisions','staff_planning_requests','users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants']) LOOP
+  IF has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Forbidden runtime staff/directory access: %',t; END IF;
+ END LOOP;
+ FOR expected IN SELECT * FROM (VALUES
+  ('staff_profiles','staff_profiles_immutable','hon.guard_staff_planning_history()',27),
+  ('staff_profiles','staff_profiles_no_truncate','hon.guard_staff_planning_history()',34),
+  ('staff_profiles','staff_profile_insert_guard','hon.guard_staff_profile_insert()',7),
+  ('staff_planning_revisions','staff_revisions_immutable','hon.guard_staff_planning_history()',27),
+  ('staff_planning_revisions','staff_revisions_no_truncate','hon.guard_staff_planning_history()',34),
+  ('staff_planning_revisions','staff_revision_insert_guard','hon.guard_staff_revision_insert()',7),
+  ('staff_planning_requests','staff_requests_immutable','hon.guard_staff_planning_history()',27),
+  ('staff_planning_requests','staff_requests_no_truncate','hon.guard_staff_planning_history()',34)
+ ) e(tablename,triggername,signature,trigger_type) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tablename)::regclass AND tgname=expected.triggername AND tgfoid=expected.signature::regprocedure AND tgtype=expected.trigger_type AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe staff planning invariant trigger: %',expected.triggername; END IF;
+ END LOOP;
+END $$;
+-- End human staff planning verification.

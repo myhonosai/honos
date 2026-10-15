@@ -175,3 +175,5 @@ export { LEAD_IMPORT_COMMAND_REGISTRY } from './lead-import.js';
 export { CURRICULUM_PROGRESS_COMMAND_REGISTRY } from './curriculum-progress.js';
 export { REVENUE_PLANNING_COMMAND_REGISTRY } from './revenue-planning.js';
 export { CAMPAIGN_COMMAND_REGISTRY } from './marketing-campaigns.js';
+
+export { STAFF_AVAILABILITY_COMMAND_REGISTRY } from './staff-availability.js';

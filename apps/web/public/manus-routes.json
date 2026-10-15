@@ -63,6 +63,10 @@
     {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
+    },
+    {
+      "path": "/staff/team/availability",
+      "title": "Human Staff Availability and Qualifications"
     }
   ]
 }

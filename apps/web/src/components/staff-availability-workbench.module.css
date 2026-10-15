@@ -1,0 +1,29 @@
+.page { max-width: 1150px; margin: 0 auto; padding: 32px 24px 80px; color: #172238; font-family: Inter, sans-serif; }
+.page nav, .actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+.page nav { margin-bottom: 36px; }
+.page a { color: #1d4fc4; font-weight: 600; }
+.page header > p:first-child { font-size: 12px; font-weight: 700; letter-spacing: .16em; color: #245ac4; }
+.page h1 { font-size: clamp(30px, 4vw, 46px); letter-spacing: -.035em; line-height: 1.1; margin: 14px 0; }
+.page h2 { font-size: 21px; margin-top: 0; }
+.page p { line-height: 1.65; }
+.page aside { background: #eef4fd; border-left: 4px solid #346be5; padding: 20px 24px; margin: 28px 0; border-radius: 8px; }
+.page aside p { margin-bottom: 0; }
+.page section { margin-top: 24px; background: white; border: 1px solid #dce3ee; border-radius: 12px; padding: 24px; box-shadow: 0 5px 18px #17223806; }
+.page label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 600; flex: 1; min-width: 140px; }
+.page input, .page select { padding: 11px 12px; border: 1px solid #b9c6da; border-radius: 6px; min-height: 44px; color: #172238; background: #fff; width: 100%; box-sizing: border-box; font: inherit; }
+.page input:focus-visible, .page select:focus-visible, .page button:focus-visible, .page a:focus-visible { outline: 3px solid #76a5ff; outline-offset: 3px; }
+.page button { background: #245ac4; border: 1px solid #245ac4; color: white; border-radius: 7px; padding: 11px 16px; min-height: 44px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.page button:disabled { opacity: .5; cursor: not-allowed; }
+.page fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.page fieldset:disabled { opacity: .65; }
+.actions form { flex: 1; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.dates, .row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin: 18px 0; }
+.row { padding: 16px; background: #f6f8fc; border: 1px solid #e3e9f3; border-radius: 8px; }
+.row button { color: #24395c; background: white; border-color: #b9c6da; }
+.page dl { font-size: 13px; overflow-wrap: anywhere; }
+.page dt { font-weight: 700; margin-top: 12px; }
+.page dd { margin: 6px 0; }
+.error, .notice { padding: 16px; border-radius: 8px; }
+.error { background: #fff0ed; color: #92351f; border: 1px solid #efc1b6; }
+.notice { background: #eaf8f1; color: #166142; border: 1px solid #bae1ce; }
+@media (max-width: 640px) { .page { padding: 24px 14px 50px; } .page section { padding: 18px; } .row label, .dates label { min-width: 100%; } .actions button { width: 100%; } }

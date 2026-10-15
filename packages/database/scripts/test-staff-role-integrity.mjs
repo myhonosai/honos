@@ -6,6 +6,7 @@ import { StaffRoleController } from '../../../apps/api/dist/staff-roles/staff-ro
 import { RuntimeDatabaseService } from '../../../apps/api/dist/foundation/runtime-database.service.js';
 
 if (!process.env.DATABASE_URL || !process.env.HON_RUNTIME_DATABASE_URL) throw new Error('Both admin and restricted runtime database URLs are required.');
+const runtimeRoleName = new URL(process.env.HON_RUNTIME_DATABASE_URL).username;
 const opts = connectionString => ({ connectionString, ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false } });
 const admin = new pg.Client(opts(process.env.DATABASE_URL));
 const runtime = new pg.Client(opts(process.env.HON_RUNTIME_DATABASE_URL));
@@ -44,8 +45,8 @@ try {
   }
   await sqlDenied(()=>runtime.query('SELECT hon.resolve_staff_role_target($1,$2,$3)',[humans.target.id,humans.target.subject,humans.actor.id]));
   const posture=(await admin.query(`SELECT p.proname,p.prosecdef,p.proconfig,
-    EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) broad
-    FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname IN('mutate_staff_role','read_staff_role','resolve_staff_role_target')`)).rows;
+    EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname=$1))) broad
+    FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname IN('mutate_staff_role','read_staff_role','resolve_staff_role_target')`,[runtimeRoleName])).rows;
   assert.equal(posture.length,3); for(const p of posture){assert(p.prosecdef);assert.deepEqual(p.proconfig,['search_path=pg_catalog, hon']);assert.equal(p.broad,false);}
   const perms=(await admin.query("SELECT code,is_sensitive FROM hon.permissions WHERE code LIKE 'iam.%'")).rows;
   assert.equal(perms.length,5); assert(perms.every(p=>p.is_sensitive));

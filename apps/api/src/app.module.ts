@@ -106,8 +106,12 @@ import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.j
 import { StaffSearchController } from './search/staff-search.controller.js';
 import { StaffSearchService } from './search/staff-search.service.js';
 
+import { StaffAvailabilityController } from './staff-availability/staff-availability.controller.js';
+import { StaffAvailabilityService } from './staff-availability/staff-availability.service.js';
+import { StaffAvailabilityHumanUiGuard } from './staff-availability/staff-availability.dto.js';
 @Module({
   controllers: [
+    StaffAvailabilityController,
     StaffPublicFormController, PublishedFormController,
     CampaignController,
     RevenuePlanningController,
@@ -160,6 +164,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
     ActionReviewController,
   ],
   providers: [
+    StaffAvailabilityService, StaffAvailabilityHumanUiGuard,
     PublicFormService, PublicFormHumanUiGuard,
     CampaignService, CampaignHumanUiGuard,
     RevenuePlanningService, RevenuePlanningHumanUiGuard,

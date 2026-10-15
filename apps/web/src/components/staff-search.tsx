@@ -33,7 +33,7 @@ export function StaffSearch(): React.ReactElement {
     }
   }
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/documents">Documents</a><a href="/staff/roles">Roles</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/documents">Documents</a><a href="/staff/roles">Roles</a><a href="/staff/team/availability">Staff availability</a><a href="/auth/login">Sign in</a></nav>
     <header><p className={styles.eyebrow}>STAFF / SINGLE-SCHOOL SEARCH</p><h1>Find the record.<br />Keep your focus.</h1><p>Search student and lead names, class sessions, programs and curricula in one authorized school. Lead email or phone can help find a match; contact details stay out of results.</p></header>
     <aside className={styles.notice}>Conventional, read-only search. Available across Essential, Core and Complete with <code>search.global</code> permission. No notes, billing, documents, internal knowledge or staff directory are searched. This is not HON Command or Parent/Eian search.</aside>
     <form onSubmit={submit} aria-busy={state === 'loading'}>
