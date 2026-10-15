@@ -518,6 +518,11 @@ export interface ParentStudentJourney {
   students: ParentStudentJourneyStudent[];
 }
 
+export type {
+  ParentFamilySchedule,
+  ParentFamilyScheduleBooking,
+} from './parent-family-schedule.js';
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;
