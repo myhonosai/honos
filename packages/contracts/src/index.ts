@@ -400,6 +400,78 @@ export interface PromotionDecisionSummary {
   createdAt: string;
 }
 
+/** The access level was resolved from a live, explicit family grant. */
+export type ParentFamilyAccessLevel = 'PRIMARY_GUARDIAN' | 'SECONDARY_GUARDIAN' | 'VIEWER';
+
+/** A deliberately minimal rank representation suitable for a parent progress view. */
+export interface ParentStudentJourneyRank {
+  id: string;
+  name: string;
+  progressionOrder: number;
+}
+
+/** A selected student's own active or historical curriculum enrollment. */
+export interface ParentStudentJourneyEnrollment {
+  id: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  enrolledAt: string;
+  curriculum: {
+    id: string;
+    name: string;
+  };
+  currentRank?: ParentStudentJourneyRank | undefined;
+  testingCandidates: ParentStudentJourneyTestingCandidate[];
+}
+
+/**
+ * An instructor decision is intentionally redacted to readiness data. It never
+ * exposes the instructor identity, rationale, notes, or school-wide results.
+ */
+export interface ParentStudentJourneyPromotionDecision {
+  id: string;
+  status: PromotionDecisionStatus | 'PENDING_INSTRUCTOR_DECISION';
+  decidedAt?: string | undefined;
+}
+
+/** A candidate for this student's own enrollment, not a testing-event roster. */
+export interface ParentStudentJourneyTestingCandidate {
+  id: string;
+  result: TestingCandidateResult;
+  createdAt: string;
+  testingEvent: {
+    id: string;
+    name: string;
+    startsAt: string;
+    status: 'DRAFT' | 'OPEN' | 'CLOSED' | 'COMPLETED' | 'CANCELLED';
+  };
+  targetRank: ParentStudentJourneyRank;
+  promotionDecision?: ParentStudentJourneyPromotionDecision | undefined;
+}
+
+/**
+ * Parent/Eian read model. It deliberately omits contact details, birth dates,
+ * billing, staff, instructor notes, and every record outside the selected family.
+ */
+export interface ParentStudentJourneyStudent {
+  familyMemberId: string;
+  person: {
+    id: string;
+    givenName: string;
+    familyName: string;
+  };
+  studentProfile?: {
+    id: string;
+    status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  } | undefined;
+  curriculumEnrollments: ParentStudentJourneyEnrollment[];
+}
+
+export interface ParentStudentJourney {
+  familyId: string;
+  accessLevel: ParentFamilyAccessLevel;
+  students: ParentStudentJourneyStudent[];
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;

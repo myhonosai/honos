@@ -26,6 +26,8 @@ import { PersonService } from './people/person.service.js';
 import { ActionReviewController } from './action/action-review.controller.js';
 import { FamilyController } from './families/family.controller.js';
 import { FamilyService } from './families/family.service.js';
+import { ParentStudentJourneyController } from './families/parent-student-journey.controller.js';
+import { ParentStudentJourneyService } from './families/parent-student-journey.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
 import { CurriculumController } from './curriculum/curriculum.controller.js';
 import { CurriculumService } from './curriculum/curriculum.service.js';
@@ -53,6 +55,7 @@ import { AttendanceService } from './schedule/attendance.service.js';
     IdentityController,
     PersonController,
     FamilyController,
+    ParentStudentJourneyController,
     LeadController,
     PipelineController,
     CurriculumController,
@@ -76,6 +79,7 @@ import { AttendanceService } from './schedule/attendance.service.js';
     HonIdentityGuard,
     PersonService,
     FamilyService,
+    ParentStudentJourneyService,
     LeadService,
     CrmLeadActionTool,
     PipelineService,
