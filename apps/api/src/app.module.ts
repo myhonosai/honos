@@ -59,6 +59,8 @@ import { ParentFamilyKnowledgeController } from './knowledge/parent-family-knowl
 import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledge.service.js';
 import { WorkItemController } from './work-items/work-item.controller.js';
 import { WorkItemService } from './work-items/work-item.service.js';
+import { AiUsageController } from './ai/ai-usage.controller.js';
+import { AiUsageService } from './ai/ai-usage.service.js';
 
 @Module({
   controllers: [
@@ -83,6 +85,7 @@ import { WorkItemService } from './work-items/work-item.service.js';
     KnowledgeArticleController,
     ParentFamilyKnowledgeController,
     WorkItemController,
+    AiUsageController,
     TestingEventController,
     TestingCandidateController,
     TestingCandidateGradeController,
@@ -116,6 +119,7 @@ import { WorkItemService } from './work-items/work-item.service.js';
     KnowledgeArticleService,
     ParentFamilyKnowledgeService,
     WorkItemService,
+    AiUsageService,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,

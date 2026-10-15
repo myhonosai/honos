@@ -103,6 +103,8 @@ GRANT SELECT ON TABLE
   hon.membership_payment_schedules,
   hon.action_policies,
   hon.action_requests,
+  -- AI economics is a read-only aggregate projection; never grant ledger writes.
+  hon.ai_usage_ledger,
   hon.idempotency_records,
   hon.principal_interface_preferences,
   hon.curricula,

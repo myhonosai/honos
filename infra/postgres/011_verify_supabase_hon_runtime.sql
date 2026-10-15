@@ -57,6 +57,14 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.work_items', 'UPDATE') AS can_transition_work_items,
   has_table_privilege('hon_runtime', 'hon.work_items', 'DELETE') AS can_delete_work_items;
 
+-- AI usage economics is a tenant-scoped, aggregate read. Ledger writes, credit
+-- charging/reset, and provider execution remain unavailable to the runtime role.
+SELECT
+  has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'SELECT') AS can_read_ai_usage_ledger,
+  has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'INSERT') AS can_insert_ai_usage_ledger,
+  has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'UPDATE') AS can_update_ai_usage_ledger,
+  has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'DELETE') AS can_delete_ai_usage_ledger;
+
 -- 4) RLS is enabled and forced on every operational table.
 SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
 FROM pg_class c
@@ -77,7 +85,10 @@ ROLLBACK;
 -- 6) Full isolation proof runs from the actual Session Pooler runtime URL after
 -- it is saved as HON_RUNTIME_DATABASE_URL:
 -- pnpm db:test-security
+-- pnpm db:test-ai-usage
 -- The HON test creates two temporary school scopes inside a rolled-back
 -- transaction, proves the second school's person is invisible to the first,
 -- proves a composite tenant FK rejects a cross-school relation, and confirms
--- transaction-local context clears after completion.
+-- transaction-local context clears after completion. The AI usage fixture also
+-- proves SELECT-only ledger access, active-tier credit calculation, and a
+-- cross-school ledger row remains invisible.

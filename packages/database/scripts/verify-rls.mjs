@@ -104,11 +104,39 @@ try {
     throw new Error('Work-item tenant-isolation RLS policy is missing.');
   }
 
+  const aiUsagePolicies = (await client.query(`
+    SELECT cmd
+    FROM pg_policies
+    WHERE schemaname = 'hon' AND tablename = 'ai_usage_ledger'
+  `)).rows.map((row) => row.cmd);
+  if (!aiUsagePolicies.includes('ALL')) {
+    throw new Error('AI usage ledger tenant-isolation RLS policy is missing.');
+  }
+
+  const runtimeRole = (await client.query(`SELECT EXISTS (
+    SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
+  ) AS exists`)).rows[0];
+  if (runtimeRole?.exists) {
+    const runtimeLedgerPrivileges = (await client.query(`
+      SELECT
+        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'SELECT') AS can_select,
+        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'INSERT') AS can_insert,
+        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'UPDATE') AS can_update,
+        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'DELETE') AS can_delete
+    `)).rows[0];
+    if (!runtimeLedgerPrivileges?.can_select
+      || runtimeLedgerPrivileges.can_insert
+      || runtimeLedgerPrivileges.can_update
+      || runtimeLedgerPrivileges.can_delete) {
+      throw new Error('hon_runtime AI usage ledger privileges are not the required SELECT-only minimum.');
+    }
+  }
+
   const context = await client.query("SELECT hon.current_organization_id() AS organization_id, hon.current_school_id() AS school_id");
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item tenant isolation, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, SELECT-only AI-ledger runtime access, and cleared connection context.`);
 } finally {
   await client.end();
 }

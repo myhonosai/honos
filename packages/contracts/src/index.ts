@@ -589,6 +589,7 @@ export type {
 
 export * from './knowledge-articles.js';
 export * from './work-items.js';
+export * from './ai-usage.js';
 
 export interface RegisteredAction {
   code: string;
