@@ -524,3 +524,59 @@ BEGIN
  END LOOP;
 END $$;
 -- End human staff planning verification.
+-- Inert automation exact verification: four boundaries, no execution.
+DO $$ DECLARE t text; f record; b record; r text; expected record;
+BEGIN
+ FOR t IN SELECT unnest(ARRAY['automation_rules','automation_rule_versions','automation_rule_requests']) LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (owner.rolsuper OR owner.rolbypassrls)
+   AND NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) safe
+  INTO b FROM pg_class c JOIN pg_roles owner ON owner.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe automation configuration private table: %',t; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_table_privilege(r,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege(r,'hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Client automation table access: %',r; END IF;
+  END LOOP;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.resolve_automation_rule_scope(text,text)',true,true),
+  ('hon.save_automation_rule(text,uuid,jsonb,text,uuid,uuid)',true,true),
+  ('hon.read_automation_rules(text,uuid,integer)',true,true),
+  ('hon.dry_run_automation_rule(text,uuid,jsonb)',true,true),
+  ('hon.guard_automation_history()',false,false),
+  ('hon.automation_closed(jsonb,text[])',false,false),
+  ('hon.validate_automation_input(jsonb,boolean)',false,false),
+  ('hon.automation_has_permission(uuid,uuid,uuid,text)',false,true),
+  ('hon.require_automation_actor(text,text)',false,true),
+  ('hon.lock_automation_actor(text,text)',false,true),
+  ('hon.automation_rule_summary(uuid,integer)',false,true),
+  ('hon.guard_automation_insert()',false,true),
+  ('hon.plan_automation_descriptor(jsonb,jsonb)',false,false)
+ ) e(signature,can_execute,definer) LOOP
+  SELECT (owner.rolsuper OR owner.rolbypassrls) AND p.prosecdef=f.definer AND p.provolatile='v'
+   AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE')) safe
+  INTO b FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe automation configuration function: %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client automation function access: %',r; END IF;
+  END LOOP;
+ END LOOP;
+ FOR t IN SELECT unnest(ARRAY['automation_rules','automation_rule_versions','automation_rule_requests','users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants']) LOOP
+  IF has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Forbidden runtime automation/directory access: %',t; END IF;
+ END LOOP;
+ FOR expected IN SELECT * FROM (VALUES
+  ('automation_rules','automation_rules_immutable','hon.guard_automation_history()',27),
+  ('automation_rules','automation_rules_no_truncate','hon.guard_automation_history()',34),
+  ('automation_rules','automation_rule_insert_guard','hon.guard_automation_insert()',7),
+  ('automation_rule_versions','automation_versions_immutable','hon.guard_automation_history()',27),
+  ('automation_rule_versions','automation_versions_no_truncate','hon.guard_automation_history()',34),
+  ('automation_rule_versions','automation_version_insert_guard','hon.guard_automation_insert()',7),
+  ('automation_rule_requests','automation_requests_immutable','hon.guard_automation_history()',27),
+  ('automation_rule_requests','automation_requests_no_truncate','hon.guard_automation_history()',34)
+ ) e(tablename,triggername,signature,trigger_type) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tablename)::regclass AND tgname=expected.triggername AND tgfoid=expected.signature::regprocedure AND tgtype=expected.trigger_type AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe automation configuration invariant trigger: %',expected.triggername; END IF;
+ END LOOP;
+END $$;
+-- End inert automation verification.

@@ -72,3 +72,5 @@ export function assertEntityInScope(entity: TenantScopedEntity, scope: TenantSco
 }
 
 export * from './ai-invocation-planning.js';
+
+export * from './automation-rule-planning.js';

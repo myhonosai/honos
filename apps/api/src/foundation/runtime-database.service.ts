@@ -141,6 +141,13 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
+  async resolveAutomationRuleScope(externalSubject: string, permission: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_automation_rule_scope($1,$2)', [externalSubject, permission],
+    )).rows[0];
+  }
+
   async resolveStaffAvailabilityScope(externalSubject: string, permission: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

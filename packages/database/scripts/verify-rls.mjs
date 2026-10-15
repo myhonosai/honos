@@ -4,16 +4,17 @@ import { readFile } from 'node:fs/promises';
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS verification.');
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username : 'hon_runtime';
-if (!['hon_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (!['hon_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    const db = runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    const db = runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
     if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
   }
 }
 
 const expectedRlsTables = [
+  'automation_rules', 'automation_rule_versions', 'automation_rule_requests',
   'staff_profiles', 'staff_planning_revisions', 'staff_planning_requests',
   'action_approvals',
   'action_policies',
@@ -219,6 +220,10 @@ try {
     if ((await client.query("SELECT has_table_privilege($1,'hon.student_curriculum_enrollments','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,'hon.student_curriculum_enrollments','INSERT,UPDATE,REFERENCES') allowed", [rolname])).rows[0].allowed) throw new Error(`Forbidden client enrollment mutation: ${rolname}`);
     for (const [signature] of curriculumFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname, signature])).rows[0].allowed) throw new Error(`Forbidden client curriculum/authorization function: ${rolname}.${signature}`);
   }
+  const automationCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const automationVerification = automationCanonical.split('-- Inert automation exact verification:')[1]?.split('-- End inert automation verification.')[0];
+  if (!automationVerification) throw new Error('Missing canonical automation verification block.');
+  await client.query(('DO $$' + automationVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
   const staffCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
   const staffVerification = staffCanonical.split('-- Human staff planning exact verification:')[1]?.split('-- End human staff planning verification.')[0];
   if (!staffVerification) throw new Error('Missing canonical staff verification block.');

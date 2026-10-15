@@ -67,6 +67,10 @@
     {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
+    },
+    {
+      "path": "/staff/automation/rules",
+      "title": "HON Staff | Automation Configuration Only"
     }
   ]
 }

@@ -865,3 +865,5 @@ export * from './documents.js';
 export * from './public-lead-forms.js';
 
 export * from './staff-availability.js';
+
+export * from './automation-rules.js';

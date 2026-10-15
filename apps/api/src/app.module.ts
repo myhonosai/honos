@@ -109,8 +109,13 @@ import { StaffSearchService } from './search/staff-search.service.js';
 import { StaffAvailabilityController } from './staff-availability/staff-availability.controller.js';
 import { StaffAvailabilityService } from './staff-availability/staff-availability.service.js';
 import { StaffAvailabilityHumanUiGuard } from './staff-availability/staff-availability.dto.js';
+import { AutomationRuleController } from './automation-rules/automation-rule.controller.js';
+import { AutomationRuleService } from './automation-rules/automation-rule.service.js';
+import { AutomationRuleHumanUiGuard } from './automation-rules/automation-rule.dto.js';
+
 @Module({
   controllers: [
+    AutomationRuleController,
     StaffAvailabilityController,
     StaffPublicFormController, PublishedFormController,
     CampaignController,
@@ -164,6 +169,7 @@ import { StaffAvailabilityHumanUiGuard } from './staff-availability/staff-availa
     ActionReviewController,
   ],
   providers: [
+    AutomationRuleService, AutomationRuleHumanUiGuard,
     StaffAvailabilityService, StaffAvailabilityHumanUiGuard,
     PublicFormService, PublicFormHumanUiGuard,
     CampaignService, CampaignHumanUiGuard,
