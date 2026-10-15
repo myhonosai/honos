@@ -46,10 +46,8 @@ export class AiInvocationPlanService {
     try {
       return await this.database.withTenantTransaction(context, async (client) => {
         await client.query('SELECT hon.require_ai_invocation_plan_access()');
-        // This invoker lookup is locked under forced tenant RLS. Do not load the
-        // work payload/result: no content or prompts enter the planner at all.
-        const work = await client.query('SELECT id FROM hon.work_items WHERE id = $1::uuid FOR UPDATE', [workItemId]);
-        if (!work.rowCount) throw new NotFoundException('The durable work item was not found in this school.');
+        // Fixed metadata-only reference boundary; runtime cannot select raw work rows.
+        await client.query('SELECT hon.lock_ai_planning_work_reference($1::uuid)', [workItemId]);
         const result = await client.query<{ data: AiInvocationPlanningResult }>(
           'SELECT hon.plan_ai_invocation($1::uuid,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data',
           [workItemId, JSON.stringify(normalized), context.idempotencyKey, context.requestId, context.correlationId],

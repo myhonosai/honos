@@ -1,3 +1,4 @@
+import { humanWorkTables, verifyHumanWorkSecurity } from './human-work-security.mjs';
 import { voiceTables, verifyVoiceSecurity } from './voice-security.mjs';
 import pg from 'pg';
 import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
@@ -7,16 +8,17 @@ import { readFile } from 'node:fs/promises';
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS verification.');
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username : 'hon_runtime';
-if (!['hon_runtime','hon_voice_runtime','hon_approval_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (!['hon_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    const db = runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    const db = runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
     if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
   }
 }
 
 const expectedRlsTables = [
+  ...humanWorkTables,
   ...voiceTables,
   ...communityTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
@@ -140,6 +142,7 @@ await client.connect();
 try {
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
+  await verifyHumanWorkSecurity(client,runtimeRoleName);
   await verifyActionApprovalSecurity(client,runtimeRoleName);
   const posture = (await client.query(`SELECT rolcanlogin,rolsuper,rolbypassrls,rolinherit,rolcreatedb,rolcreaterole,rolreplication,
     EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid) memberships,
@@ -189,9 +192,7 @@ try {
     FROM pg_policies
     WHERE schemaname = 'hon' AND tablename = 'work_items'
   `)).rows.map((row) => row.cmd);
-  if (!workItemPolicies.includes('ALL')) {
-    throw new Error('Work-item tenant-isolation RLS policy is missing.');
-  }
+  if (workItemPolicies.length) throw new Error('Work items must have forced deny-all RLS; fixed human/reference boundaries only.');
 
   const aiUsagePolicies = (await client.query(`
     SELECT cmd

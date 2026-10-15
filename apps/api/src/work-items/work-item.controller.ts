@@ -1,169 +1,47 @@
-import {
-  Body,
-  ConflictException,
-  Controller,
-  ForbiddenException,
-  Get,
-  Headers,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  Query,
-  Req,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Headers, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { CommandContext } from '@hon/contracts';
-import type { Response } from 'express';
+import { HUMAN_WORK_STATUSES, type HumanWorkContext, type HumanWorkStatus } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
-import {
-  CreateWorkItemDto,
-  ListWorkItemsQueryDto,
-  TransitionWorkItemDto,
-} from './work-item.dto.js';
-import { WorkItemService } from './work-item.service.js';
-
-@Controller('organizations/:organizationId/schools/:schoolId/work-items')
-@UseGuards(HonIdentityGuard)
+import { WorkItemService, workUuid } from './work-item.service.js';
+import { HumanWorkDto, HumanWorkTransitionDto, WorkItemHumanUiGuard } from './work-item.dto.js';
+@Controller('staff/work')
+@UseGuards(HonIdentityGuard,WorkItemHumanUiGuard)
 export class WorkItemController {
-  constructor(
-    private readonly database: RuntimeDatabaseService,
-    private readonly workItems: WorkItemService,
-  ) {}
-
-  @Post()
-  @HttpCode(HttpStatus.CREATED)
-  async create(
-    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
-    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Body() input: CreateWorkItemDto,
-    @Req() request: HonRequest,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const context = await this.resolveCommandContext(
-      request,
-      organizationId,
-      schoolId,
-      'work_item.create',
-      idempotencyKey,
-      'work-item creation',
-    );
-    const result = await this.workItems.create(context, input);
-    response.status(result.replayed ? HttpStatus.OK : HttpStatus.CREATED);
-    return {
-      data: result.workItem,
-      meta: {
-        requestId: context.requestId,
-        correlationId: context.correlationId,
-        replayed: result.replayed,
-      },
-    };
+  constructor(private readonly database: RuntimeDatabaseService, private readonly workItems: WorkItemService) {}
+  private async context(req: HonRequest,key = ''): Promise<HumanWorkContext> {
+    if (!req.honIdentity) throw new ForbiddenException({ code: 'IDENTITY_REQUIRED' });
+    const externalSubject = req.honIdentity.externalSubject;
+    const scope = await this.database.resolveHumanWorkScope(externalSubject);
+    if (!scope) throw new ForbiddenException({ code: 'STAFF_SCOPE_DENIED', detail: 'One unambiguous exact human school work scope is required.' });
+    const id = randomUUID();
+    return { ...scope,externalSubject,principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:id,correlationId:id,idempotencyKey:key };
   }
-
-  @Post(':workItemId/transition')
-  @HttpCode(HttpStatus.OK)
-  async transition(
-    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
-    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
-    @Param('workItemId', new ParseUUIDPipe()) workItemId: string,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Body() input: TransitionWorkItemDto,
-    @Req() request: HonRequest,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const context = await this.resolveCommandContext(
-      request,
-      organizationId,
-      schoolId,
-      'work_item.manage',
-      idempotencyKey,
-      'work-item transition',
-    );
-    const result = await this.workItems.transition(context, workItemId, input);
-    response.status(HttpStatus.OK);
-    return {
-      data: result.workItem,
-      meta: {
-        requestId: context.requestId,
-        correlationId: context.correlationId,
-        replayed: result.replayed,
-      },
-    };
+  private envelope<T>(c: HumanWorkContext,data: T,replayed = false) { return { data,meta:{ requestId:c.requestId,correlationId:c.correlationId,replayed } }; }
+  @Header('Cache-Control','private, no-store') @Get()
+  async list(@Query() query: Record<string,unknown>,@Req() req: HonRequest) {
+    if (!query || Object.keys(query).some(k => !['queue','status','after'].includes(k)) || (query.queue !== undefined && !['mine','team'].includes(String(query.queue))) || (query.status !== undefined && ![...HUMAN_WORK_STATUSES,'ACTIVE','ALL'].includes(query.status as HumanWorkStatus))) throw new BadRequestException({ code:'VALIDATION_FAILED' });
+    const after = query.after ?? null; if (after !== null) workUuid(after);
+    const c = await this.context(req);
+    return this.envelope(c,await this.workItems.list(c,(query.queue ?? 'mine') as 'mine'|'team',(query.status ?? 'ACTIVE') as HumanWorkStatus|'ACTIVE'|'ALL',after as string|null));
   }
-
-  @Get()
-  async list(
-    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
-    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
-    @Query() query: ListWorkItemsQueryDto,
-    @Req() request: HonRequest,
-  ) {
-    const identity = request.honIdentity;
-    if (!identity) throw new ForbiddenException('HON identity context is missing.');
-    const scope = await this.database.resolveAuthorizedScope(
-      identity.externalSubject,
-      schoolId,
-      'work_item.read',
-    );
-    if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) {
-      throw new ForbiddenException('HON work-item read is not authorized for this school.');
-    }
-    const requestId = randomUUID();
-    const workItems = await this.workItems.list({
-      ...scope,
-      principalType: 'HUMAN_USER',
-      requestId,
-    }, query.limit);
-    return {
-      data: workItems,
-      meta: { requestId, correlationId: requestId },
-    };
+  @Header('Cache-Control','private, no-store') @Get(':id')
+  async read(@Param('id') id: string,@Query() query: Record<string,unknown>,@Req() req: HonRequest) {
+    workUuid(id);
+    if (!query || Object.keys(query).some(k => k !== 'beforeVersion') || (query.beforeVersion !== undefined && (typeof query.beforeVersion !== 'string' || !/^[1-9][0-9]{0,8}$/.test(query.beforeVersion)))) throw new BadRequestException({ code:'VALIDATION_FAILED' });
+    const c = await this.context(req); return this.envelope(c,await this.workItems.read(c,id,query.beforeVersion === undefined ? null : Number(query.beforeVersion)));
   }
-
-  private async resolveCommandContext(
-    request: HonRequest,
-    organizationId: string,
-    schoolId: string,
-    permission: 'work_item.create' | 'work_item.manage',
-    idempotencyKey: string | undefined,
-    commandName: string,
-  ): Promise<CommandContext> {
-    const normalizedIdempotencyKey = idempotencyKey?.trim();
-    if (!normalizedIdempotencyKey || normalizedIdempotencyKey.length > 200) {
-      throw new ConflictException({
-        code: 'IDEMPOTENCY_KEY_REQUIRED',
-        detail: `A unique Idempotency-Key header of at most 200 characters is required for ${commandName}.`,
-      });
-    }
-    const identity = request.honIdentity;
-    if (!identity) throw new ForbiddenException('HON identity context is missing.');
-    // resolve_authorized_scope is a SECURITY DEFINER boundary that only joins a
-    // verified application user to an active HUMAN_USER principal; no body field
-    // can nominate a principal, tenant, source, or delegation.
-    const scope = await this.database.resolveAuthorizedScope(
-      identity.externalSubject,
-      schoolId,
-      permission,
-    );
-    if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) {
-      throw new ForbiddenException(`HON ${commandName} is not authorized for this school.`);
-    }
-    const requestId = randomUUID();
-    return {
-      organizationId: scope.organizationId,
-      schoolId: scope.schoolId,
-      principalId: scope.principalId,
-      principalType: 'HUMAN_USER',
-      requestId,
-      correlationId: requestId,
-      idempotencyKey: normalizedIdempotencyKey,
-      source: 'HUMAN_UI',
-    };
+  @Header('Cache-Control','private, no-store') @Post() @HttpCode(200)
+  async create(@Headers('idempotency-key') key: string|undefined,@Body() input: HumanWorkDto,@Req() req: HonRequest) {
+    const c = await this.context(req,key ?? ''); const r = await this.workItems.mutate(c,'CREATE',null,input); return this.envelope(c,r.workItem,r.replayed);
+  }
+  @Header('Cache-Control','private, no-store') @Post(':id/revisions') @HttpCode(200)
+  async update(@Param('id') id: string,@Headers('idempotency-key') key: string|undefined,@Body() input: HumanWorkDto,@Req() req: HonRequest) {
+    workUuid(id); const c = await this.context(req,key ?? ''); const r = await this.workItems.mutate(c,'UPDATE',id,input); return this.envelope(c,r.workItem,r.replayed);
+  }
+  @Header('Cache-Control','private, no-store') @Post(':id/transition') @HttpCode(200)
+  async transition(@Param('id') id: string,@Headers('idempotency-key') key: string|undefined,@Body() input: HumanWorkTransitionDto,@Req() req: HonRequest) {
+    workUuid(id); const c = await this.context(req,key ?? ''); const r = await this.workItems.mutate(c,'TRANSITION',id,input); return this.envelope(c,r.workItem,r.replayed);
   }
 }

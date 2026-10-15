@@ -1,292 +1,135 @@
 import pg from 'pg';
+import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-
-const { Client } = pg;
-if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for work-item integrity tests.');
-if (!process.env.HON_RUNTIME_DATABASE_URL) throw new Error('HON_RUNTIME_DATABASE_URL is required for work-item integrity tests.');
-
-const connectionOptions = (connectionString) => ({
-  connectionString,
-  ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
-});
-
-const { WorkItemController } = await import('../../../apps/api/dist/work-items/work-item.controller.js');
-const { WorkItemService } = await import('../../../apps/api/dist/work-items/work-item.service.js');
-const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
-
-const administrator = new Client(connectionOptions(process.env.DATABASE_URL));
-const runtime = new Client(connectionOptions(process.env.HON_RUNTIME_DATABASE_URL));
-const ids = Object.fromEntries(
-  [
-    'organization', 'schoolA', 'schoolB', 'user', 'principal', 'ownerRole',
-    'foreignWorkItem', 'subject', 'foreignSubject',
-  ].map((key) => [key, randomUUID()]),
-);
-const externalSubject = `work-item-${randomUUID()}`;
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
+import { readFile } from 'node:fs/promises';
+import { RuntimeDatabaseService } from '../../../apps/api/dist/foundation/runtime-database.service.js';
+import { WorkItemService } from '../../../apps/api/dist/work-items/work-item.service.js';
+import { WorkItemController } from '../../../apps/api/dist/work-items/work-item.controller.js';
+const { canTransitionWorkItem } = await import('../../domain/dist/index.js');
+import { humanWorkFunctions, verifyHumanWorkSecurity } from './human-work-security.mjs';
+import { verifyHumanWorkDrift } from './test-human-work-verifier.mjs';
+const transitionAuthority = "COALESCE(manager OR (w.assigned_principal_id IS NOT NULL AND actor IS NOT DISTINCT FROM w.assigned_principal_id AND hon.human_work_permission(actor,org,school,'work_item.self_manage')),false) IS DISTINCT FROM true";
+assert.equal((await readFile(new URL('../migrations/0084_human_work_item_workbench.sql', import.meta.url), 'utf8')).split(transitionAuthority).length - 1, 3, 'Initial, replay, and final transition authorization must all fail closed for an unassigned work item.');
+for (const [key,role] of [['DATABASE_URL','hon_work_owner'],['HON_RUNTIME_DATABASE_URL','hon_work_runtime']]) {
+ const u=new URL(process.env[key]??''); if(u.hostname!=='localhost'||u.port!=='5432'||u.pathname!=='/hon_work_validation'||u.username!==role) throw new Error('Only exact disposable localhost work database/roles allowed; never remote URLs.');
 }
-
-function responseCapture() {
-  return {
-    statusCode: undefined,
-    status(code) {
-      this.statusCode = code;
-      return this;
-    },
-  };
+const admin=new pg.Client({connectionString:process.env.DATABASE_URL,ssl:false}), runtime=new pg.Client({connectionString:process.env.HON_RUNTIME_DATABASE_URL,ssl:false});
+const database=new RuntimeDatabaseService(), svc=new WorkItemService(database), controller=new WorkItemController(database,svc);
+const ids=Object.fromEntries(['org','otherOrg','school','sibling','otherSchool','managerRole','selfRole','readRole','parentRole','otherRole','legacy'].map(k=>[k,randomUUID()]));
+const humans=Object.fromEntries(['manager','self','known','parent','mixedParent','hq','inactive','nonstaff','ai','sibling','other','future','expired','readOnly','orgOnly'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`work-${k}-${randomUUID()}`} ]));
+const orgs=[ids.org,ids.otherOrg], privateTables=['work_items','human_work_history','human_work_requests'];
+const context=(who='self',school=ids.school,key=randomUUID())=>({organizationId:school===ids.otherSchool?ids.otherOrg:ids.org,schoolId:school,principalId:humans[who].id,externalSubject:humans[who].subject,principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:randomUUID(),correlationId:randomUUID(),idempotencyKey:key});
+const input=(patch={})=>({expectedVersion:0,title:'Review facility checklist',description:'PRIVATE_DESCRIPTION\nHuman record only.',dueAt:'2027-01-03T14:30:00.000Z',priority:'NORMAL',assigneeId:humans.self.id,...patch});
+const transition=(version,targetStatus)=>({expectedVersion:version,targetStatus});
+const deny=(fn,status=403)=>assert.rejects(async()=>fn(),e=>{assert.equal(e.getStatus?.(),status,e.stack);return true;});
+const sqlDeny=(fn,code='42501')=>assert.rejects(fn,e=>{assert.equal(e.code,code,e.stack);return true;});
+async function snapshot(tables) { const data={};for(const t of tables)data[t]=(await admin.query(`SELECT to_jsonb(t) record FROM hon.${t} t ORDER BY to_jsonb(t)::text`)).rows;return data; }
+async function direct(client,c,work) { await client.query('BEGIN'); try {for(const [k,v]of Object.entries({organization_id:c.organizationId,school_id:c.schoolId,principal_id:c.principalId,principal_type:c.principalType,source:c.source,request_id:c.requestId,action_request_id:c.actionRequestId??'',delegated_by_principal_id:c.delegatedByPrincipalId??''}))await client.query('SELECT set_config($1,$2,true)',[`app.hon_${k}`,v]);const r=await work(c);await client.query('COMMIT');return r;}catch(e){await client.query('ROLLBACK');throw e;} }
+const sqlSave=(c,op,id,p)=>direct(runtime,c,x=>runtime.query('SELECT hon.mutate_human_work($1,$2,$3::uuid,$4::jsonb,$5,$6::uuid,$7::uuid)',[x.externalSubject,op,id,JSON.stringify(p),x.idempotencyKey,x.requestId,x.correlationId]));
+let injection=null;
+async function cleanup(){
+ await admin.query('ROLLBACK');if(injection){await admin.query(`DROP TRIGGER IF EXISTS work_fixture_failure ON hon.${injection}`);await admin.query('DROP FUNCTION IF EXISTS hon.work_fixture_failure()');}
+ await admin.query('BEGIN');try{
+  for(const t of privateTables)await admin.query(`ALTER TABLE hon.${t} DISABLE TRIGGER USER`);
+  for(const t of ['human_work_requests','human_work_history','work_items','outbox_delivery_attempts','outbox_events','audit_events','principal_role_grants','role_permissions','roles','organization_entitlements'])await admin.query(`DELETE FROM hon.${t} WHERE organization_id=ANY($1::uuid[])`,[orgs]);
+  for(const t of privateTables)await admin.query(`ALTER TABLE hon.${t} ENABLE TRIGGER USER`);
+  await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id=ANY($1::uuid[])',[Object.values(humans).map(x=>x.id)]);
+  await admin.query('DELETE FROM hon.principals WHERE id=ANY($1::uuid[])',[Object.values(humans).map(x=>x.id)]);await admin.query('DELETE FROM hon.users WHERE id=ANY($1::uuid[])',[Object.values(humans).map(x=>x.user)]);await admin.query('DELETE FROM hon.schools WHERE organization_id=ANY($1::uuid[])',[orgs]);await admin.query('DELETE FROM hon.organizations WHERE id=ANY($1::uuid[])',[orgs]);await admin.query('COMMIT');
+ }catch(e){await admin.query('ROLLBACK');throw e;}
 }
-
-async function expectStatus(expectedStatus, operation, message) {
-  try {
-    await operation();
-    throw new Error(message);
-  } catch (error) {
-    if (error instanceof Error && error.message === message) throw error;
-    if (typeof error?.getStatus !== 'function' || error.getStatus() !== expectedStatus) throw error;
-  }
-}
-
-async function cleanupFixtures() {
-  await administrator.query('BEGIN');
-  try {
-    await administrator.query('DELETE FROM hon.outbox_events WHERE organization_id = $1', [ids.organization]);
-    await administrator.query('DELETE FROM hon.audit_events WHERE organization_id = $1', [ids.organization]);
-    await administrator.query('DELETE FROM hon.idempotency_records WHERE organization_id = $1', [ids.organization]);
-    await administrator.query('DELETE FROM hon.work_items WHERE organization_id = $1', [ids.organization]);
-    await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
-    await administrator.query('DELETE FROM hon.roles WHERE id = $1', [ids.ownerRole]);
-    await administrator.query('DELETE FROM hon.principals WHERE id = $1', [ids.principal]);
-    await administrator.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
-    await administrator.query('DELETE FROM hon.schools WHERE id IN ($1, $2)', [ids.schoolA, ids.schoolB]);
-    await administrator.query('DELETE FROM hon.organizations WHERE id = $1', [ids.organization]);
-    await administrator.query('COMMIT');
-  } catch (error) {
-    await administrator.query('ROLLBACK');
-    throw error;
-  }
-}
-
-await administrator.connect();
-await runtime.connect();
-const database = new RuntimeDatabaseService();
-const workItems = new WorkItemService(database);
-const controller = new WorkItemController(database, workItems);
-
+await Promise.all([admin.connect(),runtime.connect()]);
 try {
-  const posture = await administrator.query(`
-    SELECT relrowsecurity, relforcerowsecurity
-    FROM pg_class
-    WHERE oid = 'hon.work_items'::regclass
-  `);
-  assert(posture.rows[0]?.relrowsecurity && posture.rows[0]?.relforcerowsecurity,
-    'work_items must enable and force row-level security.');
-  const privileges = await runtime.query(`
-    SELECT
-      has_table_privilege(current_user, 'hon.work_items', 'SELECT') AS can_select,
-      has_table_privilege(current_user, 'hon.work_items', 'INSERT') AS can_insert,
-      has_table_privilege(current_user, 'hon.work_items', 'UPDATE') AS can_update,
-      has_table_privilege(current_user, 'hon.work_items', 'DELETE') AS can_delete
-  `);
-  const grants = privileges.rows[0];
-  assert(grants?.can_select && grants?.can_insert && grants?.can_update && !grants?.can_delete,
-    'hon_runtime work_items privileges are not the reviewed SELECT/INSERT/UPDATE minimum.');
-
-  await administrator.query('BEGIN');
-  try {
-    await administrator.query(
-      'INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, $2, $2)',
-      [ids.organization, 'Work Item Integrity Test'],
-    );
-    await administrator.query(
-      `INSERT INTO hon.schools (id, organization_id, name, slug) VALUES
-       ($1, $2, 'Work Item School A', $3),
-       ($4, $2, 'Work Item School B', $5)`,
-      [
-        ids.schoolA, ids.organization, `work-item-a-${ids.schoolA.slice(0, 8)}`,
-        ids.schoolB, `work-item-b-${ids.schoolB.slice(0, 8)}`,
-      ],
-    );
-    await administrator.query(
-      'INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, $3, $4)',
-      [ids.user, externalSubject, `work-item-${ids.user}@example.test`, 'Work Item Manager'],
-    );
-    await administrator.query(
-      `INSERT INTO hon.principals (id, principal_type, user_id, display_name)
-       VALUES ($1, 'HUMAN_USER', $2, 'Work Item Manager')`,
-      [ids.principal, ids.user],
-    );
-    await administrator.query(
-      `INSERT INTO hon.roles (id, organization_id, code, name, is_system_role)
-       VALUES ($1, $2, 'OWNER', 'School Owner', true)`,
-      [ids.ownerRole, ids.organization],
-    );
-    await administrator.query(
-      `INSERT INTO hon.role_permissions (role_id, organization_id, permission_code)
-       SELECT $1::uuid, $2::uuid, code
-       FROM hon.permissions
-       WHERE code IN ('work_item.create', 'work_item.read', 'work_item.manage')`,
-      [ids.ownerRole, ids.organization],
-    );
-    await administrator.query(
-      `INSERT INTO hon.principal_role_grants (
-         organization_id, school_id, principal_id, role_id, granted_by_principal_id
-       ) VALUES ($1, $2, $3, $4, $3)`,
-      [ids.organization, ids.schoolA, ids.principal, ids.ownerRole],
-    );
-    await administrator.query(
-      `INSERT INTO hon.work_items (
-         id, organization_id, school_id, work_type, status, subject_type, subject_id, payload, correlation_id
-       ) VALUES ($1, $2, $3, 'FOREIGN_FIXTURE', 'READY', 'FIXTURE', $4::uuid, '{}'::jsonb, $5::uuid)`,
-      [ids.foreignWorkItem, ids.organization, ids.schoolB, ids.foreignSubject, randomUUID()],
-    );
-    await administrator.query('COMMIT');
-  } catch (error) {
-    await administrator.query('ROLLBACK');
-    throw error;
-  }
-
-  const request = { honIdentity: { externalSubject } };
-  const createInput = {
-    workType: 'SCHEDULE_RECONCILIATION',
-    subjectType: 'CLASS_SESSION',
-    subjectId: ids.subject,
-    payload: { requestedBy: 'human-test', dryRun: true },
-  };
-  const createKey = `work-item-create-${randomUUID()}`;
-  const firstResponse = responseCapture();
-  const first = await controller.create(
-    ids.organization, ids.schoolA, createKey, createInput, request, firstResponse,
-  );
-  assert(firstResponse.statusCode === 201 && !first.meta.replayed
-    && first.data.status === 'READY' && first.data.version === 1,
-  'The human create command did not create an initial READY work item.');
-  assert(!('assignedPrincipalId' in first.data) && !('payload' in first.data) && !('result' in first.data),
-    'The work-item command response exposed identity or arbitrary raw payload data.');
-
-  const stored = await administrator.query(
-    `SELECT status, version, assigned_principal_id, payload
-     FROM hon.work_items WHERE id = $1::uuid`,
-    [first.data.id],
-  );
-  assert(stored.rows[0]?.status === 'READY' && stored.rows[0]?.version === 1
-    && stored.rows[0]?.assigned_principal_id === null,
-  'Work-item creation did not preserve READY-only, unassigned initial state.');
-
-  const replayResponse = responseCapture();
-  const replay = await controller.create(
-    ids.organization, ids.schoolA, createKey, createInput, request, replayResponse,
-  );
-  assert(replayResponse.statusCode === 200 && replay.meta.replayed && replay.data.id === first.data.id,
-    'Matching work-item creation did not idempotently replay the original response.');
-  await expectStatus(409, () => controller.create(
-    ids.organization, ids.schoolA, createKey,
-    { ...createInput, payload: { requestedBy: 'human-test', dryRun: false } }, request, responseCapture(),
-  ), 'A reused work-item create idempotency key accepted a different command.');
-  await expectStatus(403, () => controller.create(
-    randomUUID(), ids.schoolA, `wrong-org-${randomUUID()}`, createInput, request, responseCapture(),
-  ), 'Work-item creation accepted an organization route outside the resolved scope.');
-  await expectStatus(400, () => workItems.create({
-    organizationId: ids.organization,
-    schoolId: ids.schoolA,
-    principalId: ids.principal,
-    principalType: 'HUMAN_USER',
-    requestId: randomUUID(),
-    correlationId: randomUUID(),
-    idempotencyKey: `bad-payload-${randomUUID()}`,
-    source: 'HUMAN_UI',
-  }, { workType: 'BAD', payload: ['not-an-object'] }),
-  'A non-object work-item payload was accepted.');
-
-  const listed = await controller.list(ids.organization, ids.schoolA, { limit: 50 }, request);
-  assert(listed.data.some((item) => item.id === first.data.id)
-    && !listed.data.some((item) => item.id === ids.foreignWorkItem)
-    && listed.data.every((item) => !('assignedPrincipalId' in item) && !('payload' in item) && !('result' in item)),
-  'Limited work-item list leaked foreign-scope, principal, or raw payload data.');
-
-  await runtime.query('BEGIN');
-  try {
-    await runtime.query(
-      `SELECT set_config('app.hon_organization_id', $1, true),
-              set_config('app.hon_school_id', $2, true)`,
-      [ids.organization, ids.schoolA],
-    );
-    await runtime.query('SELECT hon.require_tenant_context()');
-    const visible = await runtime.query('SELECT id FROM hon.work_items WHERE id = $1::uuid', [first.data.id]);
-    const hidden = await runtime.query('SELECT id FROM hon.work_items WHERE id = $1::uuid', [ids.foreignWorkItem]);
-    assert(visible.rowCount === 1 && hidden.rowCount === 0,
-      'RLS exposed a work item from another school.');
-    await runtime.query('ROLLBACK');
-  } catch (error) {
-    await runtime.query('ROLLBACK');
-    throw error;
-  }
-
-  const workingKey = `work-item-working-${randomUUID()}`;
-  const working = await controller.transition(
-    ids.organization, ids.schoolA, first.data.id, workingKey,
-    { targetStatus: 'WORKING', expectedVersion: 1, result: { started: true } }, request, responseCapture(),
-  );
-  assert(!working.meta.replayed && working.data.status === 'WORKING' && working.data.version === 2,
-    'A version-matched READY to WORKING transition was not recorded.');
-  const workingReplay = await controller.transition(
-    ids.organization, ids.schoolA, first.data.id, workingKey,
-    { targetStatus: 'WORKING', expectedVersion: 1, result: { started: true } }, request, responseCapture(),
-  );
-  assert(workingReplay.meta.replayed && workingReplay.data.id === first.data.id,
-    'Matching work-item transition did not idempotently replay the original response.');
-  await expectStatus(409, () => controller.transition(
-    ids.organization, ids.schoolA, first.data.id, `stale-${randomUUID()}`,
-    { targetStatus: 'WAITING', expectedVersion: 1 }, request, responseCapture(),
-  ), 'A stale work-item expectedVersion was accepted.');
-
-  const completed = await controller.transition(
-    ids.organization, ids.schoolA, first.data.id, `complete-${randomUUID()}`,
-    { targetStatus: 'COMPLETED', expectedVersion: 2, result: { reconciled: true } }, request, responseCapture(),
-  );
-  assert(completed.data.status === 'COMPLETED' && completed.data.version === 3,
-    'A version-matched WORKING to COMPLETED transition was not recorded.');
-  await expectStatus(409, () => controller.transition(
-    ids.organization, ids.schoolA, first.data.id, `reopen-${randomUUID()}`,
-    { targetStatus: 'READY', expectedVersion: 3 }, request, responseCapture(),
-  ), 'A terminal work item was silently reopened.');
-  await expectStatus(403, () => workItems.transition({
-    organizationId: ids.organization,
-    schoolId: ids.schoolA,
-    principalId: ids.principal,
-    principalType: 'AUTOMATION',
-    requestId: randomUUID(),
-    correlationId: randomUUID(),
-    idempotencyKey: `automation-${randomUUID()}`,
-    source: 'AUTOMATION',
-  }, first.data.id, { targetStatus: 'READY', expectedVersion: 3 }),
-  'A non-human work-item transition context was accepted.');
-
-  const evidence = await administrator.query(`
-    SELECT
-      (SELECT count(*)::integer FROM hon.audit_events
-       WHERE organization_id = $1 AND action_code = 'work_item.create') AS create_audits,
-      (SELECT count(*)::integer FROM hon.outbox_events
-       WHERE organization_id = $1 AND event_type = 'work_item.created' AND schema_version = 1) AS create_outbox,
-      (SELECT count(*)::integer FROM hon.audit_events
-       WHERE organization_id = $1 AND action_code = 'work_item.transition') AS transition_audits,
-      (SELECT count(*)::integer FROM hon.outbox_events
-       WHERE organization_id = $1 AND event_type = 'work_item.transitioned' AND schema_version = 1) AS transition_outbox
-  `, [ids.organization]);
-  assert(evidence.rows[0]?.create_audits === 1 && evidence.rows[0]?.create_outbox === 1
-    && evidence.rows[0]?.transition_audits === 2 && evidence.rows[0]?.transition_outbox === 2,
-  'Each successful work-item command did not atomically emit its required audit and v1 outbox event.');
-
-  console.log('Verified durable work-item permission scope, forced RLS isolation, exact runtime grants, initial READY/unassigned creation, bounded input, limited list projection, idempotency, optimistic transitions, terminal non-reopening, human-only command context, and atomic audit/outbox evidence.');
-} finally {
-  try {
-    await database.onModuleDestroy();
-  } finally {
-    try {
-      await cleanupFixtures();
-    } finally {
-      await Promise.all([administrator.end(), runtime.end()]);
-    }
-  }
-}
+ await verifyHumanWorkSecurity(admin,'hon_work_runtime');
+ for(const t of [...privateTables,'users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants']){
+  assert.equal((await runtime.query("SELECT has_table_privilege(current_user,$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege(current_user,$1,'SELECT,INSERT,UPDATE,REFERENCES') allowed",[`hon.${t}`])).rows[0].allowed,false,t);await sqlDeny(()=>runtime.query(`SELECT * FROM hon.${t}`));
+ }
+ for(const [signature,allowed]of humanWorkFunctions)assert.equal((await runtime.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed",[signature])).rows[0].allowed,allowed,signature);
+ await admin.query('BEGIN');
+ for(const org of orgs){await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'Work fixture','Work fixture')",[org]);await admin.query("INSERT INTO hon.organization_entitlements(organization_id,tier,effective_from) VALUES($1,'ESSENTIAL',clock_timestamp()-interval '1 day')",[org]);}
+ for(const [school,org]of [[ids.school,ids.org],[ids.sibling,ids.org],[ids.otherSchool,ids.otherOrg]])await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1::uuid,$2,'Fixture school',$1::text,'America/New_York')",[school,org]);
+ for(const [who,h]of Object.entries(humans)){await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[h.user,h.subject,`${h.user}@example.test`]);await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,$3,'PRIVATE_DIRECTORY',$4)",[h.id,who==='ai'?null:h.user,who==='ai'?'AI_EMPLOYEE':'HUMAN_USER',who!=='inactive']);}
+ for(const [role,org,code]of [[ids.managerRole,ids.org,'MANAGER'],[ids.selfRole,ids.org,'FRONT_DESK'],[ids.readRole,ids.org,'INSTRUCTOR'],[ids.parentRole,ids.org,'PARENT'],[ids.otherRole,ids.otherOrg,'OTHER_STAFF']])await admin.query("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,$3,'Fixture role')",[role,org,code]);
+ for(const [role,org,codes]of [[ids.managerRole,ids.org,['school.view','work_item.create','work_item.self_manage','work_item.manage']],[ids.selfRole,ids.org,['school.view','work_item.create','work_item.self_manage']],[ids.readRole,ids.org,['school.view','work_item.read']],[ids.parentRole,ids.org,['school.view','work_item.create','work_item.self_manage','work_item.manage']],[ids.otherRole,ids.otherOrg,['school.view','work_item.create','work_item.self_manage','work_item.manage']]])for(const code of codes)await admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)',[role,org,code]);
+ for(const who of Object.keys(humans).filter(k=>!['nonstaff','orgOnly'].includes(k))){
+  const role=who==='manager'||who==='hq'||who==='orgOnly'?ids.managerRole:who==='parent'?ids.parentRole:who==='other'?ids.otherRole:who==='readOnly'?ids.readRole:ids.selfRole;
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from,effective_until) VALUES($1,$2,$3,$4,$5,clock_timestamp()+$6::interval,CASE WHEN $7 THEN clock_timestamp()-interval '1 second' ELSE NULL END)",[who==='other'?ids.otherOrg:ids.org,who==='orgOnly'?null:who==='sibling'?ids.sibling:who==='other'?ids.otherSchool:ids.school,humans[who].id,role,humans.manager.id,who==='future'?'1 day':'-2 days',who==='expired']);
+ }
+ await admin.query('INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$5)',[ids.org,ids.school,humans.mixedParent.id,ids.parentRole,humans.manager.id]);
+ await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes) VALUES($1,'HON_HQ_OWNER',ARRAY['work_item.manage'])",[humans.hq.id]);
+ await admin.query("INSERT INTO hon.work_items(id,organization_id,school_id,work_type,status,payload,result,error_reason,correlation_id) VALUES($1,$2,$3,'LEGACY_AI','WORKING','{\"prompt\":\"RAW_AI_PROMPT\",\"email\":\"PRIVATE_CONTACT\"}','{\"toolPayload\":\"RAW_AI_OUTPUT\"}','PRIVATE_ERROR',$4)",[ids.legacy,ids.org,ids.school,randomUUID()]);
+ await admin.query('COMMIT');
+ const forbidden=['crm_leads','crm_activities','crm_appointments','people','student_profiles','action_requests','action_approvals','communication_messages','communication_consents','payment_attempts','invoices','memberships','membership_payment_schedules','billing_accounts','ai_usage_ledger','ai_invocation_plans','ai_team_presentation_preferences','hq_ai_provider_connections','hq_ai_control_requests','automation_rules','automation_rule_versions','automation_rule_requests','outbox_delivery_attempts'];
+ const before=await snapshot(forbidden), noWrites=await snapshot([...privateTables,'audit_events','outbox_events']);
+ const empty=await svc.list(context());assert.deepEqual(empty.items,[]);assert.equal(empty.humanOnly,true);assert.equal(empty.executionAllowed,false);assert.deepEqual(await snapshot(Object.keys(noWrites)),noWrites);await deny(()=>svc.read(context('manager'),ids.legacy),404);
+ const original=context(),first=(await svc.mutate(original,'CREATE',null,input())).workItem;assert.equal(first.version,1);assert.equal(first.status,'READY');assert.equal(first.humanOnly,true);assert.equal(first.dueAt,input().dueAt);assert.deepEqual(await svc.read(context(),first.workItemId),first);assert((await svc.mutate(original,'CREATE',null,input())).replayed);await deny(()=>svc.mutate(original,'CREATE',null,input({priority:'HIGH'})),409);
+ await deny(()=>svc.list(context(),'team'));await deny(()=>svc.mutate(context(),'CREATE',null,input({assigneeId:humans.known.id})));await deny(()=>svc.read(context('known'),first.workItemId),404);await deny(()=>svc.mutate(context(),'UPDATE',first.workItemId,input({expectedVersion:1})));await deny(()=>svc.mutate(context(),'TRANSITION',first.workItemId,transition(1,'COMPLETED')),409);
+ const manager=context('manager'),known=(await svc.mutate(manager,'CREATE',null,input({assigneeId:humans.known.id,title:'Team facility work'}))).workItem;
+ const unassigned=(await svc.mutate(context(),'CREATE',null,input({assigneeId:null}))).workItem;assert.equal(unassigned.assigneeId,null);await deny(()=>svc.mutate(context(),'TRANSITION',unassigned.workItemId,transition(1,'WORKING')));
+ assert.equal((await svc.list(context('known'))).items[0].workItemId,known.workItemId);
+ const team=await svc.list(context('manager'),'team','ALL');assert.equal(team.items.length,3);assert.doesNotMatch(JSON.stringify(team),/PRIVATE_|description|prompt|output|toolPayload|email|phone|externalSubject|displayName|contact|LEGACY_AI/);assert.doesNotMatch(JSON.stringify(await svc.read(context('manager'),known.workItemId)),/PRIVATE_DIRECTORY|PRIVATE_CONTACT|RAW_AI_|email|externalSubject|displayName/);
+ for(const who of ['parent','mixedParent','hq','inactive','ai','nonstaff','future','expired','readOnly','orgOnly']){
+  await deny(()=>svc.list(context(who)));await deny(()=>svc.mutate(context('manager'),'CREATE',null,input({assigneeId:humans[who].id})));assert.equal(await database.resolveHumanWorkScope(humans[who].subject),undefined);
+ }
+ for(const target of [humans.sibling.id,humans.other.id,randomUUID()])await deny(()=>svc.mutate(context('manager'),'CREATE',null,input({assigneeId:target})));
+ for(const c of [{...context('manager'),organizationId:ids.otherOrg},context('manager',ids.sibling),context('other',ids.otherSchool)]){await deny(()=>svc.read(c,first.workItemId),c.principalId===humans.other.id?404:403);await deny(()=>svc.mutate(c,'TRANSITION',first.workItemId,transition(1,'WORKING')),c.principalId===humans.other.id?404:403);}
+ for(const patch of [{source:'AI'},{source:'PARENT_APP'},{source:'PUBLIC_API'},{source:'HQ_SUPPORT'},{principalType:'AI_EMPLOYEE'},{principalType:'AUTOMATION'},{principalType:'INTEGRATION'},{principalType:'SYSTEM_SERVICE'},{actionRequestId:randomUUID()},{delegatedByPrincipalId:randomUUID()},{externalSubject:humans.hq.subject}]){
+  await deny(()=>svc.list({...context(),...patch}));await deny(()=>svc.mutate({...context(),...patch},'CREATE',null,input()));await sqlDeny(()=>direct(runtime,{...context(),...patch},x=>runtime.query("SELECT hon.read_human_work($1,NULL,'mine','ALL',NULL,NULL)",[x.externalSubject])));
+ }
+ for(const patch of [{expectedVersion:-1},{expectedVersion:1},{expectedVersion:0.5},{expectedVersion:999999999},{title:''},{title:'x'.repeat(121)},{title:' x'},{title:'x\u202e'},{description:'x'.repeat(2001)},{description:'x\tbad'},{dueAt:'2027-02-30T10:00:00.000Z'},{dueAt:'2027-01-03T10:00:00Z'},{dueAt:'2027-01-03T10:00:00.000+01:00'},{dueAt:'infinity'},{dueAt:'2100-01-01T00:00:00.000Z'},{priority:'URGENT'},{actorId:humans.self.id},{schoolId:ids.sibling},{source:'HUMAN_UI'},{recipientEmail:'external@example.test'},{payload:{prompt:'raw'}},{result:{}},{assigneeId:'external@example.test'},{description:null},{dueAt:undefined}]){
+  await deny(()=>svc.mutate(context(),'CREATE',null,input(patch)),400);await sqlDeny(()=>sqlSave(context(),'CREATE',null,input(patch)),patch.dueAt?.includes('02-30')?'22008':'22023');
+ }
+ await deny(()=>svc.mutate(context(),'TRANSITION',first.workItemId,{...transition(1,'WORKING'),result:{}}),400);
+ const states=['READY','WORKING','WAITING','NEEDS_ATTENTION','COMPLETED','FAILED'];
+ for(const from of states)for(const to of states)assert.equal((await admin.query('SELECT hon.human_work_transition_allowed($1,$2) ok',[from,to])).rows[0].ok,canTransitionWorkItem(from,to),`${from}->${to}`);
+ const revised=(await svc.mutate(context('manager'),'UPDATE',first.workItemId,input({expectedVersion:1,title:'Revised work',dueAt:null,priority:'HIGH'}))).workItem;assert.equal(revised.version,2);
+ for(const state of ['WORKING','WAITING','NEEDS_ATTENTION','READY','WORKING','COMPLETED']){const current=await svc.read(context(),first.workItemId);await svc.mutate(context(),'TRANSITION',first.workItemId,transition(current.version,state));}
+ const terminal=await svc.read(context(),first.workItemId);assert.equal(terminal.status,'COMPLETED');assert.equal(terminal.canEdit,false);assert.equal(terminal.canTransition,false);await deny(()=>svc.mutate(context('manager'),'UPDATE',first.workItemId,input({expectedVersion:terminal.version})),409);await deny(()=>svc.mutate(context('manager'),'TRANSITION',first.workItemId,transition(terminal.version,'READY')),409);
+ const failed=(await svc.mutate(context('manager'),'TRANSITION',unassigned.workItemId,transition(1,'FAILED'))).workItem;await deny(()=>svc.mutate(context('manager'),'TRANSITION',unassigned.workItemId,transition(failed.version,'READY')),409);
+ const retry=context('known'),same=await Promise.all([svc.mutate(retry,'TRANSITION',known.workItemId,transition(1,'WORKING')),svc.mutate(retry,'TRANSITION',known.workItemId,transition(1,'WORKING'))]);assert.equal(same.filter(x=>!x.replayed).length,1);
+ const race=await Promise.allSettled([svc.mutate(context('known'),'TRANSITION',known.workItemId,transition(2,'WAITING')),svc.mutate(context('known'),'TRANSITION',known.workItemId,transition(2,'NEEDS_ATTENTION'))]);assert.equal(race.filter(x=>x.status==='fulfilled').length,1);assert.equal(race.find(x=>x.status==='rejected').reason.getStatus(),409);
+ const current=await svc.read(context('known'),known.workItemId);const reassigned=(await svc.mutate(context('manager'),'UPDATE',known.workItemId,input({expectedVersion:current.version,assigneeId:humans.self.id}))).workItem;
+ await deny(()=>svc.read(context('known'),known.workItemId),404);await deny(()=>svc.mutate(retry,'TRANSITION',known.workItemId,transition(1,'WORKING')),404);await deny(()=>svc.mutate(context('known'),'TRANSITION',known.workItemId,transition(reassigned.version,'READY')),404);assert.equal((await svc.list(context('known'))).items.length,0);
+ assert.equal((await svc.read(context(),known.workItemId)).assigneeId,humans.self.id);
+ const recovery=(await svc.mutate(context('manager'),'CREATE',null,input({assigneeId:humans.known.id}))).workItem;
+ await admin.query('UPDATE hon.principals SET is_active=false WHERE id=$1',[humans.known.id]);await deny(()=>svc.list(context('known')));await deny(()=>svc.mutate(manager,'CREATE',null,input({assigneeId:humans.known.id,title:'Team facility work'})));
+ assert.equal((await svc.mutate(context('manager'),'UPDATE',recovery.workItemId,input({expectedVersion:1,assigneeId:null}))).workItem.assigneeId,null);await admin.query('UPDATE hon.principals SET is_active=true WHERE id=$1',[humans.known.id]);
+ for(const [apply,args,restore]of [
+  ['UPDATE hon.principals SET is_active=false WHERE id=$1',[humans.manager.id],'UPDATE hon.principals SET is_active=true WHERE id=$1'],
+  ['UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE principal_id=$1',[humans.manager.id,humans.self.id],'UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE principal_id=$1'],
+  ["UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval '1 second' WHERE principal_id=$1",[humans.manager.id],'UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1'],
+  ["UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '1 second' WHERE organization_id=$1",[ids.org],'UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1'],
+  ["UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1",[ids.school],"UPDATE hon.schools SET status='ACTIVE' WHERE id=$1"],
+  ["UPDATE hon.organizations SET status='SUSPENDED' WHERE id=$1",[ids.org],"UPDATE hon.organizations SET status='ACTIVE' WHERE id=$1"],
+ ]){await admin.query(apply,args);await deny(()=>svc.mutate(manager,'CREATE',null,input({assigneeId:humans.known.id,title:'Team facility work'})));await deny(()=>svc.list(context('manager'),'team'));await admin.query(restore,args.slice(0,Math.max(...[...restore.matchAll(/\$(\d+)/g)].map(m=>Number(m[1])))));}
+ await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='work_item.manage'",[ids.managerRole]);await deny(()=>svc.list(context('manager'),'team'));await deny(()=>svc.mutate(manager,'CREATE',null,input({assigneeId:humans.known.id,title:'Team facility work'})));await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'work_item.manage')",[ids.managerRole,ids.org]);
+ await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='work_item.self_manage'",[ids.selfRole]);await deny(()=>svc.mutate(context(),'TRANSITION',known.workItemId,transition(reassigned.version,'READY')),404);await deny(()=>svc.mutate(context('manager'),'CREATE',null,input()));await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'work_item.self_manage')",[ids.selfRole,ids.org]);
+ await admin.query('UPDATE hon.roles SET management_school_id=$2 WHERE id=$1',[ids.managerRole,ids.sibling]);await deny(()=>svc.list(context('manager'),'team'));await admin.query('UPDATE hon.roles SET management_school_id=NULL WHERE id=$1',[ids.managerRole]);
+ await admin.query('INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$3)',[ids.org,ids.sibling,humans.self.id,ids.selfRole]);assert.equal(await database.resolveHumanWorkScope(humans.self.subject),undefined);await deny(()=>controller.list({}, {honIdentity:{externalSubject:humans.self.subject}}));await admin.query('DELETE FROM hon.principal_role_grants WHERE principal_id=$1 AND school_id=$2',[humans.self.id,ids.sibling]);
+ const duplicate=randomUUID();await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','Duplicate')",[duplicate,humans.self.user]);try{await deny(()=>svc.list(context()));assert.equal(await database.resolveHumanWorkScope(humans.self.subject),undefined);}finally{await admin.query('DELETE FROM hon.principals WHERE id=$1',[duplicate]);}
+ // Observe actual wait before changing authority; test actor AND assignee expiry after lock wait.
+ const probe=new pg.Client({connectionString:process.env.DATABASE_URL,ssl:false});await probe.connect();
+ async function waitingChange(change){await admin.query('BEGIN');const blocker=(await admin.query('SELECT pg_backend_pid() pid')).rows[0].pid;await admin.query('SELECT id FROM hon.organizations WHERE id=$1 FOR UPDATE',[ids.org]);const wait=svc.mutate(context('manager'),'CREATE',null,input({assigneeId:humans.known.id})).then(value=>({value}),error=>({error}));let blocked=false;const deadline=Date.now()+3000;while(Date.now()<deadline){blocked=(await probe.query('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) blocked',[blocker])).rows[0].blocked;if(blocked)break;await new Promise(r=>setTimeout(r,10));}assert(blocked);await change();await admin.query('COMMIT');assert.equal((await wait).error?.getStatus(),403);}
+ try{
+  for(const principal of [humans.manager.id,humans.known.id]){await admin.query("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()+interval '250 milliseconds' WHERE principal_id=$1",[principal]);await waitingChange(async()=>new Promise(r=>setTimeout(r,350)));await admin.query('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1',[principal]);}
+  await waitingChange(()=>admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='work_item.manage'",[ids.managerRole]));await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'work_item.manage')",[ids.managerRole,ids.org]);
+  await waitingChange(()=>admin.query('UPDATE hon.principals SET is_active=false WHERE id=$1',[humans.known.id]));await admin.query('UPDATE hon.principals SET is_active=true WHERE id=$1',[humans.known.id]);
+ }finally{await admin.query('ROLLBACK');await probe.end();}
+ for(const t of ['human_work_history','human_work_requests']){await sqlDeny(()=>admin.query(`UPDATE hon.${t} SET ${t==='human_work_history'?"description='changed'":"fingerprint=repeat('0',64)"} WHERE organization_id=$1`,[ids.org]));await sqlDeny(()=>admin.query(`DELETE FROM hon.${t} WHERE organization_id=$1`,[ids.org]));await sqlDeny(()=>admin.query(`TRUNCATE hon.${t} CASCADE`));}
+ await sqlDeny(()=>admin.query('DELETE FROM hon.work_items WHERE id=$1',[first.workItemId]));
+ for(const table of ['audit_events','outbox_events']){
+  await admin.query(`CREATE FUNCTION hon.work_fixture_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.organization_id='${ids.org}'::uuid THEN RAISE EXCEPTION 'work atomic failure'; END IF; RETURN NEW; END $$`);await admin.query(`CREATE TRIGGER work_fixture_failure BEFORE INSERT ON hon.${table} FOR EACH ROW EXECUTE FUNCTION hon.work_fixture_failure()`);injection=table;
+  const tables=[...privateTables,'audit_events','outbox_events'],prior=await snapshot(tables);await assert.rejects(()=>svc.mutate(context(),'CREATE',null,input()),/work atomic failure/);assert.deepEqual(await snapshot(tables),prior);await assert.rejects(()=>svc.mutate(context('manager'),'UPDATE',recovery.workItemId,input({expectedVersion:2})),/work atomic failure/);assert.deepEqual(await snapshot(tables),prior);
+  await admin.query(`DROP TRIGGER work_fixture_failure ON hon.${table}`);await admin.query('DROP FUNCTION hon.work_fixture_failure()');injection=null;
+ }
+ for(const tier of ['ESSENTIAL','CORE','COMPLETE']){await admin.query('UPDATE hon.organization_entitlements SET tier=$2 WHERE organization_id=$1',[ids.org,tier]);const r=(await svc.mutate(context(),'CREATE',null,input({title:`Tier ${tier}`}))).workItem;assert.equal(r.version,1);}
+ for(let n=0;n<51;n++)await svc.mutate(context(),'CREATE',null,input({title:`Page ${n}`}));
+ const page=await svc.list(context('manager'),'team','ALL');assert.equal(page.items.length,50);assert.equal(page.nextAfter,page.items[49].workItemId);const next=await svc.list(context('manager'),'team','ALL',page.nextAfter);assert(next.items.length>0);assert(next.items.every(x=>x.workItemId>page.nextAfter));assert.equal(next.nextAfter,null);
+ const historyItem=(await svc.mutate(context('manager'),'CREATE',null,input())).workItem;for(let n=1;n<53;n++)await svc.mutate(context('manager'),'UPDATE',historyItem.workItemId,input({expectedVersion:n,title:`Revision ${n}`}));const history=await svc.read(context('manager'),historyItem.workItemId);assert.equal(history.history.length,50);assert.equal(history.nextBeforeVersion,4);assert.doesNotMatch(JSON.stringify(history.history),/description|title|PRIVATE_/);const older=await svc.read(context('manager'),historyItem.workItemId,history.nextBeforeVersion);assert.equal(older.history.length,3);assert.equal(older.nextBeforeVersion,null);
+ for(const t of privateTables){await admin.query(`GRANT SELECT ON hon.${t} TO hon_work_runtime`);try{assert.equal((await direct(runtime,context(),()=>runtime.query(`SELECT count(*) n FROM hon.${t}`))).rows[0].n,'0');await sqlDeny(()=>direct(runtime,context(),()=>runtime.query(`SET LOCAL row_security=off; SELECT * FROM hon.${t}`)));}finally{await admin.query(`REVOKE SELECT ON hon.${t} FROM hon_work_runtime`);}}
+ await verifyHumanWorkDrift(admin);
+ assert.deepEqual(await snapshot(forbidden),before,'No CRM/student/communication/payment/AI/provider/Action Engine/automation execution effect.');
+ const audits=(await admin.query("SELECT source,action_code,prior_state,next_state FROM hon.audit_events WHERE organization_id=ANY($1::uuid[]) AND entity_type='HUMAN_WORK_ITEM'",[orgs])).rows,events=(await admin.query("SELECT event_type,payload FROM hon.outbox_events WHERE organization_id=ANY($1::uuid[]) AND event_type='work_item.human_recorded'",[orgs])).rows;
+ assert(audits.length>0);assert.equal(events.length,audits.length);assert(audits.every(x=>x.source==='HUMAN_UI'));assert(events.every(x=>x.payload.internalOnly&&x.payload.humanOnly&&x.payload.executionAllowed===false));assert.doesNotMatch(JSON.stringify([...audits,...events]),/PRIVATE_|title|description|email|assigneeId|dueAt|RAW_AI_/);
+ assert.equal((await runtime.query('SELECT hon.current_school_id() id')).rows[0].id,null);assert.equal((await controller.list({}, {honIdentity:{externalSubject:humans.self.subject}})).data.principalId,humans.self.id);
+ console.log('Human work integrity passed: exact tenant/self/manager/creator scopes; all existing human state edges; assignment/recovery/revocation; closed API+SQL; key/version races; post-lock expiry; title-only bounded queues and metadata history; private ACL/FORCE-RLS/drift; rollback; all tiers; zero execution/domain effects.');
+}finally{try{await cleanup();}finally{await Promise.all([admin.end(),runtime.end(),database.onModuleDestroy()]);}}

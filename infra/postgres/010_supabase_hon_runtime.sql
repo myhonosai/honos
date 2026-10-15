@@ -120,8 +120,7 @@ GRANT SELECT ON TABLE
   hon.class_session_instructors,
   hon.attendance_records,
   hon.knowledge_articles,
-  hon.planned_absence_requests,
-  hon.work_items
+  hon.planned_absence_requests
 TO hon_runtime;
 GRANT INSERT ON TABLE
  hon.people,
@@ -157,8 +156,7 @@ GRANT INSERT ON TABLE
   hon.class_session_instructors,
   hon.attendance_records,
   hon.knowledge_articles,
-  hon.planned_absence_requests,
-  hon.work_items
+  hon.planned_absence_requests
 TO hon_runtime;
 -- Staff booking creation needs RLS-bound duplicate/capacity reads and inserts,
 -- but no direct UPDATE/DELETE privilege on bookings. Keep this explicit so the
@@ -428,6 +426,23 @@ REVOKE ALL ON hon.voice_sessions,hon.voice_session_requests FROM hon_runtime, PU
 REVOKE ALL ON FUNCTION hon.guard_voice_history(),hon.require_voice_actor(text),hon.require_voice_references(uuid,uuid,uuid),hon.voice_session_snapshot(uuid) FROM hon_runtime, PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_voice_session(text,uuid),hon.mutate_voice_session(text,text,uuid,jsonb,uuid,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.read_voice_session(text,uuid),hon.mutate_voice_session(text,text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+-- Conventional human work: no direct table/column access, legacy payload or state mutation.
+REVOKE ALL ON hon.work_items,hon.human_work_history,hon.human_work_requests FROM hon_runtime,PUBLIC;
+REVOKE ALL ON FUNCTION hon.guard_human_work_history(),hon.validate_human_work(text,jsonb),hon.human_work_permission(uuid,uuid,uuid,text),hon.resolve_human_work_scope(text),hon.require_human_work_actor(text),hon.lock_human_work_actor(text,uuid[]),hon.human_work_visible(uuid,hon.work_items),hon.human_work_transition_allowed(text,text),hon.human_work_snapshot(uuid,integer,uuid,integer),hon.guard_human_work_row(),hon.mutate_human_work(text,text,uuid,jsonb,text,uuid,uuid),hon.read_human_work(text,uuid,text,text,uuid,integer),hon.lock_ai_planning_work_reference(uuid) FROM hon_runtime,PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.resolve_human_work_scope(text),hon.mutate_human_work(text,text,uuid,jsonb,text,uuid,uuid),hon.read_human_work(text,uuid,text,text,uuid,integer),hon.lock_ai_planning_work_reference(uuid) TO hon_runtime;
+DO $$ DECLARE r text; t text; a text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  FOREACH t IN ARRAY ARRAY['work_items','human_work_history','human_work_requests'] LOOP
+   EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+   FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r);
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t);
+   END LOOP;
+  END LOOP;
+  IF r<>'hon_runtime' THEN EXECUTE format('REVOKE ALL ON FUNCTION hon.guard_human_work_history(),hon.validate_human_work(text,jsonb),hon.human_work_permission(uuid,uuid,uuid,text),hon.resolve_human_work_scope(text),hon.require_human_work_actor(text),hon.lock_human_work_actor(text,uuid[]),hon.human_work_visible(uuid,hon.work_items),hon.human_work_transition_allowed(text,text),hon.human_work_snapshot(uuid,integer,uuid,integer),hon.guard_human_work_row(),hon.mutate_human_work(text,text,uuid,jsonb,text,uuid,uuid),hon.read_human_work(text,uuid,text,text,uuid,integer),hon.lock_ai_planning_work_reference(uuid) FROM %I',r); END IF;
+ END LOOP;
+END $$;
+
 COMMIT;
 
 -- Future HON migrations must explicitly grant the exact table/sequence/function

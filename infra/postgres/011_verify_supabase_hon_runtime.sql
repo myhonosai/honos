@@ -815,3 +815,48 @@ BEGIN
  IF (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid='hon.voice_sessions'::regclass AND attnum>0 AND NOT attisdropped)<>ARRAY['id','organization_id','school_id','actor_principal_id','agent_catalog_id','work_item_id','action_request_id','approval_id','resume_session_id','state','reason_code','version','draft_text','created_at','updated_at','expires_at']
  OR (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid='hon.voice_session_requests'::regclass AND attnum>0 AND NOT attisdropped)<>ARRAY['organization_id','school_id','actor_principal_id','idempotency_key','request_fingerprint','session_id','receipt_version','created_at'] THEN RAISE EXCEPTION 'Expanded voice data surface'; END IF;
 END $$;
+
+-- Conventional human work independent deny-all ACL/definer/trigger checks.
+DO $$ DECLARE t text; x record; safe boolean; BEGIN
+ FOREACH t IN ARRAY ARRAY['work_items','human_work_history','human_work_requests'] LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity
+   AND NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=c.relname)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND acl.grantee<>c.relowner)
+   AND NOT has_table_privilege('hon_runtime',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   AND NOT has_any_column_privilege('hon_runtime',c.oid,'SELECT,INSERT,UPDATE,REFERENCES') INTO safe FROM pg_class c WHERE c.oid=format('hon.%I',t)::regclass;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe private human work table %',t; END IF;
+ END LOOP;
+ FOR x IN SELECT * FROM(VALUES
+ ('hon.guard_human_work_history()',false,false,'v'),
+ ('hon.validate_human_work(text,jsonb)',false,false,'v'),
+ ('hon.human_work_permission(uuid,uuid,uuid,text)',false,true,'v'),
+ ('hon.resolve_human_work_scope(text)',true,true,'v'),
+ ('hon.require_human_work_actor(text)',false,true,'v'),
+ ('hon.lock_human_work_actor(text,uuid[])',false,true,'v'),
+ ('hon.human_work_visible(uuid,hon.work_items)',false,true,'v'),
+ ('hon.human_work_transition_allowed(text,text)',false,false,'i'),
+ ('hon.human_work_snapshot(uuid,integer,uuid,integer)',false,true,'v'),
+ ('hon.guard_human_work_row()',false,false,'v'),
+ ('hon.mutate_human_work(text,text,uuid,jsonb,text,uuid,uuid)',true,true,'v'),
+ ('hon.read_human_work(text,uuid,text,text,uuid,integer)',true,true,'v'),
+ ('hon.lock_ai_planning_work_reference(uuid)',true,true,'v')
+ )v(signature,allowed,definer,volatility) LOOP
+  SELECT p.prosecdef=x.definer AND p.provolatile=x.volatility::"char" AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+   AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=x.allowed
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT x.allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO safe FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=x.signature::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe human work function %',x.signature; END IF;
+ END LOOP;
+ FOR x IN SELECT * FROM(VALUES
+  ('work_items','human_work_row_guard','hon.guard_human_work_row()'),('work_items','human_work_no_truncate','hon.guard_human_work_row()'),
+  ('human_work_history','human_work_history_immutable','hon.guard_human_work_history()'),('human_work_history','human_work_history_no_truncate','hon.guard_human_work_history()'),
+  ('human_work_requests','human_work_requests_immutable','hon.guard_human_work_history()'),('human_work_requests','human_work_requests_no_truncate','hon.guard_human_work_history()')
+ )v(tbl,trg,fn) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=format('hon.%I',x.tbl)::regclass AND tgname=x.trg AND tgenabled='O' AND tgfoid=x.fn::regprocedure) THEN RAISE EXCEPTION 'Missing human work trigger %',x.trg; END IF;
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['human_work_shape','work_items_version_positive','work_items_id_tenant_unique'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.work_items'::regclass AND conname=t AND convalidated) THEN RAISE EXCEPTION 'Missing human work constraint %',t; END IF;
+ END LOOP;
+END $$;

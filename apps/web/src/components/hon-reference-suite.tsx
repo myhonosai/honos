@@ -64,7 +64,7 @@ function Sidebar({ mode }: { mode: 'school' | 'hq' }): React.ReactElement {
   return <aside className={`${styles.sidebar} ${mode === 'hq' ? styles.hqSidebar : ''}`}>
 	<Mark />
 	<nav aria-label={mode === 'hq' ? 'HON HQ navigation' : 'HON school navigation'}>
-	  {navigation.map((item, index) => <a className={index === 0 ? styles.activeNav : ''} href={mode !== 'hq' && item === 'Community' ? '/community' : mode !== 'hq' && item === 'Action Center' ? '/staff/action-center/approvals' : mode === 'hq' && item === 'AI Providers' ? '/hq/ai-providers' : index === 0 ? '#' : `#${item.toLowerCase().replaceAll(' ', '-')}`} key={item}><span>{String(index + 1).padStart(2, '0')}</span>{item}</a>)}
+	  {navigation.map((item, index) => <a className={index === 0 ? styles.activeNav : ''} href={mode !== 'hq' && item === 'Community' ? '/community' : mode !== 'hq' && item === 'Action Center' ? '/staff/action-center/approvals' : mode !== 'hq' && item === 'Work' ? '/staff/work' : mode === 'hq' && item === 'AI Providers' ? '/hq/ai-providers' : index === 0 ? '#' : `#${item.toLowerCase().replaceAll(' ', '-')}`} key={item}><span>{String(index + 1).padStart(2, '0')}</span>{item}</a>)}
 	</nav>
     <div className={styles.sidebarFooter}><span className={styles.liveDot} />{mode === 'hq' ? 'Separate HQ authorization' : 'School context required for live work'}</div>
   </aside>;

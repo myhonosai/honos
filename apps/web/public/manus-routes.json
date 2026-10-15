@@ -91,6 +91,10 @@
     {
       "path": "/staff/voice",
       "title": "HON | Complete Voice Handoff"
+    },
+    {
+      "path": "/staff/work",
+      "title": "HON | Human Work Items"
     }
   ]
 }

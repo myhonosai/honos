@@ -84,6 +84,7 @@ import { KnowledgeArticleController } from './knowledge/knowledge-article.contro
 import { KnowledgeArticleService } from './knowledge/knowledge-article.service.js';
 import { ParentFamilyKnowledgeController } from './knowledge/parent-family-knowledge.controller.js';
 import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledge.service.js';
+import { WorkItemHumanUiGuard } from './work-items/work-item.dto.js';
 import { WorkItemController } from './work-items/work-item.controller.js';
 import { WorkItemService } from './work-items/work-item.service.js';
 import { AiInvocationPlanController } from './ai/ai-invocation-plan.controller.js';
@@ -223,7 +224,7 @@ import { CommunityHumanUiGuard } from './community/community.dto.js';
     PlannedAbsenceReviewService,
     KnowledgeArticleService,
     ParentFamilyKnowledgeService,
-    WorkItemService,
+    WorkItemService, WorkItemHumanUiGuard,
     AiUsageService,
     AiInvocationPlanService,
     AiTeamService,

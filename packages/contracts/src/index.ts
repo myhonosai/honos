@@ -1,3 +1,4 @@
+export * from './human-work-items.js';
 export * from './marketing-campaigns.js';
 export * from './revenue-planning.js';
 export * from './search.js';
