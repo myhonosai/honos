@@ -106,9 +106,33 @@ function ApprovalPreview(): React.ReactElement {
   </article>;
 }
 
+function BigButtonComplete({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+  return <main className={`${styles.referencePage} ${styles.bigButtonExperience}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><section className={styles.bigAppShell}>
+    <header className={styles.bigAppHeader}><Mark compact /><div className={styles.bigSchoolSwitch}>◉ Ideal Martial Arts⌄</div><span>◔</span><span className={styles.bigAvatar}>MD</span></header>
+    <section className={styles.bigGreeting}><div><span>HON COMPLETE · TOUCH-FIRST</span><h1>Good morning,<br />Master David!</h1><p>Your AI team is here to help you grow your school.</p><button type="button">◉ Ask Alex anything… <b>⌁</b></button></div><img src="/ai/alex.webp" alt="" /></section>
+    <section className={styles.bigTeamCard}><header><strong>Your AI Team</strong><button type="button">View All ›</button></header>{HON_AI_TEAM.slice(0,4).map((agent, index)=><div key={agent.id}><img src={agent.portrait} alt="" /><span><b>{agent.name}</b><small>{agent.signal} · {index === 1 ? 'Working' : 'Ready'}</small></span><i style={{background: agent.color}} /></div>)}</section>
+    <section className={styles.bigActionGrid}>{[['♟','Students','191'],['▣','Classes','24'],['✓','Attendance','Today'],['●','Leads','7'],['✦','Messages','3'],['◈','Programs',''],['$','Billing',''],['▥','Reports',''],['◉','AI Team',''],['⚙','Settings','']].map(([icon,label,value],i)=><button type="button" key={label} className={`${styles.bigAction} ${styles[`bigAction${i}`]}`}><i>{icon}</i><b>{label}</b><small>{value}</small></button>)}</section>
+    <section className={styles.bigLower}><article><header><b>Today’s Classes</b><button type="button">View All ›</button></header>{[['3:30 PM','Tiny Tigers (4–6)','12/14'],['4:30 PM','Green Belt','16/16'],['5:30 PM','Black Belt Program','14/16']].map(([time,name,count])=><p key={name}><time>{time}</time><span>{name}</span><b>{count}</b></p>)}</article><article><header><b>Needs Attention <em>5</em></b></header>{['3 new leads to follow up','2 student absences','1 payment overdue','Review 3 class applications'].map((item,i)=><p key={item}><i>{['♨','♟','$','▣'][i]}</i>{item}<b>›</b></p>)}</article></section>
+    <nav className={styles.bigBottomNav}><button>⌂<span>Home</span></button><button>◎<span>AI Team</span></button><button>▣<span>Schedule</span></button><button>☷<span>More</span></button></nav>
+  </section></main>;
+}
+
+function ClassicComplete({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+ const menu=['Dashboard','AI Team','Students','Programs','Classes','Attendance','Schedule','Testing','Leads','Marketing','Messages','Campaigns','Billing','Reports','Documents','Settings'];
+ return <main className={`${styles.referencePage} ${styles.classicExperience}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><section className={styles.classicAppShell}>
+   <aside className={styles.classicRail}><Mark compact /><small>MAIN</small>{menu.map((m,i)=><button type="button" key={m} className={i===0?styles.classicActive:''}><i>{['◉','✦','♟','◈','▣','✓','◷','◆','●','↗','◌','✧','$','▥','□','⚙'][i]}</i>{m}</button>)}<footer>◌ Support<br />? Help Center</footer></aside>
+   <section className={styles.classicCanvas}><header className={styles.classicTopbar}><div>◉ Ideal Martial Arts⌄</div><label>⌕ Search students, leads, classes…</label><span>◔</span><span>♧</span><b>MD</b></header><div className={styles.classicHeading}><div><h1>Dashboard</h1><p>Overview of your school’s performance and activity.</p></div><button type="button">Oct 1 – Oct 31, 2026⌄</button></div>
+   <section className={styles.classicMetrics}>{[['♟','191','Active Students','+3 This Month'],['▣','24','Today’s Classes','+6% This Month'],['◈','7','New Leads','+40%'],['$','$31,850','Monthly Revenue','+12%']].map(([i,v,l,d])=><article key={l}><i>{i}</i><div><strong>{v}</strong><span>{l}</span><small>{d}</small></div></article>)}</section>
+   <section className={styles.classicCharts}><article><header><b>Student Growth</b><button>Last 6 Months⌄</button></header><div className={styles.barChart}>{[38,50,47,68,57,82,91].map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div><footer><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span></footer></article><article><header><b>Program Distribution</b></header><div className={styles.donut}>191</div><ul><li>Tiny Tigers <b>28%</b></li><li>Green Belt <b>32%</b></li><li>Black Belt <b>24%</b></li><li>Leadership <b>10%</b></li></ul></article></section>
+   <section className={styles.classicTables}><article><header><b>Recent Leads</b><button>View All ›</button></header>{[['Emily R.','Facebook','New','Oct 14'],['Daniel K.','Referral','Contacted','Oct 14'],['Sophia M.','Google','Trial Booked','Oct 13'],['James L.','Facebook','New','Oct 13']].map(r=><p key={r[0]}><span>{r[0]}</span><small>{r[1]}</small><em>{r[2]}</em><time>{r[3]}</time></p>)}</article><article><header><b>Today’s Schedule</b><button>View All ›</button></header>{[['3:30 PM','Tiny Tigers (4–6)','12/14'],['4:30 PM','Green Belt (Beginner)','16/16'],['5:30 PM','Black Belt Program','14/16'],['6:30 PM','Leadership Club','12/14']].map(r=><p key={r[1]}><time>{r[0]}</time><span>{r[1]}</span><b>{r[2]}</b></p>)}</article></section></section>
+ </section></main>;
+}
+
 function CompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
   const [active, setActive] = useState<HonAiTeamId>('alex');
   const agent = useMemo(() => HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0], [active]);
+  if (theme === 'big-button') return <BigButtonComplete theme={theme} onTheme={onTheme} />;
+  if (theme === 'classic') return <ClassicComplete theme={theme} onTheme={onTheme} />;
   return <main className={`${styles.referencePage} ${styles.completePage} ${styles[`presentation_${theme}`]}`}>
     <ReferenceNotice />
     <PresentationThemeSwitcher theme={theme} onChange={onTheme} />
