@@ -22,6 +22,7 @@ Then run [011_verify_supabase_hon_runtime.sql](../../infra/postgres/011_verify_s
 pnpm db:test-security
 pnpm db:test-ai-usage
 pnpm db:test-operations-report
+pnpm db:test-operations-summary
 ```
 
 Those integration checks use the actual runtime URL. They create temporary school scopes, prove the runtime role cannot read another school’s person, AI-usage ledger record, or operations-report inputs; prove the composite tenant foreign key rejects a cross-school relationship; verify SELECT-only AI-ledger, invoice, and payment-attempt access; verify aggregate operational-report accuracy; and verify tenant context clears at the transaction boundary. They leave no test records behind.
@@ -39,3 +40,7 @@ PostgreSQL role grants and RLS are complementary: table grants permit a role to 
 After applying migrations, existing roles receive exact plan SELECT and fixed planning/access EXECUTE grants from the additive migrations; do not rerun role creation or grant broad HQ configuration access. The canonical runtime SQL and companion verifier include `hon.ai_invocation_plans`, `hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)` and `hon.require_ai_invocation_plan_access()`. Plan INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER, internal helper EXECUTE, direct HQ config/credential table grants, and actual AI-ledger mutations must remain false. Current invoice/membership conventional commands have their separately reviewed INSERT/UPDATE grants; this planner grants no billing rights.
 
 Run `pnpm db:verify-rls` and `pnpm db:test-ai-plans` in addition to the full database suite. Planning integration fixtures and global provider state changes are rollback-only. No new environment key, credential or worker is required. Details: [AI Invocation Planning](AI_INVOCATION_PLANNING.md).
+
+## Core multi-location summary grant (0058)
+
+The additive migration grants only EXECUTE on `hon.read_organization_operations_summary(text,uuid,timestamptz,timestamptz)` to existing runtime roles; do not rerun role creation. PUBLIC/other-grantee execution and direct IAM, organization/school directory, HQ or CRM activity access must stay false. The controlled migration owner must bypass forced RLS; the runtime must not. The canonical SQL/verifiers include these checks. `pnpm db:test-operations-summary` proves live Core/Complete and effective school permission gates, exact authorized-school-only totals, revocation, no PII/raw records and READ ONLY execution. Details: [Core Multi-location Operations Summary](CORE_MULTI_LOCATION_OPERATIONS_SUMMARY.md).

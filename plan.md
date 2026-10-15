@@ -74,7 +74,7 @@ honplatform/
 
 ### Service and API boundary
 
-- The web app speaks only to versioned `/v1/organizations/{organizationId}/schools/{schoolId}/...` API contracts. It never sends an actor, permission, tenant, approval mode, or provider credential in its request body.
+- The web app speaks only to versioned `/v1/organizations/{organizationId}/schools/{schoolId}/...` API contracts and the audited aggregate-only `/v1/organizations/{organizationId}/operations/summary` projection. It never sends an actor, permission, tenant authority, approval mode, or provider credential in its request body.
 - The API maps authenticated request context to server-created command context and binds PostgreSQL tenant scope only within an explicit database transaction.
 - Database repositories require `SchoolScope`; no operational `findById(id)` helper exists without verified organization/school scope.
 - Provider adapters remain behind domain interfaces. PostgreSQL remains the source of truth; Redis/search/provider copies are derived state.
@@ -163,3 +163,9 @@ Completed the next **decision-only** tenant dependency after the HQ control plan
 `AiInvocationPlanService.plan` is internal-only and requires a direct HUMAN_USER/HUMAN_UI context, live active Complete entitlement, exact `ai.invocation.plan` permission/action metadata, locked RLS work item, expected READY/THINKING state/version, UUID idempotency and atomic plan/audit/outbox/replay. Selection is school-bound and HQ-approved, healthy only, with effective windows, code-owned task risk and provider/customer-budget eligibility. A narrow guarded GET returns a sanitized historical plan; there is no generic write/execute route. The registered action is RESTRICTED, not a Tool Gateway executable.
 
 No provider/model/media call, credentials, raw prompt/output persistence, worker/consumer, Action Engine invocation/mutation, actual usage-ledger write, credit charge/reservation or work-state/assignment mutation is introduced. Successful replay returns history and never permits stale execution. No-choice persists nothing; a future retry can reevaluate live state. See [AI Invocation Planning](docs/architecture/AI_INVOCATION_PLANNING.md) for contracts, the first TEXT-only task slice, tests and separately reviewed execution dependencies.
+
+## Core multi-location operations summary
+
+Delivered the aggregate-only read slice through `GET /v1/organizations/:organizationId/operations/summary`. Migration 0058's fixed STABLE SECURITY DEFINER projection derives an active verified human, current effective `reporting.view` school set, active organization/schools and live Core/Complete entitlement in one statement snapshot. Only authorized schools contribute to either the organization aggregate or per-school rows; hidden-school IDs/counts, IAM/HQ directory data, PII/raw records and provider data are absent. School-bound forced RLS and runtime table grants remain unchanged; PUBLIC execution is revoked and the only new runtime right is the fixed projection EXECUTE.
+
+Current students/leads, window-bounded sessions/attendance/recent activity and invoice status counts/minor-unit totals have explicit half-open, bounded UTC semantics and currency separation. Contracts/controller/service, real restricted-role integration tests, API unit tests, canonical provisioning and verifiers cover tier gates, active/effective grant revocation, same/cross-organization exclusion, READ ONLY/no-side-effect execution and safe response allowlisting. See [Core Multi-location Operations Summary](docs/architecture/CORE_MULTI_LOCATION_OPERATIONS_SUMMARY.md). Broader cross-school writes, permission administration, transfers, templates, tasks/goals, UI and AI coordination are deliberately deferred, not claimed complete.

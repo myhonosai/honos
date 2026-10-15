@@ -32,6 +32,7 @@
     "db:test-ai-team": "pnpm --filter @hon/database db:test-ai-team",
     "db:test-ai-providers": "pnpm --filter @hon/database db:test-ai-providers",
     "db:test-operations-report": "pnpm --filter @hon/database db:test-operations-report",
+    "db:test-operations-summary": "pnpm --filter @hon/database db:test-operations-summary",
     "db:test-parent-schedule": "pnpm --filter @hon/database db:test-parent-schedule",
     "db:test-parent-knowledge": "pnpm --filter @hon/database db:test-parent-knowledge",
     "db:check": "pnpm --filter @hon/database check:migrations",

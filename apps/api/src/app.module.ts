@@ -75,6 +75,8 @@ import { OperationsReportController } from './reports/operations-report.controll
 import { OperationsReportService } from './reports/operations-report.service.js';
 import { CommunicationConsentController } from './communication/communication-consent.controller.js';
 import { CommunicationConsentService } from './communication/communication-consent.service.js';
+import { OperationsSummaryController } from './reports/operations-summary.controller.js';
+import { OperationsSummaryService } from './reports/operations-summary.service.js';
 import { CommunicationMessageController } from './communication/communication-message.controller.js';
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
@@ -109,6 +111,7 @@ import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
     AiInvocationPlanController,
     AiTeamController,
     OperationsReportController,
+    OperationsSummaryController,
     CommunicationConsentController,
     CommunicationMessageController,
     TestingEventController,
@@ -152,6 +155,7 @@ import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
     AiInvocationPlanService,
     AiTeamService,
     OperationsReportService,
+    OperationsSummaryService,
     CommunicationConsentService,
     CommunicationMessageService,
     TestingEventService,

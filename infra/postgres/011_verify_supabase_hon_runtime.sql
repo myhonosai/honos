@@ -137,3 +137,18 @@ SELECT signature, has_function_privilege('hon_runtime',signature,'EXECUTE') AS f
 FROM unnest(ARRAY['hon.validate_ai_invocation_plan_input(jsonb)','hon.ai_invocation_plan_summary(uuid)','hon.reject_ai_invocation_plan_mutation()']) AS signature;
 -- pnpm db:test-ai-plans additionally proves live human/Complete gates, replay,
 -- optimistic state/version, immutable plans, atomic evidence and no execution.
+
+-- 8) Organization operations summary: only this fixed read-only projection has
+-- the new EXECUTE privilege. Public/other-grantee ACL must remain false, owner
+-- bypass must be true, search_path must be exactly pg_catalog, hon.
+SELECT p.prosecdef, p.provolatile, p.proconfig,
+  r.rolsuper OR r.rolbypassrls AS owner_can_project_through_forced_rls,
+  has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS can_read_operations_summary,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) AS acl
+    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute
+FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+WHERE p.oid='hon.read_organization_operations_summary(text,uuid,timestamptz,timestamptz)'::regprocedure;
+SELECT table_name, has_table_privilege('hon_runtime','hon.' || table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_directory_access
+FROM unnest(ARRAY['users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants','hq_onboarding_requests','crm_activities']) AS table_name;
+-- pnpm db:test-operations-summary proves Core/Complete/live permissions, exact
+-- authorized-school-only aggregates, revocation, no PII and read-only execution.

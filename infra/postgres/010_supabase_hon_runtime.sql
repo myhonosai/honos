@@ -243,6 +243,11 @@ GRANT EXECUTE ON FUNCTION hon.resolve_parent_family_scope(text, uuid) TO hon_run
 GRANT EXECUTE ON FUNCTION hon.principal_has_school_permission(uuid, uuid, uuid, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.provision_school_from_hq(text, text, text, text, text, text, hon.plan_tier, text, text, uuid, uuid) TO hon_runtime;
 
+-- Read-only Core/Complete multi-location projection. No IAM/directory/HQ or
+-- CRM activity table grant is needed; all schools/tier are resolved internally.
+REVOKE ALL ON FUNCTION hon.read_organization_operations_summary(text, uuid, timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.read_organization_operations_summary(text, uuid, timestamptz, timestamptz) TO hon_runtime;
+
 -- Decision-only tenant planning and authenticated HQ control-plane boundaries.
 -- Never grant direct access to HQ provider/config/credential-reference tables.
 REVOKE ALL ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),

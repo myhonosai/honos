@@ -13,7 +13,7 @@ The platform secret `DATABASE_URL` is therefore migration-only. `HON_RUNTIME_DAT
 
 ## Runtime role requirements
 
-The runtime role receives only the schema and table/sequence/function privileges required by HON. It does not own HON tables, cannot alter RLS policy, cannot create roles/databases/extensions, and cannot bypass RLS. It must run every business operation through `withTenantTransaction`, which invokes `set_config(..., true)` and `hon.require_tenant_context()` inside a transaction.
+The runtime role receives only the schema and table/sequence/function privileges required by HON. It does not own HON tables, cannot alter RLS policy, cannot create roles/databases/extensions, and cannot bypass RLS. School-bound reads and business commands run through `withTenantTransaction`, which invokes `set_config(..., true)` and `hon.require_tenant_context()` inside a transaction. Separately audited identity/control-plane resolvers and the read-only organization operations projection use only their fixed SECURITY DEFINER functions; they never widen tenant RLS or expose directories to normal runtime.
 
 The normal tenant runtime role has **SELECT/INSERT only** on `hon.audit_events` and `hon.outbox_events`; matching RLS policies allow only scoped reads and appends. It cannot update or delete audit evidence or outbox history. A later independently reviewed dispatcher capability will claim/publish delivery state without broadening the tenant request role.
 
@@ -38,3 +38,7 @@ For the Supabase development database, execute `infra/postgres/010_supabase_hon_
 ## AI planning minimum
 
 `hon.ai_invocation_plans` has forced tenant SELECT RLS and SELECT-only runtime privileges; the immutable plan table is never directly writable by runtime. `plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)` and `require_ai_invocation_plan_access()` are the only new fixed SECURITY DEFINER EXECUTE grants. They repeat live human/exact permission/active Complete gates; the planner manually scopes the locked durable item and consumes HQ approval metadata internally, returning a sanitized choice/no-choice. Internal validators/summary/trigger functions and every HQ provider/config table remain inaccessible. No actual AI-ledger writes or outbox consumer capability is added. Run `pnpm db:test-ai-plans` and `pnpm db:verify-rls`; see [AI Invocation Planning](AI_INVOCATION_PLANNING.md).
+
+## Core multi-location read minimum
+
+Migration 0058 grants only `hon.read_organization_operations_summary(text,uuid,timestamptz,timestamptz)` EXECUTE to runtime, with PUBLIC revoked and a fixed safe search path. It resolves the verified active human, effective `reporting.view` school grants and active Core/Complete entitlement in a single statement snapshot, returning only those schools' aggregates. No new runtime table grants, directory/HQ access, RLS changes or writes are introduced. Canonical verifiers check STABLE/definer/owner posture and owner/runtime-only ACL. Run `pnpm db:test-operations-summary`; see [Core Multi-location Operations Summary](CORE_MULTI_LOCATION_OPERATIONS_SUMMARY.md).

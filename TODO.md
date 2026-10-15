@@ -96,3 +96,12 @@ Details: [HQ AI Provider Control Plane](docs/architecture/HQ_AI_PROVIDER_CONTROL
 - [ ] Separately review real execution: authoritative budget reservation/pricing, actual usage/credit metering, revalidated execution and independent Action Engine/tool authority, out-of-band secret custody, adapters/observed health, UNKNOWN/reconciliation/circuits, media custody and workers. Plans and `ai.invocation.planned` are not execution authorization or provider success; no consumer is activated.
 
 Details: [AI Invocation Planning](docs/architecture/AI_INVOCATION_PLANNING.md). First slice is TEXT-only metadata planning, not prompt processing, credits consumed or an AI employee working state.
+
+## Core multi-location operations summary delivery checkpoint
+
+- [x] Add migration 0058's narrowly audited, fixed-search-path read-only SECURITY DEFINER projection: active unambiguous human, exact effective school `reporting.view` grants, active live Core/Complete entitlement, owner/runtime-only EXECUTE, no directory/HQ/table grants or broadened RLS.
+- [x] Deliver guarded `GET /v1/organizations/:organizationId/operations/summary`, typed aggregate-only contracts/service, exact authorized-school aggregate and school rows, bounded half-open UTC window, current active students/leads, session/attendance/recent-activity counts, and invoice count/minor-unit totals separated by currency. No PII/raw invoices/provider/write/execution side effects.
+- [x] Cover Core/Complete allow, Essential/missing/inactive/future/expired tier denial, school grant and permission revocation, same-org omission, cross-org denial, real restricted-role directory/HQ SELECT denial, READ ONLY/GUC independence, response allowlisting and safe-number overflow. Update canonical role provisioning/verifiers.
+- [ ] Separately deliver the broader multi-location product: switching/comparison UI, centralized permission administration, templates/distribution, transfers, cross-school tasks/goals and controlled organization defaults. This read model grants none of those writes or AI coordination.
+
+Details: [Core Multi-location Operations Summary](docs/architecture/CORE_MULTI_LOCATION_OPERATIONS_SUMMARY.md).

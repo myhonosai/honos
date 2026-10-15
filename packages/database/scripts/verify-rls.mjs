@@ -138,6 +138,26 @@ try {
   `, [hqAiTables])).rows;
   if (hqAiPolicies.length) throw new Error('HQ AI configuration must retain forced deny-all RLS without tenant/GUC policies.');
   if (runtimeRole?.exists) {
+    const summaryBoundary = (await client.query(`
+      SELECT p.prosecdef, p.provolatile, p.proconfig, r.rolsuper, r.rolbypassrls,
+        has_function_privilege('hon_runtime', p.oid, 'EXECUTE') AS execute,
+        EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl
+          WHERE acl.grantee NOT IN (p.proowner, (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime'))) AS broad_acl
+      FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
+      WHERE p.oid = 'hon.read_organization_operations_summary(text,uuid,timestamptz,timestamptz)'::regprocedure
+    `)).rows[0];
+    if (!summaryBoundary?.execute || !summaryBoundary.prosecdef || summaryBoundary.provolatile !== 's'
+      || summaryBoundary.broad_acl || summaryBoundary.proconfig?.length !== 1
+      || !summaryBoundary.proconfig.includes('search_path=pg_catalog, hon')
+      || !(summaryBoundary.rolsuper || summaryBoundary.rolbypassrls)) {
+      throw new Error('Unsafe organization operations summary projection boundary.');
+    }
+    for (const table of ['users', 'principals', 'roles', 'permissions', 'role_permissions', 'principal_role_grants',
+      'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
+      if ((await client.query("SELECT has_table_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed", [`hon.${table}`])).rows[0].allowed) {
+        throw new Error(`Forbidden runtime directory/control-plane/activity privilege: hon.${table}`);
+      }
+    }
     for (const table of hqAiTables) {
       const access = (await client.query(`
         SELECT has_table_privilege('hon_runtime', $1, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed
@@ -278,7 +298,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item, immutable decision-only AI plans and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item, immutable decision-only AI plans and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, fixed read-only operations summary definer/ACL and forbidden runtime directory/HQ/activity grants, and cleared connection context.`);
 } finally {
   await client.end();
 }

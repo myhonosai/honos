@@ -29,6 +29,7 @@
     "db:test-ai-team": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-team-presentation-integrity.mjs",
     "db:test-ai-providers": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-provider-control-plane.mjs",
     "db:test-operations-report": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-operations-report-security.mjs",
+    "db:test-operations-summary": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-operations-summary-security.mjs",
     "bootstrap:hq-owner": "node scripts/bootstrap-hq-owner.mjs",
     "check:migrations": "node scripts/verify-migrations.mjs",
     "db:test-ai-plans": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-invocation-plans.mjs"

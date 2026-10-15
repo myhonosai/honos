@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
   principalId: string;
@@ -115,6 +115,21 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       [externalSubject, schoolId, permissionCode],
     );
     return result.rows[0];
+  }
+
+  async readOrganizationOperationsSummary(
+    externalSubject: string, organizationId: string, from: string, to: string,
+  ): Promise<OrganizationOperationsSummary> {
+    await this.assertRuntimePosture();
+    // One read-only statement: IAM, entitlement, school set and metrics use the
+    // same database snapshot. Never widen school RLS or set an organization GUC.
+    const result = await this.getPool().query<{ data: OrganizationOperationsSummary }>(
+      'SELECT hon.read_organization_operations_summary($1, $2::uuid, $3::timestamptz, $4::timestamptz) AS data',
+      [externalSubject, organizationId, from, to],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error('HON operations summary projection did not return a result.');
+    return row.data;
   }
 
   async resolveHqOperatorScope(
