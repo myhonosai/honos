@@ -14,6 +14,7 @@
     "db:test-outbox": "node scripts/test-outbox-leases.mjs",
     "db:test-curriculum": "node scripts/test-curriculum-integrity.mjs",
     "db:test-booking": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-booking-integrity.mjs",
+    "db:test-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-knowledge-integrity.mjs",
     "db:test-parent-schedule": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-schedule-security.mjs",
     "bootstrap:hq-owner": "node scripts/bootstrap-hq-owner.mjs",
     "check:migrations": "node scripts/verify-migrations.mjs"

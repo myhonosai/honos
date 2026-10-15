@@ -29,6 +29,7 @@ const expectedRlsTables = [
   'hq_operator_grants',
   'idempotency_records',
   'invoices',
+  'knowledge_articles',
   'membership_payment_schedules',
   'memberships',
   'organization_entitlements',

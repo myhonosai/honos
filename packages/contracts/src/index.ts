@@ -523,6 +523,8 @@ export type {
   ParentFamilyScheduleBooking,
 } from './parent-family-schedule.js';
 
+export * from './knowledge-articles.js';
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;

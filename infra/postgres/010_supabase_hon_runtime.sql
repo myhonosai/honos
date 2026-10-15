@@ -80,7 +80,9 @@ REVOKE USAGE ON TYPE
   hon.family_member_role,
   hon.family_access_level,
   hon.ai_modality,
-  hon.plan_tier
+  hon.plan_tier,
+  hon.knowledge_article_audience,
+  hon.knowledge_article_lifecycle
 FROM hon_runtime, PUBLIC;
 -- The runtime role does not administer tenant topology, commercial tier,
 -- Action policy, identity, IAM, or parent-access grants. Existing/future
@@ -113,7 +115,8 @@ GRANT SELECT ON TABLE
   hon.class_templates,
   hon.class_sessions,
   hon.class_session_instructors,
-  hon.attendance_records
+  hon.attendance_records,
+  hon.knowledge_articles
 TO hon_runtime;
 GRANT INSERT ON TABLE
   hon.people,
@@ -143,7 +146,8 @@ GRANT INSERT ON TABLE
   hon.class_templates,
   hon.class_sessions,
   hon.class_session_instructors,
-  hon.attendance_records
+  hon.attendance_records,
+  hon.knowledge_articles
 TO hon_runtime;
 -- Staff booking creation needs RLS-bound duplicate/capacity reads and inserts,
 -- but no direct UPDATE/DELETE privilege on bookings. Keep this explicit so the
@@ -152,7 +156,9 @@ GRANT SELECT, INSERT ON TABLE hon.class_bookings TO hon_runtime;
 GRANT UPDATE ON TABLE
   hon.action_requests,
   hon.idempotency_records,
-  hon.principal_interface_preferences
+  hon.principal_interface_preferences,
+  -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.
+  hon.knowledge_articles
 TO hon_runtime;
 GRANT USAGE ON TYPE
   hon.principal_type,
@@ -178,7 +184,9 @@ GRANT USAGE ON TYPE
   hon.schedule_item_status,
   -- Cast by the class-booking capacity decision and booking insert.
   hon.class_booking_status,
-  hon.attendance_status
+  hon.attendance_status,
+  hon.knowledge_article_audience,
+  hon.knowledge_article_lifecycle
 TO hon_runtime;
 
 -- Keep function execution explicit rather than granting every current/future

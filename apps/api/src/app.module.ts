@@ -49,6 +49,8 @@ import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
 import { ClassBookingController } from './schedule/class-booking.controller.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
+import { KnowledgeArticleController } from './knowledge/knowledge-article.controller.js';
+import { KnowledgeArticleService } from './knowledge/knowledge-article.service.js';
 
 @Module({
   controllers: [
@@ -68,6 +70,7 @@ import { ClassBookingService } from './schedule/class-booking.service.js';
     ClassSessionController,
     AttendanceController,
     ClassBookingController,
+    KnowledgeArticleController,
     TestingEventController,
     TestingCandidateController,
     TestingCandidateGradeController,
@@ -96,6 +99,7 @@ import { ClassBookingService } from './schedule/class-booking.service.js';
     ClassSessionService,
     AttendanceService,
     ClassBookingService,
+    KnowledgeArticleService,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,
