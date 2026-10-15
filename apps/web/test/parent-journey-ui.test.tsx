@@ -56,7 +56,7 @@ describe('family-safe Parent Journey', () => {
   it('protects/no-indexes dynamic route, manifests/navigation, local selections and clear-on-access-loss state', () => {
     const route = readFileSync('src/app/parent/journey/page.tsx', 'utf8'); const parent = readFileSync('src/app/parent/page.tsx', 'utf8');
     for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false']) expect(route).toContain(token);
-    expect(route).not.toMatch(/searchParams|familyId|studentProfileId/); expect(parent).toContain("redirect('/parent/journey')");
+    expect(route).not.toMatch(/searchParams|familyId|studentProfileId/); for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false', 'ParentHome']) expect(parent).toContain(token);
     const component = readFileSync('src/components/parent-journey.tsx', 'utf8'); const http = readFileSync('src/components/parent-journey-http.ts', 'utf8');
     expect(component).toContain('setView(null)'); expect(component).toContain('pending.current?.abort()'); expect(component).toContain("'visibilitychange'"); expect(component).toContain('generation.current === token'); expect(component).toContain('onClick={() => setSelected(i)}');
     expect(component).not.toMatch(/<input|useSearchParams|localStorage|sessionStorage/);

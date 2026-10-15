@@ -18,7 +18,7 @@
     },
     {
       "path": "/parent",
-      "title": "HON | Family Journey"
+      "title": "HON | Parent Home"
     },
     {
       "path": "/parent/documents",
@@ -142,7 +142,7 @@
     },
     {
       "path": "/parent/testing",
-      "title": "HON | Family testing interest"
+      "title": "HON | Family testing status"
     },
     {
       "path": "/staff/testing/registrations",
