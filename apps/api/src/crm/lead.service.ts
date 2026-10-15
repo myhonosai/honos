@@ -171,9 +171,9 @@ export class LeadService {
       await client.query(
         `INSERT INTO hon.audit_events (
            organization_id, school_id, actor_principal_id, source, action_code, entity_type, entity_id,
-           prior_state, next_state, result, request_id, correlation_id, occurred_at
+           prior_state, next_state, result, request_id, correlation_id, action_request_id, occurred_at
          ) VALUES ($1, $2, $3, $4, 'crm.lead.create', 'CRM_LEAD', $5, NULL, $6::jsonb,
-                   'SUCCEEDED', $7::uuid, $8::uuid, now())`,
+                   'SUCCEEDED', $7::uuid, $8::uuid, $9::uuid, now())`,
         [
           context.organizationId,
           context.schoolId,
@@ -183,6 +183,7 @@ export class LeadService {
           JSON.stringify({ ...eventPayload, version: lead.version }),
           context.requestId,
           context.correlationId,
+          context.actionRequestId ?? null,
         ],
       );
 

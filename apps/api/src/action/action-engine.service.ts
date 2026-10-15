@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
-import { actionDefinition, authorizeAction, requiresApproval, validateApprovalBinding } from '@hon/domain';
+import { actionDefinition, authorizeAction, requiresApproval, validateApprovalBinding, type ActionRequestStatus } from '@hon/domain';
 import type { ActionAuthorityMode, CommandContext, HonTier } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -41,10 +41,21 @@ export interface ActionRequestReview {
   requestedByPrincipalId: string;
   effectiveAuthorityMode: ActionAuthorityMode;
   policyVersion: number;
-  status: 'AWAITING_APPROVAL' | 'APPROVED' | 'DENIED' | 'EXPIRED';
+  status: ActionRequestStatus;
   approvalExpiresAt?: string | undefined;
   createdAt: string;
 }
+
+export interface ExecutableAction {
+  id: string;
+  actionCode: string;
+  normalizedPayload: Record<string, unknown>;
+  requestedByPrincipalId: string;
+  effectiveAuthorityMode: ActionAuthorityMode;
+  policyVersion: number;
+}
+
+export type ActionExecutionOutcome = 'SUCCEEDED' | 'FAILED' | 'UNKNOWN';
 
 type ActionPolicyRow = {
   authority_mode: ActionAuthorityMode;
@@ -70,6 +81,18 @@ type PendingActionRequestRow = {
   policy_version: number;
   approval_expires_at: Date | null;
   status: 'AWAITING_APPROVAL' | 'APPROVED' | 'DENIED' | 'EXPIRED';
+};
+
+type ExecutionRequestRow = {
+  id: string;
+  action_code: string;
+  normalized_payload: Record<string, unknown>;
+  requested_by_principal_id: string;
+  required_permission: string;
+  effective_authority_mode: ActionAuthorityMode;
+  policy_version: number;
+  approval_expires_at: Date | null;
+  status: ActionRequestStatus;
 };
 
 function canonicalize(value: unknown): unknown {
@@ -282,6 +305,112 @@ export class ActionEngineService {
         approvalExpiresAt: approvalExpiresAt?.toISOString(),
         replayed: false,
       };
+    });
+  }
+
+  /**
+   * Locks and revalidates an approved proposal immediately before a registered
+   * ordinary-domain-service adapter executes it. This is internal only.
+   */
+  async beginExecution(context: CommandContext, actionRequestId: string): Promise<ExecutableAction> {
+    return this.database.withTenantTransaction(context, async (client) => {
+      const requestResult = await client.query<ExecutionRequestRow>(
+        `SELECT id, action_code, normalized_payload, requested_by_principal_id, required_permission,
+                effective_authority_mode, policy_version, approval_expires_at, status
+         FROM hon.action_requests WHERE id=$1::uuid FOR UPDATE`, [actionRequestId],
+      );
+      const request = requestResult.rows[0];
+      if (!request) throw new ForbiddenException({ code: 'TENANT_SCOPE_DENIED', detail: 'The requested action proposal is not available in this school scope.' });
+      if (request.requested_by_principal_id !== context.principalId) {
+        throw new ForbiddenException({ code: 'PERMISSION_DENIED', detail: 'Only the original authorized Action Engine principal may execute this proposal.' });
+      }
+      if (request.status !== 'APPROVED') {
+        throw new ConflictException({ code: 'POLICY_BLOCKED', detail: 'This action proposal is not approved for execution.' });
+      }
+      if (request.approval_expires_at && request.approval_expires_at <= new Date()) {
+        await client.query(`UPDATE hon.action_requests SET status='EXPIRED',updated_at=now() WHERE id=$1::uuid`, [request.id]);
+        const expiryPayload = { actionRequestId: request.id, actionCode: request.action_code, reason: 'APPROVAL_EXPIRED' };
+        await client.query(`INSERT INTO hon.audit_events (organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id,action_request_id,occurred_at)
+          VALUES ($1,$2,$3,$4,'action.request.expire','ACTION_REQUEST',$5::uuid,$6::jsonb,$7::jsonb,'FAILED',$8::uuid,$9::uuid,$5::uuid,now())`,
+        [context.organizationId, context.schoolId, context.principalId, context.source, request.id, JSON.stringify({ status: 'APPROVED' }), JSON.stringify({ status: 'EXPIRED' }), context.requestId, context.correlationId]);
+        await client.query(`INSERT INTO hon.outbox_events (id,organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
+          VALUES ($1::uuid,$2,$3,'action.request.expired',1,'ACTION_REQUEST',$4::uuid,3,$5::uuid,$6::uuid,$7::jsonb)`,
+        [randomUUID(), context.organizationId, context.schoolId, request.id, context.correlationId, context.requestId, JSON.stringify(expiryPayload)]);
+        throw new ConflictException({ code: 'POLICY_BLOCKED', detail: 'This approval expired before HON began execution.' });
+      }
+
+      const registeredAction = actionDefinition(request.action_code);
+      if (!registeredAction || registeredAction.requiredPermission !== request.required_permission) {
+        throw new ForbiddenException({ code: 'POLICY_BLOCKED', detail: 'HON cannot execute an unregistered or mismatched action proposal.' });
+      }
+      const entitlementResult = await client.query<OrganizationEntitlementRow>(
+        `SELECT tier::text AS tier FROM hon.organization_entitlements
+         WHERE organization_id=$1 AND status='ACTIVE' AND effective_from<=now() AND (effective_until IS NULL OR effective_until>now())`, [context.organizationId],
+      );
+      const entitlement = entitlementResult.rows[0];
+      if (!entitlement) throw new ForbiddenException({ code: 'TIER_ENTITLEMENT_REQUIRED', detail: 'The organization no longer has an active entitlement for this action.' });
+      const policyResult = await client.query<ActionPolicyRow>(
+        `SELECT authority_mode,policy_version FROM hon.action_policies
+         WHERE organization_id=$1 AND school_id=$2 AND action_code=$3 AND effective_from<=now() AND (effective_until IS NULL OR effective_until>now())
+         ORDER BY policy_version DESC LIMIT 1`, [context.organizationId, context.schoolId, request.action_code],
+      );
+      const policy = policyResult.rows[0];
+      let authorized: ReturnType<typeof authorizeAction>;
+      try {
+        authorized = authorizeAction({
+          actionCode: registeredAction.code,
+          tier: entitlement.tier,
+          grantedPermissions: new Set([registeredAction.requiredPermission]),
+          authoritySources: policy ? { platform: registeredAction.platformAuthorityFloor, school: policy.authority_mode } : { platform: registeredAction.platformAuthorityFloor },
+        });
+      } catch (error) {
+        return actionFailure(error);
+      }
+      if (authorized.effectiveAuthority !== request.effective_authority_mode || (policy?.policy_version ?? 0) !== request.policy_version) {
+        throw new ConflictException({ code: 'POLICY_BLOCKED', detail: 'The authorization policy changed after this action was proposed and must be reviewed again.' });
+      }
+
+      await client.query(`UPDATE hon.action_requests SET status='EXECUTING',updated_at=now() WHERE id=$1::uuid`, [request.id]);
+      const payload = { actionRequestId: request.id, actionCode: request.action_code, policyVersion: request.policy_version };
+      await client.query(`INSERT INTO hon.audit_events (organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id,action_request_id,occurred_at)
+        VALUES ($1,$2,$3,$4,'action.request.execute.start','ACTION_REQUEST',$5::uuid,$6::jsonb,$7::jsonb,'SUCCEEDED',$8::uuid,$9::uuid,$5::uuid,now())`,
+      [context.organizationId, context.schoolId, context.principalId, context.source, request.id, JSON.stringify({ status: 'APPROVED' }), JSON.stringify({ status: 'EXECUTING' }), context.requestId, context.correlationId]);
+      await client.query(`INSERT INTO hon.outbox_events (id,organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
+        VALUES ($1::uuid,$2,$3,'action.request.execution.started',1,'ACTION_REQUEST',$4::uuid,3,$5::uuid,$6::uuid,$7::jsonb)`,
+      [randomUUID(), context.organizationId, context.schoolId, request.id, context.correlationId, context.requestId, JSON.stringify(payload)]);
+      return { id: request.id, actionCode: request.action_code, normalizedPayload: request.normalized_payload, requestedByPrincipalId: request.requested_by_principal_id, effectiveAuthorityMode: request.effective_authority_mode, policyVersion: request.policy_version };
+    });
+  }
+
+  /** Records the verified result of a typed adapter; UNKNOWN is intentionally not success. */
+  async recordExecutionOutcome(
+    context: CommandContext,
+    actionRequestId: string,
+    outcome: ActionExecutionOutcome,
+    details: Record<string, unknown>,
+  ): Promise<void> {
+    return this.database.withTenantTransaction(context, async (client) => {
+      const requestResult = await client.query<Pick<ExecutionRequestRow, 'id' | 'action_code' | 'requested_by_principal_id' | 'status'>>(
+        `SELECT id,action_code,requested_by_principal_id,status FROM hon.action_requests WHERE id=$1::uuid FOR UPDATE`, [actionRequestId],
+      );
+      const request = requestResult.rows[0];
+      if (!request) throw new ForbiddenException({ code: 'TENANT_SCOPE_DENIED', detail: 'The requested action proposal is not available in this school scope.' });
+      if (request.requested_by_principal_id !== context.principalId || request.status !== 'EXECUTING') {
+        throw new ConflictException({ code: 'POLICY_BLOCKED', detail: 'The Action Engine execution state is no longer current.' });
+      }
+      await client.query(
+        `UPDATE hon.action_requests SET status=$2::hon.action_request_status,
+          verified_result=CASE WHEN $2='SUCCEEDED' THEN $3::jsonb ELSE verified_result END,
+          failure_details=CASE WHEN $2='SUCCEEDED' THEN NULL ELSE $3::jsonb END,updated_at=now() WHERE id=$1::uuid`,
+        [request.id, outcome, JSON.stringify(details)],
+      );
+      const payload = { actionRequestId: request.id, actionCode: request.action_code, outcome, details };
+      await client.query(`INSERT INTO hon.audit_events (organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id,action_request_id,occurred_at)
+        VALUES ($1,$2,$3,$4,'action.request.execute.finish','ACTION_REQUEST',$5::uuid,$6::jsonb,$7::jsonb,$8::hon.audit_result,$9::uuid,$10::uuid,$5::uuid,now())`,
+      [context.organizationId, context.schoolId, context.principalId, context.source, request.id, JSON.stringify({ status: 'EXECUTING' }), JSON.stringify({ status: outcome }), outcome === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED', context.requestId, context.correlationId]);
+      await client.query(`INSERT INTO hon.outbox_events (id,organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
+        VALUES ($1::uuid,$2,$3,'action.request.execution.finished',1,'ACTION_REQUEST',$4::uuid,4,$5::uuid,$6::uuid,$7::jsonb)`,
+      [randomUUID(), context.organizationId, context.schoolId, request.id, context.correlationId, context.requestId, JSON.stringify(payload)]);
     });
   }
 
