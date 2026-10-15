@@ -372,6 +372,34 @@ export interface TestingCandidateSummary {
   createdAt: string;
 }
 
+/** Final outcomes a human instructor may record for a final testing candidate. */
+export const PROMOTION_DECISION_STATUSES = [
+  'PROMOTED',
+  'DEFERRED',
+  'NOT_PROMOTED',
+] as const;
+export type PromotionDecisionStatus = (typeof PROMOTION_DECISION_STATUSES)[number];
+
+/** This human-only command intentionally has no actor, AI, or source fields. */
+export interface DecidePromotionInput {
+  status: PromotionDecisionStatus;
+  rationale: string;
+}
+
+export interface PromotionDecisionSummary {
+  id: string;
+  testingCandidateId: string;
+  studentCurriculumEnrollmentId: string;
+  priorRankId?: string | undefined;
+  targetRankId: string;
+  status: PromotionDecisionStatus;
+  instructorPrincipalId: string;
+  rationale: string;
+  decidedAt: string;
+  version: number;
+  createdAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;

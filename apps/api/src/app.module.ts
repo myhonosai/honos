@@ -35,6 +35,8 @@ import { TestingEventService } from './testing/testing-event.service.js';
 import { TestingCandidateController } from './testing/testing-candidate.controller.js';
 import { TestingCandidateGradeController } from './testing/testing-candidate-grade.controller.js';
 import { TestingCandidateService } from './testing/testing-candidate.service.js';
+import { PromotionDecisionController } from './testing/promotion-decision.controller.js';
+import { PromotionDecisionService } from './testing/promotion-decision.service.js';
 import { ProgramController } from './programs/program.controller.js';
 import { ProgramService } from './programs/program.service.js';
 import { ClassSessionController } from './schedule/class-session.controller.js';
@@ -60,6 +62,7 @@ import { AttendanceService } from './schedule/attendance.service.js';
     TestingEventController,
     TestingCandidateController,
     TestingCandidateGradeController,
+    PromotionDecisionController,
     InterfaceThemeController,
     MembershipController,
     BillingAccountController,
@@ -83,6 +86,7 @@ import { AttendanceService } from './schedule/attendance.service.js';
     AttendanceService,
     TestingEventService,
     TestingCandidateService,
+    PromotionDecisionService,
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
