@@ -3,9 +3,11 @@
 import { useMemo, useState } from 'react';
 import {
   HON_AI_TEAM,
+  HON_INTERFACE_THEMES,
   HON_REFERENCE_SCREEN_STATES,
   type HonAiTeamId,
   type HonAiTeamMember,
+  type HonInterfaceTheme,
 } from '@hon/design-system';
 import styles from './hon-reference-suite.module.css';
 
@@ -35,6 +37,10 @@ function ReferenceNotice(): React.ReactElement {
 
 function Mark({ compact = false }: { compact?: boolean }): React.ReactElement {
   return <div className={`${styles.mark} ${compact ? styles.markCompact : ''}`} aria-label="HON for Martial Arts"><strong>HON</strong><span>For Martial Arts</span></div>;
+}
+
+function PresentationThemeSwitcher({ theme, onChange }: { theme: HonInterfaceTheme; onChange: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+  return <section className={styles.themeSwitcher} aria-label="HON presentation mode"><span>Presentation</span><div>{HON_INTERFACE_THEMES.map((option) => <button key={option.id} type="button" aria-pressed={theme === option.id} onClick={() => onChange(option.id)}><strong>{option.label}</strong><small>{option.id === 'modern' ? 'Recommended' : option.id === 'big-button' ? 'Touch-first' : 'High density'}</small></button>)}</div><p>Presentation only · the same school scope, permissions, and actions stay in effect.</p></section>;
 }
 
 function AgentPortrait({ agent, selected, onSelect, status = 'Ready' }: { agent: HonAiTeamMember; selected?: boolean; onSelect?: () => void; status?: string }): React.ReactElement {
@@ -100,11 +106,12 @@ function ApprovalPreview(): React.ReactElement {
   </article>;
 }
 
-function CompleteReference(): React.ReactElement {
+function CompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
   const [active, setActive] = useState<HonAiTeamId>('alex');
   const agent = useMemo(() => HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0], [active]);
-  return <main className={`${styles.referencePage} ${styles.completePage}`}>
+  return <main className={`${styles.referencePage} ${styles.completePage} ${styles[`presentation_${theme}`]}`}>
     <ReferenceNotice />
+    <PresentationThemeSwitcher theme={theme} onChange={onTheme} />
     <div className={styles.desktopShell}>
       <Sidebar mode="school" />
       <section className={styles.commandCanvas}>
@@ -122,11 +129,12 @@ function CompleteReference(): React.ReactElement {
   </main>;
 }
 
-function HqReference(): React.ReactElement {
+function HqReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
   const [active, setActive] = useState<HonAiTeamId>('alex');
   const agent = HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0];
   return <main className={`${styles.referencePage} ${styles.hqPage}`}>
     <ReferenceNotice />
+    <PresentationThemeSwitcher theme={theme} onChange={onTheme} />
     <div className={styles.desktopShell}>
       <Sidebar mode="hq" />
       <section className={styles.hqCanvas}>
@@ -140,9 +148,10 @@ function HqReference(): React.ReactElement {
   </main>;
 }
 
-function CoreReference(): React.ReactElement {
+function CoreReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
   return <main className={`${styles.referencePage} ${styles.corePage}`}>
     <ReferenceNotice />
+    <PresentationThemeSwitcher theme={theme} onChange={onTheme} />
     <div className={styles.desktopShell}>
       <Sidebar mode="school" />
       <section className={styles.coreCanvas}>
@@ -155,21 +164,23 @@ function CoreReference(): React.ReactElement {
   </main>;
 }
 
-function ParentReference(): React.ReactElement {
+function ParentReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
   const [panel, setPanel] = useState<'home' | 'progress' | 'schedule'>('home');
-  return <main className={`${styles.referencePage} ${styles.parentPage}`}><ReferenceNotice /><section className={styles.parentStage}><header><Mark compact /><div><span>PARENT APP + EIAN</span><h1>Family-safe. Clear. Encouraging.</h1><p>The native Parent App uses its own verified family scope and a conventional experience that remains useful without Eian.</p></div></header><div className={styles.phoneGrid}><article className={styles.phoneFrame}><div className={styles.phoneTop}><b>9:41</b><span>◒ ▴ ▪</span></div><div className={styles.eianHero}><div><p>Hi there!</p><h2>I’m Eian.</h2><span>I can help with schedules, makeups, progress, and more.</span></div><img src="/ai/eian.webp" alt="" /></div><CommandLane compact agent={{ id: 'alex', name: 'Eian', title: 'Family Guide', signal: 'Care', color: '#287eff', portrait: '/ai/eian.webp' }} /><div className={styles.parentShortcuts}>{[['▣', 'My Schedule'], ['◈', 'My Progress'], ['↻', 'Makeup Class'], ['✦', 'Events']].map(([icon, label]) => <button onClick={() => setPanel(label === 'My Progress' ? 'progress' : label === 'My Schedule' ? 'schedule' : 'home')} type="button" key={label}><i>{icon}</i>{label}</button>)}</div><div className={styles.phoneNav}><button className={panel === 'home' ? styles.phoneActive : ''} onClick={() => setPanel('home')}>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''} onClick={() => setPanel('schedule')}>Schedule</button><button onClick={() => setPanel('home')}>Eian</button><button>Messages</button><button>More</button></div></article><article className={styles.phoneFrame}><div className={styles.phoneTop}><button type="button">←</button><b>{panel === 'progress' ? 'My Progress' : panel === 'schedule' ? 'Class Schedule' : 'Ava’s Journey'}</b><span>●</span></div>{panel === 'schedule' ? <div className={styles.mobileSchedule}><h3>October 2026</h3>{[['3:30 PM', 'Tiny Tigers'], ['4:30 PM', 'Green Belt'], ['5:30 PM', 'All Ages']].map(([time, item]) => <p key={item}><time>{time}</time><span>{item}<small>Ideal Martial Arts</small></span></p>)}<button type="button">Book a makeup class</button></div> : <div className={styles.progressPane}><div className={styles.childCard}><div className={styles.childPortrait}>A</div><div><h3>Ava</h3><span>Green Belt · Level 2</span></div></div><ul>{[['Forms', '8 / 10'], ['Kicks', '7 / 10'], ['Sparring', '6 / 10'], ['Self-Discipline', '9 / 10']].map(([skill, score]) => <li key={skill}><i>✓</i>{skill}<span>{score}</span></li>)}</ul><button type="button">View journey details</button></div>}<div className={styles.phoneNav}><button>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''}>Schedule</button><button className={panel === 'progress' ? styles.phoneActive : ''}>Progress</button><button>Messages</button><button>More</button></div></article></div></section></main>;
+  return <main className={`${styles.referencePage} ${styles.parentPage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><section className={styles.parentStage}><header><Mark compact /><div><span>PARENT APP + EIAN</span><h1>Family-safe. Clear. Encouraging.</h1><p>The native Parent App uses its own verified family scope and a conventional experience that remains useful without Eian.</p></div></header><div className={styles.phoneGrid}><article className={styles.phoneFrame}><div className={styles.phoneTop}><b>9:41</b><span>◒ ▴ ▪</span></div><div className={styles.eianHero}><div><p>Hi there!</p><h2>I’m Eian.</h2><span>I can help with schedules, makeups, progress, and more.</span></div><img src="/ai/eian.webp" alt="" /></div><CommandLane compact agent={{ id: 'alex', name: 'Eian', title: 'Family Guide', signal: 'Care', color: '#287eff', portrait: '/ai/eian.webp' }} /><div className={styles.parentShortcuts}>{[['▣', 'My Schedule'], ['◈', 'My Progress'], ['↻', 'Makeup Class'], ['✦', 'Events']].map(([icon, label]) => <button onClick={() => setPanel(label === 'My Progress' ? 'progress' : label === 'My Schedule' ? 'schedule' : 'home')} type="button" key={label}><i>{icon}</i>{label}</button>)}</div><div className={styles.phoneNav}><button className={panel === 'home' ? styles.phoneActive : ''} onClick={() => setPanel('home')}>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''} onClick={() => setPanel('schedule')}>Schedule</button><button onClick={() => setPanel('home')}>Eian</button><button>Messages</button><button>More</button></div></article><article className={styles.phoneFrame}><div className={styles.phoneTop}><button type="button">←</button><b>{panel === 'progress' ? 'My Progress' : panel === 'schedule' ? 'Class Schedule' : 'Ava’s Journey'}</b><span>●</span></div>{panel === 'schedule' ? <div className={styles.mobileSchedule}><h3>October 2026</h3>{[['3:30 PM', 'Tiny Tigers'], ['4:30 PM', 'Green Belt'], ['5:30 PM', 'All Ages']].map(([time, item]) => <p key={item}><time>{time}</time><span>{item}<small>Ideal Martial Arts</small></span></p>)}<button type="button">Book a makeup class</button></div> : <div className={styles.progressPane}><div className={styles.childCard}><div className={styles.childPortrait}>A</div><div><h3>Ava</h3><span>Green Belt · Level 2</span></div></div><ul>{[['Forms', '8 / 10'], ['Kicks', '7 / 10'], ['Sparring', '6 / 10'], ['Self-Discipline', '9 / 10']].map(([skill, score]) => <li key={skill}><i>✓</i>{skill}<span>{score}</span></li>)}</ul><button type="button">View journey details</button></div>}<div className={styles.phoneNav}><button>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''}>Schedule</button><button className={panel === 'progress' ? styles.phoneActive : ''}>Progress</button><button>Messages</button><button>More</button></div></article></div></section></main>;
 }
 
-function MobileCompleteReference(): React.ReactElement {
+function MobileCompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
   const [active, setActive] = useState<HonAiTeamId>('alex');
   const agent = HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0];
-  return <main className={`${styles.referencePage} ${styles.mobilePage}`}><ReferenceNotice /><section className={styles.mobileStage}><header><Mark compact /><div><span>MOBILE HON COMPLETE</span><h1>Big-button AI command, without losing control.</h1><p>A touch-first presentation mode of the same governed application.</p></div></header><article className={styles.mobileCompletePhone}><div className={styles.phoneTop}><b>9:41</b><strong>HON</strong><span>◒ ▴</span></div><div className={styles.mobileSchool}>⌂ Ideal Martial Arts <b>⌄</b></div><div className={styles.mobileAgents}>{HON_AI_TEAM.slice(0, 4).map((member) => <button key={member.id} className={active === member.id ? styles.mobileAgentActive : ''} style={{ '--agent-color': member.color } as React.CSSProperties} onClick={() => setActive(member.id)} type="button"><img src={member.portrait} alt="" /><span>{member.name}</span></button>)}</div><div className={styles.mobileGreeting}><span>{agent.name.toUpperCase()} · {agent.title.toUpperCase()}</span><h2>What should we work on today?</h2><p>Touch a priority or start a voice/text request.</p></div><CommandLane agent={agent} compact /><div className={styles.mobileActions}>{[['◎', 'Show today’s priorities'], ['◉', 'Check enrollments'], ['▥', 'Review revenue'], ['✦', 'Improve retention']].map(([icon, label]) => <button type="button" key={label}><i>{icon}</i>{label}<span>→</span></button>)}</div><div className={styles.mobileWork}><span>TEAM WORK</span><p><i />Chad is organizing 5 lead follow-ups <b>Working</b></p><p><i />Maya has 2 parent messages ready <b>Ready</b></p></div><div className={styles.phoneNav}><button className={styles.phoneActive}>Home</button><button>School</button><button>AI Team</button><button>Work</button><button>More</button></div></article></section></main>;
+  return <main className={`${styles.referencePage} ${styles.mobilePage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><section className={styles.mobileStage}><header><Mark compact /><div><span>MOBILE HON COMPLETE</span><h1>Big-button AI command, without losing control.</h1><p>A touch-first presentation mode of the same governed application.</p></div></header><article className={styles.mobileCompletePhone}><div className={styles.phoneTop}><b>9:41</b><strong>HON</strong><span>◒ ▴</span></div><div className={styles.mobileSchool}>⌂ Ideal Martial Arts <b>⌄</b></div><div className={styles.mobileAgents}>{HON_AI_TEAM.slice(0, 4).map((member) => <button key={member.id} className={active === member.id ? styles.mobileAgentActive : ''} style={{ '--agent-color': member.color } as React.CSSProperties} onClick={() => setActive(member.id)} type="button"><img src={member.portrait} alt="" /><span>{member.name}</span></button>)}</div><div className={styles.mobileGreeting}><span>{agent.name.toUpperCase()} · {agent.title.toUpperCase()}</span><h2>What should we work on today?</h2><p>Touch a priority or start a voice/text request.</p></div><CommandLane agent={agent} compact /><div className={styles.mobileActions}>{[['◎', 'Show today’s priorities'], ['◉', 'Check enrollments'], ['▥', 'Review revenue'], ['✦', 'Improve retention']].map(([icon, label]) => <button type="button" key={label}><i>{icon}</i>{label}<span>→</span></button>)}</div><div className={styles.mobileWork}><span>TEAM WORK</span><p><i />Chad is organizing 5 lead follow-ups <b>Working</b></p><p><i />Maya has 2 parent messages ready <b>Ready</b></p></div><div className={styles.phoneNav}><button className={styles.phoneActive}>Home</button><button>School</button><button>AI Team</button><button>Work</button><button>More</button></div></article></section></main>;
 }
 
 export function HonReferenceSuite({ screen }: { screen: ReferenceScreen }): React.ReactElement {
-  if (screen === 'hq') return <HqReference />;
-  if (screen === 'core') return <CoreReference />;
-  if (screen === 'parent') return <ParentReference />;
-  if (screen === 'mobile') return <MobileCompleteReference />;
-  return <CompleteReference />;
+  const [theme, setTheme] = useState<HonInterfaceTheme>('modern');
+  const props = { theme, onTheme: setTheme };
+  if (screen === 'hq') return <HqReference {...props} />;
+  if (screen === 'core') return <CoreReference {...props} />;
+  if (screen === 'parent') return <ParentReference {...props} />;
+  if (screen === 'mobile') return <MobileCompleteReference {...props} />;
+  return <CompleteReference {...props} />;
 }
