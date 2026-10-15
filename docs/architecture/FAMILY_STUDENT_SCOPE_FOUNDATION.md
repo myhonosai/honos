@@ -14,4 +14,6 @@ The family/student boundary remains **school operational data**: every family, m
 
 The later Parent App/Eian authorization resolver must require a verified human principal plus an active `family_access_grant`, then apply the derived family and student scope to family-safe APIs. It must never authorize by email, phone, shared device, or a client-submitted family ID. Staff uses ordinary school scope plus named permissions; HQ remains separate.
 
+The current staff API exposes the first conventional vertical slice: school-scoped `family.read`, `family.create`, and `family.member.manage` endpoints. Student membership additionally demands `student.profile.manage`, creates a student profile within the same transaction, and writes idempotency, audit, and transactional-outbox evidence. A lower-tier client cannot submit a plan tier; the server resolves the active organization entitlement before mutation.
+
 The foundation intentionally stores access as grants rather than converting school data ownership. A future authorized move/copy creates an explicit, audited workflow that preserves history instead of silently changing a student record’s owner.

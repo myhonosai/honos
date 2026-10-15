@@ -30,6 +30,7 @@ try {
   const organizationA = randomUUID();
   const schoolA = randomUUID();
   const personA = randomUUID();
+  const familyA = randomUUID();
   const organizationB = randomUUID();
   const schoolB = randomUUID();
   const personB = randomUUID();
@@ -41,6 +42,7 @@ try {
     await client.query('INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, $2, $2)', [organizationA, 'RLS Test A']);
     await client.query('INSERT INTO hon.schools (id, organization_id, name, slug) VALUES ($1, $2, $3, $4)', [schoolA, organizationA, 'School A', `rls-a-${schoolA.slice(0, 8)}`]);
     await client.query('INSERT INTO hon.people (id, organization_id, school_id, given_name, family_name) VALUES ($1, $2, $3, $4, $5)', [personA, organizationA, schoolA, 'Scope', 'A']);
+    await client.query('INSERT INTO hon.families (id, organization_id, school_id, display_name) VALUES ($1, $2, $3, $4)', [familyA, organizationA, schoolA, 'Family A']);
 
     await bindScope(organizationB, schoolB);
     await client.query('INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, $2, $2)', [organizationB, 'RLS Test B']);
@@ -63,6 +65,21 @@ try {
       if (error?.code !== '23503') throw error;
     } finally {
       await client.query('ROLLBACK TO SAVEPOINT cross_scope_reference');
+    }
+
+    await client.query('SAVEPOINT cross_scope_family_reference');
+    try {
+      await client.query(
+        `INSERT INTO hon.family_members (organization_id, school_id, family_id, person_id, member_role)
+         VALUES ($1, $2, $3, $4, 'STUDENT')`,
+        [organizationA, schoolA, familyA, personB],
+      );
+      throw new Error('Composite family FK allowed a cross-scope person relationship.');
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Composite family FK')) throw error;
+      if (error?.code !== '23503') throw error;
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT cross_scope_family_reference');
     }
 
     await client.query('ROLLBACK');

@@ -77,6 +77,7 @@ REVOKE USAGE ON TYPE
   hon.approval_decision,
   hon.authority_mode,
   hon.outbox_delivery_outcome,
+  hon.family_member_role,
   hon.ai_modality,
   hon.plan_tier
 FROM hon_runtime, PUBLIC;
@@ -85,6 +86,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   hon.organization_entitlements,
   hon.schools,
   hon.people,
+  hon.families,
+  hon.family_members,
+  hon.student_profiles,
   hon.crm_pipelines,
   hon.crm_pipeline_stages,
   hon.crm_leads,
@@ -119,6 +123,7 @@ GRANT USAGE ON TYPE
   hon.approval_decision,
   hon.authority_mode,
   hon.outbox_delivery_outcome,
+  hon.family_member_role,
   hon.ai_modality,
   hon.plan_tier
 TO hon_runtime;

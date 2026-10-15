@@ -142,6 +142,35 @@ export interface PersonSummary {
   createdAt: string;
 }
 
+export interface CreateFamilyInput {
+  displayName: string;
+}
+
+export interface FamilySummary {
+  id: string;
+  displayName: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  version: number;
+  memberCount: number;
+  createdAt: string;
+}
+
+export interface AddFamilyMemberInput {
+  personId: string;
+  memberRole: 'GUARDIAN' | 'STUDENT' | 'DEPENDENT' | 'OTHER';
+  isBillingContact?: boolean | undefined;
+}
+
+export interface FamilyMemberSummary {
+  id: string;
+  familyId: string;
+  personId: string;
+  memberRole: 'GUARDIAN' | 'STUDENT' | 'DEPENDENT' | 'OTHER';
+  isBillingContact: boolean;
+  studentProfileId?: string | undefined;
+  createdAt: string;
+}
+
 export interface CreateMembershipInput {
   billingAccountId: string;
   participantPersonId: string;

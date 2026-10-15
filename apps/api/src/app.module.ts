@@ -24,9 +24,11 @@ import { HqOnboardingService } from './hq/hq-onboarding.service.js';
 import { PersonController } from './people/person.controller.js';
 import { PersonService } from './people/person.service.js';
 import { ActionReviewController } from './action/action-review.controller.js';
+import { FamilyController } from './families/family.controller.js';
+import { FamilyService } from './families/family.service.js';
 
 @Module({
-  controllers: [HealthController, ReadinessController, FoundationController, SessionContextController, IdentityController, PersonController, LeadController, PipelineController, InterfaceThemeController, MembershipController, BillingAccountController, HqController, HqOnboardingController, ActionReviewController],
-  providers: [RuntimeDatabaseService, ManusIdentityService, HonIdentityGuard, PersonService, LeadService, PipelineService, ActionEngineService, InterfaceThemeService, MembershipService, BillingAccountService, HqOnboardingService],
+  controllers: [HealthController, ReadinessController, FoundationController, SessionContextController, IdentityController, PersonController, FamilyController, LeadController, PipelineController, InterfaceThemeController, MembershipController, BillingAccountController, HqController, HqOnboardingController, ActionReviewController],
+  providers: [RuntimeDatabaseService, ManusIdentityService, HonIdentityGuard, PersonService, FamilyService, LeadService, PipelineService, ActionEngineService, InterfaceThemeService, MembershipService, BillingAccountService, HqOnboardingService],
 })
 export class AppModule {}
