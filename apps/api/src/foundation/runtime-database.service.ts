@@ -148,6 +148,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     );
     return result.rows[0];
   }
+  async resolveRenewalScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_renewal_scope($1)', [externalSubject],
+    )).rows[0];
+  }
   async resolveAutomationRuleScope(externalSubject: string, permission: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

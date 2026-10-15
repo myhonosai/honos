@@ -1,0 +1,10 @@
+.page { composes: page from './staff-availability-workbench.module.css'; overflow-wrap: anywhere; }
+.row { composes: row from './staff-availability-workbench.module.css'; }
+.actions { composes: actions from './staff-availability-workbench.module.css'; }
+.error { composes: error from './staff-availability-workbench.module.css'; }
+.notice { composes: notice from './staff-availability-workbench.module.css'; }
+.page textarea { box-sizing: border-box; width: 100%; min-height: 120px; padding: 12px; border: 1px solid #b9c6da; border-radius: 6px; color: #172238; background: white; font: inherit; line-height: 1.6; resize: vertical; }
+.page textarea:focus-visible { outline: 3px solid #76a5ff; outline-offset: 3px; }
+.page form > label, .page fieldset > label { margin: 14px 0; }
+.page li { margin: 14px 0; line-height: 1.7; }
+.actions button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }

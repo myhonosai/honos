@@ -116,9 +116,13 @@ import { AutomationRuleHumanUiGuard } from './automation-rules/automation-rule.d
 import { FollowUpController } from './crm/follow-up.controller.js';
 import { FollowUpService } from './crm/follow-up.service.js';
 import { FollowUpHumanUiGuard } from './crm/follow-up.dto.js';
+import { RenewalController } from './billing/renewal.controller.js';
+import { RenewalService } from './billing/renewal.service.js';
+import { RenewalHumanUiGuard } from './billing/renewal.dto.js';
 
 @Module({
   controllers: [
+    RenewalController,
     FollowUpController,
     AutomationRuleController,
     StaffAvailabilityController,
@@ -174,6 +178,7 @@ import { FollowUpHumanUiGuard } from './crm/follow-up.dto.js';
     ActionReviewController,
   ],
   providers: [
+    RenewalService, RenewalHumanUiGuard,
     FollowUpService, FollowUpHumanUiGuard,
     AutomationRuleService, AutomationRuleHumanUiGuard,
     StaffAvailabilityService, StaffAvailabilityHumanUiGuard,

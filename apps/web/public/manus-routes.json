@@ -75,6 +75,10 @@
     {
       "path": "/staff/crm/follow-ups",
       "title": "Human CRM follow-ups"
+    },
+    {
+      "path": "/staff/billing/renewals",
+      "title": "Human membership renewal reviews"
     }
   ]
 }
