@@ -34,6 +34,7 @@
     "db:test-operations-report": "pnpm --filter @hon/database db:test-operations-report",
     "db:test-operations-summary": "pnpm --filter @hon/database db:test-operations-summary",
     "db:test-command-center": "pnpm --filter @hon/database db:test-command-center",
+    "db:test-health-score": "pnpm --filter @hon/database db:test-health-score",
     "db:test-parent-schedule": "pnpm --filter @hon/database db:test-parent-schedule",
     "db:test-parent-knowledge": "pnpm --filter @hon/database db:test-parent-knowledge",
     "db:test-staff-roles": "pnpm --filter @hon/database db:test-staff-roles",

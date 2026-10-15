@@ -112,6 +112,8 @@ import { OperationsSummaryController } from './reports/operations-summary.contro
 import { OperationsSummaryService } from './reports/operations-summary.service.js';
 import { CommandCenterController } from './reports/command-center.controller.js';
 import { CommandCenterService } from './reports/command-center.service.js';
+import { HealthScoreController } from './reports/health-score.controller.js';
+import { HealthScoreService } from './reports/health-score.service.js';
 import { CommunicationMessageController } from './communication/communication-message.controller.js';
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
@@ -192,6 +194,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     OperationsReportController,
     OperationsSummaryController,
     CommandCenterController,
+    HealthScoreController,
     CommunicationConsentController,
     CommunicationMessageController,
     TestingEventController,
@@ -260,6 +263,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     OperationsReportService,
     OperationsSummaryService,
     CommandCenterService,
+    HealthScoreService,
     CommunicationConsentService,
     CommunicationMessageService,
     TestingEventService,

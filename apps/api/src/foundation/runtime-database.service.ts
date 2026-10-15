@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
@@ -236,6 +236,21 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     );
     const row = result.rows[0];
     if (!row) throw new Error('HON Command Center projection did not return a result.');
+    return row.data;
+  }
+
+  async readSchoolHealthScore(
+    externalSubject: string, organizationId: string, schoolId: string,
+  ): Promise<SchoolHealthScoreProjection> {
+    await this.assertRuntimePosture();
+    // This fixed SECURITY DEFINER projection independently resolves verified
+    // human/school/reporting/tier authority. Selectors never become caller GUCs.
+    const result = await this.getPool().query<{ data: SchoolHealthScoreProjection }>(
+      'SELECT hon.read_school_health_score($1,$2::uuid,$3::uuid) AS data',
+      [externalSubject, organizationId, schoolId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error('HON School Health Score projection did not return a result.');
     return row.data;
   }
 

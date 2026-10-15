@@ -117,6 +117,10 @@
       "title": "HON | School Command Center"
     },
     {
+      "path": "/staff/health-score",
+      "title": "HON | School Health Score"
+    },
+    {
       "path": "/parent/journey",
       "title": "HON | Family Student Journey"
     },

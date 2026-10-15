@@ -434,6 +434,21 @@ try {
       || !(summaryBoundary.rolsuper || summaryBoundary.rolbypassrls)) {
       throw new Error('Unsafe organization operations summary projection boundary.');
     }
+    const healthScoreBoundary = (await client.query(`
+      SELECT p.prosecdef, p.provolatile, p.proconfig, r.rolsuper, r.rolbypassrls,
+        has_function_privilege('${runtimeRoleName}', p.oid, 'EXECUTE') AS execute,
+        EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl
+          WHERE acl.grantee NOT IN (p.proowner, (SELECT oid FROM pg_roles WHERE rolname = '${runtimeRoleName}'))) AS broad_acl,
+        position('current_setting' IN pg_get_functiondef(p.oid)) = 0 AS no_caller_guc_authority
+      FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
+      WHERE p.oid = 'hon.read_school_health_score(text,uuid,uuid)'::regprocedure
+    `)).rows[0];
+    if (!healthScoreBoundary?.execute || !healthScoreBoundary.prosecdef || healthScoreBoundary.provolatile !== 's'
+      || healthScoreBoundary.broad_acl || !healthScoreBoundary.no_caller_guc_authority
+      || healthScoreBoundary.proconfig?.length !== 1 || !healthScoreBoundary.proconfig.includes('search_path=pg_catalog, hon')
+      || !(healthScoreBoundary.rolsuper || healthScoreBoundary.rolbypassrls)) {
+      throw new Error('Unsafe School Health Score projection boundary.');
+    }
     for (const [signature, shouldExecute] of [
       ['hon.search_school(text,uuid,uuid,text,text[],uuid)', true],
       ['hon.resolve_lead_import_scope(text,text)', true],

@@ -188,6 +188,38 @@ END $$;
 -- where not already granted to other modules, RLS/FORCE-RLS posture, no raw PII,
 -- exact half-open windows, deterministic cards, and no AI/provider/Action Engine writes.
 
+-- 8c) School Health Score: fixed aggregate-only operational indicator. It has
+-- no prediction, execution, or write path and receives only runtime EXECUTE.
+SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+  has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute,
+  position('current_setting' IN pg_get_functiondef(p.oid)) = 0 AS no_caller_guc_authority
+FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+WHERE p.oid='hon.read_school_health_score(text,uuid,uuid)'::regprocedure;
+DO $$
+DECLARE p record; role_name text;
+BEGIN
+ SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+   has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+   EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad,
+   position('current_setting' IN pg_get_functiondef(p.oid))=0 AS no_guc
+ INTO p FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+ WHERE p.oid='hon.read_school_health_score(text,uuid,uuid)'::regprocedure;
+ IF p.prosecdef IS DISTINCT FROM true OR p.provolatile<>'s' OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+   OR p.trusted_owner IS DISTINCT FROM true OR p.runtime_execute IS DISTINCT FROM true OR p.broad IS DISTINCT FROM false OR p.no_guc IS DISTINCT FROM true THEN
+  RAISE EXCEPTION 'Unsafe School Health Score projection ACL or definition';
+ END IF;
+ FOR role_name IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  IF has_function_privilege(role_name,'hon.read_school_health_score(text,uuid,uuid)','EXECUTE') THEN
+   RAISE EXCEPTION 'Client School Health Score execute: %',role_name;
+  END IF;
+ END LOOP;
+END $$;
+-- pnpm db:test-health-score proves forged-GUC denial, zero audit/outbox/action/
+-- work/AI writes, no new direct runtime directory grants, and aggregate-only output.
+
 -- 9) Human staff IAM: only command/single-ID projection EXECUTE is true.
 SELECT p.proname,p.prosecdef,p.proconfig,
   has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,

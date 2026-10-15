@@ -535,3 +535,8 @@ DO $$ DECLARE r text; t text; a text; f record; BEGIN
  END LOOP;
 END $$;
 GRANT EXECUTE ON FUNCTION hon.read_marketing_invocation(text,uuid),hon.begin_marketing_request(text,jsonb,uuid),hon.prepare_marketing_invocation(text,uuid,uuid,boolean),hon.fail_marketing_invocation(text,uuid,text,text),hon.record_marketing_result(text,uuid,jsonb),hon.bind_marketing_proposal(text,uuid,uuid),hon.marketing_action_is_current(uuid,jsonb),hon.reject_marketing_draft(uuid),hon.save_approved_marketing_draft(text,uuid),hon.marketing_planning_reference(text,uuid),hon.read_marketing_campaign_content(text,uuid) TO hon_runtime;
+
+-- Deterministic School Health Score: one fixed aggregate-only read projection.
+-- It adds no direct source-table privilege, provider capability, or write path.
+REVOKE ALL ON FUNCTION hon.read_school_health_score(text,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.read_school_health_score(text,uuid,uuid) TO hon_runtime;
