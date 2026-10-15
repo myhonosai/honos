@@ -1,0 +1,40 @@
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HON_SESSION_COOKIE, issueSession, sessionConfig, SESSION_SECONDS } from '@hon/auth';
+const request = vi.hoisted(() => ({ cookie: '' }));
+vi.mock('next/headers', () => ({ headers: async () => new Headers({ cookie: request.cookie }) }));
+vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Error(`REDIRECT:${path}`); } }));
+import ParentJourneyPage from '../src/app/parent/journey/page';
+import { ParentJourney } from '../src/components/parent-journey';
+
+describe('server-protected Parent Journey route', () => {
+  beforeEach(() => {
+    request.cookie = '';
+    vi.stubEnv('HON_AUTH_MODE', 'OIDC');
+    vi.stubEnv('HON_SESSION_JWT_SECRET', 'TEST_ONLY_PARENT_JOURNEY_SESSION_KEY_123456789');
+    vi.stubEnv('HON_SESSION_AUDIENCE', 'parent-journey-test');
+  });
+  afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+  it('redirects missing, forged, expired, duplicate and malformed HON cookies without contacting providers or data APIs', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    const valid = issueSession({ externalSubject: 'verified-parent' }, sessionConfig());
+    const expired = issueSession({ externalSubject: 'verified-parent' }, sessionConfig(), Math.floor(Date.now() / 1000) - SESSION_SECONDS - 1);
+    for (const cookie of ['', `${HON_SESSION_COOKIE}=forged`, `${HON_SESSION_COOKIE}=${expired}`, `${HON_SESSION_COOKIE}=${valid}; ${HON_SESSION_COOKIE}=${valid}`, `${HON_SESSION_COOKIE}=%INVALID`]) {
+      request.cookie = cookie;
+      await expect(ParentJourneyPage()).rejects.toThrow('REDIRECT:/auth/login');
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('renders only the live read component for a verified session, without deriving family or child authority from the session', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    request.cookie = `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: 'verified-parent' }, sessionConfig())}`;
+    const element = await ParentJourneyPage();
+    expect(React.isValidElement(element)).toBe(true); expect(element.type).toBe(ParentJourney); expect(element.props).toEqual({});
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('fails closed when HON session validation is unconfigured', async () => {
+    request.cookie = `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: 'verified-parent' }, sessionConfig())}`;
+    vi.stubEnv('HON_SESSION_JWT_SECRET', '');
+    await expect(ParentJourneyPage()).rejects.toThrow('REDIRECT:/auth/login');
+  });
+});

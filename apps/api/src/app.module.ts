@@ -57,6 +57,8 @@ import { ActionReviewController, ActionApprovalWorkbenchController } from './act
 import { FamilyController } from './families/family.controller.js';
 import { FamilyService } from './families/family.service.js';
 import { ParentStudentJourneyController } from './families/parent-student-journey.controller.js';
+import { ParentJourneyViewController, ParentJourneyReadGuard } from './families/parent-journey-view.controller.js';
+import { ParentJourneyViewService } from './families/parent-journey-view.service.js';
 import { ParentStudentJourneyService } from './families/parent-student-journey.service.js';
 import { ParentFamilyScheduleController } from './families/parent-family-schedule.controller.js';
 import { ParentFamilyScheduleService } from './families/parent-family-schedule.service.js';
@@ -158,6 +160,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     IdentityController,
     PersonController,
     FamilyController,
+    ParentJourneyViewController,
     ParentStudentJourneyController,
     ParentFamilyScheduleController,
     ParentPlannedAbsenceController,
@@ -196,6 +199,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
   ],
   providers: [
     AchievementsService, AchievementHumanUiGuard,
+    ParentJourneyViewService, ParentJourneyReadGuard,
     VoiceService, VoiceHumanUiGuard,
     MarketplaceService, MarketplaceHumanUiGuard,
     CommunityService, CommunityHumanUiGuard,

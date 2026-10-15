@@ -1,10 +1,11 @@
-import { HonReferenceSuite } from '../../components/hon-reference-suite';
+import { redirect } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
 export const metadata = {
-  title: 'HON Parent + Eian | Family Experience',
-  description: 'HON Parent App and Eian design reference: family-safe student support and progression.',
+  title: 'HON | Family Journey',
+  robots: { index: false, follow: false },
 };
 
-export default function ParentPage(): React.ReactElement {
-  return <><nav aria-label="Family recognition navigation"><a href="/parent/achievements">View current child achievements</a></nav><HonReferenceSuite screen="parent" /></>;
+export default function ParentPage(): never {
+  redirect('/parent/journey');
 }

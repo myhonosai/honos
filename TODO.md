@@ -265,3 +265,10 @@ Details: [Conventional Human Work-Item Workbench](docs/architecture/HUMAN_WORK_I
 - [x] Ship a protected, same-origin, aggregate-only `/staff/dashboard` using the existing school operations report.
 - [x] Keep unsupported trial, revenue-plan, follow-up, renewal, approval, and work-item totals explicitly unavailable rather than inferring them from private queue records.
 - [x] Add strict UI DTO redaction/error tests and document the existing `reporting.view` school authorization boundary.
+
+## Family-safe Parent Student Journey — in progress
+- [ ] Authenticated dynamic no-index `/parent/journey`, `/parent` redirect, route manifest/navigation, strict same-origin HTTP reads, mobile-first big-button-compatible shared HON theme architecture and loading/empty/error/permission-lost states.
+- [ ] Child selection only from the existing resolver-authorized Journey child set, never IDs or query authority. Fixed safe aggregation after exact live family resolver; subject-only discovery fails closed for missing/ambiguous family authority. No domain/database mutations.
+- [ ] Actual safe child names/current program/rank/current requirements, authorized unambiguous schedule, visible human achievements and family document publication summaries. Explicit unavailable for missing receipt-list/planned-absence GET/current-child schedule correlation; never fabricate progress/schedules/awards/documents or acknowledgement status.
+- [ ] No staff notes/instructor rationale/history, sibling/co-parent private records, contacts/private family data, invoices/payment instruments, AI/provider/voice/action/billing/payment/communication effects. No write surface except linking the existing explicit document flow; no invented booking/absence flow.
+- [ ] Tests for query/authority-ID smuggling, family/sibling/revocation/parent scope, strict output redaction and effect isolation; update architecture docs, full validation, commit and push.

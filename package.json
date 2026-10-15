@@ -54,6 +54,8 @@
     "db:test-voice": "pnpm --filter @hon/database db:test-voice",
     "db:test-marketplace": "pnpm --filter @hon/database db:test-marketplace",
     "db:test-achievements": "pnpm --filter @hon/database db:test-achievements",
-    "db:setup-achievements": "pnpm --filter @hon/database db:setup-achievements"
+    "db:setup-achievements": "pnpm --filter @hon/database db:setup-achievements",
+    "db:test-parent-journey": "pnpm --filter @hon/database db:test-parent-journey",
+    "db:setup-parent-journey": "pnpm --filter @hon/database db:setup-parent-journey"
   }
 }

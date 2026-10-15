@@ -38,7 +38,7 @@ The existing authenticated `GET /v1/parent/schools/:schoolId/families/:familyId/
 
 The new requirement projection contains **only** enrollment/requirement IDs, bounded display label, kind, required flag, recorded status and recorded time for the current rank and matching requirement/enrollment versions. Missing or stale observations return **null**, not an inferred NOT_STARTED/MET, score, testing readiness, approval or guarantee. Notes, private definition descriptions, instructor identity, rationale, history/replay/audit evidence and other families never enter the DTO. Existing testing results and decisions are redacted recorded facts, not recommendations. Responses are private/no-store. See [Parent family scope resolution](PARENT_FAMILY_SCOPE_RESOLUTION.md).
 
-The `/parent` web design reference is **not connected** to that endpoint and now renders `Student Journey unavailable`, rather than invented child scores/progress. This checkpoint delivers no real React Native/Expo Parent App, mobile journey, Eian execution or staff progress workbench.
+The later [Parent Student Journey UI](PARENT_STUDENT_JOURNEY_UI.md) connects `/parent/journey` to these guarded reads through a fixed, ID-free display endpoint; `/parent` redirects there. It shows only current active-profile/enrollment data and never testing history or invented progress. The native React Native/Expo Parent App and Eian execution remain outside this web delivery.
 
 ## Validation boundary
 

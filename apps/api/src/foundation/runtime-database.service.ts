@@ -254,6 +254,16 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows[0];
   }
 
+  async resolveParentJourneyScopes(externalSubject: string): Promise<ResolvedParentFamilyScope[]> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<ResolvedParentFamilyScope>(
+      `SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId",
+              family_id AS "familyId", access_level::text AS "accessLevel"
+       FROM hon.resolve_parent_journey_scopes($1)`, [externalSubject],
+    );
+    return result.rows;
+  }
+
   async resolveParentFamilyScopes(externalSubject: string, schoolId: string): Promise<ResolvedParentFamilyScope[]> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<ResolvedParentFamilyScope>(

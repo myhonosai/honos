@@ -50,7 +50,9 @@
     "db:test-voice": "pnpm --filter @hon/api build && node scripts/test-voice-integrity.mjs",
     "db:test-marketplace": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketplace-integrity.mjs",
     "db:test-achievements": "pnpm --filter @hon/contracts build && pnpm --filter @hon/api build && node scripts/test-achievement-integrity.mjs",
-    "db:setup-achievements": "node scripts/setup-achievement-validation.mjs"
+    "db:setup-achievements": "node scripts/setup-achievement-validation.mjs",
+    "db:test-parent-journey": "pnpm --filter @hon/api build && node scripts/test-parent-journey-integrity.mjs",
+    "db:setup-parent-journey": "node scripts/setup-parent-journey-validation.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

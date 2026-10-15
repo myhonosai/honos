@@ -237,6 +237,7 @@ WITH expected(signature,runtime_execute,security_definer) AS (VALUES
  ('hon.lock_human_testing_record(text,text,uuid)',true,true),
  ('hon.resolve_authorized_scope(text,uuid,text)',true,true),
  ('hon.resolve_parent_family_scope(text,uuid)',true,true),
+ ('hon.resolve_parent_journey_scopes(text)',true,true),
  ('hon.principal_has_school_permission(uuid,uuid,uuid,text)',true,true),
  ('hon.require_curriculum_actor(text,text)',false,true),
  ('hon.validate_curriculum_observation()',false,true),
