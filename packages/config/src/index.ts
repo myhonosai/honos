@@ -51,6 +51,9 @@ export const INCLUDED_AI_CREDITS: Record<HonTier, number> = {
 };
 
 export const ACTION_CATALOG: readonly RegisteredAction[] = [
+  { code: 'program.create', requiredPermission: 'program.manage', minimumTier: 'ESSENTIAL', platformAuthorityFloor: 'CONFIRM', riskClass: 'MODERATE' },
+  { code: 'schedule.session.create', requiredPermission: 'schedule.session.manage', minimumTier: 'ESSENTIAL', platformAuthorityFloor: 'CONFIRM', riskClass: 'MODERATE' },
+  { code: 'attendance.record', requiredPermission: 'attendance.record', minimumTier: 'ESSENTIAL', platformAuthorityFloor: 'AUTO', riskClass: 'SENSITIVE' },
   {
     code: 'curriculum.create',
     requiredPermission: 'curriculum.manage',

@@ -101,7 +101,20 @@ GRANT SELECT ON TABLE
   hon.action_policies,
   hon.action_requests,
   hon.idempotency_records,
-  hon.principal_interface_preferences
+  hon.principal_interface_preferences,
+  hon.curricula,
+  hon.curriculum_ranks,
+  hon.curriculum_requirements,
+  hon.student_curriculum_enrollments,
+  hon.testing_events,
+  hon.testing_candidates,
+  hon.promotion_decisions,
+  hon.programs,
+  hon.class_templates,
+  hon.class_sessions,
+  hon.class_session_instructors,
+  hon.class_bookings,
+  hon.attendance_records
 TO hon_runtime;
 GRANT INSERT ON TABLE
   hon.people,
@@ -119,7 +132,20 @@ GRANT INSERT ON TABLE
   hon.audit_events,
   hon.outbox_events,
   hon.idempotency_records,
-  hon.principal_interface_preferences
+  hon.principal_interface_preferences,
+  hon.curricula,
+  hon.curriculum_ranks,
+  hon.curriculum_requirements,
+  hon.student_curriculum_enrollments,
+  hon.testing_events,
+  hon.testing_candidates,
+  hon.promotion_decisions,
+  hon.programs,
+  hon.class_templates,
+  hon.class_sessions,
+  hon.class_session_instructors,
+  hon.class_bookings,
+  hon.attendance_records
 TO hon_runtime;
 GRANT UPDATE ON TABLE
   hon.action_requests,
@@ -142,7 +168,14 @@ GRANT USAGE ON TYPE
   hon.family_member_role,
   hon.family_access_level,
   hon.ai_modality,
-  hon.plan_tier
+  hon.plan_tier,
+  hon.curriculum_lifecycle,
+  hon.testing_event_status,
+  hon.testing_candidate_result,
+  hon.promotion_decision_status,
+  hon.schedule_item_status,
+  hon.class_booking_status,
+  hon.attendance_status
 TO hon_runtime;
 
 -- Keep function execution explicit rather than granting every current/future
