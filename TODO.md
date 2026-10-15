@@ -181,3 +181,11 @@ Remaining beyond this foundation:
 - [ ] Marcus/Lena AI research/drafting/recommendation and approval-gated publishing/budget proposal path, through separately reviewed AI economics/permissions/Action Engine boundaries. No AI execution or expanded authority in the human commands.
 
 Details: [Human Marketing Campaigns and Attribution](docs/architecture/HUMAN_MARKETING_CAMPAIGNS_AND_ATTRIBUTION.md). Completion is gated on isolated disposable-local proof and clean root validation; no remote migration or external publishing/spending is claimed.
+
+## Public published lead-form intake foundation
+
+- [x] Exact human school read/configure/publish/disable permissions, Essential+ utility, optimistic lifecycle and unguessable public ID; optional explicit ACTIVE same-school campaign, bounded name/email/mobile/interest/source schema plus vetted optional choice fields; public projection excludes private settings/analytics/credentials. No Parent/HQ/AI reuse.
+- [x] Unauthenticated exact POST ingress only: server derives org/school/form/campaign/service actor, rejects client authority IDs, strict JSON/uncompressed UTF-8/body/size/types/caps/control/newline/formula checks, honeypot, deterministic bounded idempotency/duplicate and persistent rate limits not relying on IP; necessary hashed/private evidence only, generic truthful results without contact/lead state or PII errors.
+- [x] Normal new CRM lead through narrow private domain helper, PUBLIC_API and restricted fixed no-grant service principal, immutable source/form/campaign snapshots; no merge, communication OPTED_IN/consent/message, campaign/ad publish/spend, membership/payment/appointment, AI/provider or Action Engine effect. Acknowledgement is only a fact.
+- [x] Forced private RLS and exact fixed SECURITY DEFINER/search_path runtime ACLs, no PUBLIC/Supabase broad execute or private/pending writes; exact canonical SQL and drift verifiers; staff safe counts/state only, no raw receipt endpoint.
+- [x] Same-origin /staff/marketing/forms configuration/status UI and secure endpoint-backed /forms/[publicId], manifest, safe uncertain retries/no fake success; tests for denial, validation, derivation, redaction, immutability, ACLs, revocation/concurrency/rollback and no effects; full validation, docs, commit/push origin/main, no deploy.

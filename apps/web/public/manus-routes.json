@@ -55,6 +55,14 @@
     {
       "path": "/staff/marketing/campaigns",
       "title": "Human Campaign Planning"
+    },
+    {
+      "path": "/staff/marketing/forms",
+      "title": "Human Public Lead Forms"
+    },
+    {
+      "path": "/forms/:publicId",
+      "title": "School Enquiry Form"
     }
   ]
 }

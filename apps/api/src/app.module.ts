@@ -1,3 +1,5 @@
+import { StaffPublicFormController, PublishedFormController, PublicFormHumanUiGuard } from './marketing/public-form.controller.js';
+import { PublicFormService } from './marketing/public-form.service.js';
 import { CampaignController } from './marketing/campaign.controller.js';
 import { CampaignService } from './marketing/campaign.service.js';
 import { CampaignHumanUiGuard } from './marketing/campaign-human-ui.guard.js';
@@ -106,6 +108,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
 
 @Module({
   controllers: [
+    StaffPublicFormController, PublishedFormController,
     CampaignController,
     RevenuePlanningController,
     StaffSearchController,
@@ -157,6 +160,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
     ActionReviewController,
   ],
   providers: [
+    PublicFormService, PublicFormHumanUiGuard,
     CampaignService, CampaignHumanUiGuard,
     RevenuePlanningService, RevenuePlanningHumanUiGuard,
     StaffSearchService,

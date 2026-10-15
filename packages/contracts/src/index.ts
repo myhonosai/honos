@@ -861,3 +861,5 @@ export interface AiUsageRecord extends TenantScope {
   occurredAt: string;
 }
 export * from './documents.js';
+
+export * from './public-lead-forms.js';

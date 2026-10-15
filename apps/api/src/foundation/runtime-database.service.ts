@@ -118,6 +118,29 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows[0];
   }
 
+  async resolvePublicFormScope(externalSubject: string, permission: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_public_form_scope($1,$2)', [externalSubject, permission],
+    )).rows[0];
+  }
+  async readPublishedLeadForm(publicId: string): Promise<import('@hon/contracts').PublishedLeadForm | null> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: import('@hon/contracts').PublishedLeadForm | null }>('SELECT hon.read_published_form($1) data', [publicId])).rows[0]!.data;
+  }
+  async submitPublishedLeadForm(publicId: string, input: object, key: string): Promise<string> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'");
+      const result = await client.query<{ result: string }>('SELECT hon.submit_public_form($1,$2::jsonb,$3) result', [publicId, JSON.stringify(input), key]);
+      await client.query('COMMIT');
+      return result.rows[0]!.result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
   async resolveCampaignScope(externalSubject: string, permission: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

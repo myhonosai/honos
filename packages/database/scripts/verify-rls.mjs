@@ -65,6 +65,11 @@ const expectedRlsTables = [
   'lead_import_rows',
   'lead_import_evidence',
   'lead_import_requests',
+  'public_lead_forms',
+  'public_lead_form_versions',
+  'public_lead_form_requests',
+  'public_lead_form_receipts',
+  'public_lead_form_rates',
   'marketing_campaigns',
   'marketing_campaign_versions',
   'marketing_campaign_requests',
@@ -247,6 +252,62 @@ try {
     for (const table of campaignTables) if ((await client.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,$2,'SELECT,INSERT,UPDATE,REFERENCES') allowed", [rolname,`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden client campaign access: ${rolname}.${table}`);
     for (const [signature] of campaignFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client campaign function: ${rolname}.${signature}`);
   }
+  const formTables = ['public_lead_forms','public_lead_form_versions','public_lead_form_requests','public_lead_form_receipts','public_lead_form_rates'];
+  const formFunctions = [
+    ['hon.resolve_public_form_scope(text,text)',true,true],
+    ['hon.read_public_forms(text)',true,true],
+    ['hon.mutate_public_form(text,text,uuid,jsonb,text,uuid,uuid)',true,true],
+    ['hon.read_published_form(text)',true,true],
+    ['hon.submit_public_form(text,jsonb,text)',true,true],
+    ['hon.validate_public_form_config(jsonb)',false,false],
+    ['hon.require_public_form_actor(text,text)',false,true],
+    ['hon.lock_public_form_actor(text,text)',false,true],
+    ['hon.public_form_staff_summary(uuid)',false,true],
+    ['hon.validate_public_form_submission(jsonb,jsonb)',false,false],
+    ['hon.take_public_form_rate(uuid,text,integer)',false,true],
+    ['hon.create_public_form_lead(uuid,uuid,jsonb,uuid)',false,true],
+    ['hon.guard_public_form_record()',false,true],
+    ['hon.check_public_form_version()',false,true],
+  ];
+  if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])", [formTables])).rows[0].n !== '0') throw new Error('Public form tables require deny-all forced RLS.');
+  const formAcls = (await client.query(`SELECT c.relname,r.rolsuper OR r.rolbypassrls trusted_owner,
+    EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) broad_acl
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='hon' AND c.relname=ANY($1::text[])`, [formTables])).rows;
+  if (formAcls.length !== 5 || formAcls.some(r => !r.trusted_owner || r.broad_acl)) throw new Error('Public form table and column ACLs must be trusted-owner-only.');
+  for (const [signature,execute,definer] of formFunctions) {
+    const b = (await client.query(`SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls trusted_owner,
+      has_function_privilege($2,p.oid,'EXECUTE') runtime_execute,
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname=$2) OR NOT $3::boolean OR a.privilege_type<>'EXECUTE' OR a.is_grantable)) broad_acl
+      FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature,runtimeRoleName,execute])).rows[0];
+    if (!b?.trusted_owner || b.runtime_execute !== execute || b.prosecdef !== definer || b.provolatile !== 'v' || b.broad_acl || b.proconfig?.length !== 1 || b.proconfig[0] !== 'search_path=pg_catalog, hon') throw new Error(`Unsafe public form function ACL/owner/path: ${signature}`);
+  }
+  for (const {rolname} of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
+    for (const table of formTables) if ((await client.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,$2,'SELECT,INSERT,UPDATE,REFERENCES') allowed", [rolname,`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden client public form access: ${rolname}.${table}`);
+    for (const [signature] of formFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client public form function: ${rolname}.${signature}`);
+  }
+  for (const [table,trigger,signature,deferred] of [
+    ['public_lead_forms','public_form_identity_guard','hon.guard_public_form_record()',false],
+    ['public_lead_forms','public_form_no_truncate','hon.guard_public_form_record()',false],
+    ['public_lead_forms','public_form_current_version','hon.check_public_form_version()',true],
+    ['public_lead_form_versions','public_form_version_coherent','hon.check_public_form_version()',false],
+    ['public_lead_form_versions','public_form_versions_immutable','hon.guard_campaign_history()',false],
+    ['public_lead_form_versions','public_form_versions_no_truncate','hon.guard_campaign_history()',false],
+    ['public_lead_form_requests','public_form_requests_immutable','hon.guard_campaign_history()',false],
+    ['public_lead_form_requests','public_form_requests_no_truncate','hon.guard_campaign_history()',false],
+    ['public_lead_form_receipts','public_form_receipts_no_update','hon.guard_campaign_history()',false],
+    ['crm_leads','lead_source_snapshot','hon.capture_lead_attribution()',false],
+    ['crm_leads','lead_source_immutable','hon.capture_lead_attribution()',false],
+    ['crm_lead_attributions','lead_attributions_immutable','hon.guard_campaign_history()',false],
+    ['crm_lead_attributions','lead_attributions_no_truncate','hon.guard_campaign_history()',false],
+    ['crm_lead_attributions','lead_attribution_coherent','hon.guard_campaign_evidence_insert()',false],
+  ]) {
+    if (!(await client.query("SELECT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=$2 AND tgfoid=$3::regprocedure AND tgenabled='O' AND NOT tgisinternal AND tgdeferrable=$4 AND tginitdeferred=$4) safe",[`hon.${table}`,trigger,signature,deferred])).rows[0].safe) throw new Error(`Unsafe public form provenance trigger: ${trigger}`);
+  }
+  if (!(await client.query(`SELECT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000075' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL AND is_active)
+    AND NOT EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id='00000000-0000-4000-8000-000000000075')
+    AND NOT EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-000000000075')
+    AND NOT EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id='00000000-0000-4000-8000-000000000075') safe`)).rows[0].safe) throw new Error('Unsafe public form intake principal');
   const revenueFunctions = [
     ['hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid)',true,true],
     ['hon.read_revenue_plan(text,text,uuid,integer)',true,true],
