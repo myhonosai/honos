@@ -40,6 +40,8 @@ SELECT has_function_privilege(
   'EXECUTE'
 ) AS can_resolve_hq_operator_scope;
 
+-- Parent requests require SELECT/INSERT; the separate human staff review
+-- command requires the only allowed UPDATE transition. DELETE must remain false.
 SELECT
   has_table_privilege('hon_runtime', 'hon.planned_absence_requests', 'SELECT') AS can_read_planned_absence_requests,
   has_table_privilege('hon_runtime', 'hon.planned_absence_requests', 'INSERT') AS can_submit_planned_absence_requests,

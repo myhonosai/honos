@@ -51,6 +51,8 @@ import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
 import { ClassBookingController } from './schedule/class-booking.controller.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
+import { PlannedAbsenceReviewController } from './schedule/planned-absence-review.controller.js';
+import { PlannedAbsenceReviewService } from './schedule/planned-absence-review.service.js';
 import { KnowledgeArticleController } from './knowledge/knowledge-article.controller.js';
 import { KnowledgeArticleService } from './knowledge/knowledge-article.service.js';
 import { ParentFamilyKnowledgeController } from './knowledge/parent-family-knowledge.controller.js';
@@ -75,6 +77,7 @@ import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledg
     ClassSessionController,
     AttendanceController,
     ClassBookingController,
+    PlannedAbsenceReviewController,
     KnowledgeArticleController,
     ParentFamilyKnowledgeController,
     TestingEventController,
@@ -106,6 +109,7 @@ import { ParentFamilyKnowledgeService } from './knowledge/parent-family-knowledg
     ClassSessionService,
     AttendanceService,
     ClassBookingService,
+    PlannedAbsenceReviewService,
     KnowledgeArticleService,
     ParentFamilyKnowledgeService,
     TestingEventService,

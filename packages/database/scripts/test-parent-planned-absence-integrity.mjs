@@ -12,19 +12,22 @@ const connectionOptions = (connectionString) => ({
 
 const { ParentPlannedAbsenceController } = await import('../../../apps/api/dist/families/parent-planned-absence.controller.js');
 const { ParentPlannedAbsenceService } = await import('../../../apps/api/dist/families/parent-planned-absence.service.js');
+const { PlannedAbsenceReviewController } = await import('../../../apps/api/dist/schedule/planned-absence-review.controller.js');
+const { PlannedAbsenceReviewService } = await import('../../../apps/api/dist/schedule/planned-absence-review.service.js');
 const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 
 const administrator = new Client(connectionOptions(process.env.DATABASE_URL));
 const runtime = new Client(connectionOptions(process.env.HON_RUNTIME_DATABASE_URL));
 const ids = Object.fromEntries(
   [
-    'organization', 'schoolA', 'schoolB', 'parentUser', 'parentPrincipal',
+    'organization', 'schoolA', 'schoolB', 'parentUser', 'parentPrincipal', 'staffUser', 'staffPrincipal', 'ownerRole',
     'familyA', 'familyB', 'familyC',
     'studentPersonA', 'studentPersonB', 'studentPersonC',
     'studentProfileA', 'studentProfileB', 'studentProfileC', 'foreignRequest',
   ].map((key) => [key, randomUUID()]),
 );
 const externalSubject = `parent-planned-absence-${randomUUID()}`;
+const staffExternalSubject = `staff-planned-absence-${randomUUID()}`;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -78,11 +81,13 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.idempotency_records WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.planned_absence_requests WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.family_access_grants WHERE principal_id = $1', [ids.parentPrincipal]);
+    await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.staffPrincipal]);
+    await administrator.query('DELETE FROM hon.roles WHERE id = $1', [ids.ownerRole]);
     await administrator.query('DELETE FROM hon.student_profiles WHERE id = ANY($1::uuid[])', [[ids.studentProfileA, ids.studentProfileB, ids.studentProfileC]]);
     await administrator.query('DELETE FROM hon.family_members WHERE family_id = ANY($1::uuid[])', [[ids.familyA, ids.familyB, ids.familyC]]);
     await administrator.query('DELETE FROM hon.families WHERE id = ANY($1::uuid[])', [[ids.familyA, ids.familyB, ids.familyC]]);
-    await administrator.query('DELETE FROM hon.principals WHERE id = $1', [ids.parentPrincipal]);
-    await administrator.query('DELETE FROM hon.users WHERE id = $1', [ids.parentUser]);
+    await administrator.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.parentPrincipal, ids.staffPrincipal]]);
+    await administrator.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.parentUser, ids.staffUser]]);
     await administrator.query('DELETE FROM hon.people WHERE id = ANY($1::uuid[])', [[ids.studentPersonA, ids.studentPersonB, ids.studentPersonC]]);
     await administrator.query('DELETE FROM hon.schools WHERE id IN ($1, $2)', [ids.schoolA, ids.schoolB]);
     await administrator.query('DELETE FROM hon.organizations WHERE id = $1', [ids.organization]);
@@ -98,6 +103,8 @@ await runtime.connect();
 const database = new RuntimeDatabaseService();
 const plannedAbsences = new ParentPlannedAbsenceService(database);
 const controller = new ParentPlannedAbsenceController(database, plannedAbsences);
+const plannedAbsenceReviews = new PlannedAbsenceReviewService(database);
+const reviewController = new PlannedAbsenceReviewController(database, plannedAbsenceReviews);
 
 try {
   const posture = await administrator.query(`
@@ -117,7 +124,7 @@ try {
       has_type_privilege(current_user, 'hon.planned_absence_request_status', 'USAGE') AS status_type_usage
   `);
   const grants = privileges.rows[0];
-  assert(grants?.can_select && grants?.can_insert && !grants?.can_update && !grants?.can_delete,
+  assert(grants?.can_select && grants?.can_insert && grants?.can_update && !grants?.can_delete,
     'hon_runtime planned-absence table privileges are not the reviewed minimum.');
   assert(grants?.status_type_usage,
     'hon_runtime lacks the explicit planned-absence status enum usage grant.');
@@ -149,6 +156,31 @@ try {
       `INSERT INTO hon.principals (id, principal_type, user_id, display_name)
        VALUES ($1, 'HUMAN_USER', $2, 'Parent Requester')`,
       [ids.parentPrincipal, ids.parentUser],
+    );
+    await administrator.query(
+      'INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, $3, $4)',
+      [ids.staffUser, staffExternalSubject, `planned-absence-staff-${ids.staffUser}@example.test`, 'Staff Reviewer'],
+    );
+    await administrator.query(
+      `INSERT INTO hon.principals (id, principal_type, user_id, display_name)
+       VALUES ($1, 'HUMAN_USER', $2, 'Staff Reviewer')`,
+      [ids.staffPrincipal, ids.staffUser],
+    );
+    await administrator.query(
+      `INSERT INTO hon.roles (id, organization_id, code, name, is_system_role)
+       VALUES ($1, $2, 'OWNER', 'School Owner', true)`,
+      [ids.ownerRole, ids.organization],
+    );
+    await administrator.query(
+      `INSERT INTO hon.role_permissions (role_id, organization_id, permission_code)
+       VALUES ($1, $2, 'schedule.planned_absence.review')`,
+      [ids.ownerRole, ids.organization],
+    );
+    await administrator.query(
+      `INSERT INTO hon.principal_role_grants (
+         organization_id, school_id, principal_id, role_id, granted_by_principal_id
+       ) VALUES ($1, $2, $3, $4, $3)`,
+      [ids.organization, ids.schoolA, ids.staffPrincipal, ids.ownerRole],
     );
     await administrator.query(
       `INSERT INTO hon.families (id, organization_id, school_id, display_name) VALUES
@@ -287,6 +319,93 @@ try {
     && created.rows[0]?.review_note === null,
   'The parent command created review data or a non-submitted planned absence status.');
 
+  const staffRequest = { honIdentity: { externalSubject: staffExternalSubject } };
+  const reviewInput = { decision: 'APPROVED', reviewNote: 'Approved for family travel.', expectedVersion: 1 };
+  await expectStatus(403, () => reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, `parent-review-${randomUUID()}`, reviewInput, request, responseCapture(),
+  ), 'A parent without the staff review permission reviewed a planned absence request.');
+  await expectStatus(403, () => reviewController.decide(
+    randomUUID(), ids.schoolA, first.data.id, `wrong-org-review-${randomUUID()}`, reviewInput, staffRequest, responseCapture(),
+  ), 'A staff review accepted an organization route that did not match the resolved scope.');
+  await expectStatus(403, () => reviewController.decide(
+    ids.organization, ids.schoolB, ids.foreignRequest, `wrong-school-review-${randomUUID()}`, reviewInput, staffRequest, responseCapture(),
+  ), 'A staff review accepted a school route outside the resolved scope.');
+  await expectStatus(404, () => reviewController.decide(
+    ids.organization, ids.schoolA, ids.foreignRequest, `rls-review-${randomUUID()}`, reviewInput, staffRequest, responseCapture(),
+  ), 'RLS-scoped review lookup exposed a request from another school.');
+  await expectStatus(400, () => reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, `blank-review-${randomUUID()}`,
+    { decision: 'APPROVED', reviewNote: '   ', expectedVersion: 1 }, staffRequest, responseCapture(),
+  ), 'A blank planned-absence review note was accepted.');
+  await expectStatus(400, () => reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, `decision-review-${randomUUID()}`,
+    { decision: 'CANCELLED', reviewNote: 'Invalid decision.', expectedVersion: 1 }, staffRequest, responseCapture(),
+  ), 'A non-final planned-absence review decision was accepted.');
+  await expectStatus(400, () => reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, `version-review-${randomUUID()}`,
+    { decision: 'APPROVED', reviewNote: 'Invalid version.', expectedVersion: 0 }, staffRequest, responseCapture(),
+  ), 'A non-positive planned-absence review expectedVersion was accepted.');
+
+  const reviewKey = `planned-absence-review-${randomUUID()}`;
+  const reviewResponse = responseCapture();
+  const reviewed = await reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, reviewKey, reviewInput, staffRequest, reviewResponse,
+  );
+  assert(reviewResponse.statusCode === 200 && !reviewed.meta.replayed
+    && reviewed.data.status === 'APPROVED'
+    && reviewed.data.version === 2
+    && reviewed.data.reviewedByPrincipalId === ids.staffPrincipal
+    && reviewed.data.reviewNote === reviewInput.reviewNote,
+  'The staff review did not atomically record the approved decision and authenticated reviewer attribution.');
+
+  const reviewReplayResponse = responseCapture();
+  const reviewReplay = await reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, reviewKey, reviewInput, staffRequest, reviewReplayResponse,
+  );
+  assert(reviewReplayResponse.statusCode === 200 && reviewReplay.meta.replayed
+    && reviewReplay.data.id === reviewed.data.id && reviewReplay.data.reviewedByPrincipalId === ids.staffPrincipal,
+  'A matching planned-absence review idempotency command did not replay its original response.');
+  await expectStatus(409, () => reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, reviewKey,
+    { decision: 'DECLINED', reviewNote: 'Changed decision.', expectedVersion: 1 }, staffRequest, responseCapture(),
+  ), 'A reused planned-absence review idempotency key accepted a different decision.');
+  await expectStatus(409, () => reviewController.decide(
+    ids.organization, ids.schoolA, first.data.id, `already-reviewed-${randomUUID()}`,
+    { decision: 'APPROVED', reviewNote: 'Second review.', expectedVersion: 2 }, staffRequest, responseCapture(),
+  ), 'A non-submitted planned absence request was reviewed twice.');
+
+  const secondStartsAt = new Date(now + 10 * 24 * 60 * 60 * 1000);
+  const secondEndsAt = new Date(now + 11 * 24 * 60 * 60 * 1000);
+  const second = await controller.requestPlannedAbsence(
+    ids.schoolA, ids.familyA, `second-planned-absence-${randomUUID()}`,
+    inputFor(secondStartsAt, secondEndsAt, { reason: 'Medical appointment' }), request, responseCapture(),
+  );
+  await administrator.query(
+    'UPDATE hon.planned_absence_requests SET version = version + 1 WHERE id = $1::uuid',
+    [second.data.id],
+  );
+  await expectStatus(409, () => reviewController.decide(
+    ids.organization, ids.schoolA, second.data.id, `stale-review-${randomUUID()}`,
+    { decision: 'DECLINED', reviewNote: 'Version is stale.', expectedVersion: 1 }, staffRequest, responseCapture(),
+  ), 'A stale planned-absence review version was accepted.');
+  const declined = await reviewController.decide(
+    ids.organization, ids.schoolA, second.data.id, `declined-review-${randomUUID()}`,
+    { decision: 'DECLINED', reviewNote: 'Please coordinate another date.', expectedVersion: 2 }, staffRequest, responseCapture(),
+  );
+  assert(declined.data.status === 'DECLINED' && declined.data.version === 3
+    && declined.data.reviewedByPrincipalId === ids.staffPrincipal,
+  'A version-matched submitted planned absence request was not declined by the authenticated staff reviewer.');
+  await expectStatus(403, () => plannedAbsenceReviews.decide({
+    organizationId: ids.organization,
+    schoolId: ids.schoolA,
+    principalId: ids.staffPrincipal,
+    principalType: 'AUTOMATION',
+    requestId: randomUUID(),
+    correlationId: randomUUID(),
+    idempotencyKey: `automation-review-${randomUUID()}`,
+    source: 'AUTOMATION',
+  }, first.data.id, reviewInput), 'A non-human/non-UI command context reviewed a planned absence request.');
+
   await administrator.query('BEGIN');
   try {
     await administrator.query('SAVEPOINT initial_status');
@@ -332,17 +451,21 @@ try {
 
   const evidence = await administrator.query(`
     SELECT
-      (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1 AND action_code = 'parent.planned_absence.request') AS audits,
-      (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1 AND event_type = 'parent.planned_absence.requested' AND schema_version = 1) AS outbox,
+      (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1 AND action_code = 'parent.planned_absence.request') AS request_audits,
+      (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1 AND event_type = 'parent.planned_absence.requested' AND schema_version = 1) AS request_outbox,
+      (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1 AND action_code = 'schedule.planned_absence.decide') AS decision_audits,
+      (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1 AND event_type = 'planned_absence.request.decided' AND schema_version = 1) AS decision_outbox,
       (SELECT count(*)::integer FROM hon.class_bookings WHERE organization_id = $1) AS bookings,
-      (SELECT count(*)::integer FROM hon.attendance_records WHERE organization_id = $1) AS attendance
+      (SELECT count(*)::integer FROM hon.attendance_records WHERE organization_id = $1) AS attendance,
+      (SELECT count(*)::integer FROM hon.payment_attempts WHERE organization_id = $1) AS payments
   `, [ids.organization]);
-  assert(evidence.rows[0]?.audits === 1 && evidence.rows[0]?.outbox === 1,
-    'Each created parent planned absence request did not atomically emit one audit and v1 outbox event.');
-  assert(evidence.rows[0]?.bookings === 0 && evidence.rows[0]?.attendance === 0,
-    'A planned-absence request mutated booking or attendance data.');
+  assert(evidence.rows[0]?.request_audits === 2 && evidence.rows[0]?.request_outbox === 2
+    && evidence.rows[0]?.decision_audits === 2 && evidence.rows[0]?.decision_outbox === 2,
+  'Each submitted request and final staff decision did not atomically emit its required audit and v1 outbox event.');
+  assert(evidence.rows[0]?.bookings === 0 && evidence.rows[0]?.attendance === 0 && evidence.rows[0]?.payments === 0,
+    'A planned-absence request or review mutated booking, attendance, or payment data.');
 
-  console.log('Verified planned-absence request-only state, initial-state and family-student database integrity, forced RLS, minimum runtime grants, resolver-only parent scope, validation, idempotent replay, and atomic audit/outbox evidence.');
+  console.log('Verified planned-absence request and human staff review isolation, permission-derived scope, forced RLS, exact runtime grants, validation, idempotent replay, submitted-state and stale-version protection, authenticated reviewer attribution, atomic audit/outbox evidence, and no booking/attendance/payment mutation.');
 } finally {
   try {
     await database.onModuleDestroy();

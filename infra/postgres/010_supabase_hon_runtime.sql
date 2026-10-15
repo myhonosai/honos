@@ -161,7 +161,9 @@ GRANT UPDATE ON TABLE
   hon.idempotency_records,
   hon.principal_interface_preferences,
   -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.
-  hon.knowledge_articles
+  hon.knowledge_articles,
+  -- Human staff review is the sole mutable planned-absence transition; no DELETE privilege is granted.
+  hon.planned_absence_requests
 TO hon_runtime;
 GRANT USAGE ON TYPE
   hon.principal_type,

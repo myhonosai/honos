@@ -371,6 +371,36 @@ export interface PlannedAbsenceRequestSummary {
   updatedAt: string;
 }
 
+/** The only final decisions a human staff reviewer can record. */
+export const PLANNED_ABSENCE_REVIEW_DECISIONS = ['APPROVED', 'DECLINED'] as const;
+export type PlannedAbsenceReviewDecision = (typeof PLANNED_ABSENCE_REVIEW_DECISIONS)[number];
+
+/**
+ * This staff-only command intentionally accepts no reviewer, tenant, source,
+ * booking, attendance, makeup, payment, or communication data.
+ */
+export interface DecidePlannedAbsenceRequestInput {
+  decision: PlannedAbsenceReviewDecision;
+  reviewNote: string;
+  expectedVersion: number;
+}
+
+/** Staff review result; parent request responses remain separately redacted. */
+export interface PlannedAbsenceReviewSummary {
+  id: string;
+  studentProfileId: string;
+  startsAt: string;
+  endsAt: string;
+  reason?: string | undefined;
+  status: PlannedAbsenceReviewDecision;
+  reviewedByPrincipalId: string;
+  reviewedAt: string;
+  reviewNote: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const ATTENDANCE_STATUSES = [
   'PRESENT',
   'LATE',
