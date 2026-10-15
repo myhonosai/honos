@@ -860,3 +860,59 @@ DO $$ DECLARE t text; x record; safe boolean; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.work_items'::regclass AND conname=t AND convalidated) THEN RAISE EXCEPTION 'Missing human work constraint %',t; END IF;
  END LOOP;
 END $$;
+
+-- Marketplace canonical fail-closed ACL/RLS verification.
+-- Closed human owner marketplace verification: exact ACLs, no policies, immutable history.
+DO $$ DECLARE t text; f record; r record; b boolean; trigger_name text; trigger_type integer; BEGIN
+ FOR t IN SELECT unnest(ARRAY['marketplace_assets','marketplace_versions','marketplace_curations','marketplace_selections','marketplace_requests','marketplace_events','marketplace_outbox']) LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND a.grantee<>c.relowner)
+  INTO b FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe marketplace table %',t; END IF;
+  IF true THEN
+   FOR trigger_name,trigger_type IN SELECT * FROM (VALUES('marketplace_immutable',27),('marketplace_no_truncate',34)) v(n,k) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname=trigger_name AND tgtype=trigger_type AND tgfoid='hon.guard_marketplace_history()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe marketplace trigger %.%',t,trigger_name; END IF;
+   END LOOP;
+  END IF;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+('hon.guard_marketplace_history()',false,false),
+ ('hon.marketplace_permission(uuid,uuid,uuid,text)',false,true),
+ ('hon.resolve_marketplace_scope(text,uuid)',true,true),
+ ('hon.require_marketplace_actor(text,text)',false,true),
+ ('hon.lock_marketplace_member(uuid)',false,true),
+ ('hon.lock_marketplace_actor(text,text)',false,true),
+ ('hon.marketplace_text(text,integer)',false,false),
+ ('hon.validate_marketplace_input(text,jsonb)',false,false),
+ ('hon.review_marketplace_asset(uuid,integer,text)',false,false),
+ ('hon.marketplace_visible(uuid,integer)',false,true),
+ ('hon.marketplace_projection(uuid,integer)',false,true),
+ ('hon.marketplace_selection_projection(uuid)',false,true),
+ ('hon.read_marketplace(text,text,uuid,uuid,integer)',true,true),
+ ('hon.mutate_marketplace(text,text,uuid,jsonb,text,uuid)',true,true)
+ ) v(signature,can_execute,is_definer) LOOP
+  SELECT p.prosecdef=f.is_definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO b FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe marketplace function %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r.rolname,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Forbidden client marketplace function %',r.rolname; END IF;
+  END LOOP;
+ END LOOP;
+END $$;
+
+-- Permanent marketplace review-only and inert-outbox constraints cannot be relaxed.
+DO $$ DECLARE x record; BEGIN
+ FOR x IN SELECT * FROM (VALUES
+  ('marketplace_selections','marketplace_selections_enabled_check','CHECK ((NOT enabled))'),
+  ('marketplace_selections','marketplace_selections_status_check',$definition$CHECK ((status = 'REQUIRES_REVIEW'::text))$definition$),
+  ('marketplace_selections','marketplace_selections_version_check','CHECK ((version = 1))'),
+  ('marketplace_outbox','marketplace_outbox_execution_allowed_check','CHECK ((NOT execution_allowed))'),
+  ('marketplace_outbox','marketplace_outbox_status_check',$definition$CHECK ((status = 'INERT'::text))$definition$)
+ ) v(tbl,name,definition) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',x.tbl)::regclass AND conname=x.name AND contype='c' AND convalidated AND pg_get_constraintdef(oid)=x.definition) THEN RAISE EXCEPTION 'Unsafe permanent marketplace constraint %.%',x.tbl,x.name; END IF;
+ END LOOP;
+END $$;

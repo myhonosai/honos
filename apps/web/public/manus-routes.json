@@ -95,6 +95,10 @@
     {
       "path": "/staff/work",
       "title": "HON | Human Work Items"
+    },
+    {
+      "path": "/community/marketplace",
+      "title": "HON | Private human marketplace"
     }
   ]
 }

@@ -452,3 +452,25 @@ COMMIT;
 -- role grants) are intentionally excluded. A separately audited scope-resolver
 -- boundary will resolve a verified identity to a school-scoped command context;
 -- normal runtime data-plane work never enumerates the platform identity directory.
+
+-- Private descriptive human marketplace only. No curation/runtime table/helper access.
+-- Function ACLs and column revocations are deliberately closed even with inherited default ACLs.
+DO $$ DECLARE r text; t text; a text; f record; BEGIN
+ FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%marketplace%') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f.signature);
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['marketplace_assets','marketplace_versions','marketplace_curations','marketplace_selections','marketplace_requests','marketplace_events','marketplace_outbox'] LOOP
+  EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t); END LOOP;
+ END LOOP;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  FOREACH t IN ARRAY ARRAY['marketplace_assets','marketplace_versions','marketplace_curations','marketplace_selections','marketplace_requests','marketplace_events','marketplace_outbox'] LOOP
+   EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+   FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r); END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%marketplace%' LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r); END LOOP;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+  GRANT EXECUTE ON FUNCTION hon.resolve_marketplace_scope(text,uuid),hon.read_marketplace(text,text,uuid,uuid,integer),hon.mutate_marketplace(text,text,uuid,jsonb,text,uuid) TO hon_runtime;
+ END IF;
+END $$;

@@ -245,3 +245,10 @@ Details: [Complete Voice/Text Handoff Foundation](COMPLETE_VOICE_HANDOFF.md). No
 - [x] Added architecture/plan/canonical SQL/verifier/API/web response tests for tenant/HQ/parent/nonhuman denial, assignee/manager/revocation, unassigned transitions, concurrency/idempotency, PII/raw-AI redaction, no-effects, direct RLS/ACL denial and rollback. Fresh guarded local 84-migration reset plus integration/canonical/full RLS verification passed; root `check`, `test`, `db:check`, `build` (database URLs unset) and `git diff --check` passed. No remote migration, provider, AI, Action Engine or execution activation was performed.
 
 Details: [Conventional Human Work-Item Workbench](docs/architecture/HUMAN_WORK_ITEM_WORKBENCH.md). Deployment remains an operator-reviewed database/runtime ACL step; inert evidence is not a consumer or execution authorization.
+
+## Permission-aware human marketplace asset foundation
+- [x] Verified exact human OWNER/OPERATOR creators manage own descriptive metadata/category/version/release notes/preview/required permissions/target module and draft/publish/archive/history; no private school data, customer PII, credentials, URLs, attachments, code or arbitrary JSON/scripts; no direct import/execution.
+- [x] Exact published-version platform manual curation, opted-in currently verified OWNER browsing with exact permission; no public/parent/HQ/generic-staff leakage. Community profiles supply membership only, no content or identity leakage.
+- [x] Exact owner school-bound planned asset selection pins version, permanently disabled REQUIRES_REVIEW; no purchase/apply/install/automation/external installation/AI/provider/Action Engine/configuration/operational domain effects.
+- [x] FORCE RLS/ACL, live locks/rechecks, versions/idempotency/atomic redacted audit/private inert outbox; revocation/cross-tenant/creator-owner/output-redaction/no-effect tests; canonical grants/fail-closed verifier.
+- [x] Authenticated same-origin `/community/marketplace` UI states browse/save for review only no purchase/install/automation; permission-aware controls/manual retained-key retries; docs/full validation/main commit/push SHA.
