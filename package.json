@@ -56,6 +56,9 @@
     "db:test-achievements": "pnpm --filter @hon/database db:test-achievements",
     "db:setup-achievements": "pnpm --filter @hon/database db:setup-achievements",
     "db:test-parent-journey": "pnpm --filter @hon/database db:test-parent-journey",
-    "db:setup-parent-journey": "pnpm --filter @hon/database db:setup-parent-journey"
+    "db:setup-parent-journey": "pnpm --filter @hon/database db:setup-parent-journey",
+    "db:setup-marketing-assistant": "pnpm --filter @hon/database db:setup-marketing-assistant",
+    "db:test-marketing-assistant": "pnpm --filter @hon/database db:test-marketing-assistant",
+    "db:test-marketing-assistant-verifier": "pnpm --filter @hon/database db:test-marketing-assistant-verifier"
   }
 }

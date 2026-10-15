@@ -969,3 +969,60 @@ DO $$ DECLARE x record; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',x.tbl)::regclass AND conname=x.name AND contype='c' AND convalidated AND pg_get_constraintdef(oid)=x.definition) THEN RAISE EXCEPTION 'Unsafe permanent achievement constraint %.%',x.tbl,x.name; END IF;
  END LOOP;
 END $$;
+
+-- Marketing Assistant exact verification:
+-- Shared with db:verify-rls. This verifies posture, not provider readiness or execution.
+DO $$ DECLARE t text; f record; b boolean; expected record;
+BEGIN
+ FOREACH t IN ARRAY ARRAY['marketing_ai_invocations','marketing_ai_drafts','marketing_campaign_content'] LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND a.grantee<>c.relowner)
+   INTO b FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Marketing Assistant private table: %',t; END IF;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.marketing_safe_text(text,integer)',false,false,'i','search_path=pg_catalog'),
+  ('hon.marketing_owner(text)',false,true,'v','search_path=pg_catalog, hon'),
+  ('hon.marketing_event(uuid,text)',false,true,'v','search_path=pg_catalog, hon'),
+  ('hon.guard_marketing_invocation()',false,false,'v','search_path=pg_catalog, hon'),
+  ('hon.read_marketing_invocation(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.begin_marketing_request(text,jsonb,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.prepare_marketing_invocation(text,uuid,uuid,boolean)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.fail_marketing_invocation(text,uuid,text,text)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.record_marketing_result(text,uuid,jsonb)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.bind_marketing_proposal(text,uuid,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.marketing_action_is_current(uuid,jsonb)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.reject_marketing_draft(uuid)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.save_approved_marketing_draft(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.marketing_planning_reference(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.read_marketing_campaign_content(text,uuid)',true,true,'v','search_path=pg_catalog, hon')
+ ) e(signature,can_execute,definer,volatility,path) LOOP
+  SELECT (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime' AND p.prosecdef=f.definer
+   AND p.provolatile::text=f.volatility AND p.proconfig=ARRAY[f.path]::text[]
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+   INTO b FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Marketing Assistant function: %',f.signature; END IF;
+ END LOOP;
+ FOR expected IN SELECT * FROM (VALUES
+  ('marketing_ai_invocations','marketing_invocation_guard','hon.guard_marketing_invocation()',27),
+  ('marketing_ai_invocations','marketing_invocation_no_truncate','hon.guard_marketing_invocation()',34),
+  ('marketing_ai_drafts','marketing_draft_immutable','hon.guard_campaign_history()',27),
+  ('marketing_ai_drafts','marketing_draft_no_truncate','hon.guard_campaign_history()',34),
+  ('marketing_campaign_content','marketing_content_immutable','hon.guard_campaign_history()',27),
+  ('marketing_campaign_content','marketing_content_no_truncate','hon.guard_campaign_history()',34)
+ ) e(table_name,trigger_name,signature,trigger_type) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.table_name)::regclass
+   AND tgname=expected.trigger_name AND tgfoid=expected.signature::regprocedure AND tgtype=expected.trigger_type
+   AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN
+   RAISE EXCEPTION 'Unsafe Marketing Assistant immutable trigger: %',expected.trigger_name;
+  END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='marketing.assistant.use' AND is_sensitive AND NOT is_staff_assignable) THEN
+  RAISE EXCEPTION 'Unsafe Marketing Assistant permission registry';
+ END IF;
+END $$;
+-- End Marketing Assistant verification.

@@ -39,6 +39,56 @@ test('decision replay rechecks fixed reviewer authority after an idempotency loc
   assert.equal(recheckedAfterReplay, true, 'receipt cannot be returned from a replay without a second current reviewer check');
 });
 
+test('exact DENIED receipt replays after resolution and expiry without target eligibility or effects', async () => {
+  const row = proposal({ action_code: 'marketing.draft.save', required_permission: 'marketing.assistant.use', status: 'DENIED', approval_expires_at: new Date(Date.now() - 60_000) });
+  const c = context(); const input = { actionRequestId: row.id, decision: 'DENIED', binding: binding(row), reason: 'Exact denial' };
+  const receipt = { actionRequestId: row.id, status: 'DENIED', actionCode: row.action_code, reviewedAt: new Date(Date.now() - 120_000).toISOString(), payloadHash: row.payload_hash, policyVersion: row.policy_version, executionTriggered: false };
+  let reviewerChecks = 0; let receiptLocked = false;
+  const client = { query: async (sql, args = []) => {
+    if (sql.includes('FROM hon.action_requests') && sql.includes('FOR UPDATE')) return { rows: [row], rowCount: 1 };
+    if (sql.includes("set_config('app.hon_source'") || sql.startsWith('SET LOCAL')) return { rows: [], rowCount: 0 };
+    if (sql.includes('require_human_action_review')) { reviewerChecks++; if (reviewerChecks === 2) assert.equal(receiptLocked, true); assert.deepEqual(args, [c.externalSubject, row.requested_by_principal_id]); return { rows: [], rowCount: 0 }; }
+    if (sql.includes('INSERT INTO hon.idempotency_records')) { assert.deepEqual(args, [c.organizationId, c.schoolId, c.principalId, c.idempotencyKey, hash({ operation: 'action.request.decide', ...input })]); return { rows: [], rowCount: 0 }; }
+    if (sql.includes('SELECT request_fingerprint,status,response_body FROM hon.idempotency_records')) { receiptLocked = true; assert.deepEqual(args, [c.organizationId, c.schoolId, c.principalId, c.idempotencyKey]); return { rows: [{ request_fingerprint: hash({ operation: 'action.request.decide', ...input }), status: 'COMPLETED', response_body: receipt }], rowCount: 1 }; }
+    throw new Error(`Replay must not revalidate target/state or write effects: ${sql}`);
+  }};
+  const service = new ActionEngineService({ withTenantTransaction: async (_context, work) => work(client) });
+  assert.deepEqual(await service.decide(c, input), receipt);
+  assert.equal(reviewerChecks, 2);
+});
+
+test('denial receipt replay fails closed for changed binding, key, authorized context, receipt or post-wait reviewer', async () => {
+  const row = proposal({ action_code: 'marketing.draft.save', required_permission: 'marketing.assistant.use', status: 'DENIED' });
+  const c = context(); const input = { actionRequestId: row.id, decision: 'DENIED', binding: binding(row), reason: 'Exact denial' };
+  const receipt = { actionRequestId: row.id, status: 'DENIED', actionCode: row.action_code, reviewedAt: new Date().toISOString(), payloadHash: row.payload_hash, policyVersion: row.policy_version, executionTriggered: false };
+  for (const probe of [
+    { input: { ...input, binding: { ...input.binding, payloadHash: 'a'.repeat(64) } }, status: 409 },
+    { input: { ...input, reason: 'Different denial' }, status: 409 },
+    { input: { ...input, decision: 'APPROVED' }, status: 409 },
+    { context: { ...c, idempotencyKey: randomUUID() }, status: 409 },
+    { context: { ...c, principalId: randomUUID(), externalSubject: 'other-reviewer' }, status: 409 },
+    { context: { ...c, schoolId: randomUUID() }, status: 409 },
+    { context: { ...c, organizationId: randomUUID() }, status: 409 },
+    { context: { ...c, source: 'AI' }, status: 403 },
+    { context: { ...c, delegatedByPrincipalId: randomUUID() }, status: 403 },
+    { receipt: { ...receipt, actionRequestId: randomUUID() }, status: 409 },
+    { receipt: { ...receipt, executionTriggered: true }, status: 409 },
+    { revokeAfterWait: true, status: 403 },
+  ]) {
+    let reviewerChecks = 0;
+    const client = { query: async (sql, args = []) => {
+      if (sql.includes('FROM hon.action_requests') && sql.includes('FOR UPDATE')) return { rows: [row], rowCount: 1 };
+      if (sql.includes("set_config('app.hon_source'") || sql.startsWith('SET LOCAL')) return { rows: [], rowCount: 0 };
+      if (sql.includes('require_human_action_review')) { if (++reviewerChecks === 2 && probe.revokeAfterWait) throw Object.assign(new Error('HUMAN_REVIEW_FORBIDDEN'), { code: '42501' }); return { rows: [], rowCount: 0 }; }
+      if (sql.includes('INSERT INTO hon.idempotency_records')) { const sameContext = [c.organizationId, c.schoolId, c.principalId, c.idempotencyKey].every((value, index) => value === args[index]); return { rows: sameContext ? [] : [{ id: randomUUID() }], rowCount: sameContext ? 0 : 1 }; }
+      if (sql.includes('SELECT request_fingerprint,status,response_body FROM hon.idempotency_records')) return { rows: [{ request_fingerprint: hash({ operation: 'action.request.decide', ...input }), status: 'COMPLETED', response_body: probe.receipt ?? receipt }], rowCount: 1 };
+      throw new Error(`Rejected replay must not reach target/state or effects: ${sql}`);
+    }};
+    const service = new ActionEngineService({ withTenantTransaction: async (_context, work) => work(client) });
+    await denied(() => service.decide(probe.context ?? c, probe.input ?? input), probe.status);
+  }
+});
+
 test('beginExecution rejects an APPROVED CONFIRM row that lacks a timed approval binding without invoking an executor', async () => {
   const row = proposal({ approval_expires_at: null }); const queries = [];
   const service = new ActionEngineService({ withTenantTransaction: async (_context, work) => work({ query: async (sql) => {

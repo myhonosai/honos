@@ -883,3 +883,5 @@ export * from './achievements.js';
 export * from './testing-registration.js';
 
 export * from './parent-journey-view.js';
+
+export * from './marketing-assistant.js';

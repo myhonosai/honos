@@ -154,8 +154,12 @@ export class ActionEngineService {
     if (!reviewBlock && (!safeActionReviewPayload(request.normalized_payload) || payloadHash(request.normalized_payload) !== request.payload_hash)) reviewBlock = 'APPROVAL_PAYLOAD_UNSAFE';
     // The only existing typed executable adapter is CRM lead creation. Others
     // have catalog metadata but no reviewed domain revalidation adapter yet.
-    if (!reviewBlock && request.action_code !== 'crm.lead.create') reviewBlock = 'DOMAIN_REVALIDATION_UNAVAILABLE';
-    if (!reviewBlock) {
+    if (!reviewBlock && !['crm.lead.create','marketing.draft.save'].includes(request.action_code)) reviewBlock = 'DOMAIN_REVALIDATION_UNAVAILABLE';
+    if (!reviewBlock && request.action_code === 'marketing.draft.save') {
+      const target=await client.query<{current:boolean}>('SELECT hon.marketing_action_is_current($1::uuid,$2::jsonb) AS current',[request.id,JSON.stringify(request.normalized_payload)]);
+      if (target.rows[0]?.current !== true) reviewBlock='ACTION_TARGET_STALE';
+    }
+    if (!reviewBlock && request.action_code === 'crm.lead.create') {
       const input = plainToInstance(CreateLeadDto, request.normalized_payload);
       const errors = await validate(input, { whitelist: true, forbidNonWhitelisted: true });
       const attribution = input.attribution;
@@ -223,8 +227,15 @@ export class ActionEngineService {
       throw new ForbiddenException({ code: 'POLICY_BLOCKED', detail: 'HON rejects unregistered action codes.' });
     }
 
+    return this.database.withTenantTransaction(context, client => this.proposeInTransaction(context,input,client));
+  }
+
+  /** Internal atomic composition; the existing Action Engine remains proposal owner. */
+  async proposeInTransaction(context: CommandContext, input: RegisteredActionProposalInput, client: import('pg').PoolClient): Promise<ActionProposalSummary> {
+    const registeredAction = actionDefinition(input.actionCode);
+    if (!registeredAction) throw new ForbiddenException({code:'POLICY_BLOCKED'});
     const normalizedHash = payloadHash(input.normalizedPayload);
-    return this.database.withTenantTransaction(context, async (client) => {
+    {
       if (!await this.hasLivePermission(client, context, registeredAction.requiredPermission)) {
         throw new ForbiddenException({ code: 'PERMISSION_DENIED', detail: 'The registered action permission is no longer active in this school.' });
       }
@@ -374,7 +385,7 @@ export class ActionEngineService {
         approvalExpiresAt: approvalExpiresAt?.toISOString(),
         replayed: false,
       };
-    });
+    }
   }
 
   /**
@@ -506,13 +517,9 @@ export class ActionEngineService {
     return this.database.withTenantTransaction(context,async client=>{
       const r=await this.reviewRequest(client,input.actionRequestId,true);
       await this.lockReviewer(client,context,r.requested_by_principal_id);
-      const state=await this.reviewState(client,context,r);
       const exact={actionRequestId:r.id,actionCode:r.action_code,requestedByPrincipalId:r.requested_by_principal_id,payloadHash:r.payload_hash,policyVersion:r.policy_version,approvalExpiresAt:r.approval_expires_at?.toISOString() ?? '',effectiveAuthorityMode:r.effective_authority_mode};
       if (actionReviewFingerprint(exact)!==actionReviewFingerprint(input.binding)) throw new ConflictException({code:'POLICY_BLOCKED',detail:'APPROVAL_PROPOSAL_BINDING_STALE'});
-      if (state.reviewBlock) throw new ConflictException({code:'POLICY_BLOCKED',detail:state.reviewBlock});
-      try { validateApprovalBinding({actionRequestId:r.id,requestedByPrincipalId:r.requested_by_principal_id,reviewerPrincipalId:context.principalId,normalizedPayloadHash:r.payload_hash,policyVersion:r.policy_version,expiresAt:r.approval_expires_at!},
-        {actionRequestId:input.binding.actionRequestId,requestedByPrincipalId:input.binding.requestedByPrincipalId,reviewerPrincipalId:context.principalId,normalizedPayloadHash:input.binding.payloadHash,policyVersion:state.currentPolicyVersion,now:new Date(),reviewerHasPermission:true}); }
-      catch { throw new ConflictException({code:'POLICY_BLOCKED',detail:'APPROVAL_BINDING_INVALID'}); }
+      if (r.requested_by_principal_id===context.principalId || r.delegated_by_principal_id===context.principalId) throw new ConflictException({code:'POLICY_BLOCKED',detail:'APPROVAL_SELF_REVIEW_DENIED'});
       const fingerprint=payloadHash({operation:'action.request.decide',...input});
       const reservation=await client.query(`INSERT INTO hon.idempotency_records(organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,expires_at)
         VALUES($1,$2,$3,$4,$5,'IN_PROGRESS',clock_timestamp()+interval '24 hours') ON CONFLICT(organization_id,school_id,principal_id,idempotency_key) DO NOTHING RETURNING id`,[context.organizationId,context.schoolId,context.principalId,context.idempotencyKey,fingerprint]);
@@ -521,9 +528,15 @@ export class ActionEngineService {
         // The idempotency lock can wait for another decision transaction. The
         // initial check is not durable authorization for a replayed receipt.
         await this.lockReviewer(client,context,r.requested_by_principal_id);
-        const live=await this.reviewState(client,context,r); if(live.reviewBlock) throw new ConflictException({code:'POLICY_BLOCKED',detail:live.reviewBlock});
         if (!old || old.request_fingerprint!==fingerprint) throw new ConflictException({code:'IDEMPOTENCY_KEY_REUSED'});
-        if (old.status==='COMPLETED' && old.response_body) return old.response_body;
+        // This is historical evidence, not authority for another decision. A
+        // denial has already made its target REJECTED; do not revalidate target,
+        // invocation, policy or expiry eligibility before replaying its receipt.
+        const receipt=old.response_body;
+        if (old.status==='COMPLETED' && receipt) {
+          if (receipt.actionRequestId!==r.id || receipt.actionCode!==r.action_code || receipt.status!==input.decision || receipt.payloadHash!==r.payload_hash || receipt.policyVersion!==r.policy_version || receipt.executionTriggered!==false) throw new ConflictException({code:'IDEMPOTENCY_KEY_REUSED'});
+          return receipt;
+        }
         throw new ConflictException({code:'IDEMPOTENCY_IN_PROGRESS'});
       }
       if (r.status!=='AWAITING_APPROVAL') throw new ConflictException({code:'POLICY_BLOCKED',detail:'PROPOSAL_ALREADY_RESOLVED'});
@@ -531,6 +544,9 @@ export class ActionEngineService {
       // immediately before changing proposal state or writing evidence.
       await this.lockReviewer(client,context,r.requested_by_principal_id);
       const live=await this.reviewState(client,context,r); if(live.reviewBlock) throw new ConflictException({code:'POLICY_BLOCKED',detail:live.reviewBlock});
+      try { validateApprovalBinding({actionRequestId:r.id,requestedByPrincipalId:r.requested_by_principal_id,reviewerPrincipalId:context.principalId,normalizedPayloadHash:r.payload_hash,policyVersion:r.policy_version,expiresAt:r.approval_expires_at!},
+        {actionRequestId:input.binding.actionRequestId,requestedByPrincipalId:input.binding.requestedByPrincipalId,reviewerPrincipalId:context.principalId,normalizedPayloadHash:input.binding.payloadHash,policyVersion:live.currentPolicyVersion,now:new Date(),reviewerHasPermission:true}); }
+      catch { throw new ConflictException({code:'POLICY_BLOCKED',detail:'APPROVAL_BINDING_INVALID'}); }
       // Clock check is after all lock waits, including idempotency. No execution.
       if (!r.approval_expires_at || r.approval_expires_at<=new Date()) throw new ConflictException({code:'POLICY_BLOCKED',detail:'APPROVAL_EXPIRED'});
       const updated=(await client.query<{updated_at:Date}>(`UPDATE hon.action_requests SET status=$2::hon.action_request_status,updated_at=clock_timestamp() WHERE id=$1::uuid RETURNING updated_at`,[r.id,input.decision])).rows[0]!;
@@ -541,6 +557,7 @@ export class ActionEngineService {
         VALUES($1,$2,$3,$4,'action.request.decide','ACTION_REQUEST',$5::uuid,$6::jsonb,$7::jsonb,'SUCCEEDED',$8::uuid,$9::uuid,$5::uuid,clock_timestamp())`,[context.organizationId,context.schoolId,context.principalId,context.source,r.id,JSON.stringify({status:'AWAITING_APPROVAL'}),JSON.stringify(evidence),context.requestId,context.correlationId]);
       await client.query(`INSERT INTO hon.outbox_events(id,organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
         VALUES($1::uuid,$2,$3,'action.request.decided',1,'ACTION_REQUEST',$4::uuid,2,$5::uuid,$6::uuid,$7::jsonb)`,[randomUUID(),context.organizationId,context.schoolId,r.id,context.correlationId,context.requestId,JSON.stringify(evidence)]);
+      if (r.action_code==='marketing.draft.save' && input.decision==='DENIED') await client.query('SELECT hon.reject_marketing_draft($1::uuid)',[r.id]);
       const response:HumanActionReceipt={actionRequestId:r.id,status:input.decision,actionCode:r.action_code,reviewedAt:updated.updated_at.toISOString(),payloadHash:r.payload_hash,policyVersion:r.policy_version,executionTriggered:false};
       await client.query(`UPDATE hon.idempotency_records SET status='COMPLETED',response_status=200,response_body=$5::jsonb WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND idempotency_key=$4`,[context.organizationId,context.schoolId,context.principalId,context.idempotencyKey,JSON.stringify(response)]);
       return response;

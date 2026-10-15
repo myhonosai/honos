@@ -15,4 +15,5 @@ export const AI_INVOCATION_PLANNING_TASKS: Record<AiInvocationTaskClass, {
 }> = {
   SUMMARIZE: { workType: 'AI_SUMMARIZE', riskClass: 'LOW' },
   ANALYZE: { workType: 'AI_ANALYZE', riskClass: 'MODERATE' },
+  DRAFT_MARKETING: { workType: 'AI_DRAFT_MARKETING', riskClass: 'MODERATE' },
 };

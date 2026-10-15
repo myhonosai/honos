@@ -45,6 +45,7 @@ export class AiInvocationPlanService {
     catch { throw new BadRequestException({ code: 'VALIDATION_FAILED', detail: 'Only the closed planning metadata contract is accepted.' }); }
     try {
       return await this.database.withTenantTransaction(context, async (client) => {
+        await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.source]);
         await client.query('SELECT hon.require_ai_invocation_plan_access()');
         // Fixed metadata-only reference boundary; runtime cannot select raw work rows.
         await client.query('SELECT hon.lock_ai_planning_work_reference($1::uuid)', [workItemId]);
@@ -62,6 +63,7 @@ export class AiInvocationPlanService {
     requireUuid(planId);
     try {
       return await this.database.withTenantTransaction(context, async (client) => {
+        await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.source]);
         await client.query('SELECT hon.require_ai_invocation_plan_access()');
         const result = await client.query<AiInvocationPlanSummary>(`SELECT ${PROJECTION} FROM hon.ai_invocation_plans WHERE id = $1::uuid`, [planId]);
         if (!result.rows[0]) throw new NotFoundException('The invocation plan was not found in this school.');

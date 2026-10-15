@@ -1,3 +1,6 @@
+import { MarketingAssistantController, MarketingAssistantHumanUiGuard } from './marketing/marketing-assistant.controller.js';
+import { MarketingAssistantService } from './marketing/marketing-assistant.service.js';
+import { MARKETING_PROVIDER_RUNTIME, OpenRouterRuntime } from './ai/provider-runtime.js';
 import { MarketplaceController } from './marketplace/marketplace.controller.js';
 import { MarketplaceService } from './marketplace/marketplace.service.js';
 import { MarketplaceHumanUiGuard } from './marketplace/marketplace.dto.js';
@@ -150,6 +153,7 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     StaffAvailabilityController,
     StaffPublicFormController, PublishedFormController,
     CampaignController,
+    MarketingAssistantController,
     RevenuePlanningController,
     StaffSearchController,
     CurriculumProgressController,
@@ -213,7 +217,10 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
     AutomationRuleService, AutomationRuleHumanUiGuard,
     StaffAvailabilityService, StaffAvailabilityHumanUiGuard,
     PublicFormService, PublicFormHumanUiGuard,
-    CampaignService, CampaignHumanUiGuard,
+    CampaignService,
+    MarketingAssistantService,
+    MarketingAssistantHumanUiGuard,
+    { provide: MARKETING_PROVIDER_RUNTIME, useFactory: () => new OpenRouterRuntime() }, CampaignHumanUiGuard,
     RevenuePlanningService, RevenuePlanningHumanUiGuard,
     StaffSearchService,
     CurriculumProgressService, CurriculumHumanUiGuard, TestingHumanUiGuard,

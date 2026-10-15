@@ -123,6 +123,10 @@
     {
       "path": "/staff/testing/registrations",
       "title": "HON | Human testing registration reviews"
+    },
+    {
+      "path": "/staff/marketing/assistant",
+      "title": "Human Campaign Planning"
     }
   ]
 }
