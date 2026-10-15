@@ -147,11 +147,15 @@ import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
 import { TeachingStudioController } from './teaching-studio/teaching-studio.controller.js';
 import { TeachingStudioService } from './teaching-studio/teaching-studio.service.js';
 import { TeachingStudioHumanUiGuard } from './teaching-studio/teaching-studio.dto.js';
+import { RetentionReviewController } from './retention-review/retention-review.controller.js';
+import { RetentionReviewService } from './retention-review/retention-review.service.js';
+import { RetentionReviewHumanUiGuard } from './retention-review/retention-review.dto.js';
 
 @Module({
   controllers: [
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
+    RetentionReviewController,
     VoiceController,
     MarketplaceController,
     CommunityController,
@@ -219,6 +223,7 @@ import { TeachingStudioHumanUiGuard } from './teaching-studio/teaching-studio.dt
   providers: [
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,
+    RetentionReviewService, RetentionReviewHumanUiGuard,
     ParentJourneyViewService, ParentJourneyReadGuard,
     VoiceService, VoiceHumanUiGuard,
     MarketplaceService, MarketplaceHumanUiGuard,

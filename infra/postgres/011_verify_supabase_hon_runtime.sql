@@ -1135,3 +1135,57 @@ DO $$ DECLARE t text; f record; r record; b boolean; trigger_name text; trigger_
   OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='teaching.assessment.record' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Unsafe Teaching Studio permission registry'; END IF;
 END $$;
 -- End Teaching Studio verification.
+
+-- Retention Review Signals: only scope resolution and a read-only redacted
+-- projection are executable by hon_runtime. Helpers, PUBLIC and client roles
+-- remain denied; no table privilege is added by this read-only slice.
+DO $$
+DECLARE expected record; role_name text; safe boolean;
+BEGIN
+  FOR expected IN
+    SELECT * FROM (VALUES
+      ('hon.retention_review_has_permission(uuid,uuid,uuid)', false),
+      ('hon.resolve_retention_review_scope(text,uuid)', true),
+      ('hon.require_retention_review_actor(text)', false),
+      ('hon.lock_retention_review_actor(text)', false),
+      ('hon.read_retention_review_signals(text,uuid)', true)
+    ) AS x(signature, runtime_execute)
+  LOOP
+    SELECT p.prosecdef
+      AND p.provolatile = 'v'
+      AND p.proconfig = ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls)
+      AND owner_role.rolname <> 'hon_runtime'
+      AND has_function_privilege('hon_runtime', p.oid, 'EXECUTE') = expected.runtime_execute
+      AND NOT EXISTS (
+        SELECT 1
+        FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl
+        WHERE acl.grantee <> p.proowner
+          AND (
+            acl.grantee <> (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime')
+            OR NOT expected.runtime_execute
+            OR acl.is_grantable
+            OR acl.privilege_type <> 'EXECUTE'
+          )
+      )
+    INTO safe
+    FROM pg_proc p
+    JOIN pg_roles owner_role ON owner_role.oid = p.proowner
+    WHERE p.oid = expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN
+      RAISE EXCEPTION 'Unsafe Retention Review Signals function: %', expected.signature;
+    END IF;
+    FOR role_name IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role') LOOP
+      IF has_function_privilege(role_name, expected.signature, 'EXECUTE') THEN
+        RAISE EXCEPTION 'Client Retention Review Signals function execution: %.%', role_name, expected.signature;
+      END IF;
+    END LOOP;
+  END LOOP;
+  IF NOT EXISTS (
+    SELECT 1 FROM hon.permissions
+    WHERE code = 'retention.review.read' AND is_sensitive AND is_staff_assignable
+  ) THEN
+    RAISE EXCEPTION 'Retention Review Signals permission registry is unsafe';
+  END IF;
+END $$;
+-- End Retention Review Signals verification.

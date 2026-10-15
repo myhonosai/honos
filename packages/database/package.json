@@ -33,6 +33,7 @@
     "db:test-command-center": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-command-center-security.mjs",
     "db:test-health-score": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-health-score-security.mjs",
     "db:test-teaching-studio": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-teaching-studio-security.mjs",
+    "db:test-retention-review": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-retention-review-security.mjs",
     "bootstrap:hq-owner": "node scripts/bootstrap-hq-owner.mjs",
     "check:migrations": "node scripts/verify-migrations.mjs",
     "db:test-staff-roles": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-role-integrity.mjs",

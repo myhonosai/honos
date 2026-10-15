@@ -889,3 +889,5 @@ export * from './parent-journey-view.js';
 export * from './marketing-assistant.js';
 
 export * from './teaching-studio.js';
+
+export * from './retention-review-signals.js';

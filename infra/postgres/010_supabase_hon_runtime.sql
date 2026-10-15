@@ -561,3 +561,32 @@ DO $$ DECLARE r text; t text; a text; f record; BEGIN
  END LOOP;
 END $$;
 GRANT EXECUTE ON FUNCTION hon.resolve_teaching_studio_scope(text,uuid),hon.read_teaching_studio(text,text,uuid,uuid,integer),hon.mutate_teaching_studio(text,text,uuid,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+
+-- Retention Review Signals: a true read-only, evidence-only human staff projection.
+-- No direct table access and no helper execution are granted; these two fixed
+-- functions independently enforce direct HUMAN_UI identity, exact permission,
+-- active Essential/Core/Complete entitlement and current school scope.
+DO $$ DECLARE r text; f record; BEGIN
+  FOR f IN
+    SELECT p.oid::regprocedure AS signature
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'hon'
+      AND p.proname IN (
+        'retention_review_has_permission',
+        'resolve_retention_review_scope',
+        'require_retention_review_actor',
+        'lock_retention_review_actor',
+        'read_retention_review_signals'
+      )
+  LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f.signature);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime', 'anon', 'authenticated', 'service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f.signature, r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.resolve_retention_review_scope(text, uuid),
+      hon.read_retention_review_signals(text, uuid) TO hon_runtime;
+  END IF;
+END $$;

@@ -3,6 +3,7 @@ import { achievementTables, verifyAchievementSecurity } from './achievement-secu
 import { marketplaceTables, verifyMarketplaceSecurity } from './marketplace-security.mjs';
 import { humanWorkTables, verifyHumanWorkSecurity } from './human-work-security.mjs';
 import { voiceTables, verifyVoiceSecurity } from './voice-security.mjs';
+import { verifyRetentionReviewSecurity } from './retention-review-security.mjs';
 import pg from 'pg';
 import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
@@ -167,6 +168,7 @@ try {
   await verifyVoiceSecurity(client,runtimeRoleName);
   await verifyHumanWorkSecurity(client,runtimeRoleName);
   await verifyActionApprovalSecurity(client,runtimeRoleName);
+  await verifyRetentionReviewSecurity(client,runtimeRoleName);
   const posture = (await client.query(`SELECT rolcanlogin,rolsuper,rolbypassrls,rolinherit,rolcreatedb,rolcreaterole,rolreplication,
     EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid) memberships,
     has_schema_privilege(r.rolname,'hon','CREATE') schema_create,

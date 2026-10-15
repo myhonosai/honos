@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
@@ -172,6 +172,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_teaching_studio_scope($1,$2::uuid)', [externalSubject, schoolId],
     )).rows[0];
   }
+  async resolveRetentionReviewScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_retention_review_scope($1,$2::uuid)', [externalSubject, schoolId],
+    )).rows[0];
+  }
   async resolveCommunityScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(
@@ -258,6 +264,20 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const row = result.rows[0];
     if (!row) throw new Error('HON School Health Score projection did not return a result.');
     return row.data;
+  }
+
+  async readRetentionReviewSignals(
+    context: RetentionReviewSignalsContext, membershipId: string,
+  ): Promise<RetentionReviewSignals> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.source]);
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET TRANSACTION READ ONLY");
+      const result = await client.query<{ data: RetentionReviewSignals }>(
+        'SELECT hon.read_retention_review_signals($1,$2::uuid) AS data', [context.externalSubject, membershipId],
+      );
+      if (!result.rows[0]) throw new Error('HON Retention Review Signals projection did not return a result.');
+      return result.rows[0].data;
+    });
   }
 
   async readStaffSearch(externalSubject: string, organizationId: string, schoolId: string,
