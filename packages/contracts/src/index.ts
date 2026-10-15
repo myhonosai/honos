@@ -209,6 +209,22 @@ export interface BillingAccountSummary {
   createdAt: string;
 }
 
+export interface CreateCurriculumInput {
+  name: string;
+  description?: string;
+  modelCode: 'LINEAR' | 'ROTATIONAL' | 'HYBRID' | 'SKILL_BASED' | 'MODULE_BASED' | 'ATTENDANCE_PLUS_APPROVAL' | 'CUSTOM';
+}
+
+export interface CurriculumSummary {
+  id: string;
+  name: string;
+  description?: string | undefined;
+  lifecycle: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  modelCode: CreateCurriculumInput['modelCode'];
+  version: number;
+  createdAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;

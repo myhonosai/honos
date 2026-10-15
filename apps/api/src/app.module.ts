@@ -27,9 +27,11 @@ import { ActionReviewController } from './action/action-review.controller.js';
 import { FamilyController } from './families/family.controller.js';
 import { FamilyService } from './families/family.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
+import { CurriculumController } from './curriculum/curriculum.controller.js';
+import { CurriculumService } from './curriculum/curriculum.service.js';
 
 @Module({
-  controllers: [HealthController, ReadinessController, FoundationController, SessionContextController, IdentityController, PersonController, FamilyController, LeadController, PipelineController, InterfaceThemeController, MembershipController, BillingAccountController, HqController, HqOnboardingController, ActionReviewController],
-  providers: [RuntimeDatabaseService, ManusIdentityService, HonIdentityGuard, PersonService, FamilyService, LeadService, CrmLeadActionTool, PipelineService, ActionEngineService, InterfaceThemeService, MembershipService, BillingAccountService, HqOnboardingService],
+  controllers: [HealthController, ReadinessController, FoundationController, SessionContextController, IdentityController, PersonController, FamilyController, LeadController, PipelineController, CurriculumController, InterfaceThemeController, MembershipController, BillingAccountController, HqController, HqOnboardingController, ActionReviewController],
+  providers: [RuntimeDatabaseService, ManusIdentityService, HonIdentityGuard, PersonService, FamilyService, LeadService, CrmLeadActionTool, PipelineService, CurriculumService, ActionEngineService, InterfaceThemeService, MembershipService, BillingAccountService, HqOnboardingService],
 })
 export class AppModule {}

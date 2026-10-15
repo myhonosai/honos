@@ -52,6 +52,20 @@ export const INCLUDED_AI_CREDITS: Record<HonTier, number> = {
 
 export const ACTION_CATALOG: readonly RegisteredAction[] = [
   {
+    code: 'curriculum.create',
+    requiredPermission: 'curriculum.manage',
+    minimumTier: 'ESSENTIAL',
+    platformAuthorityFloor: 'CONFIRM',
+    riskClass: 'MODERATE',
+  },
+  {
+    code: 'testing.promotion.decide',
+    requiredPermission: 'testing.promotion.decide',
+    minimumTier: 'ESSENTIAL',
+    platformAuthorityFloor: 'RESTRICTED',
+    riskClass: 'SENSITIVE',
+  },
+  {
     code: 'family.create',
     requiredPermission: 'family.create',
     minimumTier: 'ESSENTIAL',
