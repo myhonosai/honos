@@ -65,6 +65,8 @@ import { FamilyService } from './families/family.service.js';
 import { ParentStudentJourneyController } from './families/parent-student-journey.controller.js';
 import { ParentJourneyViewController, ParentJourneyReadGuard } from './families/parent-journey-view.controller.js';
 import { ParentJourneyViewService } from './families/parent-journey-view.service.js';
+import { ParentBillingViewController, ParentBillingReadGuard } from './families/parent-billing-view.controller.js';
+import { ParentBillingViewService } from './families/parent-billing-view.service.js';
 import { ParentStudentJourneyService } from './families/parent-student-journey.service.js';
 import { ParentFamilyScheduleController } from './families/parent-family-schedule.controller.js';
 import { ParentFamilyScheduleService } from './families/parent-family-schedule.service.js';
@@ -187,6 +189,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     PersonController,
     FamilyController,
     ParentJourneyViewController,
+    ParentBillingViewController,
     ParentStudentJourneyController,
     ParentFamilyScheduleController,
     ParentPlannedAbsenceController,
@@ -233,6 +236,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     TeachingStudioService, TeachingStudioHumanUiGuard,
     RetentionReviewService, RetentionReviewHumanUiGuard,
     ParentJourneyViewService, ParentJourneyReadGuard,
+    ParentBillingViewService, ParentBillingReadGuard,
     VoiceService, VoiceHumanUiGuard,
     MarketplaceService, MarketplaceHumanUiGuard,
     CommunityService, CommunityHumanUiGuard,

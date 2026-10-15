@@ -56,6 +56,7 @@
     "db:test-achievements": "pnpm --filter @hon/contracts build && pnpm --filter @hon/api build && node scripts/test-achievement-integrity.mjs",
     "db:setup-achievements": "node scripts/setup-achievement-validation.mjs",
     "db:test-parent-journey": "pnpm --filter @hon/api build && node scripts/test-parent-journey-integrity.mjs",
+    "db:test-parent-billing": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-billing-read-integrity.mjs",
     "db:setup-parent-journey": "node scripts/setup-parent-journey-validation.mjs",
     "db:setup-marketing-assistant": "node scripts/setup-marketing-assistant-validation.mjs",
     "db:test-marketing-assistant": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketing-assistant-integrity.mjs",

@@ -25,6 +25,10 @@
       "title": "HON | Parent Documents"
     },
     {
+      "path": "/parent/billing",
+      "title": "HON | Family Billing Observations"
+    },
+    {
       "path": "/complete-mobile",
       "title": "HON Complete Mobile"
     },

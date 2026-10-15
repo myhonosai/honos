@@ -9,6 +9,7 @@ export * from './ai-invocation-plan.js';
 export * from './curriculum-progress.js';
 export * from './lead-import.js';
 export * from './ai-provider.js';
+export * from './parent-billing-view.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;
 export type HonTier = (typeof HON_TIERS)[number];

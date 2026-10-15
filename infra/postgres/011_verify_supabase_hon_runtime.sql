@@ -363,6 +363,23 @@ FROM pg_roles r WHERE r.rolname IN('anon','authenticated','service_role'); -- al
 -- relationships, immutable versions/history, concurrency/replay, family redaction,
 -- atomic audit/inert outbox and all-requirements-met NEVER causing promotion.
 
+-- 13b) Parent billing observations: exactly one fixed SECURITY DEFINER function
+-- resolves one live guardian family itself. The response has no selector or
+-- identifier inputs beyond verified subject; no provider/payment method or write
+-- authority is added. Source billing tables remain forced RLS.
+SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+  has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute
+FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+WHERE p.oid='hon.read_parent_billing_view(text)'::regprocedure;
+SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='hon' AND c.relname IN('billing_accounts','memberships','invoices','payment_attempts');
+-- pnpm db:test-parent-billing proves guardian/current-family-only redaction,
+-- ambiguity/revocation, relationship insufficiency, zero writes and no provider
+-- or collection activity on an explicitly disposable local database.
+
 -- 14) Deterministic revenue planning: exactly two runtime functions, no tables,
 -- columns, helper EXECUTE, PUBLIC/client/HQ or directory access. All rows below
 -- must match_expected; the executable assertion block fails on drift.

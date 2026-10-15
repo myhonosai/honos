@@ -231,6 +231,7 @@ REVOKE ALL ON FUNCTION hon.resolve_authorized_scope(text, uuid, text) FROM PUBLI
 REVOKE ALL ON FUNCTION hon.resolve_hq_operator_scope(text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_parent_family_scope(text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_parent_journey_scopes(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_parent_billing_view(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_testing_registration_review_scopes(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) FROM PUBLIC;
@@ -245,6 +246,10 @@ GRANT EXECUTE ON FUNCTION hon.resolve_authorized_scope(text, uuid, text) TO hon_
 GRANT EXECUTE ON FUNCTION hon.resolve_hq_operator_scope(text, text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_parent_family_scope(text, uuid) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_parent_journey_scopes(text) TO hon_runtime;
+-- Fixed, current-guardian-family billing observation only. Existing billing table
+-- SELECT privileges are unchanged for reviewed staff reads; this grants no
+-- provider, method/token, invoice/payment mutation, or collection capability.
+GRANT EXECUTE ON FUNCTION hon.read_parent_billing_view(text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.resolve_testing_registration_review_scopes(text) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) TO hon_runtime;
 GRANT EXECUTE ON FUNCTION hon.mutate_parent_testing_registration_interest(text,uuid,uuid,uuid,text,text,uuid,uuid) TO hon_runtime;

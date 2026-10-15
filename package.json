@@ -60,6 +60,7 @@
     "db:test-achievements": "pnpm --filter @hon/database db:test-achievements",
     "db:setup-achievements": "pnpm --filter @hon/database db:setup-achievements",
     "db:test-parent-journey": "pnpm --filter @hon/database db:test-parent-journey",
+    "db:test-parent-billing": "pnpm --filter @hon/database db:test-parent-billing",
     "db:setup-parent-journey": "pnpm --filter @hon/database db:setup-parent-journey",
     "db:setup-marketing-assistant": "pnpm --filter @hon/database db:setup-marketing-assistant",
     "db:test-marketing-assistant": "pnpm --filter @hon/database db:test-marketing-assistant",
