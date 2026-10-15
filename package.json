@@ -22,6 +22,7 @@
     "db:test-knowledge": "pnpm --filter @hon/database db:test-knowledge",
     "db:test-planned-absence": "pnpm --filter @hon/database db:test-planned-absence",
     "db:test-crm-appointments": "pnpm --filter @hon/database db:test-crm-appointments",
+    "db:test-communication-consents": "pnpm --filter @hon/database db:test-communication-consents",
     "db:test-work-items": "pnpm --filter @hon/database db:test-work-items",
     "db:test-ai-usage": "pnpm --filter @hon/database db:test-ai-usage",
     "db:test-operations-report": "pnpm --filter @hon/database db:test-operations-report",

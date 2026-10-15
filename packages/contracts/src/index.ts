@@ -638,6 +638,39 @@ export * from './work-items.js';
 export * from './ai-usage.js';
 export * from './operations-report.js';
 
+/** Communication channels whose consent may be evidenced for a person. */
+export const COMMUNICATION_CONSENT_CHANNELS = ['SMS', 'EMAIL', 'PUSH'] as const;
+export type CommunicationConsentChannel = (typeof COMMUNICATION_CONSENT_CHANNELS)[number];
+
+export const COMMUNICATION_CONSENT_STATUSES = ['OPTED_IN', 'OPTED_OUT'] as const;
+export type CommunicationConsentStatus = (typeof COMMUNICATION_CONSENT_STATUSES)[number];
+
+/** Provenance is evidence metadata, distinct from CommandContext.source. */
+export const COMMUNICATION_CONSENT_SOURCES = ['STAFF', 'PARENT', 'IMPORT'] as const;
+export type CommunicationConsentSource = (typeof COMMUNICATION_CONSENT_SOURCES)[number];
+
+/**
+ * Staff may record only STAFF evidence through this endpoint. Tenant, person,
+ * channel, actor, and command source are established by the route/server.
+ */
+export interface RecordCommunicationConsentInput {
+  status: CommunicationConsentStatus;
+  source: 'STAFF';
+  capturedAt: string;
+  /** Required only when replacing an existing person/channel consent record. */
+  expectedVersion?: number | undefined;
+}
+
+/** Narrow representation: no contact address, tenant metadata, or staff identity. */
+export interface CommunicationConsentSummary {
+  channel: CommunicationConsentChannel;
+  status: CommunicationConsentStatus;
+  source: CommunicationConsentSource;
+  capturedAt: string;
+  version: number;
+  updatedAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;

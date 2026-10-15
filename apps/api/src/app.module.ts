@@ -67,6 +67,8 @@ import { AiUsageController } from './ai/ai-usage.controller.js';
 import { AiUsageService } from './ai/ai-usage.service.js';
 import { OperationsReportController } from './reports/operations-report.controller.js';
 import { OperationsReportService } from './reports/operations-report.service.js';
+import { CommunicationConsentController } from './communication/communication-consent.controller.js';
+import { CommunicationConsentService } from './communication/communication-consent.service.js';
 
 @Module({
   controllers: [
@@ -95,6 +97,7 @@ import { OperationsReportService } from './reports/operations-report.service.js'
     WorkItemController,
     AiUsageController,
     OperationsReportController,
+    CommunicationConsentController,
     TestingEventController,
     TestingCandidateController,
     TestingCandidateGradeController,
@@ -132,6 +135,7 @@ import { OperationsReportService } from './reports/operations-report.service.js'
     WorkItemService,
     AiUsageService,
     OperationsReportService,
+    CommunicationConsentService,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,

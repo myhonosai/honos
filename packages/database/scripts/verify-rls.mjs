@@ -15,6 +15,7 @@ const expectedRlsTables = [
   'class_session_instructors',
   'class_sessions',
   'class_templates',
+  'communication_consents',
   'crm_activities',
   'crm_appointments',
   'crm_leads',
@@ -150,6 +151,26 @@ try {
       throw new Error('hon_runtime CRM appointment privileges are not the required SELECT/INSERT/UPDATE and no-DELETE minimum.');
     }
 
+    const runtimeCommunicationConsentPrivileges = (await client.query(`
+      SELECT
+        has_table_privilege('hon_runtime', 'hon.communication_consents', 'SELECT') AS can_select,
+        has_table_privilege('hon_runtime', 'hon.communication_consents', 'INSERT') AS can_insert,
+        has_table_privilege('hon_runtime', 'hon.communication_consents', 'UPDATE') AS can_update,
+        has_table_privilege('hon_runtime', 'hon.communication_consents', 'DELETE') AS can_delete,
+        has_type_privilege('hon_runtime', 'hon.communication_consent_channel', 'USAGE') AS channel_usage,
+        has_type_privilege('hon_runtime', 'hon.communication_consent_status', 'USAGE') AS status_usage,
+        has_type_privilege('hon_runtime', 'hon.communication_consent_source', 'USAGE') AS source_usage
+    `)).rows[0];
+    if (!runtimeCommunicationConsentPrivileges?.can_select
+      || !runtimeCommunicationConsentPrivileges.can_insert
+      || !runtimeCommunicationConsentPrivileges.can_update
+      || runtimeCommunicationConsentPrivileges.can_delete
+      || !runtimeCommunicationConsentPrivileges.channel_usage
+      || !runtimeCommunicationConsentPrivileges.status_usage
+      || !runtimeCommunicationConsentPrivileges.source_usage) {
+      throw new Error('hon_runtime communication consent privileges are not the required SELECT/INSERT/UPDATE, enum-usage, and no-DELETE minimum.');
+    }
+
     const runtimeOperationsReportingPrivileges = (await client.query(`
       SELECT
         has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS invoices_can_select,
@@ -177,7 +198,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment command grants, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communication-consent command grants, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
 } finally {
   await client.end();
 }
