@@ -10,6 +10,8 @@ export * from './action-engine.js';
 export * from './action-gate.js';
 export * from './usage-economics.js';
 export * from './work-item-state.js';
+export * from './ai-provider-validation.js';
+export * from './ai-provider-router.js';
 
 export interface AuthorityPolicySources {
   platform: ActionAuthorityMode;

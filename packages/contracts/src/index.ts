@@ -1,3 +1,5 @@
+export * from './ai-provider.js';
+
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;
 export type HonTier = (typeof HON_TIERS)[number];
 

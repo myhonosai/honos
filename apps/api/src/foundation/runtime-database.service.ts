@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
   principalId: string;
@@ -163,6 +163,31 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const provisioned = result.rows[0];
     if (!provisioned) throw new Error('HON HQ tenant provisioning did not return a result.');
     return provisioned;
+  }
+
+  async readAiControlPlaneFromHq(externalSubject: string): Promise<AiControlPlaneSnapshot> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<{ data: AiControlPlaneSnapshot }>(
+      'SELECT hon.hq_ai_control_plane_read($1) AS data', [externalSubject],
+    );
+    return result.rows[0]!.data;
+  }
+
+  async writeAiControlPlaneFromHq(externalSubject: string, kind: AiControlPlaneKind, payload: AiProviderConnectionWrite | AiCatalogEntryWrite | AiRoutingPolicyWrite, idempotencyKey: string, requestId: string): Promise<{ recordId: string; version: number; replayed: boolean }> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<{ data: { recordId: string; version: number; replayed: boolean } }>(
+      'SELECT hon.hq_ai_control_plane_write($1, $2, $3::jsonb, $4::uuid, $5::uuid) AS data',
+      [externalSubject, kind, JSON.stringify(payload), idempotencyKey, requestId],
+    );
+    return result.rows[0]!.data;
+  }
+
+  async resolveAiRoutingRegistryFromHq(externalSubject: string, policyId: string): Promise<AiRoutingRegistry> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<{ data: AiRoutingRegistry }>(
+      'SELECT hon.hq_ai_routing_registry($1, $2::uuid) AS data', [externalSubject, policyId],
+    );
+    return result.rows[0]!.data;
   }
 
   async withTenantTransaction<T>(

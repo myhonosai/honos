@@ -149,3 +149,9 @@ The repository includes a transaction-bound security test that creates temporary
 ## Development operating rule
 
 Continue with build, test, inspect, fix, retest, document, and integrate. The Master Directive’s Essential/Core/Complete behavior, Parent App/Eian, Student Journey, curriculum/testing, staff, marketing, reporting, Community/Marketplace, HON HQ, voice/recovery, AI economics, and Complete AI team experience remain required product scope and will be implemented through these shared contracts rather than retrofitted around them.
+
+## HQ AI Provider Control Plane foundation
+
+Completed the provider-independent, **configuration-only** foundation for OPENROUTER, DIRECT_LLM_API, HEYGEN, and HIGGSFIELD. Additive migrations 0052–0053 establish forced deny-all-RLS HQ provider/catalog/policy tables, opaque UUID-only credential references, HQ-only live-human resolver functions, optimistic/idempotent audited/outboxed writes, redacted reads, and server-entitlement-backed routing preview. A pure deterministic router enforces registered approval, ordered fallback, capability/modality/unit, active effective windows, health, minimum tier, and micro-unit budget without changing authority or invoking a provider. Schools receive no HQ config/table privileges or settings endpoint.
+
+See [HQ AI Provider Control Plane](docs/architecture/HQ_AI_PROVIDER_CONTROL_PLANE.md) for contracts, deployment posture, test commands, and deferred activation. No SDKs, new environment keys, raw credentials, provider HTTP calls, LLM/media invocation, health probes, secret dereferencing, budget reservation, or model worker were introduced. Future tenant decision-only access and execution adapters require separate review and never inherit Action Engine authority from routing.

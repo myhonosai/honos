@@ -75,6 +75,8 @@ import { CommunicationConsentController } from './communication/communication-co
 import { CommunicationConsentService } from './communication/communication-consent.service.js';
 import { CommunicationMessageController } from './communication/communication-message.controller.js';
 import { CommunicationMessageService } from './communication/communication-message.service.js';
+import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
+import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
 
 @Module({
   controllers: [
@@ -116,6 +118,7 @@ import { CommunicationMessageService } from './communication/communication-messa
     InvoiceController,
     HqController,
     HqOnboardingController,
+    HqAiProviderController,
     ActionReviewController,
   ],
   providers: [
@@ -156,6 +159,7 @@ import { CommunicationMessageService } from './communication/communication-messa
     BillingAccountService,
     InvoiceService,
     HqOnboardingService,
+    HqAiProviderService,
   ],
 })
 export class AppModule {}

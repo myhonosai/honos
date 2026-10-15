@@ -29,6 +29,13 @@ const expectedRlsTables = [
   'families',
   'family_access_grants',
   'family_members',
+  'hq_ai_provider_connections',
+  'hq_ai_model_catalog',
+  'hq_ai_routing_policies',
+  'hq_ai_routing_candidates',
+  'hq_ai_control_requests',
+  'hq_ai_control_audit',
+  'hq_ai_control_outbox',
   'hq_onboarding_requests',
   'hq_operator_grants',
   'idempotency_records',
@@ -120,7 +127,19 @@ try {
   const runtimeRole = (await client.query(`SELECT EXISTS (
     SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
   ) AS exists`)).rows[0];
+  const hqAiTables = expectedRlsTables.filter((table) => table.startsWith('hq_ai_'));
+  const hqAiPolicies = (await client.query(`
+    SELECT tablename FROM pg_policies
+    WHERE schemaname = 'hon' AND tablename = ANY($1::text[])
+  `, [hqAiTables])).rows;
+  if (hqAiPolicies.length) throw new Error('HQ AI configuration must retain forced deny-all RLS without tenant/GUC policies.');
   if (runtimeRole?.exists) {
+    for (const table of hqAiTables) {
+      const access = (await client.query(`
+        SELECT has_table_privilege('hon_runtime', $1, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed
+      `, [`hon.${table}`])).rows[0];
+      if (access?.allowed) throw new Error(`hon_runtime has forbidden direct HQ AI privileges on ${table}.`);
+    }
     const runtimeLedgerPrivileges = (await client.query(`
       SELECT
         has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'SELECT') AS can_select,

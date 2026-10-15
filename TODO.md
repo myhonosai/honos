@@ -76,3 +76,12 @@
 - [ ] Deliver practical Migration Center: CSV/Excel, mapping, validation, duplicate suggestions, preview, test/final import, problem reporting, audit and source preservation. Do not automatically merge ambiguous duplicates. Use IMA as workflow/migration reference without copying prototype architecture.
 - [ ] Implement customer data ownership/portability: import/export/migration/backup/recovery/account closure procedures, tested recovery, destructive-operation protection, audit and appropriate restore/undo behavior. Logs are not a recovery strategy.
 - [ ] Maintain living architecture/schema/domain/API/tool/action/permission/tier/integration/backlog/dependency/test/issue/debt/decision/deployment/provider-health documentation. Avoid unnecessary repeated AI/media/provider calls, duplicated implementations, premature infrastructure, and technical choices that force a rebuild at 3,000+ school locations.
+
+## HQ AI provider control-plane delivery checkpoint
+
+- [x] Establish HQ-only configuration foundation for the approved future OPENROUTER, DIRECT_LLM_API, HEYGEN, and HIGGSFIELD adapters: closed provider IDs/states, UUID-only opaque credential references, approved versioned catalog/capabilities/modalities, effective USD micro-unit costs, and scoped HQ-approved policy/fallback records.
+- [x] Add immutable additive migrations with forced deny-all RLS, no runtime HQ table/config grants, live human-HQ resolver authorization, strict API and SQL secret/field validation, redacted reads/evidence, optimistic/idempotent mutations with HQ audit/outbox, and deterministic selection-only preview.
+- [x] Test raw-secret/arbitrary-provider/URL/authority injection rejection; inactive/tier/health/budget/effective-window selection; fallback authority invariance; tenant invisibility; forced RLS/no runtime access; idempotency/version/evidence; and no external execution effects.
+- [ ] Activate only after separate review: out-of-band secret store and rotation, code-owned provider adapters and real health checks, tenant decision-only resolver, budget reservation/metering, revalidated execution with Action Engine/tool authority, safe retries/circuit/UNKNOWN outcomes, media storage/delivery, and model execution worker. Routing selection alone must never authorize or invoke them.
+
+Details: [HQ AI Provider Control Plane](docs/architecture/HQ_AI_PROVIDER_CONTROL_PLANE.md). Conventional HON remains useful when all providers are disabled or unavailable.

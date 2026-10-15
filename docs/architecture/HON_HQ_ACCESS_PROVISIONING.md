@@ -18,7 +18,11 @@ The governed `POST /v1/hq/organizations` boundary is available only after the se
 ## Security invariants
 
 - `hon.hq_operator_grants` is RLS-enabled and force-RLS; normal runtime data access has no direct table grant.
-- `hon.resolve_hq_operator_scope` is the only runtime bridge and is `SECURITY DEFINER` with a fixed `pg_catalog, hon` search path.
+- `hon.resolve_hq_operator_scope` is the identity-to-HQ grant resolver and is `SECURITY DEFINER` with a fixed `pg_catalog, hon` search path. Reviewed fixed provisioning/configuration functions repeat this live HQ gate; they do not grant runtime direct HQ table access.
 - The initial bootstrap is intentionally **not** a public route. Binding an account to HON HQ owner authority is a privileged ownership action. The parameterized administrator utility provisions/updates only the verified user/principal profile and its isolated HQ owner grant; it creates no school role and no tenant-data access.
 - Future HQ roles may receive explicit permission codes, while `HON_HQ_OWNER` retains full `hq.*` access through the resolver.
 - Future support impersonation must be separately implemented with an explicit reason, narrow tenant/time scope, audit evidence, and visible operator status.
+
+## AI provider configuration
+
+The [HQ AI Provider Control Plane](HQ_AI_PROVIDER_CONTROL_PLANE.md) adds separate `hq.ai.providers.read` and `hq.ai.providers.manage` gates, redacted catalog/provider/policy configuration, and selection-only routing preview. It adds no tenant settings/config access, provider invocation, secret dereferencing, or Action Engine authority.
