@@ -125,6 +125,38 @@ export interface LeadListItem extends LeadSummary {
   nextFollowUpAt?: string | undefined;
 }
 
+export const CRM_APPOINTMENT_TYPES = ['TRIAL', 'CONSULTATION'] as const;
+export type CrmAppointmentType = (typeof CRM_APPOINTMENT_TYPES)[number];
+
+export const CRM_APPOINTMENT_STATUSES = ['SCHEDULED', 'CANCELLED', 'COMPLETED', 'NO_SHOW'] as const;
+export type CrmAppointmentStatus = (typeof CRM_APPOINTMENT_STATUSES)[number];
+
+/**
+ * Public trial scheduling input. Tenant, lead, type, status, actor, and source
+ * are resolved at the server boundary and are intentionally not caller inputs.
+ */
+export interface CreateTrialAppointmentInput {
+  startsAt: string;
+  endsAt: string;
+  location?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface CrmAppointmentSummary {
+  id: string;
+  crmLeadId: string;
+  appointmentType: CrmAppointmentType;
+  status: CrmAppointmentStatus;
+  startsAt: string;
+  endsAt: string;
+  location?: string | undefined;
+  notes?: string | undefined;
+  createdByPrincipalId: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreatePersonInput {
   givenName: string;
   familyName: string;

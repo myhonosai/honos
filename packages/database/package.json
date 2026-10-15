@@ -18,6 +18,7 @@
     "db:test-parent-schedule": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-schedule-security.mjs",
     "db:test-parent-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-knowledge-security.mjs",
     "db:test-planned-absence": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-planned-absence-integrity.mjs",
+    "db:test-crm-appointments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-trial-appointment-integrity.mjs",
     "db:test-work-items": "pnpm --filter @hon/contracts build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-work-item-integrity.mjs",
     "db:test-ai-usage": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-usage-read.mjs",
     "db:test-operations-report": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-operations-report-security.mjs",

@@ -16,6 +16,7 @@ const expectedRlsTables = [
   'class_sessions',
   'class_templates',
   'crm_activities',
+  'crm_appointments',
   'crm_leads',
   'crm_pipeline_stages',
   'crm_pipelines',
