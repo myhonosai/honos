@@ -1,3 +1,7 @@
+import { DocumentController } from './documents/document.controller.js';
+import { ParentDocumentController } from './documents/parent-document.controller.js';
+import { DocumentService } from './documents/document.service.js';
+import { DocumentHumanUiGuard } from './documents/document-human-ui.guard.js';
 import { Module } from '@nestjs/common';
 import { FoundationController } from './foundation/foundation.controller.js';
 import { HonIdentityGuard } from './foundation/hon-identity.guard.js';
@@ -87,6 +91,7 @@ import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.j
 
 @Module({
   controllers: [
+    DocumentController, ParentDocumentController,
     StaffRoleController,
     HealthController,
     ReadinessController,
@@ -132,6 +137,7 @@ import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.j
     ActionReviewController,
   ],
   providers: [
+    DocumentService, DocumentHumanUiGuard,
     StaffRoleService,
     StaffRoleHumanUiGuard,
     RuntimeDatabaseService,

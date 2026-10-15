@@ -851,3 +851,4 @@ export interface AiUsageRecord extends TenantScope {
   correlationId: string;
   occurredAt: string;
 }
+export * from './documents.js';

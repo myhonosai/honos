@@ -168,3 +168,21 @@ SELECT t,has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELET
 FROM unnest(ARRAY['users','principals','roles','permissions','role_permissions','principal_role_grants','hq_operator_grants']) t;
 -- pnpm db:test-staff-roles proves scope/subset/HUMAN_UI, exact registered target,
 -- expiry, concurrency, idempotent ending, OWNER protection, evidence/no effects.
+
+-- 10) Internal documents: all tables deny-all forced RLS, no direct runtime access.
+-- Only mutate_document/read_documents runtime EXECUTE may be true; all helpers false.
+SELECT t,has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_document_table_access
+FROM unnest(ARRAY['document_templates','document_versions','document_publications','document_acknowledgements','document_command_requests']) t;
+SELECT p.proname,p.prosecdef,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+  has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute
+FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid IN (
+  'hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,uuid)'::regprocedure,
+  'hon.read_documents(text,text,text,uuid,integer)'::regprocedure,
+  'hon.guard_document_immutability()'::regprocedure,
+  'hon.require_document_actor(text,text,text,uuid,boolean)'::regprocedure,
+  'hon.document_family_authorized(text,uuid,boolean)'::regprocedure);
+SELECT * FROM pg_policies WHERE schemaname='hon' AND tablename LIKE 'document_%'; -- zero rows
+-- pnpm db:test-documents proves real runtime and direct RLS, publication immutability,
+-- family/audience separation, stale/replay, human-only, atomic evidence/no effects.

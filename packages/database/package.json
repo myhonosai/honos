@@ -33,7 +33,8 @@
     "bootstrap:hq-owner": "node scripts/bootstrap-hq-owner.mjs",
     "check:migrations": "node scripts/verify-migrations.mjs",
     "db:test-staff-roles": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-role-integrity.mjs",
-    "db:test-ai-plans": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-invocation-plans.mjs"
+    "db:test-ai-plans": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-invocation-plans.mjs",
+    "db:test-documents": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-document-integrity.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

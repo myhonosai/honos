@@ -258,6 +258,17 @@ REVOKE ALL ON FUNCTION hon.mutate_staff_role(text,text,uuid,jsonb,text,uuid,uuid
 GRANT EXECUTE ON FUNCTION hon.mutate_staff_role(text,text,uuid,jsonb,text,uuid,uuid),
   hon.read_staff_role(text,text,uuid) TO hon_runtime;
 
+-- Human internal document boundary: no direct table or helper execution.
+REVOKE ALL ON TABLE hon.document_templates,hon.document_versions,
+  hon.document_publications,hon.document_acknowledgements,hon.document_command_requests FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.guard_document_immutability(),
+  hon.document_family_authorized(text,uuid,boolean),
+  hon.require_document_actor(text,text,text,uuid,boolean) FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,uuid),
+  hon.read_documents(text,text,text,uuid,integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,uuid),
+  hon.read_documents(text,text,text,uuid,integer) TO hon_runtime;
+
 -- Decision-only tenant planning and authenticated HQ control-plane boundaries.
 -- Never grant direct access to HQ provider/config/credential-reference tables.
 REVOKE ALL ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),

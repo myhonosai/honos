@@ -27,6 +27,11 @@ const expectedRlsTables = [
   'curricula',
   'curriculum_ranks',
   'curriculum_requirements',
+  'document_templates',
+  'document_versions',
+  'document_publications',
+  'document_acknowledgements',
+  'document_command_requests',
   'families',
   'family_access_grants',
   'family_members',
@@ -129,6 +134,8 @@ try {
   const planPolicies = (await client.query("SELECT cmd FROM pg_policies WHERE schemaname='hon' AND tablename='ai_invocation_plans'")).rows;
   if (planPolicies.length !== 1 || planPolicies[0].cmd !== 'SELECT') throw new Error('Invocation plans must have only scoped SELECT policy; append is definer-only.');
 
+  const documentTables = ['document_templates','document_versions','document_publications','document_acknowledgements','document_command_requests'];
+  if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])",[documentTables])).rows[0].n !== '0') throw new Error('Document tables must retain forced deny-all RLS.');
   const runtimeRole = (await client.query(`SELECT EXISTS (
     SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
   ) AS exists`)).rows[0];
@@ -154,23 +161,28 @@ try {
       throw new Error('Unsafe organization operations summary projection boundary.');
     }
     for (const [signature, shouldExecute] of [
+      ['hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,uuid)', true],
+      ['hon.read_documents(text,text,text,uuid,integer)', true],
+      ['hon.guard_document_immutability()', false],
+      ['hon.require_document_actor(text,text,text,uuid,boolean)', false],
+      ['hon.document_family_authorized(text,uuid,boolean)', false],
       ['hon.mutate_staff_role(text,text,uuid,jsonb,text,uuid,uuid)', true],
       ['hon.read_staff_role(text,text,uuid)', true],
       ['hon.resolve_staff_role_target(uuid,text,uuid)', false],
       ['hon.guard_staff_custom_role_recipients()', false],
     ]) {
-      const boundary = (await client.query(`SELECT p.prosecdef,p.proconfig,
+      const boundary = (await client.query(`SELECT p.prosecdef,p.proconfig,r.rolsuper,r.rolbypassrls,
         has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS execute,
         EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
           WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad_acl
-        FROM pg_proc p WHERE p.oid=$1::regprocedure`, [signature])).rows[0];
-      if (!boundary?.prosecdef || boundary.execute !== shouldExecute || boundary.broad_acl
+        FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature])).rows[0];
+      if (!boundary?.prosecdef || !(boundary.rolsuper || boundary.rolbypassrls) || boundary.execute !== shouldExecute || boundary.broad_acl
         || boundary.proconfig?.length !== 1 || boundary.proconfig[0] !== 'search_path=pg_catalog, hon') {
         throw new Error(`Unsafe staff IAM boundary: ${signature}`);
       }
     }
     for (const table of ['users', 'principals', 'roles', 'permissions', 'role_permissions', 'principal_role_grants',
-      'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
+      ...documentTables, 'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
       if ((await client.query("SELECT has_table_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed", [`hon.${table}`])).rows[0].allowed) {
         throw new Error(`Forbidden runtime directory/control-plane/activity privilege: hon.${table}`);
       }

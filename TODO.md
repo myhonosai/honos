@@ -116,3 +116,15 @@ Details: [Core Multi-location Operations Summary](docs/architecture/CORE_MULTI_L
 - [ ] Separately review ownership transfer/control-plane IAM cleanup and broader registered staff profiles, schedules/availability, time off and qualifications; no payroll or autonomous employment/disciplinary decisions.
 
 Details: [Human Staff Role Administration](docs/architecture/HUMAN_STAFF_ROLE_ADMINISTRATION.md). Configure exact trusted `HON_PUBLIC_ORIGIN` for sensitive cookie-authenticated UI writes; missing configuration fails closed.
+
+## Human document / internal acknowledgement foundation checkpoint
+
+- [x] Deliver 0062–0064 single-school immutable template audience, append-only content versions/publications/acknowledgement evidence, optimistic current-publication pointers, composite ownership/hash keys and forced deny-all RLS with no direct runtime document table access.
+- [x] Add explicit sensitive staff create/version/publish/read/acknowledge/evidence permission mappings, human-only action/tier registry (not Action Engine tools), existing OWNER-only upgrades and canonical HQ/Supabase provisioning/verifier coverage.
+- [x] Require verified direct HUMAN_USER/HUMAN_UI, trusted same-origin JSON, locked scoped lookup/live post-wait permission/guardian checks, closed bounded contracts, private document-domain idempotency responses and atomic audit/inert outbox.
+- [x] Deliver conventional scoped staff and parent-safe current-publication/own-receipt reads plus `/staff/documents` and `/parent/documents` explicit read/review/acknowledge forms. Parents never submit family/person/signer IDs; co-parent evidence remains private.
+- [x] Prove cross-school/org/family/audience denial, author/publisher separation, immutable bytes/hash/evidence, unsupported student authority, stale/replay/concurrency, expiry/source prohibition, atomic rollback, direct RLS/runtime directory/security denial and zero AI/financial/communication/provider effects.
+- [ ] Separately decide legal/compliance requirements and any reviewed e-signature provider: identity/capacity/minors, legal consent/intent/disclosures, retention/export/privacy, provider custody and verification. This internal evidence slice does not establish ESIGN/UETA compliance or legal signature verification.
+- [ ] Separately add verified student-principal authority, broader audience distribution, pagination/discovery/export, retention/deletion policy, legal-provider adapters and independently authorized downstream Billing/communications workflows. No automatic consumer or external effect is activated.
+
+Details: [Human Document Acknowledgements](docs/architecture/HUMAN_DOCUMENT_ACKNOWLEDGEMENTS.md). The wider website/forms/waiver/agreement/checkout and workforce/renewal backlog remains open; internal acknowledgements are not legal e-signatures.
