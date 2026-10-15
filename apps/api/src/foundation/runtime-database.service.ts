@@ -1,0 +1,168 @@
+import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
+import { Pool, type PoolClient } from 'pg';
+import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
+import type { HonTier } from '@hon/contracts';
+
+export interface ResolvedPrincipalScope {
+  principalId: string;
+  organizationId: string;
+  schoolId: string;
+}
+
+export interface ResolvedHqOperatorScope {
+  principalId: string;
+  hqRole: 'HON_HQ_OWNER' | 'HON_HQ_OPERATOR' | 'HON_HQ_SUPPORT';
+}
+
+export interface HqSchoolProvisioningCommand {
+  externalSubject: string;
+  legalName: string;
+  displayName: string;
+  schoolName: string;
+  schoolSlug: string;
+  timezone: string;
+  initialTier: HonTier;
+  idempotencyKey: string;
+  requestFingerprint: string;
+  requestId: string;
+  correlationId: string;
+}
+
+export interface HqSchoolProvisioningResult {
+  organizationId: string;
+  schoolId: string;
+  ownerRoleId: string;
+  replayed: boolean;
+}
+
+@Injectable()
+export class RuntimeDatabaseService implements OnModuleDestroy {
+  private pool: Pool | undefined;
+  private postureCheck: Promise<void> | undefined;
+
+  isConfigured(): boolean {
+    return Boolean(process.env.HON_RUNTIME_DATABASE_URL);
+  }
+
+  private getPool(): Pool {
+    const connectionString = process.env.HON_RUNTIME_DATABASE_URL;
+    if (!connectionString) {
+      throw new ServiceUnavailableException({
+        type: 'https://hon.example/problems/runtime-database-not-configured',
+        title: 'HON runtime database is not configured',
+        status: 503,
+        code: 'PERSISTENCE_NOT_CONFIGURED',
+        detail: 'HON refuses to use the privileged migration connection at runtime.',
+      });
+    }
+
+    this.pool ??= new Pool({
+      connectionString,
+      max: 8,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+      ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+    });
+    return this.pool;
+  }
+
+  async probe(): Promise<void> {
+    await this.assertRuntimePosture();
+    await this.getPool().query('SELECT 1');
+  }
+
+  private async assertRuntimePosture(): Promise<void> {
+    this.postureCheck ??= (async () => {
+      const result = await this.getPool().query<{ rolsuper: boolean; rolbypassrls: boolean }>(
+        `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`,
+      );
+      const role = result.rows[0];
+      if (!role || role.rolsuper || role.rolbypassrls) {
+        throw new ServiceUnavailableException({
+          type: 'https://hon.example/problems/runtime-database-role-unsafe',
+          title: 'HON runtime database role is unsafe',
+          status: 503,
+          code: 'PERSISTENCE_NOT_CONFIGURED',
+          detail: 'HON requires a non-superuser PostgreSQL role without BYPASSRLS for runtime data access.',
+        });
+      }
+    })();
+    try {
+      await this.postureCheck;
+    } catch (error) {
+      this.postureCheck = undefined;
+      throw error;
+    }
+  }
+
+  async resolveAuthorizedScope(
+    externalSubject: string,
+    schoolId: string,
+    permissionCode: string,
+  ): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<ResolvedPrincipalScope>(
+      `SELECT
+         principal_id AS "principalId",
+         organization_id AS "organizationId",
+         school_id AS "schoolId"
+       FROM hon.resolve_authorized_scope($1, $2::uuid, $3)`,
+      [externalSubject, schoolId, permissionCode],
+    );
+    return result.rows[0];
+  }
+
+  async resolveHqOperatorScope(
+    externalSubject: string,
+    permissionCode: string,
+  ): Promise<ResolvedHqOperatorScope | undefined> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<ResolvedHqOperatorScope>(
+      `SELECT principal_id AS "principalId", hq_role AS "hqRole"
+       FROM hon.resolve_hq_operator_scope($1, $2)`,
+      [externalSubject, permissionCode],
+    );
+    return result.rows[0];
+  }
+
+  async provisionSchoolFromHq(command: HqSchoolProvisioningCommand): Promise<HqSchoolProvisioningResult> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<HqSchoolProvisioningResult>(
+      `SELECT organization_id AS "organizationId", school_id AS "schoolId", owner_role_id AS "ownerRoleId", replayed
+       FROM hon.provision_school_from_hq($1, $2, $3, $4, $5, $6, $7::hon.plan_tier, $8, $9, $10::uuid, $11::uuid)`,
+      [
+        command.externalSubject,
+        command.legalName,
+        command.displayName,
+        command.schoolName,
+        command.schoolSlug,
+        command.timezone,
+        command.initialTier,
+        command.idempotencyKey,
+        command.requestFingerprint,
+        command.requestId,
+        command.correlationId,
+      ],
+    );
+    const provisioned = result.rows[0];
+    if (!provisioned) throw new Error('HON HQ tenant provisioning did not return a result.');
+    return provisioned;
+  }
+
+  async withTenantTransaction<T>(
+    context: TenantTransactionContext,
+    work: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      return await withTenantTransaction(client, context, work);
+    } finally {
+      client.release();
+    }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.pool?.end();
+  }
+}

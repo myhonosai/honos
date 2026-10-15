@@ -1,0 +1,29 @@
+import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+
+export class CreatePersonDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  givenName!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  familyName!: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(320)
+  email?: string;
+
+  @IsOptional()
+  @Matches(/^\+[1-9]\d{1,14}$/)
+  phoneE164?: string;
+}
+
+export class ListPeopleDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  query?: string;
+}

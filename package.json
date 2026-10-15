@@ -1,0 +1,20 @@
+{
+  "name": "hon-platform",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.18.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @hon/web dev",
+    "dev:api": "pnpm --filter @hon/api start:dev",
+    "build": "pnpm -r --if-present build",
+    "check": "pnpm -r --if-present check",
+    "test": "pnpm -r --if-present test",
+    "db:migrate": "pnpm --filter @hon/database db:migrate",
+    "db:verify-rls": "pnpm --filter @hon/database db:verify-rls",
+    "db:test-security": "pnpm --filter @hon/database db:test-security",
+    "db:check": "pnpm --filter @hon/database check:migrations"
+  }
+}

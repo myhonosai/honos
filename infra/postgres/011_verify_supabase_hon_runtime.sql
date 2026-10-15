@@ -1,0 +1,66 @@
+-- HON / Supabase development runtime-role verification
+-- Run this AFTER 010_supabase_hon_runtime.sql in the Supabase SQL Editor.
+
+-- 1) Role posture: every boolean must be false except rolcanlogin.
+SELECT
+  rolname,
+  rolcanlogin,
+  rolsuper,
+  rolinherit,
+  rolcreaterole,
+  rolcreatedb,
+  rolreplication,
+  rolbypassrls
+FROM pg_roles
+WHERE rolname = 'hon_runtime';
+
+-- 2) No explicit privileged role memberships: this should return zero rows.
+SELECT parent.rolname AS inherited_role
+FROM pg_auth_members membership
+JOIN pg_roles parent ON parent.oid = membership.roleid
+JOIN pg_roles member ON member.oid = membership.member
+WHERE member.rolname = 'hon_runtime';
+
+-- 3) Required grants only. can_connect and can_use_hon_schema must be true;
+-- can_create_in_hon_schema must be false.
+SELECT
+  has_database_privilege('hon_runtime', current_database(), 'CONNECT') AS can_connect,
+  has_schema_privilege('hon_runtime', 'hon', 'USAGE') AS can_use_hon_schema,
+  has_schema_privilege('hon_runtime', 'hon', 'CREATE') AS can_create_in_hon_schema;
+
+SELECT has_function_privilege(
+  'hon_runtime',
+  'hon.resolve_authorized_scope(text, uuid, text)',
+  'EXECUTE'
+) AS can_resolve_authorized_scope;
+
+SELECT has_function_privilege(
+  'hon_runtime',
+  'hon.resolve_hq_operator_scope(text, text)',
+  'EXECUTE'
+) AS can_resolve_hq_operator_scope;
+
+-- 4) RLS is enabled and forced on every operational table.
+SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'hon'
+  AND c.relkind = 'r'
+ORDER BY c.relname;
+
+-- 5) Confirm the runtime role starts with no tenant context and sees no people
+-- through RLS without a transaction-bound scope. Roll back so SQL Editor role
+-- state is not retained.
+BEGIN;
+SET LOCAL ROLE hon_runtime;
+SELECT current_user, session_user, hon.current_organization_id(), hon.current_school_id();
+SELECT count(*) AS rows_visible_without_tenant_context FROM hon.people;
+ROLLBACK;
+
+-- 6) Full isolation proof runs from the actual Session Pooler runtime URL after
+-- it is saved as HON_RUNTIME_DATABASE_URL:
+-- pnpm db:test-security
+-- The HON test creates two temporary school scopes inside a rolled-back
+-- transaction, proves the second school's person is invisible to the first,
+-- proves a composite tenant FK rejects a cross-school relation, and confirms
+-- transaction-local context clears after completion.

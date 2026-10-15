@@ -1,0 +1,7 @@
+-- Use 010_supabase_hon_runtime.sql for the HON Supabase development database.
+-- This file is intentionally a pointer only, not executable SQL.
+--
+-- The Supabase-specific script includes role creation, least-privilege grants,
+-- Session Pooler compatibility, and a companion verification file.
+--
+-- See: docs/architecture/SUPABASE_RUNTIME_ROLE_SETUP.md

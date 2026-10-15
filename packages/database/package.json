@@ -1,0 +1,25 @@
+{
+  "name": "@hon/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:verify-rls": "node scripts/verify-rls.mjs",
+    "db:test-security": "node scripts/test-security-boundaries.mjs",
+    "bootstrap:hq-owner": "node scripts/bootstrap-hq-owner.mjs",
+    "check:migrations": "node scripts/verify-migrations.mjs"
+  },
+  "dependencies": {
+    "@hon/contracts": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.3"
+  }
+}
