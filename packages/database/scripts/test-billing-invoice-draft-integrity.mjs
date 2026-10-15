@@ -109,8 +109,8 @@ try {
       has_table_privilege(current_user, 'hon.invoices', 'UPDATE') AS can_update,
       has_table_privilege(current_user, 'hon.invoices', 'DELETE') AS can_delete
   `)).rows[0];
-  assert(grants?.can_select && grants?.can_insert && !grants?.can_update && !grants?.can_delete,
-    'hon_runtime invoice grants are not exact SELECT/INSERT with no UPDATE/DELETE.');
+  assert(grants?.can_select && grants?.can_insert && grants?.can_update && !grants?.can_delete,
+    'hon_runtime invoice grants are not exact SELECT/INSERT/UPDATE with no DELETE.');
 
   await administrator.query('BEGIN');
   try {

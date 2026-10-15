@@ -12,6 +12,8 @@ import {
   type CommandContext,
   type CreateInvoiceDraftInput,
   type InvoiceDraftSummary,
+  type InvoiceIssuedSummary,
+  type IssueInvoiceInput,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -20,6 +22,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const TIMEZONE_QUALIFIED_ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const CURRENCIES = new Set<string>(ISO_4217_CURRENCIES);
 const INPUT_KEYS = new Set(['billingAccountId', 'membershipId', 'dueAt', 'currency', 'subtotalMinor']);
+const ISSUE_INPUT_KEYS = new Set(['expectedVersion']);
 
 type IdempotencyRecord = {
   request_fingerprint: string;
@@ -41,6 +44,26 @@ type InvoiceRow = {
   createdAt: Date | string;
 };
 
+type InvoiceIssuanceRow = {
+  id: string;
+  billingAccountId: string;
+  membershipId: string | null;
+  status: string;
+  currency: string;
+  subtotalMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  dueAt: Date | string | null;
+  version: number;
+  createdAt: Date | string;
+};
+
+type IssueIdempotencyRecord = {
+  request_fingerprint: string;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  response_body: InvoiceIssuedSummary | null;
+};
+
 function timestamp(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -56,6 +79,25 @@ function summarize(row: InvoiceRow): InvoiceDraftSummary {
     discountMinor: 0,
     totalMinor: row.totalMinor,
     dueAt: timestamp(row.dueAt),
+    version: row.version,
+    createdAt: timestamp(row.createdAt),
+  };
+}
+
+function summarizeIssued(row: InvoiceIssuanceRow): InvoiceIssuedSummary {
+  if (row.status !== 'ISSUED') {
+    throw new Error('HON invoice issuance query returned an invalid invoice status.');
+  }
+  return {
+    id: row.id,
+    billingAccountId: row.billingAccountId,
+    membershipId: row.membershipId ?? undefined,
+    status: 'ISSUED',
+    currency: row.currency,
+    subtotalMinor: row.subtotalMinor,
+    discountMinor: row.discountMinor,
+    totalMinor: row.totalMinor,
+    dueAt: row.dueAt === null ? undefined : timestamp(row.dueAt),
     version: row.version,
     createdAt: timestamp(row.createdAt),
   };
@@ -243,6 +285,205 @@ export class InvoiceService {
     });
   }
 
+  /**
+   * Issues an already-created DRAFT. This intentionally records no provider,
+   * payment attempt, delivery, membership, credit, discount, refund, waiver,
+   * extension, or Action Engine side effect.
+   */
+  async issue(
+    context: CommandContext,
+    invoiceId: string,
+    input: IssueInvoiceInput,
+  ): Promise<{ invoice: InvoiceIssuedSummary; replayed: boolean }> {
+    this.assertHumanInvoiceIssueContext(context);
+    if (!UUID.test(invoiceId)) {
+      throw new BadRequestException({ code: 'VALIDATION_FAILED', detail: 'invoiceId must be a UUID.' });
+    }
+    this.assertIssueInput(input);
+    const requestFingerprint = createHash('sha256')
+      .update(JSON.stringify({
+        operation: 'billing.invoice.issue',
+        invoiceId,
+        expectedVersion: input.expectedVersion,
+      }))
+      .digest('hex');
+
+    return this.database.withTenantTransaction(context, async (client) => {
+      // This lookup is deliberately only ID-constrained: transaction-local RLS
+      // hides a record outside the permission-derived organization and school.
+      const currentResult = await client.query<InvoiceIssuanceRow>(
+        `SELECT
+           id,
+           billing_account_id AS "billingAccountId",
+           membership_id AS "membershipId",
+           status::text AS status,
+           currency,
+           subtotal_minor AS "subtotalMinor",
+           discount_minor AS "discountMinor",
+           total_minor AS "totalMinor",
+           due_at AS "dueAt",
+           version,
+           created_at AS "createdAt"
+         FROM hon.invoices
+         WHERE id = $1::uuid
+         FOR UPDATE`,
+        [invoiceId],
+      );
+      const current = currentResult.rows[0];
+      if (!current) {
+        throw new NotFoundException({
+          code: 'INVOICE_NOT_FOUND',
+          detail: 'The invoice is not available in this school.',
+        });
+      }
+
+      const reservation = await client.query<{ id: string }>(
+        `INSERT INTO hon.idempotency_records (
+           organization_id, school_id, principal_id, idempotency_key, request_fingerprint, status, expires_at
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, 'IN_PROGRESS', now() + interval '24 hours')
+         ON CONFLICT (organization_id, school_id, principal_id, idempotency_key) DO NOTHING
+         RETURNING id`,
+        [
+          context.organizationId,
+          context.schoolId,
+          context.principalId,
+          context.idempotencyKey,
+          requestFingerprint,
+        ],
+      );
+      if (!reservation.rowCount) {
+        const existing = await client.query<IssueIdempotencyRecord>(
+          `SELECT request_fingerprint, status, response_body
+           FROM hon.idempotency_records
+           WHERE organization_id = $1::uuid
+             AND school_id = $2::uuid
+             AND principal_id = $3::uuid
+             AND idempotency_key = $4
+           FOR UPDATE`,
+          [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey],
+        );
+        const record = existing.rows[0];
+        if (!record) throw new Error('HON invoice issuance idempotency record unexpectedly missing.');
+        if (record.request_fingerprint !== requestFingerprint) {
+          throw new ConflictException({
+            code: 'IDEMPOTENCY_KEY_REUSED',
+            detail: 'The idempotency key was already used for a different invoice issue command.',
+          });
+        }
+        if (record.status === 'COMPLETED' && record.response_body) {
+          return { invoice: record.response_body, replayed: true };
+        }
+        throw new ConflictException({
+          code: 'IDEMPOTENCY_IN_PROGRESS',
+          detail: 'The matching invoice issue command is being processed.',
+        });
+      }
+
+      if (current.status !== 'DRAFT') {
+        throw new ConflictException({
+          code: 'INVOICE_NOT_DRAFT',
+          detail: 'Only a DRAFT invoice can be issued.',
+        });
+      }
+      if (current.version !== input.expectedVersion) {
+        throw new ConflictException({
+          code: 'VERSION_CONFLICT',
+          detail: 'The invoice has changed. Refresh it and retry with its current version and a new Idempotency-Key.',
+        });
+      }
+
+      const updatedResult = await client.query<InvoiceIssuanceRow>(
+        `UPDATE hon.invoices
+         SET status = 'ISSUED'::hon.invoice_status,
+             version = version + 1
+         WHERE id = $1::uuid
+           AND status = 'DRAFT'::hon.invoice_status
+           AND version = $2::integer
+         RETURNING
+           id,
+           billing_account_id AS "billingAccountId",
+           membership_id AS "membershipId",
+           status::text AS status,
+           currency,
+           subtotal_minor AS "subtotalMinor",
+           discount_minor AS "discountMinor",
+           total_minor AS "totalMinor",
+           due_at AS "dueAt",
+           version,
+           created_at AS "createdAt"`,
+        [invoiceId, input.expectedVersion],
+      );
+      const updated = updatedResult.rows[0];
+      if (!updated) {
+        throw new ConflictException({
+          code: 'VERSION_CONFLICT',
+          detail: 'The invoice changed before it could be issued.',
+        });
+      }
+      const invoice = summarizeIssued(updated);
+      const priorState = { status: current.status, version: current.version };
+      const payload = { invoiceId: invoice.id, status: invoice.status, version: invoice.version };
+
+      await client.query(
+        `INSERT INTO hon.audit_events (
+           organization_id, school_id, actor_principal_id, source, action_code,
+           entity_type, entity_id, prior_state, next_state, result,
+           request_id, correlation_id, action_request_id, occurred_at
+         ) VALUES (
+           $1::uuid, $2::uuid, $3::uuid, 'HUMAN_UI', 'billing.invoice.issue',
+           'INVOICE', $4::uuid, $5::jsonb, $6::jsonb, 'SUCCEEDED',
+           $7::uuid, $8::uuid, NULL, now()
+         )`,
+        [
+          context.organizationId,
+          context.schoolId,
+          context.principalId,
+          invoice.id,
+          JSON.stringify(priorState),
+          JSON.stringify(payload),
+          context.requestId,
+          context.correlationId,
+        ],
+      );
+      await client.query(
+        `INSERT INTO hon.outbox_events (
+           id, organization_id, school_id, event_type, schema_version,
+           aggregate_type, aggregate_id, aggregate_version, correlation_id,
+           causation_id, payload
+         ) VALUES (
+           $1::uuid, $2::uuid, $3::uuid, 'billing.invoice.issued', 1,
+           'INVOICE', $4::uuid, $5::integer, $6::uuid, $7::uuid, $8::jsonb
+         )`,
+        [
+          randomUUID(),
+          context.organizationId,
+          context.schoolId,
+          invoice.id,
+          invoice.version,
+          context.correlationId,
+          context.requestId,
+          JSON.stringify(payload),
+        ],
+      );
+      await client.query(
+        `UPDATE hon.idempotency_records
+         SET status = 'COMPLETED', response_status = 200, response_body = $5::jsonb
+         WHERE organization_id = $1::uuid
+           AND school_id = $2::uuid
+           AND principal_id = $3::uuid
+           AND idempotency_key = $4`,
+        [
+          context.organizationId,
+          context.schoolId,
+          context.principalId,
+          context.idempotencyKey,
+          JSON.stringify(invoice),
+        ],
+      );
+      return { invoice, replayed: false };
+    });
+  }
+
   private assertHumanInvoiceDraftContext(context: CommandContext): void {
     if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
       throw new ForbiddenException({
@@ -258,6 +499,31 @@ export class InvoiceService {
       throw new ConflictException({
         code: 'IDEMPOTENCY_KEY_REQUIRED',
         detail: 'A bounded Idempotency-Key is required for invoice draft creation.',
+      });
+    }
+  }
+
+  private assertHumanInvoiceIssueContext(context: CommandContext): void {
+    if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
+      throw new ForbiddenException({
+        code: 'HUMAN_COMMAND_REQUIRED',
+        detail: 'Invoice issuance accepts only HUMAN_USER commands from HUMAN_UI.',
+      });
+    }
+    if (context.actionRequestId || context.delegatedByPrincipalId) {
+      throw new ForbiddenException({
+        code: 'HUMAN_COMMAND_REQUIRED',
+        detail: 'Invoice issuance cannot be delegated or executed through the Action Engine.',
+      });
+    }
+    if (
+      !context.idempotencyKey
+      || context.idempotencyKey !== context.idempotencyKey.trim()
+      || context.idempotencyKey.length > 200
+    ) {
+      throw new ConflictException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        detail: 'A bounded Idempotency-Key is required for invoice issuance.',
       });
     }
   }
@@ -302,6 +568,23 @@ export class InvoiceService {
       throw new BadRequestException({
         code: 'VALIDATION_FAILED',
         detail: 'subtotalMinor must be a non-negative signed 32-bit integer.',
+      });
+    }
+  }
+
+  private assertIssueInput(input: IssueInvoiceInput): void {
+    for (const key of Object.keys(input as unknown as Record<string, unknown>)) {
+      if (!ISSUE_INPUT_KEYS.has(key)) {
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          detail: `Unsupported invoice issue field: ${key}.`,
+        });
+      }
+    }
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        detail: 'expectedVersion must be a positive whole number.',
       });
     }
   }

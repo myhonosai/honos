@@ -116,10 +116,10 @@ try {
       has_table_privilege(current_user, 'hon.payment_attempts', 'DELETE') AS payments_can_delete
   `)).rows[0];
   assert(billingGrants?.invoices_can_select && billingGrants?.invoices_can_insert
-    && !billingGrants?.invoices_can_update && !billingGrants?.invoices_can_delete
+    && billingGrants?.invoices_can_update && !billingGrants?.invoices_can_delete
     && billingGrants?.payments_can_select && !billingGrants?.payments_can_insert
     && !billingGrants?.payments_can_update && !billingGrants?.payments_can_delete,
-  'hon_runtime billing grants are not exact invoice SELECT/INSERT and payment SELECT-only minima.');
+  'hon_runtime billing grants are not exact invoice SELECT/INSERT/UPDATE and payment SELECT-only minima.');
 
   const defaultRange = normalizeOperationsReportRange({});
   assert(new Date(defaultRange.to).getTime() - new Date(defaultRange.from).getTime() === 30 * 24 * 60 * 60 * 1000,
@@ -269,7 +269,7 @@ try {
          id, organization_id, school_id, billing_account_id, membership_id, status, currency,
          subtotal_minor, discount_minor, total_minor, created_at
        ) VALUES
-       ($1, $2, $3, $4, $5, 'OPEN', 'USD', 100, 0, 100, $6),
+       ($1, $2, $3, $4, $5, 'ISSUED', 'USD', 100, 0, 100, $6),
        ($7, $2, $3, $4, $8, 'PAID', 'USD', 100, 0, 100, $6),
        ($9, $2, $3, $4, $5, 'VOID', 'USD', 100, 0, 100, $10),
        ($11, $2, $12, $13, $14, 'UNCOLLECTIBLE', 'USD', 100, 0, 100, $6)`,
@@ -328,7 +328,7 @@ try {
   assert(snapshot.memberships.byState.ACTIVE === 1 && snapshot.memberships.byState.FROZEN === 1
     && snapshot.memberships.byState.CANCELLED === 0,
   'Operations report membership current-state counts are incorrect or cross-school data leaked.');
-  assert(snapshot.invoices.inRangeByStatus.OPEN === 1 && snapshot.invoices.inRangeByStatus.PAID === 1
+  assert(snapshot.invoices.inRangeByStatus.ISSUED === 1 && snapshot.invoices.inRangeByStatus.PAID === 1
     && snapshot.invoices.inRangeByStatus.VOID === 0 && snapshot.invoices.inRangeByStatus.UNCOLLECTIBLE === 0,
   'Operations report invoice state counts were not range-bounded and school-scoped.');
   assert(snapshot.paymentAttempts.inRangeByState.PENDING === 1 && snapshot.paymentAttempts.inRangeByState.SUCCEEDED === 1

@@ -139,8 +139,9 @@ GRANT INSERT ON TABLE
  hon.crm_pipeline_stages,
  hon.crm_leads,
  hon.crm_appointments,
- -- Human invoice drafts are create-only; issue/payment transitions remain unavailable.
- hon.invoices,
+  -- Human invoice drafting plus the narrow DRAFT-to-ISSUED transition; payment
+  -- execution and every other billing mutation remain unavailable.
+  hon.invoices,
  hon.billing_accounts,
  hon.memberships,
   hon.membership_payment_schedules,
@@ -174,6 +175,8 @@ GRANT UPDATE ON TABLE
  hon.action_requests,
  hon.idempotency_records,
  hon.principal_interface_preferences,
+  -- Human invoice issuance is the only reviewed invoice state transition.
+  hon.invoices,
  -- The conventional trial outcome command is a version-checked lifecycle update.
  hon.crm_appointments,
  -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.

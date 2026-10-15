@@ -46,7 +46,7 @@ interface OperationalSnapshotRow {
   membershipsCancelled: CountValue;
   membershipsExpired: CountValue;
   invoicesDraft: CountValue;
-  invoicesOpen: CountValue;
+  invoicesIssued: CountValue;
   invoicesPaid: CountValue;
   invoicesVoid: CountValue;
   invoicesUncollectible: CountValue;
@@ -203,7 +203,7 @@ export class OperationsReportService {
            (SELECT COUNT(*) FILTER (WHERE state = 'CANCELLED') FROM scoped_memberships) AS "membershipsCancelled",
            (SELECT COUNT(*) FILTER (WHERE state = 'EXPIRED') FROM scoped_memberships) AS "membershipsExpired",
            (SELECT COUNT(*) FILTER (WHERE status = 'DRAFT') FROM ranged_invoices) AS "invoicesDraft",
-           (SELECT COUNT(*) FILTER (WHERE status = 'OPEN') FROM ranged_invoices) AS "invoicesOpen",
+           (SELECT COUNT(*) FILTER (WHERE status = 'ISSUED') FROM ranged_invoices) AS "invoicesIssued",
            (SELECT COUNT(*) FILTER (WHERE status = 'PAID') FROM ranged_invoices) AS "invoicesPaid",
            (SELECT COUNT(*) FILTER (WHERE status = 'VOID') FROM ranged_invoices) AS "invoicesVoid",
            (SELECT COUNT(*) FILTER (WHERE status = 'UNCOLLECTIBLE') FROM ranged_invoices) AS "invoicesUncollectible",
@@ -265,7 +265,7 @@ export class OperationsReportService {
         invoices: {
           inRangeByStatus: {
             DRAFT: asSafeNonNegativeInteger(row.invoicesDraft, 'invoicesDraft'),
-            OPEN: asSafeNonNegativeInteger(row.invoicesOpen, 'invoicesOpen'),
+            ISSUED: asSafeNonNegativeInteger(row.invoicesIssued, 'invoicesIssued'),
             PAID: asSafeNonNegativeInteger(row.invoicesPaid, 'invoicesPaid'),
             VOID: asSafeNonNegativeInteger(row.invoicesVoid, 'invoicesVoid'),
             UNCOLLECTIBLE: asSafeNonNegativeInteger(row.invoicesUncollectible, 'invoicesUncollectible'),

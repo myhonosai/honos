@@ -75,9 +75,9 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'UPDATE') AS can_update_ai_usage_ledger,
   has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'DELETE') AS can_delete_ai_usage_ledger;
 
--- Human invoice drafting needs only invoice SELECT/INSERT. Reporting reads
--- invoice/payment-attempt state; invoice issue, provider, and payment mutations
--- remain unavailable to the runtime role.
+-- Human invoice drafting and the sole DRAFT-to-ISSUED transition require
+-- SELECT/INSERT/UPDATE. DELETE and all payment/provider mutations remain
+-- unavailable to the runtime role.
 SELECT
   has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS can_read_invoices,
   has_table_privilege('hon_runtime', 'hon.invoices', 'INSERT') AS can_insert_invoices,

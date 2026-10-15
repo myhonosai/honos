@@ -310,6 +310,26 @@ export interface InvoiceDraftSummary {
   createdAt: string;
 }
 
+/** Issuance is a human-only optimistic-concurrency transition from DRAFT. */
+export interface IssueInvoiceInput {
+  expectedVersion: number;
+}
+
+/** The issue command returns only the schema-supported ISSUED invoice state. */
+export interface InvoiceIssuedSummary {
+  id: string;
+  billingAccountId: string;
+  membershipId?: string | undefined;
+  status: 'ISSUED';
+  currency: string;
+  subtotalMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  dueAt?: string | undefined;
+  version: number;
+  createdAt: string;
+}
+
 export interface CreateCurriculumInput {
   name: string;
   description?: string;

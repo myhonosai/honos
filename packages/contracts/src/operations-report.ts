@@ -16,7 +16,7 @@ export const MEMBERSHIP_STATES = [
 export type MembershipState = (typeof MEMBERSHIP_STATES)[number];
 
 /** Current invoice state for invoices created during the requested range. */
-export const INVOICE_STATUSES = ['DRAFT', 'OPEN', 'PAID', 'VOID', 'UNCOLLECTIBLE'] as const;
+export const INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'PAID', 'VOID', 'UNCOLLECTIBLE'] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 /** Current processor-attempt state for attempts initiated during the requested range. */
