@@ -1,3 +1,4 @@
+export * from './revenue-planning.js';
 export * from './search.js';
 export * from './staff-roles.js';
 export * from './ai-invocation-plan.js';

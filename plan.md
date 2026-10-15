@@ -1,3 +1,10 @@
+## Deterministic school revenue planning (after `7059785`)
+Implement a human-only `/staff/planning/revenue` slice on every active Essential/Core/Complete school with exact `planning.revenue.manage`. Fixed scoped boundaries expose aggregates, never contact, invoice, payer, payment/provider or private-note rows. Immutable revisions, saved evidence snapshots, algorithm version and idempotent receipts make assumptions/arithmetic reproducible; live reads do not rewrite saved revisions.
+
+Schema inspection: recurring amounts exist only in membership payment schedules. Only current ACTIVE memberships with exactly one ACTIVE auto-renewing MONTHLY schedule in the plan/account currency are eligible. Count exclusions; never interpret invoice/payment state as MRR. CRM TRIAL appointments have lead lineage, but memberships have no lead/trial lineage: WON is not membership conversion. Distinct bounded half-open lead cohorts yield booking/completed-trial rates only with >=20 samples and no unresolved/repeated trial ambiguity. New-member price uses an exact eligible average only with >=5 samples. Missing membership/activity signals require explicit bounded human assumptions. No AI/provider calls, advice/guarantees, execution, spending, publishing or CRM/billing/communication mutations.
+
+Use fixed trusted SECURITY DEFINER read/save boundaries, deny-all forced RLS on private tables, live locked IAM/entitlement revalidation before replay, exact versions and atomic redacted audit/inert outbox. Closed inputs, rational integer arithmetic, explicit zero-rate/insufficient/bounded-output states, single currency and timezone-qualified half-open windows. Reuse clean staff styling for scope selectors, form, saved plan list, source/sample evidence, assumptions/full funnel and retained same-origin retry keys. Add exact runtime provisioning/verifier function allowlists with no new table/directory grants. Validate only disposable-local databases, never the configured remote Supabase dataset.
+
 # HON Implementation Plan
 
 ## Authority and scope

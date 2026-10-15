@@ -2,6 +2,14 @@ import pg from 'pg';
 
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS verification.');
+const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username : 'hon_runtime';
+if (!['hon_runtime','hon_revenue_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (runtimeRoleName === 'hon_revenue_runtime') {
+  for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
+    const url = new URL(process.env[key]);
+    if (url.hostname !== 'localhost' || url.pathname !== '/hon_revenue_validation') throw new Error('Local revenue verifier requires the guarded disposable localhost database.');
+  }
+}
 
 const expectedRlsTables = [
   'action_approvals',
@@ -67,6 +75,9 @@ const expectedRlsTables = [
   'principal_interface_preferences',
   'principal_role_grants',
   'programs',
+  'revenue_plans',
+  'revenue_plan_versions',
+  'revenue_plan_requests',
   'roles',
   'role_permissions',
   'schools',
@@ -107,6 +118,12 @@ const client = new Client({
 });
 await client.connect();
 try {
+  const posture = (await client.query(`SELECT rolcanlogin,rolsuper,rolbypassrls,rolinherit,rolcreatedb,rolcreaterole,rolreplication,
+    EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid) memberships,
+    has_schema_privilege(r.rolname,'hon','CREATE') schema_create,
+    has_schema_privilege(r.rolname,'hon','USAGE') schema_usage
+    FROM pg_roles r WHERE r.rolname=$1`, [runtimeRoleName])).rows[0];
+  if (!posture?.rolcanlogin || !posture.schema_usage || Object.entries(posture).some(([k,v]) => !['rolcanlogin','schema_usage'].includes(k) && v)) throw new Error('Runtime verification requires a restricted login with no elevated posture, role memberships or schema CREATE.');
   const rows = (await client.query(`
     SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
     FROM pg_class c
@@ -174,10 +191,10 @@ try {
     SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='hon' AND c.relname=ANY($1::text[]) AND (
       EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
-        WHERE a.grantee NOT IN(c.relowner,coalesce((SELECT oid FROM pg_roles WHERE rolname='hon_runtime'),c.relowner)))
+        WHERE a.grantee NOT IN(c.relowner,coalesce((SELECT oid FROM pg_roles WHERE rolname='${runtimeRoleName}'),c.relowner)))
       OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a
         WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped
-        AND a.grantee NOT IN(c.relowner,coalesce((SELECT oid FROM pg_roles WHERE rolname='hon_runtime'),c.relowner))))
+        AND a.grantee NOT IN(c.relowner,coalesce((SELECT oid FROM pg_roles WHERE rolname='${runtimeRoleName}'),c.relowner))))
   `, [[...curriculumRestrictedTables, 'student_curriculum_enrollments']])).rows;
   if (broadCurriculumAcls.length) throw new Error(`Forbidden PUBLIC/client curriculum table/column ACLs: ${broadCurriculumAcls.map(r => r.relname).join(', ')}`);
   for (const {rolname} of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
@@ -190,8 +207,40 @@ try {
     if ((await client.query("SELECT has_table_privilege($1,'hon.student_curriculum_enrollments','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,'hon.student_curriculum_enrollments','INSERT,UPDATE,REFERENCES') allowed", [rolname])).rows[0].allowed) throw new Error(`Forbidden client enrollment mutation: ${rolname}`);
     for (const [signature] of curriculumFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname, signature])).rows[0].allowed) throw new Error(`Forbidden client curriculum/authorization function: ${rolname}.${signature}`);
   }
+  const revenueTables = ['revenue_plans','revenue_plan_versions','revenue_plan_requests'];
+  const revenueFunctions = [
+    ['hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid)',true,true],
+    ['hon.read_revenue_plan(text,text,uuid,integer)',true,true],
+    ['hon.validate_revenue_plan_input(jsonb)',false,false],
+    ['hon.guard_revenue_plan()',false,false],
+    ['hon.guard_revenue_plan_history()',false,false],
+    ['hon.require_revenue_planning_actor(text)',false,true],
+    ['hon.lock_revenue_planning_actor(text)',false,true],
+    ['hon.revenue_plan_snapshot(uuid)',false,true],
+  ];
+  if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])", [revenueTables])).rows[0].n !== '0') throw new Error('Revenue tables require deny-all forced RLS with no policies.');
+  // Every table AND column ACL must be owner-only, not just denied to PUBLIC.
+  const revenueAcls = (await client.query(`SELECT c.relname,r.rolsuper OR r.rolbypassrls trusted_owner,
+    EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a
+        WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) broad_acl
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner
+    WHERE n.nspname='hon' AND c.relname=ANY($1::text[])`, [revenueTables])).rows;
+  if (revenueAcls.length !== 3 || revenueAcls.some(r => !r.trusted_owner || r.broad_acl)) throw new Error('Revenue table/column ACLs must be trusted-owner-only.');
+  for (const [signature, execute, definer] of revenueFunctions) {
+    const b = (await client.query(`SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls trusted_owner,
+      has_function_privilege($2,p.oid,'EXECUTE') runtime_execute,
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname=$2) OR NOT $3::boolean OR a.privilege_type<>'EXECUTE' OR a.is_grantable)) broad_acl
+      FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature,runtimeRoleName,execute])).rows[0];
+    if (!b?.trusted_owner || b.runtime_execute !== execute || b.prosecdef !== definer || b.provolatile !== 'v' || b.broad_acl || b.proconfig?.length !== 1 || b.proconfig[0] !== 'search_path=pg_catalog, hon') throw new Error(`Unsafe revenue function ACL/owner/path: ${signature}`);
+  }
+  for (const {rolname} of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
+    for (const table of revenueTables) if ((await client.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,$2,'SELECT,INSERT,UPDATE,REFERENCES') allowed", [rolname,`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden client revenue access: ${rolname}.${table}`);
+    for (const [signature] of revenueFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client revenue function: ${rolname}.${signature}`);
+  }
   const runtimeRole = (await client.query(`SELECT EXISTS (
-    SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
+    SELECT 1 FROM pg_roles WHERE rolname = '${runtimeRoleName}'
   ) AS exists`)).rows[0];
   const hqAiTables = expectedRlsTables.filter((table) => table.startsWith('hq_ai_'));
   const hqAiPolicies = (await client.query(`
@@ -201,34 +250,34 @@ try {
   if (hqAiPolicies.length) throw new Error('HQ AI configuration must retain forced deny-all RLS without tenant/GUC policies.');
   if (runtimeRole?.exists) {
     for (const table of curriculumRestrictedTables) {
-      const access = (await client.query("SELECT has_table_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,REFERENCES') allowed", [`hon.${table}`])).rows[0];
+      const access = (await client.query(`SELECT has_table_privilege('${runtimeRoleName}',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('${runtimeRoleName}',$1,'SELECT,INSERT,UPDATE,REFERENCES') allowed`, [`hon.${table}`])).rows[0];
       if (access.allowed) throw new Error(`Forbidden direct runtime curriculum access: ${table}`);
     }
     for (const [table, allowedUpdates] of [
       ['student_curriculum_enrollments', ['current_rank_id', 'version', 'updated_at']],
       ['testing_candidates', ['result', 'instructor_notes', 'version', 'updated_at']],
     ]) {
-      if ((await client.query("SELECT has_table_privilege('hon_runtime',$1,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime',$1,'REFERENCES') allowed", [`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden broad testing/enrollment mutation: ${table}`);
-      const columns = (await client.query(`SELECT attname,has_column_privilege('hon_runtime',attrelid,attnum,'UPDATE') allowed
+      if ((await client.query(`SELECT has_table_privilege('${runtimeRoleName}',$1,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('${runtimeRoleName}',$1,'REFERENCES') allowed`, [`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden broad testing/enrollment mutation: ${table}`);
+      const columns = (await client.query(`SELECT attname,has_column_privilege('${runtimeRoleName}',attrelid,attnum,'UPDATE') allowed
         FROM pg_attribute WHERE attrelid=$1::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum`, [`hon.${table}`])).rows;
       if (!columns.length || columns.some(c => c.allowed !== allowedUpdates.includes(c.attname)) || allowedUpdates.some(c => !columns.some(row => row.attname === c))) throw new Error(`Incorrect exact curriculum/testing UPDATE column grants: ${table}`);
     }
-    const enrollmentAccess = (await client.query("SELECT has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','SELECT') read,has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT') OR has_any_column_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT') insert_allowed")).rows[0];
+    const enrollmentAccess = (await client.query(`SELECT has_table_privilege('${runtimeRoleName}','hon.student_curriculum_enrollments','SELECT') read,has_table_privilege('${runtimeRoleName}','hon.student_curriculum_enrollments','INSERT') OR has_any_column_privilege('${runtimeRoleName}','hon.student_curriculum_enrollments','INSERT') insert_allowed`)).rows[0];
     if (!enrollmentAccess.read || enrollmentAccess.insert_allowed) throw new Error('Enrollment runtime requires SELECT, exact evidenced UPDATE columns, no INSERT.');
     for (const [signature, shouldExecute, shouldDefine] of curriculumFunctions) {
       const boundary = (await client.query(`SELECT p.prosecdef,p.proconfig,r.rolsuper OR r.rolbypassrls trusted_owner,
-        has_function_privilege('hon_runtime',p.oid,'EXECUTE') execute,
+        has_function_privilege('${runtimeRoleName}',p.oid,'EXECUTE') execute,
         EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
-          WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) broad_acl
+          WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='${runtimeRoleName}'))) broad_acl
         FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature])).rows[0];
       if (!boundary?.trusted_owner || boundary.prosecdef !== shouldDefine || boundary.execute !== shouldExecute || boundary.broad_acl
         || boundary.proconfig?.length !== 1 || boundary.proconfig[0] !== 'search_path=pg_catalog, hon') throw new Error(`Unsafe curriculum/testing authorization or private-helper boundary: ${signature}`);
     }
     const summaryBoundary = (await client.query(`
       SELECT p.prosecdef, p.provolatile, p.proconfig, r.rolsuper, r.rolbypassrls,
-        has_function_privilege('hon_runtime', p.oid, 'EXECUTE') AS execute,
+        has_function_privilege('${runtimeRoleName}', p.oid, 'EXECUTE') AS execute,
         EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl
-          WHERE acl.grantee NOT IN (p.proowner, (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime'))) AS broad_acl
+          WHERE acl.grantee NOT IN (p.proowner, (SELECT oid FROM pg_roles WHERE rolname = '${runtimeRoleName}'))) AS broad_acl
       FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
       WHERE p.oid = 'hon.read_organization_operations_summary(text,uuid,timestamptz,timestamptz)'::regprocedure
     `)).rows[0];
@@ -259,9 +308,9 @@ try {
       ['hon.guard_staff_custom_role_recipients()', false],
     ]) {
       const boundary = (await client.query(`SELECT p.prosecdef,p.proconfig,r.rolsuper,r.rolbypassrls,
-        has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS execute,
+        has_function_privilege('${runtimeRoleName}',p.oid,'EXECUTE') AS execute,
         EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
-          WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad_acl
+          WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='${runtimeRoleName}'))) AS broad_acl
         FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature])).rows[0];
       if (!boundary?.prosecdef || !(boundary.rolsuper || boundary.rolbypassrls) || boundary.execute !== shouldExecute || boundary.broad_acl
         || boundary.proconfig?.length !== 1 || boundary.proconfig[0] !== 'search_path=pg_catalog, hon') {
@@ -269,32 +318,32 @@ try {
       }
     }
     for (const table of ['users', 'principals', 'roles', 'permissions', 'role_permissions', 'principal_role_grants',
-      ...documentTables, ...importTables, 'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
-      if ((await client.query("SELECT has_table_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed", [`hon.${table}`])).rows[0].allowed) {
+      ...documentTables, ...importTables, ...revenueTables, 'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
+      if ((await client.query(`SELECT has_table_privilege('${runtimeRoleName}',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('${runtimeRoleName}',$1,'SELECT,INSERT,UPDATE,REFERENCES') AS allowed`, [`hon.${table}`])).rows[0].allowed) {
         throw new Error(`Forbidden runtime directory/control-plane/activity privilege: hon.${table}`);
       }
     }
     for (const table of hqAiTables) {
       const access = (await client.query(`
-        SELECT has_table_privilege('hon_runtime', $1, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed
+        SELECT has_table_privilege('${runtimeRoleName}', $1, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed
       `, [`hon.${table}`])).rows[0];
       if (access?.allowed) throw new Error(`hon_runtime has forbidden direct HQ AI privileges on ${table}.`);
     }
-    const planAccess = (await client.query("SELECT has_table_privilege('hon_runtime','hon.ai_invocation_plans','SELECT') AS read,has_table_privilege('hon_runtime','hon.ai_invocation_plans','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS mutate")).rows[0];
+    const planAccess = (await client.query(`SELECT has_table_privilege('${runtimeRoleName}','hon.ai_invocation_plans','SELECT') AS read,has_table_privilege('${runtimeRoleName}','hon.ai_invocation_plans','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS mutate`)).rows[0];
     if (!planAccess.read || planAccess.mutate) throw new Error('Invocation plans require exact SELECT-only runtime access.');
     for (const signature of ['hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)', 'hon.require_ai_invocation_plan_access()']) {
-      const f = (await client.query("SELECT p.prosecdef,p.proconfig,r.rolsuper,r.rolbypassrls,has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS execute FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure", [signature])).rows[0];
+      const f = (await client.query(`SELECT p.prosecdef,p.proconfig,r.rolsuper,r.rolbypassrls,has_function_privilege('${runtimeRoleName}',p.oid,'EXECUTE') AS execute FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature])).rows[0];
       if (!f?.execute || !f.prosecdef || !f.proconfig?.includes('search_path=pg_catalog, hon') || !(f.rolsuper || f.rolbypassrls)) throw new Error(`Unsafe planning boundary: ${signature}`);
     }
     for (const signature of ['hon.validate_ai_invocation_plan_input(jsonb)','hon.ai_invocation_plan_summary(uuid)','hon.reject_ai_invocation_plan_mutation()']) {
-      if ((await client.query("SELECT has_function_privilege('hon_runtime',$1,'EXECUTE') AS allowed", [signature])).rows[0].allowed) throw new Error(`Forbidden runtime planning helper: ${signature}`);
+      if ((await client.query(`SELECT has_function_privilege('${runtimeRoleName}',$1,'EXECUTE') AS allowed`, [signature])).rows[0].allowed) throw new Error(`Forbidden runtime planning helper: ${signature}`);
     }
     const runtimeLedgerPrivileges = (await client.query(`
       SELECT
-        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'SELECT') AS can_select,
-        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'INSERT') AS can_insert,
-        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'UPDATE') AS can_update,
-        has_table_privilege('hon_runtime', 'hon.ai_usage_ledger', 'DELETE') AS can_delete
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_usage_ledger', 'SELECT') AS can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_usage_ledger', 'INSERT') AS can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_usage_ledger', 'UPDATE') AS can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_usage_ledger', 'DELETE') AS can_delete
     `)).rows[0];
     if (!runtimeLedgerPrivileges?.can_select
       || runtimeLedgerPrivileges.can_insert
@@ -305,12 +354,12 @@ try {
 
     const runtimeCrmAppointmentPrivileges = (await client.query(`
       SELECT
-        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'SELECT') AS can_select,
-        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'INSERT') AS can_insert,
-        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'UPDATE') AS can_update,
-        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'DELETE') AS can_delete,
-        has_type_privilege('hon_runtime', 'hon.crm_appointment_type', 'USAGE') AS type_usage,
-        has_type_privilege('hon_runtime', 'hon.crm_appointment_status', 'USAGE') AS status_usage
+        has_table_privilege('${runtimeRoleName}', 'hon.crm_appointments', 'SELECT') AS can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.crm_appointments', 'INSERT') AS can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.crm_appointments', 'UPDATE') AS can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.crm_appointments', 'DELETE') AS can_delete,
+        has_type_privilege('${runtimeRoleName}', 'hon.crm_appointment_type', 'USAGE') AS type_usage,
+        has_type_privilege('${runtimeRoleName}', 'hon.crm_appointment_status', 'USAGE') AS status_usage
     `)).rows[0];
     if (!runtimeCrmAppointmentPrivileges?.can_select
       || !runtimeCrmAppointmentPrivileges.can_insert
@@ -323,13 +372,13 @@ try {
 
     const runtimeCommunicationConsentPrivileges = (await client.query(`
       SELECT
-        has_table_privilege('hon_runtime', 'hon.communication_consents', 'SELECT') AS can_select,
-        has_table_privilege('hon_runtime', 'hon.communication_consents', 'INSERT') AS can_insert,
-        has_table_privilege('hon_runtime', 'hon.communication_consents', 'UPDATE') AS can_update,
-        has_table_privilege('hon_runtime', 'hon.communication_consents', 'DELETE') AS can_delete,
-        has_type_privilege('hon_runtime', 'hon.communication_consent_channel', 'USAGE') AS channel_usage,
-        has_type_privilege('hon_runtime', 'hon.communication_consent_status', 'USAGE') AS status_usage,
-        has_type_privilege('hon_runtime', 'hon.communication_consent_source', 'USAGE') AS source_usage
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_consents', 'SELECT') AS can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_consents', 'INSERT') AS can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_consents', 'UPDATE') AS can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_consents', 'DELETE') AS can_delete,
+        has_type_privilege('${runtimeRoleName}', 'hon.communication_consent_channel', 'USAGE') AS channel_usage,
+        has_type_privilege('${runtimeRoleName}', 'hon.communication_consent_status', 'USAGE') AS status_usage,
+        has_type_privilege('${runtimeRoleName}', 'hon.communication_consent_source', 'USAGE') AS source_usage
     `)).rows[0];
     if (!runtimeCommunicationConsentPrivileges?.can_select
       || !runtimeCommunicationConsentPrivileges.can_insert
@@ -343,12 +392,12 @@ try {
 
     const runtimeCommunicationMessagePrivileges = (await client.query(`
       SELECT
-        has_table_privilege('hon_runtime', 'hon.communication_messages', 'SELECT') AS can_select,
-        has_table_privilege('hon_runtime', 'hon.communication_messages', 'INSERT') AS can_insert,
-        has_table_privilege('hon_runtime', 'hon.communication_messages', 'UPDATE') AS can_update,
-        has_table_privilege('hon_runtime', 'hon.communication_messages', 'DELETE') AS can_delete,
-        has_type_privilege('hon_runtime', 'hon.communication_message_channel', 'USAGE') AS channel_usage,
-        has_type_privilege('hon_runtime', 'hon.communication_message_lifecycle', 'USAGE') AS lifecycle_usage
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_messages', 'SELECT') AS can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_messages', 'INSERT') AS can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_messages', 'UPDATE') AS can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.communication_messages', 'DELETE') AS can_delete,
+        has_type_privilege('${runtimeRoleName}', 'hon.communication_message_channel', 'USAGE') AS channel_usage,
+        has_type_privilege('${runtimeRoleName}', 'hon.communication_message_lifecycle', 'USAGE') AS lifecycle_usage
     `)).rows[0];
     if (!runtimeCommunicationMessagePrivileges?.can_select
       || !runtimeCommunicationMessagePrivileges.can_insert
@@ -361,14 +410,14 @@ try {
 
     const runtimeOperationsReportingPrivileges = (await client.query(`
       SELECT
-        has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS invoices_can_select,
-        has_table_privilege('hon_runtime', 'hon.invoices', 'INSERT') AS invoices_can_insert,
-        has_table_privilege('hon_runtime', 'hon.invoices', 'UPDATE') AS invoices_can_update,
-        has_table_privilege('hon_runtime', 'hon.invoices', 'DELETE') AS invoices_can_delete,
-        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'SELECT') AS payments_can_select,
-        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'INSERT') AS payments_can_insert,
-        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'UPDATE') AS payments_can_update,
-        has_table_privilege('hon_runtime', 'hon.payment_attempts', 'DELETE') AS payments_can_delete
+        has_table_privilege('${runtimeRoleName}', 'hon.invoices', 'SELECT') AS invoices_can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.invoices', 'INSERT') AS invoices_can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.invoices', 'UPDATE') AS invoices_can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.invoices', 'DELETE') AS invoices_can_delete,
+        has_table_privilege('${runtimeRoleName}', 'hon.payment_attempts', 'SELECT') AS payments_can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.payment_attempts', 'INSERT') AS payments_can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.payment_attempts', 'UPDATE') AS payments_can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.payment_attempts', 'DELETE') AS payments_can_delete
     `)).rows[0];
     if (!runtimeOperationsReportingPrivileges?.invoices_can_select
       || !runtimeOperationsReportingPrivileges.invoices_can_insert
@@ -383,10 +432,10 @@ try {
 
     const runtimeMembershipPrivileges = (await client.query(`
       SELECT
-        has_table_privilege('hon_runtime', 'hon.memberships', 'SELECT') AS can_select,
-        has_table_privilege('hon_runtime', 'hon.memberships', 'INSERT') AS can_insert,
-        has_table_privilege('hon_runtime', 'hon.memberships', 'UPDATE') AS can_update,
-        has_table_privilege('hon_runtime', 'hon.memberships', 'DELETE') AS can_delete
+        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'SELECT') AS can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'INSERT') AS can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'UPDATE') AS can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'DELETE') AS can_delete
     `)).rows[0];
     if (!runtimeMembershipPrivileges?.can_select
       || !runtimeMembershipPrivileges.can_insert
@@ -397,10 +446,10 @@ try {
 
     const runtimeAiTeamPreferencesPrivileges = (await client.query(`
       SELECT
-        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'SELECT') AS can_select,
-        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'INSERT') AS can_insert,
-        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'UPDATE') AS can_update,
-        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'DELETE') AS can_delete
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_team_presentation_preferences', 'SELECT') AS can_select,
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_team_presentation_preferences', 'INSERT') AS can_insert,
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_team_presentation_preferences', 'UPDATE') AS can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.ai_team_presentation_preferences', 'DELETE') AS can_delete
     `)).rows[0];
     if (!runtimeAiTeamPreferencesPrivileges?.can_select
       || !runtimeAiTeamPreferencesPrivileges.can_insert
@@ -414,7 +463,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item, immutable decision-only AI plans and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, fixed read-only operations summary definer/ACL and forbidden runtime directory/HQ/activity grants, curriculum deny-all history/private access, exact enrollment/grading UPDATE columns and callable authorization/lock boundaries with denied PUBLIC/client/guard/evidence helpers, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item, immutable decision-only AI plans and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, fixed read-only operations summary definer/ACL and forbidden runtime directory/HQ/activity grants, curriculum deny-all history/private access, exact enrollment/grading UPDATE columns and callable authorization/lock boundaries with denied PUBLIC/client/guard/evidence helpers, revenue owner-only tables and exact function-only runtime ACLs/private helpers, and cleared connection context.`);
 } finally {
   await client.end();
 }

@@ -173,3 +173,4 @@ export { DOCUMENT_COMMAND_REGISTRY } from './documents.js';
 export { STAFF_SEARCH_READ_REGISTRY } from './search.js';
 export { LEAD_IMPORT_COMMAND_REGISTRY } from './lead-import.js';
 export { CURRICULUM_PROGRESS_COMMAND_REGISTRY } from './curriculum-progress.js';
+export { REVENUE_PLANNING_COMMAND_REGISTRY } from './revenue-planning.js';

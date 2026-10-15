@@ -1,3 +1,6 @@
+import { RevenuePlanningController } from './planning/revenue-planning.controller.js';
+import { RevenuePlanningService } from './planning/revenue-planning.service.js';
+import { RevenuePlanningHumanUiGuard } from './planning/revenue-planning-human-ui.guard.js';
 import { TestingHumanUiGuard } from './testing/testing-human-ui.guard.js';
 import { DocumentController } from './documents/document.controller.js';
 import { ParentDocumentController } from './documents/parent-document.controller.js';
@@ -100,6 +103,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
 
 @Module({
   controllers: [
+    RevenuePlanningController,
     StaffSearchController,
     CurriculumProgressController,
     LeadImportController,
@@ -149,6 +153,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
     ActionReviewController,
   ],
   providers: [
+    RevenuePlanningService, RevenuePlanningHumanUiGuard,
     StaffSearchService,
     CurriculumProgressService, CurriculumHumanUiGuard, TestingHumanUiGuard,
     LeadImportService, LeadImportHumanUiGuard,

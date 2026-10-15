@@ -294,3 +294,64 @@ FROM pg_roles r WHERE r.rolname IN('anon','authenticated','service_role'); -- al
 -- pnpm db:test-curriculum-progress proves live exact human/source permissions,
 -- relationships, immutable versions/history, concurrency/replay, family redaction,
 -- atomic audit/inert outbox and all-requirements-met NEVER causing promotion.
+
+-- 14) Deterministic revenue planning: exactly two runtime functions, no tables,
+-- columns, helper EXECUTE, PUBLIC/client/HQ or directory access. All rows below
+-- must match_expected; the executable assertion block fails on drift.
+WITH expected(signature,runtime_execute,definer) AS (VALUES
+ ('hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid)',true,true),
+ ('hon.read_revenue_plan(text,text,uuid,integer)',true,true),
+ ('hon.validate_revenue_plan_input(jsonb)',false,false),
+ ('hon.guard_revenue_plan()',false,false),
+ ('hon.guard_revenue_plan_history()',false,false),
+ ('hon.require_revenue_planning_actor(text)',false,true),
+ ('hon.lock_revenue_planning_actor(text)',false,true),
+ ('hon.revenue_plan_snapshot(uuid)',false,true)
+)
+SELECT e.signature,p.prosecdef,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+ has_function_privilege('hon_runtime',p.oid,'EXECUTE')=e.runtime_execute
+ AND p.prosecdef=e.definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+ AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+  WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT e.runtime_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE')) AS matches_expected
+FROM expected e JOIN pg_proc p ON p.oid=e.signature::regprocedure JOIN pg_roles r ON r.oid=p.proowner;
+SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,
+ EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+ OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a
+  WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) AS forbidden_nonowner_table_or_column_acl
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='hon' AND c.relname IN('revenue_plans','revenue_plan_versions','revenue_plan_requests');
+SELECT * FROM pg_policies WHERE schemaname='hon' AND tablename IN('revenue_plans','revenue_plan_versions','revenue_plan_requests'); -- zero rows
+DO $$
+DECLARE t text; f record; b record; r text;
+BEGIN
+ FOR t IN SELECT unnest(ARRAY['revenue_plans','revenue_plan_versions','revenue_plan_requests']) LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (owner.rolsuper OR owner.rolbypassrls)
+   AND NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a
+    WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) AS safe
+  INTO b FROM pg_class c JOIN pg_roles owner ON owner.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe revenue private table: %',t; END IF;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid)',true,true),('hon.read_revenue_plan(text,text,uuid,integer)',true,true),
+  ('hon.validate_revenue_plan_input(jsonb)',false,false),('hon.guard_revenue_plan()',false,false),('hon.guard_revenue_plan_history()',false,false),
+  ('hon.require_revenue_planning_actor(text)',false,true),('hon.lock_revenue_planning_actor(text)',false,true),('hon.revenue_plan_snapshot(uuid)',false,true)
+ ) e(signature,can_execute,definer) LOOP
+  SELECT (owner.rolsuper OR owner.rolbypassrls) AND p.prosecdef=f.definer AND p.provolatile='v'
+   AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE')) AS safe
+  INTO b FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe revenue function: %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client revenue function access: %',r; END IF;
+  END LOOP;
+ END LOOP;
+ FOR t IN SELECT unnest(ARRAY['revenue_plans','revenue_plan_versions','revenue_plan_requests','users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants','hq_onboarding_requests','crm_activities','hq_ai_provider_connections','hq_ai_model_catalog','hq_ai_routing_policies','hq_ai_routing_candidates','hq_ai_control_requests','hq_ai_control_audit','hq_ai_control_outbox']) LOOP
+  IF has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Forbidden runtime private/directory/HQ access: %',t; END IF;
+ END LOOP;
+END $$;
+-- Guarded disposable-local proof only for this slice: pnpm db:test-revenue-planning.
+-- No production/Supabase migration or remote fixture is implied by this verifier.
