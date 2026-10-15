@@ -66,6 +66,8 @@
     "db:test-marketing-assistant": "pnpm --filter @hon/database db:test-marketing-assistant",
     "db:test-testing-certificates": "pnpm --filter @hon/database db:test-testing-certificates",
     "db:setup-testing-certificates": "pnpm --filter @hon/database db:setup-testing-certificates",
+    "db:test-testing-scorecards": "pnpm --filter @hon/database db:test-testing-scorecards",
+    "db:setup-testing-scorecards": "pnpm --filter @hon/database db:setup-testing-scorecards",
     "db:setup-teaching-assistant": "pnpm --filter @hon/database db:setup-teaching-assistant",
     "db:test-teaching-assistant": "pnpm --filter @hon/database db:test-teaching-assistant",
     "db:test-marketing-assistant-verifier": "pnpm --filter @hon/database db:test-marketing-assistant-verifier"

@@ -198,6 +198,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_testing_certificate_scope($1,$2::uuid)', [externalSubject, schoolId],
     )).rows[0];
   }
+  async resolveTestingScorecardScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_testing_scorecard_scope($1,$2::uuid)', [externalSubject, schoolId],
+    )).rows[0];
+  }
   async resolveCommunityScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(
@@ -325,6 +331,35 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
         [context.externalSubject, testingCandidateId, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId],
       );
       if (!result.rows[0]) throw new Error('HON testing certificate issue did not return a receipt.');
+      return result.rows[0].data;
+    });
+  }
+
+  async readTestingScorecard(
+    context: TestingCertificateRuntimeContext, testingCandidateId: string, testingEventId: string,
+  ): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.source]);
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET TRANSACTION READ ONLY");
+      const result = await client.query<{ data: unknown }>(
+        'SELECT hon.read_testing_scorecard($1,$2::uuid,$3::uuid) AS data', [context.externalSubject, testingCandidateId, testingEventId],
+      );
+      if (!result.rows[0]) throw new Error('HON testing scorecard projection did not return a result.');
+      return result.rows[0].data;
+    });
+  }
+
+  async recordTestingScorecardEvaluation(
+    context: TestingCertificateRuntimeContext, testingCandidateId: string, testingEventId: string, input: object,
+  ): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.source]);
+      await client.query("SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'");
+      const result = await client.query<{ data: unknown }>(
+        'SELECT hon.record_testing_scorecard_evaluation($1,$2::uuid,$3::uuid,$4::jsonb,$5,$6::uuid,$7::uuid) AS data',
+        [context.externalSubject, testingCandidateId, testingEventId, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId],
+      );
+      if (!result.rows[0]) throw new Error('HON testing scorecard record did not return a receipt.');
       return result.rows[0].data;
     });
   }

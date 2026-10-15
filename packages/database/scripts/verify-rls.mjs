@@ -1,6 +1,7 @@
 import { marketingAssistantTables, verifyMarketingAssistantSecurity } from './marketing-assistant-security.mjs';
 import { achievementTables, verifyAchievementSecurity } from './achievement-security.mjs';
 import { testingCertificateTables, verifyTestingCertificateSecurity } from './testing-certificate-security.mjs';
+import { testingScorecardTables, verifyTestingScorecardSecurity } from './testing-scorecard-security.mjs';
 import { marketplaceTables, verifyMarketplaceSecurity } from './marketplace-security.mjs';
 import { humanWorkTables, verifyHumanWorkSecurity } from './human-work-security.mjs';
 import { voiceTables, verifyVoiceSecurity } from './voice-security.mjs';
@@ -30,6 +31,7 @@ const expectedRlsTables = [
   ...marketingAssistantTables,
   ...achievementTables,
   ...testingCertificateTables,
+  ...testingScorecardTables,
   ...marketplaceTables,
   ...humanWorkTables,
   ...voiceTables,
@@ -169,6 +171,7 @@ try {
   await verifyMarketingAssistantSecurity(client, runtimeRoleName);
   await verifyAchievementSecurity(client,runtimeRoleName);
   await verifyTestingCertificateSecurity(client, runtimeRoleName);
+  await verifyTestingScorecardSecurity(client, runtimeRoleName);
   await verifyMarketplaceSecurity(client, runtimeRoleName);
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
