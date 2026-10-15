@@ -179,6 +179,10 @@ GRANT UPDATE ON TABLE
  hon.principal_interface_preferences,
   -- Human invoice issuance is the only reviewed invoice state transition.
   hon.invoices,
+  -- Human membership activation and direct cancellation are the only reviewed
+  -- membership state transitions; payment schedule and provider effects remain
+  -- outside this privilege.
+  hon.memberships,
  -- The conventional trial outcome command is a version-checked lifecycle update.
  hon.crm_appointments,
  -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.

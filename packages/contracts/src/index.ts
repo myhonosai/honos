@@ -261,6 +261,27 @@ export interface ActivatedMembershipSummary {
   createdAt: string;
 }
 
+/** A direct human cancellation is an optimistic ACTIVE-to-CANCELLED transition. */
+export interface CancelMembershipInput {
+  expectedVersion: number;
+  cancellationReason: string;
+  /** Optional timezone-qualified effective timestamp evidenced with the cancellation. */
+  effectiveAt?: string | undefined;
+}
+
+/** Direct cancellation returns only the schema-supported terminal CANCELLED state. */
+export interface CancelledMembershipSummary {
+  id: string;
+  billingAccountId: string;
+  participantPersonId: string;
+  planCode: string;
+  state: 'CANCELLED';
+  version: number;
+  cancellationReason: string;
+  effectiveAt?: string | undefined;
+  createdAt: string;
+}
+
 export interface CreateBillingAccountInput {
   responsiblePersonId: string;
   currency?: string;

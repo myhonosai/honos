@@ -16,7 +16,7 @@ Supabase’s Session Pooler is the correct shared-pooler choice for an IPv4-only
 
 Set that copied Session Pooler URL through the pending protected `HON_RUNTIME_DATABASE_URL` input. Do not use `DATABASE_URL`: in this project it is migration-only. The application will use `pg.Pool` with explicit transactions; each tenant request calls PostgreSQL `set_config(..., true)` within its transaction, which prevents school context from surviving a pooled-connection checkout.
 
-Then run [011_verify_supabase_hon_runtime.sql](../../infra/postgres/011_verify_supabase_hon_runtime.sql) in the SQL Editor. It proves the role flags, absence of explicit role memberships, expected grants (including SELECT-only AI-ledger, invoice, and payment-attempt access), forced RLS, and an empty read without tenant context. Finally, after the protected runtime URL is saved, run the project commands below from the HON workspace:
+Then run [011_verify_supabase_hon_runtime.sql](../../infra/postgres/011_verify_supabase_hon_runtime.sql) in the SQL Editor. It proves the role flags, absence of explicit role memberships, expected grants (including the reviewed membership SELECT/INSERT/UPDATE lifecycle subset; SELECT-only AI-ledger and payment-attempt access), forced RLS, and an empty read without tenant context. Finally, after the protected runtime URL is saved, run the project commands below from the HON workspace:
 
 ```bash
 pnpm db:test-security

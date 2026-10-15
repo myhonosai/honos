@@ -6,6 +6,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { ActivateMembershipDto } from './activate-membership.dto.js';
+import { CancelMembershipDto } from './cancel-membership.dto.js';
 import { CreateMembershipDto } from './create-membership.dto.js';
 import { MembershipService } from './membership.service.js';
 
@@ -81,6 +82,59 @@ export class MembershipController {
       source: 'HUMAN_UI',
     };
     const result = await this.memberships.activate(context, membershipId, input);
+    response.status(HttpStatus.OK);
+    return {
+      data: result.membership,
+      meta: { requestId, correlationId: requestId, replayed: result.replayed },
+    };
+  }
+
+  /**
+   * A human operator directly cancels exactly one RLS-visible ACTIVE membership.
+   * The route derives actor, tenant, permission, source, and attribution; the
+   * request body cannot select an Action Engine, delegate, payment action, or
+   * related billing/scheduling resource.
+   */
+  @Post(':membershipId/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancel(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('membershipId', new ParseUUIDPipe()) membershipId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() input: CancelMembershipDto,
+    @Req() request: HonRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const normalizedIdempotencyKey = idempotencyKey?.trim();
+    if (!normalizedIdempotencyKey || normalizedIdempotencyKey.length > 200) {
+      throw new ConflictException({
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        detail: 'A unique Idempotency-Key header is required for membership cancellation.',
+      });
+    }
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    const scope = await this.database.resolveAuthorizedScope(
+      identity.externalSubject,
+      schoolId,
+      'billing.membership.cancel',
+    );
+    if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) {
+      throw new ForbiddenException('HON membership cancellation is not authorized for this school.');
+    }
+    const requestId = randomUUID();
+    const context: CommandContext = {
+      organizationId: scope.organizationId,
+      schoolId: scope.schoolId,
+      principalId: scope.principalId,
+      principalType: 'HUMAN_USER',
+      requestId,
+      correlationId: requestId,
+      idempotencyKey: normalizedIdempotencyKey,
+      source: 'HUMAN_UI',
+    };
+    const result = await this.memberships.cancel(context, membershipId, input);
     response.status(HttpStatus.OK);
     return {
       data: result.membership,

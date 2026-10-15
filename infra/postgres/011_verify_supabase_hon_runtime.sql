@@ -88,6 +88,15 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.payment_attempts', 'UPDATE') AS can_update_payment_attempts,
   has_table_privilege('hon_runtime', 'hon.payment_attempts', 'DELETE') AS can_delete_payment_attempts;
 
+-- Human membership creation, activation, and direct ACTIVE-to-CANCELLED
+-- cancellation use the reviewed RLS-bound SELECT/INSERT/UPDATE subset. DELETE,
+-- payment-attempt writes, and every payment-provider action remain unavailable.
+SELECT
+  has_table_privilege('hon_runtime', 'hon.memberships', 'SELECT') AS can_read_memberships,
+  has_table_privilege('hon_runtime', 'hon.memberships', 'INSERT') AS can_insert_memberships,
+  has_table_privilege('hon_runtime', 'hon.memberships', 'UPDATE') AS can_update_memberships,
+  has_table_privilege('hon_runtime', 'hon.memberships', 'DELETE') AS can_delete_memberships;
+
 -- 4) RLS is enabled and forced on every operational table.
 SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
 FROM pg_class c
