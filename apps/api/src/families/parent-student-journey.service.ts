@@ -2,6 +2,8 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import {
   TESTING_CANDIDATE_RESULTS,
+  CURRICULUM_PROGRESS_STATUSES, CURRICULUM_REQUIREMENT_KINDS,
+  type ParentCurriculumRequirementProgress,
   type ParentStudentJourney,
   type ParentStudentJourneyEnrollment,
   type ParentStudentJourneyPromotionDecision,
@@ -91,14 +93,15 @@ export class ParentStudentJourneyService {
     resolvedScope: ResolvedParentFamilyScope,
     requestedFamilyId: string,
     requestId: string,
+    externalSubject: string,
   ): Promise<ParentStudentJourney> {
     // Keep the controller's authorization invariant local to the data access
     // boundary as well: an accidentally reused tenant scope cannot widen this read.
-    if (resolvedScope.familyId !== requestedFamilyId) {
+    if (resolvedScope.familyId !== requestedFamilyId || typeof externalSubject !== 'string' || !externalSubject.trim() || externalSubject.length > 200) {
       throw new ForbiddenException('HON parent access is not authorized for this family.');
     }
 
-    return this.database.withTenantTransaction(
+    try { return await this.database.withTenantTransaction(
       {
         organizationId: resolvedScope.organizationId,
         schoolId: resolvedScope.schoolId,
@@ -107,6 +110,11 @@ export class ParentStudentJourneyService {
         requestId,
       },
       async (client) => {
+        // Reauthorize every read, including callers holding a stale resolved scope.
+        await client.query("SET LOCAL statement_timeout='5s'");
+        await client.query<{ data: ParentCurriculumRequirementProgress[] }>(
+          'SELECT hon.read_parent_curriculum_progress($1,$2::uuid) data', [externalSubject, requestedFamilyId],
+        );
         const students = await this.selectStudents(client, requestedFamilyId);
         const studentsByProfileId = new Map<string, ParentStudentJourneyStudent>();
         for (const student of students) {
@@ -114,6 +122,7 @@ export class ParentStudentJourneyService {
         }
 
         if (studentsByProfileId.size === 0) {
+          await client.query('SELECT hon.read_parent_curriculum_progress($1,$2::uuid)', [externalSubject, requestedFamilyId]);
           return {
             familyId: resolvedScope.familyId,
             accessLevel: resolvedScope.accessLevel,
@@ -128,13 +137,32 @@ export class ParentStudentJourneyService {
         );
         await this.selectTestingCandidates(client, requestedFamilyId, enrollmentsById);
 
+        // Use a fresh live authorization/projection after dependency reads too.
+        const progress = await client.query<{ data: ParentCurriculumRequirementProgress[] }>(
+          'SELECT hon.read_parent_curriculum_progress($1,$2::uuid) data', [externalSubject, requestedFamilyId],
+        );
+        for (const row of progress.rows[0]?.data ?? []) {
+          const enrollment = enrollmentsById.get(row.enrollmentId);
+          if (!enrollment || !CURRICULUM_REQUIREMENT_KINDS.includes(row.kind)
+            || (row.status !== null && !CURRICULUM_PROGRESS_STATUSES.includes(row.status))) {
+            throw new Error('HON parent progress projection returned an unsupported relationship or status.');
+          }
+          // Construct a whitelist; never spread a DB object into a parent DTO.
+          enrollment.requirementProgress!.push({ enrollmentId: row.enrollmentId, requirementId: row.requirementId,
+            label: row.label, kind: row.kind, required: row.required, status: row.status, recordedAt: row.recordedAt });
+        }
         return {
           familyId: resolvedScope.familyId,
           accessLevel: resolvedScope.accessLevel,
           students,
         };
       },
-    );
+    ); } catch (error) {
+      if ((error as { code?: string }).code === '42501') {
+        throw new ForbiddenException({ code: 'FAMILY_FORBIDDEN', detail: 'Current parent access to this family is required.' });
+      }
+      throw error;
+    }
   }
 
   private async selectStudents(client: PoolClient, familyId: string): Promise<ParentStudentJourneyStudent[]> {
@@ -215,6 +243,7 @@ export class ParentStudentJourneyService {
         AND curriculum.school_id = enrollment.school_id
        LEFT JOIN hon.curriculum_ranks AS rank
          ON rank.id = enrollment.current_rank_id
+        AND rank.curriculum_id = enrollment.curriculum_id
         AND rank.organization_id = enrollment.organization_id
         AND rank.school_id = enrollment.school_id
        ORDER BY enrollment.enrolled_at ASC, enrollment.id ASC`,
@@ -243,6 +272,7 @@ export class ParentStudentJourneyService {
             }
           : {}),
         testingCandidates: [],
+        requirementProgress: [],
       };
       student.curriculumEnrollments.push(enrollment);
       enrollmentsById.set(enrollment.id, enrollment);

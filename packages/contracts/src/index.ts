@@ -1,6 +1,7 @@
 export * from './search.js';
 export * from './staff-roles.js';
 export * from './ai-invocation-plan.js';
+export * from './curriculum-progress.js';
 export * from './lead-import.js';
 export * from './ai-provider.js';
 
@@ -690,10 +691,12 @@ export interface ParentStudentJourneyEnrollment {
   };
   currentRank?: ParentStudentJourneyRank | undefined;
   testingCandidates: ParentStudentJourneyTestingCandidate[];
+  /** Current explicit human observations only; empty without a supported secure projection. */
+  requirementProgress?: import('./curriculum-progress.js').ParentCurriculumRequirementProgress[];
 }
 
 /**
- * An instructor decision is intentionally redacted to readiness data. It never
+ * An instructor decision is intentionally redacted to recorded decision data. It never
  * exposes the instructor identity, rationale, notes, or school-wide results.
  */
 export interface ParentStudentJourneyPromotionDecision {

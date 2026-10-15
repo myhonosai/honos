@@ -223,3 +223,74 @@ FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid IN(
 SELECT r.rolname,t,has_table_privilege(r.rolname,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_client_import_access
 FROM pg_roles r CROSS JOIN unnest(ARRAY['lead_import_batches','lead_import_rows','lead_import_evidence','lead_import_requests']) t
 WHERE r.rolname IN('anon','authenticated','service_role'); -- all false
+
+-- 13) Human curriculum progress: private history/current requirement tables deny
+-- all direct runtime/client access. Only fixed commands/reads/locks and shared
+-- authorization boundaries execute; trigger, actor and evidence helpers do not.
+SELECT t,has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_curriculum_access
+FROM unnest(ARRAY['curriculum_requirements','curriculum_requirement_versions','curriculum_enrollment_history','curriculum_progress_observations','curriculum_command_requests']) t;
+WITH expected(signature,runtime_execute,security_definer) AS (VALUES
+ ('hon.mutate_curriculum_progress(text,text,uuid,uuid,jsonb,text,uuid,uuid)',true,true),
+ ('hon.read_staff_curriculum_progress(text,text,uuid,uuid)',true,true),
+ ('hon.read_parent_curriculum_progress(text,uuid)',true,true),
+ ('hon.lock_human_testing_authority(text)',true,true),
+ ('hon.lock_human_testing_record(text,text,uuid)',true,true),
+ ('hon.resolve_authorized_scope(text,uuid,text)',true,true),
+ ('hon.resolve_parent_family_scope(text,uuid)',true,true),
+ ('hon.principal_has_school_permission(uuid,uuid,uuid,text)',true,true),
+ ('hon.require_curriculum_actor(text,text)',false,true),
+ ('hon.validate_curriculum_observation()',false,true),
+ ('hon.snapshot_curriculum_requirement()',false,true),
+ ('hon.verify_curriculum_enrollment_evidence()',false,true),
+ ('hon.guard_curriculum_history()',false,false),
+ ('hon.guard_curriculum_requirement()',false,false),
+ ('hon.guard_curriculum_enrollment_identity()',false,false),
+ ('hon.guard_curriculum_structure_identity()',false,false)
+)
+SELECT expected.signature,p.prosecdef,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+ expected.runtime_execute AS expected_runtime_execute,
+ has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+ has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+   AND p.prosecdef=expected.security_definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AS matches_expected_boundary,
+ EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute
+FROM expected JOIN pg_proc p ON p.oid=expected.signature::regprocedure JOIN pg_roles r ON r.oid=p.proowner;
+
+-- Enrollment SELECT must be true; table-wide mutation and INSERT columns false.
+SELECT has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','SELECT') AS can_read_enrollment,
+ has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_broad_enrollment_mutation,
+ has_any_column_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT,REFERENCES') AS forbidden_enrollment_column_insert_or_reference,
+ has_table_privilege('hon_runtime','hon.testing_candidates','UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_broad_grading_mutation;
+-- Every matches_expected_update must be true, including all non-allowed columns.
+WITH expected(table_name,update_columns) AS (VALUES
+ ('student_curriculum_enrollments',ARRAY['current_rank_id','version','updated_at']),
+ ('testing_candidates',ARRAY['result','instructor_notes','version','updated_at'])
+)
+SELECT e.table_name,a.attname,a.attname=ANY(e.update_columns) AS expected_update,
+ has_column_privilege('hon_runtime',a.attrelid,a.attnum,'UPDATE') AS runtime_update,
+ has_column_privilege('hon_runtime',a.attrelid,a.attnum,'UPDATE')=(a.attname=ANY(e.update_columns)) AS matches_expected_update
+FROM expected e JOIN pg_attribute a ON a.attrelid=('hon.'||e.table_name)::regclass
+WHERE a.attnum>0 AND NOT a.attisdropped ORDER BY e.table_name,a.attnum;
+
+SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='hon' AND c.relname IN('curriculum_requirement_versions','curriculum_enrollment_history','curriculum_progress_observations','curriculum_command_requests'); -- all forced
+SELECT * FROM pg_policies WHERE schemaname='hon' AND tablename IN('curriculum_requirement_versions','curriculum_enrollment_history','curriculum_progress_observations','curriculum_command_requests'); -- zero rows
+-- Detect PUBLIC or any other client ACL even when that client role is absent.
+SELECT c.relname,
+ EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+   WHERE acl.grantee NOT IN(c.relowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))
+ OR EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl
+   WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
+   AND acl.grantee NOT IN(c.relowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_table_or_column_acl
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='hon' AND c.relname IN('curriculum_requirements','curriculum_requirement_versions','curriculum_enrollment_history','curriculum_progress_observations','curriculum_command_requests','student_curriculum_enrollments'); -- all false
+SELECT r.rolname,t,has_table_privilege(r.rolname,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_client_curriculum_access
+FROM pg_roles r CROSS JOIN unnest(ARRAY['curriculum_requirements','curriculum_requirement_versions','curriculum_enrollment_history','curriculum_progress_observations','curriculum_command_requests']) t
+WHERE r.rolname IN('anon','authenticated','service_role');
+SELECT r.rolname,
+ has_table_privilege(r.rolname,'hon.student_curriculum_enrollments','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+ OR has_any_column_privilege(r.rolname,'hon.student_curriculum_enrollments','INSERT,UPDATE,REFERENCES') AS forbidden_client_enrollment_mutation
+FROM pg_roles r WHERE r.rolname IN('anon','authenticated','service_role'); -- all false
+-- pnpm db:test-curriculum-progress proves live exact human/source permissions,
+-- relationships, immutable versions/history, concurrency/replay, family redaction,
+-- atomic audit/inert outbox and all-requirements-met NEVER causing promotion.

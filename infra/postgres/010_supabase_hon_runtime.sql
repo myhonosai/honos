@@ -224,6 +224,14 @@ GRANT USAGE ON TYPE
   hon.crm_appointment_status
 TO hon_runtime;
 
+-- Reproduce the exact existing 0046/0047/0051 migration minima when this role is
+-- first created AFTER all migrations. These grant no delivery/provider access.
+GRANT SELECT, INSERT, UPDATE ON TABLE hon.communication_consents,
+  hon.communication_messages,hon.ai_team_presentation_preferences TO hon_runtime;
+GRANT USAGE ON TYPE hon.communication_consent_channel,
+  hon.communication_consent_status,hon.communication_consent_source,
+  hon.communication_message_channel,hon.communication_message_lifecycle TO hon_runtime;
+
 -- Keep function execution explicit rather than granting every current/future
 -- function. Current application transaction helpers need only these functions.
 REVOKE ALL ON FUNCTION hon.current_organization_id() FROM PUBLIC;
@@ -305,6 +313,36 @@ GRANT EXECUTE ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),
 REVOKE ALL ON FUNCTION hon.validate_ai_invocation_plan_input(jsonb),
   hon.ai_invocation_plan_summary(uuid), hon.reject_ai_invocation_plan_mutation()
   FROM hon_runtime, PUBLIC;
+
+-- Human curriculum progress (0070/0071): private state/evidence, fixed commands
+-- and safe projections. Preserve only the evidenced testing column minima.
+REVOKE ALL ON TABLE hon.curriculum_requirements,hon.curriculum_requirement_versions,
+  hon.curriculum_enrollment_history,hon.curriculum_progress_observations,hon.curriculum_command_requests FROM hon_runtime, PUBLIC;
+REVOKE INSERT,UPDATE,DELETE ON hon.student_curriculum_enrollments FROM hon_runtime, PUBLIC;
+-- Required by promotion's locked dependency read and exact evidenced rank update.
+-- No identity, status, enrollment-date, or other enrollment column is writable.
+GRANT UPDATE(current_rank_id,version,updated_at) ON hon.student_curriculum_enrollments TO hon_runtime;
+REVOKE ALL ON FUNCTION hon.lock_human_testing_authority(text),hon.lock_human_testing_record(text,text,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.lock_human_testing_authority(text),hon.lock_human_testing_record(text,text,uuid) TO hon_runtime;
+-- Existing instructor grading requires only its assessment and version columns.
+REVOKE UPDATE ON hon.testing_candidates FROM hon_runtime;
+GRANT UPDATE(result,instructor_notes,version,updated_at) ON hon.testing_candidates TO hon_runtime;
+REVOKE ALL ON FUNCTION hon.guard_curriculum_history(),hon.guard_curriculum_requirement(),
+  hon.snapshot_curriculum_requirement(),hon.guard_curriculum_enrollment_identity(),
+  hon.require_curriculum_actor(text,text),hon.validate_curriculum_observation(),
+  hon.guard_curriculum_structure_identity(),hon.verify_curriculum_enrollment_evidence() FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.mutate_curriculum_progress(text,text,uuid,uuid,jsonb,text,uuid,uuid),
+  hon.read_staff_curriculum_progress(text,text,uuid,uuid),hon.read_parent_curriculum_progress(text,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.mutate_curriculum_progress(text,text,uuid,uuid,jsonb,text,uuid,uuid),
+  hon.read_staff_curriculum_progress(text,text,uuid,uuid),hon.read_parent_curriculum_progress(text,uuid) TO hon_runtime;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE INSERT,UPDATE,DELETE ON hon.student_curriculum_enrollments FROM %I',r);
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.lock_human_testing_authority(text),hon.lock_human_testing_record(text,text,uuid),hon.guard_curriculum_structure_identity(),hon.verify_curriculum_enrollment_evidence() FROM %I',r);
+  EXECUTE format('REVOKE ALL ON TABLE hon.curriculum_requirements,hon.curriculum_requirement_versions,hon.curriculum_enrollment_history,hon.curriculum_progress_observations,hon.curriculum_command_requests FROM %I',r);
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.guard_curriculum_history(),hon.guard_curriculum_requirement(),hon.snapshot_curriculum_requirement(),hon.guard_curriculum_enrollment_identity(),hon.require_curriculum_actor(text,text),hon.validate_curriculum_observation(),hon.mutate_curriculum_progress(text,text,uuid,uuid,jsonb,text,uuid,uuid),hon.read_staff_curriculum_progress(text,text,uuid,uuid),hon.read_parent_curriculum_progress(text,uuid) FROM %I',r);
+ END LOOP;
+END $$;
 
 -- Safe future-migration defaults for objects created by the privileged `postgres`
 -- migration role. New objects receive no runtime or PUBLIC access until their

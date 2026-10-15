@@ -1,3 +1,4 @@
+import { testingDatabaseError } from './testing-database-error.js';
 import {
   BadRequestException,
   ConflictException,
@@ -139,6 +140,10 @@ export class PromotionDecisionService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)");
+      await client.query("SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'");
+      await client.query('SELECT hon.lock_human_testing_authority($1)', ['testing.promotion.decide']);
+      await client.query('SELECT hon.lock_human_testing_record($1,$2,$3::uuid)', ['testing.promotion.decide','CANDIDATE',candidateId]);
       // Every dependency read is both transaction-bound and RLS-scoped. Holding
       // a row lock on the candidate also prevents a competing decision insert.
       const candidateResult = await client.query<TestingCandidateRow>(
@@ -150,7 +155,7 @@ export class PromotionDecisionService {
            version
          FROM hon.testing_candidates
          WHERE id = $1::uuid
-         FOR UPDATE`,
+         `,
         [candidateId],
       );
       const candidate = candidateResult.rows[0];
@@ -241,10 +246,11 @@ export class PromotionDecisionService {
       const existingDecision = await client.query<{ id: string }>(
         `SELECT id
          FROM hon.promotion_decisions
-         WHERE testing_candidate_id = $1::uuid
-         FOR KEY SHARE`,
+         WHERE testing_candidate_id = $1::uuid`,
         [candidate.id],
       );
+      // The candidate is already locked until commit. Decisions are insert-only
+      // for runtime, so this check must not demand a decision UPDATE privilege.
       if (existingDecision.rowCount) {
         throw new ConflictException({
           code: 'PROMOTION_DECISION_ALREADY_EXISTS',
@@ -379,7 +385,7 @@ export class PromotionDecisionService {
       await this.completeIdempotencyRecord(client, context, decision);
 
       return { decision, replayed: false };
-    });
+    }).catch(testingDatabaseError);
   }
 
   private assertCandidateDecisionCoherency(
@@ -415,11 +421,12 @@ export class PromotionDecisionService {
     rankId: string,
     notFoundDetail: string,
   ): Promise<CurriculumRankRow> {
+    await client.query('SELECT hon.lock_human_testing_record($1,$2,$3::uuid)', ['testing.promotion.decide','RANK',rankId]);
     const result = await client.query<CurriculumRankRow>(
       `SELECT id, curriculum_id AS "curriculumId"
        FROM hon.curriculum_ranks
        WHERE id = $1::uuid
-       FOR KEY SHARE`,
+       `,
       [rankId],
     );
     const rank = result.rows[0];

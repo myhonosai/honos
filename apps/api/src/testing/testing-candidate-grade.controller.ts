@@ -1,3 +1,4 @@
+import { TestingHumanUiGuard } from './testing-human-ui.guard.js';
 import {
   Body,
   ConflictException,
@@ -23,7 +24,7 @@ import { GradeTestingCandidateDto } from './grade-testing-candidate.dto.js';
 import { TestingCandidateService } from './testing-candidate.service.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/testing/candidates')
-@UseGuards(HonIdentityGuard)
+@UseGuards(HonIdentityGuard, TestingHumanUiGuard)
 export class TestingCandidateGradeController {
   constructor(
     private readonly database: RuntimeDatabaseService,

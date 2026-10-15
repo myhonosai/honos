@@ -2,6 +2,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Req,
@@ -27,6 +28,7 @@ export class ParentStudentJourneyController {
     private readonly journeys: ParentStudentJourneyService,
   ) {}
 
+  @Header('Cache-Control', 'private, no-store')
   @Get('student-journey')
   async getStudentJourney(
     @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
@@ -48,7 +50,7 @@ export class ParentStudentJourneyController {
 
     const requestId = randomUUID();
     return {
-      data: await this.journeys.get(resolvedScope, familyId, requestId),
+      data: await this.journeys.get(resolvedScope, familyId, requestId, identity.externalSubject),
       meta: {
         requestId,
         correlationId: requestId,

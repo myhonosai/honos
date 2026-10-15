@@ -1,3 +1,4 @@
+import { TestingHumanUiGuard } from './testing-human-ui.guard.js';
 import {
   Body,
   ConflictException,
@@ -22,7 +23,7 @@ import { DecidePromotionDto } from './decide-promotion.dto.js';
 import { PromotionDecisionService } from './promotion-decision.service.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/testing/candidates')
-@UseGuards(HonIdentityGuard)
+@UseGuards(HonIdentityGuard, TestingHumanUiGuard)
 export class PromotionDecisionController {
   constructor(
     private readonly database: RuntimeDatabaseService,

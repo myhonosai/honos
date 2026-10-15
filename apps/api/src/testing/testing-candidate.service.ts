@@ -1,3 +1,4 @@
+import { testingDatabaseError } from './testing-database-error.js';
 import {
   BadRequestException,
   ConflictException,
@@ -128,12 +129,14 @@ export class TestingCandidateService {
     testingEventId: string,
     input: RegisterTestingCandidateInput,
   ): Promise<{ candidate: TestingCandidateSummary; replayed: boolean }> {
+    this.requireHuman(context);
     const normalized = normalizeInput(input);
     const requestFingerprint = createHash('sha256')
       .update(JSON.stringify({ testingEventId, ...normalized }))
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      await this.requireAuthority(client, context);
       // These dependency reads deliberately execute after tenant context is bound.
       // RLS therefore makes an out-of-scope identifier indistinguishable from absent data.
       const testingEvent = await this.requireCurriculumScopedRecord(
@@ -320,7 +323,7 @@ export class TestingCandidateService {
       await this.completeIdempotencyRecord(client, context, candidate);
 
       return { candidate, replayed: false };
-    });
+    }).catch(testingDatabaseError);
   }
 
   /**
@@ -333,9 +336,7 @@ export class TestingCandidateService {
     candidateId: string,
     input: GradeTestingCandidateInput,
   ): Promise<{ candidate: TestingCandidateSummary; replayed: boolean }> {
-    if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
-      throw new ForbiddenException('Testing candidate grading is a human-only instructor command.');
-    }
+    this.requireHuman(context);
     if (!isUuid(candidateId)) {
       throw validationError('candidateId must be a UUID.');
     }
@@ -346,8 +347,10 @@ export class TestingCandidateService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      await this.requireAuthority(client, context);
       // The lookup is inside the transaction-bound RLS scope, so an identifier
       // from another school is indistinguishable from one that does not exist.
+      await client.query('SELECT hon.lock_human_testing_record($1,$2,$3::uuid)', ['testing.manage','CANDIDATE',candidateId]);
       const current = await client.query<TestingCandidateRow>(
         `SELECT
            id,
@@ -360,7 +363,7 @@ export class TestingCandidateService {
            created_at AS "createdAt"
          FROM hon.testing_candidates
          WHERE id = $1::uuid
-         FOR UPDATE`,
+         `,
         [candidateId],
       );
       const currentRow = current.rows[0];
@@ -508,20 +511,33 @@ export class TestingCandidateService {
       await this.completeIdempotencyRecord(client, context, candidate, 200);
 
       return { candidate, replayed: false };
-    });
+    }).catch(testingDatabaseError);
   }
 
+  private requireHuman(context: CommandContext): void {
+    if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI' || context.actionRequestId || context.delegatedByPrincipalId) {
+      throw new ForbiddenException('Testing candidate commands require a direct human instructor.');
+    }
+  }
+  private async requireAuthority(client: PoolClient, context: CommandContext): Promise<void> {
+    await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)");
+    await client.query("SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'");
+    await client.query('SELECT hon.lock_human_testing_authority($1)', ['testing.manage']);
+  }
   private async requireCurriculumScopedRecord(
     client: PoolClient,
     table: 'hon.testing_events' | 'hon.student_curriculum_enrollments' | 'hon.curriculum_ranks',
     id: string,
     notFoundDetail: string,
   ): Promise<CurriculumScopedRow> {
+    if (table !== 'hon.student_curriculum_enrollments') {
+      await client.query('SELECT hon.lock_human_testing_record($1,$2,$3::uuid)', ['testing.manage', table === 'hon.testing_events' ? 'EVENT' : 'RANK', id]);
+    }
     const result = await client.query<CurriculumScopedRow>(
       `SELECT id, curriculum_id AS "curriculumId"
        FROM ${table}
        WHERE id = $1::uuid
-       FOR KEY SHARE`,
+       ${table === 'hon.student_curriculum_enrollments' ? 'FOR SHARE' : ''}`,
       [id],
     );
     const row = result.rows[0];

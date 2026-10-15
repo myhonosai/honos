@@ -1,6 +1,10 @@
+import { TestingHumanUiGuard } from './testing/testing-human-ui.guard.js';
 import { DocumentController } from './documents/document.controller.js';
 import { ParentDocumentController } from './documents/parent-document.controller.js';
 import { DocumentService } from './documents/document.service.js';
+import { CurriculumProgressController } from './curriculum/curriculum-progress.controller.js';
+import { CurriculumProgressService } from './curriculum/curriculum-progress.service.js';
+import { CurriculumHumanUiGuard } from './curriculum/curriculum-human-ui.guard.js';
 import { DocumentHumanUiGuard } from './documents/document-human-ui.guard.js';
 import { Module } from '@nestjs/common';
 import { LeadImportController } from './migration/lead-import.controller.js';
@@ -97,6 +101,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
 @Module({
   controllers: [
     StaffSearchController,
+    CurriculumProgressController,
     LeadImportController,
     DocumentController, ParentDocumentController,
     StaffRoleController,
@@ -145,6 +150,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
   ],
   providers: [
     StaffSearchService,
+    CurriculumProgressService, CurriculumHumanUiGuard, TestingHumanUiGuard,
     LeadImportService, LeadImportHumanUiGuard,
     DocumentService, DocumentHumanUiGuard,
     StaffRoleService,

@@ -27,6 +27,10 @@ const expectedRlsTables = [
   'curricula',
   'curriculum_ranks',
   'curriculum_requirements',
+  'curriculum_requirement_versions',
+  'curriculum_enrollment_history',
+  'curriculum_progress_observations',
+  'curriculum_command_requests',
   'document_templates',
   'document_versions',
   'document_publications',
@@ -73,6 +77,29 @@ const expectedRlsTables = [
   'promotion_decisions',
   'work_items',
 ].sort();
+
+const curriculumPrivateTables = ['curriculum_requirement_versions', 'curriculum_enrollment_history', 'curriculum_progress_observations', 'curriculum_command_requests'];
+const curriculumRestrictedTables = ['curriculum_requirements', ...curriculumPrivateTables];
+// [signature, runtime EXECUTE, SECURITY DEFINER]; trigger-only guards are invoker
+// functions, not callable authorization boundaries.
+const curriculumFunctions = [
+  ['hon.mutate_curriculum_progress(text,text,uuid,uuid,jsonb,text,uuid,uuid)', true, true],
+  ['hon.read_staff_curriculum_progress(text,text,uuid,uuid)', true, true],
+  ['hon.read_parent_curriculum_progress(text,uuid)', true, true],
+  ['hon.lock_human_testing_authority(text)', true, true],
+  ['hon.lock_human_testing_record(text,text,uuid)', true, true],
+  ['hon.resolve_authorized_scope(text,uuid,text)', true, true],
+  ['hon.resolve_parent_family_scope(text,uuid)', true, true],
+  ['hon.principal_has_school_permission(uuid,uuid,uuid,text)', true, true],
+  ['hon.require_curriculum_actor(text,text)', false, true],
+  ['hon.snapshot_curriculum_requirement()', false, true],
+  ['hon.validate_curriculum_observation()', false, true],
+  ['hon.verify_curriculum_enrollment_evidence()', false, true],
+  ['hon.guard_curriculum_history()', false, false],
+  ['hon.guard_curriculum_requirement()', false, false],
+  ['hon.guard_curriculum_enrollment_identity()', false, false],
+  ['hon.guard_curriculum_structure_identity()', false, false],
+];
 
 const client = new Client({
   connectionString: process.env.DATABASE_URL,
@@ -142,9 +169,26 @@ try {
   if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])",[documentTables])).rows[0].n !== '0') throw new Error('Document tables must retain forced deny-all RLS.');
   const importTables = ['lead_import_batches','lead_import_rows','lead_import_evidence','lead_import_requests'];
   if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])",[importTables])).rows[0].n !== '0') throw new Error('Import tables must retain forced deny-all RLS.');
+  if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])", [curriculumPrivateTables])).rows[0].n !== '0') throw new Error('Curriculum history/replay must retain forced deny-all RLS.');
+  const broadCurriculumAcls = (await client.query(`
+    SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='hon' AND c.relname=ANY($1::text[]) AND (
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
+        WHERE a.grantee NOT IN(c.relowner,coalesce((SELECT oid FROM pg_roles WHERE rolname='hon_runtime'),c.relowner)))
+      OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a
+        WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped
+        AND a.grantee NOT IN(c.relowner,coalesce((SELECT oid FROM pg_roles WHERE rolname='hon_runtime'),c.relowner))))
+  `, [[...curriculumRestrictedTables, 'student_curriculum_enrollments']])).rows;
+  if (broadCurriculumAcls.length) throw new Error(`Forbidden PUBLIC/client curriculum table/column ACLs: ${broadCurriculumAcls.map(r => r.relname).join(', ')}`);
   for (const {rolname} of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
     for (const table of importTables) if ((await client.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') allowed",[rolname,`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden client import access: ${rolname}.${table}`);
     for (const signature of ['hon.resolve_lead_import_scope(text,text)','hon.mutate_lead_import(text,text,uuid,jsonb,text,uuid,uuid)','hon.read_lead_import(text,text,uuid,uuid)']) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client import function: ${rolname}.${signature}`);
+    for (const table of curriculumRestrictedTables) {
+      const access = (await client.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,$2,'SELECT,INSERT,UPDATE,REFERENCES') allowed", [rolname, `hon.${table}`])).rows[0];
+      if (access.allowed) throw new Error(`Forbidden client curriculum access: ${rolname}.${table}`);
+    }
+    if ((await client.query("SELECT has_table_privilege($1,'hon.student_curriculum_enrollments','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,'hon.student_curriculum_enrollments','INSERT,UPDATE,REFERENCES') allowed", [rolname])).rows[0].allowed) throw new Error(`Forbidden client enrollment mutation: ${rolname}`);
+    for (const [signature] of curriculumFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname, signature])).rows[0].allowed) throw new Error(`Forbidden client curriculum/authorization function: ${rolname}.${signature}`);
   }
   const runtimeRole = (await client.query(`SELECT EXISTS (
     SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
@@ -156,6 +200,30 @@ try {
   `, [hqAiTables])).rows;
   if (hqAiPolicies.length) throw new Error('HQ AI configuration must retain forced deny-all RLS without tenant/GUC policies.');
   if (runtimeRole?.exists) {
+    for (const table of curriculumRestrictedTables) {
+      const access = (await client.query("SELECT has_table_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,REFERENCES') allowed", [`hon.${table}`])).rows[0];
+      if (access.allowed) throw new Error(`Forbidden direct runtime curriculum access: ${table}`);
+    }
+    for (const [table, allowedUpdates] of [
+      ['student_curriculum_enrollments', ['current_rank_id', 'version', 'updated_at']],
+      ['testing_candidates', ['result', 'instructor_notes', 'version', 'updated_at']],
+    ]) {
+      if ((await client.query("SELECT has_table_privilege('hon_runtime',$1,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime',$1,'REFERENCES') allowed", [`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden broad testing/enrollment mutation: ${table}`);
+      const columns = (await client.query(`SELECT attname,has_column_privilege('hon_runtime',attrelid,attnum,'UPDATE') allowed
+        FROM pg_attribute WHERE attrelid=$1::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum`, [`hon.${table}`])).rows;
+      if (!columns.length || columns.some(c => c.allowed !== allowedUpdates.includes(c.attname)) || allowedUpdates.some(c => !columns.some(row => row.attname === c))) throw new Error(`Incorrect exact curriculum/testing UPDATE column grants: ${table}`);
+    }
+    const enrollmentAccess = (await client.query("SELECT has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','SELECT') read,has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT') OR has_any_column_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT') insert_allowed")).rows[0];
+    if (!enrollmentAccess.read || enrollmentAccess.insert_allowed) throw new Error('Enrollment runtime requires SELECT, exact evidenced UPDATE columns, no INSERT.');
+    for (const [signature, shouldExecute, shouldDefine] of curriculumFunctions) {
+      const boundary = (await client.query(`SELECT p.prosecdef,p.proconfig,r.rolsuper OR r.rolbypassrls trusted_owner,
+        has_function_privilege('hon_runtime',p.oid,'EXECUTE') execute,
+        EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) broad_acl
+        FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature])).rows[0];
+      if (!boundary?.trusted_owner || boundary.prosecdef !== shouldDefine || boundary.execute !== shouldExecute || boundary.broad_acl
+        || boundary.proconfig?.length !== 1 || boundary.proconfig[0] !== 'search_path=pg_catalog, hon') throw new Error(`Unsafe curriculum/testing authorization or private-helper boundary: ${signature}`);
+    }
     const summaryBoundary = (await client.query(`
       SELECT p.prosecdef, p.provolatile, p.proconfig, r.rolsuper, r.rolbypassrls,
         has_function_privilege('hon_runtime', p.oid, 'EXECUTE') AS execute,
@@ -346,7 +414,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item, immutable decision-only AI plans and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, fixed read-only operations summary definer/ACL and forbidden runtime directory/HQ/activity grants, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item, immutable decision-only AI plans and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, invoice and membership SELECT/INSERT/UPDATE plus payment and AI-ledger SELECT-only reporting access, fixed read-only operations summary definer/ACL and forbidden runtime directory/HQ/activity grants, curriculum deny-all history/private access, exact enrollment/grading UPDATE columns and callable authorization/lock boundaries with denied PUBLIC/client/guard/evidence helpers, and cleared connection context.`);
 } finally {
   await client.end();
 }
