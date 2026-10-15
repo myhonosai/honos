@@ -45,6 +45,12 @@ Owners inherit HQ permissions through the existing HQ resolver; operators need t
 
 Catalog provider/model ID and cost unit are immutable after approval; register a new UUID to change identity/unit. Policy tenant scope and capability are immutable; register a new policy to change them. Catalog/policy deactivation and future/expired effective windows are selectable state, not deletion. Connection states are DISABLED, CONFIGURED, HEALTHY, DEGRADED, UNAVAILABLE. Provider status changes do not enqueue execution.
 
+## HQ web configuration surface
+
+`/hq/ai-providers` is the human-only HON HQ configuration surface. It calls these same-origin routes through `/api/v1`, so the existing verified-session cookie reaches the HON backend; it does not call a provider or external service. The page loads only the redacted snapshot permitted by the read boundary and locks its forms until that gate succeeds. A 403 on a mutation locks management controls while retaining permitted read/selection-preview access.
+
+The surface collects only the established write-contract fields: non-secret connection metadata, an optional opaque `hon-secret:<UUID v4>` reference identifier, approved catalog/capability/economics/effective-window metadata, and scoped routing-policy metadata. It labels references as **“Secret reference only — managed outside HON UI”** and never asks for or exposes raw keys, tokens, passwords, URLs, prompt content, or provider invocation controls. Its routing preview is explicitly selection-only and renders the returned `authority: UNCHANGED` / `execution: NOT_PERFORMED` result.
+
 ## Deterministic router contract
 
 `decideAiRoute(request, registry)` is a pure function with no I/O. `HqAiProviderService.preview` loads the **registered policy and live organization entitlement** from the HQ-only database resolver; the body cannot supply tier, provider/model/fallback configuration, credentials, tools, permissions, or Action Engine authority.
