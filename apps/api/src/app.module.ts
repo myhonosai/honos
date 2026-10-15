@@ -10,6 +10,8 @@ import { LeadController } from './crm/lead.controller.js';
 import { LeadService } from './crm/lead.service.js';
 import { TrialAppointmentController } from './crm/trial-appointment.controller.js';
 import { TrialAppointmentService } from './crm/trial-appointment.service.js';
+import { TrialAppointmentOutcomeController } from './crm/trial-appointment-outcome.controller.js';
+import { TrialAppointmentOutcomeService } from './crm/trial-appointment-outcome.service.js';
 import { ActionEngineService } from './action/action-engine.service.js';
 import { InterfaceThemeController } from './preferences/interface-theme.controller.js';
 import { InterfaceThemeService } from './preferences/interface-theme.service.js';
@@ -80,6 +82,7 @@ import { OperationsReportService } from './reports/operations-report.service.js'
     ParentPlannedAbsenceController,
     LeadController,
     TrialAppointmentController,
+    TrialAppointmentOutcomeController,
     PipelineController,
     CurriculumController,
     ProgramController,
@@ -114,6 +117,7 @@ import { OperationsReportService } from './reports/operations-report.service.js'
     ParentPlannedAbsenceService,
     LeadService,
     TrialAppointmentService,
+    TrialAppointmentOutcomeService,
     CrmLeadActionTool,
     PipelineService,
     CurriculumService,

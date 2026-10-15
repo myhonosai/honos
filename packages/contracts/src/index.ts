@@ -157,6 +157,20 @@ export interface CrmAppointmentSummary {
   updatedAt: string;
 }
 
+/** The only final states a human may record for an already scheduled trial. */
+export const CRM_TRIAL_OUTCOME_STATUSES = ['COMPLETED', 'NO_SHOW', 'CANCELLED'] as const;
+export type CrmTrialOutcomeStatus = (typeof CRM_TRIAL_OUTCOME_STATUSES)[number];
+
+/**
+ * A human staff outcome record. Appointment identity, tenant, actor, source,
+ * and appointment type remain server-derived and cannot be supplied by callers.
+ */
+export interface RecordTrialAppointmentOutcomeInput {
+  status: CrmTrialOutcomeStatus;
+  outcomeNotes?: string | undefined;
+  expectedVersion: number;
+}
+
 export interface CreatePersonInput {
   givenName: string;
   familyName: string;

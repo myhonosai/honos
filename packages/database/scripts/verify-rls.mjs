@@ -132,6 +132,24 @@ try {
       throw new Error('hon_runtime AI usage ledger privileges are not the required SELECT-only minimum.');
     }
 
+    const runtimeCrmAppointmentPrivileges = (await client.query(`
+      SELECT
+        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'SELECT') AS can_select,
+        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'INSERT') AS can_insert,
+        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'UPDATE') AS can_update,
+        has_table_privilege('hon_runtime', 'hon.crm_appointments', 'DELETE') AS can_delete,
+        has_type_privilege('hon_runtime', 'hon.crm_appointment_type', 'USAGE') AS type_usage,
+        has_type_privilege('hon_runtime', 'hon.crm_appointment_status', 'USAGE') AS status_usage
+    `)).rows[0];
+    if (!runtimeCrmAppointmentPrivileges?.can_select
+      || !runtimeCrmAppointmentPrivileges.can_insert
+      || !runtimeCrmAppointmentPrivileges.can_update
+      || runtimeCrmAppointmentPrivileges.can_delete
+      || !runtimeCrmAppointmentPrivileges.type_usage
+      || !runtimeCrmAppointmentPrivileges.status_usage) {
+      throw new Error('hon_runtime CRM appointment privileges are not the required SELECT/INSERT/UPDATE and no-DELETE minimum.');
+    }
+
     const runtimeOperationsReportingPrivileges = (await client.query(`
       SELECT
         has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS invoices_can_select,
@@ -159,7 +177,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment command grants, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
 } finally {
   await client.end();
 }

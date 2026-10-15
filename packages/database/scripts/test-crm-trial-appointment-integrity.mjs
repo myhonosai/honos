@@ -12,13 +12,15 @@ const connectionOptions = (connectionString) => ({
 
 const { TrialAppointmentController } = await import('../../../apps/api/dist/crm/trial-appointment.controller.js');
 const { TrialAppointmentService } = await import('../../../apps/api/dist/crm/trial-appointment.service.js');
+const { TrialAppointmentOutcomeController } = await import('../../../apps/api/dist/crm/trial-appointment-outcome.controller.js');
+const { TrialAppointmentOutcomeService } = await import('../../../apps/api/dist/crm/trial-appointment-outcome.service.js');
 const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 
 const ids = Object.fromEntries(
   [
     'organization', 'schoolA', 'schoolB', 'user', 'principal', 'ownerRole',
     'personA', 'personB', 'pipelineA', 'pipelineB', 'stageA', 'stageB', 'leadA', 'leadB',
-    'foreignAppointment',
+    'foreignAppointment', 'localScheduledAppointment',
   ].map((key) => [key, randomUUID()]),
 );
 const externalSubject = `crm-trial-appointment-${randomUUID()}`;
@@ -45,6 +47,14 @@ function inputFor(startsAt, endsAt, overrides = {}) {
     endsAt: endsAt.toISOString(),
     location: 'Studio A',
     notes: 'First visit; parent will attend.',
+    ...overrides,
+  };
+}
+
+function outcomeFor(status, expectedVersion, overrides = {}) {
+  return {
+    status,
+    expectedVersion,
     ...overrides,
   };
 }
@@ -98,12 +108,14 @@ await runtime.connect();
 const database = new RuntimeDatabaseService();
 const service = new TrialAppointmentService(database);
 const controller = new TrialAppointmentController(database, service);
+const outcomeService = new TrialAppointmentOutcomeService(database);
+const outcomeController = new TrialAppointmentOutcomeController(database, outcomeService);
 
 try {
-  const permission = await administrator.query(
-    "SELECT 1 FROM hon.permissions WHERE code = 'crm.trial.schedule'",
+  const permissions = await administrator.query(
+    "SELECT code FROM hon.permissions WHERE code IN ('crm.trial.schedule', 'crm.trial.manage') ORDER BY code",
   );
-  assert(permission.rowCount === 1, 'crm.trial.schedule permission migration was not applied.');
+  assert(permissions.rowCount === 2, 'CRM trial schedule/manage permission migrations were not applied.');
 
   const posture = await administrator.query(`
     SELECT relrowsecurity, relforcerowsecurity
@@ -122,8 +134,8 @@ try {
       has_type_privilege(current_user, 'hon.crm_appointment_type', 'USAGE') AS type_usage,
       has_type_privilege(current_user, 'hon.crm_appointment_status', 'USAGE') AS status_usage
   `)).rows[0];
-  assert(grants?.can_select && grants?.can_insert && !grants?.can_update && !grants?.can_delete,
-    'hon_runtime CRM appointment grants are not the exact SELECT/INSERT minimum.');
+  assert(grants?.can_select && grants?.can_insert && grants?.can_update && !grants?.can_delete,
+    'hon_runtime CRM appointment grants are not the exact SELECT/INSERT/UPDATE and no-DELETE minimum.');
   assert(grants?.type_usage && grants?.status_usage,
     'hon_runtime lacks explicit CRM appointment enum usage grants.');
 
@@ -162,7 +174,9 @@ try {
     );
     await administrator.query(
       `INSERT INTO hon.role_permissions (role_id, organization_id, permission_code)
-       VALUES ($1, $2, 'crm.trial.schedule')`,
+       VALUES
+         ($1, $2, 'crm.trial.schedule'),
+         ($1, $2, 'crm.trial.manage')`,
       [ids.ownerRole, ids.organization],
     );
     await administrator.query(
@@ -211,6 +225,15 @@ try {
        )`,
       [ids.foreignAppointment, ids.organization, ids.schoolB, ids.leadB, startsAt.toISOString(), endsAt.toISOString(), ids.principal],
     );
+    await administrator.query(
+      `INSERT INTO hon.crm_appointments (
+         id, organization_id, school_id, crm_lead_id, appointment_type, status,
+         starts_at, ends_at, location, notes, created_by_principal_id
+       ) VALUES (
+         $1, $2, $3, $4, 'TRIAL', 'SCHEDULED', $5, $6, 'Studio A', 'Unchanged schedule note', $7
+       )`,
+      [ids.localScheduledAppointment, ids.organization, ids.schoolA, ids.leadA, startsAt.toISOString(), endsAt.toISOString(), ids.principal],
+    );
     await administrator.query('COMMIT');
   } catch (error) {
     await administrator.query('ROLLBACK');
@@ -237,6 +260,95 @@ try {
   );
   assert(replayResponse.statusCode === 200 && replay.meta.replayed && replay.data.id === first.data.id,
     'A matching trial scheduling idempotency request did not replay its original response.');
+
+  const outcomeKey = `crm-trial-outcome-${randomUUID()}`;
+  const outcomeInput = outcomeFor('COMPLETED', first.data.version, { outcomeNotes: '  Trial completed successfully.  ' });
+  const outcomeResponse = responseCapture();
+  const outcome = await outcomeController.record(
+    ids.organization, ids.schoolA, first.data.id, outcomeKey, outcomeInput, request, outcomeResponse,
+  );
+  assert(outcomeResponse.statusCode === 200 && !outcome.meta.replayed,
+    'The first CRM trial outcome was not recorded with HTTP 200.');
+  assert(outcome.data.id === first.data.id && outcome.data.crmLeadId === ids.leadA
+    && outcome.data.appointmentType === 'TRIAL' && outcome.data.status === 'COMPLETED'
+    && outcome.data.version === first.data.version + 1
+    && outcome.data.notes === 'First visit; parent will attend.'
+    && outcome.data.updatedAt !== first.data.updatedAt,
+  'Trial outcome recording did not atomically preserve appointment identity/type/schedule notes while advancing outcome version and timestamp.');
+
+  const outcomeReplayResponse = responseCapture();
+  const outcomeReplay = await outcomeController.record(
+    ids.organization, ids.schoolA, first.data.id, outcomeKey, outcomeInput, request, outcomeReplayResponse,
+  );
+  assert(outcomeReplayResponse.statusCode === 200 && outcomeReplay.meta.replayed
+    && outcomeReplay.data.id === outcome.data.id && outcomeReplay.data.version === outcome.data.version,
+  'A matching trial outcome idempotency request did not replay its original response.');
+  await expectStatus(409, () => outcomeController.record(
+    ids.organization, ids.schoolA, first.data.id, outcomeKey,
+    outcomeFor('COMPLETED', first.data.version, { outcomeNotes: 'Different evidence' }), request, responseCapture(),
+  ), 'A reused trial outcome idempotency key accepted a different command.');
+  await expectStatus(409, () => outcomeController.record(
+    ids.organization, ids.schoolA, ids.localScheduledAppointment, `outcome-stale-${randomUUID()}`,
+    outcomeFor('NO_SHOW', 2), request, responseCapture(),
+  ), 'A stale trial outcome expectedVersion was accepted.');
+  await expectStatus(409, () => outcomeController.record(
+    ids.organization, ids.schoolA, first.data.id, `outcome-terminal-${randomUUID()}`,
+    outcomeFor('NO_SHOW', outcome.data.version), request, responseCapture(),
+  ), 'A terminal CRM appointment accepted another trial outcome.');
+  await expectStatus(404, () => outcomeController.record(
+    ids.organization, ids.schoolA, ids.foreignAppointment, `outcome-foreign-${randomUUID()}`,
+    outcomeFor('CANCELLED', 1), request, responseCapture(),
+  ), 'RLS-scoped trial outcome lookup exposed an appointment from another school.');
+  await expectStatus(400, () => outcomeService.record({
+    organizationId: ids.organization,
+    schoolId: ids.schoolA,
+    principalId: ids.principal,
+    principalType: 'HUMAN_USER',
+    requestId: randomUUID(),
+    correlationId: randomUUID(),
+    idempotencyKey: `outcome-invalid-status-${randomUUID()}`,
+    source: 'HUMAN_UI',
+  }, ids.localScheduledAppointment, outcomeFor('SCHEDULED', 1)), 'An invalid trial outcome status was accepted.');
+  await expectStatus(400, () => outcomeService.record({
+    organizationId: ids.organization,
+    schoolId: ids.schoolA,
+    principalId: ids.principal,
+    principalType: 'HUMAN_USER',
+    requestId: randomUUID(),
+    correlationId: randomUUID(),
+    idempotencyKey: `outcome-blank-note-${randomUUID()}`,
+    source: 'HUMAN_UI',
+  }, ids.localScheduledAppointment, outcomeFor('CANCELLED', 1, { outcomeNotes: '   ' })), 'A blank trial outcome note was accepted.');
+  await expectStatus(400, () => outcomeService.record({
+    organizationId: ids.organization,
+    schoolId: ids.schoolA,
+    principalId: ids.principal,
+    principalType: 'HUMAN_USER',
+    requestId: randomUUID(),
+    correlationId: randomUUID(),
+    idempotencyKey: `outcome-long-note-${randomUUID()}`,
+    source: 'HUMAN_UI',
+  }, ids.localScheduledAppointment, outcomeFor('CANCELLED', 1, { outcomeNotes: 'x'.repeat(2001) })), 'An oversized trial outcome note was accepted.');
+  await expectStatus(400, () => outcomeService.record({
+    organizationId: ids.organization,
+    schoolId: ids.schoolA,
+    principalId: ids.principal,
+    principalType: 'HUMAN_USER',
+    requestId: randomUUID(),
+    correlationId: randomUUID(),
+    idempotencyKey: `outcome-version-${randomUUID()}`,
+    source: 'HUMAN_UI',
+  }, ids.localScheduledAppointment, outcomeFor('CANCELLED', 0)), 'A non-positive trial outcome expectedVersion was accepted.');
+  await expectStatus(403, () => outcomeService.record({
+    organizationId: ids.organization,
+    schoolId: ids.schoolA,
+    principalId: ids.principal,
+    principalType: 'AUTOMATION',
+    requestId: randomUUID(),
+    correlationId: randomUUID(),
+    idempotencyKey: `outcome-automation-${randomUUID()}`,
+    source: 'AUTOMATION',
+  }, ids.localScheduledAppointment, outcomeFor('CANCELLED', 1)), 'A non-human/non-UI context recorded a trial outcome.');
 
   await expectStatus(409, () => controller.schedule(
     ids.organization, ids.schoolA, ids.leadA, firstKey,
@@ -331,17 +443,45 @@ try {
   const evidence = await administrator.query(`
     SELECT
       (SELECT count(*)::integer FROM hon.crm_appointments WHERE organization_id = $1) AS appointments,
-      (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1 AND action_code = 'crm.trial.schedule') AS audits,
-      (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1 AND event_type = 'crm.trial.scheduled' AND schema_version = 1) AS outbox,
+      (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1 AND action_code = 'crm.trial.schedule') AS schedule_audits,
+      (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1 AND action_code = 'crm.trial.outcome.record') AS outcome_audits,
+      (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1 AND event_type = 'crm.trial.scheduled' AND schema_version = 1) AS schedule_outbox,
+      (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1 AND event_type = 'crm.trial.outcome.recorded' AND schema_version = 1) AS outcome_outbox,
+      (SELECT next_state->>'outcomeNotes' FROM hon.audit_events WHERE organization_id = $1 AND action_code = 'crm.trial.outcome.record') AS audit_outcome_notes,
+      (SELECT payload->>'outcomeNotes' FROM hon.outbox_events WHERE organization_id = $1 AND event_type = 'crm.trial.outcome.recorded') AS outbox_outcome_notes,
+      (SELECT status::text FROM hon.crm_leads WHERE id = $2::uuid) AS lead_status,
+      (SELECT pipeline_id::text FROM hon.crm_leads WHERE id = $2::uuid) AS lead_pipeline_id,
+      (SELECT appointment_type::text FROM hon.crm_appointments WHERE id = $3::uuid) AS appointment_type,
+      (SELECT status::text FROM hon.crm_appointments WHERE id = $3::uuid) AS appointment_status,
+      (SELECT version FROM hon.crm_appointments WHERE id = $3::uuid) AS appointment_version,
+      (SELECT notes FROM hon.crm_appointments WHERE id = $3::uuid) AS appointment_notes,
+      (SELECT status::text FROM hon.crm_appointments WHERE id = $4::uuid) AS stale_appointment_status,
       (SELECT count(*)::integer FROM hon.class_bookings WHERE organization_id = $1) AS bookings,
-      (SELECT count(*)::integer FROM hon.memberships WHERE organization_id = $1) AS memberships
-  `, [ids.organization]);
-  assert(evidence.rows[0]?.appointments === 2 && evidence.rows[0]?.audits === 1 && evidence.rows[0]?.outbox === 1,
-    'Trial scheduling did not create exactly one appointment/audit/v1 outbox event under idempotent replay.');
-  assert(evidence.rows[0]?.bookings === 0 && evidence.rows[0]?.memberships === 0,
-    'Trial scheduling mutated booking or membership data.');
+      (SELECT count(*)::integer FROM hon.families WHERE organization_id = $1) AS families,
+      (SELECT count(*)::integer FROM hon.student_profiles WHERE organization_id = $1) AS students,
+      (SELECT count(*)::integer FROM hon.student_curriculum_enrollments WHERE organization_id = $1) AS enrollments,
+      (SELECT count(*)::integer FROM hon.memberships WHERE organization_id = $1) AS memberships,
+      (SELECT count(*)::integer FROM hon.crm_activities WHERE organization_id = $1) AS activities,
+      (SELECT count(*)::integer FROM hon.ai_usage_ledger WHERE organization_id = $1) AS ai_usage,
+      (SELECT count(*)::integer FROM hon.action_requests WHERE organization_id = $1) AS action_requests
+  `, [ids.organization, ids.leadA, first.data.id, ids.localScheduledAppointment]);
+  assert(evidence.rows[0]?.appointments === 3
+    && evidence.rows[0]?.schedule_audits === 1 && evidence.rows[0]?.outcome_audits === 1
+    && evidence.rows[0]?.schedule_outbox === 1 && evidence.rows[0]?.outcome_outbox === 1
+    && evidence.rows[0]?.audit_outcome_notes === 'Trial completed successfully.'
+    && evidence.rows[0]?.outbox_outcome_notes === 'Trial completed successfully.',
+  'Trial scheduling/outcome did not create exactly one atomic audit and v1 outbox event under idempotent replay.');
+  assert(evidence.rows[0]?.lead_status === 'OPEN' && evidence.rows[0]?.lead_pipeline_id === ids.pipelineA
+    && evidence.rows[0]?.appointment_type === 'TRIAL' && evidence.rows[0]?.appointment_status === 'COMPLETED'
+    && evidence.rows[0]?.appointment_version === 2 && evidence.rows[0]?.appointment_notes === 'First visit; parent will attend.'
+    && evidence.rows[0]?.stale_appointment_status === 'SCHEDULED',
+  'Trial outcome altered lead/pipeline state, appointment type/schedule notes, or a stale appointment.');
+  assert(evidence.rows[0]?.bookings === 0 && evidence.rows[0]?.families === 0 && evidence.rows[0]?.students === 0
+    && evidence.rows[0]?.enrollments === 0 && evidence.rows[0]?.memberships === 0 && evidence.rows[0]?.activities === 0
+    && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,
+  'Trial outcome mutated booking, student/family, enrollment, membership, CRM activity, or AI/action state.');
 
-  console.log('Verified CRM trial appointment permission scope, forced RLS, exact grants, lead isolation, strict bounded dates, human-UI boundary, idempotent replay, composite storage integrity, atomic audit/outbox, and no booking or membership mutation.');
+  console.log('Verified CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
 } finally {
   try {
     await database.onModuleDestroy();
