@@ -14,6 +14,11 @@ export interface ResolvedHqOperatorScope {
   hqRole: 'HON_HQ_OWNER' | 'HON_HQ_OPERATOR' | 'HON_HQ_SUPPORT';
 }
 
+export interface ResolvedParentFamilyScope extends ResolvedPrincipalScope {
+  familyId: string;
+  accessLevel: 'PRIMARY_GUARDIAN' | 'SECONDARY_GUARDIAN' | 'VIEWER';
+}
+
 export interface HqSchoolProvisioningCommand {
   externalSubject: string;
   legalName: string;
@@ -123,6 +128,17 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       [externalSubject, permissionCode],
     );
     return result.rows[0];
+  }
+
+  async resolveParentFamilyScopes(externalSubject: string, schoolId: string): Promise<ResolvedParentFamilyScope[]> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<ResolvedParentFamilyScope>(
+      `SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId",
+              family_id AS "familyId", access_level::text AS "accessLevel"
+       FROM hon.resolve_parent_family_scope($1, $2::uuid)`,
+      [externalSubject, schoolId],
+    );
+    return result.rows;
   }
 
   async provisionSchoolFromHq(command: HqSchoolProvisioningCommand): Promise<HqSchoolProvisioningResult> {
