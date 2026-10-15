@@ -69,6 +69,8 @@ import { OperationsReportController } from './reports/operations-report.controll
 import { OperationsReportService } from './reports/operations-report.service.js';
 import { CommunicationConsentController } from './communication/communication-consent.controller.js';
 import { CommunicationConsentService } from './communication/communication-consent.service.js';
+import { CommunicationMessageController } from './communication/communication-message.controller.js';
+import { CommunicationMessageService } from './communication/communication-message.service.js';
 
 @Module({
   controllers: [
@@ -98,6 +100,7 @@ import { CommunicationConsentService } from './communication/communication-conse
     AiUsageController,
     OperationsReportController,
     CommunicationConsentController,
+    CommunicationMessageController,
     TestingEventController,
     TestingCandidateController,
     TestingCandidateGradeController,
@@ -136,6 +139,7 @@ import { CommunicationConsentService } from './communication/communication-conse
     AiUsageService,
     OperationsReportService,
     CommunicationConsentService,
+    CommunicationMessageService,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,

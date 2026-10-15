@@ -16,6 +16,7 @@ const expectedRlsTables = [
   'class_sessions',
   'class_templates',
   'communication_consents',
+  'communication_messages',
   'crm_activities',
   'crm_appointments',
   'crm_leads',
@@ -171,6 +172,24 @@ try {
       throw new Error('hon_runtime communication consent privileges are not the required SELECT/INSERT/UPDATE, enum-usage, and no-DELETE minimum.');
     }
 
+    const runtimeCommunicationMessagePrivileges = (await client.query(`
+      SELECT
+        has_table_privilege('hon_runtime', 'hon.communication_messages', 'SELECT') AS can_select,
+        has_table_privilege('hon_runtime', 'hon.communication_messages', 'INSERT') AS can_insert,
+        has_table_privilege('hon_runtime', 'hon.communication_messages', 'UPDATE') AS can_update,
+        has_table_privilege('hon_runtime', 'hon.communication_messages', 'DELETE') AS can_delete,
+        has_type_privilege('hon_runtime', 'hon.communication_message_channel', 'USAGE') AS channel_usage,
+        has_type_privilege('hon_runtime', 'hon.communication_message_lifecycle', 'USAGE') AS lifecycle_usage
+    `)).rows[0];
+    if (!runtimeCommunicationMessagePrivileges?.can_select
+      || !runtimeCommunicationMessagePrivileges.can_insert
+      || !runtimeCommunicationMessagePrivileges.can_update
+      || runtimeCommunicationMessagePrivileges.can_delete
+      || !runtimeCommunicationMessagePrivileges.channel_usage
+      || !runtimeCommunicationMessagePrivileges.lifecycle_usage) {
+      throw new Error('hon_runtime communication message privileges are not the required SELECT/INSERT/UPDATE, enum-usage, and no-DELETE minimum.');
+    }
+
     const runtimeOperationsReportingPrivileges = (await client.query(`
       SELECT
         has_table_privilege('hon_runtime', 'hon.invoices', 'SELECT') AS invoices_can_select,
@@ -198,7 +217,7 @@ try {
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
   }
-  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communication-consent command grants, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
+  console.log(`Verified forced RLS on all ${expectedRlsTables.length} tracked HON operational tables, append-only audit/outbox policies, work-item and AI ledger tenant isolation, exact CRM appointment and communications consent/message command grants, SELECT-only AI-ledger/invoice/payment reporting access, and cleared connection context.`);
 } finally {
   await client.end();
 }

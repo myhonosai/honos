@@ -671,6 +671,42 @@ export interface CommunicationConsentSummary {
   updatedAt: string;
 }
 
+/** Provider-neutral channels for a consent-gated outbound message queue. */
+export const COMMUNICATION_MESSAGE_CHANNELS = ['SMS', 'EMAIL', 'PUSH'] as const;
+export type CommunicationMessageChannel = (typeof COMMUNICATION_MESSAGE_CHANNELS)[number];
+
+/** Delivery is deliberately outside this queue foundation. */
+export const COMMUNICATION_MESSAGE_LIFECYCLES = ['DRAFT', 'QUEUED', 'CANCELLED'] as const;
+export type CommunicationMessageLifecycle = (typeof COMMUNICATION_MESSAGE_LIFECYCLES)[number];
+
+/** Tenant, actor, initial lifecycle, and all provider data are server-established. */
+export interface CreateCommunicationMessageInput {
+  recipientPersonId: string;
+  channel: CommunicationMessageChannel;
+  content: string;
+  scheduledAt?: string | undefined;
+}
+
+/** Queueing is a separate human confirmation against the current consent record. */
+export interface QueueCommunicationMessageInput {
+  expectedVersion: number;
+}
+
+/** Narrow queue representation: it has no contact address or provider/delivery data. */
+export interface CommunicationMessageSummary {
+  id: string;
+  recipientPersonId: string;
+  channel: CommunicationMessageChannel;
+  content: string;
+  lifecycle: CommunicationMessageLifecycle;
+  scheduledAt?: string | undefined;
+  createdByPrincipalId: string;
+  queuedByPrincipalId?: string | undefined;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RegisteredAction {
   code: string;
   requiredPermission: string;
