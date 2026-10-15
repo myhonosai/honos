@@ -6,7 +6,7 @@
 
 - [x] Validate migration `0100_claire_teaching_assistant.sql` in a disposable restricted-role database only; never target a remote/Supabase database.
 - [x] Run Claire security, API, and UI checks with the paid-call gate absent and a rejecting network sentinel.
-- [ ] Validate separate-reviewer approval/denial, stale policy/expiry, replay/concurrency, quota, unknown outcome, redaction, and zero unintended Teaching Studio/student/attendance/testing/promotion/billing/communication effects.
+- [x] Validate separate-reviewer approval/denial, stale policy/expiry, replay/concurrency, quota, unknown outcome, redaction, and zero unintended Teaching Studio/student/attendance/testing/promotion/billing/communication effects.
 
 ## 1. Shared commercial tenancy, security, and entitlement foundation
 

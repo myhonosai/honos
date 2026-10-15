@@ -38,5 +38,5 @@ env -u OPENROUTER_API_KEY -u OPENROUTER_PAID_CALL_APPROVED \
 
 - [x] Apply the migration in a disposable local database and verify RLS, ACLs, functions, and restricted runtime posture.
 - [x] Run focused API/UI tests, migration checks, and workspace compilation after the local fixture is available.
-- [ ] Exercise fake-result approval, denial, stale-policy/expiry, quota, replay/concurrency, raw-source rejection, and zero-side-effect cases against the disposable database.
+- [x] Exercise fake-result approval, denial, stale-policy/expiry, quota, replay/concurrency, raw-source rejection, and zero-side-effect cases against the disposable database with a rejecting external-network sentinel.
 - [ ] Obtain a separately documented owner authorization before any real paid provider call; do not enable the gate in code or test.

@@ -69,6 +69,11 @@ try {
       if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_marketing_ai_validation' || runtime.hostname!==owner.hostname || runtime.port!==owner.port || runtime.pathname!==owner.pathname || runtime.username!=='hon_marketing_ai_runtime') throw new Error('Marketing AI aliases require exact disposable localhost database.');
       sql=sql.replaceAll('hon_runtime','hon_marketing_ai_runtime');
     }
+    if (new URL(databaseUrl).username === 'hon_teaching_ai_owner') {
+      const owner=new URL(databaseUrl), runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_teaching_ai_validation' || runtime.hostname!==owner.hostname || runtime.port!==owner.port || runtime.pathname!==owner.pathname || runtime.username!=='hon_teaching_ai_runtime') throw new Error('Claire Teaching Assistant aliases require exact disposable localhost database.');
+      sql=sql.replaceAll('hon_runtime','hon_teaching_ai_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_campaign_owner') {
       const runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
       const owner = new URL(databaseUrl);
