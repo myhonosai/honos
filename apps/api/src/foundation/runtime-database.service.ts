@@ -179,6 +179,13 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_teaching_studio_scope($1,$2::uuid)', [externalSubject, schoolId],
     )).rows[0];
   }
+  /** Claire has no client school selector; SQL returns only one live eligible staff scope. */
+  async resolveTeachingAssistantScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_teaching_assistant_scope($1)', [externalSubject],
+    )).rows[0];
+  }
   async resolveRetentionReviewScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

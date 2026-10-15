@@ -16,11 +16,11 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS
 // PostgreSQL role grants and SECURITY DEFINER ACLs remain attached to `role`.
 // Local disposable validation aliases do not contain a dot and pass unchanged.
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username.split('.', 1)[0] : 'hon_runtime';
-if (!['hon_marketing_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (!['hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    const db = runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    const db = runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
     if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
     if (runtimeRoleName === 'hon_marketing_ai_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_marketing_ai_owner' : runtimeRoleName))) throw new Error('Marketing Assistant verifier requires exact disposable-local aliases.');
   }
@@ -120,6 +120,9 @@ const expectedRlsTables = [
   'student_profiles',
   'teaching_lesson_plans',
   'teaching_lesson_plan_revisions',
+  'teaching_ai_invocations',
+  'teaching_ai_drafts',
+  'teaching_studio_ai_drafts',
   'teaching_resources',
   'teaching_resource_revisions',
   'instructor_assessments',

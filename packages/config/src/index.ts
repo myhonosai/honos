@@ -161,6 +161,13 @@ export const ACTION_CATALOG: readonly RegisteredAction[] = [
     riskClass: 'MODERATE',
   },
   {
+    code: 'teaching.draft.save',
+    requiredPermission: 'teaching.assistant.use',
+    minimumTier: 'COMPLETE',
+    platformAuthorityFloor: 'CONFIRM',
+    riskClass: 'MODERATE',
+  },
+  {
     code: 'marketing.social.publish',
     requiredPermission: 'marketing.social.publish',
     minimumTier: 'CORE',

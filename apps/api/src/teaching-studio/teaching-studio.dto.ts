@@ -19,7 +19,7 @@ export class TeachingAssessmentDto implements TeachingAssessmentInput {
 }
 @Injectable()
 export class TeachingStudioHumanUiGuard extends CurriculumHumanUiGuard {
-  protected readonly command = 'teaching-studio';
+  protected readonly command: string = 'teaching-studio';
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<{ method: string; headers: Record<string, unknown> }>();
     if (request.method !== 'GET' && request.headers['sec-fetch-site'] !== undefined && request.headers['sec-fetch-site'] !== 'same-origin') throw new ForbiddenException({ code: 'HUMAN_UI_REQUIRED' });

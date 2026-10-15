@@ -634,3 +634,38 @@ BEGIN
     TO hon_runtime;
   END IF;
 END $$;
+
+
+-- Claire Teaching Assistant: private curriculum-only drafting records. No direct
+-- table/column or helper access; only these explicit server boundaries execute.
+BEGIN;
+DO $$
+DECLARE r text; t text; a text; f record;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['teaching_ai_invocations','teaching_ai_drafts','teaching_studio_ai_drafts'] LOOP
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t);
+    END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='hon' AND p.proname IN('teaching_assistant_safe_text','guard_teaching_assistant','resolve_teaching_assistant_scope','require_teaching_assistant_actor','teaching_assistant_event','read_teaching_invocation','begin_teaching_request','teaching_planning_reference','prepare_teaching_invocation','fail_teaching_invocation','record_teaching_result','bind_teaching_proposal','teaching_action_is_current','reject_teaching_draft','save_approved_teaching_draft') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f.signature);
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+    FOREACH t IN ARRAY ARRAY['teaching_ai_invocations','teaching_ai_drafts','teaching_studio_ai_drafts'] LOOP
+      EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+      FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r);
+      END LOOP;
+    END LOOP;
+    FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='hon' AND p.proname IN('teaching_assistant_safe_text','guard_teaching_assistant','resolve_teaching_assistant_scope','require_teaching_assistant_actor','teaching_assistant_event','read_teaching_invocation','begin_teaching_request','teaching_planning_reference','prepare_teaching_invocation','fail_teaching_invocation','record_teaching_result','bind_teaching_proposal','teaching_action_is_current','reject_teaching_draft','save_approved_teaching_draft') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.resolve_teaching_assistant_scope(text),hon.read_teaching_invocation(text,uuid),hon.begin_teaching_request(text,jsonb,uuid),hon.teaching_planning_reference(text,uuid),hon.prepare_teaching_invocation(text,uuid,uuid,boolean),hon.fail_teaching_invocation(text,uuid,text,text),hon.record_teaching_result(text,uuid,jsonb),hon.bind_teaching_proposal(text,uuid,uuid),hon.teaching_action_is_current(uuid,jsonb),hon.reject_teaching_draft(uuid),hon.save_approved_teaching_draft(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+COMMIT;

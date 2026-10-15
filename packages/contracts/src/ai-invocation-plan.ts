@@ -1,7 +1,7 @@
 import type { HonAiTeamAgentKey } from './ai-team.js';
 import type { AiProviderId } from './ai-provider.js';
 
-export const AI_INVOCATION_TASK_CLASSES = ['SUMMARIZE', 'ANALYZE', 'DRAFT_MARKETING'] as const;
+export const AI_INVOCATION_TASK_CLASSES = ['SUMMARIZE', 'ANALYZE', 'DRAFT_MARKETING', 'DRAFT_TEACHING'] as const;
 export type AiInvocationTaskClass = (typeof AI_INVOCATION_TASK_CLASSES)[number];
 export const AI_INVOCATION_PLANNING_STATES = ['READY', 'THINKING'] as const;
 export type AiInvocationPlanningState = (typeof AI_INVOCATION_PLANNING_STATES)[number];

@@ -1,6 +1,9 @@
 import { MarketingAssistantController, MarketingAssistantHumanUiGuard } from './marketing/marketing-assistant.controller.js';
 import { MarketingAssistantService } from './marketing/marketing-assistant.service.js';
 import { MARKETING_PROVIDER_RUNTIME, OpenRouterRuntime } from './ai/provider-runtime.js';
+import { TeachingAssistantController, TeachingAssistantHumanUiGuard } from './teaching-assistant/teaching-assistant.controller.js';
+import { TeachingAssistantService } from './teaching-assistant/teaching-assistant.service.js';
+import { CLAIRE_PROVIDER_RUNTIME, OpenRouterClaireRuntime } from './ai/claire-provider-runtime.js';
 import { MarketplaceController } from './marketplace/marketplace.controller.js';
 import { MarketplaceService } from './marketplace/marketplace.service.js';
 import { MarketplaceHumanUiGuard } from './marketplace/marketplace.dto.js';
@@ -169,6 +172,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     StaffPublicFormController, PublishedFormController,
     CampaignController,
     MarketingAssistantController,
+    TeachingAssistantController,
     RevenuePlanningController,
     StaffSearchController,
     CurriculumProgressController,
@@ -241,6 +245,9 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     MarketingAssistantService,
     MarketingAssistantHumanUiGuard,
     { provide: MARKETING_PROVIDER_RUNTIME, useFactory: () => new OpenRouterRuntime() }, CampaignHumanUiGuard,
+    TeachingAssistantService,
+    TeachingAssistantHumanUiGuard,
+    { provide: CLAIRE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterClaireRuntime() },
     RevenuePlanningService, RevenuePlanningHumanUiGuard,
     StaffSearchService,
     CurriculumProgressService, CurriculumHumanUiGuard, TestingHumanUiGuard,
