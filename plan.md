@@ -130,6 +130,10 @@ Family scope + student model ─────────── Parent App/Eian +
 Curriculum/rank model ────────────────── Progress + testing + gamification
 ```
 
+## Family and student data foundation
+
+The first family/student migration deliberately separates **person**, **family**, **family relationship**, **student profile**, and **verified family-access grant**. It adds forced-RLS composite ownership to each table and avoids treating a phone number, email address, guardian relationship, or client-submitted family UUID as authorization. The later Parent App/Eian resolver must derive an active family grant from the verified human application principal; staff retains school-scoped permissions, and HQ does not inherit family access.
+
 ## Current external dependency
 
 A protected PostgreSQL `DATABASE_URL` is used only for migration execution and controlled database-administrator checks. Supabase development now has a separate `HON_RUNTIME_DATABASE_URL` for the non-superuser, non-`BYPASSRLS` `hon_runtime` role; readiness, forced RLS, transaction-scoped isolation, and the current HQ Owner gate have been verified through that connection. The application refuses to fall back to the migration credential. Production requires an equivalently restricted runtime connection.

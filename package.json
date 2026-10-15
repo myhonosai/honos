@@ -9,9 +9,10 @@
   "scripts": {
     "dev": "pnpm --filter @hon/web dev",
     "dev:api": "pnpm --filter @hon/api start:dev",
-    "build": "pnpm -r --if-present build",
-    "check": "pnpm -r --if-present check",
-    "test": "pnpm -r --if-present test",
+    "prepare:workspace": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/design-system build",
+    "build": "pnpm prepare:workspace && pnpm -r --if-present build",
+    "check": "pnpm prepare:workspace && pnpm -r --if-present check",
+    "test": "pnpm prepare:workspace && pnpm -r --if-present test",
     "db:migrate": "pnpm --filter @hon/database db:migrate",
     "db:verify-rls": "pnpm --filter @hon/database db:verify-rls",
     "db:test-security": "pnpm --filter @hon/database db:test-security",

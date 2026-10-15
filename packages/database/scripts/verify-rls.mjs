@@ -19,12 +19,13 @@ try {
         'organizations', 'organization_entitlements', 'schools', 'hq_operator_grants', 'principal_interface_preferences', 'audit_events', 'idempotency_records', 'outbox_events',
         'people', 'crm_leads', 'billing_accounts', 'memberships', 'invoices',
         'payment_attempts', 'membership_payment_schedules', 'action_requests', 'action_approvals', 'work_items', 'outbox_delivery_attempts',
+        'families', 'family_members', 'student_profiles', 'family_access_grants',
         'ai_usage_ledger'
       )
     ORDER BY c.relname
   `)).rows;
   const missing = rows.filter((row) => !row.relrowsecurity || !row.relforcerowsecurity).map((row) => row.relname);
-  if (rows.length < 20 || missing.length > 0) {
+  if (rows.length < 24 || missing.length > 0) {
     throw new Error(`RLS verification failed. Missing, disabled, or unforced: ${missing.join(', ') || 'required tables'}`);
   }
   const appendOnlyPolicies = (await client.query(`
