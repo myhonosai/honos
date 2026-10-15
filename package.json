@@ -52,6 +52,8 @@
     "db:test-community": "pnpm --filter @hon/database db:test-community",
     "db:test-action-approvals": "pnpm --filter @hon/database db:test-action-approvals",
     "db:test-voice": "pnpm --filter @hon/database db:test-voice",
-    "db:test-marketplace": "pnpm --filter @hon/database db:test-marketplace"
+    "db:test-marketplace": "pnpm --filter @hon/database db:test-marketplace",
+    "db:test-achievements": "pnpm --filter @hon/database db:test-achievements",
+    "db:setup-achievements": "pnpm --filter @hon/database db:setup-achievements"
   }
 }

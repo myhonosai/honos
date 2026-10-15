@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function ParentPage(): React.ReactElement {
-  return <HonReferenceSuite screen="parent" />;
+  return <><nav aria-label="Family recognition navigation"><a href="/parent/achievements">View current child achievements</a></nav><HonReferenceSuite screen="parent" /></>;
 }

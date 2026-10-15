@@ -48,7 +48,9 @@
     "db:test-community": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-community-integrity.mjs",
     "db:test-action-approvals": "node scripts/test-action-approvals-integrity.mjs",
     "db:test-voice": "pnpm --filter @hon/api build && node scripts/test-voice-integrity.mjs",
-    "db:test-marketplace": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketplace-integrity.mjs"
+    "db:test-marketplace": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketplace-integrity.mjs",
+    "db:test-achievements": "pnpm --filter @hon/contracts build && pnpm --filter @hon/api build && node scripts/test-achievement-integrity.mjs",
+    "db:setup-achievements": "node scripts/setup-achievement-validation.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

@@ -99,6 +99,14 @@
     {
       "path": "/community/marketplace",
       "title": "HON | Private human marketplace"
+    },
+    {
+      "path": "/staff/students/achievements",
+      "title": "HON | Human student achievements"
+    },
+    {
+      "path": "/parent/achievements",
+      "title": "HON | Family child achievements"
     }
   ]
 }

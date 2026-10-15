@@ -916,3 +916,55 @@ DO $$ DECLARE x record; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',x.tbl)::regclass AND conname=x.name AND contype='c' AND convalidated AND pg_get_constraintdef(oid)=x.definition) THEN RAISE EXCEPTION 'Unsafe permanent marketplace constraint %.%',x.tbl,x.name; END IF;
  END LOOP;
 END $$;
+
+-- Closed human student achievement verification: exact ACLs, no policies, immutable history.
+DO $$ DECLARE t text; f record; r record; b boolean; trigger_name text; trigger_type integer; BEGIN
+ FOR t IN SELECT unnest(ARRAY['achievement_definitions','achievement_definition_versions','achievement_awards','achievement_award_versions','achievement_requests','achievement_events','achievement_outbox']) LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND a.grantee<>c.relowner)
+  INTO b FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe achievement table %',t; END IF;
+  IF true THEN
+   FOR trigger_name,trigger_type IN SELECT * FROM (VALUES('achievement_immutable',27),('achievement_no_truncate',34)) v(n,k) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname=trigger_name AND tgtype=trigger_type AND tgfoid='hon.guard_achievement_history()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe achievement trigger %.%',t,trigger_name; END IF;
+   END LOOP;
+  END IF;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+ ('hon.guard_achievement_history()',false,false),
+ ('hon.achievement_text(text,integer,boolean)',false,false),
+ ('hon.achievement_permission(uuid,uuid,uuid,text)',false,true),
+ ('hon.resolve_achievement_scope(text,uuid)',true,true),
+ ('hon.require_achievement_actor(text,text)',false,true),
+ ('hon.lock_achievement_actor(text,text,boolean)',false,true),
+ ('hon.lock_achievement_student(uuid)',false,true),
+ ('hon.validate_achievement_input(text,jsonb)',false,false),
+ ('hon.achievement_definition_projection(uuid,integer)',false,true),
+ ('hon.achievement_award_projection(uuid,integer,boolean)',false,true),
+ ('hon.read_achievements(text,text,uuid,uuid,uuid,integer)',true,true),
+ ('hon.mutate_achievements(text,text,uuid,uuid,jsonb,text,uuid,uuid)',true,true),
+ ('hon.require_parent_achievement_actor(text,uuid,uuid)',false,true),
+ ('hon.read_parent_achievements(text,uuid,uuid,uuid)',true,true)
+ ) v(signature,can_execute,is_definer) LOOP
+  SELECT p.prosecdef=f.is_definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO b FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe achievement function %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r.rolname,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Forbidden client achievement function %',r.rolname; END IF;
+  END LOOP;
+ END LOOP;
+END $$;
+
+-- Permanent achievement review-only and inert-outbox constraints cannot be relaxed.
+DO $$ DECLARE x record; BEGIN
+ FOR x IN SELECT * FROM (VALUES
+  ('achievement_outbox','achievement_outbox_execution_allowed_check','CHECK ((NOT execution_allowed))'),
+  ('achievement_outbox','achievement_outbox_status_check',$definition$CHECK ((status = 'INERT'::text))$definition$)
+ ) v(tbl,name,definition) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',x.tbl)::regclass AND conname=x.name AND contype='c' AND convalidated AND pg_get_constraintdef(oid)=x.definition) THEN RAISE EXCEPTION 'Unsafe permanent achievement constraint %.%',x.tbl,x.name; END IF;
+ END LOOP;
+END $$;

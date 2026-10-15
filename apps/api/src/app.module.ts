@@ -129,9 +129,13 @@ import { RenewalHumanUiGuard } from './billing/renewal.dto.js';
 import { CommunityController } from './community/community.controller.js';
 import { CommunityService } from './community/community.service.js';
 import { CommunityHumanUiGuard } from './community/community.dto.js';
+import { AchievementsController, ParentAchievementsController } from './achievements/achievements.controller.js';
+import { AchievementsService } from './achievements/achievements.service.js';
+import { AchievementHumanUiGuard } from './achievements/achievements.dto.js';
 
 @Module({
   controllers: [
+    AchievementsController, ParentAchievementsController,
     VoiceController,
     MarketplaceController,
     CommunityController,
@@ -191,6 +195,7 @@ import { CommunityHumanUiGuard } from './community/community.dto.js';
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [
+    AchievementsService, AchievementHumanUiGuard,
     VoiceService, VoiceHumanUiGuard,
     MarketplaceService, MarketplaceHumanUiGuard,
     CommunityService, CommunityHumanUiGuard,

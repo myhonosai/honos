@@ -29,6 +29,11 @@ try {
   for (const file of files) {
     if (applied.has(file)) continue;
     let sql = await readFile(join(migrationsDirectory.pathname, file), 'utf8');
+    if (new URL(databaseUrl).username === 'hon_achievement_owner') {
+      const owner=new URL(databaseUrl), runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_achievement_validation' || runtime.hostname!=='localhost' || runtime.port!=='5432' || runtime.pathname!==owner.pathname || runtime.username!=='hon_achievement_runtime') throw new Error('Achievement aliases require exact disposable localhost database.');
+      sql=sql.replaceAll('hon_runtime','hon_achievement_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_marketplace_owner') {
       const owner=new URL(databaseUrl), runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
       if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_marketplace_validation' || runtime.hostname!=='localhost' || runtime.port!=='5432' || runtime.pathname!==owner.pathname || runtime.username!=='hon_marketplace_runtime') throw new Error('Marketplace aliases require exact disposable localhost database.');
