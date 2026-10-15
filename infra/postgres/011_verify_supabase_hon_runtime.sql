@@ -355,3 +355,47 @@ BEGIN
 END $$;
 -- Guarded disposable-local proof only for this slice: pnpm db:test-revenue-planning.
 -- No production/Supabase migration or remote fixture is implied by this verifier.
+
+-- Human marketing planning / immutable lead attribution: exact allowlist only.
+-- Re-runnable diagnostics. Four entry points execute, no table/client/helper access.
+DO $$ DECLARE t text; f record; b record; r text;
+BEGIN
+ FOR t IN SELECT unnest(ARRAY['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions']) LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (owner.rolsuper OR owner.rolbypassrls)
+   AND NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) safe
+  INTO b FROM pg_class c JOIN pg_roles owner ON owner.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe campaign private table: %',t; END IF;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.resolve_campaign_scope(text,text)',true,true),
+  ('hon.mutate_campaign(text,text,uuid,jsonb,text,uuid,uuid)',true,true),
+  ('hon.read_campaigns(text,text,uuid,text,text,integer)',true,true),
+  ('hon.authorize_campaign_lead(text,boolean)',true,true),
+  ('hon.guard_campaign_history()',false,false),
+  ('hon.validate_campaign_window(text,text,boolean)',false,false),
+  ('hon.validate_campaign_input(jsonb,boolean)',false,false),
+  ('hon.campaign_summary(uuid)',false,true),
+  ('hon.guard_campaign_record()',false,false),
+  ('hon.require_campaign_actor(text,text)',false,true),
+  ('hon.lock_campaign_actor(text,text)',false,true),
+  ('hon.capture_lead_attribution()',false,true),
+  ('hon.guard_campaign_evidence_insert()',false,true),
+  ('hon.check_campaign_current_version()',false,true)
+ ) e(signature,can_execute,definer) LOOP
+  SELECT (owner.rolsuper OR owner.rolbypassrls) AND p.prosecdef=f.definer AND p.provolatile='v'
+   AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE')) safe
+  INTO b FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b.safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe campaign function: %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client campaign function access: %',r; END IF;
+  END LOOP;
+ END LOOP;
+ FOR t IN SELECT unnest(ARRAY['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions','users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants','crm_activities','hq_ai_provider_connections','hq_ai_control_requests']) LOOP
+  IF has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Forbidden runtime campaign/directory/HQ access: %',t; END IF;
+ END LOOP;
+END $$;
+-- Local isolated proof: pnpm db:test-marketing-campaigns. Never targets production.

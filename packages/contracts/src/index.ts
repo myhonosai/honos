@@ -1,3 +1,4 @@
+export * from './marketing-campaigns.js';
 export * from './revenue-planning.js';
 export * from './search.js';
 export * from './staff-roles.js';
@@ -113,6 +114,8 @@ export interface CreateLeadInput {
   sourceId?: string;
   programInterestCode?: string;
   nextFollowUpAt?: string;
+  campaignId?: string;
+  campaignCode?: string;
   attribution?: Record<string, string>;
 }
 

@@ -3,11 +3,12 @@ import pg from 'pg';
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS verification.');
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username : 'hon_runtime';
-if (!['hon_runtime','hon_revenue_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
-if (runtimeRoleName === 'hon_revenue_runtime') {
+if (!['hon_runtime','hon_revenue_runtime','hon_campaign_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    if (url.hostname !== 'localhost' || url.pathname !== '/hon_revenue_validation') throw new Error('Local revenue verifier requires the guarded disposable localhost database.');
+    const db = runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
   }
 }
 
@@ -30,6 +31,7 @@ const expectedRlsTables = [
   'crm_activities',
   'crm_appointments',
   'crm_leads',
+  'crm_lead_attributions',
   'crm_pipeline_stages',
   'crm_pipelines',
   'curricula',
@@ -63,6 +65,9 @@ const expectedRlsTables = [
   'lead_import_rows',
   'lead_import_evidence',
   'lead_import_requests',
+  'marketing_campaigns',
+  'marketing_campaign_versions',
+  'marketing_campaign_requests',
   'membership_payment_schedules',
   'memberships',
   'organization_entitlements',
@@ -208,6 +213,40 @@ try {
     for (const [signature] of curriculumFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname, signature])).rows[0].allowed) throw new Error(`Forbidden client curriculum/authorization function: ${rolname}.${signature}`);
   }
   const revenueTables = ['revenue_plans','revenue_plan_versions','revenue_plan_requests'];
+  const campaignTables = ['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions'];
+  const campaignFunctions = [
+    ['hon.resolve_campaign_scope(text,text)',true,true],
+    ['hon.mutate_campaign(text,text,uuid,jsonb,text,uuid,uuid)',true,true],
+    ['hon.read_campaigns(text,text,uuid,text,text,integer)',true,true],
+    ['hon.authorize_campaign_lead(text,boolean)',true,true],
+    ['hon.guard_campaign_history()',false,false],
+    ['hon.validate_campaign_window(text,text,boolean)',false,false],
+    ['hon.validate_campaign_input(jsonb,boolean)',false,false],
+    ['hon.campaign_summary(uuid)',false,true],
+    ['hon.guard_campaign_record()',false,false],
+    ['hon.require_campaign_actor(text,text)',false,true],
+    ['hon.lock_campaign_actor(text,text)',false,true],
+    ['hon.capture_lead_attribution()',false,true],
+    ['hon.guard_campaign_evidence_insert()',false,true],
+    ['hon.check_campaign_current_version()',false,true],
+  ];
+  if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])", [campaignTables])).rows[0].n !== '0') throw new Error('Campaign/source tables require deny-all forced RLS.');
+  const campaignAcls = (await client.query(`SELECT c.relname,r.rolsuper OR r.rolbypassrls trusted_owner,
+    EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) broad_acl
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='hon' AND c.relname=ANY($1::text[])`, [campaignTables])).rows;
+  if (campaignAcls.length !== 4 || campaignAcls.some(r => !r.trusted_owner || r.broad_acl)) throw new Error('Campaign/source table and column ACLs must be trusted-owner-only.');
+  for (const [signature,execute,definer] of campaignFunctions) {
+    const b = (await client.query(`SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls trusted_owner,
+      has_function_privilege($2,p.oid,'EXECUTE') runtime_execute,
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname=$2) OR NOT $3::boolean OR a.privilege_type<>'EXECUTE' OR a.is_grantable)) broad_acl
+      FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature,runtimeRoleName,execute])).rows[0];
+    if (!b?.trusted_owner || b.runtime_execute !== execute || b.prosecdef !== definer || b.provolatile !== 'v' || b.broad_acl || b.proconfig?.length !== 1 || b.proconfig[0] !== 'search_path=pg_catalog, hon') throw new Error(`Unsafe campaign function ACL/owner/path: ${signature}`);
+  }
+  for (const {rolname} of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
+    for (const table of campaignTables) if ((await client.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege($1,$2,'SELECT,INSERT,UPDATE,REFERENCES') allowed", [rolname,`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden client campaign access: ${rolname}.${table}`);
+    for (const [signature] of campaignFunctions) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client campaign function: ${rolname}.${signature}`);
+  }
   const revenueFunctions = [
     ['hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid)',true,true],
     ['hon.read_revenue_plan(text,text,uuid,integer)',true,true],

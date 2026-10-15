@@ -1,3 +1,6 @@
+import { CampaignController } from './marketing/campaign.controller.js';
+import { CampaignService } from './marketing/campaign.service.js';
+import { CampaignHumanUiGuard } from './marketing/campaign-human-ui.guard.js';
 import { RevenuePlanningController } from './planning/revenue-planning.controller.js';
 import { RevenuePlanningService } from './planning/revenue-planning.service.js';
 import { RevenuePlanningHumanUiGuard } from './planning/revenue-planning-human-ui.guard.js';
@@ -103,6 +106,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
 
 @Module({
   controllers: [
+    CampaignController,
     RevenuePlanningController,
     StaffSearchController,
     CurriculumProgressController,
@@ -153,6 +157,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
     ActionReviewController,
   ],
   providers: [
+    CampaignService, CampaignHumanUiGuard,
     RevenuePlanningService, RevenuePlanningHumanUiGuard,
     StaffSearchService,
     CurriculumProgressService, CurriculumHumanUiGuard, TestingHumanUiGuard,

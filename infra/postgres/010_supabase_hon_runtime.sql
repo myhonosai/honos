@@ -1,5 +1,5 @@
 -- HON / Supabase development runtime role
--- Execute this entire script ONCE in the Supabase SQL Editor as the project
+-- Execute this entire script in the Supabase SQL Editor as the project
 -- administrator, after replacing the password placeholder with a freshly
 -- generated base64url secret. Do not save the secret in Git or a shared note.
 --
@@ -14,24 +14,15 @@
 ROLLBACK;
 BEGIN;
 
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
-    RAISE EXCEPTION 'Role hon_runtime already exists. Do not overwrite an existing runtime role; inspect and rotate it deliberately.';
-  END IF;
-END;
-$$;
-
-CREATE ROLE hon_runtime
-  LOGIN
-  PASSWORD '<PASTE_FRESH_BASE64URL_PASSWORD_HERE>'
-  NOSUPERUSER
-  NOBYPASSRLS
-  NOCREATEDB
-  NOCREATEROLE
-  NOINHERIT
-  NOREPLICATION
-  CONNECTION LIMIT 20;
+-- Re-runnable ACL reconciliation. Existing roles must already be restricted;
+-- never rotate credentials or elevate an existing login as part of a rerun.
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime' AND (NOT rolcanlogin OR rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication)) THEN RAISE EXCEPTION 'Existing hon_runtime is unsafe'; END IF;
+ ELSE
+  CREATE ROLE hon_runtime LOGIN PASSWORD '<PASTE_FRESH_BASE64URL_PASSWORD_HERE>' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION CONNECTION LIMIT 20;
+ END IF;
+END $$;
 
 -- A newly created login has no explicit role memberships. Verify that invariant
 -- rather than attempting to revoke Supabase-owned administrative roles, which
@@ -355,8 +346,20 @@ DO $$ DECLARE r text; BEGIN
   EXECUTE format('REVOKE ALL ON FUNCTION hon.validate_revenue_plan_input(jsonb),hon.guard_revenue_plan(),hon.guard_revenue_plan_history(),hon.require_revenue_planning_actor(text),hon.lock_revenue_planning_actor(text),hon.revenue_plan_snapshot(uuid),hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid),hon.read_revenue_plan(text,text,uuid,integer) FROM %I',r);
  END LOOP;
 END $$;
--- Safe future-migration defaults for objects created by the privileged `postgres`
--- migration role. New objects receive no runtime or PUBLIC access until their
+-- Human campaign planning and source capture: no new runtime table privileges.
+REVOKE ALL ON TABLE hon.marketing_campaigns,hon.marketing_campaign_versions,hon.marketing_campaign_requests,hon.crm_lead_attributions FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.guard_campaign_history(),hon.validate_campaign_window(text,text,boolean),hon.validate_campaign_input(jsonb,boolean),hon.campaign_summary(uuid),hon.guard_campaign_record(),hon.require_campaign_actor(text,text),hon.lock_campaign_actor(text,text),hon.capture_lead_attribution(),hon.guard_campaign_evidence_insert(),hon.check_campaign_current_version() FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.resolve_campaign_scope(text,text),hon.authorize_campaign_lead(text,boolean),hon.mutate_campaign(text,text,uuid,jsonb,text,uuid,uuid),hon.read_campaigns(text,text,uuid,text,text,integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.resolve_campaign_scope(text,text),hon.authorize_campaign_lead(text,boolean),hon.mutate_campaign(text,text,uuid,jsonb,text,uuid,uuid),hon.read_campaigns(text,text,uuid,text,text,integer) TO hon_runtime;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON TABLE hon.marketing_campaigns,hon.marketing_campaign_versions,hon.marketing_campaign_requests,hon.crm_lead_attributions FROM %I',r);
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.guard_campaign_history(),hon.validate_campaign_window(text,text,boolean),hon.validate_campaign_input(jsonb,boolean),hon.campaign_summary(uuid),hon.guard_campaign_record(),hon.require_campaign_actor(text,text),hon.lock_campaign_actor(text,text),hon.capture_lead_attribution(),hon.guard_campaign_evidence_insert(),hon.check_campaign_current_version(),hon.resolve_campaign_scope(text,text),hon.authorize_campaign_lead(text,boolean),hon.mutate_campaign(text,text,uuid,jsonb,text,uuid,uuid),hon.read_campaigns(text,text,uuid,text,text,integer) FROM %I',r);
+ END LOOP;
+END $$;
+
+-- Safe future-migration defaults for the privileged migration role.
+-- New objects receive no runtime or PUBLIC access until their
 -- introducing migration grants the reviewed minimum explicitly.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA hon REVOKE ALL ON TABLES FROM hon_runtime;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA hon REVOKE ALL ON SEQUENCES FROM hon_runtime;

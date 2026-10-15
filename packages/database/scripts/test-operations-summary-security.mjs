@@ -1,3 +1,4 @@
+import { cleanupLocalAttributionFixtures } from './local-attribution-fixture-cleanup.mjs';
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -32,6 +33,7 @@ const amounts = (metrics, currency) => metrics.invoices.amountsByCurrency.find((
 async function cleanup() {
   await admin.query('BEGIN');
   try {
+    await cleanupLocalAttributionFixtures(admin,[ids.org,ids.foreignOrg]);
     for (const table of ['attendance_records', 'crm_activities', 'invoices', 'billing_accounts', 'crm_leads', 'crm_pipeline_stages', 'crm_pipelines', 'student_profiles', 'class_sessions', 'programs', 'people', 'principal_role_grants', 'organization_entitlements']) {
       await admin.query(`DELETE FROM hon.${table} WHERE organization_id = ANY($1::uuid[])`, [[ids.org, ids.foreignOrg]]);
     }

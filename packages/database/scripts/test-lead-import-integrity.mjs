@@ -1,3 +1,4 @@
+import { cleanupLocalAttributionFixtures } from './local-attribution-fixture-cleanup.mjs';
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID,createHash } from 'node:crypto';
@@ -6,7 +7,11 @@ import { LeadImportService } from '../../../apps/api/dist/migration/lead-import.
 import { LeadImportController } from '../../../apps/api/dist/migration/lead-import.controller.js';
 import { RuntimeDatabaseService } from '../../../apps/api/dist/foundation/runtime-database.service.js';
 if(!process.env.DATABASE_URL||!process.env.HON_RUNTIME_DATABASE_URL)throw new Error('Protected admin and restricted runtime URLs required.');
-const opts=connectionString=>({connectionString,ssl:connectionString.includes('localhost')?false:{rejectUnauthorized:false}});
+for(const [key,role]of [['DATABASE_URL','hon_campaign_owner'],['HON_RUNTIME_DATABASE_URL','hon_campaign_runtime']]){
+ const u=new URL(process.env[key]);if(u.hostname!=='localhost'||u.port!=='5432'||u.pathname!=='/hon_campaign_validation'||u.username!==role)throw new Error('Lead-import fixtures require the exact guarded disposable localhost database and roles; never remote.');
+}
+const runtimeRole=new URL(process.env.HON_RUNTIME_DATABASE_URL).username;
+const opts=connectionString=>({connectionString,ssl:false});
 const admin=new pg.Client(opts(process.env.DATABASE_URL)),runtime=new pg.Client(opts(process.env.HON_RUNTIME_DATABASE_URL));
 const db=new RuntimeDatabaseService(),svc=new LeadImportService(db),controller=new LeadImportController(db,svc);
 const ids=Object.fromEntries(['org','foreignOrg','school','sibling','foreignSchool','role','readerRole','foreignRole','pipeline','stage','siblingPipeline','siblingStage','foreignPipeline','foreignStage'].map(k=>[k,randomUUID()]));
@@ -25,6 +30,7 @@ let failureTrigger=false;
 async function cleanup(){
  await admin.query('ROLLBACK');if(failureTrigger){await admin.query('DROP TRIGGER IF EXISTS import_fixture_failure ON hon.outbox_events');await admin.query('DROP FUNCTION IF EXISTS hon.import_fixture_failure()');}
  await admin.query('BEGIN');try{
+  await cleanupLocalAttributionFixtures(admin,orgs);
   for(const t of privateTables)await admin.query(`ALTER TABLE hon.${t} DISABLE TRIGGER USER`);
   for(const t of [...privateTables,'outbox_delivery_attempts','outbox_events','audit_events','idempotency_records','crm_leads','people','crm_pipeline_stages','crm_pipelines','principal_role_grants','role_permissions','organization_entitlements','roles'])await admin.query(`DELETE FROM hon.${t} WHERE organization_id=ANY($1::uuid[])`,[orgs]);
   for(const t of privateTables)await admin.query(`ALTER TABLE hon.${t} ENABLE TRIGGER USER`);
@@ -86,7 +92,7 @@ try{
  // Atomic injected failure: no private evidence, person, lead, audit, outbox or replay survives.
  const ab=(await svc.upload(c(),body('First,Last,Email,Mobile,Source,Note\nAtomic,One,one@example.test,+15550000001,S,one\nAtomic,Two,two@example.test,+15550000002,S,two\n'))).record,ar=await open(ab),ac=await decide(ar.batch,ar,[{index:1,choice:'IMPORT'},{index:2,choice:'IMPORT'}]);
  await admin.query(`CREATE FUNCTION hon.import_fixture_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.organization_id='${ids.org}'::uuid AND NEW.event_type='migration.lead_import.row_applied' THEN RAISE EXCEPTION 'import fixture atomic failure'; END IF; RETURN NEW; END $$`);await admin.query('CREATE TRIGGER import_fixture_failure BEFORE INSERT ON hon.outbox_events FOR EACH ROW EXECUTE FUNCTION hon.import_fixture_failure()');failureTrigger=true;
- const atomicTables=[...privateTables,'people','crm_leads','audit_events','outbox_events','idempotency_records'],atomicBefore=await snapshot(atomicTables),atomicContext=c();await assert.rejects(()=>finish(ac,ar,[1,2],atomicContext),/import fixture atomic failure/);
+ const atomicTables=[...privateTables,'people','crm_leads','crm_lead_attributions','audit_events','outbox_events','idempotency_records'],atomicBefore=await snapshot(atomicTables),atomicContext=c();await assert.rejects(()=>finish(ac,ar,[1,2],atomicContext),/import fixture atomic failure/);
  for(const [t,n] of Object.entries(atomicBefore))assert.equal(await count(t),n,`${t} must roll back`);assert.deepEqual(await svc.read(c(),'BATCH',ab.id),ac);
  await admin.query('DROP TRIGGER import_fixture_failure ON hon.outbox_events');await admin.query('DROP FUNCTION hon.import_fixture_failure()');failureTrigger=false;assert.equal((await finish(ac,ar,[1,2],atomicContext)).replayed,false);
  // Revocation applies to redacted reads, private review and previously completed retries.
@@ -98,7 +104,7 @@ try{
  // Multi-school authority cannot silently select or broaden scope.
  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$3)",[ids.org,ids.sibling,humans.staff.id,ids.role]);assert.equal(await db.resolveLeadImportScope(humans.staff.subject,'migration.lead_import.read'),undefined);await deny(()=>controller.list({honIdentity:{externalSubject:humans.staff.subject}}));await admin.query('DELETE FROM hon.principal_role_grants WHERE principal_id=$1 AND school_id=$2',[humans.staff.id,ids.sibling]);
  // Direct forced RLS proof even with explicit table SELECT and real tenant GUCs.
- await admin.query('BEGIN');await admin.query('CREATE ROLE hon_import_rls_probe NOLOGIN NOSUPERUSER NOBYPASSRLS');await admin.query('GRANT hon_import_rls_probe TO CURRENT_USER');await admin.query('GRANT USAGE ON SCHEMA hon TO hon_import_rls_probe');for(const t of privateTables)await admin.query(`GRANT SELECT ON hon.${t} TO hon_import_rls_probe`);await admin.query('SET LOCAL ROLE hon_import_rls_probe');await admin.query("SELECT set_config('app.hon_organization_id',$1,true),set_config('app.hon_school_id',$2,true)",[ids.org,ids.school]);for(const t of privateTables)assert.equal((await admin.query(`SELECT count(*) n FROM hon.${t}`)).rows[0].n,'0');await admin.query('ROLLBACK');
+ await admin.query('BEGIN');await admin.query(`GRANT USAGE ON SCHEMA hon TO ${runtimeRole}`);for(const t of privateTables)await admin.query(`GRANT SELECT ON hon.${t} TO ${runtimeRole}`);await admin.query(`SET LOCAL ROLE ${runtimeRole}`);await admin.query("SELECT set_config('app.hon_organization_id',$1,true),set_config('app.hon_school_id',$2,true)",[ids.org,ids.school]);for(const t of privateTables)assert.equal((await admin.query(`SELECT count(*) n FROM hon.${t}`)).rows[0].n,'0');await admin.query('ROLLBACK');
  for(const [table,id,update] of [['lead_import_rows',b.id,"source_row='[]'"],['lead_import_batches',b.id,"mapping='{}',version=version+1"]])await sqlDeny(()=>admin.query(`UPDATE hon.${table} SET ${update} WHERE ${table==='lead_import_rows'?'batch_id':'id'}=$1`,[id]));await sqlDeny(()=>admin.query('DELETE FROM hon.lead_import_evidence WHERE batch_id=$1',[b.id]));
  const audits=(await admin.query('SELECT * FROM hon.audit_events WHERE organization_id=ANY($1::uuid[])',[orgs])).rows,events=(await admin.query('SELECT * FROM hon.outbox_events WHERE organization_id=ANY($1::uuid[])',[orgs])).rows;
  assert.equal(audits.length,events.length);assert(audits.every(a=>a.source==='HUMAN_UI'&&!a.action_request_id&&a.action_code.startsWith('migration.lead_import.')));assert(events.every(e=>e.event_type.startsWith('migration.lead_import.')&&e.payload.internalOnly));for(const a of audits)assert.equal(events.filter(e=>e.causation_id===a.request_id&&e.aggregate_id===a.entity_id&&e.aggregate_type===a.entity_type).length,1);

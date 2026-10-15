@@ -23,6 +23,7 @@ function fingerprint(input: CreateLeadInput): string {
     sourceId: input.sourceId ?? null,
     programInterestCode: input.programInterestCode ?? null,
     nextFollowUpAt: input.nextFollowUpAt ?? null,
+    ...(input.campaignId === undefined && input.campaignCode === undefined ? {} : { campaignId: input.campaignId ?? null, campaignCode: input.campaignCode ?? null }),
     attribution,
   })).digest('hex');
 }
@@ -50,8 +51,24 @@ export class LeadService {
   }
 
   async create(context: CommandContext, input: CreateLeadInput): Promise<CreateLeadCommandResult> {
+    const hasCampaign = input.campaignId !== undefined || input.campaignCode !== undefined;
+    if (hasCampaign && (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI' || context.actionRequestId || context.delegatedByPrincipalId)) {
+      throw new ForbiddenException({ code: 'HUMAN_COMMAND_REQUIRED' });
+    }
+    if (input.attribution && (typeof input.attribution !== 'object' || Array.isArray(input.attribution)
+      || Object.entries(input.attribution).some(([key, value]) => ['migration', 'campaignId', 'campaignCode'].includes(key) || typeof value !== 'string')
+      || Buffer.byteLength(JSON.stringify(input.attribution)) > 12000)) {
+      throw new BadRequestException({ code: 'INVALID_SOURCE_FACTS', detail: 'Use bounded source labels and explicit top-level campaign selectors; migration provenance is server-owned.' });
+    }
+    if (input.campaignId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.campaignId)
+      || input.campaignCode !== undefined && !/^[A-Z0-9][A-Z0-9_-]{0,39}$/.test(input.campaignCode)) {
+      throw new BadRequestException({ code: 'INVALID_CAMPAIGN_REFERENCE' });
+    }
+    const sourceFacts = { ...input.attribution, ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }), ...(input.campaignCode === undefined ? {} : { campaignCode: input.campaignCode }) };
     const requestFingerprint = fingerprint(input);
-    return this.database.withTenantTransaction(context, async (client) => {
+    try { return await this.database.withTenantTransaction(context, async (client) => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id',$2,true),set_config('app.hon_delegated_by_principal_id',$3,true)", [context.source, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+      if (context.principalType === 'HUMAN_USER' && context.source === 'HUMAN_UI' && !context.actionRequestId && !context.delegatedByPrincipalId) await client.query('SELECT hon.authorize_campaign_lead($1,$2::boolean)', [(context as CommandContext & { externalSubject?: string }).externalSubject ?? null, hasCampaign]);
       const entitlement = await client.query<{ tier: HonTier }>(
         `SELECT tier::text AS tier
          FROM hon.organization_entitlements
@@ -152,7 +169,7 @@ export class LeadService {
           input.pipelineStageId,
           input.sourceId ?? null,
           input.programInterestCode ?? null,
-          JSON.stringify(input.attribution ?? {}),
+          JSON.stringify(sourceFacts),
           input.nextFollowUpAt ?? null,
         ],
       );
@@ -213,6 +230,11 @@ export class LeadService {
       );
 
       return { lead, replayed: false };
-    });
+    }); } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === '42501') throw new ForbiddenException({ code: 'LEAD_AUTHORITY_REQUIRED' });
+      if (['22023', '22P02', '23514', '23503'].includes(code ?? '')) throw new BadRequestException({ code: 'INVALID_SOURCE_OR_CAMPAIGN', detail: 'Campaign attribution requires an ACTIVE current-school campaign and valid immutable source facts.' });
+      throw error;
+    }
   }
 }

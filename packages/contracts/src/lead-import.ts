@@ -1,5 +1,5 @@
 import type { CommandContext } from './index.js';
-export const LEAD_IMPORT_FIELDS = ['givenName','familyName','displayName','email','mobile','source','note','campaign','medium','sourceDetail'] as const;
+export const LEAD_IMPORT_FIELDS = ['givenName','familyName','displayName','email','mobile','source','note','campaign','campaignCode','medium','sourceDetail'] as const;
 export type LeadImportField = typeof LEAD_IMPORT_FIELDS[number];
 export interface LeadImportContext extends CommandContext { externalSubject: string }
 export interface LeadImportUpload { csv: string; mapping: Record<string, LeadImportField>; pipelineStageId: string }

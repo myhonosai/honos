@@ -1,3 +1,4 @@
+import { cleanupLocalAttributionFixtures } from './local-attribution-fixture-cleanup.mjs';
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -33,6 +34,7 @@ async function cleanup(){
  await admin.query('ROLLBACK');
  if(injected){await admin.query('DROP TRIGGER IF EXISTS revenue_fixture_failure ON hon.audit_events');await admin.query('DROP TRIGGER IF EXISTS revenue_fixture_failure ON hon.outbox_events');await admin.query('DROP FUNCTION IF EXISTS hon.revenue_fixture_failure()');}
  await admin.query('BEGIN');try{
+  await cleanupLocalAttributionFixtures(admin,orgs);
   for(const t of privateTables)await admin.query(`ALTER TABLE hon.${t} DISABLE TRIGGER USER`);
   for(const t of ['revenue_plan_requests','revenue_plan_versions','revenue_plans','outbox_delivery_attempts','outbox_events','audit_events','payment_attempts','invoices','membership_payment_schedules','memberships','billing_accounts','crm_appointments','crm_activities','crm_leads','crm_pipeline_stages','crm_pipelines','family_access_grants','families','people','principal_role_grants','role_permissions','roles','organization_entitlements'])await admin.query(`DELETE FROM hon.${t} WHERE organization_id=ANY($1::uuid[])`,[orgs]);
   for(const t of privateTables)await admin.query(`ALTER TABLE hon.${t} ENABLE TRIGGER USER`);

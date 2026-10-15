@@ -1,3 +1,4 @@
+import { cleanupLocalAttributionFixtures } from './local-attribution-fixture-cleanup.mjs';
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -37,6 +38,7 @@ async function snapshot() {
 async function cleanup() {
   await admin.query('ROLLBACK'); await admin.query('BEGIN');
   try {
+    await cleanupLocalAttributionFixtures(admin,[ids.org,ids.otherOrg]);
     for(const table of ['crm_activities','crm_leads','crm_pipeline_stages','crm_pipelines','student_profiles','class_sessions','programs','curricula','people','family_access_grants','families','principal_role_grants','organization_entitlements']) await admin.query(`DELETE FROM hon.${table} WHERE organization_id=ANY($1::uuid[])`,[[ids.org,ids.otherOrg]]);
     await admin.query('DELETE FROM hon.role_permissions WHERE organization_id=ANY($1::uuid[])',[[ids.org,ids.otherOrg]]);
     await admin.query('DELETE FROM hon.roles WHERE organization_id=ANY($1::uuid[])',[[ids.org,ids.otherOrg]]);

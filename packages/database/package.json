@@ -38,7 +38,8 @@
     "db:test-search": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-search-security.mjs",
     "db:test-lead-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-lead-import-integrity.mjs",
     "db:test-curriculum-progress": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-curriculum-progress-integrity.mjs",
-    "db:test-revenue-planning": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-revenue-planning-integrity.mjs && node scripts/test-revenue-planning-verifier.mjs"
+    "db:test-revenue-planning": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-revenue-planning-integrity.mjs && node scripts/test-revenue-planning-verifier.mjs",
+    "db:test-marketing-campaigns": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketing-campaign-integrity.mjs && node scripts/test-marketing-campaign-verifier.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

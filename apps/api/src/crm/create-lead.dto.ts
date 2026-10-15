@@ -56,6 +56,14 @@ export class CreateLeadDto {
   nextFollowUpAt?: string;
 
   @IsOptional()
+  @IsUUID()
+  campaignId?: string;
+
+  @IsOptional()
+  @Matches(/^[A-Z0-9][A-Z0-9_-]{0,39}$/)
+  campaignCode?: string;
+
+  @IsOptional()
   @IsObject()
   attribution?: Record<string, string>;
 }
