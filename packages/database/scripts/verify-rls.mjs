@@ -7,6 +7,7 @@ const expectedRlsTables = [
   'action_approvals',
   'action_policies',
   'action_requests',
+  'ai_team_presentation_preferences',
   'ai_usage_ledger',
   'audit_events',
   'attendance_records',
@@ -224,6 +225,20 @@ try {
       || !runtimeMembershipPrivileges.can_update
       || runtimeMembershipPrivileges.can_delete) {
       throw new Error('hon_runtime membership privileges are not the required SELECT/INSERT/UPDATE and no-DELETE minimum.');
+    }
+
+    const runtimeAiTeamPreferencesPrivileges = (await client.query(`
+      SELECT
+        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'SELECT') AS can_select,
+        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'INSERT') AS can_insert,
+        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'UPDATE') AS can_update,
+        has_table_privilege('hon_runtime', 'hon.ai_team_presentation_preferences', 'DELETE') AS can_delete
+    `)).rows[0];
+    if (!runtimeAiTeamPreferencesPrivileges?.can_select
+      || !runtimeAiTeamPreferencesPrivileges.can_insert
+      || !runtimeAiTeamPreferencesPrivileges.can_update
+      || runtimeAiTeamPreferencesPrivileges.can_delete) {
+      throw new Error('hon_runtime AI Team presentation preferences privileges are not the required SELECT/INSERT/UPDATE and no-DELETE minimum.');
     }
   }
 

@@ -28,6 +28,7 @@
     "db:test-billing-membership-activation": "pnpm --filter @hon/database db:test-billing-membership-activation",
     "db:test-work-items": "pnpm --filter @hon/database db:test-work-items",
     "db:test-ai-usage": "pnpm --filter @hon/database db:test-ai-usage",
+    "db:test-ai-team": "pnpm --filter @hon/database db:test-ai-team",
     "db:test-operations-report": "pnpm --filter @hon/database db:test-operations-report",
     "db:test-parent-schedule": "pnpm --filter @hon/database db:test-parent-schedule",
     "db:test-parent-knowledge": "pnpm --filter @hon/database db:test-parent-knowledge",

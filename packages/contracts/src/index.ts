@@ -728,6 +728,7 @@ export * from './knowledge-articles.js';
 export * from './work-items.js';
 export * from './ai-usage.js';
 export * from './operations-report.js';
+export * from './ai-team.js';
 
 /** Communication channels whose consent may be evidenced for a person. */
 export const COMMUNICATION_CONSENT_CHANNELS = ['SMS', 'EMAIL', 'PUSH'] as const;

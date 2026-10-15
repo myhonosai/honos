@@ -164,3 +164,5 @@ export const ACTION_CATALOG: readonly RegisteredAction[] = [
 export function tierIncludesFeature(tier: HonTier, feature: string): boolean {
   return TIER_FEATURES[tier].includes(feature);
 }
+
+export { AI_TEAM_CATALOG, aiTeamAgentDefinition } from './ai-team-catalog.js';

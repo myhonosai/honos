@@ -67,6 +67,8 @@ import { WorkItemController } from './work-items/work-item.controller.js';
 import { WorkItemService } from './work-items/work-item.service.js';
 import { AiUsageController } from './ai/ai-usage.controller.js';
 import { AiUsageService } from './ai/ai-usage.service.js';
+import { AiTeamController } from './ai-team/ai-team.controller.js';
+import { AiTeamService } from './ai-team/ai-team.service.js';
 import { OperationsReportController } from './reports/operations-report.controller.js';
 import { OperationsReportService } from './reports/operations-report.service.js';
 import { CommunicationConsentController } from './communication/communication-consent.controller.js';
@@ -100,6 +102,7 @@ import { CommunicationMessageService } from './communication/communication-messa
     ParentFamilyKnowledgeController,
     WorkItemController,
     AiUsageController,
+    AiTeamController,
     OperationsReportController,
     CommunicationConsentController,
     CommunicationMessageController,
@@ -140,6 +143,7 @@ import { CommunicationMessageService } from './communication/communication-messa
     ParentFamilyKnowledgeService,
     WorkItemService,
     AiUsageService,
+    AiTeamService,
     OperationsReportService,
     CommunicationConsentService,
     CommunicationMessageService,
