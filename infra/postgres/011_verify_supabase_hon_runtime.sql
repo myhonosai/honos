@@ -152,3 +152,19 @@ SELECT table_name, has_table_privilege('hon_runtime','hon.' || table_name,'SELEC
 FROM unnest(ARRAY['users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants','hq_onboarding_requests','crm_activities']) AS table_name;
 -- pnpm db:test-operations-summary proves Core/Complete/live permissions, exact
 -- authorized-school-only aggregates, revocation, no PII and read-only execution.
+
+-- 9) Human staff IAM: only command/single-ID projection EXECUTE is true.
+SELECT p.proname,p.prosecdef,p.proconfig,
+  has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute
+FROM pg_proc p WHERE p.oid IN (
+  'hon.mutate_staff_role(text,text,uuid,jsonb,text,uuid,uuid)'::regprocedure,
+  'hon.read_staff_role(text,text,uuid)'::regprocedure,
+  'hon.resolve_staff_role_target(uuid,text,uuid)'::regprocedure,
+  'hon.guard_staff_custom_role_recipients()'::regprocedure);
+-- Both target/recipient helper runtime_execute values MUST be false. Paths fixed.
+SELECT t,has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_iam_access
+FROM unnest(ARRAY['users','principals','roles','permissions','role_permissions','principal_role_grants','hq_operator_grants']) t;
+-- pnpm db:test-staff-roles proves scope/subset/HUMAN_UI, exact registered target,
+-- expiry, concurrency, idempotent ending, OWNER protection, evidence/no effects.

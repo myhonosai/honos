@@ -81,9 +81,13 @@ import { CommunicationMessageController } from './communication/communication-me
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
+import { StaffRoleController } from './staff-roles/staff-role.controller.js';
+import { StaffRoleService } from './staff-roles/staff-role.service.js';
+import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.js';
 
 @Module({
   controllers: [
+    StaffRoleController,
     HealthController,
     ReadinessController,
     FoundationController,
@@ -128,6 +132,8 @@ import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
     ActionReviewController,
   ],
   providers: [
+    StaffRoleService,
+    StaffRoleHumanUiGuard,
     RuntimeDatabaseService,
     HonIdentityService,
     HonIdentityGuard,

@@ -105,3 +105,14 @@ Details: [AI Invocation Planning](docs/architecture/AI_INVOCATION_PLANNING.md). 
 - [ ] Separately deliver the broader multi-location product: switching/comparison UI, centralized permission administration, templates/distribution, transfers, cross-school tasks/goals and controlled organization defaults. This read model grants none of those writes or AI coordination.
 
 Details: [Core Multi-location Operations Summary](docs/architecture/CORE_MULTI_LOCATION_OPERATIONS_SUMMARY.md).
+
+## Human staff/custom-role administration checkpoint
+
+- [x] Inspect live IAM tables/resolver/HQ OWNER bootstrap; add sensitive exact create/update/manage/grant/revoke permissions, upgrading only existing canonical OWNER roles without mass principal grants.
+- [x] Deliver scoped custom-role create/update, exact registered active human grant, versioned idempotent end (never DELETE), subset/self/system/HQ/final-owner protection, transaction-local RLS, locked lookup and atomic audit/inert outbox.
+- [x] Keep runtime global IAM/directory SELECT/mutation denied; private exact target/recipient helpers, fixed search paths/PUBLIC revoked and canonical Supabase grants/verifier updated.
+- [x] Deliver `/staff/roles` human-only exact forms, known-ID reads, trusted-origin JSON/CSRF checks, safe replay/failure states and no directory enumeration/external effects.
+- [x] Add contract/API/live restricted-role proofs for scope, subset, targets, expiry, concurrency, end/replay, evidence rollback and no prohibited effects.
+- [ ] Separately review ownership transfer/control-plane IAM cleanup and broader registered staff profiles, schedules/availability, time off and qualifications; no payroll or autonomous employment/disciplinary decisions.
+
+Details: [Human Staff Role Administration](docs/architecture/HUMAN_STAFF_ROLE_ADMINISTRATION.md). Configure exact trusted `HON_PUBLIC_ORIGIN` for sensitive cookie-authenticated UI writes; missing configuration fails closed.

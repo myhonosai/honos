@@ -55,6 +55,7 @@ const expectedRlsTables = [
   'principal_role_grants',
   'programs',
   'roles',
+  'role_permissions',
   'schools',
   'student_curriculum_enrollments',
   'student_profiles',
@@ -151,6 +152,22 @@ try {
       || !summaryBoundary.proconfig.includes('search_path=pg_catalog, hon')
       || !(summaryBoundary.rolsuper || summaryBoundary.rolbypassrls)) {
       throw new Error('Unsafe organization operations summary projection boundary.');
+    }
+    for (const [signature, shouldExecute] of [
+      ['hon.mutate_staff_role(text,text,uuid,jsonb,text,uuid,uuid)', true],
+      ['hon.read_staff_role(text,text,uuid)', true],
+      ['hon.resolve_staff_role_target(uuid,text,uuid)', false],
+      ['hon.guard_staff_custom_role_recipients()', false],
+    ]) {
+      const boundary = (await client.query(`SELECT p.prosecdef,p.proconfig,
+        has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS execute,
+        EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+          WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad_acl
+        FROM pg_proc p WHERE p.oid=$1::regprocedure`, [signature])).rows[0];
+      if (!boundary?.prosecdef || boundary.execute !== shouldExecute || boundary.broad_acl
+        || boundary.proconfig?.length !== 1 || boundary.proconfig[0] !== 'search_path=pg_catalog, hon') {
+        throw new Error(`Unsafe staff IAM boundary: ${signature}`);
+      }
     }
     for (const table of ['users', 'principals', 'roles', 'permissions', 'role_permissions', 'principal_role_grants',
       'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {

@@ -248,6 +248,16 @@ GRANT EXECUTE ON FUNCTION hon.provision_school_from_hq(text, text, text, text, t
 REVOKE ALL ON FUNCTION hon.read_organization_operations_summary(text, uuid, timestamptz, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.read_organization_operations_summary(text, uuid, timestamptz, timestamptz) TO hon_runtime;
 
+-- Human-only staff IAM: no direct users/principals/roles/permission/grant access.
+REVOKE ALL ON TABLE hon.users,hon.principals,hon.roles,hon.permissions,
+  hon.role_permissions,hon.principal_role_grants FROM hon_runtime;
+REVOKE ALL ON FUNCTION hon.resolve_staff_role_target(uuid,text,uuid) FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.guard_staff_custom_role_recipients() FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.mutate_staff_role(text,text,uuid,jsonb,text,uuid,uuid),
+  hon.read_staff_role(text,text,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.mutate_staff_role(text,text,uuid,jsonb,text,uuid,uuid),
+  hon.read_staff_role(text,text,uuid) TO hon_runtime;
+
 -- Decision-only tenant planning and authenticated HQ control-plane boundaries.
 -- Never grant direct access to HQ provider/config/credential-reference tables.
 REVOKE ALL ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),
