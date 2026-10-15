@@ -107,6 +107,10 @@
     {
       "path": "/parent/achievements",
       "title": "HON | Family child achievements"
+    },
+    {
+      "path": "/staff/dashboard",
+      "title": "HON | Staff Operations Dashboard"
     }
   ]
 }

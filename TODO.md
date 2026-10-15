@@ -259,3 +259,9 @@ Details: [Conventional Human Work-Item Workbench](docs/architecture/HUMAN_WORK_I
 - [x] Exact active staff/instructor known-school permission and HUMAN_UI boundary; parent read is current authorized exact child/latest visible awards only, with no staff reasons/notes/attribution/history or sibling records. Essential conventional recognition has no tier restriction; no raw directory or child social feed.
 - [x] FORCE RLS/closed ACL, live locks/rechecks, version/idempotency/audit/private inert outbox; tenant/family scope, staff/parent revocation, inactivity/age/category/title validation, immutable attribution/history/concurrency/replay/redaction/no-effects/RLS/ACL/rollback tests and canonical fail-closed verifier.
 - [x] Authenticated staff `/staff/students/achievements` and safe parent route use existing same-origin architecture; manifest/navigation, API and web UI tests, and `docs/architecture/HUMAN_STUDENT_ACHIEVEMENTS.md` added. Guarded `HON_ACHIEVEMENT_RESET=LOCAL_DISPOSABLE_ONLY` exact-localhost reset plus achievement integrity test passed after final attribution update; no remote database, provider, AI/action execution, communication, or payment activation was performed.
+
+## Staff operations dashboard
+
+- [x] Ship a protected, same-origin, aggregate-only `/staff/dashboard` using the existing school operations report.
+- [x] Keep unsupported trial, revenue-plan, follow-up, renewal, approval, and work-item totals explicitly unavailable rather than inferring them from private queue records.
+- [x] Add strict UI DTO redaction/error tests and document the existing `reporting.view` school authorization boundary.
