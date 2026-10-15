@@ -1,6 +1,7 @@
 export * from './search.js';
 export * from './staff-roles.js';
 export * from './ai-invocation-plan.js';
+export * from './lead-import.js';
 export * from './ai-provider.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;

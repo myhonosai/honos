@@ -197,3 +197,29 @@ FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
 WHERE p.oid='hon.search_school(text,uuid,uuid,text,text[],uuid)'::regprocedure;
 -- pnpm db:test-search proves active/exact scope, revocation, literal injection,
 -- redaction, stable 20 cap and READ ONLY/no audit/outbox/provider side effects.
+
+-- 12) Human lead imports: zero table grants/policies, all four tables forced RLS.
+SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,
+ has_table_privilege('hon_runtime',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_import_table_access
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='hon' AND c.relname IN('lead_import_batches','lead_import_rows','lead_import_evidence','lead_import_requests');
+SELECT * FROM pg_policies WHERE schemaname='hon' AND tablename LIKE 'lead_import_%'; -- zero rows
+-- Only resolver/mutate/read runtime EXECUTE is true; internal helpers are false.
+SELECT p.proname,p.prosecdef,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+ has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+ EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+  WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS forbidden_broad_execute
+FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid IN(
+ 'hon.resolve_lead_import_scope(text,text)'::regprocedure,
+ 'hon.mutate_lead_import(text,text,uuid,jsonb,text,uuid,uuid)'::regprocedure,
+ 'hon.read_lead_import(text,text,uuid,uuid)'::regprocedure,
+ 'hon.guard_lead_import_evidence()'::regprocedure,
+ 'hon.require_lead_import_actor(text,text)'::regprocedure,
+ 'hon.lead_import_summary(uuid)'::regprocedure,
+ 'hon.validate_lead_import_row(jsonb,jsonb,jsonb)'::regprocedure,
+ 'hon.apply_imported_lead(uuid,integer,uuid,uuid,uuid)'::regprocedure);
+-- pnpm db:test-lead-import proves isolation/revocation, private review, strict CSV,
+-- no merge, explicit scoped atomic finalization/replay, redacted audit/inert outbox.
+
+SELECT r.rolname,t,has_table_privilege(r.rolname,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_client_import_access
+FROM pg_roles r CROSS JOIN unnest(ARRAY['lead_import_batches','lead_import_rows','lead_import_evidence','lead_import_requests']) t
+WHERE r.rolname IN('anon','authenticated','service_role'); -- all false

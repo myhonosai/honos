@@ -47,6 +47,10 @@ const expectedRlsTables = [
   'idempotency_records',
   'invoices',
   'knowledge_articles',
+  'lead_import_batches',
+  'lead_import_rows',
+  'lead_import_evidence',
+  'lead_import_requests',
   'membership_payment_schedules',
   'memberships',
   'organization_entitlements',
@@ -136,6 +140,12 @@ try {
 
   const documentTables = ['document_templates','document_versions','document_publications','document_acknowledgements','document_command_requests'];
   if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])",[documentTables])).rows[0].n !== '0') throw new Error('Document tables must retain forced deny-all RLS.');
+  const importTables = ['lead_import_batches','lead_import_rows','lead_import_evidence','lead_import_requests'];
+  if ((await client.query("SELECT count(*) n FROM pg_policies WHERE schemaname='hon' AND tablename=ANY($1::text[])",[importTables])).rows[0].n !== '0') throw new Error('Import tables must retain forced deny-all RLS.');
+  for (const {rolname} of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
+    for (const table of importTables) if ((await client.query("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') allowed",[rolname,`hon.${table}`])).rows[0].allowed) throw new Error(`Forbidden client import access: ${rolname}.${table}`);
+    for (const signature of ['hon.resolve_lead_import_scope(text,text)','hon.mutate_lead_import(text,text,uuid,jsonb,text,uuid,uuid)','hon.read_lead_import(text,text,uuid,uuid)']) if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client import function: ${rolname}.${signature}`);
+  }
   const runtimeRole = (await client.query(`SELECT EXISTS (
     SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
   ) AS exists`)).rows[0];
@@ -162,6 +172,14 @@ try {
     }
     for (const [signature, shouldExecute] of [
       ['hon.search_school(text,uuid,uuid,text,text[],uuid)', true],
+      ['hon.resolve_lead_import_scope(text,text)', true],
+      ['hon.mutate_lead_import(text,text,uuid,jsonb,text,uuid,uuid)', true],
+      ['hon.read_lead_import(text,text,uuid,uuid)', true],
+      ['hon.require_lead_import_actor(text,text)', false],
+      ['hon.lead_import_summary(uuid)', false],
+      ['hon.validate_lead_import_row(jsonb,jsonb,jsonb)', false],
+      ['hon.apply_imported_lead(uuid,integer,uuid,uuid,uuid)', false],
+      ['hon.guard_lead_import_evidence()', false],
       ['hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,uuid)', true],
       ['hon.read_documents(text,text,text,uuid,integer)', true],
       ['hon.guard_document_immutability()', false],
@@ -183,7 +201,7 @@ try {
       }
     }
     for (const table of ['users', 'principals', 'roles', 'permissions', 'role_permissions', 'principal_role_grants',
-      ...documentTables, 'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
+      ...documentTables, ...importTables, 'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
       if ((await client.query("SELECT has_table_privilege('hon_runtime',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed", [`hon.${table}`])).rows[0].allowed) {
         throw new Error(`Forbidden runtime directory/control-plane/activity privilege: hon.${table}`);
       }

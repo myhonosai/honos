@@ -171,3 +171,4 @@ export { AI_TEAM_CATALOG, aiTeamAgentDefinition } from './ai-team-catalog.js';
 export { AI_INVOCATION_PLANNING_LIMITS, AI_INVOCATION_PLANNING_TASKS } from './ai-invocation-planning.js';
 export { DOCUMENT_COMMAND_REGISTRY } from './documents.js';
 export { STAFF_SEARCH_READ_REGISTRY } from './search.js';
+export { LEAD_IMPORT_COMMAND_REGISTRY } from './lead-import.js';

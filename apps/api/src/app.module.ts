@@ -3,6 +3,9 @@ import { ParentDocumentController } from './documents/parent-document.controller
 import { DocumentService } from './documents/document.service.js';
 import { DocumentHumanUiGuard } from './documents/document-human-ui.guard.js';
 import { Module } from '@nestjs/common';
+import { LeadImportController } from './migration/lead-import.controller.js';
+import { LeadImportService } from './migration/lead-import.service.js';
+import { LeadImportHumanUiGuard } from './migration/lead-import-human-ui.guard.js';
 import { FoundationController } from './foundation/foundation.controller.js';
 import { HonIdentityGuard } from './foundation/hon-identity.guard.js';
 import { HonIdentityService } from './foundation/hon-identity.service.js';
@@ -94,6 +97,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
 @Module({
   controllers: [
     StaffSearchController,
+    LeadImportController,
     DocumentController, ParentDocumentController,
     StaffRoleController,
     HealthController,
@@ -141,6 +145,7 @@ import { StaffSearchService } from './search/staff-search.service.js';
   ],
   providers: [
     StaffSearchService,
+    LeadImportService, LeadImportHumanUiGuard,
     DocumentService, DocumentHumanUiGuard,
     StaffRoleService,
     StaffRoleHumanUiGuard,

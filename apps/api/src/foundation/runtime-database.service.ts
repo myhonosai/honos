@@ -118,6 +118,14 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows[0];
   }
 
+  async resolveLeadImportScope(externalSubject: string, permission: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_lead_import_scope($1,$2)',
+      [externalSubject,permission],
+    )).rows[0];
+  }
+
   async readOrganizationOperationsSummary(
     externalSubject: string, organizationId: string, from: string, to: string,
   ): Promise<OrganizationOperationsSummary> {
