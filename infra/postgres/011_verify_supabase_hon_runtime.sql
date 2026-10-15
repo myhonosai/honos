@@ -186,3 +186,14 @@ FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid IN (
 SELECT * FROM pg_policies WHERE schemaname='hon' AND tablename LIKE 'document_%'; -- zero rows
 -- pnpm db:test-documents proves real runtime and direct RLS, publication immutability,
 -- family/audience separation, stale/replay, human-only, atomic evidence/no effects.
+
+-- 11) Search: STABLE definer, fixed path, trusted owner, runtime EXECUTE true,
+-- broad ACL false. No direct directory/HQ/secret grants are introduced.
+SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolbypassrls,r.rolsuper,
+  has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad_acl
+FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+WHERE p.oid='hon.search_school(text,uuid,uuid,text,text[],uuid)'::regprocedure;
+-- pnpm db:test-search proves active/exact scope, revocation, literal injection,
+-- redaction, stable 20 cap and READ ONLY/no audit/outbox/provider side effects.

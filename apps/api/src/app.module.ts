@@ -88,9 +88,12 @@ import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
 import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.js';
+import { StaffSearchController } from './search/staff-search.controller.js';
+import { StaffSearchService } from './search/staff-search.service.js';
 
 @Module({
   controllers: [
+    StaffSearchController,
     DocumentController, ParentDocumentController,
     StaffRoleController,
     HealthController,
@@ -137,6 +140,7 @@ import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.j
     ActionReviewController,
   ],
   providers: [
+    StaffSearchService,
     DocumentService, DocumentHumanUiGuard,
     StaffRoleService,
     StaffRoleHumanUiGuard,

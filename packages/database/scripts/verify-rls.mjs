@@ -161,6 +161,7 @@ try {
       throw new Error('Unsafe organization operations summary projection boundary.');
     }
     for (const [signature, shouldExecute] of [
+      ['hon.search_school(text,uuid,uuid,text,text[],uuid)', true],
       ['hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,uuid)', true],
       ['hon.read_documents(text,text,text,uuid,integer)', true],
       ['hon.guard_document_immutability()', false],

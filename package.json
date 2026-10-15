@@ -38,6 +38,7 @@
     "db:test-staff-roles": "pnpm --filter @hon/database db:test-staff-roles",
     "db:check": "pnpm --filter @hon/database check:migrations",
     "db:test-ai-plans": "pnpm --filter @hon/database db:test-ai-plans",
-    "db:test-documents": "pnpm --filter @hon/database db:test-documents"
+    "db:test-documents": "pnpm --filter @hon/database db:test-documents",
+    "db:test-search": "pnpm --filter @hon/database db:test-search"
   }
 }

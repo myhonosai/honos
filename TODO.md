@@ -128,3 +128,13 @@ Details: [Human Staff Role Administration](docs/architecture/HUMAN_STAFF_ROLE_AD
 - [ ] Separately add verified student-principal authority, broader audience distribution, pagination/discovery/export, retention/deletion policy, legal-provider adapters and independently authorized downstream Billing/communications workflows. No automatic consumer or external effect is activated.
 
 Details: [Human Document Acknowledgements](docs/architecture/HUMAN_DOCUMENT_ACKNOWLEDGEMENTS.md). The wider website/forms/waiver/agreement/checkout and workforce/renewal backlog remains open; internal acknowledgements are not legal e-signatures.
+
+## Deterministic staff search checkpoint
+
+- [x] Deliver HonIdentityGuard-protected school GET search with exact effective `search.global`; active unambiguous human, organization/school and non-revoked effective grants; Essential/Core/Complete without upgrade gate, no Parent/Eian or HQ authority reuse.
+- [x] Fixed safe-search-path SECURITY DEFINER read only, PUBLIC revoked, owner/runtime-only execution; bounded non-empty query (120 characters), closed kind filters, at most 20 stable ordered redacted results and current-scope server routes. Only allowlisted student/lead/session/program/curriculum names and lead contact matching; never private notes, billing/payment, documents/evidence, knowledge, AI plans/prompts/outputs, directory or secrets.
+- [x] Same-origin conventional `/staff/search` UI and reauthorized redacted landing route with clear empty/denied/error states; canonical runtime/verification, owner-only safe permission backfill, contracts/DTO/controller/service and precise read registry.
+- [x] Prove invalid queries, scope/permission/principal revocation, no forbidden sources/exposure/direct runtime directory/HQ/secret grants, literal injection-safe filters, deterministic ordering/20 cap and zero writes/audit/outbox/provider effects; run full checks/build/tests, integrate and push main.
+- [ ] Separately deliver HON Command explanation/action and Parent/Eian family-safe search. This staff find/navigate slice grants no action execution.
+
+Details: [Deterministic Staff Search](docs/architecture/DETERMINISTIC_STAFF_SEARCH.md). Migrations 0065–0066 add no derived search store, provider/model calls, executable Action Engine action or runtime directory grant. Redacted landing cards are not expanded operational detail pages.

@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestj
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary } from '@hon/contracts';
+import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
   principalId: string;
@@ -130,6 +131,24 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const row = result.rows[0];
     if (!row) throw new Error('HON operations summary projection did not return a result.');
     return row.data;
+  }
+
+  async readStaffSearch(externalSubject: string, organizationId: string, schoolId: string,
+    q: string, types: StaffSearchKind[], entityId?: string): Promise<StaffSearchResponse> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN READ ONLY');
+      await client.query("SET LOCAL statement_timeout = '2000ms'");
+      const result = await client.query<{ data: StaffSearchResponse }>(
+        'SELECT hon.search_school($1,$2::uuid,$3::uuid,$4,$5::text[],$6::uuid) AS data',
+        [externalSubject, organizationId, schoolId, q, types, entityId ?? null],
+      );
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HON search projection did not return a result.');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 
   async resolveHqOperatorScope(

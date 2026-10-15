@@ -1,3 +1,4 @@
+export * from './search.js';
 export * from './staff-roles.js';
 export * from './ai-invocation-plan.js';
 export * from './ai-provider.js';

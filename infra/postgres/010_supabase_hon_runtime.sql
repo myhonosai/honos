@@ -269,6 +269,10 @@ REVOKE ALL ON FUNCTION hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,u
 GRANT EXECUTE ON FUNCTION hon.mutate_document(text,text,text,uuid,jsonb,text,uuid,uuid),
   hon.read_documents(text,text,text,uuid,integer) TO hon_runtime;
 
+-- Deterministic single-school staff display search; no new direct table grants.
+REVOKE ALL ON FUNCTION hon.search_school(text,uuid,uuid,text,text[],uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.search_school(text,uuid,uuid,text,text[],uuid) TO hon_runtime;
+
 -- Decision-only tenant planning and authenticated HQ control-plane boundaries.
 -- Never grant direct access to HQ provider/config/credential-reference tables.
 REVOKE ALL ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),

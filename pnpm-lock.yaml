@@ -80,6 +80,9 @@ importers:
       '@hon/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@hon/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@hon/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
