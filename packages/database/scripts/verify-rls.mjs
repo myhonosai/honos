@@ -1,3 +1,5 @@
+import { requireClassPassLocalUrls } from './classpass-local-guard.mjs';
+import { classpassTables, verifyClassPassSecurity } from './classpass-security.mjs';
 import { requirePromotionReadinessLocalUrls } from './promotion-readiness-local-guard.mjs';
 import { verifyPromotionReadinessSecurity } from './promotion-readiness-security.mjs';
 import { marketingAssistantTables, verifyMarketingAssistantSecurity } from './marketing-assistant-security.mjs';
@@ -19,12 +21,13 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS
 // PostgreSQL role grants and SECURITY DEFINER ACLs remain attached to `role`.
 // Local disposable validation aliases do not contain a dot and pass unchanged.
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username.split('.', 1)[0] : 'hon_runtime';
-if (!['hon_promotion_readiness_runtime','hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_attendance_runtime','hon_attendance_backfill_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_parent_billing_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (!['hon_classpass_runtime','hon_promotion_readiness_runtime','hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_attendance_runtime','hon_attendance_backfill_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_parent_billing_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (runtimeRoleName === 'hon_classpass_runtime') requireClassPassLocalUrls();
 if (runtimeRoleName === 'hon_promotion_readiness_runtime') requirePromotionReadinessLocalUrls();
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    const db = runtimeRoleName === 'hon_promotion_readiness_runtime' ? '/hon_promotion_readiness_validation' : runtimeRoleName === 'hon_attendance_runtime' ? '/hon_attendance_validation' : runtimeRoleName === 'hon_attendance_backfill_runtime' ? '/hon_attendance_backfill_validation' : runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_parent_billing_runtime' ? '/hon_parent_billing_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    const db = runtimeRoleName === 'hon_classpass_runtime' ? '/hon_classpass_validation' : runtimeRoleName === 'hon_promotion_readiness_runtime' ? '/hon_promotion_readiness_validation' : runtimeRoleName === 'hon_attendance_runtime' ? '/hon_attendance_validation' : runtimeRoleName === 'hon_attendance_backfill_runtime' ? '/hon_attendance_backfill_validation' : runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_parent_billing_runtime' ? '/hon_parent_billing_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
     if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
     if (runtimeRoleName === 'hon_attendance_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_attendance_owner' : runtimeRoleName))) throw new Error('Attendance verifier requires exact disposable-local aliases.');
     if (runtimeRoleName === 'hon_attendance_backfill_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_attendance_backfill_owner' : runtimeRoleName))) throw new Error('Attendance backfill verifier requires exact marked disposable-local aliases.');
@@ -61,6 +64,7 @@ const expectedRlsTables = [
   'attendance_progression_policies',
   'attendance_policy_requests',
   'billing_accounts',
+  ...classpassTables,
   'class_bookings',
   'class_session_instructors',
   'class_sessions',
@@ -201,6 +205,7 @@ try {
   await verifyTestingCertificateSecurity(client, runtimeRoleName);
   await verifyTestingScorecardSecurity(client, runtimeRoleName);
   await verifyPromotionReadinessSecurity(client, runtimeRoleName);
+  await verifyClassPassSecurity(client, runtimeRoleName);
   await verifyMarketplaceSecurity(client, runtimeRoleName);
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);

@@ -20,20 +20,23 @@
 - Membership, billing-account, invoice, payment-attempt, entitlement, idempotency, audit, and transactional-outbox foundations.
 - Existing restricted runtime role, school/organization ownership, and action/provider boundaries.
 
-### Bounded missing functionality
+### Delivered bounded foundation (migrations `0117`–`0121`)
 
-- A school-configured ClassPass product/allowance and a server-controlled redemption ledger that is distinct from membership term, payment schedule, payer, and participant.
-- A governed human/UI purchase and reversal lifecycle only after the payment/reconciliation boundary is ready. No raw card handling, inferred payment success, automatic refund, or AI-created credit.
-- A deterministic admission/redeem decision for an eligible scheduled walk-in, including school/program/class eligibility, capacity/waitlist behavior, expiry/remaining-use rules, idempotency, optimistic concurrency, audit, and an inert/local-only outbox until a reviewed consumer exists.
-- Staff/parent views that clearly distinguish a booking, a walk-in eligibility decision, a redemption, attendance, and an unknown payment/provider outcome.
+- A school-configured, program-scoped operational allowance and append-only signed redemption ledger distinct from membership term, payment schedule, payer, participant, invoices and payment attempts. Issued passes freeze product/program/allowed-use/expiry facts.
+- Direct-human **manual nonfinancial** issuance only. This is an operational grant—not a purchase, payment/reconciliation result, provider receipt, credit or refund. Payment-backed issuance, purchase and refund remain deferred until a separate reconciliation boundary is reviewed.
+- A deterministic ClassPass admission/redeem function uses the canonical booking and attendance foundations. An eligible scheduled `WALK_IN` with capacity creates/uses one `BOOKED` ClassPass booking and one debit; a full class creates/preserves `WAITLISTED` with no debit. Exact idempotency, pass version, session/pass/booking locks, audit and inert outbox prevent double spend and ClassPass-path oversubscription.
+- Direct-human issuance/redemption reversals are narrow, append-only and fail closed for expiry, attendance/check-in, prior use, ambiguity or financial/provider circumstances. No generic booking update grant was added.
+- Same-origin staff and selector-free guardian views distinguish booking, admission decision, redemption, existing attendance and unavailable payment/provider outcome. The parent view is resolver-derived/current-family-only with bounded redaction and no parent command surface.
+
+The full operating contract and guarded validation procedure are documented in [ClassPass & Walk-In](CLASSPASS_WALK_IN.md). No payment/provider, messaging, AI, Action Engine, consumer, worker or external delivery is activated by this foundation.
 
 ### Dependencies and security requirements
 
-ClassPass follows reliable membership, billing, scheduling, attendance, and provider-reconciliation foundations. It must never bypass class capacity, school ownership, human financial authority, payment reconciliation, or receipt evidence. It must not turn a trial, a generic customer record, or an AI proposal into a redeemed pass.
+ClassPass reuses membership/billing context only as a deliberate separation: its delivered manual nonfinancial allowance never claims payment/reconciliation evidence. It must never bypass ClassPass capacity, school ownership, human financial authority, payment reconciliation, or receipt evidence. It must not turn a trial, generic customer record, payment invoice or AI proposal into a redeemed pass.
 
 ### Acceptance evidence
 
-A disposable-local integrity suite must cover two schools, cross-school denial, capacity and waitlist outcomes, duplicate/concurrent redemption, expiration, allowed and forbidden reversals, role/tier revocation, RLS/ACL posture, audit/outbox atomicity, and absence of direct payment/provider calls. No live payment test is implied.
+A fresh marked localhost-only integrity suite now covers 33 assertion groups, 72 rollback-only ACL drift probes, 36 verified commands, 26 real read-only checks and full-table snapshots across 163 HON tables. It proves two-school/RLS/ACL/context denial, capacity/waitlist outcomes, same-key and concurrent redemption, generic/ClassPass booking coexistence, expiration/final-use/reversal gates, role/tier/principal/family revocation, audit/outbox atomicity and zero payment/provider/message/AI/Action Engine effects. No live payment test is implied.
 
 ## B. HON Self-Service Kiosk
 
@@ -117,8 +120,8 @@ Before a model may become an HQ-approved production default, prove with local/mo
 ## Sequence and priority
 
 1. Finish and retain the validated current foundations; do not redesign them around this amendment.
-2. Build ClassPass only after dependable membership/billing/scheduling/attendance contracts are reused.
-3. Build Kiosk only after ClassPass and the check-in backend expose a bounded, auditable admission result.
+2. The direct-human manual-nonfinancial ClassPass foundation now reuses dependable membership/billing/scheduling/attendance contracts. Payment-backed issuance remains separately deferred.
+3. Build Kiosk only after this ClassPass admission result and the existing check-in backend are reviewed for limited terminal-session authority.
 4. Progress AI model intelligence alongside AI employee infrastructure: start with contracts, fixture evaluation, and HQ evidence; defer production model defaults and paid validation until separately approved.
 5. Apply the requested three AI-avatar styles as presentation assets only. They do not alter employee identity, permissions, pricing, routing, or authority.
 

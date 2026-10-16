@@ -23,6 +23,10 @@ const STAFF_BOOKING_SOURCE = 'STAFF' as const;
 
 type BookingOperation = 'CREATED';
 
+export interface ClassBookingCommandContext extends CommandContext {
+  externalSubject: string;
+}
+
 interface ClassSessionRow {
   id: string;
   capacity: number;
@@ -101,22 +105,35 @@ export class ClassBookingService {
   constructor(private readonly database: RuntimeDatabaseService) {}
 
   async create(
-    context: CommandContext,
+    context: ClassBookingCommandContext,
     sessionId: string,
     input: CreateClassBookingInput,
   ): Promise<{ booking: ClassBookingSummary; replayed: boolean; created: boolean }> {
     // This staff-only service is deliberately closed to future callers that
     // could otherwise supply an AI, automation, or untrusted public source.
-    if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
+    if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI'
+      || !context.externalSubject || context.actionRequestId || context.delegatedByPrincipalId) {
       throw new ForbiddenException('Class booking creation requires a human staff UI command.');
     }
 
     const normalized = normalizeInput(input);
+    // Do not let a forged principal reach idempotency foreign keys or receipts.
+    // The lock function still independently rechecks authority inside the command
+    // transaction after any wait; this preflight never replaces that boundary.
+    const scope = await this.database.resolveAuthorizedScope(context.externalSubject, context.schoolId, 'schedule.booking.manage');
+    if (!scope || scope.organizationId !== context.organizationId || scope.schoolId !== context.schoolId
+      || scope.principalId !== context.principalId) {
+      throw new ForbiddenException('Class booking is not authorized for this school.');
+    }
     const requestFingerprint = createHash('sha256')
       .update(JSON.stringify({ sessionId, ...normalized }))
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      await client.query(
+        "SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)",
+        [context.source, context.externalSubject],
+      );
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (
            organization_id, school_id, principal_id, idempotency_key, request_fingerprint, status, expires_at
@@ -151,6 +168,9 @@ export class ClassBookingService {
         );
         const record = existing.rows[0];
         if (!record) throw new Error('HON class-booking idempotency record unexpectedly missing.');
+        // Replays must not retain authority after IAM/tier revocation. Preserve
+        // canonical idempotency -> session lock ordering shared with ClassPass.
+        await this.lockSession(client, context, sessionId);
         if (record.request_fingerprint !== requestFingerprint) {
           throw new ConflictException({
             code: 'IDEMPOTENCY_KEY_REUSED',
@@ -166,24 +186,9 @@ export class ClassBookingService {
         });
       }
 
-      // This RLS-bound row lock serializes all booking decisions for the
-      // session. The count below is therefore capacity-safe across concurrent
-      // staff requests without taking a table-wide lock.
-      const sessionResult = await client.query<ClassSessionRow>(
-        `SELECT
-           id,
-           capacity,
-           booking_policy AS "bookingPolicy",
-           status::text AS status
-         FROM hon.class_sessions
-         WHERE id = $1::uuid
-         FOR UPDATE`,
-        [sessionId],
-      );
-      const session = sessionResult.rows[0];
-      if (!session) {
-        throw new NotFoundException('Class session was not found in this school.');
-      }
+      // The fixed definer locks only an exact authorized school session and
+      // rechecks live human authority after waiting; runtime gets no UPDATE ACL.
+      const session = await this.lockSession(client, context, sessionId);
       if (session.status === 'CANCELLED') {
         throw new ConflictException({
           code: 'SESSION_CANCELLED',
@@ -278,6 +283,27 @@ export class ClassBookingService {
       await this.recordCreationEvidence(client, context, booking, 'CREATED', 201);
       return { booking, replayed: false, created: true };
     });
+  }
+
+  private async lockSession(
+    client: PoolClient, context: ClassBookingCommandContext, sessionId: string,
+  ): Promise<ClassSessionRow> {
+    let result;
+    try {
+      result = await client.query<ClassSessionRow>(
+        `SELECT id, capacity, booking_policy AS "bookingPolicy", status
+         FROM hon.lock_class_booking_session($1,$2::uuid)`,
+        [context.externalSubject, sessionId],
+      );
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '42501') {
+        throw new ForbiddenException('Class booking is not authorized for this school.');
+      }
+      throw error;
+    }
+    const session = result.rows[0];
+    if (!session) throw new NotFoundException('Class session was not found in this school.');
+    return session;
   }
 
   private async activeSeatCount(client: PoolClient, sessionId: string): Promise<number> {

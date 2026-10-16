@@ -1625,3 +1625,82 @@ DO $$ DECLARE t text; BEGIN
  END LOOP;
 END $$;
 -- End promotion readiness exact verification.
+
+-- ClassPass exact verification:
+DO $$ DECLARE t text; r text; signature text; f record; runtime_oid oid; runtime_execute boolean; BEGIN
+ SELECT oid INTO runtime_oid FROM pg_roles WHERE rolname='hon_runtime';
+ IF runtime_oid IS NULL THEN RAISE EXCEPTION 'ClassPass runtime missing'; END IF;
+ FOR t IN SELECT unnest(ARRAY['classpass_products','classpass_passes','classpass_ledger']) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity)
+   OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=('hon.'||t)::regclass) THEN RAISE EXCEPTION 'ClassPass requires forced no-policy RLS: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM pg_class c JOIN pg_roles owner ON owner.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass AND NOT(owner.rolsuper OR owner.rolbypassrls)) THEN RAISE EXCEPTION 'ClassPass table owner must be trusted'; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   IF has_table_privilege(r,'hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege(r,'hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'ClassPass table or column ACL surplus: % %',r,t; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee=0) THEN RAISE EXCEPTION 'ClassPass PUBLIC table grant'; END IF;
+ END LOOP;
+ FOR signature IN SELECT unnest(ARRAY['read_classpass(text,text,uuid)','command_classpass(text,text,uuid,jsonb,text,uuid,uuid)','lock_classpass_actor(text,text)','guard_classpass_snapshot()','guard_classpass_booking()','require_classpass_read_actor(text)','lock_class_booking_session(text,uuid)','read_parent_classpass_view(text)']) LOOP
+  SELECT p.*,owner.rolsuper,owner.rolbypassrls INTO f FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=('hon.'||signature)::regprocedure;
+  IF f.oid IS NULL OR f.proowner=runtime_oid OR NOT(f.rolsuper OR f.rolbypassrls) OR f.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN RAISE EXCEPTION 'ClassPass function posture: %',signature; END IF;
+  IF signature IN('read_classpass(text,text,uuid)','command_classpass(text,text,uuid,jsonb,text,uuid,uuid)','lock_classpass_actor(text,text)','require_classpass_read_actor(text)','lock_class_booking_session(text,uuid)','read_parent_classpass_view(text)') AND NOT f.prosecdef THEN RAISE EXCEPTION 'ClassPass definer required'; END IF;
+  runtime_execute:=signature IN('read_classpass(text,text,uuid)','command_classpass(text,text,uuid,jsonb,text,uuid,uuid)','lock_class_booking_session(text,uuid)','read_parent_classpass_view(text)');
+  -- Exact explicit entries, not merely effective privilege for four named roles.
+  -- Owner self-EXECUTE and, for public boundaries only, runtime EXECUTE; no GO.
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a
+   WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable
+    OR (a.grantee<>f.proowner AND (NOT runtime_execute OR a.grantee<>runtime_oid))
+    OR a.grantor<>f.proowner)
+   OR NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=f.proowner AND a.privilege_type='EXECUTE' AND NOT a.is_grantable)
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=runtime_oid AND a.privilege_type='EXECUTE' AND NOT a.is_grantable)<>(CASE WHEN runtime_execute THEN 1 ELSE 0 END)
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE') IS DISTINCT FROM runtime_execute
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE WITH GRANT OPTION') THEN
+   RAISE EXCEPTION 'ClassPass exact function ACL surplus/missing/grant option: %',signature;
+  END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r,f.oid,'EXECUTE') THEN RAISE EXCEPTION 'ClassPass forbidden client function authority: % %',r,signature; END IF;
+  END LOOP;
+ END LOOP;
+ IF has_table_privilege('hon_runtime','hon.class_bookings','UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege('hon_runtime','hon.class_bookings','UPDATE') THEN RAISE EXCEPTION 'ClassPass must not grant raw booking mutation'; END IF;
+END $$;
+-- End ClassPass exact verification.
+
+-- Class booking lock exact verification:
+DO $$ DECLARE f record; safe boolean; r text; BEGIN
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.lock_class_booking_session(text,uuid)',true,'v'),
+  ('hon.require_classpass_read_actor(text)',false,'s'),
+  ('hon.read_classpass(text,text,uuid)',true,'s')
+ ) x(signature,runtime_execute,volatility) LOOP
+  SELECT p.prosecdef AND p.provolatile::text=f.volatility
+   AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+   AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+    WHERE a.is_grantable OR (a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')
+     OR NOT f.runtime_execute OR a.privilege_type<>'EXECUTE')))
+  INTO safe FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe class booking lock/read function %',f.signature; END IF;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   IF has_function_privilege(r,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Forbidden class booking client function %',r; END IF;
+  END LOOP;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_proc WHERE oid='hon.lock_class_booking_session(text,uuid)'::regprocedure
+  AND proretset AND prorettype='record'::regtype
+  AND proargnames=ARRAY['p_subject','p_session','id','capacity','booking_policy','status']::text[]
+  AND proargmodes=ARRAY['i','i','t','t','t','t']::"char"[]
+  AND proallargtypes=ARRAY['text'::regtype::oid,'uuid'::regtype::oid,'uuid'::regtype::oid,'integer'::regtype::oid,'text'::regtype::oid,'text'::regtype::oid]) THEN
+  RAISE EXCEPTION 'Unsafe class booking lock return facts';
+ END IF;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  IF has_table_privilege(r,'hon.class_sessions','UPDATE') OR has_any_column_privilege(r,'hon.class_sessions','UPDATE') THEN
+   RAISE EXCEPTION 'Forbidden direct session UPDATE privilege %',r;
+  END IF;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
+  WHERE c.oid='hon.class_sessions'::regclass AND a.grantee=0 AND a.privilege_type='UPDATE')
+  OR EXISTS(SELECT 1 FROM pg_attribute att,LATERAL aclexplode(att.attacl) a
+   WHERE att.attrelid='hon.class_sessions'::regclass AND a.grantee=0 AND a.privilege_type='UPDATE') THEN
+  RAISE EXCEPTION 'Forbidden PUBLIC session UPDATE privilege';
+ END IF;
+END $$;
+-- End class booking lock exact verification.

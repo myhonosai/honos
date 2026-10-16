@@ -15,11 +15,10 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
-import type { CommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
-import { ClassBookingService } from './class-booking.service.js';
+import { ClassBookingService, type ClassBookingCommandContext } from './class-booking.service.js';
 import { CreateClassBookingDto } from './create-class-booking.dto.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/schedule/sessions')
@@ -69,10 +68,11 @@ export class ClassBookingController {
     }
 
     const requestId = randomUUID();
-    const context: CommandContext = {
+    const context: ClassBookingCommandContext = {
       organizationId: scope.organizationId,
       schoolId: scope.schoolId,
       principalId: scope.principalId,
+      externalSubject: identity.externalSubject,
       principalType: 'HUMAN_USER',
       requestId,
       correlationId: requestId,

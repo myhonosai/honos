@@ -17,6 +17,7 @@ const administrator = new Client(connectionOptions(process.env.DATABASE_URL));
 const ids = Object.fromEntries(
   [
     'organizationA', 'schoolA', 'organizationB', 'schoolB', 'principal', 'user',
+    'role', 'grant',
     'person1', 'person2', 'person3', 'person4', 'personB',
     'student1', 'student2', 'student3', 'student4', 'studentB',
     'programA', 'programB', 'requiredSession', 'walkInSession', 'cancelledSession', 'sessionB',
@@ -29,6 +30,7 @@ function commandContext(idempotencyKey) {
     organizationId: ids.organizationA,
     schoolId: ids.schoolA,
     principalId: ids.principal,
+    externalSubject: `booking-test-${ids.user}`,
     principalType: 'HUMAN_USER',
     requestId,
     correlationId: requestId,
@@ -48,10 +50,14 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.audit_events WHERE organization_id IN ($1, $2)', [ids.organizationA, ids.organizationB]);
     await administrator.query('DELETE FROM hon.idempotency_records WHERE organization_id IN ($1, $2)', [ids.organizationA, ids.organizationB]);
     await administrator.query('DELETE FROM hon.class_bookings WHERE organization_id IN ($1, $2)', [ids.organizationA, ids.organizationB]);
+    assert((await administrator.query('SELECT count(*)::integer n FROM hon.class_bookings WHERE organization_id IN ($1,$2)', [ids.organizationA,ids.organizationB])).rows[0].n === 0, 'Generic bookings were silently suppressed by a DELETE guard.');
     await administrator.query('DELETE FROM hon.class_sessions WHERE organization_id IN ($1, $2)', [ids.organizationA, ids.organizationB]);
     await administrator.query('DELETE FROM hon.programs WHERE organization_id IN ($1, $2)', [ids.organizationA, ids.organizationB]);
     await administrator.query('DELETE FROM hon.student_profiles WHERE id = ANY($1::uuid[])', [[ids.student1, ids.student2, ids.student3, ids.student4, ids.studentB]]);
     await administrator.query('DELETE FROM hon.people WHERE id = ANY($1::uuid[])', [[ids.person1, ids.person2, ids.person3, ids.person4, ids.personB]]);
+    await administrator.query('DELETE FROM hon.principal_role_grants WHERE id = $1', [ids.grant]);
+    await administrator.query('DELETE FROM hon.roles WHERE id = $1', [ids.role]);
+    await administrator.query('DELETE FROM hon.organization_entitlements WHERE organization_id IN ($1, $2)', [ids.organizationA, ids.organizationB]);
     await administrator.query('DELETE FROM hon.principals WHERE id = $1', [ids.principal]);
     await administrator.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
     await administrator.query('DELETE FROM hon.schools WHERE id IN ($1, $2)', [ids.schoolA, ids.schoolB]);
@@ -86,6 +92,10 @@ try {
        VALUES ($1, 'HUMAN_USER', $2, 'Booking Test Staff')`,
       [ids.principal, ids.user],
     );
+    await administrator.query("INSERT INTO hon.organization_entitlements(organization_id,tier,status) VALUES($1,'ESSENTIAL','ACTIVE')", [ids.organizationA]);
+    await administrator.query("INSERT INTO hon.roles(id,organization_id,code,name,management_school_id) VALUES($1,$2,$1::uuid::text,'Booking staff',$3)", [ids.role,ids.organizationA,ids.schoolA]);
+    await administrator.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'schedule.booking.manage')", [ids.role,ids.organizationA]);
+    await administrator.query('INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$5,$4)', [ids.grant,ids.organizationA,ids.schoolA,ids.principal,ids.role]);
     const people = [
       [ids.person1, ids.organizationA, ids.schoolA, 'Student', 'One'],
       [ids.person2, ids.organizationA, ids.schoolA, 'Student', 'Two'],

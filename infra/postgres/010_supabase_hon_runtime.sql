@@ -818,3 +818,52 @@ DO $$ DECLARE r text; BEGIN
  GRANT EXECUTE ON FUNCTION hon.read_promotion_readiness(text,uuid,uuid) TO hon_runtime;
 END $$;
 COMMIT;
+
+-- ClassPass exact grants: direct table/column and helper authority are denied.
+BEGIN;
+REVOKE ALL ON hon.classpass_products,hon.classpass_passes,hon.classpass_ledger FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.guard_classpass_snapshot(),hon.guard_classpass_booking(),hon.lock_classpass_actor(text,text),hon.read_classpass(text,text,uuid),hon.command_classpass(text,text,uuid,jsonb,text,uuid,uuid) FROM PUBLIC;
+DO $$ DECLARE r text; t text; a text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON hon.classpass_products,hon.classpass_passes,hon.classpass_ledger FROM %I',r);
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.guard_classpass_snapshot(),hon.guard_classpass_booking(),hon.lock_classpass_actor(text,text),hon.read_classpass(text,text,uuid),hon.command_classpass(text,text,uuid,jsonb,text,uuid,uuid) FROM %I',r);
+ END LOOP;
+ FOR t IN SELECT unnest(ARRAY['classpass_products','classpass_passes','classpass_ledger']) LOOP
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_classpass(text,text,uuid),hon.command_classpass(text,text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;
+COMMIT;
+
+-- Generic human booking lock: runtime needs EXECUTE, never session UPDATE.
+BEGIN;
+REVOKE ALL ON FUNCTION hon.lock_class_booking_session(text,uuid),hon.require_classpass_read_actor(text) FROM PUBLIC;
+DO $$ DECLARE r text; a text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.lock_class_booking_session(text,uuid),hon.require_classpass_read_actor(text) FROM %I',r);
+  EXECUTE format('REVOKE UPDATE ON hon.class_sessions FROM %I',r);
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid='hon.class_sessions'::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE UPDATE (%I) ON hon.class_sessions FROM %I',a,r);
+  END LOOP;
+ END LOOP;
+ REVOKE UPDATE ON hon.class_sessions FROM PUBLIC;
+ FOR a IN SELECT attname FROM pg_attribute WHERE attrelid='hon.class_sessions'::regclass AND attnum>0 AND NOT attisdropped LOOP
+  EXECUTE format('REVOKE UPDATE (%I) ON hon.class_sessions FROM PUBLIC',a);
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.lock_class_booking_session(text,uuid) TO hon_runtime;
+END $$;
+COMMIT;
+
+-- Fixed parent ClassPass read: no direct table or command grants.
+REVOKE ALL ON FUNCTION hon.read_parent_classpass_view(text) FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.read_parent_classpass_view(text) FROM %I',r);
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_parent_classpass_view(text) TO hon_runtime;
+END $$;

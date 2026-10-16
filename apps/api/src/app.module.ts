@@ -1,3 +1,6 @@
+import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
+import { ParentClassPassViewService } from './families/parent-classpass-view.service.js';
+import { ClassPassModule } from './classpass/classpass.module.js';
 import { PromotionReadinessController } from './testing/promotion-readiness.controller.js';
 import { PromotionReadinessService } from './testing/promotion-readiness.service.js';
 import { MarketingAssistantController, MarketingAssistantHumanUiGuard } from './marketing/marketing-assistant.controller.js';
@@ -180,6 +183,7 @@ import { RetentionReviewService } from './retention-review/retention-review.serv
 import { RetentionReviewHumanUiGuard } from './retention-review/retention-review.dto.js';
 
 @Module({
+  imports: [ClassPassModule],
   controllers: [
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
@@ -212,6 +216,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     FamilyController,
     ParentJourneyViewController,
     ParentBillingViewController,
+    ParentClassPassViewController,
     ParentStudentJourneyController,
     ParentFamilyScheduleController,
     ParentPlannedAbsenceController,
@@ -265,6 +270,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     RetentionReviewService, RetentionReviewHumanUiGuard,
     ParentJourneyViewService, ParentJourneyReadGuard,
     ParentBillingViewService, ParentBillingReadGuard,
+    ParentClassPassViewService, ParentClassPassReadGuard,
     VoiceService, VoiceHumanUiGuard,
     MarketplaceService, MarketplaceHumanUiGuard,
     CommunityService, CommunityHumanUiGuard,

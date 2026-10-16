@@ -1,6 +1,6 @@
 import {
   CLASS_BOOKING_KINDS,
-  type ClassBookingKind,
+  type GenericClassBookingKind,
   type CreateClassBookingInput,
 } from '@hon/contracts';
 import { IsIn, IsUUID } from 'class-validator';
@@ -15,5 +15,5 @@ export class CreateClassBookingDto implements CreateClassBookingInput {
   studentProfileId!: string;
 
   @IsIn([...CLASS_BOOKING_KINDS])
-  bookingKind!: ClassBookingKind;
+  bookingKind!: GenericClassBookingKind;
 }

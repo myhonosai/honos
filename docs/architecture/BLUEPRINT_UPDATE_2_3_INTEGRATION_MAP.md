@@ -43,7 +43,7 @@ HON is intended to be a **broad functional beta** for the approved Ideal School 
 | Class pre-registration, capacity and waitlist | Class sessions/bookings and scheduling integrity foundations | **Existing foundation; 2.3 verification pending** | Exact booking/capacity/waitlist regression against current behavior |
 | Family-linked accounts and family billing | Guardian/family and parent-safe billing reads | **Implemented and validated as bounded read foundations** | Mutating family billing/payment workflows remain separately governed |
 | Staff permissions and instructor records | Roles, staff qualification and human curriculum/testing foundations | **Implemented and validated bounded slices** | Broader staff profile/workforce delivery remains open |
-| Attendance history and staff corrections | Existing sessions/bookings/attendance with guarded policy and function-only command boundary | **Implemented and tested bounded vertical** | Cross-domain progression/readiness and ClassPass admission remain distinct future domains |
+| Attendance history and staff corrections | Existing sessions/bookings/attendance with guarded policy and function-only command boundary | **Implemented and tested bounded vertical** | Promotion readiness and ClassPass admission reuse attendance only as separate human-governed domains |
 | Promotion readiness | Existing curriculum/rank/history/progress/attendance/testing/document evidence through a fixed staff read | **Implemented and tested bounded projection** | Policy authoring, wider instructor workflow integration and every promotion/testing action remain distinct human-governed work |
 | Mobile-responsive parent access | Parent Home/Journey/Billing/Testing bounded web surfaces | **Implemented and validated bounded web reads** | Purpose-built Expo Parent App is still open |
 | Parent notifications | Consent/communication architecture and intentionally unavailable parent receipt view | **Partial / receipt evidence not implemented** | Proven recipient delivery/receipt model and consent-safe projection |
@@ -107,8 +107,8 @@ Build on Migration Center and HQ onboarding foundations: school/profile/program/
 
 1. Preserve and complete current HQ task-profile control-plane milestone.
 2. Complete Essential/Core/Complete entitlement enforcement and governed AI employee/Action Engine integration against existing slices.
-3. Use the completed advanced-attendance and deterministic-readiness boundaries before ClassPass admission affects progression signals.
-4. Deliver ClassPass & Walk-In on existing membership/billing/scheduling/capacity/attendance; then Kiosk on the bounded admission result.
+3. Use the completed advanced-attendance and deterministic-readiness boundaries before any future progression integration; completed ClassPass remains nonfinancial and does not alter either domain.
+4. The direct-human manual-nonfinancial ClassPass & Walk-In foundation is complete on existing membership/billing/scheduling/capacity/attendance. Next, design Kiosk only on its bounded admission result and the existing check-in boundary.
 5. Add retention alerts and acknowledgements on already proven evidence/delivery boundaries.
 6. Add curriculum video library and guided onboarding/import extensions with existing storage/migration controls.
 7. Continue model optimization only via evaluated HQ profiles and a separately owner-authorized bounded provider validation.

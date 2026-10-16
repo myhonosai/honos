@@ -5,7 +5,7 @@ export const PARENT_JOURNEY_UNAVAILABLE = ['READ_API_UNAVAILABLE', 'READ_UNAVAIL
 export type JourneyList<T> = { status: 'AVAILABLE'; items: T[]; limited: boolean } | { status: 'UNAVAILABLE'; reason: (typeof PARENT_JOURNEY_UNAVAILABLE)[number] };
 export interface JourneyRequirement { label: string; kind: (typeof CURRICULUM_REQUIREMENT_KINDS)[number]; required: boolean; status: (typeof CURRICULUM_PROGRESS_STATUSES)[number] | null; recordedAt: string | null }
 export interface JourneyProgram { name: string; rank: string | null; requirements: JourneyList<JourneyRequirement> }
-export interface JourneyBooking { name: string; program: string; startsAt: string; endsAt: string; room: string | null; bookingStatus: 'BOOKED' | 'WAITLISTED' | 'CANCELLED' | 'CHECKED_IN' | 'NO_SHOW'; sessionStatus: 'DRAFT' | 'SCHEDULED' | 'CANCELLED' | 'COMPLETED'; kind: 'REGULAR' | 'TRIAL' | 'MAKEUP' | 'PRIVATE_LESSON' | 'EVENT' }
+export interface JourneyBooking { name: string; program: string; startsAt: string; endsAt: string; room: string | null; bookingStatus: 'BOOKED' | 'WAITLISTED' | 'CANCELLED' | 'CHECKED_IN' | 'NO_SHOW'; sessionStatus: 'DRAFT' | 'SCHEDULED' | 'CANCELLED' | 'COMPLETED'; kind: 'REGULAR' | 'TRIAL' | 'MAKEUP' | 'PRIVATE_LESSON' | 'EVENT' | 'CLASS_PASS' }
 export interface JourneyAchievement { name: string; description: string; awardedOn: string }
 export interface JourneyDocument { title: string; publishedAt: string }
 export interface JourneyChild { name: string; profileAvailable: boolean; programs: JourneyProgram[]; schedule: JourneyList<JourneyBooking>; achievements: JourneyList<JourneyAchievement> }
@@ -58,7 +58,7 @@ function booking(v: unknown): JourneyBooking {
   const startsAt = timestamp(r.startsAt), endsAt = timestamp(r.endsAt); if (Date.parse(endsAt) <= Date.parse(startsAt)) invalid();
   return { name: text(r.name, 200), program: text(r.program, 200), startsAt, endsAt, room: nullable(r.room, x => text(x, 200)),
     bookingStatus: values(r.bookingStatus, ['BOOKED', 'WAITLISTED', 'CANCELLED', 'CHECKED_IN', 'NO_SHOW']),
-    sessionStatus: values(r.sessionStatus, ['DRAFT', 'SCHEDULED', 'CANCELLED', 'COMPLETED']), kind: values(r.kind, ['REGULAR', 'TRIAL', 'MAKEUP', 'PRIVATE_LESSON', 'EVENT']) };
+    sessionStatus: values(r.sessionStatus, ['DRAFT', 'SCHEDULED', 'CANCELLED', 'COMPLETED']), kind: values(r.kind, ['REGULAR', 'TRIAL', 'MAKEUP', 'PRIVATE_LESSON', 'EVENT', 'CLASS_PASS']) };
 }
 function achievement(v: unknown): JourneyAchievement {
   const r = object(v, ['name', 'description', 'awardedOn']); const awardedOn = text(r.awardedOn, 10);

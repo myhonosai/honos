@@ -482,7 +482,8 @@ export const CLASS_BOOKING_KINDS = [
   'PRIVATE_LESSON',
   'EVENT',
 ] as const;
-export type ClassBookingKind = (typeof CLASS_BOOKING_KINDS)[number];
+export type GenericClassBookingKind = (typeof CLASS_BOOKING_KINDS)[number];
+export type ClassBookingKind = GenericClassBookingKind | 'CLASS_PASS';
 
 export const CLASS_BOOKING_STATUSES = [
   'BOOKED',
@@ -497,7 +498,7 @@ export type ClassBookingSource = 'STAFF' | 'PARENT_APP' | 'AUTOMATION' | 'INTEGR
 
 export interface CreateClassBookingInput {
   studentProfileId: string;
-  bookingKind: ClassBookingKind;
+  bookingKind: GenericClassBookingKind;
 }
 
 /**
@@ -912,3 +913,7 @@ export * from './retention-review-signals.js';
 export * from './chad-follow-up-assistant.js';
 
 export * from './promotion-readiness.js';
+
+export * from './classpass.js';
+
+export * from './parent-classpass-view.js';

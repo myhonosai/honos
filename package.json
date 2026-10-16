@@ -87,6 +87,8 @@
     "db:setup-attendance-backfill": "pnpm --filter @hon/database db:setup-attendance-backfill",
     "db:test-attendance-backfill": "pnpm --filter @hon/database db:test-attendance-backfill",
     "db:setup-promotion-readiness": "pnpm --filter @hon/database db:setup-promotion-readiness",
-    "db:test-promotion-readiness": "pnpm --filter @hon/database db:test-promotion-readiness"
+    "db:test-promotion-readiness": "pnpm --filter @hon/database db:test-promotion-readiness",
+    "db:setup-classpass": "pnpm --filter @hon/database db:setup-classpass",
+    "db:test-classpass": "pnpm --filter @hon/database db:test-classpass"
   }
 }

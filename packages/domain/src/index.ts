@@ -78,3 +78,5 @@ export * from './automation-rule-planning.js';
 
 export * from './ai-task-profile-router.js';
 export * from './attendance-policy.js';
+
+export * from './classpass.js';

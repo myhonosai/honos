@@ -183,6 +183,14 @@
     {
       "path": "/staff/testing/readiness",
       "title": "HON | Human promotion readiness"
+    },
+    {
+      "path": "/staff/classpass",
+      "title": "Human ClassPass Workbench"
+    },
+    {
+      "path": "/parent/classpass",
+      "title": "HON | Family ClassPass Observations"
     }
   ]
 }
