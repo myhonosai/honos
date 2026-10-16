@@ -8,6 +8,16 @@ export interface StudentRegistrationReceipt {
   registrationId: string; studentProfileId: string; enrollmentId: string; programId: string; classSessionId: string;
   status: 'REGISTERED_NO_BOOKING'; createdAt: string;
 }
+export type OwnerLaunchRegistrationKind = 'NEW_ADULT_NO_GUARDIAN' | 'NEW_CHILD_WITH_NEW_GUARDIAN';
+export interface OwnerLaunchSavedStudentConfirmation {
+  registrationId: string; studentProfileId: string; displayName: string; createdAt: string;
+  registrationKind: OwnerLaunchRegistrationKind; status: 'REGISTERED_NO_BOOKING';
+}
+export interface OwnerLaunchSavedStudentsProjection {
+  organizationId: string; schoolId: string;
+  state: 'NO_RECORDED_REGISTRATIONS' | 'RECORDED_REGISTRATIONS';
+  registrations: OwnerLaunchSavedStudentConfirmation[];
+}
 export interface LaunchProgramReceipt { id: string; version: number; status: 'DRAFT' | 'SCHEDULED' | 'CANCELLED' | 'COMPLETED'; }
 export interface LaunchClassReceipt extends LaunchProgramReceipt { programId: string; }
 export interface OwnerLaunchProjection {
@@ -40,6 +50,30 @@ export function verifyStudentRegistrationReceipt(value: unknown, input?: Pick<Re
   const receipt: StudentRegistrationReceipt = { registrationId: ownerLaunchId(row.registrationId), studentProfileId: ownerLaunchId(row.studentProfileId), enrollmentId: ownerLaunchId(row.enrollmentId), programId: ownerLaunchId(row.programId), classSessionId: ownerLaunchId(row.classSessionId), status: 'REGISTERED_NO_BOOKING', createdAt };
   if (input && (receipt.programId !== input.programId || receipt.classSessionId !== input.classSessionId)) invalid();
   return receipt;
+}
+export function verifyOwnerLaunchSavedStudentsProjection(value: unknown): OwnerLaunchSavedStudentsProjection {
+  const row = ownerLaunchRecord(value, ['organizationId','schoolId','state','registrations']);
+  if (!Array.isArray(row.registrations) || row.registrations.length > 5) invalid();
+  const registrations = row.registrations.map((value) => {
+    const registration = ownerLaunchRecord(value, ['registrationId','studentProfileId','displayName','createdAt','registrationKind','status']);
+    const createdAt = text(registration.createdAt, 24);
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(createdAt) || !Number.isFinite(Date.parse(createdAt)) || registration.status !== 'REGISTERED_NO_BOOKING'
+      || !['NEW_ADULT_NO_GUARDIAN','NEW_CHILD_WITH_NEW_GUARDIAN'].includes(String(registration.registrationKind))) invalid();
+    return {
+      registrationId: ownerLaunchId(registration.registrationId), studentProfileId: ownerLaunchId(registration.studentProfileId),
+      displayName: text(registration.displayName, 160), createdAt,
+      registrationKind: registration.registrationKind as OwnerLaunchRegistrationKind, status: 'REGISTERED_NO_BOOKING' as const,
+    };
+  });
+  if ((registrations.length === 0 && row.state !== 'NO_RECORDED_REGISTRATIONS') || (registrations.length > 0 && row.state !== 'RECORDED_REGISTRATIONS')) invalid();
+  for (let index = 1; index < registrations.length; index++) {
+    const prior = registrations[index - 1]!; const current = registrations[index]!;
+    if (Date.parse(prior.createdAt) < Date.parse(current.createdAt) || (prior.createdAt === current.createdAt && prior.registrationId <= current.registrationId)) invalid();
+  }
+  return {
+    organizationId: ownerLaunchId(row.organizationId), schoolId: ownerLaunchId(row.schoolId),
+    state: row.state as OwnerLaunchSavedStudentsProjection['state'], registrations,
+  };
 }
 export function verifyLaunchProgramReceipt(value: unknown): LaunchProgramReceipt {
   const row = ownerLaunchRecord(value, ['id','version','status']);

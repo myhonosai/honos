@@ -1,6 +1,6 @@
 # Owner launch lifecycle — bounded conventional setup
 
-**Status:** adult-only bounded vertical (`0133`) retained unchanged; separate guardian-and-child extension (`0134`) implemented with local validation. Final milestone/checkpoint evidence remains in TODO and is not marked complete by this change.
+**Status:** adult-only bounded vertical (`0133`) retained unchanged; separate guardian-and-child extension (`0134`) is implemented with local validation; saved-student confirmation (`0135`–`0136`) is a completed additive read boundary. Final checkpoint evidence is recorded in TODO.
 
 This is the conventional path from an already provisioned and authorized school-owner context to saved program, class and student-registration receipts. It is **not** public sign-up, parent onboarding, family readiness, enrollment-to-membership completion, booking, attendance, payment setup or a complete school readiness checklist.
 
@@ -13,6 +13,7 @@ The authenticated, dynamic, no-index `/staff/launch` flow uses only fixed same-o
 | Method/path | Fixed boundary |
 | --- | --- |
 | `GET /owner-launch` | Current direct-human school context and requester-owned saved creation receipts; not a directory or current-eligibility read |
+| `GET /owner-launch/saved-students` | Selector-free current requester confirmation of at most five newest receipt-linked current student profile/display-name records; not a student/family directory |
 | `POST /organizations/:organizationId/schools/:schoolId/programs` | Existing Program command |
 | `POST /organizations/:organizationId/schools/:schoolId/schedule/sessions` | Existing Class Session command |
 | `POST /organizations/:organizationId/schools/:schoolId/student-registrations` | Unchanged adult-only `hon.register_owner_launch_student` |
@@ -35,6 +36,12 @@ All launch reads and both registration commands require the existing `0133` scop
 SQL resolves actual live scope before/after bounded IAM locks, after advisory/context/identity waits, immediately before writes and again before returning. Revocation, expiry and ambiguity fail closed, including replay. IAM locks prevent permission/grant phantoms and writes during execution; clock-based reauthorization handles expiry. Runtime transaction context and its verified external subject are independently matched by the fixed definer. UI, supplied IDs and forged GUCs cannot replace live authorization.
 
 The additive owner projection has `guardianChildRegistration: null | redacted receipt`. It selects only this actor's receipts matching that actor's saved program/class. Without current `family.manage` it returns **null**, never a family directory, another owner's receipt or a readiness assertion. Family authority is checked again before returning a child receipt. Parent reads, grants, sessions and privacy policies are unchanged.
+
+### Saved-student confirmation — additive `0135`–`0136`
+
+`GET /owner-launch/saved-students` has no organization, school, registration, student, family, cursor or query selector. It repeats the same live direct `HUMAN_USER`/`HUMAN_UI` owner-launch resolver and lock/recheck, including exact current role/permission, one active Essential/Core/Complete entitlement, parent/family/HQ exclusion and delegated/Action Engine denial. The response is either **`NO_RECORDED_REGISTRATIONS`** or a fixed maximum of five newest **`RECORDED_REGISTRATIONS`** entries, each containing only authoritative organization/school scope, registration ID, current student profile ID, sanitized current display name, receipt creation time, `NEW_ADULT_NO_GUARDIAN` or `NEW_CHILD_WITH_NEW_GUARDIAN`, and honest **`REGISTERED_NO_BOOKING`**.
+
+The immutable receipt is the sole authority link: the function first limits to the current actor's exact current-school adult/child receipt, then joins that receipt to the current same-school student profile and person. It returns neither receipt JSON nor a general profile/person row, and it has no path to guardian/family/birth/contact/payment/booking/attendance/testing/curriculum/grade/rank data. Private receipt relations remain forced-RLS/no-policy/no-runtime-table-grant; the runtime has only fixed function execution. The staff dashboard calls this same-origin no-store GET only after the existing operations-dashboard read succeeds and renders it only when the returned authoritative organization/school exactly matches that verified dashboard result; any mismatch is unavailable, not a cross-school display.
 
 ## Two deliberately separate registration commands
 
@@ -93,7 +100,7 @@ Neither command creates membership, billing/payment account or method/outcome, i
 
 `pnpm db:setup-owner-launch` requires the explicit marked localhost-only target and a fresh private job-directory descriptor file; it refuses remote/unmarked targets, inherited database URLs/PG overrides, provider/payment/communication/execution environment values and unsafe files. `pnpm db:test-owner-launch` loads credentials only through the verified mode-0600, non-symlink, descriptor-bound loader. All non-local networking is disabled and external call count must remain zero.
 
-The same proof now exercises both separate commands: two-school independent registrations; exact guardian/child/student/family/enrollment relations; child ages and eighteenth birthdays; conservative identity denial and one-pair contracts; expected-version changes/historical replay/concurrent replay/duplicate races; staff/family/HQ/principal/source/delegation/action/tier/revocation denial; actual IAM revocation and entitlement/grant expiry **after observed lock waits**; forced RLS and raw ACL denial; canonical drift probes; composite graph failures; immutable evidence; audit and inert-fact failure rollback; whole-HON-table snapshots and zero extra effects. Focused API/UI/domain tests retain adult closure and cover the new route/marker, exact transport, pair validation, redaction and truthful unavailable labels.
+The same proof now exercises both separate commands plus the selector-free confirmation: two-school independent registrations; receipt-to-current-profile/person links; fixed five-row newest-first output; adult/child display-name redaction; child ages and eighteenth birthdays; conservative identity denial and one-pair contracts; expected-version changes/historical replay/concurrent replay/duplicate races; staff/family/HQ/principal/source/delegation/action/tier/revocation denial; actual IAM revocation and entitlement/grant expiry **after observed lock waits**; forced RLS and raw ACL/function denial; canonical drift probes; composite graph failures; immutable evidence; audit and inert-fact failure rollback; whole-HON-table snapshots and zero extra effects. Focused API/UI/domain tests retain adult closure and cover the fixed GET, no-selector transport, bounded output, redaction and truthful unavailable labels.
 
 ```bash
 # In a scrubbed shell, with no provider/execution/database overrides:

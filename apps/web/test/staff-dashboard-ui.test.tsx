@@ -3,7 +3,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { StaffDashboard } from '../src/components/staff-dashboard';
-import { loadStaffDashboard, staffDashboardReportPath, StaffDashboardAccessError, verifyStaffDashboardSnapshot } from '../src/components/staff-dashboard-http';
+import { loadOwnerLaunchSavedStudents, loadStaffDashboard, ownerLaunchSavedStudentsPath, staffDashboardReportPath, StaffDashboardAccessError, verifyStaffDashboardSnapshot } from '../src/components/staff-dashboard-http';
 
 const organizationId = '11111111-1111-4111-8111-111111111111';
 const schoolId = '22222222-2222-4222-8222-222222222222';
@@ -20,6 +20,7 @@ const report = () => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 2, FAILED: 3, REQUIRES_ACTION: 4, UNKNOWN: 5, REFUNDED: 6 } },
 });
 const response = (operationalSnapshot: unknown) => ({ ok: true, json: async () => ({ data: { operationalSnapshot }, meta: { requestId: 'id', correlationId: 'id' } }) }) as Response;
+const savedStudents = { organizationId, schoolId, state: 'RECORDED_REGISTRATIONS', registrations: [{ registrationId: '33333333-3333-4333-8333-333333333333', studentProfileId: '44444444-4444-4444-8444-444444444444', displayName: 'Saved Student', createdAt: to, registrationKind: 'NEW_ADULT_NO_GUARDIAN', status: 'REGISTERED_NO_BOOKING' }] };
 
 describe('staff operations dashboard', () => {
   it('uses exactly the existing same-origin read-only operations report and reconstructs its aggregate DTO', async () => {
@@ -40,12 +41,26 @@ describe('staff operations dashboard', () => {
     try { await expect(loadStaffDashboard(organizationId, schoolId)).rejects.toBeInstanceOf(StaffDashboardAccessError); } finally { fetchSpy.mockRestore(); }
   });
 
+  it('loads saved student confirmation only from the fixed selector-free owner receipt read and rejects private fields', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ data: savedStudents }) } as Response);
+    try {
+      expect(ownerLaunchSavedStudentsPath()).toBe('/api/v1/owner-launch/saved-students');
+      await expect(loadOwnerLaunchSavedStudents()).resolves.toEqual(savedStudents);
+      expect(fetchSpy).toHaveBeenCalledWith('/api/v1/owner-launch/saved-students', expect.objectContaining({ method: 'GET', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' }));
+    } finally { fetchSpy.mockRestore(); }
+    for (const patch of [{ registrations: [{ ...savedStudents.registrations[0], familyId: organizationId }] }, { registrations: [{ ...savedStudents.registrations[0], birthDate: '2015-01-01' }] }, { state: 'NO_RECORDED_REGISTRATIONS' }]) {
+      const malformed = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ data: { ...savedStudents, ...patch } }) } as Response);
+      try { await expect(loadOwnerLaunchSavedStudents()).rejects.toThrow(); } finally { malformed.mockRestore(); }
+    }
+  });
+
   it('starts without fabricated metrics and exposes explicit unavailable states plus real managed-workflow links', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     try {
       const html = renderToStaticMarkup(<StaffDashboard />);
       expect(fetchSpy).not.toHaveBeenCalled();
       for (const text of ['No verified school is selected', 'no contact data, notes, payment methods, private evidence']) expect(html).toContain(text);
+      expect(html).not.toContain('Saved students');
       expect(html).not.toContain('31,850');
       expect(html).not.toContain('Ideal Martial Arts');
     } finally { fetchSpy.mockRestore(); }
@@ -57,10 +72,13 @@ describe('staff operations dashboard', () => {
     const http = readFileSync('src/components/staff-dashboard-http.ts', 'utf8');
     for (const text of ['verifySession', "redirect('/auth/login')", 'index: false', 'follow: false', 'force-dynamic']) expect(route).toContain(text);
     expect(component).toContain('setSnapshot(null)');
-    for (const text of ['Student profiles', 'Current-school aggregate', 'Trial count unavailable', 'Revenue-plan summary unavailable', 'NOT COUNTED HERE']) expect(component).toContain(text);
+    expect(component).toContain('confirmation.organizationId !== next.organizationId');
+    expect(component).toContain('confirmation.schoolId !== next.schoolId');
+    for (const text of ['Student profiles', 'Current-school aggregate', 'Trial count unavailable', 'Revenue-plan summary unavailable', 'NOT COUNTED HERE', 'Saved students', 'not a student or family directory']) expect(component).toContain(text);
     for (const href of ['/staff/search', '/staff/planning/revenue', '/staff/launch', '/staff/crm/follow-ups', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(component).toContain(href);
     expect(http).toContain("method: 'GET'");
     expect(http).toContain("credentials: 'same-origin'");
+    expect(http).toContain("'/api/v1/owner-launch/saved-students'");
     expect(http).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|from\s+['"][^'"]*(?:voice|action|ai|provider)/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/dashboard')).toHaveLength(1);

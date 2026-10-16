@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, type FormEvent } from 'react';
-import type { OperationalSnapshot } from '@hon/contracts';
-import { loadStaffDashboard, StaffDashboardAccessError } from './staff-dashboard-http';
+import type { OperationalSnapshot, OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
+import { loadOwnerLaunchSavedStudents, loadStaffDashboard, StaffDashboardAccessError } from './staff-dashboard-http';
 import styles from './staff-dashboard.module.css';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
@@ -18,6 +18,29 @@ function WorkflowLink({ href, children }: { href: string; children: React.ReactN
 }
 function NoAggregate({ workflow, children }: { workflow: string; children: React.ReactNode }): React.ReactElement {
   return <article className={styles.unavailable}><span>NOT COUNTED HERE</span><p>{children}</p><WorkflowLink href={workflow}>Open the managed workflow</WorkflowLink></article>;
+}
+function SavedStudentConfirmation({ projection }: { projection: OwnerLaunchSavedStudentsProjection }): React.ReactElement {
+  if (projection.state === 'NO_RECORDED_REGISTRATIONS') return <section className={styles.savedConfirmation} aria-labelledby="saved-students-title">
+    <p className={styles.eyebrow}>OWNER LAUNCH / RECEIPT CONFIRMATION</p><h2 id="saved-students-title">Saved students</h2>
+    <p className={styles.savedEmpty}>No saved owner-launch registrations are recorded for your current direct owner-launch scope.</p>
+    <p className={styles.savedBoundary}>This is not a student or family directory. No booking, attendance, parent access, payment, or communication outcome is implied.</p>
+    <WorkflowLink href="/staff/launch">Open owner launch</WorkflowLink>
+  </section>;
+  return <section className={styles.savedConfirmation} aria-labelledby="saved-students-title">
+    <p className={styles.eyebrow}>OWNER LAUNCH / RECEIPT CONFIRMATION</p><h2 id="saved-students-title">Saved students</h2>
+    <p className={styles.savedBoundary}>Up to five newest registrations saved by you in your direct owner-launch scope. This is not a student or family directory.</p>
+    <ul className={styles.savedList}>{projection.registrations.map((registration) => <li key={registration.registrationId}>
+      <strong>{registration.displayName}</strong><dl>
+        <div><dt>Student profile ID</dt><dd><code>{registration.studentProfileId}</code></dd></div>
+        <div><dt>Registration receipt</dt><dd><code>{registration.registrationId}</code></dd></div>
+        <div><dt>Saved</dt><dd>{utc(registration.createdAt)} UTC</dd></div>
+        <div><dt>Registration kind</dt><dd>{registration.registrationKind === 'NEW_CHILD_WITH_NEW_GUARDIAN' ? 'New child with new guardian' : 'New adult without guardian'}</dd></div>
+        <div><dt>Status</dt><dd>Registered — no booking</dd></div>
+      </dl>
+    </li>)}</ul>
+    <p className={styles.savedBoundary}>A saved registration does not assert family readiness, parent login/access, membership, booking, attendance, payment, or communication.</p>
+    <WorkflowLink href="/staff/launch">Open owner launch</WorkflowLink>
+  </section>;
 }
 function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React.ReactElement {
   const attendance = snapshot.attendance.inRangeByStatus;
@@ -69,10 +92,12 @@ export function StaffDashboard(): React.ReactElement {
   const [schoolId, setSchoolId] = useState('');
   const [selection, setSelection] = useState<VerifiedSelection | null>(null);
   const [snapshot, setSnapshot] = useState<OperationalSnapshot | null>(null);
+  const [savedStudents, setSavedStudents] = useState<OwnerLaunchSavedStudentsProjection | null>(null);
+  const [savedStudentsUnavailable, setSavedStudentsUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  function clear() { setSelection(null); setSnapshot(null); setError(''); }
+  function clear() { setSelection(null); setSnapshot(null); setSavedStudents(null); setSavedStudentsUnavailable(false); setError(''); }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
@@ -81,6 +106,12 @@ export function StaffDashboard(): React.ReactElement {
       const next = await loadStaffDashboard(organizationId, schoolId);
       setSnapshot(next);
       setSelection({ organizationId: next.organizationId, schoolId: next.schoolId, generatedAt: next.generatedAt, from: next.from, to: next.to });
+      try {
+        const confirmation = await loadOwnerLaunchSavedStudents();
+        if (confirmation.organizationId !== next.organizationId || confirmation.schoolId !== next.schoolId) throw new Error('Saved registration scope does not match the verified dashboard school.');
+        setSavedStudents(confirmation);
+      }
+      catch { setSavedStudents(null); setSavedStudentsUnavailable(true); }
     } catch (reason) {
       if (reason instanceof StaffDashboardAccessError) { setSelection(null); setSnapshot(null); }
       setError(reason instanceof Error ? reason.message : 'The operations dashboard is unavailable.');
@@ -102,5 +133,7 @@ export function StaffDashboard(): React.ReactElement {
       {selection && <div className={styles.verified} role="status"><strong>Verified current school</strong><span>Organization <code>{selection.organizationId}</code></span><span>School <code>{selection.schoolId}</code></span><span>Window: {utc(selection.from)} – {utc(selection.to)} UTC</span><span>Generated: {utc(selection.generatedAt)} UTC</span></div>}
     </section>
     {snapshot && <OperationsCards snapshot={snapshot} />}
+    {snapshot && savedStudents && <SavedStudentConfirmation projection={savedStudents} />}
+    {snapshot && savedStudentsUnavailable && <section className={styles.savedUnavailable} aria-live="polite"><strong>Owner-launch saved-student confirmation unavailable.</strong><p>No registration is shown. The dashboard did not use its school inputs to search for a student.</p></section>}
   </main>;
 }

@@ -19,6 +19,12 @@ export class OwnerLaunchController {
     const requestId=randomUUID();
     return {...scope,externalSubject:request.honIdentity.externalSubject,principalType:'HUMAN_USER',source:'HUMAN_UI',requestId,correlationId:requestId,idempotencyKey:key??`read:${requestId}`};
   }
+  @Get('owner-launch/saved-students')
+  @UseGuards(OwnerLaunchHumanUiGuard)
+  async savedStudents(@Req() request: HonRequest, @Res({passthrough:true}) response: Response) {
+    response.setHeader('Cache-Control','private, no-store');
+    return {data:await this.launch.readSavedStudents(await this.context(request))};
+  }
   @Get('owner-launch')
   @UseGuards(OwnerLaunchHumanUiGuard)
   async read(@Req() request: HonRequest, @Res({passthrough:true}) response: Response) {

@@ -1,4 +1,4 @@
-import type { OperationalSnapshot } from '@hon/contracts';
+import { verifyOwnerLaunchSavedStudentsProjection, type OperationalSnapshot, type OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ATTENDANCE = ['PRESENT', 'LATE', 'EXCUSED_ABSENCE', 'UNEXCUSED_ABSENCE', 'MAKEUP'] as const;
@@ -41,6 +41,11 @@ export function staffDashboardReportPath(organizationId: string, schoolId: strin
   const school = schoolId.trim().toLowerCase();
   if (!UUID.test(organization) || !UUID.test(school)) throw new Error('Enter the exact organization and school UUIDs from your staff context.');
   return `/api/v1/organizations/${organization}/schools/${school}/reports/operations`;
+}
+
+/** No organization, school, registration, or student selector is accepted here. */
+export function ownerLaunchSavedStudentsPath(): '/api/v1/owner-launch/saved-students' {
+  return '/api/v1/owner-launch/saved-students';
 }
 
 /**
@@ -94,4 +99,18 @@ export async function loadStaffDashboard(organizationId: string, schoolId: strin
   const root = record(envelope, ['data', 'meta']);
   const data = record(root.data, ['operationalSnapshot']);
   return verifyStaffDashboardSnapshot(data.operationalSnapshot, organizationId, schoolId);
+}
+
+/**
+ * A separate owner-scoped receipt confirmation, loaded only after the existing
+ * dashboard report succeeds. This is not a school-selected directory request.
+ */
+export async function loadOwnerLaunchSavedStudents(): Promise<OwnerLaunchSavedStudentsProjection> {
+  const response = await fetch(ownerLaunchSavedStudentsPath(), {
+    method: 'GET', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw new StaffDashboardAccessError('Owner-launch saved-student confirmation is unavailable. No registration is shown.', response.status);
+  let envelope: unknown;
+  try { envelope = await response.json(); } catch { throw new Error('The owner-launch saved-student response could not be verified.'); }
+  return verifyOwnerLaunchSavedStudentsProjection(record(envelope, ['data']).data);
 }

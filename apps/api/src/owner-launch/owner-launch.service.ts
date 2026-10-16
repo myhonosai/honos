@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { ownerLaunchRecord, verifyOwnerLaunchProjection, verifyRegisterStudentInput, verifyStudentRegistrationReceipt, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, type OwnerLaunchContext } from '@hon/contracts';
+import { ownerLaunchRecord, verifyOwnerLaunchProjection, verifyOwnerLaunchSavedStudentsProjection, verifyRegisterStudentInput, verifyStudentRegistrationReceipt, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, type OwnerLaunchContext } from '@hon/contracts';
 import { assertOwnerLaunchHuman, assertGuardianChildDistinct } from '@hon/domain';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 @Injectable()
@@ -18,6 +18,10 @@ export class OwnerLaunchService {
   async read(context: OwnerLaunchContext) {
     this.human(context);
     try { return verifyOwnerLaunchProjection(await this.database.ownerLaunchCommand(context)); } catch (error) { return this.failure(error); }
+  }
+  async readSavedStudents(context: OwnerLaunchContext) {
+    this.human(context);
+    try { return verifyOwnerLaunchSavedStudentsProjection(await this.database.readOwnerLaunchSavedStudents(context)); } catch (error) { return this.failure(error); }
   }
   async register(context: OwnerLaunchContext, value: unknown) {
     this.human(context);
