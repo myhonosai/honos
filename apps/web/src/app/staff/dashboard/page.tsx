@@ -6,12 +6,16 @@ import { StaffDashboard } from '../../../components/staff-dashboard';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'HON | Staff Operations Dashboard', description: 'Verified aggregate-only school operations dashboard.', referrer: 'no-referrer', robots: { index: false, follow: false } };
 
-export default async function StaffDashboardPage() {
+type StaffDashboardPageProps = { searchParams: Promise<{ organizationId?: string; schoolId?: string }> };
+function prefill(value: unknown): string | undefined { return typeof value === 'string' && value.length <= 80 ? value : undefined; }
+
+export default async function StaffDashboardPage({ searchParams }: StaffDashboardPageProps) {
   let authenticated = false;
   try {
     const token = (await cookies()).get(HON_SESSION_COOKIE)?.value;
     if (token) { verifySession(token, sessionConfig()); authenticated = true; }
   } catch { /* fail closed */ }
   if (!authenticated) redirect('/auth/login');
-  return <StaffDashboard />;
+  const query = await searchParams;
+  return <StaffDashboard initialScope={{ organizationId: prefill(query.organizationId), schoolId: prefill(query.schoolId) }} />;
 }

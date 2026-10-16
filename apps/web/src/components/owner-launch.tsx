@@ -8,6 +8,10 @@ import { InterfaceThemePicker } from './interface-theme-picker';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
 import progressStyles from './owner-launch-progress.module.css';
 
+export function ownerDashboardHandoffPath(context: Pick<OwnerLaunchProjection, 'organizationId' | 'schoolId'>): string {
+  return `/staff/dashboard?${new URLSearchParams({ organizationId: context.organizationId, schoolId: context.schoolId }).toString()}`;
+}
+
 type OwnerLaunchProgressState = 'RECORDED' | 'NOT_RECORDED' | 'UNAVAILABLE';
 
 export function OwnerLaunchProgress({
@@ -169,7 +173,7 @@ export function OwnerLaunch() {
     <p role="status" aria-live="polite">{message}</p><button type="button" disabled={busy} onClick={()=>void reload()}>{busy?'Verifying…':'Load / refresh saved receipts'}</button>
     {context&&<>
       <OwnerLaunchProgress context={context} booking={booking} bookingState={bookingState} draftState={draftState} />
-      <section aria-label="Verified school context"><h2>1. Verified school context</h2><p>{context.schoolName} · {context.tier}</p><p>School receipt context: <code>{context.schoolId}</code></p></section>
+      <section aria-label="Verified school context"><h2>1. Verified school context</h2><p>{context.schoolName} · {context.tier}</p><p>School receipt context: <code>{context.schoolId}</code></p><p><Link href={ownerDashboardHandoffPath(context)}>Open verified operations dashboard</Link> — this only pre-fills school identifiers. The dashboard remains empty until it independently verifies current access and loads its report.</p></section>
       <section><h2>2. First program</h2>{context.program?<p>Saved program receipt: <code>{context.program.id}</code> · {context.program.status} · version {context.program.version}</p>:<form onSubmit={e=>{e.preventDefault();void submit('program');}}><label style={field}>Program name<input value={programName} onChange={e=>setProgramName(e.target.value)} maxLength={160} required /></label><button disabled={busy}>Save first program</button></form>}</section>
       <section><h2>3. First class</h2>{context.classSession?<p>Saved class receipt: <code>{context.classSession.id}</code> · {context.classSession.status} · version {context.classSession.version}</p>:context.program?<form onSubmit={e=>{e.preventDefault();void submit('class');}}><label style={field}>Class name<input value={className} onChange={e=>setClassName(e.target.value)} maxLength={160} required /></label><label style={field}>Starts (your local time)<input type="datetime-local" value={startsAt} onChange={e=>setStartsAt(e.target.value)} required /></label><label style={field}>Ends (your local time)<input type="datetime-local" value={endsAt} onChange={e=>setEndsAt(e.target.value)} required /></label><label style={field}>Capacity<input type="number" min={1} max={1000} value={capacity} onChange={e=>setCapacity(Number(e.target.value))} required /></label><p>Optional booking policy. This step saves a class; it does not book a student.</p><button disabled={busy}>Save first class</button></form>:<p>Save a program first.</p>}</section>
       <section><h2>4. Register a real student</h2><p>The adult-only command is unchanged. The separate guardian-and-child command requires current family.manage authority, a guardian adult and child under 18 at the exact future class date. Existing or potentially matching people, families and uncertain eligibility need staff; no identity is merged or inferred.</p><p>Registration creates only existing person/student records and program-only enrollment. Child mode also records one new family with explicit GUARDIAN and STUDENT links. No curriculum/rank, billing contact or parent access is inferred.</p>

@@ -18,7 +18,13 @@ The three existing owner-launch commands and their fixed endpoint paths, bodies,
 
 After the existing verified owner-launch context and its existing selector-free booking/DRAFT confirmation reads settle, `/staff/launch` displays six passive facts: verified school context, first program, first class, student registration, first-class booking, and membership DRAFT. Each tile is only **RECORDED**, **NOT_RECORDED**, or **UNAVAILABLE**. Recorded means the exact existing context or receipt is present; it is never a school-readiness score, lifecycle completion claim, activation, payment, attendance, eligibility, parent-access, communication, or permission proof.
 
-The booking tile deliberately does not manufacture a seat/attendance outcome; it describes only a current receipt-linked booking confirmation. The membership tile is explicitly **DRAFT only — not active**. The guide makes no request beyond the page's existing fixed reads, stores no state, adds no command/link/selector, and has no provider, Action Engine, financial, automation, worker, or external effect. It is a visual guide over the same existing direct-human/current-school boundaries, not a new onboarding model.
+The booking tile deliberately does not manufacture a seat/attendance outcome; it describes only a current receipt-linked booking confirmation. The membership tile is explicitly **DRAFT only — not active**. The guide makes no request beyond the page's existing fixed reads, stores no state, adds no command or selector, and has no provider, Action Engine, financial, automation, worker, or external effect. It is a visual guide over the same existing direct-human/current-school boundaries, not a new onboarding model.
+
+### Conventional dashboard handoff
+
+Once Owner Launch has already obtained its verified current-school context, it offers one ordinary link to `/staff/dashboard`. The link carries only that context's organization and school UUIDs as URL-encoded **untrusted prefilled text**. The authenticated dashboard server route bounds these query values to short strings and renders its normal idle form; it does not request a report, derive authority, display data, persist a preference, or issue a command from the link. The owner must explicitly load the dashboard, and the existing dashboard API independently resolves the current human, exact school, entitlement and `reporting.view` permission before any report is shown.
+
+No receipt, registration/student/family data, booking/membership context, tier or permission proof, theme state, Action Engine request, financial/provider value or external effect crosses this handoff. It is navigation only—not a scope grant, dashboard auto-load, onboarding-completion claim or lifecycle transition.
 
 ## Purpose and routes
 

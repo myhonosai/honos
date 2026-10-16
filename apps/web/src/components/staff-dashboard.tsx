@@ -11,6 +11,7 @@ import styles from './staff-dashboard.module.css';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
 type InterfaceThemeState = 'UNAVAILABLE' | 'LOADING' | 'READY' | 'SAVING' | 'ERROR';
+export type StaffDashboardInitialScope = { organizationId?: string | undefined; schoolId?: string | undefined };
 
 function utc(value: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(value));
@@ -171,9 +172,9 @@ function PlatformViewSelector({
   </section>;
 }
 
-export function StaffDashboard(): React.ReactElement {
-  const [organizationId, setOrganizationId] = useState('');
-  const [schoolId, setSchoolId] = useState('');
+export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDashboardInitialScope } = {}): React.ReactElement {
+  const [organizationId, setOrganizationId] = useState(initialScope.organizationId ?? '');
+  const [schoolId, setSchoolId] = useState(initialScope.schoolId ?? '');
   const [selection, setSelection] = useState<VerifiedSelection | null>(null);
   const [snapshot, setSnapshot] = useState<OperationalSnapshot | null>(null);
   const [ownerWorkflowProgress, setOwnerWorkflowProgress] = useState<OwnerWorkflowProgress | null>(null);
