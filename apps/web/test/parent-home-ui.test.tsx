@@ -20,19 +20,22 @@ describe('bounded Parent Home composition', () => {
   });
 
   it('links only to existing parent destinations after their fixed family-safe reads succeed', () => {
-    const html = renderToStaticMarkup(<ParentHomeCards journey={ready} testing={ready} billing={ready} plannedAbsences={ready} />);
-    for (const href of ['/parent/journey#schedule', '/parent/journey', '/parent/documents', '/parent/testing', '/parent/billing', '/parent/planned-absences']) expect(html).toContain(`href="${href}"`);
+    const html = renderToStaticMarkup(<ParentHomeCards journey={ready} testing={ready} billing={ready} plannedAbsences={ready} curriculumLibrary={ready} />);
+    for (const href of ['/parent/journey#schedule', '/parent/journey', '/parent/documents', '/parent/testing', '/parent/curriculum-library', '/parent/billing', '/parent/planned-absences']) expect(html).toContain(`href="${href}"`);
     expect(html).toContain('Planned Absences');
     expect(html).toContain('bounded recorded absence-request status');
+    expect(html).toContain('Curriculum References');
+    expect(html).toContain('does not preview, fetch, or analyze it');
     expect(html).not.toContain('Messages');
     expect(html).not.toMatch(/familyId|schoolId|studentProfileId/i);
   });
 
   it('shows explicit unavailable states without a destination link and omits cards whose read access was lost', () => {
-    const html = renderToStaticMarkup(<ParentHomeCards journey={unavailable} testing={{ kind: 'access-lost', message: 'Family access lost.' }} billing={unavailable} plannedAbsences={unavailable} />);
+    const html = renderToStaticMarkup(<ParentHomeCards journey={unavailable} testing={{ kind: 'access-lost', message: 'Family access lost.' }} billing={unavailable} plannedAbsences={unavailable} curriculumLibrary={unavailable} />);
     expect(html).toContain('Student Journey');
     expect(html).toContain('Billing');
     expect(html).toContain('Planned Absences');
+    expect(html).toContain('Curriculum References');
     expect(html).toContain('The verified reader is unavailable');
     expect(html).not.toContain('/parent/journey#schedule');
     expect(html).not.toContain('/parent/testing');
@@ -43,7 +46,7 @@ describe('bounded Parent Home composition', () => {
     const component = readFileSync('src/components/parent-home.tsx', 'utf8');
     const route = readFileSync('src/app/parent/page.tsx', 'utf8');
     const documents = readFileSync('src/app/parent/documents/page.tsx', 'utf8');
-    for (const token of ['loadParentJourney', 'loadParentTestingStatus', 'loadParentBilling', 'loadParentPlannedAbsenceHistory', 'HON_INTERFACE_THEMES', 'setJourney({ kind: \'access-lost\'', 'pending.current?.abort()', 'visibilitychange']) expect(component).toContain(token);
+    for (const token of ['loadParentJourney', 'loadParentTestingStatus', 'loadParentBilling', 'loadParentPlannedAbsenceHistory', 'loadParentLibrary', 'HON_INTERFACE_THEMES', 'setJourney({ kind: \'access-lost\'', 'pending.current?.abort()', 'visibilitychange']) expect(component).toContain(token);
     expect(component).not.toMatch(/fetch\(|method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|submitParentTestingInterest|sendMessage|invokeLLM|executeAction|payment provider/i);
     for (const text of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false', 'ParentHome']) expect(route).toContain(text);
     expect(route).not.toContain("redirect('/parent/journey')");

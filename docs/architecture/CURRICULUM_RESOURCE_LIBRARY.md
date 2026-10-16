@@ -34,6 +34,7 @@ Only `ACTIVE`, `PARENT` references join a current `ACTIVE` child profile, explic
 
 - `/staff/curriculum/library`: known-school verification, local curriculum/rank choices, create, versioned metadata edit and archive.
 - `/parent/curriculum-library`: selector-free verified read, explicit reverify, no previous protected result after error/blur/pagehide and stale-response suppression.
+- Parent Home exposes **Curriculum References** only after a separate selector-free library read succeeds; the Home discards the response, links to the library route and clears/hides the destination on lost scope. This composition does not grant a Home authority or reuse a Journey/testing/billing response as library proof.
 
 Both are authenticated, no-index, no-store routes with synchronized `manus-routes.json`. Big-Button / Modern / Classic affect **presentation only**. Links appear only from strictly verified response data; neither screen contains a player, preview or iframe.
 

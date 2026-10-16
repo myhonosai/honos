@@ -7,6 +7,7 @@ import { loadParentBilling, ParentBillingAccessError } from './parent-billing-ht
 import { loadParentJourney, ParentJourneyAccessError } from './parent-journey-http';
 import { loadParentTestingStatus, ParentTestingStatusAccessError } from './parent-testing-status-http';
 import { loadParentPlannedAbsenceHistory, ParentPlannedAbsenceHistoryAccessError } from './parent-planned-absence-history-http';
+import { loadParentLibrary, LibraryUiError } from './curriculum-library-http';
 import s from './parent-home.module.css';
 
 export type ParentHomeReadState =
@@ -41,7 +42,7 @@ function DomainCard({ title, eyebrow, description, href, note, state }: { title:
  * billing selectors, and it intentionally discards successful response data.
  * Each destination rechecks its own fixed family-scope read boundary.
  */
-export function ParentHomeCards({ journey, testing, billing, plannedAbsences }: { journey: ParentHomeReadState; testing: ParentHomeReadState; billing: ParentHomeReadState; plannedAbsences: ParentHomeReadState }) {
+export function ParentHomeCards({ journey, testing, billing, plannedAbsences, curriculumLibrary }: { journey: ParentHomeReadState; testing: ParentHomeReadState; billing: ParentHomeReadState; plannedAbsences: ParentHomeReadState; curriculumLibrary: ParentHomeReadState }) {
   return <div className={s.cards}>
     {journey.kind === 'ready' && <>
       <HomeCard title="Schedule" eyebrow="AUTHORIZED BOOKINGS" description="View the current family schedule in Student Journey." href="/parent/journey#schedule" note="The Journey read chooses the authorized family and its bounded window. No booking, cancellation, check-in, or attendance action starts here." />
@@ -51,6 +52,7 @@ export function ParentHomeCards({ journey, testing, billing, plannedAbsences }: 
     {journey.kind === 'unavailable' && <UnavailableCard title="Student Journey">{journey.message}</UnavailableCard>}
     {plannedAbsences.kind !== 'access-lost' && <DomainCard title="Planned Absences" eyebrow="RECORDED STATUS" description="Review bounded recorded absence-request status for your verified guardian family." href="/parent/planned-absences" note="This separate guarded history read never submits, reviews, approves, changes a schedule, cancels a booking, records attendance, or infers makeup." state={plannedAbsences} />}
     {testing.kind !== 'access-lost' && <DomainCard title="Testing Status" eyebrow="RECORDED STATUS" description="Review redacted current testing observations for your verified family." href="/parent/testing" note="Testing status is a separate read with its own live family-scope enforcement. It does not predict readiness, eligibility, payment, grades, promotion, or certificates." state={testing} />}
+    {curriculumLibrary.kind !== 'access-lost' && <DomainCard title="Curriculum References" eyebrow="SCHOOL-APPROVED LINKS" description="Open active parent-audienced curriculum video and link references for currently enrolled children." href="/parent/curriculum-library" note="The library independently rechecks family, enrollment, curriculum and rank scope. Opening an external reference is a deliberate browser action; HON does not preview, fetch, or analyze it." state={curriculumLibrary} />}
     {billing.kind !== 'access-lost' && <DomainCard title="Billing" eyebrow="REDACTED OBSERVATIONS" description="Review current membership and linked invoice/payment observations when guardian access is verified." href="/parent/billing" note="Billing is a separate guarded read. No payment method, provider, payer identity, collection, retry, change, or payment action begins here." state={billing} />}
   </div>;
 }
@@ -61,6 +63,7 @@ export function ParentHome(): React.ReactElement {
   const [testing, setTesting] = useState<ParentHomeReadState>(loading);
   const [billing, setBilling] = useState<ParentHomeReadState>(loading);
   const [plannedAbsences, setPlannedAbsences] = useState<ParentHomeReadState>(loading);
+  const [curriculumLibrary, setCurriculumLibrary] = useState<ParentHomeReadState>(loading);
   const generation = useRef(0);
   const pending = useRef<AbortController | null>(null);
 
@@ -72,6 +75,7 @@ export function ParentHome(): React.ReactElement {
     setTesting({ kind: 'access-lost', message });
     setBilling({ kind: 'access-lost', message });
     setPlannedAbsences({ kind: 'access-lost', message });
+    setCurriculumLibrary({ kind: 'access-lost', message });
   }, []);
 
   const hide = useCallback(() => {
@@ -83,7 +87,7 @@ export function ParentHome(): React.ReactElement {
     pending.current?.abort();
     const controller = new AbortController();
     pending.current = controller;
-    setJourney(loading); setTesting(loading); setBilling(loading); setPlannedAbsences(loading);
+    setJourney(loading); setTesting(loading); setBilling(loading); setPlannedAbsences(loading); setCurriculumLibrary(loading);
 
     void loadParentJourney(controller.signal).then(() => {
       if (generation.current === token) setJourney({ kind: 'ready' });
@@ -101,6 +105,16 @@ export function ParentHome(): React.ReactElement {
         if (error.status === 401) conceal(error.message);
         else setTesting({ kind: 'access-lost', message: error.message });
       } else setTesting({ kind: 'unavailable', message: error instanceof Error ? error.message : 'Testing Status is unavailable. No status is shown.' });
+    });
+
+    void loadParentLibrary(controller.signal).then(() => {
+      if (generation.current === token) setCurriculumLibrary({ kind: 'ready' });
+    }).catch(error => {
+      if (generation.current !== token || error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof LibraryUiError) {
+        if (error.status === 401) conceal(error.message);
+        else setCurriculumLibrary({ kind: 'access-lost', message: error.message });
+      } else setCurriculumLibrary({ kind: 'unavailable', message: error instanceof Error ? error.message : 'Curriculum References are unavailable. No library result is shown.' });
     });
 
     void loadParentPlannedAbsenceHistory(controller.signal).then(() => {
@@ -142,7 +156,7 @@ export function ParentHome(): React.ReactElement {
     };
   }, [hide, verify]);
 
-  const checking = [journey, testing, billing, plannedAbsences].some(state => state.kind === 'loading');
+  const checking = [journey, testing, billing, plannedAbsences, curriculumLibrary].some(state => state.kind === 'loading');
   const familyAccessLost = journey.kind === 'access-lost';
 
   return <main className={`theme-${theme} ${s.page}`}><div className={s.shell}>
@@ -153,7 +167,7 @@ export function ParentHome(): React.ReactElement {
       {checking && <p className={s.state} role="status">Loading Parent Home. Each available area is being checked through its existing family-safe read route; no previous family content is retained.</p>}
       {familyAccessLost && <section className={s.error} role="alert"><strong>Family access unavailable</strong><p>{journey.message}</p><Link href="/auth/login" prefetch={false}>Sign in again</Link></section>}
     </div>
-    {!familyAccessLost && <ParentHomeCards journey={journey} testing={testing} billing={billing} plannedAbsences={plannedAbsences} />}
+    {!familyAccessLost && <ParentHomeCards journey={journey} testing={testing} billing={billing} plannedAbsences={plannedAbsences} curriculumLibrary={curriculumLibrary} />}
     <footer className={s.footer}>Messages are intentionally not linked from Home until independently provable receipt evidence exists; queue intent is never presented as received content. Every destination independently verifies its own family scope. Presentation choices are visual only and do not change access, data, or actions.</footer>
   </div></main>;
 }
