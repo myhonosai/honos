@@ -105,6 +105,10 @@
       "title": "Human CRM follow-ups"
     },
     {
+      "path": "/staff/crm/trials",
+      "title": "Human CRM trial appointments"
+    },
+    {
       "path": "/staff/leads/assistant",
       "title": "HON Chad | CRM follow-up draft guide"
     },
