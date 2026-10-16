@@ -165,17 +165,17 @@ SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS tru
 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
 WHERE p.oid='hon.read_school_command_center(text,uuid,uuid)'::regprocedure;
 DO $$
-DECLARE p record; role_name text;
+DECLARE projection record; role_name text;
 BEGIN
- SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
-   has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
-   EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
-    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad,
-   position('current_setting' IN pg_get_functiondef(p.oid))=0 AS no_guc
- INTO p FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
- WHERE p.oid='hon.read_school_command_center(text,uuid,uuid)'::regprocedure;
- IF p.prosecdef IS DISTINCT FROM true OR p.provolatile<>'s' OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
-   OR p.trusted_owner IS DISTINCT FROM true OR p.runtime_execute IS DISTINCT FROM true OR p.broad IS DISTINCT FROM false OR p.no_guc IS DISTINCT FROM true THEN
+ SELECT proc.prosecdef,proc.provolatile,proc.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+   has_function_privilege('hon_runtime',proc.oid,'EXECUTE') AS runtime_execute,
+   EXISTS(SELECT 1 FROM aclexplode(coalesce(proc.proacl,acldefault('f',proc.proowner))) acl
+    WHERE acl.grantee NOT IN(proc.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad,
+   position('current_setting' IN pg_get_functiondef(proc.oid))=0 AS no_guc
+ INTO projection FROM pg_proc proc JOIN pg_roles r ON r.oid=proc.proowner
+ WHERE proc.oid='hon.read_school_command_center(text,uuid,uuid)'::regprocedure;
+ IF projection.prosecdef IS DISTINCT FROM true OR projection.provolatile<>'s' OR projection.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+   OR projection.trusted_owner IS DISTINCT FROM true OR projection.runtime_execute IS DISTINCT FROM true OR projection.broad IS DISTINCT FROM false OR projection.no_guc IS DISTINCT FROM true THEN
   RAISE EXCEPTION 'Unsafe Command Center projection ACL or definition';
  END IF;
  FOR role_name IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
@@ -198,17 +198,17 @@ SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS tru
 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
 WHERE p.oid='hon.read_school_health_score(text,uuid,uuid)'::regprocedure;
 DO $$
-DECLARE p record; role_name text;
+DECLARE projection record; role_name text;
 BEGIN
- SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
-   has_function_privilege('hon_runtime',p.oid,'EXECUTE') AS runtime_execute,
-   EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
-    WHERE acl.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad,
-   position('current_setting' IN pg_get_functiondef(p.oid))=0 AS no_guc
- INTO p FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
- WHERE p.oid='hon.read_school_health_score(text,uuid,uuid)'::regprocedure;
- IF p.prosecdef IS DISTINCT FROM true OR p.provolatile<>'s' OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
-   OR p.trusted_owner IS DISTINCT FROM true OR p.runtime_execute IS DISTINCT FROM true OR p.broad IS DISTINCT FROM false OR p.no_guc IS DISTINCT FROM true THEN
+ SELECT proc.prosecdef,proc.provolatile,proc.proconfig,r.rolsuper OR r.rolbypassrls AS trusted_owner,
+   has_function_privilege('hon_runtime',proc.oid,'EXECUTE') AS runtime_execute,
+   EXISTS(SELECT 1 FROM aclexplode(coalesce(proc.proacl,acldefault('f',proc.proowner))) acl
+    WHERE acl.grantee NOT IN(proc.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) AS broad,
+   position('current_setting' IN pg_get_functiondef(proc.oid))=0 AS no_guc
+ INTO projection FROM pg_proc proc JOIN pg_roles r ON r.oid=proc.proowner
+ WHERE proc.oid='hon.read_school_health_score(text,uuid,uuid)'::regprocedure;
+ IF projection.prosecdef IS DISTINCT FROM true OR projection.provolatile<>'s' OR projection.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+   OR projection.trusted_owner IS DISTINCT FROM true OR projection.runtime_execute IS DISTINCT FROM true OR projection.broad IS DISTINCT FROM false OR projection.no_guc IS DISTINCT FROM true THEN
   RAISE EXCEPTION 'Unsafe School Health Score projection ACL or definition';
  END IF;
  FOR role_name IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
@@ -1300,21 +1300,21 @@ BEGIN
   END IF;
 
   FOR expected IN SELECT * FROM (VALUES
-    ('hon.testing_certificate_safe_text(text,integer)',false,false),
-    ('hon.guard_testing_certificate_history()',false,false),
-    ('hon.testing_certificate_permission(uuid,uuid,uuid,text)',false,true),
-    ('hon.resolve_testing_certificate_scope(text,uuid)',true,true),
-    ('hon.require_testing_certificate_actor(text,text)',false,true),
-    ('hon.lock_testing_certificate_actor(text,text,boolean)',false,true),
-    ('hon.testing_certificate_projection(uuid)',false,true),
-    ('hon.guard_testing_certificate_insert()',false,true),
-    ('hon.guard_testing_certificate_dependency()',false,true),
-    ('hon.guard_testing_certificate_promotion_delete()',false,true),
-    ('hon.read_testing_certificate(text,uuid)',true,true),
-    ('hon.issue_testing_certificate(text,uuid,jsonb,text,uuid,uuid)',true,true)
-  ) AS x(signature, runtime_execute, security_definer) LOOP
+    ('hon.testing_certificate_safe_text(text,integer)',false,false,'i'),
+    ('hon.guard_testing_certificate_history()',false,false,'v'),
+    ('hon.testing_certificate_permission(uuid,uuid,uuid,text)',false,true,'v'),
+    ('hon.resolve_testing_certificate_scope(text,uuid)',true,true,'v'),
+    ('hon.require_testing_certificate_actor(text,text)',false,true,'v'),
+    ('hon.lock_testing_certificate_actor(text,text,boolean)',false,true,'v'),
+    ('hon.testing_certificate_projection(uuid)',false,true,'v'),
+    ('hon.guard_testing_certificate_insert()',false,true,'v'),
+    ('hon.guard_testing_certificate_dependency()',false,true,'v'),
+    ('hon.guard_testing_certificate_promotion_delete()',false,true,'v'),
+    ('hon.read_testing_certificate(text,uuid)',true,true,'v'),
+    ('hon.issue_testing_certificate(text,uuid,jsonb,text,uuid,uuid)',true,true,'v')
+  ) AS x(signature, runtime_execute, security_definer, volatility) LOOP
     SELECT p.prosecdef = expected.security_definer
-      AND p.provolatile = 'v'
+      AND p.provolatile = expected.volatility
       AND p.proconfig = ARRAY['search_path=pg_catalog, hon']::text[]
       AND (owner_role.rolsuper OR owner_role.rolbypassrls)
       AND owner_role.rolname <> 'hon_runtime'
@@ -1430,23 +1430,23 @@ BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Claire private table: %',t; END IF;
   END LOOP;
   FOR expected IN SELECT * FROM (VALUES
-    ('hon.teaching_assistant_safe_text(text,integer,boolean)',false,false),
-    ('hon.guard_teaching_assistant()',false,false),
-    ('hon.resolve_teaching_assistant_scope(text)',true,true),
-    ('hon.require_teaching_assistant_actor(text,boolean)',false,true),
-    ('hon.teaching_assistant_event(uuid,text)',false,true),
-    ('hon.read_teaching_invocation(text,uuid)',true,true),
-    ('hon.begin_teaching_request(text,jsonb,uuid)',true,true),
-    ('hon.teaching_planning_reference(text,uuid)',true,true),
-    ('hon.prepare_teaching_invocation(text,uuid,uuid,boolean)',true,true),
-    ('hon.fail_teaching_invocation(text,uuid,text,text)',true,true),
-    ('hon.record_teaching_result(text,uuid,jsonb)',true,true),
-    ('hon.bind_teaching_proposal(text,uuid,uuid)',true,true),
-    ('hon.teaching_action_is_current(uuid,jsonb)',true,true),
-    ('hon.reject_teaching_draft(uuid)',true,true),
-    ('hon.save_approved_teaching_draft(text,uuid)',true,true)
-  ) AS x(signature,runtime_execute,security_definer) LOOP
-    SELECT p.prosecdef=expected.security_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+    ('hon.teaching_assistant_safe_text(text,integer,boolean)',false,false,'i','search_path=pg_catalog'),
+    ('hon.guard_teaching_assistant()',false,false,'v','search_path=pg_catalog, hon'),
+    ('hon.resolve_teaching_assistant_scope(text)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.require_teaching_assistant_actor(text,boolean)',false,true,'v','search_path=pg_catalog, hon'),
+    ('hon.teaching_assistant_event(uuid,text)',false,true,'v','search_path=pg_catalog, hon'),
+    ('hon.read_teaching_invocation(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.begin_teaching_request(text,jsonb,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.teaching_planning_reference(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.prepare_teaching_invocation(text,uuid,uuid,boolean)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.fail_teaching_invocation(text,uuid,text,text)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.record_teaching_result(text,uuid,jsonb)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.bind_teaching_proposal(text,uuid,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.teaching_action_is_current(uuid,jsonb)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.reject_teaching_draft(uuid)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.save_approved_teaching_draft(text,uuid)',true,true,'v','search_path=pg_catalog, hon')
+  ) AS x(signature,runtime_execute,security_definer,volatility,path_setting) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile=expected.volatility AND p.proconfig=ARRAY[expected.path_setting]::text[]
       AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
       AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
