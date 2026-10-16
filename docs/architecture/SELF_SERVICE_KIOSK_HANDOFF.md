@@ -2,7 +2,7 @@
 
 ## Status
 
-Migration `0122` delivers an intentionally limited **staff-assistance handoff**, not autonomous self-service admission. It follows the ClassPass and function-only attendance boundaries without calling either command.
+Migration `0122`, reconciled forward-only by `0125` and `0126`, delivers an intentionally limited **staff-assistance handoff**, not autonomous self-service admission. It follows the ClassPass and function-only attendance boundaries without calling either command.
 
 > A kiosk result of `NEEDS_STAFF_ASSISTANCE` means only that the public terminal has submitted a valid opaque handoff claim for a human staff member to review. It is **not** a booking, admission, ClassPass redemption, check-in, attendance, payment, notification, or identity-verification result.
 
@@ -41,6 +41,8 @@ The public function accepts no organization, school, student, family, class, pas
 ## Private records and safeguards
 
 `kiosk_terminals`, `kiosk_terminal_sessions`, `kiosk_claims`, `kiosk_handoffs` and `kiosk_receipts` are forced-RLS, no-policy private tables. The restricted runtime has no table or column privilege and executes only fixed functions. State transitions are append-only or narrowly immutable; the receipt is IDs/timestamp/fixed outcome only.
+
+`0125` reconciles an ordinary PostgreSQL migration replay with the pre-existing canonical `hon_runtime` grant posture: exactly four public-facing kiosk function signatures are executable, while all kiosk tables and helpers remain denied. `0126` applies the matching runtime-role parameter logging controls (`log_parameter_max_length=0` and `log_parameter_max_length_on_error=0`) so opaque bearer parameters are not captured in PostgreSQL error/parameter logs. These migrations add no kiosk feature or authority.
 
 The public submission intentionally creates **no** audit event: HON audit requires a non-null, correctly attributable actor principal, and a public bearer submission must not be falsely credited to a staff member. Its private receipt preserves the limited internal provenance needed for exact staff recovery.
 

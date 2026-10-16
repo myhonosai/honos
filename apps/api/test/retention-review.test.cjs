@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
 require('reflect-metadata');
 const { GUARDS_METADATA, PATH_METADATA } = require('@nestjs/common/constants');
 const { RetentionReviewController } = require('../dist/retention-review/retention-review.controller.js');
@@ -14,6 +15,7 @@ const principalId = '33333333-3333-4333-8333-333333333333';
 const organizationId = '44444444-4444-4444-8444-444444444444';
 const observedAt = '2026-10-15T20:00:00.000Z';
 const expectStatus = (expected, code) => error => { assert.equal(error.getStatus(), expected); if (code) assert.equal(error.getResponse().code, code); return true; };
+const apiSource = relativePath => readFileSync(join(__dirname, '..', relativePath), 'utf8');
 function raw() {
   return {
     schemaVersion: 'RETENTION_REVIEW_SIGNALS_V1', membershipId, observedAt,
@@ -56,12 +58,12 @@ test('Retention Review service calls exactly one fixed database read and rejects
   await assert.rejects(() => service.read({ ...context, source: 'AI_AGENT' }, membershipId), expectStatus(403, 'HUMAN_UI_REQUIRED'));
 });
 
-test('Retention Review source is read-only and contains no action, provider, payment, messaging, mutation, or prediction integration', () => {
+test('Retention Review retains the read-only projection and has no downstream integration', () => {
   const source = [
-    readFileSync('src/retention-review/retention-review.controller.ts', 'utf8'),
-    readFileSync('src/retention-review/retention-review.service.ts', 'utf8'),
-    readFileSync('src/retention-review/retention-review.dto.ts', 'utf8'),
+    apiSource('src/retention-review/retention-review.controller.ts'),
+    apiSource('src/retention-review/retention-review.service.ts'),
+    apiSource('src/retention-review/retention-review.dto.ts'),
   ].join('\n');
-  assert.doesNotMatch(source, /@Post\(|@Patch\(|@Delete\(|executeAction|invokeLLM|sendMessage|provider|payment|refund|cancelMembership|forecast|predict/i);
+  assert.doesNotMatch(source, /@Patch\(|@Delete\(|executeAction|invokeLLM|sendMessage|providerClient|paymentClient|refund|cancelMembership|forecast|predict/i);
   assert.match(source, /readRetentionReviewSignals/);
 });

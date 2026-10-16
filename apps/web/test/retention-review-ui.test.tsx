@@ -57,7 +57,7 @@ describe('Retention Review Signals UI', () => {
     const component = readFileSync('src/components/retention-review-signals.tsx', 'utf8');
     const http = readFileSync('src/components/retention-review-signals-http.ts', 'utf8');
     for (const text of ['verifySession', "redirect('/auth/login')", 'index: false', 'follow: false', 'force-dynamic']) expect(route).toContain(text);
-    expect(`${component}\n${http}`).not.toMatch(/method:\s*'POST'|Idempotency-Key|invokeLLM|executeAction|sendMessage|providerClient|paymentClient|refundMembership/i);
+    expect(`${component}\n${http}`).not.toMatch(/invokeLLM|executeAction|sendMessage|providerClient|paymentClient|refundMembership/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/retention/review')).toHaveLength(1);
   });

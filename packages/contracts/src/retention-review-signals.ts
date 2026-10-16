@@ -128,7 +128,7 @@ function attendance(value: unknown, observedAt: string): RetentionReviewAttendan
   const recordedAttendanceCount = count(source.recordedAttendanceCount); const presentCount = count(source.presentCount); const lateCount = count(source.lateCount); const makeupCount = count(source.makeupCount); const excusedAbsenceCount = count(source.excusedAbsenceCount); const unexcusedAbsenceCount = count(source.unexcusedAbsenceCount);
   if (windowTo !== observedAt || Date.parse(windowTo) - Date.parse(windowFrom) !== 28 * 86_400_000 || presentCount + lateCount + makeupCount + excusedAbsenceCount + unexcusedAbsenceCount !== recordedAttendanceCount) invalid();
   const expected = status === 'AVAILABLE' ? null : status === 'INSUFFICIENT_DATA' ? 'NO_RECORDED_ATTENDANCE_IN_WINDOW' : oneOf(source.reason, ['NO_MATCHING_STUDENT_PROFILE','AMBIGUOUS_STUDENT_PROFILE_LINK'] as const);
-  if ((status === 'AVAILABLE') !== (recordedAttendanceCount > 0) || (status === 'INSUFFICIENT_DATA') !== (recordedAttendanceCount === 0) || (status === 'UNAVAILABLE' && recordedAttendanceCount !== 0)) invalid();
+  if ((status === 'AVAILABLE') !== (recordedAttendanceCount > 0) || (status === 'INSUFFICIENT_DATA' && recordedAttendanceCount !== 0) || (status === 'UNAVAILABLE' && recordedAttendanceCount !== 0)) invalid();
   return { status, windowFrom, windowTo, recordedAttendanceCount, presentCount, lateCount, makeupCount, excusedAbsenceCount, unexcusedAbsenceCount, reason: exactReason(source.reason, expected) };
 }
 function progression(value: unknown): RetentionReviewProgression {
@@ -148,4 +148,53 @@ export function verifyRetentionReviewSignals(value: unknown, expectedMembershipI
   const followUp = row(source.followUp, ['status','reason']);
   if (followUp.status !== 'UNAVAILABLE' || followUp.reason !== 'NO_UNAMBIGUOUS_MEMBERSHIP_TO_FOLLOW_UP_RELATION') invalid();
   return { schemaVersion: RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION, membershipId, observedAt, humanOnly: true, readOnly: true, evidenceOnly: true, predictionOrAutomaticAction: false, membershipTerm: membershipTerm(source.membershipTerm), renewalReview: renewalReview(source.renewalReview), followUp: { status: 'UNAVAILABLE', reason: 'NO_UNAMBIGUOUS_MEMBERSHIP_TO_FOLLOW_UP_RELATION' }, attendance: attendance(source.attendance, observedAt), progression: progression(source.progression) };
+}
+
+/** Acknowledgement records review only; the underlying signals remain read-only. */
+export const RETENTION_REVIEW_ACKNOWLEDGE_PERMISSION = 'retention.review.acknowledge' as const;
+export interface RetentionReviewAcknowledgementEvidence {
+  signals: RetentionReviewSignals;
+  evidenceVersion: typeof RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION;
+  evidenceFingerprint: string;
+}
+export interface RetentionReviewAcknowledgementInput {
+  evidenceVersion: typeof RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION;
+  evidenceFingerprint: string;
+  observedAt: string;
+  idempotencyKey: string;
+}
+export interface RetentionReviewAcknowledgement {
+  schemaVersion: 'RETENTION_REVIEW_ACKNOWLEDGEMENT_V1';
+  membershipId: string;
+  acknowledgementId: string;
+  evidenceVersion: typeof RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION;
+  evidenceFingerprint: string;
+  observedAt: string;
+  recordedAt: string;
+  state: 'EVIDENCE_REVIEWED';
+  humanOnly: true;
+  evidenceOnly: true;
+  noDownstreamEffect: true;
+}
+function fingerprint(value: unknown): string {
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) invalid();
+  return value;
+}
+export function verifyRetentionReviewAcknowledgementEvidence(value: unknown, membershipId?: string): RetentionReviewAcknowledgementEvidence {
+  const source = row(value, ['signals','evidenceVersion','evidenceFingerprint']);
+  if (source.evidenceVersion !== RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION) invalid();
+  return { signals: verifyRetentionReviewSignals(source.signals, membershipId), evidenceVersion: RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION, evidenceFingerprint: fingerprint(source.evidenceFingerprint) };
+}
+export function verifyRetentionReviewAcknowledgementInput(value: unknown): RetentionReviewAcknowledgementInput {
+  const source = row(value, ['evidenceVersion','evidenceFingerprint','observedAt','idempotencyKey']);
+  if (source.evidenceVersion !== RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION) invalid();
+  return { evidenceVersion: RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION, evidenceFingerprint: fingerprint(source.evidenceFingerprint), observedAt: timestamp(source.observedAt)!, idempotencyKey: scopedId(source.idempotencyKey) };
+}
+export function verifyRetentionReviewAcknowledgement(value: unknown, membershipId: string, expected: Omit<RetentionReviewAcknowledgementInput,'idempotencyKey'>): RetentionReviewAcknowledgement {
+  const source = row(value, ['schemaVersion','membershipId','acknowledgementId','evidenceVersion','evidenceFingerprint','observedAt','recordedAt','state','humanOnly','evidenceOnly','noDownstreamEffect']);
+  if (source.schemaVersion !== 'RETENTION_REVIEW_ACKNOWLEDGEMENT_V1' || source.state !== 'EVIDENCE_REVIEWED' || source.humanOnly !== true || source.evidenceOnly !== true || source.noDownstreamEffect !== true
+    || source.evidenceVersion !== RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION || source.evidenceVersion !== expected.evidenceVersion || source.evidenceFingerprint !== expected.evidenceFingerprint || source.observedAt !== expected.observedAt) invalid();
+  const observedAt = timestamp(source.observedAt)!; const recordedAt = timestamp(source.recordedAt)!;
+  if (Date.parse(recordedAt) < Date.parse(observedAt) || Date.parse(recordedAt) - Date.parse(observedAt) > 5 * 60_000) invalid();
+  return { schemaVersion: 'RETENTION_REVIEW_ACKNOWLEDGEMENT_V1', membershipId: scopedId(source.membershipId, membershipId), acknowledgementId: scopedId(source.acknowledgementId), evidenceVersion: RETENTION_REVIEW_SIGNALS_SCHEMA_VERSION, evidenceFingerprint: fingerprint(source.evidenceFingerprint), observedAt, recordedAt, state: 'EVIDENCE_REVIEWED', humanOnly: true, evidenceOnly: true, noDownstreamEffect: true };
 }

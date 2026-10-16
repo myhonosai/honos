@@ -93,7 +93,9 @@ Reuse approved secure object storage/video providers when separately configured;
 
 ## D. Deterministic retention and engagement alerts
 
-Extend the existing Command Center/retention read models with deduplicated, evidence-backed alerts for absence, attendance decline, membership expiration, failed/overdue payment, readiness/progression stalls, trial return, first-week engagement and pass/credit expiry. Each alert has trigger evidence, recommendation, assigned staff and human-managed resolution state. Recommendations are not communications; consent, approval and Action Engine rules remain mandatory for any downstream message or financial action.
+Migration `0123` delivers the first bounded human-managed fact: a direct-human immutable **evidence reviewed** acknowledgement for one fresh Retention Review Signals projection. It reuses no communication, renewal, billing, Action Engine or AI command; it records neither risk nor resolution and has no consumer or delivery effect. The existing read stays read-only. This does not yet deliver alerts, recommendations, assignments or downstream action.
+
+Future work may extend the existing Command Center/retention read models with deduplicated, evidence-backed alerts for absence, attendance decline, membership expiration, failed/overdue payment, readiness/progression stalls, trial return, first-week engagement and pass/credit expiry. Each future alert needs trigger evidence, human-managed resolution state, exact recommendation semantics and separate consent/approval/Action Engine rules for any downstream message or financial action.
 
 ## E. Announcement acknowledgements
 

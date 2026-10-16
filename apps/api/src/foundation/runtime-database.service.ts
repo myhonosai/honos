@@ -323,6 +323,21 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return row.data;
   }
 
+  async readRetentionReviewAcknowledgementEvidence(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)", [context.source, context.externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET TRANSACTION READ ONLY");
+      return (await client.query('SELECT hon.read_retention_review_acknowledgement_evidence($1,$2::uuid) AS data', [context.externalSubject, membershipId])).rows[0]?.data;
+    });
+  }
+  async acknowledgeRetentionReviewEvidence(context: RetentionReviewSignalsContext, membershipId: string, input: { evidenceVersion: string; evidenceFingerprint: string; observedAt: string; idempotencyKey: string }): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)", [context.source, context.externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'");
+      return (await client.query('SELECT hon.acknowledge_retention_review_evidence($1,$2::uuid,$3,$4,$5::timestamptz,$6::uuid,$7::uuid,$8::uuid) AS data', [context.externalSubject, membershipId, input.evidenceVersion, input.evidenceFingerprint, input.observedAt, input.idempotencyKey, context.requestId, context.correlationId])).rows[0]?.data;
+    });
+  }
+
   async readRetentionReviewSignals(
     context: RetentionReviewSignalsContext, membershipId: string,
   ): Promise<RetentionReviewSignals> {

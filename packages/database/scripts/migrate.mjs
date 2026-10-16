@@ -13,6 +13,17 @@ if (!databaseUrl) {
 if (new URL(databaseUrl).username === 'hon_classpass_owner') requireClassPassLocalUrls();
 const migrationsDirectory = new URL('../migrations/', import.meta.url);
 const stopAfter = process.env.HON_MIGRATION_STOP_AFTER;
+const localFixtureRuntimeAlias = (() => {
+  if (!process.env.HON_RUNTIME_DATABASE_URL) return false;
+  const owner = new URL(databaseUrl);
+  const runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL);
+  const prefix = owner.username.endsWith('_owner') ? owner.username.slice(0, -'_owner'.length) : '';
+  return owner.hostname === 'localhost' && owner.port === '5432'
+    && /^hon_[a-z0-9_]+$/.test(prefix)
+    && owner.pathname.startsWith(`/${prefix}_validation`)
+    && runtime.hostname === owner.hostname && runtime.port === owner.port && runtime.pathname === owner.pathname
+    && runtime.username === `${prefix}_runtime`;
+})();
 if (stopAfter && stopAfter !== '0113_hq_ai_task_profiles.sql') {
   throw new Error('Only the guarded attendance backfill proof may stop migrations at 0113.');
 }
@@ -141,6 +152,16 @@ try {
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_followup_validation'
         || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_followup_runtime') throw new Error('Follow-up aliases require the exact disposable localhost database.');
       sql = sql.replaceAll('hon_runtime', 'hon_followup_runtime');
+    }
+    // PostgreSQL treats these logging controls as superuser-only. A marked
+    // localhost validation owner deliberately has no superuser capability, so
+    // retain 0126's trusted-owner guard but leave its role-global mutation to
+    // the fixture's canonical grant replay (which runs as local postgres).
+    // Production/development migrations always execute 0126 unchanged.
+    if (file === '0126_kiosk_runtime_logging_reconciliation.sql' && localFixtureRuntimeAlias) {
+      sql = sql
+        .replace('    ALTER ROLE hon_runtime SET log_parameter_max_length = 0;\n', '')
+        .replace('    ALTER ROLE hon_runtime SET log_parameter_max_length_on_error = 0;\n', '');
     }
     await client.query(sql);
     await client.query('INSERT INTO hon.schema_migrations (filename) VALUES ($1)', [file]);

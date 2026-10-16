@@ -91,6 +91,8 @@
     "db:setup-classpass": "pnpm --filter @hon/database db:setup-classpass",
     "db:test-classpass": "pnpm --filter @hon/database db:test-classpass",
     "db:setup-kiosk-handoff": "pnpm --filter @hon/database db:setup-kiosk-handoff",
-    "db:test-kiosk-handoff": "pnpm --filter @hon/database db:test-kiosk-handoff"
+    "db:test-kiosk-handoff": "pnpm --filter @hon/database db:test-kiosk-handoff",
+    "db:setup-retention-review-acknowledgement": "pnpm --filter @hon/database db:setup-retention-review-acknowledgement",
+    "db:test-retention-review-acknowledgement": "pnpm --filter @hon/database db:test-retention-review-acknowledgement"
   }
 }

@@ -1,13 +1,13 @@
 import { ForbiddenException, Injectable, type ExecutionContext } from '@nestjs/common';
 import { CurriculumHumanUiGuard } from '../curriculum/curriculum-human-ui.guard.js';
 
-/** GET-only surface: this guard rejects cross-site browser contexts and shares no write command path. */
+/** Only same-origin direct-human read and the exact evidence acknowledgement command. */
 @Injectable()
 export class RetentionReviewHumanUiGuard extends CurriculumHumanUiGuard {
-  protected readonly command = 'retention-review-signals';
+  protected readonly command = 'retention-review-acknowledgement';
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<{ method: string; headers: Record<string, unknown> }>();
-    if (request.method !== 'GET') throw new ForbiddenException({ code: 'HUMAN_UI_REQUIRED' });
+    if (!['GET', 'POST'].includes(request.method)) throw new ForbiddenException({ code: 'HUMAN_UI_REQUIRED' });
     if (request.headers['sec-fetch-site'] !== undefined && request.headers['sec-fetch-site'] !== 'same-origin') throw new ForbiddenException({ code: 'HUMAN_UI_REQUIRED' });
     return super.canActivate(context);
   }

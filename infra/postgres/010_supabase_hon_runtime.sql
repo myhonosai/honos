@@ -887,3 +887,26 @@ DO $$ DECLARE r text; t text; signature text; BEGIN
   IF signature IN('manage_kiosk_terminal(text,text,uuid,uuid,text)','provision_kiosk_claim(text,uuid,uuid,uuid,text)','submit_kiosk_handoff(text,text)','read_kiosk_handoff(text,uuid)') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION hon.%s TO hon_runtime',signature); END IF;
  END LOOP;
 END $$;
+
+-- Human retention acknowledgement: exact private function-only boundary.
+DO $$ DECLARE r text; t text; f text; a text; BEGIN
+ FOREACH t IN ARRAY ARRAY['retention_review_acknowledgements','retention_review_acknowledgement_receipts','retention_review_acknowledgement_outbox','retention_review_acknowledgement_evidence_keys'] LOOP
+  EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+  END LOOP;
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['require_retention_acknowledgement_actor(text)','retention_review_evidence_fingerprint(jsonb,timestamptz)','read_retention_review_acknowledgement_evidence(text,uuid)','acknowledge_retention_review_evidence(text,uuid,text,text,timestamptz,uuid,uuid,uuid)'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I',f,r);
+  END LOOP;
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_retention_review_acknowledgement_evidence(text,uuid),hon.acknowledge_retention_review_evidence(text,uuid,text,text,timestamptz,uuid,uuid,uuid) TO hon_runtime;
+END $$;

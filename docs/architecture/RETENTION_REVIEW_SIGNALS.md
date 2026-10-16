@@ -10,18 +10,25 @@ It is available to direct human staff with the exact `retention.review.read` per
 
 ## Explicit boundary
 
-The only runtime entry points are:
+The read-only projection runtime entry points are:
 
 - `hon.resolve_retention_review_scope(text, uuid)` — derives a verified direct-human current-school scope from an already-known school ID.
 - `hon.read_retention_review_signals(text, uuid)` — emits one redacted projection for an already-known membership ID.
+
+The separate `0123` acknowledgement boundary, hardened forward-only by fixed command version `0124`, exposes only these exact function-only entries:
+
+- `hon.read_retention_review_acknowledgement_evidence(text, uuid)` — re-reads the same redacted signals and returns a server-generated evidence version/fingerprint.
+- `hon.acknowledge_retention_review_evidence(text, uuid, text, text, timestamptz, uuid, uuid, uuid)` — records an immutable direct-human statement that an exact fresh evidence observation was reviewed.
 
 The API exposes only:
 
 ```http
 GET /v1/staff/retention/review?schoolId=<known-uuid>&membershipId=<known-uuid>
+GET /v1/staff/retention/review/acknowledgement-evidence?schoolId=<known-uuid>&membershipId=<known-uuid>
+POST /v1/staff/retention/review/acknowledgement?schoolId=<known-uuid>&membershipId=<known-uuid>
 ```
 
-The staff page is `/staff/retention/review`. It is authenticated, dynamic, `noindex`, same-origin, no-store, and has no write control.
+The staff page is `/staff/retention/review`. It is authenticated, dynamic, `noindex`, same-origin and no-store. A direct human staff member may acknowledge only a fresh, verified, already displayed evidence observation through the fixed POST body `{ evidenceVersion, evidenceFingerprint, observedAt, idempotencyKey }`. The page clears the acknowledgement evidence and receipt whenever its known school/membership selection or verified read context changes.
 
 ## Evidence emitted
 
@@ -49,7 +56,7 @@ The projection requires all of the following at database execution time:
 6. transaction-bound server-derived organization, school, and principal context; and
 7. the requested membership belonging to the same current organization and school.
 
-The function owner is trusted while the Session Pooler runtime role has no superuser or `BYPASSRLS` posture. Runtime receives no Retention Review source-table privileges and may execute only the scope resolver and projection. `PUBLIC`, `anon`, `authenticated`, and `service_role` cannot execute any Retention Review function.
+The function owner is trusted while the Session Pooler runtime role has no superuser or `BYPASSRLS` posture. Runtime receives no Retention Review source-table privileges and may execute only the scope resolver, projection, acknowledgement-evidence read and fixed acknowledgement command. `PUBLIC`, `anon`, `authenticated`, and `service_role` cannot execute any Retention Review function.
 
 The projection runs inside `SET TRANSACTION READ ONLY`; initial and final authority checks prevent an authorization decision from being treated as durable if authority no longer holds by the end of the evidence read.
 
@@ -67,9 +74,22 @@ A Retention Review Signals read does **not**:
 
 Any future human action must enter its own domain command and applicable policy/approval path.
 
+## Human acknowledgement boundary
+
+An acknowledgement records only **`EVIDENCE_REVIEWED`** for a known current-school membership. It is not alert acknowledgement, risk/churn categorization, resolution, recommendation, staff assignment, follow-up, renewal/cancellation decision, financial decision, payment result, customer contact, message delivery, consent, legal signature, Action Engine request, AI work item or automation trigger.
+
+The server recomputes the current redacted evidence, binds its SHA-256 fingerprint to the original server observation window/time label, and accepts it only within five minutes. A changed term, renewal review, attendance observation, curriculum/progression or testing observation, scope/role/tier/principal/family/HQ state, malformed input, stale/replayed key, or failed post-lock authorization fails closed. The browser never supplies a note, recommendation, evidence payload, contact, payer, provider or downstream outcome.
+
+Only a verified direct `HUMAN_USER` / `HUMAN_UI` with both `retention.review.read` and `retention.review.acknowledge`, one active Essential/Core/Complete entitlement, exact current organization/school scope, and no HQ/parent/guardian/student/family/nonhuman/delegated/action context may use the command. For each actor/evidence observation it atomically stores one append-only acknowledgement, one redacted audit and one permanently **INERT** private outbox fact; it has no consumer/delivery path.
+
+**Distinct-key policy: reuse the existing acknowledgement and store one receipt per idempotency key.** The natural evidence key is `(organization_id, school_id, membership_id, actor_principal_id, evidence_version, evidence_fingerprint, observed_at)`. Concurrent submissions with different UUID keys for that exact observation return the identical acknowledgement ID, recorded time and redacted response. The second key appends only its own immutable SHA-256 idempotency receipt: no second acknowledgement, audit or outbox. The same key and exact payload replay the same response without any writes; a changed payload under the same key conflicts. All reuse/replay still rechecks current direct-human authority, live facts and the five-minute freshness limit, and fails closed when any of those no longer holds.
+
+Migration `0124` uses a private trusted-owner-only, FORCE RLS/no-policy, immutable evidence-key ledger, transaction advisory locks on both scoped idempotency and natural evidence keys, and a composite acknowledgement FK that is **DEFERRABLE INITIALLY DEFERRED**. The command reserves the unique evidence key before creating an acknowledgement, so a losing submission never leaves an orphan acknowledgement. For any pre-`0124` duplicates, the migration seeds one canonical key with deterministic newest ordering (`recorded_at DESC, id DESC`); it does not delete or rewrite immutable acknowledgements, receipts, audits or inert outbox history. New keys reuse that canonical acknowledgement, while existing keys retain their exact historical receipt replay.
+
 ## Validation
 
 - `pnpm db:test-retention-review` verifies function ACL posture, runtime-only execution, client/source-table denial, read-only forged-context denial, and zero mutation effects.
-- API and browser tests verify strict schema validation, redaction, absence of action/provider paths, same-origin GET behavior, and protected route metadata.
+- `pnpm db:setup-retention-review-acknowledgement` then `pnpm db:test-retention-review-acknowledgement` create/replay a descriptor-bound, marked localhost-only fixture with generated private credentials. The proof rejects remote/unmarked/provider/execution environments and verifies RLS/ACL/role/tier/context/replay/concurrency/fingerprint/atomicity/redaction/no-effect posture, including two concurrent distinct keys producing one acknowledgement/audit/inert-outbox and two deterministic receipts, plus evidence-key ledger drift/ACL denial; it tears down its marked fixture after a pass.
+- API and browser tests verify strict schema validation, redaction, same-origin GET/POST behavior, human transport protection, stale UI clearing and protected route metadata.
 - `pnpm db:verify-rls` imports the Retention Review ACL verifier alongside the complete HON tenant/RLS inventory.
 - `infra/postgres/010_supabase_hon_runtime.sql` and `011_verify_supabase_hon_runtime.sql` contain the canonical fresh-role grant and verification statements.

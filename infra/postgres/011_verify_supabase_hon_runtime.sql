@@ -1740,3 +1740,53 @@ DO $$ DECLARE t text; f record; runtime_oid oid; executable boolean; signature t
  IF NOT EXISTS(SELECT 1 FROM pg_db_role_setting WHERE setrole=runtime_oid AND setdatabase=0 AND setconfig @> ARRAY['log_parameter_max_length=0','log_parameter_max_length_on_error=0']) THEN RAISE EXCEPTION 'Kiosk bearer parameter logging must be disabled by administrator'; END IF;
 END $$;
 -- End kiosk handoff exact verification.
+
+-- Retention acknowledgement exact verification:
+DO $$ DECLARE t text; f record; runtime_oid oid; executable boolean; signature text; expected_config text[]; BEGIN
+ SELECT oid INTO runtime_oid FROM pg_roles WHERE rolname='hon_runtime';
+ IF runtime_oid IS NULL THEN RAISE EXCEPTION 'Retention acknowledgement runtime missing'; END IF;
+ FOREACH t IN ARRAY ARRAY['retention_review_acknowledgements','retention_review_acknowledgement_receipts','retention_review_acknowledgement_outbox','retention_review_acknowledgement_evidence_keys'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND c.relowner<>runtime_oid)
+   OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=('hon.'||t)::regclass) THEN RAISE EXCEPTION 'Retention acknowledgement forced no-policy RLS required: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+   OR EXISTS(SELECT 1 FROM pg_attribute att JOIN pg_class c ON c.oid=att.attrelid,LATERAL aclexplode(att.attacl) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+   OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Retention acknowledgement private table/column ACL surplus: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM pg_constraint fk WHERE fk.conrelid=('hon.'||t)::regclass AND fk.contype='f' AND fk.confrelid<>'hon.principals'::regclass AND (cardinality(fk.conkey)<2
+   OR NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=fk.conrelid AND a.attname='organization_id' AND a.attnum=ANY(fk.conkey))
+   OR NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=fk.conrelid AND a.attname='school_id' AND a.attnum=ANY(fk.conkey)))) THEN RAISE EXCEPTION 'Retention acknowledgement composite scope FK required: %',t; END IF;
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['require_retention_acknowledgement_actor(text)','retention_review_evidence_fingerprint(jsonb,timestamptz)','read_retention_review_acknowledgement_evidence(text,uuid)','acknowledge_retention_review_evidence(text,uuid,text,text,timestamptz,uuid,uuid,uuid)'] LOOP
+  SELECT p.*,o.rolsuper,o.rolbypassrls INTO f FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=('hon.'||signature)::regprocedure;
+  executable:=signature IN('read_retention_review_acknowledgement_evidence(text,uuid)','acknowledge_retention_review_evidence(text,uuid,text,text,timestamptz,uuid,uuid,uuid)');
+  expected_config:=ARRAY['search_path=pg_catalog, hon'];
+  IF f.oid IS NULL OR f.proowner=runtime_oid OR NOT(f.rolsuper OR f.rolbypassrls) OR f.proconfig IS DISTINCT FROM expected_config
+   OR (NOT f.prosecdef OR f.provolatile<>'v') THEN RAISE EXCEPTION 'Retention acknowledgement function posture: %',signature; END IF;
+  -- Fixed forward-only 0124 implementation: reject restoration of vulnerable
+  -- 0123 semantics even when the signature/ACL/security posture is unchanged.
+  IF signature='acknowledge_retention_review_evidence(text,uuid,text,text,timestamptz,uuid,uuid,uuid)' AND md5(f.prosrc)<>'6ea520210f67af2761e91734ebeed238' THEN RAISE EXCEPTION 'Retention acknowledgement fixed 0124 command drift'; END IF;
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>f.proowner OR (a.grantee<>f.proowner AND (NOT executable OR a.grantee<>runtime_oid)))
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=f.proowner AND NOT a.is_grantable)<>1
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=runtime_oid AND NOT a.is_grantable)<>(CASE WHEN executable THEN 1 ELSE 0 END)
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE') IS DISTINCT FROM executable
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE WITH GRANT OPTION') THEN RAISE EXCEPTION 'Retention acknowledgement exact function ACL surplus/missing/grant option: %',signature; END IF;
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['retention_review_acknowledgements','retention_review_acknowledgement_receipts','retention_review_acknowledgement_outbox','retention_review_acknowledgement_evidence_keys'] LOOP
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND NOT tgisinternal AND tgenabled='O' AND tgfoid='hon.guard_campaign_history()'::regprocedure AND tgtype IN(27,34))<>2 THEN RAISE EXCEPTION 'Retention acknowledgement immutable guards missing: %',t; END IF;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='hon' AND table_name='retention_review_acknowledgements' AND column_name NOT IN('id','organization_id','school_id','membership_id','actor_principal_id','evidence_version','evidence_fingerprint','observed_at','recorded_at','state'))
+  OR EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='hon' AND table_name='retention_review_acknowledgement_receipts' AND column_name NOT IN('id','organization_id','school_id','membership_id','actor_principal_id','acknowledgement_id','idempotency_digest','evidence_version','evidence_fingerprint','observed_at'))
+  OR EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='hon' AND table_name='retention_review_acknowledgement_outbox' AND column_name NOT IN('id','organization_id','school_id','membership_id','actor_principal_id','acknowledgement_id','evidence_version','evidence_fingerprint','observed_at','event_code','state'))
+  OR (SELECT array_agg(attname::text||':'||atttypid::regtype::text||':'||attnotnull::text ORDER BY attnum) FROM pg_attribute WHERE attrelid='hon.retention_review_acknowledgement_evidence_keys'::regclass AND attnum>0 AND NOT attisdropped)
+   IS DISTINCT FROM ARRAY['id:uuid:true','organization_id:uuid:true','school_id:uuid:true','membership_id:uuid:true','actor_principal_id:uuid:true','evidence_version:text:true','evidence_fingerprint:text:true','observed_at:timestamp with time zone:true','acknowledgement_id:uuid:true'] THEN RAISE EXCEPTION 'Retention acknowledgement evidence columns must be closed and redacted'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.retention_review_acknowledgement_evidence_keys'::regclass AND conname='retention_ack_evidence_natural_key' AND contype='u' AND convalidated AND NOT condeferrable
+  AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, membership_id, actor_principal_id, evidence_version, evidence_fingerprint, observed_at)') THEN RAISE EXCEPTION 'Retention acknowledgement exact natural evidence key required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint fk WHERE fk.conrelid='hon.retention_review_acknowledgement_evidence_keys'::regclass AND fk.conname='retention_ack_evidence_ack_fk' AND fk.contype='f' AND fk.confrelid='hon.retention_review_acknowledgements'::regclass AND fk.convalidated AND fk.condeferrable AND fk.condeferred AND fk.confdeltype='r' AND fk.confupdtype='a'
+  AND ARRAY(SELECT a.attname::text FROM unnest(fk.conkey) WITH ORDINALITY k(attnum,position) JOIN pg_attribute a ON a.attrelid=fk.conrelid AND a.attnum=k.attnum ORDER BY k.position)=ARRAY['acknowledgement_id','organization_id','school_id','membership_id','actor_principal_id','evidence_version','evidence_fingerprint','observed_at']
+  AND ARRAY(SELECT a.attname::text FROM unnest(fk.confkey) WITH ORDINALITY k(attnum,position) JOIN pg_attribute a ON a.attrelid=fk.confrelid AND a.attnum=k.attnum ORDER BY k.position)=ARRAY['id','organization_id','school_id','membership_id','actor_principal_id','evidence_version','evidence_fingerprint','observed_at']) THEN RAISE EXCEPTION 'Retention acknowledgement deferred exact evidence FK required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.retention_review_acknowledgement_receipts'::regclass AND contype='u' AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_digest)')
+  OR EXISTS(SELECT 1 FROM pg_constraint u WHERE u.conrelid='hon.retention_review_acknowledgement_receipts'::regclass AND u.contype IN('u','p') AND u.conkey=ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid=u.conrelid AND attname='acknowledgement_id')]::smallint[]) THEN RAISE EXCEPTION 'Retention acknowledgement requires one receipt per scoped key, not per acknowledgement'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.retention_review_acknowledgement_outbox'::regclass AND contype='c' AND pg_get_constraintdef(oid) = 'CHECK ((state = ''INERT''::text))') THEN RAISE EXCEPTION 'Retention acknowledgement outbox must remain permanently inert'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='retention.review.acknowledge' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Retention acknowledgement exact sensitive staff permission required'; END IF;
+END $$;
+-- End retention acknowledgement exact verification.
