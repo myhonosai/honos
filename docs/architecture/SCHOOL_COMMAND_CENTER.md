@@ -49,7 +49,7 @@ A later School Health Score or retention implementation must add defined source 
 
 `/staff/command-center` is authenticated, dynamic, no-index and uses the existing same-origin API boundary. Users may locally hide dashboard sections and individual recommendation cards, then restore them. Those preferences remain browser-local and cannot change tenant scope, permission, tier, recommendation calculation, action authority, or school data.
 
-The three HON presentation modes remain presentation-only; this vertical slice has no separate mode-specific API or authorization path.
+After the aggregate projection independently verifies the exact organization/school, the Command Center may read or save only the existing current-principal/current-school presentation preference. It uses a generated idempotency UUID and the closed `selectedVia: SETTINGS` value; it neither loads a preference before verification nor reuses a school preference in HQ or family/parent contexts. Big-Button / Phone, Modern HON and Classic CRM alter touch targets and density only. The fixed facts, formulas, local-only hide behavior, links, entitlement/permission checks and authority path remain shared. Scope entry, reload, access denial, preference failure and unmount invalidate stale presentation state.
 
 ## Explicit exclusions
 
