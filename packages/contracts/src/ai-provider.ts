@@ -32,6 +32,8 @@ export interface AiCatalogEntry {
   displayName: string;
   capabilities: AiCapability[];
   modalities: AiModality[];
+  /** HQ attestation metadata only; never proof of external enforcement. */
+  privacyControls: AiPrivacyControl[];
   active: boolean;
   minimumTier: HonTier;
   /** Integer USD micro-units per declared billable unit; not floating dollars. */
@@ -41,7 +43,15 @@ export interface AiCatalogEntry {
   effectiveUntil: string | null;
   version: number;
 }
-export type AiCatalogEntryWrite = Omit<AiCatalogEntry, 'version'> & { expectedVersion: number };
+/**
+ * `privacyControls` was added after the first catalog contract. Omission keeps
+ * the current persisted attestation on update (or the safe empty default on
+ * create); an explicit list replaces it. Read snapshots always include it.
+ */
+export type AiCatalogEntryWrite = Omit<AiCatalogEntry, 'version' | 'privacyControls'> & {
+  privacyControls?: AiPrivacyControl[];
+  expectedVersion: number;
+};
 export interface AiRoutingPolicy extends TenantScope {
   policyId: string;
   capability: AiCapability;
@@ -56,11 +66,12 @@ export interface AiRoutingPolicy extends TenantScope {
   version: number;
 }
 export type AiRoutingPolicyWrite = Omit<AiRoutingPolicy, 'version'> & { expectedVersion: number };
-export type AiControlPlaneKind = 'PROVIDER' | 'CATALOG' | 'POLICY';
+export type AiControlPlaneKind = 'PROVIDER' | 'CATALOG' | 'POLICY' | 'TASK_PROFILE';
 export interface AiControlPlaneSnapshot {
   providers: AiProviderConnection[];
   catalog: AiCatalogEntry[];
   policies: AiRoutingPolicy[];
+  taskProfiles: AiTaskProfile[];
 }
 export interface AiRouteRequest extends TenantScope {
   policyId: string;
@@ -71,7 +82,7 @@ export interface AiRouteRequest extends TenantScope {
   budgetMicros: number;
 }
 /** Trusted live registry snapshot, never caller-supplied tenant entitlement. */
-export interface AiRoutingRegistry extends AiControlPlaneSnapshot {
+export interface AiRoutingRegistry extends Omit<AiControlPlaneSnapshot, 'taskProfiles'> {
   tenant: TenantScope & { tier: HonTier; entitlementActive: boolean };
   asOf: string;
 }
@@ -95,4 +106,53 @@ export type AiRouteDecision = {
 } & (
   | { status: 'SELECTED'; reason: 'PRIMARY' | 'FALLBACK' | 'DEGRADED_ALLOWED'; chosen: AiRouteCandidate; fallbackCandidates: AiRouteCandidate[] }
   | { status: 'DENIED'; reason: AiRouteDenial; chosen: null; fallbackCandidates: [] }
+);
+
+/** Closed selection metadata. No prompts, secrets, URLs, tools, scope or authority. */
+export const AI_PRIVACY_CONTROLS = ['NO_TRAINING', 'ZERO_RETENTION'] as const;
+export type AiPrivacyControl = (typeof AI_PRIVACY_CONTROLS)[number];
+export const AI_TASK_TIMEOUT_CATEGORIES = ['QUICK', 'STANDARD', 'EXTENDED'] as const;
+export const AI_TASK_RETRY_CATEGORIES = ['NONE', 'TRANSIENT_ONCE'] as const;
+export interface AiTaskProfile {
+  profileId: string;
+  routingPolicyId: string;
+  agentKey: import('./ai-team.js').HonAiTeamAgentKey;
+  taskCategory: import('./ai-model-evaluation.js').AiModelEvaluationTaskCategory;
+  costUnit: AiCatalogEntry['costUnit'];
+  active: boolean;
+  maxCostMicros: number;
+  defaultCatalogId: string;
+  fallbackCatalogIds: string[];
+  advancedCatalogId: string | null;
+  requiredCapabilities: AiCapability[];
+  requiredModalities: AiModality[];
+  allowedProviderIds: AiProviderId[];
+  privacyControls: AiPrivacyControl[];
+  timeoutCategory: (typeof AI_TASK_TIMEOUT_CATEGORIES)[number];
+  retryCategory: (typeof AI_TASK_RETRY_CATEGORIES)[number];
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+  version: number;
+}
+export type AiTaskProfileWrite = Omit<AiTaskProfile, 'version'> & { expectedVersion: number };
+export interface AiTaskProfilePreviewRequest {
+  profileId: string;
+  selection: 'DEFAULT' | 'ADVANCED';
+  estimatedUnits: number;
+}
+export interface AiTaskProfileRegistry extends AiRoutingRegistry { profile: AiTaskProfile }
+export type AiTaskProfileDenial = AiRouteDenial | 'PROFILE_NOT_ACTIVE' | 'ADVANCED_NOT_CONFIGURED';
+export type AiTaskProfileDecision = {
+  contractVersion: 1;
+  profileId: string;
+  profileVersion: number | null;
+  selection: 'DEFAULT' | 'ADVANCED' | null;
+  policyId: string;
+  policyVersion: number | null;
+  budgetMicros: number;
+  authority: 'UNCHANGED';
+  execution: 'NOT_PERFORMED';
+} & (
+  | { status: 'SELECTED'; reason: 'PRIMARY' | 'FALLBACK' | 'DEGRADED_ALLOWED' | 'ADVANCED'; chosen: AiRouteCandidate; fallbackCandidates: AiRouteCandidate[] }
+  | { status: 'DENIED'; reason: AiTaskProfileDenial; chosen: null; fallbackCandidates: [] }
 );

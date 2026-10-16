@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
@@ -572,7 +572,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows[0]!.data;
   }
 
-  async writeAiControlPlaneFromHq(externalSubject: string, kind: AiControlPlaneKind, payload: AiProviderConnectionWrite | AiCatalogEntryWrite | AiRoutingPolicyWrite, idempotencyKey: string, requestId: string): Promise<{ recordId: string; version: number; replayed: boolean }> {
+  async writeAiControlPlaneFromHq(externalSubject: string, kind: AiControlPlaneKind, payload: AiProviderConnectionWrite | AiCatalogEntryWrite | AiRoutingPolicyWrite | AiTaskProfileWrite, idempotencyKey: string, requestId: string): Promise<{ recordId: string; version: number; replayed: boolean }> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<{ data: { recordId: string; version: number; replayed: boolean } }>(
       'SELECT hon.hq_ai_control_plane_write($1, $2, $3::jsonb, $4::uuid, $5::uuid) AS data',
@@ -589,6 +589,13 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows[0]!.data;
   }
 
+  async resolveAiTaskProfileRegistryFromHq(externalSubject: string, profileId: string): Promise<AiTaskProfileRegistry> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<{ data: AiTaskProfileRegistry }>(
+      'SELECT hon.hq_ai_task_profile_registry($1, $2::uuid) AS data', [externalSubject, profileId],
+    );
+    return result.rows[0]!.data;
+  }
   async withTenantTransaction<T>(
     context: TenantTransactionContext,
     work: (client: PoolClient) => Promise<T>,

@@ -85,6 +85,8 @@ const expectedRlsTables = [
   'hq_ai_model_catalog',
   'hq_ai_routing_policies',
   'hq_ai_routing_candidates',
+  'hq_ai_task_profiles',
+  'hq_ai_task_profile_candidates',
   'hq_ai_control_requests',
   'hq_ai_control_audit',
   'hq_ai_control_outbox',
@@ -291,6 +293,11 @@ try {
   const qualificationVerification = qualificationCanonical.split('-- Human instructor qualification evidence:')[1]?.split('-- End Human instructor qualification exact verification.')[0];
   if (!qualificationVerification) throw new Error('Missing canonical instructor qualification verification block.');
   await client.query(('DO $$' + qualificationVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
+
+  const hqAiCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const hqAiVerification = hqAiCanonical.split('-- HQ AI exact verification:')[1]?.split('-- End HQ AI exact verification.')[0];
+  if (!hqAiVerification) throw new Error('Missing canonical HQ AI exact verification block.');
+  await client.query(('DO $$' + hqAiVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
 
   const revenueTables = ['revenue_plans','revenue_plan_versions','revenue_plan_requests'];
   const campaignTables = ['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions'];

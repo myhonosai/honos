@@ -8,14 +8,15 @@ The catalog is approval metadata, not a claim that a named model exists or is re
 
 ## Ownership and immutable migrations
 
-New additive migrations `0052` and `0053` leave prior migrations unchanged. Every new `hon.hq_ai_*` table enables and **forces RLS**, with **no RLS policy** and no PUBLIC/runtime table privilege:
+New additive migrations `0052`, `0053`, and `0113` leave prior migrations unchanged. Every new `hon.hq_ai_*` table enables and **forces RLS**, with **no RLS policy** and no PUBLIC/runtime table privilege:
 
 - `hq_ai_provider_connections`: closed provider IDs, non-secret display name, connection state, opaque reference, version.
-- `hq_ai_model_catalog`: approved catalog UUID, stable provider/model identity and billable unit, capabilities, modalities, integer USD micro-unit price, minimum tier, activation and effective window.
+- `hq_ai_model_catalog`: approved catalog UUID, stable provider/model identity and billable unit, capabilities, modalities, closed privacy-attestation metadata, integer USD micro-unit price, minimum tier, activation and effective window.
 - `hq_ai_routing_policies` / `hq_ai_routing_candidates`: composite organization/school ownership, capability, minimum tier, ceiling, explicit degraded allowance, and up to eight unique FK-constrained catalog IDs in ordinal order.
+- `hq_ai_task_profiles` / `hq_ai_task_profile_candidates`: HQ-reviewed, policy-bound task selection metadata with immutable profile identity, active/effective state, default/ordered fallback/optional advanced catalog candidates, capability/modality/provider/privacy filters, budget, and timeout/retry **categories**. Profile candidates have a deferred containment FK to the policy candidates and the locked write path refuses a policy candidate removal while referenced.
 - `hq_ai_control_requests`, `hq_ai_control_audit`, `hq_ai_control_outbox`: idempotency results and append-only HQ evidence. No update/delete API or delivery worker exists for evidence.
 
-Ordinary runtime cannot SELECT, INSERT, UPDATE, DELETE, TRUNCATE, reference, or trigger these tables. Setting tenant/HQ GUCs cannot confer HQ access. The only runtime grants are EXECUTE on three fixed functions: `hq_ai_control_plane_read`, `hq_ai_control_plane_write`, and `hq_ai_routing_registry`. Internal validation/projection helpers are INVOKER, not runtime/PUBLIC executable.
+Ordinary runtime cannot SELECT, INSERT, UPDATE, DELETE, TRUNCATE, reference, or trigger these tables. Setting tenant/HQ GUCs cannot confer HQ access. The only runtime grants are EXECUTE on four fixed functions: `hq_ai_control_plane_read`, `hq_ai_control_plane_write`, `hq_ai_routing_registry`, and `hq_ai_task_profile_registry`. Internal validation/projection helpers are INVOKER, not runtime/PUBLIC executable.
 
 These fixed SECURITY DEFINER functions have `search_path = pg_catalog, hon`, use no dynamic SQL, and re-resolve the active verified **HUMAN_USER** against HQ grants on every call. The reviewed privileged migration owner must have the same forced-RLS global-identity read posture as the existing HQ resolver; migration `0053` fails closed otherwise. This privilege is **never** given to `hon_runtime`. A future dedicated HQ function owner must be reviewed and provisioned independently; do not weaken RLS to make a migration run.
 
@@ -39,17 +40,19 @@ All routes use the existing `HonIdentityGuard` and live HQ scope resolution, wit
 | `POST /v1/hq/ai-providers/connections` | `hq.ai.providers.manage` | Full validated provider record |
 | `POST /v1/hq/ai-providers/catalog` | `hq.ai.providers.manage` | Full validated catalog record |
 | `POST /v1/hq/ai-providers/routing-policies` | `hq.ai.providers.manage` | Full validated tenant routing policy |
+| `POST /v1/hq/ai-providers/task-profiles` | `hq.ai.providers.manage` | Full validated policy-contained task profile |
 | `POST /v1/hq/ai-providers/route-preview` | `hq.ai.providers.read` | Read-only validation and deterministic selection |
+| `POST /v1/hq/ai-providers/task-profile-preview` | `hq.ai.providers.read` | Read-only default/advanced task-profile selection |
 
 Owners inherit HQ permissions through the existing HQ resolver; operators need the explicit HQ codes. No school permission grants these codes. Write bodies are the shared `Ai*Write` contracts and require an `Idempotency-Key` UUID header and `expectedVersion` (`0` to create). Mutation returns `{recordId, version, replayed}`. Replays authenticate again and append nothing; reuse with changed input or a stale version returns 409. Validated mutations, redacted audit, named outbox event, and idempotency result are one atomic database operation. Low-volume HQ writes use one transaction advisory lock to prevent approval-check races across connections.
 
-Catalog provider/model ID and cost unit are immutable after approval; register a new UUID to change identity/unit. Policy tenant scope and capability are immutable; register a new policy to change them. Catalog/policy deactivation and future/expired effective windows are selectable state, not deletion. Connection states are DISABLED, CONFIGURED, HEALTHY, DEGRADED, UNAVAILABLE. Provider status changes do not enqueue execution.
+Catalog provider/model ID and cost unit are immutable after approval; register a new UUID to change identity/unit. Catalog privacy controls are closed HQ attestation metadata (`NO_TRAINING`, `ZERO_RETENTION`) and not proof of external provider enforcement. Explicit writes replace the list. For backward-compatible legacy catalog writes that omit the new field, the gateway preserves the existing persisted attestation on update or stores the safe empty default on create; omission can never erase a prior assertion. Policy tenant scope and capability are immutable; register a new policy to change them. Task profile routing policy, agent key, task category, and cost unit are immutable; register a new profile to change that identity. Catalog/policy/profile deactivation and future/expired effective windows are selectable state, not deletion. Connection states are DISABLED, CONFIGURED, HEALTHY, DEGRADED, UNAVAILABLE. Provider status changes do not enqueue execution.
 
 ## HQ web configuration surface
 
 `/hq/ai-providers` is the human-only HON HQ configuration surface. It calls these same-origin routes through `/api/v1`, so the existing verified-session cookie reaches the HON backend; it does not call a provider or external service. The page loads only the redacted snapshot permitted by the read boundary and locks its forms until that gate succeeds. A 403 on a mutation locks management controls while retaining permitted read/selection-preview access.
 
-The surface collects only the established write-contract fields: non-secret connection metadata, an optional opaque `hon-secret:<UUID v4>` reference identifier, approved catalog/capability/economics/effective-window metadata, and scoped routing-policy metadata. It labels references as **“Secret reference only — managed outside HON UI”** and never asks for or exposes raw keys, tokens, passwords, URLs, prompt content, or provider invocation controls. Its routing preview is explicitly selection-only and renders the returned `authority: UNCHANGED` / `execution: NOT_PERFORMED` result.
+The surface collects only the established connection/catalog/policy fields: non-secret connection metadata, an optional opaque `hon-secret:<UUID v4>` reference identifier, approved catalog/capability/privacy-attestation/economics/effective-window metadata, and scoped routing-policy metadata. It labels references as **“Secret reference only — managed outside HON UI”** and never asks for or exposes raw keys, tokens, passwords, URLs, prompt content, or provider invocation controls. Its routing preview is explicitly selection-only and renders the returned `authority: UNCHANGED` / `execution: NOT_PERFORMED` result. A task-profile **API/selection foundation is delivered**; its profile-editor UI is deliberately deferred rather than represented by an unsafe or incomplete form.
 
 ## Deterministic router contract
 
@@ -64,6 +67,16 @@ The surface collects only the established write-contract fields: non-secret conn
 
 A selection is a snapshot decision, not a durable execution authorization: future execution must revalidate current policy/catalog/health, reserve actual economics, and independently enforce live permissions, authority, approval, and scope before any provider/tool call. There is no automatic retry or fallback invocation here.
 
+## HQ task profile selection contract
+
+`decideAiTaskProfileRoute(request, registry)` is a second **read-only caller of the same routing rules**, not a second gateway. The browser request has the exact shape `{ profileId, selection: 'DEFAULT' | 'ADVANCED', estimatedUnits }`; it cannot supply school/organization, policy, catalog, provider, model, budget, credentials, prompt, tool, permission, authority, timeout or retry instruction.
+
+- A profile references one registered routing policy. Every default, fallback or advanced catalog candidate must already be a candidate of that policy; profile filters can only narrow policy/catalog eligibility.
+- `DEFAULT` considers the profile default and then its ordered profile fallbacks. `ADVANCED` considers only the optional advanced candidate and **never silently downgrades** to default.
+- Existing live entitlement/tier, policy/catalog effective state, provider health/credential posture, cost-unit, policy/profile budget, capability/modality, provider allow-list and catalog privacy-attestation filters all apply. Deactivation or a changed policy safely yields denial.
+- Timeout and retry values are categorization metadata only. They do not start a timer, queue work, retry a provider, call a model, reserve budget, consume credits, mutate a Work Item, invoke Action Engine, or send a message.
+- Every result remains `authority: UNCHANGED` and `execution: NOT_PERFORMED`. Future adapters must independently revalidate all current selection/authorization/economics conditions.
+
 ## Verification
 
 - `pnpm test`: shared/domain/web suite, including strict field/secret rejection and pure router tests.
@@ -74,7 +87,7 @@ Integration fixtures, provider updates, and evidence are isolated in a **rolled-
 
 ## Deferred activation work
 
-Reviewed secret-store custody/rotation, code-owned endpoint adapters, observed health/error classification, provider/model capability verification, budget reservation/customer-credit accounting, safe execution/revalidation/UNKNOWN handling, retry/circuit policy, media delivery/storage, and execution workers remain unimplemented. Conventional HON remains independent of provider availability.
+Reviewed secret-store custody/rotation, code-owned endpoint adapters, observed health/error classification, provider/model capability verification, budget reservation/customer-credit accounting, safe execution/revalidation/UNKNOWN handling, retry/circuit policy, task-profile editor UI, tenant invocation-plan consumption of profiles, media delivery/storage, and execution workers remain unimplemented. Conventional HON remains independent of provider availability.
 
 ## Delivered next dependency: tenant decision-only plans
 

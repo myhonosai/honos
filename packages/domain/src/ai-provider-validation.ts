@@ -1,6 +1,7 @@
 import {
   AI_CAPABILITIES, AI_CONNECTION_STATES, AI_MODALITIES, AI_PROVIDER_IDS, HON_TIERS,
-  type AiCatalogEntryWrite, type AiControlPlaneKind, type AiProviderConnectionWrite, type AiRoutingPolicyWrite,
+  AI_PRIVACY_CONTROLS, AI_TASK_TIMEOUT_CATEGORIES, AI_TASK_RETRY_CATEGORIES, HON_AI_TEAM_AGENT_KEYS, AI_MODEL_EVALUATION_TASK_CATEGORIES,
+  type AiCatalogEntryWrite, type AiControlPlaneKind, type AiProviderConnectionWrite, type AiRoutingPolicyWrite, type AiTaskProfileWrite,
 } from '@hon/contracts';
 
 export const AI_COST_UNITS = ['TOKEN', 'SECOND', 'IMAGE', 'VIDEO', 'REQUEST'] as const;
@@ -37,8 +38,8 @@ function boolean(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new Error('VALIDATION_FAILED');
   return value;
 }
-function list<T extends string>(value: unknown, allowed: readonly T[]): T[] {
-  if (!Array.isArray(value) || value.length < 1 || value.length > allowed.length) throw new Error('VALIDATION_FAILED');
+function list<T extends string>(value: unknown, allowed: readonly T[], minimum = 1): T[] {
+  if (!Array.isArray(value) || value.length < minimum || value.length > allowed.length) throw new Error('VALIDATION_FAILED');
   const result = value.map((item) => aiConfigEnum(item, allowed));
   if (new Set(result).size !== result.length) throw new Error('VALIDATION_FAILED');
   return result;
@@ -55,24 +56,32 @@ function window(object: Record<string, unknown>): { effectiveFrom: string; effec
   if (effectiveUntil !== null && effectiveUntil <= effectiveFrom) throw new Error('VALIDATION_FAILED');
   return { effectiveFrom, effectiveUntil };
 }
-export function validateAiControlPlaneWrite(kind: AiControlPlaneKind, input: unknown): AiProviderConnectionWrite | AiCatalogEntryWrite | AiRoutingPolicyWrite {
+export function validateAiControlPlaneWrite(kind: AiControlPlaneKind, input: unknown): AiProviderConnectionWrite | AiCatalogEntryWrite | AiRoutingPolicyWrite | AiTaskProfileWrite {
+  if (kind === 'TASK_PROFILE') return validateAiTaskProfileWrite(input);
   if (kind === 'PROVIDER') {
     const object = aiConfigObject(input, ['providerId', 'displayName', 'state', 'credentialSecretRef', 'expectedVersion']);
     const ref = object.credentialSecretRef;
     if (ref !== null && (typeof ref !== 'string' || !SECRET_REF.test(ref))) throw new Error('VALIDATION_FAILED');
     const state = aiConfigEnum(object.state, AI_CONNECTION_STATES);
     if (state !== 'DISABLED' && ref === null) throw new Error('VALIDATION_FAILED');
-    return { providerId: aiConfigEnum(object.providerId, AI_PROVIDER_IDS), displayName: safeText(object.displayName), state, credentialSecretRef: ref as string | null, expectedVersion: aiConfigInteger(object.expectedVersion) };
+    return { providerId: aiConfigEnum(object.providerId, AI_PROVIDER_IDS), displayName: safeText(object.displayName), state, credentialSecretRef: ref as string | null, expectedVersion: aiConfigVersion(object.expectedVersion) };
   }
   if (kind === 'CATALOG') {
-    const object = aiConfigObject(input, ['catalogId', 'providerId', 'modelId', 'displayName', 'capabilities', 'modalities', 'active', 'minimumTier', 'unitCostMicros', 'costUnit', 'effectiveFrom', 'effectiveUntil', 'expectedVersion']);
+    const legacyKeys = ['catalogId', 'providerId', 'modelId', 'displayName', 'capabilities', 'modalities', 'active', 'minimumTier', 'unitCostMicros', 'costUnit', 'effectiveFrom', 'effectiveUntil', 'expectedVersion'];
+    const object = input && typeof input === 'object' && !Array.isArray(input) && Object.hasOwn(input, 'privacyControls')
+      ? aiConfigObject(input, [...legacyKeys.slice(0, 6), 'privacyControls', ...legacyKeys.slice(6)])
+      : aiConfigObject(input, legacyKeys);
+    const privacyControls = Object.hasOwn(object, 'privacyControls')
+      ? list(object.privacyControls, AI_PRIVACY_CONTROLS, 0)
+      : undefined;
     return {
       catalogId: aiConfigUuid(object.catalogId), providerId: aiConfigEnum(object.providerId, AI_PROVIDER_IDS),
       modelId: safeText(object.modelId, true), displayName: safeText(object.displayName),
       capabilities: list(object.capabilities, AI_CAPABILITIES), modalities: list(object.modalities, AI_MODALITIES),
+      ...(privacyControls === undefined ? {} : { privacyControls }),
       active: boolean(object.active), minimumTier: aiConfigEnum(object.minimumTier, HON_TIERS),
       unitCostMicros: aiConfigInteger(object.unitCostMicros), costUnit: aiConfigEnum(object.costUnit, AI_COST_UNITS),
-      ...window(object), expectedVersion: aiConfigInteger(object.expectedVersion),
+      ...window(object), expectedVersion: aiConfigVersion(object.expectedVersion),
     };
   }
   if (kind !== 'POLICY') throw new Error('VALIDATION_FAILED');
@@ -84,6 +93,31 @@ export function validateAiControlPlaneWrite(kind: AiControlPlaneKind, input: unk
     policyId: aiConfigUuid(object.policyId), organizationId: aiConfigUuid(object.organizationId), schoolId: aiConfigUuid(object.schoolId),
     capability: aiConfigEnum(object.capability, AI_CAPABILITIES), active: boolean(object.active),
     minimumTier: aiConfigEnum(object.minimumTier, HON_TIERS), maxCostMicros: aiConfigInteger(object.maxCostMicros),
-    allowDegraded: boolean(object.allowDegraded), catalogIds, ...window(object), expectedVersion: aiConfigInteger(object.expectedVersion),
+    allowDegraded: boolean(object.allowDegraded), catalogIds, ...window(object), expectedVersion: aiConfigVersion(object.expectedVersion),
+  };
+}
+
+function aiConfigVersion(value: unknown): number {
+  const version = aiConfigInteger(value);
+  if (version > 2147483646) throw new Error('VALIDATION_FAILED');
+  return version;
+}
+export function validateAiTaskProfileWrite(input: unknown): AiTaskProfileWrite {
+  const object = aiConfigObject(input, ['profileId', 'routingPolicyId', 'agentKey', 'taskCategory', 'costUnit', 'active', 'maxCostMicros', 'defaultCatalogId', 'fallbackCatalogIds', 'advancedCatalogId', 'requiredCapabilities', 'requiredModalities', 'allowedProviderIds', 'privacyControls', 'timeoutCategory', 'retryCategory', 'effectiveFrom', 'effectiveUntil', 'expectedVersion']);
+  if (!Array.isArray(object.fallbackCatalogIds) || object.fallbackCatalogIds.length > 7) throw new Error('VALIDATION_FAILED');
+  const defaultCatalogId = aiConfigUuid(object.defaultCatalogId);
+  const fallbackCatalogIds = object.fallbackCatalogIds.map(aiConfigUuid);
+  const advancedCatalogId = object.advancedCatalogId === null ? null : aiConfigUuid(object.advancedCatalogId);
+  const ids = [defaultCatalogId, ...fallbackCatalogIds, ...(advancedCatalogId === null ? [] : [advancedCatalogId])];
+  if (new Set(ids).size !== ids.length || ids.length > 8) throw new Error('VALIDATION_FAILED');
+  return {
+    profileId: aiConfigUuid(object.profileId), routingPolicyId: aiConfigUuid(object.routingPolicyId),
+    agentKey: aiConfigEnum(object.agentKey, HON_AI_TEAM_AGENT_KEYS), taskCategory: aiConfigEnum(object.taskCategory, AI_MODEL_EVALUATION_TASK_CATEGORIES),
+    costUnit: aiConfigEnum(object.costUnit, AI_COST_UNITS), active: boolean(object.active), maxCostMicros: aiConfigInteger(object.maxCostMicros),
+    defaultCatalogId, fallbackCatalogIds, advancedCatalogId,
+    requiredCapabilities: list(object.requiredCapabilities, AI_CAPABILITIES), requiredModalities: list(object.requiredModalities, AI_MODALITIES),
+    allowedProviderIds: list(object.allowedProviderIds, AI_PROVIDER_IDS), privacyControls: list(object.privacyControls, AI_PRIVACY_CONTROLS, 0),
+    timeoutCategory: aiConfigEnum(object.timeoutCategory, AI_TASK_TIMEOUT_CATEGORIES), retryCategory: aiConfigEnum(object.retryCategory, AI_TASK_RETRY_CATEGORIES),
+    ...window(object), expectedVersion: aiConfigVersion(object.expectedVersion),
   };
 }

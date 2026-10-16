@@ -132,7 +132,7 @@ SELECT has_table_privilege('hon_runtime','hon.ai_invocation_plans','SELECT') AS 
   has_function_privilege('hon_runtime','hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)','EXECUTE') AS can_plan,
   has_function_privilege('hon_runtime','hon.require_ai_invocation_plan_access()','EXECUTE') AS can_check_plan_access;
 SELECT table_name, has_table_privilege('hon_runtime','hon.' || table_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS forbidden_config_access
-FROM unnest(ARRAY['hq_ai_provider_connections','hq_ai_model_catalog','hq_ai_routing_policies','hq_ai_routing_candidates','hq_ai_control_requests','hq_ai_control_audit','hq_ai_control_outbox']) AS table_name;
+FROM unnest(ARRAY['hq_ai_provider_connections','hq_ai_model_catalog','hq_ai_routing_policies','hq_ai_routing_candidates','hq_ai_task_profiles','hq_ai_task_profile_candidates','hq_ai_control_requests','hq_ai_control_audit','hq_ai_control_outbox']) AS table_name;
 SELECT signature, has_function_privilege('hon_runtime',signature,'EXECUTE') AS forbidden_helper_execution
 FROM unnest(ARRAY['hon.validate_ai_invocation_plan_input(jsonb)','hon.ai_invocation_plan_summary(uuid)','hon.reject_ai_invocation_plan_mutation()']) AS signature;
 -- pnpm db:test-ai-plans additionally proves live human/Complete gates, replay,
@@ -497,7 +497,7 @@ BEGIN
    IF has_function_privilege(r,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client revenue function access: %',r; END IF;
   END LOOP;
  END LOOP;
- FOR t IN SELECT unnest(ARRAY['revenue_plans','revenue_plan_versions','revenue_plan_requests','users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants','hq_onboarding_requests','crm_activities','hq_ai_provider_connections','hq_ai_model_catalog','hq_ai_routing_policies','hq_ai_routing_candidates','hq_ai_control_requests','hq_ai_control_audit','hq_ai_control_outbox']) LOOP
+ FOR t IN SELECT unnest(ARRAY['revenue_plans','revenue_plan_versions','revenue_plan_requests','users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants','hq_onboarding_requests','crm_activities','hq_ai_provider_connections','hq_ai_model_catalog','hq_ai_routing_policies','hq_ai_routing_candidates','hq_ai_task_profiles','hq_ai_task_profile_candidates','hq_ai_control_requests','hq_ai_control_audit','hq_ai_control_outbox']) LOOP
   IF has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
    OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Forbidden runtime private/directory/HQ access: %',t; END IF;
  END LOOP;
@@ -1523,3 +1523,47 @@ BEGIN
     OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='staff.instructor_qualification.manage' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Instructor qualification permission registry is unsafe'; END IF;
 END $$;
 -- End Human instructor qualification exact verification.
+
+-- HQ AI exact verification: function-only selection configuration, never execution.
+DO $$
+DECLARE t text; f record; b record; client_role text;
+BEGIN
+ FOR t IN SELECT unnest(ARRAY['hq_ai_provider_connections','hq_ai_model_catalog','hq_ai_routing_policies','hq_ai_routing_candidates','hq_ai_task_profiles','hq_ai_task_profile_candidates','hq_ai_control_requests','hq_ai_control_audit','hq_ai_control_outbox']) LOOP
+  SELECT c.relrowsecurity,c.relforcerowsecurity,r.rolsuper OR r.rolbypassrls trusted_owner,
+    EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t) has_policy,
+    EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+    OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND a.grantee<>c.relowner) broad_acl
+  INTO b FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF NOT b.relrowsecurity OR NOT b.relforcerowsecurity OR NOT b.trusted_owner OR b.has_policy OR b.broad_acl
+    OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe HQ AI table/column RLS or ACL: %',t;
+  END IF;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+   ('hon.hq_ai_control_plane_read(text)',true,true,'s'),
+   ('hon.hq_ai_control_plane_write(text,text,jsonb,uuid,uuid)',true,true,'v'),
+   ('hon.hq_ai_routing_registry(text,uuid)',true,true,'s'),
+   ('hon.hq_ai_task_profile_registry(text,uuid)',true,true,'s'),
+   ('hon.hq_ai_snapshot()',false,false,'s'),
+   ('hon.hq_ai_task_profile_snapshot(uuid)',false,false,'s'),
+   ('hon.hq_ai_validate_write(text,jsonb)',false,false,'v'),
+   ('hon.hq_ai_valid_list(jsonb,text[],integer,integer)',false,false,'i'),
+   ('hon.hq_ai_safe_text(text,boolean)',false,false,'i')
+ ) AS v(signature,should_execute,should_define,expected_volatility) LOOP
+  SELECT p.prosecdef,p.provolatile,p.proconfig,r.rolsuper OR r.rolbypassrls trusted_owner,
+    has_function_privilege('hon_runtime',p.oid,'EXECUTE') runtime_execute,
+    EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+      AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.should_execute OR a.privilege_type<>'EXECUTE' OR a.is_grantable)) broad_acl
+  INTO b FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b.trusted_owner IS DISTINCT FROM true OR b.prosecdef IS DISTINCT FROM f.should_define OR b.runtime_execute IS DISTINCT FROM f.should_execute
+    OR b.provolatile::text<>f.expected_volatility OR b.broad_acl IS DISTINCT FROM false
+    OR b.proconfig IS DISTINCT FROM (CASE WHEN f.signature='hon.hq_ai_safe_text(text,boolean)' THEN ARRAY['search_path=pg_catalog'] ELSE ARRAY['search_path=pg_catalog, hon'] END) THEN
+    RAISE EXCEPTION 'Unsafe exact HQ AI function owner/path/ACL: %',f.signature;
+  END IF;
+  FOR client_role IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+    IF has_function_privilege(client_role,f.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client HQ AI function grant'; END IF;
+  END LOOP;
+ END LOOP;
+END $$;
+-- End HQ AI exact verification.

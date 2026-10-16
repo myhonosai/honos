@@ -334,11 +334,11 @@ END $$;
 REVOKE ALL ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),
   hon.require_ai_invocation_plan_access(), hon.hq_ai_control_plane_read(text),
   hon.hq_ai_control_plane_write(text, text, jsonb, uuid, uuid),
-  hon.hq_ai_routing_registry(text, uuid) FROM PUBLIC;
+  hon.hq_ai_routing_registry(text, uuid), hon.hq_ai_task_profile_registry(text, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hon.plan_ai_invocation(uuid, jsonb, uuid, uuid, uuid),
   hon.require_ai_invocation_plan_access(), hon.hq_ai_control_plane_read(text),
   hon.hq_ai_control_plane_write(text, text, jsonb, uuid, uuid),
-  hon.hq_ai_routing_registry(text, uuid) TO hon_runtime;
+  hon.hq_ai_routing_registry(text, uuid), hon.hq_ai_task_profile_registry(text, uuid) TO hon_runtime;
 -- Internal validators/projections and immutability trigger remain non-executable.
 REVOKE ALL ON FUNCTION hon.validate_ai_invocation_plan_input(jsonb),
   hon.ai_invocation_plan_summary(uuid), hon.reject_ai_invocation_plan_mutation()
@@ -780,3 +780,9 @@ BEGIN
   END IF;
 END $$;
 COMMIT;
+
+-- HQ profiles remain function-only. No PUBLIC/runtime table or column ACLs.
+REVOKE ALL ON TABLE hon.hq_ai_task_profiles,hon.hq_ai_task_profile_candidates FROM PUBLIC,hon_runtime;
+REVOKE ALL ON FUNCTION hon.hq_ai_valid_list(jsonb,text[],integer,integer),
+  hon.hq_ai_task_profile_snapshot(uuid),hon.hq_ai_snapshot(),hon.hq_ai_validate_write(text,jsonb),
+  hon.hq_ai_safe_text(text,boolean) FROM PUBLIC,hon_runtime;

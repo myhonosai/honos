@@ -8,6 +8,7 @@ const CONNECTION_STATES = ['DISABLED', 'CONFIGURED', 'HEALTHY', 'DEGRADED', 'UNA
 const CAPABILITIES = ['TEXT', 'VOICE_INPUT', 'VOICE_OUTPUT', 'IMAGE', 'VIDEO', 'EMBEDDING', 'TOOL_EXECUTION'] as const;
 const MODALITIES = ['TEXT', 'VOICE_INPUT', 'VOICE_OUTPUT', 'IMAGE', 'VIDEO', 'EMBEDDING'] as const;
 const COST_UNITS = ['TOKEN', 'SECOND', 'IMAGE', 'VIDEO', 'REQUEST'] as const;
+const PRIVACY_CONTROLS = ['NO_TRAINING', 'ZERO_RETENTION'] as const;
 const TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;
 
 type ProviderId = (typeof PROVIDER_IDS)[number];
@@ -32,6 +33,7 @@ type CatalogEntry = {
   displayName: string;
   capabilities: Capability[];
   modalities: Modality[];
+  privacyControls: (typeof PRIVACY_CONTROLS)[number][];
   active: boolean;
   minimumTier: Tier;
   unitCostMicros: number;
@@ -75,6 +77,7 @@ type CatalogForm = {
   displayName: string;
   capabilities: Capability[];
   modalities: Modality[];
+  privacyControls: (typeof PRIVACY_CONTROLS)[number][];
   active: boolean;
   minimumTier: Tier;
   unitCostMicros: string;
@@ -140,7 +143,7 @@ function blankProvider(providerId: ProviderId = 'OPENROUTER'): ProviderForm {
 
 function blankCatalog(): CatalogForm {
   return {
-    catalogId: newUuid(), providerId: 'OPENROUTER', modelId: '', displayName: '', capabilities: ['TEXT'], modalities: ['TEXT'], active: true,
+    catalogId: newUuid(), providerId: 'OPENROUTER', modelId: '', displayName: '', capabilities: ['TEXT'], modalities: ['TEXT'], privacyControls: [], active: true,
     minimumTier: 'CORE', unitCostMicros: '', costUnit: 'TOKEN', effectiveFrom: '', effectiveUntil: '', expectedVersion: 0,
   };
 }
@@ -294,7 +297,7 @@ export function HqAiProviderControl(): React.ReactElement {
     setCatalogState({ kind: 'idle' });
     setCatalogForm({
       catalogId: entry.catalogId, providerId: entry.providerId, modelId: entry.modelId, displayName: entry.displayName, capabilities: entry.capabilities,
-      modalities: entry.modalities, active: entry.active, minimumTier: entry.minimumTier, unitCostMicros: String(entry.unitCostMicros),
+      modalities: entry.modalities, privacyControls: entry.privacyControls, active: entry.active, minimumTier: entry.minimumTier, unitCostMicros: String(entry.unitCostMicros),
       costUnit: entry.costUnit, effectiveFrom: toDateTimeInput(entry.effectiveFrom), effectiveUntil: toDateTimeInput(entry.effectiveUntil), expectedVersion: entry.version,
     });
     document.getElementById('catalog-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -524,6 +527,8 @@ export function HqAiProviderControl(): React.ReactElement {
                 <label>Effective until <small>Optional</small><input type="datetime-local" value={catalogForm.effectiveUntil} onChange={(event) => setCatalogForm({ ...catalogForm, effectiveUntil: event.target.value })} /></label>
               </div>
               <div className={styles.switchRow}><label><input type="checkbox" checked={catalogForm.active} onChange={(event) => setCatalogForm({ ...catalogForm, active: event.target.checked })} /> Active for policy selection</label><span>Provider, model identity, and billable unit are immutable after approval; register a new ID to change them.</span></div>
+              <p>Privacy controls are HQ selection attestations only, not proof of external enforcement. Empty means no attestation.</p>
+              <CheckboxList label="Privacy attestations" options={PRIVACY_CONTROLS} selected={catalogForm.privacyControls} onChange={(privacyControls) => setCatalogForm({ ...catalogForm, privacyControls })} disabled={!canManage || catalogState.kind === 'submitting'} />
               <div className={styles.checkboxGrid}><CheckboxList label="Capabilities" options={CAPABILITIES} selected={catalogForm.capabilities} onChange={(capabilities) => setCatalogForm({ ...catalogForm, capabilities })} disabled={!canManage || catalogState.kind === 'submitting'} /><CheckboxList label="Modalities" options={MODALITIES} selected={catalogForm.modalities} onChange={(modalities) => setCatalogForm({ ...catalogForm, modalities })} disabled={!canManage || catalogState.kind === 'submitting'} /></div>
               <div className={styles.formActions}><button type="submit">{catalogState.kind === 'submitting' ? 'Saving catalog metadata…' : 'Save catalog record →'}</button><span>No model prompt is collected or sent.</span></div>
               <OperationNotice state={catalogState} />

@@ -16,7 +16,7 @@ export function validateAiRouteRequest(input: unknown): AiRouteRequest {
     costUnit: aiConfigEnum(value.costUnit, AI_COST_UNITS), estimatedUnits: aiConfigInteger(value.estimatedUnits, 1), budgetMicros: aiConfigInteger(value.budgetMicros),
   };
 }
-function validateRegistry(registry: AiRoutingRegistry): void {
+export function validateAiRoutingRegistry(registry: AiRoutingRegistry): void {
   aiConfigObject(registry, ['tenant', 'asOf', 'providers', 'catalog', 'policies']);
   aiConfigObject(registry.tenant, ['organizationId', 'schoolId', 'tier', 'entitlementActive']);
   aiConfigUuid(registry.tenant.organizationId); aiConfigUuid(registry.tenant.schoolId);
@@ -47,7 +47,7 @@ export function decideAiRoute(input: AiRouteRequest, registry: AiRoutingRegistry
   const base = { contractVersion: 1 as const, policyId: '', policyVersion: null as number | null, budgetMicros: 0, authority: 'UNCHANGED' as const, execution: 'NOT_PERFORMED' as const };
   const deny = (reason: AiRouteDenial): AiRouteDecision => ({ ...base, status: 'DENIED', reason, chosen: null, fallbackCandidates: [] });
   let request: AiRouteRequest;
-  try { request = validateAiRouteRequest(input); validateRegistry(registry); } catch { return deny('INVALID_INPUT'); }
+  try { request = validateAiRouteRequest(input); validateAiRoutingRegistry(registry); } catch { return deny('INVALID_INPUT'); }
   base.policyId = request.policyId;
   base.budgetMicros = request.budgetMicros;
   const tenant = registry.tenant;

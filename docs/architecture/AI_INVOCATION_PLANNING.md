@@ -73,6 +73,8 @@ A matching successful replay revalidates current permission/Complete entitlement
 
 No SDK, provider HTTP, new environment key/secret, credential resolution, model/media call, worker, outbox consumer, automatic retry, tool invocation, ledger write, credit consumption/reservation, billing mutation, Action Engine mutation, work transition to Working, generated output, or provider-success claim is added.
 
+HQ task profiles delivered in migration `0113` are intentionally **not consumed** by this first tenant planning slice. They are HQ-only selection metadata/preview for policy-contained candidates and do not alter this direct-policy, human/Complete, TEXT/TOKEN estimator. Connecting a task profile to a durable tenant plan requires a separate review of task-category authority, budget reservation, current profile revalidation and Action Engine behavior.
+
 Future execution requires a separately reviewed boundary: revalidate current scope/permission/entitlement/risk/policy/catalog/health; establish authoritative pricing and budget reservation; resolve credentials out of band; register code-owned adapters; apply Action Engine/tool/approval authority independently; meter actual costs/credits; handle UNKNOWN/reconciliation/circuits; and only then introduce execution workers/media custody. Conventional HON remains independent of AI availability.
 
 ## Deployment and verification

@@ -48,6 +48,18 @@ export class HqAiProviderController {
     return this.mutate(request, 'POLICY', body, key);
   }
 
+  @Post('task-profiles')
+  @HttpCode(HttpStatus.OK)
+  writeTaskProfile(@Req() request: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return this.mutate(request, 'TASK_PROFILE', body, key);
+  }
+
+  @Post('task-profile-preview')
+  @HttpCode(HttpStatus.OK)
+  async previewTaskProfile(@Req() request: HonRequest, @Body() body: unknown) {
+    return { data: await this.controlPlane.previewTaskProfile(await this.subject(request, 'hq.ai.providers.read'), body) };
+  }
+
   @Post('route-preview')
   @HttpCode(HttpStatus.OK)
   async preview(@Req() request: HonRequest, @Body() body: unknown) {
