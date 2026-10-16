@@ -8,6 +8,11 @@
 - [x] Run Claire security, API, and UI checks with the paid-call gate absent and a rejecting network sentinel.
 - [x] Validate separate-reviewer approval/denial, stale policy/expiry, replay/concurrency, quota, unknown outcome, redaction, and zero unintended Teaching Studio/student/attendance/testing/promotion/billing/communication effects.
 
+## Shared AI employee regression validation checkpoint
+
+- [x] Add a provider-free shared verifier and focused mock/rejecting-transport evidence matrix for Marcus, Claire, and Chad: typed durable work, HQ-policy-only planning, CONFIRM review, safe result/rejection/failure/UNKNOWN lifecycle, live Complete/role/tenant gates, redacted usage/provider-cost audit evidence, and no unreviewed external side effect.
+- [x] Add Chad's guarded disposable-local restricted-role integration proof and document the intentional fixture distinction: Marcus/Chad create marked local aliases; Claire requires pre-provisioned restricted aliases; all current focused proofs are mock-only and refuse or sentinel-block provider transport.
+
 ## Chad Complete CRM follow-up draft assistant — scoped checkpoint
 
 - [x] Add Complete-only direct-human `FOLLOW_UP_DRAFT` planning for one known current-school OPEN CRM lead/version with a closed purpose, private durable request/plan/usage/draft evidence, redacted audit, explicit paid-call gate, and no provider call in focused tests.
