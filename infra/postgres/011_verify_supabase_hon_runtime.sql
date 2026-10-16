@@ -2109,7 +2109,7 @@ DO $$ DECLARE t text; f record; b boolean; trigger_name text; trigger_type integ
  FOR f IN SELECT * FROM (VALUES
   ('hon.guard_enrollment_program_identity()',false,false),('hon.resolve_owner_launch_scope(text)',true,true),
   ('hon.require_owner_launch_actor(text)',false,true),('hon.lock_owner_launch_actor(text)',false,true),
-  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true),('hon.read_owner_launch_saved_students(text)',true,true),('hon.require_owner_launch_family_actor(text)',false,true),('hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)',true,true),('hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)',true,true),('hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch_membership_draft(text)',true,true)
+  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true),('hon.read_owner_launch_saved_students(text)',true,true),('hon.require_owner_launch_family_actor(text)',false,true),('hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)',true,true),('hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)',true,true),('hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch_membership_draft(text)',true,true),('hon.read_owner_launch_first_class_booking_context(text)',true,true)
  ) v(signature,can_execute,is_definer) LOOP
   SELECT p.prosecdef=f.is_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
    AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
@@ -2167,6 +2167,12 @@ DO $$ DECLARE f record; BEGIN
 END $$;
 DO $$ BEGIN
  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_membership_draft(text)'::regprocedure) IS DISTINCT FROM '77fe22668845ad87ce3005affb7c2113' THEN RAISE EXCEPTION 'Owner launch DRAFT confirmation body drift'; END IF;
+ IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_first_class_booking_context(text)'::regprocedure) IS DISTINCT FROM 'aa3867a643ba61d184acccfeab21e179' THEN RAISE EXCEPTION 'Owner launch booking context body drift'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang WHERE p.oid='hon.read_owner_launch_first_class_booking_context(text)'::regprocedure AND p.prorettype='jsonb'::regtype AND NOT p.proretset AND p.prokind='f' AND p.proargnames=ARRAY['p_subject']::text[] AND p.proargmodes IS NULL AND l.lanname='plpgsql'
+  AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantor<>p.proowner OR a.is_grantable OR a.privilege_type<>'EXECUTE' OR a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))
+  AND (SELECT count(*) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))))=2
+ ) THEN RAISE EXCEPTION 'Unsafe exact owner booking context signature/ACL'; END IF;
+ IF has_table_privilege('hon_runtime','hon.class_bookings','UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege('hon_runtime','hon.class_bookings','UPDATE') THEN RAISE EXCEPTION 'Unsafe owner launch booking context mutation grant'; END IF;
  IF has_table_privilege('hon_runtime','hon.audit_events','UPDATE,DELETE,TRUNCATE')
  OR has_table_privilege('hon_runtime','hon.memberships','DELETE,TRUNCATE')
  OR has_table_privilege('hon_runtime','hon.billing_accounts','UPDATE,DELETE,TRUNCATE') THEN RAISE EXCEPTION 'Unsafe owner launch canonical relation mutation grant'; END IF;

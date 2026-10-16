@@ -20,7 +20,7 @@ function elements(node:unknown):React.ReactElement<Record<string,unknown>>[]{if(
 function text(node:unknown):string{if(Array.isArray(node))return node.map(text).join(' ');if(React.isValidElement<Record<string,unknown>>(node))return text(node.props.children);return typeof node==='string'||typeof node==='number'?String(node):'';}
 function render(){hooks.cursor=0;return OwnerLaunch();}
 function refresh(){const button=elements(render()).find(e=>e.type==='button'&&text(e).includes('Load / refresh'));expect(button).toBeDefined();(button!.props.onClick as ()=>void)();}
-function transport(){return vi.spyOn(globalThis,'fetch').mockImplementation(async path=>response(path==='/api/v1/owner-launch'?context:confirmation));}
+function transport(){return vi.spyOn(globalThis,'fetch').mockImplementation(async path=>response(path==='/api/v1/owner-launch'?context:path==='/api/v1/owner-launch/first-class-booking-context'?{state:'NO_RECORDED_BOOKING',context:null}:confirmation));}
 beforeEach(()=>{hooks.cells=[];hooks.cursor=0;hooks.mounted=false;hooks.events={};const add=(name:string,fn:()=>void)=>{hooks.events[name]=fn;};vi.stubGlobal('window',{addEventListener:add,removeEventListener:()=>{}});vi.stubGlobal('document',{addEventListener:add,removeEventListener:()=>{}});});
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
 describe('owner launch current DRAFT confirmation UI',()=>{
@@ -39,13 +39,13 @@ describe('owner launch current DRAFT confirmation UI',()=>{
  it('renders one DRAFT saved configuration after reload and provides no activation/cancel link or button',async()=>{
   const fetch=transport();expect(text(render())).not.toContain(receipt.membershipId);refresh();await vi.waitFor(()=>expect(text(render())).toContain(receipt.membershipId));
   const tree=render(),copy=text(tree);expect(copy).toContain('DRAFT only — saved membership configuration, NOT active');expect(copy).toContain('not a financial agreement, signature or consent');expect(copy).toContain('No payment, invoice, schedule, communication, attendance or parent login');
-  expect(elements(tree).filter(e=>e.type==='button').map(text).join(' ')).not.toMatch(/activate|cancel/i);expect(elements(tree).filter(e=>e.props.href).map(e=>e.props.href)).not.toContain('/staff/billing');expect(copy).not.toContain('Save membership DRAFT only');expect(copy).not.toContain('account created');expect(fetch).toHaveBeenCalledTimes(2);
-  refresh();await vi.waitFor(()=>expect(text(render())).toContain(receipt.membershipId));expect(fetch).toHaveBeenCalledTimes(4);
+  expect(elements(tree).filter(e=>e.type==='button').map(text).join(' ')).not.toMatch(/activate|cancel/i);expect(elements(tree).filter(e=>e.props.href).map(e=>e.props.href)).not.toContain('/staff/billing');expect(copy).not.toContain('Save membership DRAFT only');expect(copy).not.toContain('account created');expect(fetch).toHaveBeenCalledTimes(3);
+  refresh();await vi.waitFor(()=>expect(text(render())).toContain(receipt.membershipId));expect(fetch).toHaveBeenCalledTimes(6);
  });
  it('shows truthful NO_RECORDED_DRAFT or bounded unavailable without fake receipt or mutation button on drift',async()=>{
-  const fetch=vi.spyOn(globalThis,'fetch').mockImplementation(async path=>response(path==='/api/v1/owner-launch'?context:{state:'NO_RECORDED_DRAFT',receipt:null}));
+  const fetch=vi.spyOn(globalThis,'fetch').mockImplementation(async path=>response(path==='/api/v1/owner-launch'?context:path==='/api/v1/owner-launch/first-class-booking-context'?{state:'NO_RECORDED_BOOKING',context:null}:{state:'NO_RECORDED_DRAFT',receipt:null}));
   refresh();await vi.waitFor(()=>expect(text(render())).toContain('NO_RECORDED_DRAFT'));expect(text(render())).not.toContain(receipt.membershipId);expect(text(render())).toContain('Save membership DRAFT only');
-  fetch.mockImplementation(async path=>response(path==='/api/v1/owner-launch'?context:{state:'DRAFT_UNAVAILABLE',receipt:null}));refresh();await vi.waitFor(()=>expect(text(render())).toContain('Current DRAFT confirmation unavailable — needs staff review'));expect(text(render())).not.toContain('Save membership DRAFT only');expect(text(render())).not.toContain(receipt.membershipId);
+  fetch.mockImplementation(async path=>response(path==='/api/v1/owner-launch'?context:path==='/api/v1/owner-launch/first-class-booking-context'?{state:'NO_RECORDED_BOOKING',context:null}:{state:'DRAFT_UNAVAILABLE',receipt:null}));refresh();await vi.waitFor(()=>expect(text(render())).toContain('Current DRAFT confirmation unavailable — needs staff review'));expect(text(render())).not.toContain('Save membership DRAFT only');expect(text(render())).not.toContain(receipt.membershipId);
  });
  it('clears stale content immediately on reload/access denial and ignores late results after focus invalidation',async()=>{
   const fetch=transport();refresh();await vi.waitFor(()=>expect(text(render())).toContain(receipt.membershipId));
@@ -54,6 +54,6 @@ describe('owner launch current DRAFT confirmation UI',()=>{
   for(const status of [401,403,404,503]){fetch.mockResolvedValue({ok:false,status} as Response);await expect(loadOwnerLaunchMembershipDraft()).rejects.toMatchObject({status});}
  });
  it('retains existing route/manifest and no browser storage or activation transport',()=>{
-  const source=readFileSync('src/components/owner-launch.tsx','utf8')+readFileSync('src/components/owner-launch-http.ts','utf8');expect(source).toContain('generation.current');expect(source).toContain('loadOwnerLaunchWithDraft');const dashboard=readFileSync('src/components/staff-dashboard.tsx','utf8');expect(dashboard).toContain('Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active.');expect(dashboard).not.toMatch(/href=[^\n]*(?:activate|cancel)/);expect(source).not.toMatch(/localStorage|sessionStorage|href=[^\n]*(?:activate|cancel|billing)|invokeLLM|providerClient/);
+  const source=readFileSync('src/components/owner-launch.tsx','utf8')+readFileSync('src/components/owner-launch-http.ts','utf8');expect(source).toContain('generation.current');expect(source).toContain('loadOwnerLaunchWithConfirmations');const dashboard=readFileSync('src/components/staff-dashboard.tsx','utf8');expect(dashboard).toContain('Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active.');expect(dashboard).not.toMatch(/href=[^\n]*(?:activate|cancel)/);expect(source).not.toMatch(/localStorage|sessionStorage|href=[^\n]*(?:activate|cancel|billing)|invokeLLM|providerClient/);
  });
 });

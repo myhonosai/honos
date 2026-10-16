@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { ownerLaunchRecord, verifyOwnerLaunchProjection, verifyOwnerLaunchSavedStudentsProjection, verifyRegisterStudentInput, verifyStudentRegistrationReceipt, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, verifyOwnerLaunchMembershipDraftConfirmation, type OwnerLaunchContext } from '@hon/contracts';
+import { ownerLaunchRecord, verifyOwnerLaunchProjection, verifyOwnerLaunchSavedStudentsProjection, verifyRegisterStudentInput, verifyStudentRegistrationReceipt, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, verifyOwnerLaunchMembershipDraftConfirmation, verifyOwnerLaunchFirstClassBookingContext, type OwnerLaunchContext } from '@hon/contracts';
 import { assertOwnerLaunchHuman, assertGuardianChildDistinct } from '@hon/domain';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 @Injectable()
@@ -22,6 +22,14 @@ export class OwnerLaunchService {
   async readSavedStudents(context: OwnerLaunchContext) {
     this.human(context);
     try { return verifyOwnerLaunchSavedStudentsProjection(await this.database.readOwnerLaunchSavedStudents(context)); } catch (error) { return this.failure(error); }
+  }
+  async readFirstClassBookingContext(context: OwnerLaunchContext) {
+    this.human(context);
+    try { return verifyOwnerLaunchFirstClassBookingContext(await this.database.readOwnerLaunchFirstClassBookingContext(context)); }
+    catch(error) {
+      if ((error as {code?:string}).code === '42501') throw new ForbiddenException({code:'BOOKING_FORBIDDEN',detail:'Current direct-human owner-launch, booking and applicable family authority with an active tier are required. Clear saved booking context.'});
+      throw new ServiceUnavailableException({code:'BOOKING_UNAVAILABLE',detail:'Current receipt-linked booking confirmation is unavailable. No attendance, membership, payment, eligibility, parent access or communication is claimed.'});
+    }
   }
   async readMembershipDraft(context: OwnerLaunchContext) {
     this.human(context);

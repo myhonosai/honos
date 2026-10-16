@@ -1,4 +1,4 @@
-import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, verifyOwnerLaunchMembershipDraftConfirmation, type OwnerLaunchProjection, type RegisterStudentInput, type BookOwnerLaunchFirstClassInput } from '@hon/contracts';
+import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, verifyOwnerLaunchMembershipDraftConfirmation, verifyOwnerLaunchFirstClassBookingContext, type OwnerLaunchProjection, type RegisterStudentInput, type BookOwnerLaunchFirstClassInput } from '@hon/contracts';
 export class OwnerLaunchAccessError extends Error { constructor(message:string,readonly status:number) { super(message); } }
 export function ownerLaunchPath(context: Pick<OwnerLaunchProjection,'organizationId'|'schoolId'>, operation: 'program'|'class'|'student'|'guardian-child'): string {
   const suffix={program:'programs',class:'schedule/sessions',student:'student-registrations','guardian-child':'guardian-child-registrations'}[operation];
@@ -94,4 +94,26 @@ export async function loadOwnerLaunchWithDraft() {
   const saved=context.guardianChildRegistration??context.registration;
   if(confirmation.receipt && confirmation.receipt.registrationId!==saved?.registrationId) throw new Error('DRAFT confirmation unavailable: saved receipt context changed. Reload before continuing.');
   return {context,confirmation};
+}
+
+/** Fixed GET only: no IDs, query, body, retry key or human-command marker. */
+export async function loadOwnerLaunchFirstClassBookingContext() {
+  try {
+    const envelope=await request('/api/v1/owner-launch/first-class-booking-context',{method:'GET',headers:{Accept:'application/json'}});
+    ownerLaunchRecord(envelope,['data']);
+    return verifyOwnerLaunchFirstClassBookingContext(envelope.data);
+  } catch(error) {
+    if(error instanceof OwnerLaunchAccessError) throw new OwnerLaunchAccessError([401,403].includes(error.status)?'Current human school/booking authority is unavailable. Saved booking context was cleared.':'Booking confirmation unavailable. No attendance, membership, payment, eligibility, parent access or communication is claimed.',error.status);
+    throw new Error('Unverified booking confirmation. No current saved booking context can be shown.');
+  }
+}
+
+/** Independent confirmations are bound to the verified saved receipt, never UI selectors. */
+export async function loadOwnerLaunchWithConfirmations() {
+  const {context,confirmation}=await loadOwnerLaunchWithDraft();
+  const bookingConfirmation=await loadOwnerLaunchFirstClassBookingContext();
+  const saved=context.guardianChildRegistration??context.registration;
+  const booking=bookingConfirmation.context;
+  if(booking && (!saved || booking.registrationId!==saved.registrationId || booking.student.studentProfileId!==saved.studentProfileId || booking.classSession.id!==saved.classSessionId || booking.classSession.id!==context.classSession?.id)) throw new Error('Booking confirmation unavailable: saved receipt context changed. Reload before continuing.');
+  return {context,confirmation,bookingConfirmation};
 }

@@ -1027,11 +1027,11 @@ DO $$ DECLARE t text; r text; a record; f text; BEGIN
    END LOOP;
   END LOOP;
  END LOOP;
- FOREACH f IN ARRAY ARRAY['guard_enrollment_program_identity()','resolve_owner_launch_scope(text)','require_owner_launch_actor(text)','lock_owner_launch_actor(text)','register_owner_launch_student(text,jsonb,text,uuid,uuid)','read_owner_launch(text)','read_owner_launch_saved_students(text)','require_owner_launch_family_actor(text)','register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)','book_owner_launch_first_class(text,jsonb,text,uuid,uuid)','draft_owner_launch_membership(text,jsonb,text,uuid,uuid)','read_owner_launch_membership_draft(text)'] LOOP
+ FOREACH f IN ARRAY ARRAY['guard_enrollment_program_identity()','resolve_owner_launch_scope(text)','require_owner_launch_actor(text)','lock_owner_launch_actor(text)','register_owner_launch_student(text,jsonb,text,uuid,uuid)','read_owner_launch(text)','read_owner_launch_saved_students(text)','require_owner_launch_family_actor(text)','register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)','book_owner_launch_first_class(text,jsonb,text,uuid,uuid)','draft_owner_launch_membership(text,jsonb,text,uuid,uuid)','read_owner_launch_membership_draft(text)','read_owner_launch_first_class_booking_context(text)'] LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC',f);
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
    EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I',f,r);
   END LOOP;
  END LOOP;
- GRANT EXECUTE ON FUNCTION hon.resolve_owner_launch_scope(text),hon.register_owner_launch_student(text,jsonb,text,uuid,uuid),hon.read_owner_launch(text),hon.read_owner_launch_saved_students(text),hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid),hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid),hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid),hon.read_owner_launch_membership_draft(text) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.resolve_owner_launch_scope(text),hon.register_owner_launch_student(text,jsonb,text,uuid,uuid),hon.read_owner_launch(text),hon.read_owner_launch_saved_students(text),hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid),hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid),hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid),hon.read_owner_launch_membership_draft(text),hon.read_owner_launch_first_class_booking_context(text) TO hon_runtime;
 END $$;

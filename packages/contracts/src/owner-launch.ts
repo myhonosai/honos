@@ -195,3 +195,42 @@ export function verifyOwnerLaunchMembershipDraftReceipt(value: unknown, input?: 
   if (input && (verified.registrationId !== input.registrationId || verified.planCode !== input.planCode || verified.currency !== input.currency || Date.parse(verified.termStartedAt) !== Date.parse(input.termStartedAt) || Date.parse(verified.termEndsAt) !== Date.parse(input.termEndsAt))) invalid();
   return {registrationId:verified.registrationId,membershipId:ownerLaunchId(row.membershipId),state:'DRAFT',membershipVersion:version(row.membershipVersion),planCode:verified.planCode,termStartedAt:verified.termStartedAt,termEndsAt:verified.termEndsAt,currency:verified.currency,billingAccountCreated:row.billingAccountCreated,recordedAt};
 }
+
+/** Receipt-bound canonical confirmation only, never roster, attendance or commercial authority. */
+export interface OwnerLaunchFirstClassBookingContext {
+  registrationId: string;
+  student: { studentProfileId: string; displayName: string };
+  classSession: { id: string; name: string; startsAt: string; endsAt: string; status: LaunchClassReceipt['status']; capacity: number; bookingPolicy: 'WALK_IN' | 'OPTIONAL_BOOKING' | 'REQUIRED_BOOKING' };
+  booking: { id: string; bookingKind: 'REGULAR'; status: 'BOOKED' | 'WAITLISTED'; version: number; recordedAt: string };
+}
+export type OwnerLaunchFirstClassBookingContextProjection =
+  | { state: 'RECORDED_BOOKING'; context: OwnerLaunchFirstClassBookingContext }
+  | { state: 'NO_RECORDED_BOOKING' | 'BOOKING_UNAVAILABLE'; context: null };
+export function verifyOwnerLaunchFirstClassBookingContext(value: unknown): OwnerLaunchFirstClassBookingContextProjection {
+  const row = ownerLaunchRecord(value, ['state','context']);
+  if (row.state === 'NO_RECORDED_BOOKING' || row.state === 'BOOKING_UNAVAILABLE') {
+    if (row.context !== null) invalid();
+    return { state: row.state, context: null };
+  }
+  if (row.state !== 'RECORDED_BOOKING') invalid();
+  const context = ownerLaunchRecord(row.context, ['registrationId','student','classSession','booking']);
+  const student = ownerLaunchRecord(context.student, ['studentProfileId','displayName']);
+  const session = ownerLaunchRecord(context.classSession, ['id','name','startsAt','endsAt','status','capacity','bookingPolicy']);
+  const booking = ownerLaunchRecord(context.booking, ['id','bookingKind','status','version','recordedAt']);
+  const instant = (value: unknown): string => {
+    const time = text(value, 24);
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(time) || !Number.isFinite(Date.parse(time)) || new Date(time).toISOString() !== time) invalid();
+    return time;
+  };
+  const startsAt = instant(session.startsAt), endsAt = instant(session.endsAt);
+  if (Date.parse(endsAt) <= Date.parse(startsAt) || !['DRAFT','SCHEDULED','CANCELLED','COMPLETED'].includes(String(session.status))
+    || typeof session.capacity !== 'number' || !Number.isSafeInteger(session.capacity) || session.capacity < 1 || session.capacity > 1000
+    || !['WALK_IN','OPTIONAL_BOOKING','REQUIRED_BOOKING'].includes(String(session.bookingPolicy))
+    || booking.bookingKind !== 'REGULAR' || !['BOOKED','WAITLISTED'].includes(String(booking.status))) invalid();
+  return { state: 'RECORDED_BOOKING', context: {
+    registrationId: ownerLaunchId(context.registrationId),
+    student: { studentProfileId: ownerLaunchId(student.studentProfileId), displayName: text(student.displayName, 160) },
+    classSession: { id: ownerLaunchId(session.id), name: text(session.name, 160), startsAt, endsAt, status: session.status as LaunchClassReceipt['status'], capacity: session.capacity, bookingPolicy: session.bookingPolicy as OwnerLaunchFirstClassBookingContext['classSession']['bookingPolicy'] },
+    booking: { id: ownerLaunchId(booking.id), bookingKind: 'REGULAR', status: booking.status as 'BOOKED' | 'WAITLISTED', version: version(booking.version), recordedAt: instant(booking.recordedAt) },
+  } };
+}

@@ -25,6 +25,13 @@ export class OwnerLaunchController {
     response.setHeader('Cache-Control','private, no-store');
     return {data:await this.launch.readSavedStudents(await this.context(request))};
   }
+  @Get('owner-launch/first-class-booking-context')
+  @UseGuards(OwnerLaunchHumanUiGuard)
+  async firstClassBookingContext(@Req() request: HonRequest, @Res({passthrough:true}) response: Response) {
+    response.setHeader('Cache-Control','private, no-store');
+    if ((request.body !== undefined && request.body !== null) || ['x-hon-human-command','idempotency-key','x-hon-source','x-hon-action-request-id','x-hon-delegated-by-principal-id'].some(header=>request.headers[header] !== undefined)) throw new BadRequestException('This fixed read accepts no input or command marker.');
+    return {data:await this.launch.readFirstClassBookingContext(await this.context(request))};
+  }
   @Get('owner-launch/membership-draft')
   @UseGuards(OwnerLaunchHumanUiGuard)
   async membershipDraft(@Req() request: HonRequest, @Res({passthrough:true}) response: Response) {
