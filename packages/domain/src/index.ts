@@ -12,6 +12,7 @@ export * from './usage-economics.js';
 export * from './work-item-state.js';
 export * from './ai-provider-validation.js';
 export * from './ai-provider-router.js';
+export * from './ai-model-evaluation.js';
 
 export interface AuthorityPolicySources {
   platform: ActionAuthorityMode;

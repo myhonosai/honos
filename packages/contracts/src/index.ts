@@ -9,6 +9,7 @@ export * from './ai-invocation-plan.js';
 export * from './curriculum-progress.js';
 export * from './lead-import.js';
 export * from './ai-provider.js';
+export * from './ai-model-evaluation.js';
 export * from './parent-billing-view.js';
 export * from './parent-testing-status.js';
 export * from './parent-planned-absence-history.js';

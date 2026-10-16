@@ -31,6 +31,7 @@
     "db:test-ai-usage": "pnpm --filter @hon/database db:test-ai-usage",
     "db:test-ai-team": "pnpm --filter @hon/database db:test-ai-team",
     "db:test-ai-providers": "pnpm --filter @hon/database db:test-ai-providers",
+    "test:ai-model-evaluation": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/domain exec vitest run test/ai-model-evaluation.test.ts",
     "db:test-operations-report": "pnpm --filter @hon/database db:test-operations-report",
     "db:test-operations-summary": "pnpm --filter @hon/database db:test-operations-summary",
     "db:test-command-center": "pnpm --filter @hon/database db:test-command-center",

@@ -1,7 +1,7 @@
 import type { HonTier, TenantScope } from './index.js';
 
 /** Code-owned adapter registry; adding a provider requires a reviewed code change. */
-export const AI_PROVIDER_IDS = ['OPENROUTER', 'DIRECT_LLM_API', 'HEYGEN', 'HIGGSFIELD'] as const;
+export const AI_PROVIDER_IDS = Object.freeze(['OPENROUTER', 'DIRECT_LLM_API', 'HEYGEN', 'HIGGSFIELD'] as const);
 export type AiProviderId = (typeof AI_PROVIDER_IDS)[number];
 export const AI_CONNECTION_STATES = ['DISABLED', 'CONFIGURED', 'HEALTHY', 'DEGRADED', 'UNAVAILABLE'] as const;
 export type AiConnectionState = (typeof AI_CONNECTION_STATES)[number];
