@@ -6,7 +6,7 @@ import { OwnerLaunch } from '../src/components/owner-launch';
 import { loadOwnerLaunch,ownerLaunchPath,postOwnerLaunch } from '../src/components/owner-launch-http';
 import type { OwnerLaunchProjection } from '@hon/contracts';
 const id=(n:string)=>`${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
-const projection:OwnerLaunchProjection={organizationId:id('1'),schoolId:id('2'),schoolName:'Local',tier:'ESSENTIAL',program:{id:id('3'),version:1,status:'DRAFT'},classSession:{id:id('4'),programId:id('3'),version:1,status:'SCHEDULED'},registration:null};
+const projection:OwnerLaunchProjection={organizationId:id('1'),schoolId:id('2'),schoolName:'Local',tier:'ESSENTIAL',program:{id:id('3'),version:1,status:'DRAFT'},classSession:{id:id('4'),programId:id('3'),version:1,status:'SCHEDULED'},registration:null,guardianChildRegistration:null};
 const input={programId:id('3'),expectedProgramVersion:1,classSessionId:id('4'),expectedClassSessionVersion:1,givenName:'Adult',familyName:'Student',birthDate:'1990-02-03',attestation:'NEW_ADULT_NO_GUARDIAN_REQUIRED'};
 const receipt={registrationId:id('5'),studentProfileId:id('6'),enrollmentId:id('7'),programId:id('3'),classSessionId:id('4'),status:'REGISTERED_NO_BOOKING',createdAt:'2026-10-16T00:00:00.000Z'};
 const response=(data:unknown)=>({ok:true,status:200,json:async()=>({data})}) as Response;

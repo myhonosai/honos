@@ -8,6 +8,7 @@ import net from 'node:net';
 import http from 'node:http';
 import https from 'node:https';
 import { ownerLaunchTables, ownerLaunchFunctions, verifyOwnerLaunchSecurity } from './owner-launch-security.mjs';
+import { proveOwnerLaunchGuardianChild } from './owner-launch-guardian-child-proof.mjs';
 const { RuntimeDatabaseService }=await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 const { OwnerLaunchService }=await import('../../../apps/api/dist/owner-launch/owner-launch.service.js');
 const { ProgramService }=await import('../../../apps/api/dist/programs/program.service.js');
@@ -28,7 +29,7 @@ const status=n=>e=>e?.getStatus?.()===n,check=()=>groups++;
 async function snapshot(){const result={};for(const table of tables){assert(/^[a-z_]+$/.test(table));result[table]=(await owner.query(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text,E'\n' ORDER BY to_jsonb(t)::text),'')) hash FROM hon.${table} t`)).rows[0].hash;}return result;}
 async function checked(work,allowed=[]){const before=await snapshot();try{const result=await work();operations++;const after=await snapshot();for(const table of tables)if(!allowed.includes(table))assert.equal(after[table],before[table],'Unexpected write: '+table);return result;}catch(error){assert.deepEqual(await snapshot(),before,'Denied command wrote data');throw error;}}
 async function raw(c,sql,args){await runtime.query('BEGIN');try{await runtime.query("SELECT set_config('app.hon_organization_id',$1,true),set_config('app.hon_school_id',$2,true),set_config('app.hon_principal_id',$3,true),set_config('app.hon_principal_type',$4,true),set_config('app.hon_source',$5,true),set_config('app.hon_external_subject',$6,true),set_config('app.hon_action_request_id',$7,true),set_config('app.hon_delegated_by_principal_id',$8,true),set_config('app.hon_request_id',$9,true)",[c.organizationId,c.schoolId,c.principalId,c.principalType,c.source,c.externalSubject,c.actionRequestId??'',c.delegatedByPrincipalId??'',c.requestId]);return await runtime.query(sql,args);}finally{await runtime.query('ROLLBACK');}}
-const registrationEffects=['people','student_profiles','student_curriculum_enrollments',...ownerLaunchTables,'audit_events'];
+const registrationEffects=['people','student_profiles','student_curriculum_enrollments','student_registration_receipts','student_registration_outbox','audit_events'];
 const input=(patch={})=>({programId:program.id,expectedProgramVersion:program.version,classSessionId:classSession.id,expectedClassSessionVersion:classSession.version,givenName:'Private adult '+randomUUID(),familyName:'PII_CANARY_FAMILY',birthDate:'1990-02-03',attestation:'NEW_ADULT_NO_GUARDIAN_REQUIRED',...patch});
 const register=(value,c=context())=>checked(()=>service.register(c,value),registrationEffects);
 async function drift(sql){await owner.query('BEGIN');try{await owner.query(sql);await assert.rejects(()=>verifyOwnerLaunchSecurity(owner,'hon_owner_launch_runtime'));driftProbes++;}finally{await owner.query('ROLLBACK');}}
@@ -95,6 +96,7 @@ try {
  // FKs and immutable canonical program linkage reject mixed school/program relations.
  await owner.query('BEGIN');try{await assert.rejects(()=>owner.query('UPDATE hon.student_curriculum_enrollments SET program_id=$2 WHERE id=$1',[registered.receipt.enrollmentId,randomUUID()]),e=>e.code==='42501');}finally{await owner.query('ROLLBACK');}check();
  for(const table of ownerLaunchTables){await owner.query('BEGIN');try{await owner.query(`GRANT SELECT ON hon.${table} TO hon_owner_launch_runtime; SET LOCAL ROLE hon_owner_launch_runtime`);assert.deepEqual((await owner.query(`SELECT * FROM hon.${table}`)).rows,[]);}finally{await owner.query('ROLLBACK');}}check();
+ groups+=await proveOwnerLaunchGuardianChild({owner,runtime,database,service,programs,classes,scope,other,context,checked,raw,drift,ids,program,classSession,ownerRoleId:a.ownerRoleId});
  assert.equal((await runtime.query("SELECT nullif(current_setting('app.hon_school_id',true),'') context")).rows[0].context,null);assert.equal(externalCalls,0);
  console.log(`Owner launch proof passed: ${groups} assertion groups, ${operations} whole-table checked operations, ${driftProbes} rollback-only ACL/RLS probes, ${tables.length} HON table snapshots, zero external calls. Fixture remains marked localhost-only for regression checks.`);
 } finally {await database.onModuleDestroy();await runtime.end();await owner.end();net.Socket.prototype.connect=connect;}

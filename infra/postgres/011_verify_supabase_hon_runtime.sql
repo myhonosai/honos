@@ -2095,7 +2095,7 @@ END $$;
 
 -- Owner launch exact verification:
 DO $$ DECLARE t text; f record; b boolean; trigger_name text; trigger_type integer; BEGIN
- FOREACH t IN ARRAY ARRAY['student_registration_receipts','student_registration_outbox'] LOOP
+ FOREACH t IN ARRAY ARRAY['student_registration_receipts','student_registration_outbox','guardian_child_registration_receipts','guardian_child_registration_outbox'] LOOP
   SELECT c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
    AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
@@ -2109,7 +2109,7 @@ DO $$ DECLARE t text; f record; b boolean; trigger_name text; trigger_type integ
  FOR f IN SELECT * FROM (VALUES
   ('hon.guard_enrollment_program_identity()',false,false),('hon.resolve_owner_launch_scope(text)',true,true),
   ('hon.require_owner_launch_actor(text)',false,true),('hon.lock_owner_launch_actor(text)',false,true),
-  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true)
+  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true),('hon.require_owner_launch_family_actor(text)',false,true),('hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)',true,true)
  ) v(signature,can_execute,is_definer) LOOP
   SELECT p.prosecdef=f.is_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
    AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
@@ -2128,13 +2128,21 @@ DO $$ DECLARE f record; expected record; BEGIN
  FOR f IN SELECT * FROM (VALUES
  ('student_registration_receipts','registration_enrollment_relation_fk','FOREIGN KEY (enrollment_id, student_profile_id, program_id, organization_id, school_id) REFERENCES hon.student_curriculum_enrollments(id, student_profile_id, program_id, organization_id, school_id)'),
  ('student_registration_receipts','registration_class_program_fk','FOREIGN KEY (class_session_id, program_id, organization_id, school_id) REFERENCES hon.class_sessions(id, program_id, organization_id, school_id)'),
- ('student_registration_outbox','registration_outbox_scope_fk','FOREIGN KEY (registration_id, organization_id, school_id) REFERENCES hon.student_registration_receipts(id, organization_id, school_id)')
+ ('student_registration_outbox','registration_outbox_scope_fk','FOREIGN KEY (registration_id, organization_id, school_id) REFERENCES hon.student_registration_receipts(id, organization_id, school_id)'),
+ ('guardian_child_registration_receipts','child_registration_guardian_fk','FOREIGN KEY (guardian_member_id, family_id, guardian_person_id, guardian_role, organization_id, school_id) REFERENCES hon.family_members(id, family_id, person_id, member_role, organization_id, school_id)'),
+ ('guardian_child_registration_receipts','child_registration_child_fk','FOREIGN KEY (child_member_id, family_id, child_person_id, child_role, organization_id, school_id) REFERENCES hon.family_members(id, family_id, person_id, member_role, organization_id, school_id)'),
+ ('guardian_child_registration_receipts','child_registration_student_family_fk','FOREIGN KEY (student_profile_id, child_person_id, family_id, organization_id, school_id) REFERENCES hon.student_profiles(id, person_id, primary_family_id, organization_id, school_id)'),
+ ('guardian_child_registration_receipts','child_registration_enrollment_fk','FOREIGN KEY (enrollment_id, student_profile_id, program_id, organization_id, school_id) REFERENCES hon.student_curriculum_enrollments(id, student_profile_id, program_id, organization_id, school_id)'),
+ ('guardian_child_registration_receipts','child_registration_class_fk','FOREIGN KEY (class_session_id, program_id, organization_id, school_id) REFERENCES hon.class_sessions(id, program_id, organization_id, school_id)'),
+ ('guardian_child_registration_outbox','child_registration_outbox_scope_fk','FOREIGN KEY (registration_id, organization_id, school_id) REFERENCES hon.guardian_child_registration_receipts(id, organization_id, school_id)')
  ) v(tbl,name,definition) LOOP
   IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',f.tbl)::regclass AND conname=f.name AND contype='f' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)=f.definition) THEN RAISE EXCEPTION 'Unsafe registration relation %.%',f.tbl,f.name; END IF;
  END LOOP;
  FOR expected IN SELECT * FROM (VALUES
  ('student_registration_receipts',ARRAY['id','organization_id','school_id','actor_principal_id','student_profile_id','enrollment_id','program_id','class_session_id','idempotency_digest','fingerprint','receipt','created_at']::text[]),
- ('student_registration_outbox',ARRAY['registration_id','organization_id','school_id','event_code','state']::text[])
+ ('student_registration_outbox',ARRAY['registration_id','organization_id','school_id','event_code','state']::text[]),
+ ('guardian_child_registration_receipts',ARRAY['id','organization_id','school_id','actor_principal_id','family_id','guardian_person_id','child_person_id','guardian_member_id','child_member_id','guardian_role','child_role','student_profile_id','enrollment_id','program_id','class_session_id','idempotency_digest','fingerprint','receipt','created_at']::text[]),
+ ('guardian_child_registration_outbox',ARRAY['registration_id','organization_id','school_id','event_code','state']::text[])
  ) v(tbl,cols) LOOP
   IF (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid=format('hon.%I',expected.tbl)::regclass AND attnum>0 AND NOT attisdropped) IS DISTINCT FROM expected.cols
    OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=format('hon.%I',expected.tbl)::regclass AND attnum>0 AND NOT attisdropped AND NOT attnotnull) THEN RAISE EXCEPTION 'Unsafe registration columns %',expected.tbl; END IF;
@@ -2142,5 +2150,19 @@ DO $$ DECLARE f record; expected record; BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_index WHERE indexrelid='hon.enrollment_student_program_unique'::regclass AND indisunique AND indisvalid AND pg_get_expr(indpred,indrelid)='(program_id IS NOT NULL)')
   OR has_column_privilege('hon_runtime','hon.student_curriculum_enrollments','program_id','UPDATE')
   OR has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT') THEN RAISE EXCEPTION 'Unsafe program enrollment command boundary'; END IF;
+END $$;
+DO $$ DECLARE f record; BEGIN
+ FOR f IN SELECT * FROM (VALUES
+ ('guardian_child_registration_outbox',$def$CHECK ((state = 'INERT'::text))$def$),
+ ('guardian_child_registration_outbox',$def$CHECK ((event_code = 'student.guardian_child_registered.v1'::text))$def$),
+ ('guardian_child_registration_receipts',$def$CHECK ((guardian_role = 'GUARDIAN'::hon.family_member_role))$def$),
+ ('guardian_child_registration_receipts',$def$CHECK ((child_role = 'STUDENT'::hon.family_member_role))$def$),
+ ('guardian_child_registration_receipts','CHECK (((guardian_person_id <> child_person_id) AND (guardian_member_id <> child_member_id)))'),
+ ('guardian_child_registration_receipts','CHECK ((octet_length(idempotency_digest) = 32))'),
+ ('guardian_child_registration_receipts','CHECK ((octet_length(fingerprint) = 32))')
+ ) v(tbl,definition) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',f.tbl)::regclass AND contype='c' AND convalidated AND pg_get_constraintdef(oid)=f.definition) THEN RAISE EXCEPTION 'Unsafe child registration invariant %',f.tbl; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.guardian_child_registration_receipts'::regclass AND contype='u' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_digest)') THEN RAISE EXCEPTION 'Child registration scoped replay key required'; END IF;
 END $$;
 -- End owner launch exact verification.

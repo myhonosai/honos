@@ -1015,7 +1015,7 @@ END $$;
 
 -- Owner launch exact grant reconciliation (no raw table or column grants).
 DO $$ DECLARE t text; r text; a record; f text; BEGIN
- FOREACH t IN ARRAY ARRAY['student_registration_receipts','student_registration_outbox'] LOOP
+ FOREACH t IN ARRAY ARRAY['student_registration_receipts','student_registration_outbox','guardian_child_registration_receipts','guardian_child_registration_outbox'] LOOP
   EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
@@ -1027,11 +1027,11 @@ DO $$ DECLARE t text; r text; a record; f text; BEGIN
    END LOOP;
   END LOOP;
  END LOOP;
- FOREACH f IN ARRAY ARRAY['guard_enrollment_program_identity()','resolve_owner_launch_scope(text)','require_owner_launch_actor(text)','lock_owner_launch_actor(text)','register_owner_launch_student(text,jsonb,text,uuid,uuid)','read_owner_launch(text)'] LOOP
+ FOREACH f IN ARRAY ARRAY['guard_enrollment_program_identity()','resolve_owner_launch_scope(text)','require_owner_launch_actor(text)','lock_owner_launch_actor(text)','register_owner_launch_student(text,jsonb,text,uuid,uuid)','read_owner_launch(text)','require_owner_launch_family_actor(text)','register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)'] LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC',f);
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
    EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I',f,r);
   END LOOP;
  END LOOP;
- GRANT EXECUTE ON FUNCTION hon.resolve_owner_launch_scope(text),hon.register_owner_launch_student(text,jsonb,text,uuid,uuid),hon.read_owner_launch(text) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.resolve_owner_launch_scope(text),hon.register_owner_launch_student(text,jsonb,text,uuid,uuid),hon.read_owner_launch(text),hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid) TO hon_runtime;
 END $$;

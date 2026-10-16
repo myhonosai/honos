@@ -12,7 +12,7 @@ export interface LaunchProgramReceipt { id: string; version: number; status: 'DR
 export interface LaunchClassReceipt extends LaunchProgramReceipt { programId: string; }
 export interface OwnerLaunchProjection {
   organizationId: string; schoolId: string; schoolName: string; tier: HonTier;
-  program: LaunchProgramReceipt | null; classSession: LaunchClassReceipt | null; registration: StudentRegistrationReceipt | null;
+  program: LaunchProgramReceipt | null; classSession: LaunchClassReceipt | null; registration: StudentRegistrationReceipt | null; guardianChildRegistration: GuardianChildRegistrationReceipt | null;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function invalid(): never { throw new Error('Unverified owner launch data.'); }
@@ -51,12 +51,42 @@ export function verifyLaunchClassReceipt(value: unknown): LaunchClassReceipt {
   return { ...verifyLaunchProgramReceipt({id:row.id,version:row.version,status:row.status}), programId: ownerLaunchId(row.programId) };
 }
 export function verifyOwnerLaunchProjection(value: unknown): OwnerLaunchProjection {
-  const row = ownerLaunchRecord(value, ['organizationId','schoolId','schoolName','tier','program','classSession','registration']);
+  const row = ownerLaunchRecord(value, ['organizationId','schoolId','schoolName','tier','program','classSession','registration','guardianChildRegistration']);
   if (!['ESSENTIAL','CORE','COMPLETE'].includes(String(row.tier))) invalid();
   const program = row.program === null ? null : verifyLaunchProgramReceipt(row.program);
   const classSession = row.classSession === null ? null : verifyLaunchClassReceipt(row.classSession);
   if (classSession && (!program || classSession.programId !== program.id)) invalid();
   const registration = row.registration === null ? null : verifyStudentRegistrationReceipt(row.registration);
   if (registration && (!program || !classSession || registration.programId !== program.id || registration.classSessionId !== classSession.id)) invalid();
-  return { organizationId: ownerLaunchId(row.organizationId), schoolId: ownerLaunchId(row.schoolId), schoolName: text(row.schoolName,160), tier: row.tier as HonTier, program, classSession, registration };
+  const guardianChildRegistration = row.guardianChildRegistration === null ? null : verifyGuardianChildRegistrationReceipt(row.guardianChildRegistration);
+  if (guardianChildRegistration && (!program || !classSession || guardianChildRegistration.programId !== program.id || guardianChildRegistration.classSessionId !== classSession.id)) invalid();
+  return { organizationId: ownerLaunchId(row.organizationId), schoolId: ownerLaunchId(row.schoolId), schoolName: text(row.schoolName,160), tier: row.tier as HonTier, program, classSession, registration, guardianChildRegistration };
+}
+
+/** Exactly one newly attested pair, not existing-identity/family linking or login. */
+export interface RegisterGuardianChildInput {
+  programId: string; expectedProgramVersion: number; classSessionId: string; expectedClassSessionVersion: number;
+  guardianGivenName: string; guardianFamilyName: string; guardianBirthDate: string;
+  childGivenName: string; childFamilyName: string; childBirthDate: string;
+  attestation: 'NEW_CHILD_WITH_NEW_GUARDIAN';
+}
+export interface GuardianChildRegistrationReceipt extends StudentRegistrationReceipt {
+  familyId: string; registrationKind: 'NEW_CHILD_WITH_NEW_GUARDIAN';
+}
+function launchBirthDate(value: unknown): string {
+  const date = text(value,10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date) invalid();
+  return date;
+}
+export function verifyRegisterGuardianChildInput(value: unknown): RegisterGuardianChildInput {
+  const row=ownerLaunchRecord(value,['programId','expectedProgramVersion','classSessionId','expectedClassSessionVersion','guardianGivenName','guardianFamilyName','guardianBirthDate','childGivenName','childFamilyName','childBirthDate','attestation']);
+  if(row.attestation!=='NEW_CHILD_WITH_NEW_GUARDIAN') invalid();
+  const names = ['guardianGivenName','guardianFamilyName','childGivenName','childFamilyName'].map(key=>text(row[key],100));
+  if(names.some(name=>!/[\p{L}\p{N}]/u.test(name))) invalid();
+  return {programId:ownerLaunchId(row.programId),expectedProgramVersion:version(row.expectedProgramVersion),classSessionId:ownerLaunchId(row.classSessionId),expectedClassSessionVersion:version(row.expectedClassSessionVersion),guardianGivenName:names[0]!,guardianFamilyName:names[1]!,guardianBirthDate:launchBirthDate(row.guardianBirthDate),childGivenName:names[2]!,childFamilyName:names[3]!,childBirthDate:launchBirthDate(row.childBirthDate),attestation:'NEW_CHILD_WITH_NEW_GUARDIAN'};
+}
+export function verifyGuardianChildRegistrationReceipt(value: unknown, input?: Pick<RegisterGuardianChildInput,'programId'|'classSessionId'>): GuardianChildRegistrationReceipt {
+  const row=ownerLaunchRecord(value,['registrationId','studentProfileId','enrollmentId','programId','classSessionId','familyId','registrationKind','status','createdAt']);
+  if(row.registrationKind!=='NEW_CHILD_WITH_NEW_GUARDIAN') invalid();
+  return {...verifyStudentRegistrationReceipt({registrationId:row.registrationId,studentProfileId:row.studentProfileId,enrollmentId:row.enrollmentId,programId:row.programId,classSessionId:row.classSessionId,status:row.status,createdAt:row.createdAt},input),familyId:ownerLaunchId(row.familyId),registrationKind:'NEW_CHILD_WITH_NEW_GUARDIAN'};
 }
