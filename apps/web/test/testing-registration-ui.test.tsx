@@ -40,11 +40,12 @@ describe('human testing registration UI', () => {
     const failed = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 403 } as Response);
     try { await expect(loadParentTestingRegistrations()).rejects.toBeInstanceOf(TestingRegistrationAccessError); } finally { failed.mockRestore(); }
   });
-  it('auth-protects both pages and keeps the parent status display redacted from staff review detail', () => {
-    const parentRoute = readFileSync('src/app/parent/testing/page.tsx', 'utf8'), staffRoute = readFileSync('src/app/staff/testing/registrations/page.tsx', 'utf8');
-    for (const route of [parentRoute, staffRoute]) for (const token of ['verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false']) expect(route).toContain(token);
+  it('auth-protects the status, interest and staff pages while keeping the parent status display redacted from staff review detail', () => {
+    const parentRoute = readFileSync('src/app/parent/testing/page.tsx', 'utf8'), interestRoute = readFileSync('src/app/parent/testing/interest/page.tsx', 'utf8'), staffRoute = readFileSync('src/app/staff/testing/registrations/page.tsx', 'utf8');
+    for (const route of [parentRoute, interestRoute, staffRoute]) for (const token of ['verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false']) expect(route).toContain(token);
+    expect(interestRoute).toContain('ParentTestingRegistration');
     const component = readFileSync('src/components/parent-testing-registration.tsx', 'utf8'), http = readFileSync('src/components/testing-registration-http.ts', 'utf8');
     expect(component).not.toMatch(/\.parentNote|\.reviewer|candidateId|familyId|principalId/); expect(http).not.toMatch(/fetch\(['"]https?:\/\/|invokeLLM|executeAction|sendMessage|checkout|payment/i);
-    const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')); expect(manifest.routes.filter((r: { path: string }) => r.path === '/parent/testing')).toHaveLength(1); expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/testing/registrations')).toHaveLength(1);
+    const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')); expect(manifest.routes.filter((r: { path: string }) => r.path === '/parent/testing')).toHaveLength(1); expect(manifest.routes.filter((r: { path: string }) => r.path === '/parent/testing/interest')).toHaveLength(1); expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/testing/registrations')).toHaveLength(1);
   });
 });

@@ -177,6 +177,10 @@
       "title": "HON | Family testing status"
     },
     {
+      "path": "/parent/testing/interest",
+      "title": "HON | Family testing interest"
+    },
+    {
       "path": "/staff/testing/registrations",
       "title": "HON | Human testing registration reviews"
     },

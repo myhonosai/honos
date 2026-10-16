@@ -34,7 +34,7 @@ No schema/function/controller/UI path creates or updates `testing_candidates`, p
 
 ## UI and validation
 
-- `/parent/testing` is an authenticated no-index family surface. It clears previous view state while revalidating and on visibility loss; no event/child is fabricated. The parent sees its own redacted status, never staff review content.
+- `/parent/testing` is an authenticated no-index **status-only** family surface. It clears previous view state while revalidating and on visibility loss; no event/child is fabricated. After that independent status read succeeds, it may link to the separately authenticated no-index `/parent/testing/interest` route. That route re-verifies its own fixed parent registration scope before it displays a returned child/open-event selector or submits a direct human request; status data is never reused as write authority.
 - `/staff/testing/registrations` is an authenticated no-index conventional queue. It exposes only explicit human **Accept interest**, **Waitlist interest**, and **Decline interest** controls for `SUBMITTED` rows.
 - Run `pnpm check`, `pnpm test`, `pnpm db:check`, `pnpm build`, and `git diff --check` at the repository root. The local migration compile proof must recreate only a disposable localhost database and run all migrations; never point this foundation’s tests or setup at Supabase/production.
 
