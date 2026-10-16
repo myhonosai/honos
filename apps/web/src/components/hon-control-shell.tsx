@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { DEFAULT_HON_INTERFACE_THEME, HON_INTERFACE_THEMES, honTokens, type HonInterfaceTheme } from '@hon/design-system';
+import { InterfaceThemePicker } from './interface-theme-picker';
 
 const navigation = [
   ['Today', 'Your day at a glance'],
@@ -45,18 +46,6 @@ const aiTeam = [
   ['Lena', 'Creative & Commerce Manager', 'Imagination', 'READY', 'L'],
 ] as const;
 
-function ThemePicker({ current, onChange }: { current: HonInterfaceTheme; onChange: (theme: HonInterfaceTheme) => void }): React.ReactElement {
-  return (
-    <div className="view-picker" aria-label="Select HON interface theme" role="group">
-      {HON_INTERFACE_THEMES.map((theme) => (
-        <button key={theme.id} type="button" className={current === theme.id ? 'selected' : ''} aria-pressed={current === theme.id} onClick={() => onChange(theme.id)}>
-          <strong>{theme.label}</strong><span>{theme.detail}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function Rail(): React.ReactElement {
   return (
     <aside className="side-rail" aria-label="HON operational navigation">
@@ -73,7 +62,7 @@ function ViewHeader({ theme, onChange }: { theme: HonInterfaceTheme; onChange: (
   return (
     <header className="topbar">
       <div><p className="eyebrow">HON / FOUNDATION</p><h1>One operating system.<br />Your preferred way to work.</h1></div>
-      <div className="topbar-actions"><span className="tier-chip">PRESENTATION MODE</span><ThemePicker current={theme} onChange={onChange} /><small className="theme-explainer">{selected?.recommendedFor} · the same scoped data, permissions, and actions in every theme.</small></div>
+      <div className="topbar-actions"><span className="tier-chip">PRESENTATION MODE</span><InterfaceThemePicker current={theme} onChange={onChange} /><small className="theme-explainer">{selected?.recommendedFor} · the same scoped data, permissions, and actions in every theme.</small></div>
     </header>
   );
 }

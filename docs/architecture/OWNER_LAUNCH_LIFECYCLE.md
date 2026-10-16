@@ -6,6 +6,14 @@ This is the conventional path from an already provisioned and authorized school-
 
 > The sole authority for school provisioning remains the separate HON HQ onboarding boundary. `/staff/launch` never creates an organization, school, login, HQ grant, staff account or cross-school access.
 
+### Delivered presentation-only interface preference
+
+After the existing verified owner-launch context read succeeds, `/staff/launch` presents the shared **Big-Button / Phone**, **Modern HON**, and **Classic CRM** interface cards. Their labels describe touch-first, balanced daily-work, and high-density keyboard-and-mouse interaction respectively. Selection is optional and can be changed later.
+
+This reuses the existing per-principal interface-theme preference contract and scoped `GET`/`PUT /organizations/:organizationId/schools/:schoolId/interface-theme` API. The saved value is scoped to the current authenticated principal plus its verified organization/school; it is never a tier, role, feature, permission, authority, entitlement, school-context, or data switch. The cards load only after the verified launch context provides that scope, disable while loading/saving, and state unavailable/error outcomes without claiming a save. The responsive shared picker retains semantic button labels, pressed state, keyboard operation, and a live status message.
+
+The three existing owner-launch commands and their fixed endpoint paths, bodies, direct-human markers, idempotency behavior, receipts and results are unchanged. The preference is sent only to the existing preference endpoint; no preference field enters a launch command, and no selector is added to a launch command. It has no provider, Action Engine, payment, membership, booking, attendance, communication, worker, or external effect. Focused preference API/UI regressions plus the complete web test, type-check, and build validation passed for this presentation-only delivery.
+
 ## Purpose and routes
 
 The authenticated, dynamic, no-index `/staff/launch` flow uses only fixed same-origin API paths, under `/api/v1`:

@@ -2,7 +2,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { OwnerLaunchProjection, OwnerLaunchFirstClassBookingReceipt, OwnerLaunchMembershipDraftConfirmationReceipt } from '@hon/contracts';
+import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { OwnerLaunchAccessError, postOwnerLaunch, postOwnerLaunchFirstClassBooking, postOwnerLaunchMembershipDraft, loadOwnerLaunchWithDraft } from './owner-launch-http';
+import { InterfaceThemePicker } from './interface-theme-picker';
+import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
 export function OwnerLaunch() {
   const [context,setContext]=useState<OwnerLaunchProjection|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('Load your verified school context to begin. HQ provisioning is separate.');
   const [programName,setProgramName]=useState(''),[className,setClassName]=useState(''),[startsAt,setStartsAt]=useState(''),[endsAt,setEndsAt]=useState(''),[capacity,setCapacity]=useState(10);
@@ -13,7 +16,11 @@ export function OwnerLaunch() {
   const [membershipDraft,setMembershipDraft]=useState<OwnerLaunchMembershipDraftConfirmationReceipt|null>(null);
   const [draftState,setDraftState]=useState<'NO_RECORDED_DRAFT'|'RECORDED_DRAFT'|'DRAFT_UNAVAILABLE'>('DRAFT_UNAVAILABLE');
   const [planCode,setPlanCode]=useState(''),[termStart,setTermStart]=useState(''),[termEnd,setTermEnd]=useState(''),[currency,setCurrency]=useState('');
+  const [interfaceTheme,setInterfaceTheme]=useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
+  const [interfaceThemeState,setInterfaceThemeState]=useState<'UNAVAILABLE'|'LOADING'|'READY'|'SAVING'|'ERROR'>('UNAVAILABLE');
+  const [interfaceThemeMessage,setInterfaceThemeMessage]=useState('Load verified school context to view or change your personal interface preference.');
   const generation=useRef(0);
+  const interfaceThemeGeneration=useRef(0);
   const retry=useRef<{operation:string;fingerprint:string;key:string}|null>(null);
   function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);setPlanCode('');setTermStart('');setTermEnd('');setCurrency('');setMembershipDraft(null);setDraftState('DRAFT_UNAVAILABLE');retry.current=null;}
   useEffect(()=>{
@@ -21,7 +28,34 @@ export function OwnerLaunch() {
     window.addEventListener('focus',stale);document.addEventListener('visibilitychange',stale);
     return ()=>{generation.current++;window.removeEventListener('focus',stale);document.removeEventListener('visibilitychange',stale);};
   },[]);
+  useEffect(()=>{
+    const organizationId=context?.organizationId,schoolId=context?.schoolId;
+    if(!organizationId||!schoolId){interfaceThemeGeneration.current++;setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME);setInterfaceThemeState('UNAVAILABLE');setInterfaceThemeMessage('Load verified school context to view or change your personal interface preference.');return;}
+    const current=++interfaceThemeGeneration.current;
+    setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME);setInterfaceThemeState('LOADING');setInterfaceThemeMessage('Loading your personal presentation preference…');
+    void loadInterfaceThemePreference({organizationId,schoolId}).then(preference=>{
+      if(current!==interfaceThemeGeneration.current)return;
+      setInterfaceTheme(preference.interfaceTheme);setInterfaceThemeState('READY');setInterfaceThemeMessage(preference.selectedVia==='DEFAULT'?'Modern HON is the default presentation. Choosing another mode is optional and can be changed later.':'Saved for your current user only. You can change this presentation preference later.');
+    }).catch(error=>{
+      if(current!==interfaceThemeGeneration.current)return;
+      setInterfaceThemeState('ERROR');setInterfaceThemeMessage(error instanceof Error?error.message:'The interface preference is unavailable. No presentation change is assumed.');
+    });
+    return ()=>{if(current===interfaceThemeGeneration.current)interfaceThemeGeneration.current++;};
+  },[context?.organizationId,context?.schoolId]);
   async function reload() {const current=++generation.current;setBusy(true);setContext(null);setBooking(null);setMembershipDraft(null);setDraftState('DRAFT_UNAVAILABLE');try {const loaded=await loadOwnerLaunchWithDraft();if(current!==generation.current)return;setContext(loaded.context);setMembershipDraft(loaded.confirmation.receipt);setDraftState(loaded.confirmation.state);setMessage('Saved creation receipts loaded. Membership confirmation is DRAFT only: saved configuration, NOT active or an agreement/payment/invoice/schedule/communication outcome.');}catch(error){if(current!==generation.current)return;setMessage(error instanceof Error?error.message:'School launch is unavailable.');if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status))clearPrivateInput();}finally{if(current===generation.current)setBusy(false);}}
+  async function chooseInterfaceTheme(next:HonInterfaceTheme) {
+    if(!context||interfaceThemeState!=='READY')return;
+    const current=++interfaceThemeGeneration.current;
+    setInterfaceThemeState('SAVING');setInterfaceThemeMessage('Saving your personal presentation preference…');
+    try {
+      const preference=await saveInterfaceThemePreference({organizationId:context.organizationId,schoolId:context.schoolId},next,crypto.randomUUID());
+      if(current!==interfaceThemeGeneration.current)return;
+      setInterfaceTheme(preference.interfaceTheme);setInterfaceThemeState('READY');setInterfaceThemeMessage('Saved for your current user only. You can change this presentation preference later.');
+    } catch(error) {
+      if(current!==interfaceThemeGeneration.current)return;
+      setInterfaceThemeState('ERROR');setInterfaceThemeMessage(error instanceof Error?error.message:'The interface preference is unavailable. No presentation change is assumed.');
+    }
+  }
   async function submit(operation:'program'|'class'|'student') {
     if (!context || busy) return;
     const current=++generation.current;
@@ -88,10 +122,11 @@ export function OwnerLaunch() {
   }
   const field={display:'grid',gap:6,marginBottom:12} as const;
   const saved=context?.guardianChildRegistration??context?.registration;
-  return <main style={{maxWidth:840,margin:'2rem auto',padding:24}}>
+  return <main className={`owner-launch owner-launch-${interfaceTheme}`} data-interface-theme={interfaceTheme} style={{maxWidth:840,margin:'2rem auto',padding:24}}>
     <h1>Owner launch</h1><p>School context → first program → first class → student registration → saved receipt</p>
     <p>Conventional human setup only. No directory search or cross-school selection. HQ provisioning and owner grants remain a separate controlled workflow.</p>
     <p>Choose a new adult without a guardian, or exactly one new child with one new adult guardian. A recorded family relationship is not parent login, parent access or family readiness.</p>
+    <section className="owner-launch-theme" aria-labelledby="owner-launch-interface-mode"><div><p className="owner-launch-theme-kicker">OPTIONAL PRESENTATION</p><h2 id="owner-launch-interface-mode">Choose your interface mode</h2><p>Big-Button / Phone favors large touch targets, Modern HON balances daily work, and Classic CRM favors dense keyboard-and-mouse controls.</p><p>This is a current-user presentation preference only. You can change it later; it never changes your school scope, tier, role, features, permissions, authority, data, or available launch actions.</p></div><InterfaceThemePicker current={interfaceTheme} onChange={theme=>void chooseInterfaceTheme(theme)} disabled={interfaceThemeState!=='READY'} busy={interfaceThemeState==='LOADING'||interfaceThemeState==='SAVING'} presentation="cards" ariaLabel="Optional interface mode for this owner launch" /><p className="owner-launch-theme-status" role="status" aria-live="polite">{interfaceThemeMessage}</p></section>
     <p role="status" aria-live="polite">{message}</p><button type="button" disabled={busy} onClick={()=>void reload()}>{busy?'Verifying…':'Load / refresh saved receipts'}</button>
     {context&&<>
       <section aria-label="Verified school context"><h2>1. Verified school context</h2><p>{context.schoolName} · {context.tier}</p><p>School receipt context: <code>{context.schoolId}</code></p></section>

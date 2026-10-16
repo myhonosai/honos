@@ -13,8 +13,8 @@ export const HON_INTERFACE_THEMES = [
   },
   {
     id: 'classic',
-    label: 'Classic / Agency Platform',
-    detail: 'Higher-density CRM and administrative workspace',
+    label: 'Classic CRM',
+    detail: 'Higher-density CRM controls for keyboard-and-mouse workflows',
     recommendedFor: 'experienced staff and power users',
   },
 ] as const;
