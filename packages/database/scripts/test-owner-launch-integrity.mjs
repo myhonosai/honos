@@ -9,10 +9,12 @@ import http from 'node:http';
 import https from 'node:https';
 import { ownerLaunchTables, ownerLaunchFunctions, verifyOwnerLaunchSecurity } from './owner-launch-security.mjs';
 import { proveOwnerLaunchGuardianChild } from './owner-launch-guardian-child-proof.mjs';
+import { proveOwnerLaunchFirstClassBooking } from './owner-launch-first-class-booking-proof.mjs';
 const { RuntimeDatabaseService }=await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 const { OwnerLaunchService }=await import('../../../apps/api/dist/owner-launch/owner-launch.service.js');
 const { ProgramService }=await import('../../../apps/api/dist/programs/program.service.js');
 const { ClassSessionService }=await import('../../../apps/api/dist/schedule/class-session.service.js');
+const { ClassBookingService }=await import('../../../apps/api/dist/schedule/class-booking.service.js');
 const { HqOnboardingService }=await import('../../../apps/api/dist/hq/hq-onboarding.service.js');
 let groups=0,operations=0,driftProbes=0,externalCalls=0;
 const forbid=()=>{externalCalls++;throw new Error('External transport forbidden in owner launch proof');};
@@ -20,7 +22,7 @@ globalThis.fetch=forbid;http.request=forbid;http.get=forbid;https.request=forbid
 const connect=net.Socket.prototype.connect;
 net.Socket.prototype.connect=function(...args){const o=Array.isArray(args[0])?args[0][0]:args[0];if(!(typeof o==='object'?o.port===5432&&o.host==='localhost':o===5432&&args[1]==='localhost'))return forbid();return connect.apply(this,args);};
 const owner=new pg.Client({connectionString:process.env.DATABASE_URL,ssl:false}),runtime=new pg.Client({connectionString:process.env.HON_RUNTIME_DATABASE_URL,ssl:false});
-const database=new RuntimeDatabaseService(),service=new OwnerLaunchService(database),programs=new ProgramService(database),classes=new ClassSessionService(database),hq=new HqOnboardingService(database);
+const database=new RuntimeDatabaseService(),service=new OwnerLaunchService(database),programs=new ProgramService(database),classes=new ClassSessionService(database),bookings=new ClassBookingService(database),hq=new HqOnboardingService(database);
 const ids=Object.fromEntries(['hqUser','hqPrincipal','user','principal','otherUser','otherPrincipal','grant','otherGrant','family'].map(k=>[k,randomUUID()]));
 const subject='owner-local-'+randomUUID(),otherSubject='owner-other-'+randomUUID(),hqSubject='hq-local-'+randomUUID();
 let scope,other,program,classSession,tables;
@@ -101,9 +103,10 @@ try {
  // FKs and immutable canonical program linkage reject mixed school/program relations.
  await owner.query('BEGIN');try{await assert.rejects(()=>owner.query('UPDATE hon.student_curriculum_enrollments SET program_id=$2 WHERE id=$1',[registered.receipt.enrollmentId,randomUUID()]),e=>e.code==='42501');}finally{await owner.query('ROLLBACK');}check();
  for(const table of ownerLaunchTables){await owner.query('BEGIN');try{await owner.query(`GRANT SELECT ON hon.${table} TO hon_owner_launch_runtime; SET LOCAL ROLE hon_owner_launch_runtime`);assert.deepEqual((await owner.query(`SELECT * FROM hon.${table}`)).rows,[]);}finally{await owner.query('ROLLBACK');}}check();
- groups+=await proveOwnerLaunchGuardianChild({owner,runtime,database,service,programs,classes,scope,other,context,checked,raw,drift,ids,program,classSession,ownerRoleId:a.ownerRoleId});
- const ownSaved=await readSavedStudents();assert.equal(ownSaved.state,'RECORDED_REGISTRATIONS');assert.equal(ownSaved.registrations.length,5);assert(ownSaved.registrations.every(row=>row.status==='REGISTERED_NO_BOOKING'&&['NEW_ADULT_NO_GUARDIAN','NEW_CHILD_WITH_NEW_GUARDIAN'].includes(row.registrationKind)));assert(!JSON.stringify(ownSaved).match(/birth|email|phone|familyId|payment|attendance|grade|curriculum|rank/i));
- const otherSaved=await readSavedStudents(context(other));assert.equal(otherSaved.organizationId,other.organizationId);assert.equal(otherSaved.schoolId,other.schoolId);assert.equal(otherSaved.state,'RECORDED_REGISTRATIONS');assert.equal(otherSaved.registrations.length,1);assert.notEqual(otherSaved.registrations[0].registrationId,registered.receipt.registrationId);check();
- assert.equal((await runtime.query("SELECT nullif(current_setting('app.hon_school_id',true),'') context")).rows[0].context,null);assert.equal(externalCalls,0);
+	 groups+=await proveOwnerLaunchGuardianChild({owner,runtime,database,service,programs,classes,scope,other,context,checked,raw,drift,ids,program,classSession,ownerRoleId:a.ownerRoleId});
+	 const ownSaved=await readSavedStudents();assert.equal(ownSaved.state,'RECORDED_REGISTRATIONS');assert.equal(ownSaved.registrations.length,5);assert(ownSaved.registrations.every(row=>row.status==='REGISTERED_NO_BOOKING'&&['NEW_ADULT_NO_GUARDIAN','NEW_CHILD_WITH_NEW_GUARDIAN'].includes(row.registrationKind)));assert(!JSON.stringify(ownSaved).match(/birth|email|phone|familyId|payment|attendance|grade|curriculum|rank/i));
+	 const otherSaved=await readSavedStudents(context(other));assert.equal(otherSaved.organizationId,other.organizationId);assert.equal(otherSaved.schoolId,other.schoolId);assert.equal(otherSaved.state,'RECORDED_REGISTRATIONS');assert.equal(otherSaved.registrations.length,1);assert.notEqual(otherSaved.registrations[0].registrationId,registered.receipt.registrationId);check();
+	 groups+=await proveOwnerLaunchFirstClassBooking({owner,service,programs,classes,bookings,scope,other,context,checked,raw,drift,ids,ownerRoleId:a.ownerRoleId});
+	 assert.equal((await runtime.query("SELECT nullif(current_setting('app.hon_school_id',true),'') context")).rows[0].context,null);assert.equal(externalCalls,0);
  console.log(`Owner launch proof passed: ${groups} assertion groups, ${operations} whole-table checked operations, ${driftProbes} rollback-only ACL/RLS probes, ${tables.length} HON table snapshots, zero external calls. Fixture remains marked localhost-only for regression checks.`);
 } finally {await database.onModuleDestroy();await runtime.end();await owner.end();net.Socket.prototype.connect=connect;}

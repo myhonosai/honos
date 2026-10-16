@@ -147,6 +147,15 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     });
   }
 
+  /** Fixed receipt-only owner-launch booking wrapper; no client student/class/program/school selector reaches SQL. */
+  async bookOwnerLaunchFirstClass(context: import('@hon/contracts').OwnerLaunchContext, input: import('@hon/contracts').BookOwnerLaunchFirstClassInput): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)", [context.source, context.externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+      return (await client.query<{ data: unknown }>('SELECT hon.book_owner_launch_first_class($1,$2::jsonb,$3,$4::uuid,$5::uuid) data', [context.externalSubject, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId])).rows[0]!.data;
+    });
+  }
+
   async ownerLaunchGuardianChildCommand(context: import('@hon/contracts').OwnerLaunchContext, input: import('@hon/contracts').RegisterGuardianChildInput): Promise<unknown> {
     return this.withTenantTransaction(context, async client => {
       await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");

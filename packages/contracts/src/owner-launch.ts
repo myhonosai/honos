@@ -8,6 +8,14 @@ export interface StudentRegistrationReceipt {
   registrationId: string; studentProfileId: string; enrollmentId: string; programId: string; classSessionId: string;
   status: 'REGISTERED_NO_BOOKING'; createdAt: string;
 }
+/** Exact immutable owner-launch receipt only; no student, family, program, class or school selector exists. */
+export interface BookOwnerLaunchFirstClassInput {
+  registrationId: string; expectedReceiptVersion: 1; expectedClassSessionVersion: number;
+}
+/** Redacted proof of the canonical booking decision, deliberately not an eligibility/payment/attendance result. */
+export interface OwnerLaunchFirstClassBookingReceipt {
+  registrationId: string; bookingId: string; classSessionId: string; status: 'BOOKED' | 'WAITLISTED'; bookingVersion: number; recordedAt: string;
+}
 export type OwnerLaunchRegistrationKind = 'NEW_ADULT_NO_GUARDIAN' | 'NEW_CHILD_WITH_NEW_GUARDIAN';
 export interface OwnerLaunchSavedStudentConfirmation {
   registrationId: string; studentProfileId: string; displayName: string; createdAt: string;
@@ -49,6 +57,19 @@ export function verifyStudentRegistrationReceipt(value: unknown, input?: Pick<Re
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(createdAt) || !Number.isFinite(Date.parse(createdAt)) || row.status !== 'REGISTERED_NO_BOOKING') invalid();
   const receipt: StudentRegistrationReceipt = { registrationId: ownerLaunchId(row.registrationId), studentProfileId: ownerLaunchId(row.studentProfileId), enrollmentId: ownerLaunchId(row.enrollmentId), programId: ownerLaunchId(row.programId), classSessionId: ownerLaunchId(row.classSessionId), status: 'REGISTERED_NO_BOOKING', createdAt };
   if (input && (receipt.programId !== input.programId || receipt.classSessionId !== input.classSessionId)) invalid();
+  return receipt;
+}
+export function verifyBookOwnerLaunchFirstClassInput(value: unknown): BookOwnerLaunchFirstClassInput {
+  const row = ownerLaunchRecord(value, ['registrationId','expectedReceiptVersion','expectedClassSessionVersion']);
+  if (row.expectedReceiptVersion !== 1) invalid();
+  return { registrationId: ownerLaunchId(row.registrationId), expectedReceiptVersion: 1, expectedClassSessionVersion: version(row.expectedClassSessionVersion) };
+}
+export function verifyOwnerLaunchFirstClassBookingReceipt(value: unknown, input?: Pick<BookOwnerLaunchFirstClassInput,'registrationId'>): OwnerLaunchFirstClassBookingReceipt {
+  const row = ownerLaunchRecord(value, ['registrationId','bookingId','classSessionId','status','bookingVersion','recordedAt']);
+  const recordedAt = text(row.recordedAt, 24);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(recordedAt) || !Number.isFinite(Date.parse(recordedAt)) || !['BOOKED','WAITLISTED'].includes(String(row.status))) invalid();
+  const receipt = { registrationId: ownerLaunchId(row.registrationId), bookingId: ownerLaunchId(row.bookingId), classSessionId: ownerLaunchId(row.classSessionId), status: row.status as 'BOOKED' | 'WAITLISTED', bookingVersion: version(row.bookingVersion), recordedAt };
+  if (input && receipt.registrationId !== input.registrationId) invalid();
   return receipt;
 }
 export function verifyOwnerLaunchSavedStudentsProjection(value: unknown): OwnerLaunchSavedStudentsProjection {

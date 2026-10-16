@@ -1,23 +1,24 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import type { OwnerLaunchProjection } from '@hon/contracts';
-import { loadOwnerLaunch, OwnerLaunchAccessError, postOwnerLaunch } from './owner-launch-http';
+import type { OwnerLaunchProjection, OwnerLaunchFirstClassBookingReceipt } from '@hon/contracts';
+import { loadOwnerLaunch, OwnerLaunchAccessError, postOwnerLaunch, postOwnerLaunchFirstClassBooking } from './owner-launch-http';
 export function OwnerLaunch() {
   const [context,setContext]=useState<OwnerLaunchProjection|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('Load your verified school context to begin. HQ provisioning is separate.');
   const [programName,setProgramName]=useState(''),[className,setClassName]=useState(''),[startsAt,setStartsAt]=useState(''),[endsAt,setEndsAt]=useState(''),[capacity,setCapacity]=useState(10);
   const [mode,setMode]=useState<'adult'|'guardian-child'>('adult');
   const [givenName,setGivenName]=useState(''),[familyName,setFamilyName]=useState(''),[birthDate,setBirthDate]=useState(''),[attested,setAttested]=useState(false);
   const [guardianGivenName,setGuardianGivenName]=useState(''),[guardianFamilyName,setGuardianFamilyName]=useState(''),[guardianBirthDate,setGuardianBirthDate]=useState('');
+  const [booking,setBooking]=useState<OwnerLaunchFirstClassBookingReceipt|null>(null);
   const generation=useRef(0);
   const retry=useRef<{operation:string;fingerprint:string;key:string}|null>(null);
   function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);retry.current=null;}
   useEffect(()=>{
-    const stale=()=>{generation.current++;setContext(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();};
+    const stale=()=>{generation.current++;setContext(null);setBooking(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();};
     window.addEventListener('focus',stale);document.addEventListener('visibilitychange',stale);
     return ()=>{generation.current++;window.removeEventListener('focus',stale);document.removeEventListener('visibilitychange',stale);};
   },[]);
-  async function reload() {const current=++generation.current;setBusy(true);setContext(null);try {const loaded=await loadOwnerLaunch();if(current!==generation.current)return;setContext(loaded);setMessage('Saved creation receipts loaded. These are historical receipts, not current eligibility or class admission.');}catch(error){if(current!==generation.current)return;setMessage(error instanceof Error?error.message:'School launch is unavailable.');if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status))clearPrivateInput();}finally{if(current===generation.current)setBusy(false);}}
+  async function reload() {const current=++generation.current;setBusy(true);setContext(null);setBooking(null);try {const loaded=await loadOwnerLaunch();if(current!==generation.current)return;setContext(loaded);setMessage('Saved creation receipts loaded. These are historical receipts, not current eligibility or class admission.');}catch(error){if(current!==generation.current)return;setMessage(error instanceof Error?error.message:'School launch is unavailable.');if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status))clearPrivateInput();}finally{if(current===generation.current)setBusy(false);}}
   async function submit(operation:'program'|'class'|'student') {
     if (!context || busy) return;
     const current=++generation.current;
@@ -40,6 +41,24 @@ export function OwnerLaunch() {
       const loaded=await loadOwnerLaunch();if(current!==generation.current)return;setContext(loaded);setMessage('Saved receipt verified. No booking, attendance, membership, billing, parent login, parent access or message was created.');
     }catch(error){if(current!==generation.current)return;setContext(null);setMessage(error instanceof Error?error.message:'Outcome unavailable. Reload saved receipts before trying again.');if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status))clearPrivateInput();}finally{if(current===generation.current)setBusy(false);}
   }
+  async function bookFirstClass() {
+    const saved=context?.guardianChildRegistration??context?.registration;
+    if(!context || !saved || !context.classSession || busy) return;
+    const current=++generation.current;
+    const input={registrationId:saved.registrationId,expectedReceiptVersion:1 as const,expectedClassSessionVersion:context.classSession.version};
+    const fingerprint=JSON.stringify(input);
+    if(!retry.current || retry.current.operation!=='first-class-booking' || retry.current.fingerprint!==fingerprint)retry.current={operation:'first-class-booking',fingerprint,key:crypto.randomUUID()};
+    try {
+      setBusy(true);setBooking(null);
+      const receipt=await postOwnerLaunchFirstClassBooking(context,input,retry.current.key);
+      if(current!==generation.current)return;
+      setBooking(receipt);
+      setMessage(receipt.status==='BOOKED'?'First-class booking recorded as BOOKED. This is not membership, payment, attendance, eligibility, parent contact or family readiness.':'First-class booking recorded as WAITLISTED. No seat, membership, payment, attendance, eligibility, parent contact or family readiness is claimed.');
+    } catch(error) {
+      if(current!==generation.current)return;
+      setMessage(error instanceof Error?error.message:'Booking outcome is unavailable. Reload the saved receipt or retry the exact same request and key.');
+    } finally {if(current===generation.current)setBusy(false);}
+  }
   const field={display:'grid',gap:6,marginBottom:12} as const;
   const saved=context?.guardianChildRegistration??context?.registration;
   return <main style={{maxWidth:840,margin:'2rem auto',padding:24}}>
@@ -59,6 +78,7 @@ export function OwnerLaunch() {
           <label style={field}><span><input type="checkbox" checked={attested} onChange={e=>setAttested(e.target.checked)} required /> {mode==='adult'?'I verified this is a new adult student and no guardian relationship is required.':'I verified exactly one new child and one different new adult guardian, their ages and explicit guardian/child relationship: NEW_CHILD_WITH_NEW_GUARDIAN.'}</span></label><button disabled={busy||!attested}>{mode==='adult'?'Save bounded student registration':'Save guardian-and-child registration'}</button>
         </form>:<p>Save a class first. Registration authority is rechecked at the server.</p>}</section>
       <section><h2>5. Saved receipt</h2>{saved?<><p><strong>REGISTERED — NO BOOKING</strong></p>{context.guardianChildRegistration&&<p>One new guardian/child relationship recorded. Not family readiness, parent login, parent access, membership, payment, attendance or communication.</p>}<p>Receipt: <code>{saved.registrationId}</code></p><p>Student: <code>{saved.studentProfileId}</code></p><p>Program enrollment: <code>{saved.enrollmentId}</code> — program-only, not membership or class booking.</p><p>Saved at {saved.createdAt}</p></>:<p>No saved student registration receipt yet. An unavailable result is never success.</p>}</section>
+      <section><h2>6. Book first class</h2>{saved&&context.classSession?<><p>Human-only exact saved-receipt action. It uses no student, family, program, class or school selector; the current server rechecks receipt relation, authority, tier, versions and canonical capacity.</p>{context.guardianChildRegistration&&<p>For a guardian-and-child receipt, this is a class booking decision only. It does not create parent login, parent access, family readiness, parent contact, membership, payment, attendance or eligibility success.</p>}{booking?<><p><strong>{booking.status}</strong> booking receipt recorded.</p><p>Booking: <code>{booking.bookingId}</code> · class: <code>{booking.classSessionId}</code> · version {booking.bookingVersion}</p></>:<><p>No booking is recorded by registration. A full class may return WAITLISTED; an unavailable result is not booking success.</p><button type="button" disabled={busy} onClick={()=>void bookFirstClass()}>{busy?'Verifying booking…':'Book first class'}</button></>}</>:<p>Save one registration receipt first. No booking action is available otherwise.</p>}</section>
     </>}
     <nav aria-label="Conventional staff modules"><Link href="/staff/dashboard">Staff dashboard</Link> · <Link href="/staff/attendance">Attendance</Link> · <Link href="/staff/curriculum/library">Curriculum library</Link></nav>
   </main>;

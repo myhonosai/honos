@@ -1,4 +1,4 @@
-import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, type OwnerLaunchProjection, type RegisterStudentInput } from '@hon/contracts';
+import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, type OwnerLaunchProjection, type RegisterStudentInput, type BookOwnerLaunchFirstClassInput } from '@hon/contracts';
 export class OwnerLaunchAccessError extends Error { constructor(message:string,readonly status:number) { super(message); } }
 export function ownerLaunchPath(context: Pick<OwnerLaunchProjection,'organizationId'|'schoolId'>, operation: 'program'|'class'|'student'|'guardian-child'): string {
   const suffix={program:'programs',class:'schedule/sessions',student:'student-registrations','guardian-child':'guardian-child-registrations'}[operation];
@@ -43,5 +43,17 @@ export async function postOwnerLaunch(context:OwnerLaunchProjection, operation:'
   if (operation==='program') return verifyLaunchProgramReceipt({id:row.id,status:row.status,version:row.version});
   const receipt=verifyLaunchClassReceipt({id:row.id,programId:row.programId,status:row.status,version:row.version});
   if (receipt.programId!==context.program?.id) throw new Error('Unverified program linkage.');
+  return receipt;
+}
+
+/** One fixed receipt-authorized booking path. No program/class/student/family/school selector is accepted. */
+export async function postOwnerLaunchFirstClassBooking(context: OwnerLaunchProjection, value: unknown, key: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(key)) throw new Error('A generated retry key is required.');
+  const input=verifyBookOwnerLaunchFirstClassInput(value) as BookOwnerLaunchFirstClassInput;
+  const saved=context.guardianChildRegistration??context.registration;
+  if(!saved || !context.classSession || saved.registrationId!==input.registrationId || saved.classSessionId!==context.classSession.id || input.expectedClassSessionVersion!==context.classSession.version) throw new Error('Only the exact saved registration receipt and current saved class version can be booked.');
+  const result=await request('/api/v1/owner-launch/first-class-booking',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','Idempotency-Key':key,'X-HON-Human-Command':'owner-launch-first-class-booking'},body:JSON.stringify(input)});
+  const receipt=verifyOwnerLaunchFirstClassBookingReceipt(result.data,input);
+  if(receipt.classSessionId!==context.classSession.id) throw new Error('Unverified saved class linkage.');
   return receipt;
 }
