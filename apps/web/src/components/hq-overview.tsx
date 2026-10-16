@@ -98,7 +98,7 @@ export function HqOverview(): React.ReactElement {
   }, []);
 
   return <main className={`${styles.page} ${styles[`presentation_${presentation}`]}`}>
-    <nav className={styles.navigation} aria-label="HON HQ navigation"><a href="/hq">Overview</a><a href="/hq/schools">Schools</a><a href="/hq/ai-providers">AI provider configuration</a><a href="/auth/login">Account</a></nav>
+    <nav className={styles.navigation} aria-label="HON HQ navigation"><a href="/hq">Overview</a><a href="/hq/executives">Executive Team</a><a href="/hq/schools">Schools</a><a href="/hq/ai-providers">AI provider configuration</a><a href="/auth/login">Account</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>HON HQ / PLATFORM OPERATOR</p><h1>HQ overview</h1><p>A separate, conventional, read-only platform overview. School authority, family access, AI employees, delegated context, and unauthenticated clients do not grant HQ access.</p></header>
     <section className={styles.presentation} aria-label="Presentation mode">
       <strong>Presentation</strong><div>{PRESENTATION_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={presentation === mode.id} onClick={() => setPresentation(mode.id)}><span>{mode.label}</span><small>{mode.detail}</small></button>)}</div><p>These are the existing three display modes only. Changing a mode never changes data, scope, authority, or execution.</p>

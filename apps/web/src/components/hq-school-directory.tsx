@@ -65,7 +65,7 @@ export function HqSchoolDirectory(): React.ReactElement {
   }, []);
 
   return <main className={`${styles.page} ${styles[`presentation_${presentation}`]}`}>
-    <nav className={styles.navigation} aria-label="HON HQ navigation"><a href="/hq">Overview</a><a href="/hq/schools" aria-current="page">Schools</a><a href="/hq/ai-providers">AI provider configuration</a><a href="/auth/login">Account</a></nav>
+    <nav className={styles.navigation} aria-label="HON HQ navigation"><a href="/hq">Overview</a><a href="/hq/executives">Executive Team</a><a href="/hq/schools" aria-current="page">Schools</a><a href="/hq/ai-providers">AI provider configuration</a><a href="/auth/login">Account</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>HON HQ / SCHOOL MANAGEMENT</p><h1>School directory</h1><p>A fixed, read-only customer-account projection. Only verified current platform HQ owners and operators may view it; school staff, families, AI, automation, delegated contexts, and support roles do not gain access.</p></header>
     <section className={styles.presentation} aria-label="Presentation mode">
       <strong>Presentation</strong><div>{PRESENTATION_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={presentation === mode.id} onClick={() => setPresentation(mode.id)}><span>{mode.label}</span><small>{mode.detail}</small></button>)}</div><p>Modes change content density only. They do not change the directory, access, scope, authority, or data fields.</p>
