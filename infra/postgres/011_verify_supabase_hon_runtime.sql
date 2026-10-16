@@ -1567,3 +1567,42 @@ BEGIN
  END LOOP;
 END $$;
 -- End HQ AI exact verification.
+
+-- Advanced attendance exact verification:
+DO $$
+DECLARE t text; f record; b record; a record; runtime_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime');
+BEGIN
+ FOREACH t IN ARRAY ARRAY['attendance_progression_policies','attendance_policy_requests'] LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity forced,r.rolsuper OR r.rolbypassrls trusted,
+   EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+    OR EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) acl WHERE att.attrelid=c.oid AND att.attnum>0 AND NOT att.attisdropped AND acl.grantee<>c.relowner) broad INTO b
+  FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner WHERE c.oid=format('hon.%I',t)::regclass;
+  IF NOT b.forced OR NOT b.trusted OR b.broad OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t) THEN RAISE EXCEPTION 'Unsafe attendance policy table %',t; END IF;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.default_attendance_categories()',false,false,'i'),('hon.valid_attendance_categories(jsonb)',false,false,'i'),
+  ('hon.lock_attendance_actor(text,text)',true,true,'v'),('hon.read_attendance_policy(text,uuid)',true,true,'v'),
+  ('hon.configure_attendance_policy(text,uuid,jsonb,text,uuid,uuid)',true,true,'v'),
+  ('hon.record_attendance(text,uuid,jsonb,text,uuid,uuid)',true,true,'v'),('hon.snapshot_attendance_credit()',false,true,'v')) x(signature,runtime_allowed,definer,volatility) LOOP
+  SELECT p.prosecdef,p.provolatile::text volatility,p.proconfig,r.rolsuper OR r.rolbypassrls trusted,
+   has_function_privilege('hon_runtime',p.oid,'EXECUTE') runtime_execute,
+   EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>runtime_oid OR NOT f.runtime_allowed OR acl.privilege_type<>'EXECUTE' OR acl.is_grantable)) broad INTO b
+  FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF NOT b.trusted OR b.prosecdef<>f.definer OR b.volatility<>f.volatility OR b.runtime_execute<>f.runtime_allowed OR b.broad OR b.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] THEN RAISE EXCEPTION 'Unsafe attendance function %',f.signature; END IF;
+ END LOOP;
+ SELECT c.relrowsecurity AND c.relforcerowsecurity forced,
+  EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner AND (acl.grantee<>runtime_oid OR acl.privilege_type<>'SELECT' OR acl.is_grantable)) broad INTO b
+ FROM pg_class c WHERE c.oid='hon.attendance_records'::regclass;
+ IF NOT b.forced OR b.broad OR NOT has_table_privilege('hon_runtime','hon.attendance_records','SELECT')
+  OR has_table_privilege('hon_runtime','hon.attendance_records','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN RAISE EXCEPTION 'Unsafe attendance record table'; END IF;
+ FOR a IN SELECT attname,has_column_privilege('hon_runtime',attrelid,attnum,'INSERT,UPDATE,REFERENCES') allowed,
+   EXISTS(SELECT 1 FROM aclexplode(attacl) acl WHERE acl.grantee<>(SELECT relowner FROM pg_class WHERE oid=attrelid)) broad
+  FROM pg_attribute WHERE attrelid='hon.attendance_records'::regclass AND attnum>0 AND NOT attisdropped LOOP
+  IF a.broad OR a.allowed THEN RAISE EXCEPTION 'Unsafe attendance column %',a.attname; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.attendance_records'::regclass AND tgname='attendance_credit_snapshot' AND tgfoid='hon.snapshot_attendance_credit()'::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN RAISE EXCEPTION 'Missing attendance snapshot guard'; END IF;
+ FOREACH t IN ARRAY ARRAY['attendance_progression_policies','attendance_policy_requests'] LOOP
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=format('hon.%I',t)::regclass AND tgenabled='O' AND tgfoid='hon.guard_campaign_history()'::regprocedure AND NOT tgisinternal)<>2 THEN RAISE EXCEPTION 'Missing attendance immutable guards'; END IF;
+ END LOOP;
+END $$;
+-- End advanced attendance exact verification.

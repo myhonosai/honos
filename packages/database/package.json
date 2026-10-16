@@ -76,7 +76,11 @@
     "db:setup-testing-scorecards": "node scripts/setup-testing-scorecard-validation.mjs",
     "db:setup-teaching-assistant": "node scripts/setup-teaching-assistant-validation.mjs",
     "db:test-teaching-assistant": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-teaching-assistant-integrity.mjs",
-    "db:test-marketing-assistant-verifier": "node scripts/test-marketing-assistant-verifier.mjs"
+    "db:test-marketing-assistant-verifier": "node scripts/test-marketing-assistant-verifier.mjs",
+    "db:setup-attendance": "node scripts/setup-attendance-validation.mjs",
+    "db:test-attendance": "pnpm --filter @hon/contracts build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-integrity.mjs",
+    "db:setup-attendance-backfill": "node scripts/setup-attendance-backfill-validation.mjs",
+    "db:test-attendance-backfill": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-backfill-migration.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

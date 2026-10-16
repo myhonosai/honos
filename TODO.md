@@ -69,7 +69,7 @@ Task-profile evidence: fresh local PostgreSQL replay through migration `0113` pa
 
 ## Blueprint 2.3 — Operational Excellence & Competitive Gap Update
 
-- [ ] Extend existing attendance, scheduling, curriculum/progress and staff correction boundaries with closed attendance categories, deterministic school/program progression-weight configuration, duplicate prevention, auditable corrections and strict separation of pass/package consumption from promotion-progress credit. Reuse the single attendance domain; no provider/payment/AI effect follows check-in.
+- [x] Extend existing attendance, scheduling, curriculum/progress and staff correction boundaries with closed attendance categories, deterministic school/program progression-weight configuration, duplicate prevention, auditable corrections and strict separation of pass/package consumption from promotion-progress credit. Reuse the single attendance domain; no provider/payment/AI effect follows check-in.
 - [ ] Add deterministic, explainable promotion-readiness states from existing attendance, time-in-rank, curriculum/skill evidence, instructor recommendation, testing window, documents and prerequisites. Readiness must never auto-promote, award rank, bypass instructor/administrator authority or let AI approve a promotion.
 - [ ] Build a school-scoped private curriculum video/link library using approved storage/services, program/rank/audience projection and search/filtering. Student/parent access requires exact authorized program/rank; instructor content stays private and external AI cannot automatically receive curriculum material.
 - [ ] Extend Command Center/retention evidence with deduplicated operational alerts and human-managed resolution; any recommended communication remains subject to consent, approval and delivery/receipt evidence.
@@ -77,6 +77,8 @@ Task-profile evidence: fresh local PostgreSQL replay through migration `0113` pa
 - [ ] Extend Migration Center/HQ onboarding with guided school setup and bounded human-reviewed CSV import/recovery; core CRM cannot require AI setup.
 
 Details: [Blueprint Update 2.3 integration map](docs/architecture/BLUEPRINT_UPDATE_2_3_INTEGRATION_MAP.md).
+
+Attendance evidence: migrations `0114`–`0115` deliver the human staff `/staff/attendance` workbench, seven closed categories, school/program append-only human policy revisions, safe nonfinancial milli-class snapshots and a fixed function-only record/correction command. `0115` closes direct runtime attendance INSERT/UPDATE (including columns): the DB command owns atomic idempotency/audit/schema-v2 inert outbox/receipt, with only exact RLS SELECT retained. Fresh guarded local 0001–0115 attendance proof passed 24 assertion groups and the JS verifier passed all 156 tracked tables; the separate real 0001–0113 legacy fixture passed unchanged 0114 backfill plus 0115 raw-write/context denial, historical replay and matching create/correction evidence. Focused API (10), domain (3) and UI (5) tests, API TypeScript check and the 115-file migration check passed; final root `pnpm test` passed 199 tests, with `pnpm check`, `pnpm build` and `git diff --check` also clean. No deployment, auto-progress/rank/testing/pass/package/payment/AI/Action Engine/provider/worker/message/external result is claimed. [Advanced attendance operating contract](docs/architecture/ADVANCED_ATTENDANCE_MANAGEMENT.md).
 
 ## 5. Action Engine, automation, durable work, and Complete AI Office
 

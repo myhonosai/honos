@@ -1,6 +1,6 @@
 # Blueprint Update 2.3 — Operational Excellence integration map
 
-**Source of authority:** [HON Master Directive](../HON_MASTER_DIRECTIVE.md), [Blueprint Update 2.1](BLUEPRINT_UPDATE_2_1_INTEGRATION_MAP.md), [Blueprint Update 2.2](BLUEPRINT_UPDATE_2_2_INTEGRATION_MAP.md), and the approved October 2026 Blueprint 2.3 amendment.
+**Source of authority:** [HON Master Directive](../HON_MASTER_DIRECTIVE.md), [Blueprint Update 2.1](BLUEPRINT_UPDATE_2_1_INTEGRATION_MAP.md), [Blueprint Update 2.2](BLUEPRINT_UPDATE_2_2_INTEGRATION_MAP.md), the approved October 2026 Blueprint 2.3 amendment, and the additive Final Product Experience and Scope Reconciliation.
 
 > **Status rule:** approved scope is not implemented functionality; implemented functionality is not tested functionality; tested functionality is not production readiness. This document records the additive roadmap and current evidence boundary. It does not authorize a paid provider call, production deployment, financial transaction, customer message, advertisement, or external delivery.
 
@@ -16,6 +16,25 @@ It preserves the approved AI employees, pricing and AI-credit allowances, provid
 
 Kiosk is a constrained customer-facing interface, never a fourth presentation mode or a substitute for school permissions.
 
+## Final product experience reconciliation
+
+HON is intended to be a **broad functional beta** for the approved Ideal School OS foundation and HON enhancements—not a narrow MVP, a set of reference screens, or a collection of isolated infrastructure demonstrations. The status labels below distinguish a bounded, tested vertical from the end-to-end product experience still required. No status label is a production-readiness claim.
+
+| Approved experience | Current classification | Reconciliation and remaining acceptance boundary |
+| --- | --- | --- |
+| Full functional beta | **Partially implemented** | Tenant/RLS, CRM, membership/billing, scheduling/attendance, curriculum/testing, families, documents, staff, reporting, onboarding, community, marketplace and AI-control-plane verticals exist. Complete cross-domain school operation from registration through retention, with ordinary user journeys and graceful fallback, remains open. |
+| Big-Button, Modern HON and Classic CRM | **Partially implemented** | Shared presentation themes, mode preference, visual reference routes and responsive components exist. Every product workflow must still be verified as the same common data/permission/business-function surface in all three modes. Onboarding preview/selection and later safe switching must remain on this common implementation; no tier- or mode-specific domain fork is allowed. |
+| Visual AI team | **Partially implemented** | Named employees, workspaces, approval evidence and selectable realistic/anime/chibi presentation assets exist in bounded presentation surfaces. Portrait/style customization stays presentation-only; complete visible cross-employee work histories and all employee journeys remain to be finished through the shared Action Engine. |
+| Complete school onboarding | **Partially implemented** | HQ provisioning/onboarding and migration/import foundations exist. Save/resume, optional-step skipping, progress/readiness validation and a coherent school-registration-to-first-use journey covering branding, mode, programs, schedules, pricing, staff, families/memberships, payment setup, integrations and optional AI configuration remain product work. |
+| Essential, Core and Complete | **Partially implemented** | Entitlements are server-side and tested in several bounded modules. A full entitlement matrix across every end-to-end journey, including useful conventional Core operation and general approved AI assistance without separate Core/Complete domain implementations, remains required. Existing owner-approved pricing, credit allowances, onboarding credits and founder offers remain locked; no historical figure is silently selected or changed here. |
+| Parent and student experience | **Partially implemented** | Family-safe linked-account web reads for Journey, billing, testing, absence and messages exist. The school-branded purpose-built Expo parent app, broader student experience, approved curriculum access, announcements and appropriately evidenced notifications remain open. Native distribution requires each school’s own Apple/Google developer-account decisions where applicable. |
+| End-to-end business growth | **Partially implemented** | CRM, attribution, public forms, campaign planning, human approval, Chad draft follow-up, trials, enrollment/membership and revenue foundations exist. A proven campaign-to-creative-to-approved delivery-to-conversion/optimization journey remains open; Meta/Google lead import stays conventional and does not require premium AI. Financial, advertising and external communication actions retain their separate approvals. |
+| Optional Teaching Studio | **Implemented and tested as a bounded slice** | Human Teaching Studio and Claire preparation are optional instructor support; they do not decide evaluations, readiness, testing or promotion. Broader instructor workflow integration remains open and must preserve human instructor authority. |
+| HON HQ control plane | **Partially implemented** | HQ tenant/entitlement/provider/catalog/policy/task-profile, usage/evidence and onboarding foundations are guarded and separated from school permissions. Complete operational oversight, secret custody/rotation, activation/reconciliation and broader onboarding/model-routing administration remain open. School owners never gain HQ-only authority. |
+| Real product acceptance | **Partially implemented** | Every completed milestone requires tenant, role, subscription, security, error-state and actual user-journey evidence. A table/API/mock/reference screen alone is not completion; the remaining roadmap uses these classifications and must demonstrate integrated end-to-end operation. |
+
+**Conflicting decision status:** no new pricing, allowance, founder-offer, payment-processor, provider-default, native-distribution or legal-consent figure is introduced by this reconciliation. Any conflicting historical value found later is an owner-review blocker rather than a value to infer.
+
 ## Feature inventory and current evidence boundary
 
 | Capability | Existing reusable foundation | Current status | Required completion evidence |
@@ -24,7 +43,7 @@ Kiosk is a constrained customer-facing interface, never a fourth presentation mo
 | Class pre-registration, capacity and waitlist | Class sessions/bookings and scheduling integrity foundations | **Existing foundation; 2.3 verification pending** | Exact booking/capacity/waitlist regression against current behavior |
 | Family-linked accounts and family billing | Guardian/family and parent-safe billing reads | **Implemented and validated as bounded read foundations** | Mutating family billing/payment workflows remain separately governed |
 | Staff permissions and instructor records | Roles, staff qualification and human curriculum/testing foundations | **Implemented and validated bounded slices** | Broader staff profile/workforce delivery remains open |
-| Attendance history and staff corrections | Attendance/session foundations | **Existing foundation; advanced-category verification pending** | Category, duplicate-check-in, audit and progression-weight proof |
+| Attendance history and staff corrections | Existing sessions/bookings/attendance with guarded policy and function-only command boundary | **Implemented and tested bounded vertical** | Cross-domain progression/readiness and ClassPass admission remain distinct future domains |
 | Mobile-responsive parent access | Parent Home/Journey/Billing/Testing bounded web surfaces | **Implemented and validated bounded web reads** | Purpose-built Expo Parent App is still open |
 | Parent notifications | Consent/communication architecture and intentionally unavailable parent receipt view | **Partial / receipt evidence not implemented** | Proven recipient delivery/receipt model and consent-safe projection |
 | Secure exports and multi-location management | Migration/import and Core multi-location summary slices | **Partial / bounded foundations** | Product-level export and multi-location operational workflow proof |
@@ -46,6 +65,8 @@ Use the existing class sessions, bookings, attendance, student curriculum/progre
 ### Acceptance
 
 Two-school restricted-role proof covers category eligibility, duplicate and concurrent check-in, progression-credit versus pass-credit separation, staff correction/expected version, entitlement/role revocation, RLS/ACL, audit/outbox atomicity and zero payment/provider effect.
+
+**Delivered bounded vertical (migrations 0114–0115):** seven closed categories, direct-human school/program policy revisions, immutable nonfinancial attendance snapshots and a function-only atomic attendance command now extend the existing attendance model and staff workbench. The [advanced attendance operating contract](ADVANCED_ATTENDANCE_MANAGEMENT.md) records the full boundary, including the separate pre-0114 real-migration backfill proof. It does not deliver ClassPass/redemption, curriculum progress mutation, readiness or promotion automation, billing/payment effects, AI/provider execution, messaging or a worker.
 
 ## B. Deterministic promotion readiness
 

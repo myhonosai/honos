@@ -14,6 +14,7 @@ export * from './parent-billing-view.js';
 export * from './parent-testing-status.js';
 export * from './parent-planned-absence-history.js';
 export * from './parent-message-history.js';
+export * from './attendance-policy.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;
 export type HonTier = (typeof HON_TIERS)[number];
@@ -590,6 +591,8 @@ export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 export interface RecordAttendanceInput {
   studentProfileId: string;
   status: AttendanceStatus;
+  /** Omitted legacy input defaults to REGULAR_PARTICIPANT (MAKEUP → MAKEUP_CLASS). */
+  category?: import('./attendance-policy.js').AttendanceCategory | undefined;
   note?: string | undefined;
   /** Required when changing an attendance record already present for the session/student pair. */
   expectedVersion?: number | undefined;
@@ -601,6 +604,11 @@ export interface AttendanceRecordSummary {
   studentProfileId: string;
   classBookingId?: string | undefined;
   status: AttendanceStatus;
+  category: import('./attendance-policy.js').AttendanceCategory;
+  progressionPolicyVersion: number;
+  progressionEnabled: boolean;
+  progressionWeightMilli: number;
+  progressionCreditMilli: number;
   recordedByPrincipalId?: string | undefined;
   recordedAt: string;
   note?: string | undefined;

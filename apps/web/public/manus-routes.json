@@ -81,6 +81,10 @@
       "title": "Human Staff Availability and Qualifications"
     },
     {
+      "path": "/staff/attendance",
+      "title": "HON | Human Attendance Workbench"
+    },
+    {
       "path": "/staff/instructor-qualifications",
       "title": "HON | Human instructor qualification evidence"
     },

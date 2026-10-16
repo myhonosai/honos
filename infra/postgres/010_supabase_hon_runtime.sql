@@ -154,7 +154,6 @@ GRANT INSERT ON TABLE
   hon.class_templates,
   hon.class_sessions,
   hon.class_session_instructors,
-  hon.attendance_records,
   hon.knowledge_articles,
   hon.planned_absence_requests
 TO hon_runtime;
@@ -786,3 +785,25 @@ REVOKE ALL ON TABLE hon.hq_ai_task_profiles,hon.hq_ai_task_profile_candidates FR
 REVOKE ALL ON FUNCTION hon.hq_ai_valid_list(jsonb,text[],integer,integer),
   hon.hq_ai_task_profile_snapshot(uuid),hon.hq_ai_snapshot(),hon.hq_ai_validate_write(text,jsonb),
   hon.hq_ai_safe_text(text,boolean) FROM PUBLIC,hon_runtime;
+
+-- Advanced attendance: fixed function-only commands and exact scoped record reads.
+BEGIN;
+REVOKE ALL ON TABLE hon.attendance_progression_policies,hon.attendance_policy_requests FROM PUBLIC,hon_runtime;
+REVOKE ALL ON FUNCTION hon.default_attendance_categories(),hon.valid_attendance_categories(jsonb),hon.snapshot_attendance_credit() FROM PUBLIC,hon_runtime;
+REVOKE ALL ON FUNCTION hon.lock_attendance_actor(text,text),hon.read_attendance_policy(text,uuid),hon.configure_attendance_policy(text,uuid,jsonb,text,uuid,uuid),hon.record_attendance(text,uuid,jsonb,text,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hon.lock_attendance_actor(text,text),hon.read_attendance_policy(text,uuid),hon.configure_attendance_policy(text,uuid,jsonb,text,uuid,uuid),hon.record_attendance(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+REVOKE ALL ON hon.attendance_records FROM PUBLIC,hon_runtime;
+DO $$ DECLARE a text; r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON hon.attendance_records FROM %I',r);
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.record_attendance(text,uuid,jsonb,text,uuid,uuid) FROM %I',r);
+ END LOOP;
+ FOR a IN SELECT attname FROM pg_attribute WHERE attrelid='hon.attendance_records'::regclass AND attnum>0 AND NOT attisdropped LOOP
+  EXECUTE format('REVOKE ALL (%I) ON hon.attendance_records FROM PUBLIC,hon_runtime',a);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.attendance_records FROM %I',a,r);
+  END LOOP;
+ END LOOP;
+END $$;
+GRANT SELECT ON hon.attendance_records TO hon_runtime;
+COMMIT;

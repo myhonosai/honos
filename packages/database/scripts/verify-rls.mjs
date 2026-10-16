@@ -17,12 +17,14 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS
 // PostgreSQL role grants and SECURITY DEFINER ACLs remain attached to `role`.
 // Local disposable validation aliases do not contain a dot and pass unchanged.
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username.split('.', 1)[0] : 'hon_runtime';
-if (!['hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_parent_billing_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (!['hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_attendance_runtime','hon_attendance_backfill_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_parent_billing_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    const db = runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_parent_billing_runtime' ? '/hon_parent_billing_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    const db = runtimeRoleName === 'hon_attendance_runtime' ? '/hon_attendance_validation' : runtimeRoleName === 'hon_attendance_backfill_runtime' ? '/hon_attendance_backfill_validation' : runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_parent_billing_runtime' ? '/hon_parent_billing_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
     if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
+    if (runtimeRoleName === 'hon_attendance_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_attendance_owner' : runtimeRoleName))) throw new Error('Attendance verifier requires exact disposable-local aliases.');
+    if (runtimeRoleName === 'hon_attendance_backfill_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_attendance_backfill_owner' : runtimeRoleName))) throw new Error('Attendance backfill verifier requires exact marked disposable-local aliases.');
     if (runtimeRoleName === 'hon_marketing_ai_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_marketing_ai_owner' : runtimeRoleName))) throw new Error('Marketing Assistant verifier requires exact disposable-local aliases.');
     if (runtimeRoleName === 'hon_parent_billing_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_parent_billing_owner' : runtimeRoleName))) throw new Error('Parent billing verifier requires exact disposable-local aliases.');
   }
@@ -53,6 +55,8 @@ const expectedRlsTables = [
   'chad_follow_up_drafts',
   'audit_events',
   'attendance_records',
+  'attendance_progression_policies',
+  'attendance_policy_requests',
   'billing_accounts',
   'class_bookings',
   'class_session_instructors',
@@ -176,6 +180,19 @@ const client = new Client({
 });
 await client.connect();
 try {
+  const attendanceCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const attendanceVerification = attendanceCanonical.split('-- Advanced attendance exact verification:')[1]?.split('-- End advanced attendance exact verification.')[0];
+  if (!attendanceVerification) throw new Error('Missing canonical attendance verification.');
+  await client.query(attendanceVerification.replaceAll('hon_runtime', runtimeRoleName));
+  // Explicitly guard the application command boundary in the JS verifier too.
+  const attendanceBoundary = (await client.query(`SELECT
+    has_table_privilege($1,'hon.attendance_records','SELECT') readable,
+    has_table_privilege($1,'hon.attendance_records','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') writable,
+    has_any_column_privilege($1,'hon.attendance_records','INSERT,UPDATE,REFERENCES') column_writable,
+    has_function_privilege($1,'hon.record_attendance(text,uuid,jsonb,text,uuid,uuid)','EXECUTE') command`, [runtimeRoleName])).rows[0];
+  if (!attendanceBoundary?.readable || attendanceBoundary.writable || attendanceBoundary.column_writable || !attendanceBoundary.command) {
+    throw new Error('Attendance requires SELECT-only records and the fixed atomic command.');
+  }
   await verifyMarketingAssistantSecurity(client, runtimeRoleName);
   await verifyAchievementSecurity(client,runtimeRoleName);
   await verifyTestingCertificateSecurity(client, runtimeRoleName);

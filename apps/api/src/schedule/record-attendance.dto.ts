@@ -1,5 +1,7 @@
 import {
   ATTENDANCE_STATUSES,
+  ATTENDANCE_CATEGORIES,
+  type AttendanceCategory,
   type AttendanceStatus,
   type RecordAttendanceInput,
 } from '@hon/contracts';
@@ -11,6 +13,7 @@ import {
   IsUUID,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class RecordAttendanceDto implements RecordAttendanceInput {
@@ -19,6 +22,10 @@ export class RecordAttendanceDto implements RecordAttendanceInput {
 
   @IsIn([...ATTENDANCE_STATUSES])
   status!: AttendanceStatus;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsIn([...ATTENDANCE_CATEGORIES])
+  category?: AttendanceCategory;
 
   @IsOptional()
   @IsString()

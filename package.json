@@ -81,6 +81,10 @@
     "db:setup-testing-scorecards": "pnpm --filter @hon/database db:setup-testing-scorecards",
     "db:setup-teaching-assistant": "pnpm --filter @hon/database db:setup-teaching-assistant",
     "db:test-teaching-assistant": "pnpm --filter @hon/database db:test-teaching-assistant",
-    "db:test-marketing-assistant-verifier": "pnpm --filter @hon/database db:test-marketing-assistant-verifier"
+    "db:test-marketing-assistant-verifier": "pnpm --filter @hon/database db:test-marketing-assistant-verifier",
+    "db:setup-attendance": "pnpm --filter @hon/database db:setup-attendance",
+    "db:test-attendance": "pnpm --filter @hon/database db:test-attendance",
+    "db:setup-attendance-backfill": "pnpm --filter @hon/database db:setup-attendance-backfill",
+    "db:test-attendance-backfill": "pnpm --filter @hon/database db:test-attendance-backfill"
   }
 }

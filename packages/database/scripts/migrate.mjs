@@ -9,8 +9,20 @@ if (!databaseUrl) {
 }
 
 const migrationsDirectory = new URL('../migrations/', import.meta.url);
+const stopAfter = process.env.HON_MIGRATION_STOP_AFTER;
+if (stopAfter && stopAfter !== '0113_hq_ai_task_profiles.sql') {
+  throw new Error('Only the guarded attendance backfill proof may stop migrations at 0113.');
+}
+if (stopAfter) {
+  const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+  if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_attendance_backfill_validation' || owner.username !== 'hon_attendance_backfill_owner'
+    || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_attendance_backfill_runtime') {
+    throw new Error('Stopping at 0113 requires the exact marked attendance-backfill localhost aliases.');
+  }
+}
 const files = (await readdir(migrationsDirectory))
   .filter((file) => /^\d{4}_.+\.sql$/.test(file))
+  .filter((file) => !stopAfter || file <= stopAfter)
   .sort();
 
 const client = new Client({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } });
@@ -29,6 +41,16 @@ try {
   for (const file of files) {
     if (applied.has(file)) continue;
     let sql = await readFile(join(migrationsDirectory.pathname, file), 'utf8');
+    if (new URL(databaseUrl).username === 'hon_attendance_owner') {
+      const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_attendance_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_attendance_runtime') throw new Error('Attendance aliases require exact disposable localhost database.');
+      sql = sql.replaceAll('hon_runtime', 'hon_attendance_runtime');
+    }
+    if (new URL(databaseUrl).username === 'hon_attendance_backfill_owner') {
+      const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_attendance_backfill_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_attendance_backfill_runtime') throw new Error('Attendance backfill aliases require exact marked disposable localhost database.');
+      sql = sql.replaceAll('hon_runtime', 'hon_attendance_backfill_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_achievement_owner') {
       const owner=new URL(databaseUrl), runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
       if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_achievement_validation' || runtime.hostname!=='localhost' || runtime.port!=='5432' || runtime.pathname!==owner.pathname || runtime.username!=='hon_achievement_runtime') throw new Error('Achievement aliases require exact disposable localhost database.');

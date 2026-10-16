@@ -107,6 +107,9 @@ import { ClassSessionController } from './schedule/class-session.controller.js';
 import { ClassSessionService } from './schedule/class-session.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
+import { AttendancePolicyService } from './schedule/attendance-policy.service.js';
+import { AttendancePolicyController } from './schedule/attendance-policy.controller.js';
+import { AttendanceHumanUiGuard } from './schedule/attendance-human-ui.guard.js';
 import { ClassBookingController } from './schedule/class-booking.controller.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
 import { PlannedAbsenceReviewController } from './schedule/planned-absence-review.controller.js';
@@ -220,6 +223,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     ProgramController,
     ClassSessionController,
     AttendanceController,
+    AttendancePolicyController,
     ClassBookingController,
     PlannedAbsenceReviewController,
     KnowledgeArticleController,
@@ -306,6 +310,8 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     ProgramService,
     ClassSessionService,
     AttendanceService,
+    AttendancePolicyService,
+    AttendanceHumanUiGuard,
     ClassBookingService,
     PlannedAbsenceReviewService,
     KnowledgeArticleService,
