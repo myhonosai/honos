@@ -44,19 +44,20 @@ A fresh marked localhost-only integrity suite now covers 33 assertion groups, 72
 
 - The completed ClassPass admission/redemption service, check-in/attendance boundary, school context, session authentication, and conservative unknown-outcome behavior.
 
-### Bounded missing functionality
+### Delivered bounded handoff foundation (migration `0122`)
 
-- A kiosk-device/session model with a sharply limited school/terminal scope, short-lived interaction state, safe reset/lock behavior, and an explicit staff recovery path.
-- A minimal self-service discovery and check-in flow that never becomes a directory, exposes private family/student/payment information, or treats a scan/tap/provider response as success without server verification.
-- Clear unavailable/needs-staff states for capacity, missing eligibility, ambiguous identity, unknown payment/reconciliation, and provider/outage conditions.
+- A school-owned terminal/device and 15-minute opaque terminal-session bearer with direct-human staff activation/retirement, forced private storage, reset/lock behavior and exact staff recovery.
+- A direct-human staff-provisioned, opaque, single-use 10-minute claim for one exact existing student/session context. The public kiosk receives no selector, identity, organization/school, family, pass, class, payment or permission data; it submits only terminal + claim bearer values.
+- An atomic fixed public boundary that always returns `NEEDS_STAFF_ASSISTANCE`, recording a redacted `PENDING_STAFF_REVIEW` handoff only after successful exact server verification. Invalid, expired, replayed, retired, cross-school, ambiguous or unavailable cases receive the same generic result without a state oracle.
+- Resettable `/kiosk` and exact-ID direct-human `/staff/kiosk` surfaces. They state clearly that there is no admission, ClassPass redemption, booking, check-in, attendance, payment, notification, identity verification or provider outcome.
 
 ### Dependencies and security requirements
 
-Kiosk follows the ClassPass and check-in backend rather than duplicating admission, attendance, payment, or identity logic. It has no general staff/HQ authority, cannot change membership/pricing, cannot issue credits/refunds, cannot view protected records beyond the exact verified interaction, and never receives raw payment credentials.
+Kiosk follows the ClassPass and check-in backend rather than duplicating admission, attendance, payment, or identity logic. This initial bounded handoff does not invoke either command. It has no general staff/HQ authority, cannot change membership/pricing, cannot issue credits/refunds, cannot view protected records beyond the exact verified interaction, and never receives raw payment credentials. Public bearer submission creates no HON audit event because it must not be falsely attributed to staff; its private receipt is redacted to IDs/time/fixed outcome.
 
 ### Acceptance evidence
 
-Validate device/session expiry, terminal-school isolation, replay and concurrent scans, cross-school and ambiguous-identity denial, screen reset/redaction, no directory enumeration, staff-only recovery, and no external payment or message effect without separately approved adapters.
+Fresh guarded local validation covers device/session expiry, terminal-school isolation, replay and concurrent scans, cross-school and ambiguous-identity denial, screen reset/redaction, no directory enumeration, staff-only recovery, forced RLS/ACL/function grant-option drift, row-level no-effect snapshots and no external payment/message effect. The fixed runtime verifier now tracks kiosk tables and exact function boundary. Focused domain/API/UI tests cover opaque exact input, public generic response, direct-human transport/context, no PII/financial surface and same-origin credential-free public submission. The detailed operating contract is [Self-Service Kiosk Handoff](SELF_SERVICE_KIOSK_HANDOFF.md).
 
 ## C. HON AI Model Intelligence & Routing
 

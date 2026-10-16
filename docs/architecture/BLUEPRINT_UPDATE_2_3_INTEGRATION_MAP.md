@@ -108,7 +108,7 @@ Build on Migration Center and HQ onboarding foundations: school/profile/program/
 1. Preserve and complete current HQ task-profile control-plane milestone.
 2. Complete Essential/Core/Complete entitlement enforcement and governed AI employee/Action Engine integration against existing slices.
 3. Use the completed advanced-attendance and deterministic-readiness boundaries before any future progression integration; completed ClassPass remains nonfinancial and does not alter either domain.
-4. The direct-human manual-nonfinancial ClassPass & Walk-In foundation is complete on existing membership/billing/scheduling/capacity/attendance. Next, design Kiosk only on its bounded admission result and the existing check-in boundary.
+4. The direct-human manual-nonfinancial ClassPass & Walk-In foundation is complete on existing membership/billing/scheduling/capacity/attendance. The completed `0122` Kiosk handoff now uses only opaque terminal/claim verification and human staff recovery; it deliberately does not admit, redeem, book, check in or record attendance. Any future kiosk completion must remain on the reviewed ClassPass/check-in authority boundary.
 5. Add retention alerts and acknowledgements on already proven evidence/delivery boundaries.
 6. Add curriculum video library and guided onboarding/import extensions with existing storage/migration controls.
 7. Continue model optimization only via evaluated HQ profiles and a separately owner-authorized bounded provider validation.

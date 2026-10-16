@@ -181,9 +181,10 @@ import { TeachingStudioHumanUiGuard } from './teaching-studio/teaching-studio.dt
 import { RetentionReviewController } from './retention-review/retention-review.controller.js';
 import { RetentionReviewService } from './retention-review/retention-review.service.js';
 import { RetentionReviewHumanUiGuard } from './retention-review/retention-review.dto.js';
+import { KioskModule } from './kiosk/kiosk.module.js';
 
 @Module({
-  imports: [ClassPassModule],
+  imports: [ClassPassModule, KioskModule],
   controllers: [
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,

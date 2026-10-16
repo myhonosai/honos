@@ -4,10 +4,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { json } from 'express';
 import { publicFormTransport } from './marketing/public-form-transport.js';
+import { kioskTransport } from './kiosk/kiosk-transport.js';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { cors: false, bodyParser: false });
   // JSON escaping may expand 256 KiB CSV; domain validation retains strict caps.
+  app.use(kioskTransport());
   app.use(publicFormTransport());
   app.use(json({ limit: '2mb', strict: true }));
   app.setGlobalPrefix('v1');

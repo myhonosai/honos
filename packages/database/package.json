@@ -84,7 +84,9 @@
     "db:setup-promotion-readiness": "node scripts/setup-promotion-readiness-validation.mjs",
     "db:test-promotion-readiness": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-promotion-readiness-integrity.mjs",
     "db:setup-classpass": "node scripts/setup-classpass-validation.mjs",
-    "db:test-classpass": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-classpass-integrity.mjs"
+    "db:test-classpass": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-classpass-integrity.mjs",
+    "db:setup-kiosk-handoff": "node scripts/setup-kiosk-handoff-validation.mjs",
+    "db:test-kiosk-handoff": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-kiosk-handoff-integrity.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

@@ -84,6 +84,22 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.getPool().query('SELECT 1');
   }
 
+  async submitKioskHandoff(terminalSession: string, claim: string): Promise<void> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const logging = await client.query<{ safe: boolean }>("SELECT current_setting('log_parameter_max_length')='0' safe");
+      if (logging.rows[0]?.safe !== true) throw new Error('KIOSK_UNAVAILABLE');
+      await client.query('SELECT hon.submit_kiosk_handoff($1,$2)', [terminalSession,claim]);
+      await client.query('COMMIT');
+    } catch {
+      await client.query('ROLLBACK');
+      throw new Error('KIOSK_UNAVAILABLE');
+    } finally { client.release(); }
+  }
+
   private async assertRuntimePosture(): Promise<void> {
     this.postureCheck ??= (async () => {
       const result = await this.getPool().query<{ rolsuper: boolean; rolbypassrls: boolean }>(

@@ -80,3 +80,4 @@ export * from './ai-task-profile-router.js';
 export * from './attendance-policy.js';
 
 export * from './classpass.js';
+export * from './kiosk.js';

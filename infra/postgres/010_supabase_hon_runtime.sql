@@ -867,3 +867,23 @@ DO $$ DECLARE r text; BEGIN
  END LOOP;
  GRANT EXECUTE ON FUNCTION hon.read_parent_classpass_view(text) TO hon_runtime;
 END $$;
+
+-- Kiosk handoff: only fixed functions, never direct table/column authority.
+-- Parameter logging is superuser-controlled: no elevated runtime setting grant.
+ALTER ROLE hon_runtime SET log_parameter_max_length=0;
+ALTER ROLE hon_runtime SET log_parameter_max_length_on_error=0;
+DO $$ DECLARE r text; t text; signature text; BEGIN
+ FOREACH t IN ARRAY ARRAY['kiosk_terminals','kiosk_terminal_sessions','kiosk_claims','kiosk_handoffs','kiosk_receipts'] LOOP
+  EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+  END LOOP;
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['manage_kiosk_terminal(text,text,uuid,uuid,text)','provision_kiosk_claim(text,uuid,uuid,uuid,text)','submit_kiosk_handoff(text,text)','read_kiosk_handoff(text,uuid)','lock_kiosk_actor(text,text)','kiosk_secret_valid(text)','guard_kiosk_transition()'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC',signature);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I',signature,r);
+  END LOOP;
+  IF signature IN('manage_kiosk_terminal(text,text,uuid,uuid,text)','provision_kiosk_claim(text,uuid,uuid,uuid,text)','submit_kiosk_handoff(text,text)','read_kiosk_handoff(text,uuid)') THEN EXECUTE format('GRANT EXECUTE ON FUNCTION hon.%s TO hon_runtime',signature); END IF;
+ END LOOP;
+END $$;

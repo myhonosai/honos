@@ -1704,3 +1704,39 @@ DO $$ DECLARE f record; safe boolean; r text; BEGIN
  END IF;
 END $$;
 -- End class booking lock exact verification.
+
+-- Kiosk handoff exact verification:
+DO $$ DECLARE t text; f record; runtime_oid oid; executable boolean; signature text; expected_config text[]; BEGIN
+ SELECT oid INTO runtime_oid FROM pg_roles WHERE rolname='hon_runtime';
+ IF runtime_oid IS NULL THEN RAISE EXCEPTION 'Kiosk runtime missing'; END IF;
+ FOREACH t IN ARRAY ARRAY['kiosk_terminals','kiosk_terminal_sessions','kiosk_claims','kiosk_handoffs','kiosk_receipts'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND c.relowner<>runtime_oid)
+   OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=('hon.'||t)::regclass) THEN RAISE EXCEPTION 'Kiosk forced no-policy RLS required: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+   OR EXISTS(SELECT 1 FROM pg_attribute att JOIN pg_class c ON c.oid=att.attrelid,LATERAL aclexplode(att.attacl) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+   OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Kiosk private table/column ACL surplus: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM pg_constraint fk WHERE fk.conrelid=('hon.'||t)::regclass AND fk.contype='f' AND (cardinality(fk.conkey)<2
+   OR NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=fk.conrelid AND a.attname='organization_id' AND a.attnum=ANY(fk.conkey))
+   OR NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=fk.conrelid AND a.attname='school_id' AND a.attnum=ANY(fk.conkey)))) THEN RAISE EXCEPTION 'Kiosk composite scope FK required: %',t; END IF;
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['manage_kiosk_terminal(text,text,uuid,uuid,text)','provision_kiosk_claim(text,uuid,uuid,uuid,text)','submit_kiosk_handoff(text,text)','read_kiosk_handoff(text,uuid)','lock_kiosk_actor(text,text)','kiosk_secret_valid(text)','guard_kiosk_transition()'] LOOP
+  SELECT p.*,o.rolsuper,o.rolbypassrls INTO f FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=('hon.'||signature)::regprocedure;
+  executable:=signature IN('manage_kiosk_terminal(text,text,uuid,uuid,text)','provision_kiosk_claim(text,uuid,uuid,uuid,text)','submit_kiosk_handoff(text,text)','read_kiosk_handoff(text,uuid)');
+  expected_config:=CASE WHEN signature='kiosk_secret_valid(text)' THEN ARRAY['search_path=pg_catalog'] ELSE ARRAY['search_path=pg_catalog, hon'] END;
+  IF f.oid IS NULL OR f.proowner=runtime_oid OR NOT(f.rolsuper OR f.rolbypassrls) OR f.proconfig IS DISTINCT FROM expected_config
+   OR (signature NOT IN('kiosk_secret_valid(text)','guard_kiosk_transition()') AND (NOT f.prosecdef OR f.provolatile<>'v')) THEN RAISE EXCEPTION 'Kiosk function posture: %',signature; END IF;
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>f.proowner OR (a.grantee<>f.proowner AND (NOT executable OR a.grantee<>runtime_oid)))
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=f.proowner AND NOT a.is_grantable)<>1
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=runtime_oid AND NOT a.is_grantable)<>(CASE WHEN executable THEN 1 ELSE 0 END)
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE') IS DISTINCT FROM executable
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE WITH GRANT OPTION') THEN RAISE EXCEPTION 'Kiosk exact function ACL surplus/missing/grant option: %',signature; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_proc WHERE oid='hon.submit_kiosk_handoff(text,text)'::regprocedure AND pronargs=2 AND prorettype='text'::regtype)
+  OR NOT EXISTS(SELECT 1 FROM pg_proc WHERE oid='hon.read_kiosk_handoff(text,uuid)'::regprocedure AND pronargs=2 AND prorettype='jsonb'::regtype) THEN RAISE EXCEPTION 'Kiosk exact fixed signatures required'; END IF;
+ IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='hon' AND table_name='kiosk_receipts' AND column_name NOT IN('id','organization_id','school_id','handoff_id','claim_id','terminal_session_id','result','recorded_at')) THEN RAISE EXCEPTION 'Kiosk receipt must contain internal IDs/result/time only'; END IF;
+ IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.kiosk_receipts'::regclass AND NOT tgisinternal AND tgenabled='O' AND tgfoid='hon.guard_campaign_history()'::regprocedure)<>3 THEN RAISE EXCEPTION 'Kiosk receipt append-only guards required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit AND NOT rolreplication) THEN RAISE EXCEPTION 'Kiosk restricted runtime required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_db_role_setting WHERE setrole=runtime_oid AND setdatabase=0 AND setconfig @> ARRAY['log_parameter_max_length=0','log_parameter_max_length_on_error=0']) THEN RAISE EXCEPTION 'Kiosk bearer parameter logging must be disabled by administrator'; END IF;
+END $$;
+-- End kiosk handoff exact verification.

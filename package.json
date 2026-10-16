@@ -89,6 +89,8 @@
     "db:setup-promotion-readiness": "pnpm --filter @hon/database db:setup-promotion-readiness",
     "db:test-promotion-readiness": "pnpm --filter @hon/database db:test-promotion-readiness",
     "db:setup-classpass": "pnpm --filter @hon/database db:setup-classpass",
-    "db:test-classpass": "pnpm --filter @hon/database db:test-classpass"
+    "db:test-classpass": "pnpm --filter @hon/database db:test-classpass",
+    "db:setup-kiosk-handoff": "pnpm --filter @hon/database db:setup-kiosk-handoff",
+    "db:test-kiosk-handoff": "pnpm --filter @hon/database db:test-kiosk-handoff"
   }
 }

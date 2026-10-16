@@ -191,6 +191,14 @@
     {
       "path": "/parent/classpass",
       "title": "HON | Family ClassPass Observations"
+    },
+    {
+      "path": "/kiosk",
+      "title": "HON | Staff Assistance Kiosk"
+    },
+    {
+      "path": "/staff/kiosk",
+      "title": "HON | Human Kiosk Handoff"
     }
   ]
 }
