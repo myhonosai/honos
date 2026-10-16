@@ -1,7 +1,7 @@
 'use client';
 import { ParentJourneyUnavailable } from './parent-journey-unavailable';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   HON_AI_TEAM,
   HON_INTERFACE_THEMES,
@@ -59,6 +59,24 @@ function portraitFor(agent: HonAiTeamMember, style: AiPortraitStyle): string {
   return HON_REFERENCE_PORTRAITS[style][agent.id] ?? agent.portrait;
 }
 
+function AgentVisual({ agent, portraitStyle, className }: { agent: HonAiTeamMember; portraitStyle: AiPortraitStyle; className?: string | undefined }): React.ReactElement {
+  const source = portraitFor(agent, portraitStyle);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [source]);
+  if (failed) return <span className={`${styles.portraitFallback} ${className ?? ''}`} aria-hidden="true">{agent.name.slice(0, 1)}</span>;
+  return <img className={className} src={source} alt="" onError={() => setFailed(true)} />;
+}
+
+function HeroAgentPortrait({ agent, portraitStyle }: { agent: HonAiTeamMember; portraitStyle: AiPortraitStyle }): React.ReactElement {
+  const source = portraitFor(agent, portraitStyle);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [source]);
+  return <span className={styles.heroAgentVisual} aria-hidden="true">
+    {!failed && <img src={source} alt="" onError={() => setFailed(true)} />}
+    {failed && <span className={styles.heroPortraitFallback}>{agent.name.slice(0, 1)}</span>}
+  </span>;
+}
+
 const schoolMetrics = [
   ['191', 'Active Students', '+3'],
   ['24', 'New Leads', '+6'],
@@ -98,7 +116,7 @@ function AgentPortrait({ agent, selected, onSelect, status = 'Ready', portraitSt
     onClick={onSelect}
     aria-pressed={selected}
   >
-    <span className={styles.portraitFrame}><img src={portraitFor(agent, portraitStyle)} alt="" /></span>
+    <span className={styles.portraitFrame}><AgentVisual agent={agent} portraitStyle={portraitStyle} /></span>
     <span className={styles.agentName}>{agent.name}</span>
     <span className={styles.agentRole}>{agent.title}</span>
     <span className={styles.agentState}><i />{status}</span>
@@ -157,8 +175,8 @@ function BigButtonComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: {
   const alex = HON_AI_TEAM[0];
   return <main className={`${styles.referencePage} ${styles.bigButtonExperience}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><PortraitStyleSwitcher style={portraitStyle} onChange={onPortraitStyle} /><section className={styles.bigAppShell}>
     <header className={styles.bigAppHeader}><Mark compact /><div className={styles.bigSchoolSwitch}>◉ Ideal Martial Arts⌄</div><span>◔</span><span className={styles.bigAvatar}>MD</span></header>
-    <section className={styles.bigGreeting}><div><span>HON COMPLETE · TOUCH-FIRST</span><h1>Good morning,<br />Master David!</h1><p>Your AI team is here to help you grow your school.</p><button type="button">◉ Ask Alex anything… <b>⌁</b></button></div><img src={portraitFor(alex, portraitStyle)} alt="" /></section>
-    <section className={styles.bigTeamCard}><header><strong>Your AI Team</strong><button type="button">View All ›</button></header>{HON_AI_TEAM.slice(0,4).map((agent, index)=><div key={agent.id}><img src={portraitFor(agent, portraitStyle)} alt="" /><span><b>{agent.name}</b><small>{agent.signal} · {index === 1 ? 'Working' : 'Ready'}</small></span><i style={{background: agent.color}} /></div>)}</section>
+    <section className={styles.bigGreeting}><div><span>HON COMPLETE · TOUCH-FIRST</span><h1>Good morning,<br />Master David!</h1><p>Your AI team is here to help you grow your school.</p><button type="button">◉ Ask Alex anything… <b>⌁</b></button></div><AgentVisual agent={alex} portraitStyle={portraitStyle} className={styles.bigGreetingPortrait} /></section>
+    <section className={styles.bigTeamCard}><header><strong>Your AI Team</strong><button type="button">View All ›</button></header>{HON_AI_TEAM.slice(0,4).map((agent, index)=><div key={agent.id}><AgentVisual agent={agent} portraitStyle={portraitStyle} className={styles.bigTeamPortrait} /><span><b>{agent.name}</b><small>{agent.signal} · {index === 1 ? 'Working' : 'Ready'}</small></span><i style={{background: agent.color}} /></div>)}</section>
     <section className={styles.bigActionGrid}>{[['♟','Students','191'],['▣','Classes','24'],['✓','Attendance','Today'],['●','Leads','7'],['✦','Messages','3'],['◈','Programs',''],['$','Billing',''],['▥','Reports',''],['◉','AI Team',''],['⚙','Settings','']].map(([icon,label,value],i)=><button type="button" key={label} className={`${styles.bigAction} ${styles[`bigAction${i}`]}`}><i>{icon}</i><b>{label}</b><small>{value}</small></button>)}</section>
     <section className={styles.bigLower}><article><header><b>Today’s Classes</b><button type="button">View All ›</button></header>{[['3:30 PM','Tiny Tigers (4–6)','12/14'],['4:30 PM','Green Belt','16/16'],['5:30 PM','Black Belt Program','14/16']].map(([time,name,count])=><p key={name}><time>{time}</time><span>{name}</span><b>{count}</b></p>)}</article><article><header><b>Needs Attention <em>5</em></b></header>{['3 new leads to follow up','2 student absences','1 payment overdue','Review 3 class applications'].map((item,i)=><p key={item}><i>{['♨','♟','$','▣'][i]}</i>{item}<b>›</b></p>)}</article></section>
     <nav className={styles.bigBottomNav}><button>⌂<span>Home</span></button><button>◎<span>AI Team</span></button><button>▣<span>Schedule</span></button><button>☷<span>More</span></button></nav>
@@ -169,7 +187,7 @@ function ClassicComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: { t
  const menu=['Dashboard','AI Team','Students','Programs','Classes','Attendance','Schedule','Testing','Leads','Marketing','Messages','Campaigns','Billing','Reports','Documents','Settings'];
  return <main className={`${styles.referencePage} ${styles.classicExperience}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><PortraitStyleSwitcher style={portraitStyle} onChange={onPortraitStyle} /><section className={styles.classicAppShell}>
    <aside className={styles.classicRail}><Mark compact /><small>MAIN</small>{menu.map((m,i)=><button type="button" key={m} className={i===0?styles.classicActive:''}><i>{['◉','✦','♟','◈','▣','✓','◷','◆','●','↗','◌','✧','$','▥','□','⚙'][i]}</i>{m}</button>)}<footer>◌ Support<br />? Help Center</footer></aside>
-   <section className={styles.classicCanvas}><header className={styles.classicTopbar}><div>◉ Ideal Martial Arts⌄</div><label>⌕ Search students, leads, classes…</label><div className={styles.classicAgentStack} aria-label="AI team visual style preview">{HON_AI_TEAM.slice(0, 3).map((agent) => <img key={agent.id} src={portraitFor(agent, portraitStyle)} alt="" />)}</div><span>◔</span><span>♧</span><b>MD</b></header><div className={styles.classicHeading}><div><h1>Dashboard</h1><p>Overview of your school’s performance and activity.</p></div><button type="button">Oct 1 – Oct 31, 2026⌄</button></div>
+   <section className={styles.classicCanvas}><header className={styles.classicTopbar}><div>◉ Ideal Martial Arts⌄</div><label>⌕ Search students, leads, classes…</label><div className={styles.classicAgentStack} aria-label="AI team visual style preview">{HON_AI_TEAM.slice(0, 3).map((agent) => <AgentVisual key={agent.id} agent={agent} portraitStyle={portraitStyle} className={styles.classicAgentPortrait} />)}</div><span>◔</span><span>♧</span><b>MD</b></header><div className={styles.classicHeading}><div><h1>Dashboard</h1><p>Overview of your school’s performance and activity.</p></div><button type="button">Oct 1 – Oct 31, 2026⌄</button></div>
    <section className={styles.classicMetrics}>{[['♟','191','Active Students','+3 This Month'],['▣','24','Today’s Classes','+6% This Month'],['◈','7','New Leads','+40%'],['$','$31,850','Monthly Revenue','+12%']].map(([i,v,l,d])=><article key={l}><i>{i}</i><div><strong>{v}</strong><span>{l}</span><small>{d}</small></div></article>)}</section>
    <section className={styles.classicCharts}><article><header><b>Student Growth</b><button>Last 6 Months⌄</button></header><div className={styles.barChart}>{[38,50,47,68,57,82,91].map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div><footer><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span></footer></article><article><header><b>Program Distribution</b></header><div className={styles.donut}>191</div><ul><li>Tiny Tigers <b>28%</b></li><li>Green Belt <b>32%</b></li><li>Black Belt <b>24%</b></li><li>Leadership <b>10%</b></li></ul></article></section>
    <section className={styles.classicTables}><article><header><b>Recent Leads</b><button>View All ›</button></header>{[['Emily R.','Facebook','New','Oct 14'],['Daniel K.','Referral','Contacted','Oct 14'],['Sophia M.','Google','Trial Booked','Oct 13'],['James L.','Facebook','New','Oct 13']].map(r=><p key={r[0]}><span>{r[0]}</span><small>{r[1]}</small><em>{r[2]}</em><time>{r[3]}</time></p>)}</article><article><header><b>Today’s Schedule</b><button>View All ›</button></header>{[['3:30 PM','Tiny Tigers (4–6)','12/14'],['4:30 PM','Green Belt (Beginner)','16/16'],['5:30 PM','Black Belt Program','14/16'],['6:30 PM','Leadership Club','12/14']].map(r=><p key={r[1]}><time>{r[0]}</time><span>{r[1]}</span><b>{r[2]}</b></p>)}</article></section></section>
@@ -191,7 +209,7 @@ function CompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme; onThe
       <section className={styles.commandCanvas}>
         <header className={styles.canvasHeader}><div><span className={styles.contextLabel}>HON COMPLETE · SCHOOL OWNER VIEW</span><h1>An AI team that knows<br />what needs attention.</h1></div><div className={styles.schoolSelect}><span>⌂</span><div><strong>Ideal Martial Arts</strong><small>San Gabriel · Design reference</small></div><b>⌄</b></div></header>
         <section className={styles.completeHero}>
-          <div className={styles.heroPortrait} style={{ '--hero-image': `url(${portraitFor(agent, portraitStyle)})`, '--agent-color': agent.color } as React.CSSProperties}><div className={styles.heroCopy}><span>{agent.name.toUpperCase()} · SELECTED</span><strong>{agent.name} is ready to coordinate your next move.</strong><p>Switch employees, ask one question, and keep every action inside permissions, policy, and approval.</p></div></div>
+          <div className={styles.heroPortrait} style={{ '--agent-color': agent.color, '--hero-image': 'none' } as React.CSSProperties}><HeroAgentPortrait agent={agent} portraitStyle={portraitStyle} /><div className={styles.heroCopy}><span>{agent.name.toUpperCase()} · SELECTED</span><strong>{agent.name} is ready to coordinate your next move.</strong><p>Switch employees, ask one question, and keep every action inside permissions, policy, and approval.</p></div></div>
           <div className={styles.heroContext}><p>Today at a glance</p><strong>Tue, Oct 14</strong><ul><li><b>191</b> Active Students <span>↗ 3</span></li><li><b>24</b> New Leads <span>↗ 6</span></li><li><b>8</b> Trial Classes <span>↗ 2</span></li></ul></div>
         </section>
         <AgentRoster active={active} onActive={setActive} portraitStyle={portraitStyle} />
@@ -249,7 +267,7 @@ function MobileCompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme;
   const [active, setActive] = useState<HonAiTeamId>('alex');
   const [portraitStyle, setPortraitStyle] = useState<AiPortraitStyle>('realistic');
   const agent = HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0];
-  return <main className={`${styles.referencePage} ${styles.mobilePage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><PortraitStyleSwitcher style={portraitStyle} onChange={setPortraitStyle} /><section className={styles.mobileStage}><header><Mark compact /><div><span>MOBILE HON COMPLETE</span><h1>Big-button AI command, without losing control.</h1><p>A touch-first presentation mode of the same governed application.</p></div></header><article className={styles.mobileCompletePhone}><div className={styles.phoneTop}><b>9:41</b><strong>HON</strong><span>◒ ▴</span></div><div className={styles.mobileSchool}>⌂ Ideal Martial Arts <b>⌄</b></div><div className={styles.mobileAgents}>{HON_AI_TEAM.slice(0, 4).map((member) => <button key={member.id} className={active === member.id ? styles.mobileAgentActive : ''} style={{ '--agent-color': member.color } as React.CSSProperties} onClick={() => setActive(member.id)} type="button"><img src={portraitFor(member, portraitStyle)} alt="" /><span>{member.name}</span></button>)}</div><div className={styles.mobileGreeting}><span>{agent.name.toUpperCase()} · {agent.title.toUpperCase()}</span><h2>What should we work on today?</h2><p>Touch a priority or start a voice/text request.</p></div><CommandLane agent={agent} compact /><div className={styles.mobileActions}>{[['◎', 'Show today’s priorities'], ['◉', 'Check enrollments'], ['▥', 'Review revenue'], ['✦', 'Improve retention']].map(([icon, label]) => <button type="button" key={label}><i>{icon}</i>{label}<span>→</span></button>)}</div><div className={styles.mobileWork}><span>TEAM WORK</span><p><i />Chad is organizing 5 lead follow-ups <b>Working</b></p><p><i />Maya has 2 parent messages ready <b>Ready</b></p></div><div className={styles.phoneNav}><button className={styles.phoneActive}>Home</button><button>School</button><button>AI Team</button><button>Work</button><button>More</button></div></article></section></main>;
+  return <main className={`${styles.referencePage} ${styles.mobilePage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><PortraitStyleSwitcher style={portraitStyle} onChange={setPortraitStyle} /><section className={styles.mobileStage}><header><Mark compact /><div><span>MOBILE HON COMPLETE</span><h1>Big-button AI command, without losing control.</h1><p>A touch-first presentation mode of the same governed application.</p></div></header><article className={styles.mobileCompletePhone}><div className={styles.phoneTop}><b>9:41</b><strong>HON</strong><span>◒ ▴</span></div><div className={styles.mobileSchool}>⌂ Ideal Martial Arts <b>⌄</b></div><div className={styles.mobileAgents}>{HON_AI_TEAM.slice(0, 4).map((member) => <button key={member.id} className={active === member.id ? styles.mobileAgentActive : ''} style={{ '--agent-color': member.color } as React.CSSProperties} onClick={() => setActive(member.id)} type="button"><AgentVisual agent={member} portraitStyle={portraitStyle} className={styles.mobileAgentPortrait} /><span>{member.name}</span></button>)}</div><div className={styles.mobileGreeting}><span>{agent.name.toUpperCase()} · {agent.title.toUpperCase()}</span><h2>What should we work on today?</h2><p>Touch a priority or start a voice/text request.</p></div><CommandLane agent={agent} compact /><div className={styles.mobileActions}>{[['◎', 'Show today’s priorities'], ['◉', 'Check enrollments'], ['▥', 'Review revenue'], ['✦', 'Improve retention']].map(([icon, label]) => <button type="button" key={label}><i>{icon}</i>{label}<span>→</span></button>)}</div><div className={styles.mobileWork}><span>TEAM WORK</span><p><i />Chad is organizing 5 lead follow-ups <b>Working</b></p><p><i />Maya has 2 parent messages ready <b>Ready</b></p></div><div className={styles.phoneNav}><button className={styles.phoneActive}>Home</button><button>School</button><button>AI Team</button><button>Work</button><button>More</button></div></article></section></main>;
 }
 
 export function HonReferenceSuite({ screen }: { screen: ReferenceScreen }): React.ReactElement {

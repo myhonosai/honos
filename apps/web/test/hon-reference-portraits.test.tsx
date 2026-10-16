@@ -16,13 +16,17 @@ describe('HON AI portrait presentation variants', () => {
   });
 
   it('applies a selected style across modern, classic, big-button, HQ, and mobile reference presentations', () => {
-    for (const text of ['portraitFor(agent, portraitStyle)', 'PortraitStyleSwitcher', 'classicAgentStack', 'portraitStyle={portraitStyle}', 'portraitFor(member, portraitStyle)']) expect(source).toContain(text);
+    for (const text of ['portraitFor(agent, portraitStyle)', 'PortraitStyleSwitcher', 'classicAgentStack', 'portraitStyle={portraitStyle}', 'AgentVisual agent={member}']) expect(source).toContain(text);
     expect(styles).toContain('.portraitStyleSwitcher');
     expect(styles).toContain('.classicAgentStack');
   });
 
   it('states and preserves the presentation-only boundary', () => {
     expect(source).toContain('Presentation assets only · agent identity, authority, routes, and tools never change.');
+    expect(source).toContain('onError={() => setFailed(true)}');
+    expect(source).toContain('portraitFallback');
+    expect(styles).toContain('.portraitFallback');
+    expect(styles).toContain('.heroPortraitFallback');
     expect(source).not.toMatch(/portraitStyle.*(?:modelId|providerId|toolGrant|authorityMode)/s);
   });
 });
