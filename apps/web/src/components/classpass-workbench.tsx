@@ -1,10 +1,11 @@
 'use client';
-import { useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { CLASSPASS_ACTIONS, type ClassPassAction, type ClassPassInput, type ClassPassReceipt, type ClassPassReadKind } from '@hon/contracts';
 import { commandClassPass, readClassPass } from './classpass-workbench-http';
 import styles from './attendance-workbench.module.css';
-export function ClassPassWorkbench() {
- const [scope,setScope]=useState({organizationId:'',schoolId:''});
+export type ClassPassInitialScope={organizationId?:string|undefined;schoolId?:string|undefined};
+export function ClassPassWorkbench({initialScope={}}:{initialScope?:ClassPassInitialScope}={}) {
+ const [scope,setScope]=useState({organizationId:initialScope.organizationId??'',schoolId:initialScope.schoolId??''});
  const [action,setAction]=useState<ClassPassAction>('CONFIGURE_PRODUCT');
  const [draft,setDraft]=useState({target:'',programId:'',studentProfileId:'',passId:'',name:'',allowedUses:'1',validityDays:'30',expectedVersion:'0',reason:''});
  const [readKind,setReadKind]=useState<ClassPassReadKind>('PRODUCT');const [readId,setReadId]=useState('');
@@ -28,7 +29,7 @@ export function ClassPassWorkbench() {
  }
  return <main className={styles.page}>
   <header className={styles.header}><p className={styles.eyebrow}>Human staff · operational allowance</p><h1>ClassPass &amp; Walk-In</h1><p>Manual nonfinancial grants only. No purchase, reconciliation, refund or credit. Payment/provider outcome unavailable.</p></header>
-  <section className={styles.panel}><h2>Exact known school context</h2><p>No directory, roster, search or inferred family association. Parent ClassPass projection unavailable.</p><fieldset disabled={busy} className={styles.scopeGrid}>{(['organizationId','schoolId'] as const).map(field=><label key={field}>{field}<input value={scope[field]} onChange={e=>{clear();setScope(s=>({...s,[field]:e.target.value.trim().toLowerCase()}));}} /></label>)}</fieldset></section>
+  <section className={styles.panel}><h2>Exact known school context</h2><p>No directory, roster, search or inferred family association. A verified view may prefill untrusted UUIDs only; no record or command runs until a direct human selects an operation. Parent ClassPass projection unavailable.</p><fieldset disabled={busy} className={styles.scopeGrid}>{(['organizationId','schoolId'] as const).map(field=><label key={field}>{field}<input value={scope[field]} onChange={e=>{clear();setScope(s=>({...s,[field]:e.target.value.trim().toLowerCase()}));}} /></label>)}</fieldset></section>
   <section className={styles.panel}><h2>Read one exact operational record</h2><fieldset disabled={busy} className={styles.recordForm}><label>Record kind<select value={readKind} onChange={e=>{clear();setReadKind(e.target.value as ClassPassReadKind);}}>{['PRODUCT','PASS','BOOKING'].map(k=><option key={k}>{k}</option>)}</select></label><label>Exact record UUID<input value={readId} onChange={e=>{clear();setReadId(e.target.value.trim().toLowerCase());}} /></label><button onClick={()=>void run(()=>readClassPass(scope,readKind,readId))}>Read exact record</button></fieldset></section>
   <section className={styles.panel}><h2>Direct human command</h2><p>Configure target = product UUID (new: expected version 0). Issue target = product UUID/version. Admit target = exact session UUID; version = pass version. Reverse redemption target = exact booking UUID; version = pass version. Retirement does not alter frozen issued allowances.</p>
    <fieldset disabled={busy} className={styles.recordForm}><label>Operation<select value={action} onChange={e=>{clear();setAction(e.target.value as ClassPassAction);}}>{CLASSPASS_ACTIONS.map(a=><option key={a}>{a}</option>)}</select></label>

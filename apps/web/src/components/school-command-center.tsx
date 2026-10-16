@@ -23,6 +23,9 @@ function utc(value: string): string {
 function crmScopeHref(path: '/staff/crm/leads' | '/staff/crm/trials', organizationId: string, schoolId: string): string {
   return `${path}?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
 }
+function classPassScopeHref(organizationId: string, schoolId: string): string {
+  return `/staff/classpass?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
+}
 function localHidden(): string[] {
   try {
     const value = JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? '[]');
@@ -173,9 +176,10 @@ export function SchoolCommandCenter(): React.ReactElement {
   const themeClass = interfaceTheme === 'big-button' ? styles.bigButton : interfaceTheme === 'classic' ? styles.classic : styles.modern;
   const crmLeadsHref = snapshot ? crmScopeHref('/staff/crm/leads', snapshot.organizationId, snapshot.schoolId) : '/staff/crm/leads';
   const trialAppointmentsHref = snapshot ? crmScopeHref('/staff/crm/trials', snapshot.organizationId, snapshot.schoolId) : '/staff/crm/trials';
+  const classPassHref = snapshot ? classPassScopeHref(snapshot.organizationId, snapshot.schoolId) : '/staff/classpass';
 
   return <main className={`${styles.page} ${themeClass}`} data-interface-theme={interfaceTheme}>
-    <nav aria-label="Staff navigation"><a href="/staff/dashboard">Operations dashboard</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/staff/dashboard">Operations dashboard</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href={classPassHref}>ClassPass &amp; Walk-In</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / SCHOOL COMMAND CENTER</p><h1>School Command Center</h1><p>An optional, conventional, read-only school view that extends the staff dashboard. It uses deterministic operational data only—no AI, Action Engine execution, provider call, or mutation.</p></header>
     <aside className={styles.notice}><strong>Human navigation only.</strong><p>Known IDs select one school; they never grant access. The server verifies a direct human, exact <code>reporting.view</code>, selected school, and active Essential/Core/Complete entitlement. Every recommendation opens an existing workflow and never performs an action.</p></aside>
     <section className={styles.scopeSection} aria-labelledby="command-center-scope"><div><h2 id="command-center-scope">Verified current school</h2><p>Enter already-known staff-context IDs. No snapshot is requested until you select a school.</p></div><form onSubmit={submit} aria-busy={loading}><fieldset disabled={loading}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label><button type="submit">{loading ? 'Verifying school…' : 'Load Command Center'}</button></fieldset></form>{!snapshot && !loading && !error && <p className={styles.scopeState} role="status">No verified school is selected. No Command Center data is shown.</p>}{loading && <p className={styles.scopeState} role="status">Verifying access and loading deterministic aggregate facts…</p>}{error && <p className={styles.error} role="alert">{error}</p>}{snapshot && <div className={styles.verified} role="status"><strong>Verified current school</strong><span>Organization <code>{snapshot.organizationId}</code></span><span>School <code>{snapshot.schoolId}</code></span><span>Tier: {snapshot.entitlementTier}</span><span>Generated: {utc(snapshot.generatedAt)} UTC</span></div>}</section>

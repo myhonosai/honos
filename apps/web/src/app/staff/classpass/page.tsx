@@ -1,12 +1,15 @@
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { HON_SESSION_COOKIE, sessionConfig, verifySession } from '@hon/auth';
 import { ClassPassWorkbench } from '../../../components/classpass-workbench';
-export const dynamic='force-dynamic';
-export const metadata={title:'HON | Human ClassPass Workbench',robots:{index:false,follow:false}};
-export default async function StaffClassPassPage() {
- let authenticated=false;
- try {const token=(await cookies()).get(HON_SESSION_COOKIE)?.value;if(token){verifySession(token,sessionConfig());authenticated=true;}}catch{/* fail closed */}
- if(!authenticated)redirect('/auth/login');
- return <ClassPassWorkbench />;
+
+export const dynamic = 'force-dynamic';
+export const metadata = { title: 'HON | Human ClassPass Workbench', robots: { index: false, follow: false } };
+
+type ClassPassPageProps = { searchParams: Promise<{ organizationId?: string; schoolId?: string }> };
+
+function value(input: unknown): string | undefined {
+  return typeof input === 'string' && input.length <= 80 ? input : undefined;
+}
+
+export default async function StaffClassPassPage({ searchParams }: ClassPassPageProps) {
+  const query = await searchParams;
+  return <ClassPassWorkbench initialScope={{ organizationId: value(query.organizationId), schoolId: value(query.schoolId) }} />;
 }

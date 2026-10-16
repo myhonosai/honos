@@ -26,6 +26,9 @@ function WorkflowLink({ href, children }: { href: string; children: React.ReactN
 function crmScopeHref(path: '/staff/crm/leads' | '/staff/crm/trials', organizationId: string, schoolId: string): string {
   return `${path}?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
 }
+function classPassScopeHref(organizationId: string, schoolId: string): string {
+  return `/staff/classpass?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
+}
 function NoAggregate({ workflow, children }: { workflow: string; children: React.ReactNode }): React.ReactElement {
   return <article className={styles.unavailable}><span>NOT COUNTED HERE</span><p>{children}</p><WorkflowLink href={workflow}>Open the managed workflow</WorkflowLink></article>;
 }
@@ -305,8 +308,9 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   const themeClass = interfaceTheme === 'big-button' ? styles.bigButton : interfaceTheme === 'classic' ? styles.classic : styles.modern;
   const crmLeadsHref = selection ? crmScopeHref('/staff/crm/leads', selection.organizationId, selection.schoolId) : '/staff/crm/leads';
   const trialAppointmentsHref = selection ? crmScopeHref('/staff/crm/trials', selection.organizationId, selection.schoolId) : '/staff/crm/trials';
+  const classPassHref = selection ? classPassScopeHref(selection.organizationId, selection.schoolId) : '/staff/classpass';
   return <main className={`${styles.page} ${themeClass}`} data-interface-theme={interfaceTheme}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href={classPassHref}>ClassPass &amp; Walk-In</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
     <section className={styles.scopeSection} aria-labelledby="scope-heading">
