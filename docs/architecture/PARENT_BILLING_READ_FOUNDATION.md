@@ -38,7 +38,7 @@ The application makes the projection call in `REPEATABLE READ READ ONLY` with sh
 
 ## Validation
 
-`pnpm db:test-parent-billing` is intended only after the existing explicit `pnpm db:setup-parent-journey` disposable-local reset. It asserts current guardian-only access, cross-family/school suppression, insufficient payer-link withholding, ambiguous/revoked scope denial, forced RLS/function ACL posture, response redaction, and unchanged table/audit/outbox counts. It must never target a remote or Supabase database.
+`pnpm db:test-parent-billing` requires separately provisioned exact legacy parent-billing disposable credentials; it must not use `pnpm db:setup-parent-journey`, whose marked sandbox aliases are reserved for the Parent Journey proof. It asserts current guardian-only access, cross-family/school suppression, insufficient payer-link withholding, ambiguous/revoked scope denial, forced RLS/function ACL posture, response redaction, and unchanged table/audit/outbox counts. It must never target a remote or Supabase database.
 
 ## Known limits / follow-up
 

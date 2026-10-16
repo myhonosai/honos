@@ -10,8 +10,8 @@ const owner = 'hon_approval_owner';
 const runtime = 'hon_approval_runtime';
 const marker = 'HON disposable action approval validation';
 const setupSelectors = new Set(['HON_ACTION_APPROVAL_VALIDATION_TARGET', 'HON_ACTION_APPROVAL_ENV_FILE']);
-const riskyEnvironment = Object.keys(process.env).filter((key) => !setupSelectors.has(key) && (/^(?:OPENROUTER|DIRECT_LLM_API|HEYGEN|HIGGSFIELD|OPENAI|ANTHROPIC|GOOGLE_AI|GOOGLE_GENERATIVE|STRIPE|SQUARE|TWILIO|SHOPIFY|META|FACEBOOK|INSTAGRAM|TIKTOK|SENDGRID|MAILGUN|POSTMARK|SLACK|DISCORD|AWS|AZURE|GCP|GOOGLE_CLOUD|SUPABASE)_(?:.*(?:API_)?KEY|.*TOKEN|.*SECRET|.*PASSWORD|.*PAID.*|.*APPROV.*|.*LIVE.*|.*EXECUT.*|.*ENABLED.*)$/i.test(key)
-  || /^(?:HON_)?(?:ACTION_ENGINE|ACTION|PROVIDER|PAYMENT|PAYMENTS|COMMUNICATION|MESSAGING|MESSAGE|DELIVERY|PUBLISH|CONSUMER|WORKER)_(?:.*(?:API_)?KEY|.*TOKEN|.*SECRET|.*PASSWORD|.*PAID.*|.*APPROV.*|.*LIVE.*|.*EXECUT.*|.*ENABLED.*)$/i.test(key)));
+const riskyEnvironment = Object.keys(process.env).filter((key) => !setupSelectors.has(key) && (/^(?:OPENROUTER|DIRECT_LLM_API|HEYGEN|HIGGSFIELD|OPENAI|ANTHROPIC|GOOGLE|STRIPE|SQUARE|TWILIO|SHOPIFY|META|FACEBOOK|INSTAGRAM|TIKTOK|SENDGRID|MAILGUN|POSTMARK|SLACK|DISCORD|AWS|AZURE|GCP|GOOGLE_CLOUD|SUPABASE)(?:_|$)/i.test(key)
+  || /^(?:HON_)?(?:AI|ACTION(?:_ENGINE)?|PROVIDER(?:S)?|PAYMENT(?:S)?|COMMUNICATION(?:S)?|MESSAGING|MESSAGE(?:S)?|DELIVERY|PUBLISH|CONSUMER|WORKER)(?:_|$)/i.test(key)));
 
 if (target !== `postgresql://localhost:5432/${database}`) {
   throw new Error(`Explicit localhost:5432/${database} target required; all other targets are refused.`);

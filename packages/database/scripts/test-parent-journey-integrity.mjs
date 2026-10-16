@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 const owner = new URL(process.env.DATABASE_URL ?? ''), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
-if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_parent_journey_validation' || owner.username !== 'hon_parent_journey_owner'
-  || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_parent_journey_runtime') throw new Error('Only the exact isolated localhost Journey validation database is permitted.');
+if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_parent_journey_validation_sandbox' || owner.username !== 'hon_parent_journey_sandbox_owner'
+  || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_parent_journey_sandbox_runtime') throw new Error('Only the exact isolated localhost Journey validation database is permitted.');
 const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 const { ParentJourneyViewService } = await import('../../../apps/api/dist/families/parent-journey-view.service.js');
 const { ParentStudentJourneyService } = await import('../../../apps/api/dist/families/parent-student-journey.service.js');
@@ -66,10 +66,22 @@ try {
   const publication = (await document.publish({ ...staff(), audienceMode: 'STAFF' }, draft.id, { expectedVersion: draft.version, versionId: draft.versionId })).record;
   // Another parent's own receipt is never part of the Journey projection.
   await document.acknowledge({ organizationId: ids.organization, schoolId: ids.school, principalId: ids.coPrincipal, externalSubject: coSubject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: randomUUID(), audienceMode: 'PARENT' }, publication.currentPublicationId, { contentHash: publication.contentHash, choice: 'ACKNOWLEDGE', attestationText: 'PRIVATE_COPARENT_ATTESTATION' });
-  await assert.rejects(view.get(staffSubject), e => e.getStatus() === 403);
-  const snapshot = async () => (await admin.query(`SELECT coalesce(jsonb_object_agg(table_name,n),'{}') counts FROM (SELECT table_name,(xpath('/row/n/text()',query_to_xml(format('SELECT count(*) n FROM hon.%I',table_name),false,true,'')))[1]::text::bigint n FROM information_schema.tables WHERE table_schema='hon' AND table_type='BASE TABLE') rows`)).rows[0].counts;
-  const effectsBefore = await snapshot();
-  const first = await view.get(subject);
+  const snapshot = async () => {
+    const tables = (await admin.query("SELECT table_name FROM information_schema.tables WHERE table_schema='hon' AND table_type='BASE TABLE' ORDER BY table_name")).rows;
+    const state = {};
+    for (const { table_name: table } of tables) {
+      if (!/^[a-z0-9_]+$/.test(table)) throw new Error('Unsafe fixture table name.');
+      state[table] = (await admin.query(`SELECT count(*)::text AS count, coalesce(jsonb_agg(to_jsonb(row) ORDER BY to_jsonb(row)),'[]'::jsonb) AS rows FROM hon.${table} row`)).rows[0];
+    }
+    return state;
+  };
+  const readWithoutEffects = async (label, read) => {
+    const before = await snapshot();
+    try { return await read(); }
+    finally { assert.deepEqual(await snapshot(), before, `${label} must leave every HON row, audit/outbox and provider/action/payment/communication state unchanged`); }
+  };
+  await assert.rejects(readWithoutEffects('staff scope denial', () => view.get(staffSubject)), e => e.getStatus() === 403);
+  const first = await readWithoutEffects('initial family Journey', () => view.get(subject));
   assert.equal(first.data.children.length, 2); assert.equal(first.data.children[0].schedule.items[0].name, 'Avery class'); assert.equal(first.data.children[1].schedule.items[0].name, 'Blair class');
   assert.equal(first.data.children[0].achievements.status, 'AVAILABLE'); assert.equal(first.data.children[0].achievements.items.length, 1);
   assert.equal(first.data.children[0].achievements.items[0].name, 'Actual shared achievement');
@@ -79,34 +91,33 @@ try {
   assert.equal(first.data.documents.items[0].title, 'Actual family document');
   assert.equal(first.data.documentReceipts.status, 'UNAVAILABLE'); assert.equal(first.data.plannedAbsences.status, 'UNAVAILABLE');
   assert(!/PRIVATE_|familyId|studentProfileId|principalId|schoolId|organizationId|payment|invoice|staffNote|rationale/.test(JSON.stringify(first.data)));
-  assert.deepEqual(await snapshot(), effectsBefore, 'Journey reads must leave every domain/audit/outbox/provider/action/payment/communication table count unchanged');
   await achievement.saveAward(staff(), ids.profile, award.id, { ...awardInput(false), expectedVersion: award.version, status: 'WITHDRAWN' });
-  const withdrawn = await view.get(subject); assert.equal(withdrawn.data.children[0].achievements.items.length, 0);
-  const co = await view.get(coSubject); assert.equal(co.data.accessLevel, 'SECONDARY_GUARDIAN'); assert(!JSON.stringify(co.data).includes('PRIVATE_PARENT'));
-  await assert.rejects(view.get(`unknown-${randomUUID()}`), e => e.getStatus() === 403);
+  const withdrawn = await readWithoutEffects('withdrawn-award Journey', () => view.get(subject)); assert.equal(withdrawn.data.children[0].achievements.items.length, 0);
+  const co = await readWithoutEffects('secondary-guardian Journey', () => view.get(coSubject)); assert.equal(co.data.accessLevel, 'SECONDARY_GUARDIAN'); assert(!JSON.stringify(co.data).includes('PRIVATE_PARENT'));
+  await assert.rejects(readWithoutEffects('unknown-subject denial', () => view.get(`unknown-${randomUUID()}`)), e => e.getStatus() === 403);
   // Current family ambiguity does not pick the first authorized family.
   const extraGrant = randomUUID(); await admin.query("INSERT INTO hon.family_access_grants(id,organization_id,school_id,family_id,principal_id,access_level,effective_from,granted_by_principal_id) VALUES($1,$2,$3,$4,$5,'VIEWER',now()-interval '1 day',$5)", [extraGrant, ids.organization, ids.school, ids.otherFamily, ids.principal]);
-  await assert.rejects(view.get(subject), e => e.getStatus() === 409); await admin.query('DELETE FROM hon.family_access_grants WHERE id=$1', [extraGrant]);
+  await assert.rejects(readWithoutEffects('ambiguous-family denial', () => view.get(subject)), e => e.getStatus() === 409); await admin.query('DELETE FROM hon.family_access_grants WHERE id=$1', [extraGrant]);
   // Expiry, disabled identity and topology revoke existing cached authority.
   await admin.query("UPDATE hon.family_access_grants SET effective_until=now()-interval '1 minute' WHERE id=$1", [ids.grant]);
-  await assert.rejects(view.get(subject), e => e.getStatus() === 403);
+  await assert.rejects(readWithoutEffects('expired-grant denial', () => view.get(subject)), e => e.getStatus() === 403);
   await admin.query('UPDATE hon.family_access_grants SET effective_until=NULL WHERE id=$1', [ids.grant]);
-  await admin.query('UPDATE hon.principals SET is_active=false WHERE id=$1', [ids.principal]); await assert.rejects(view.get(subject), e => e.getStatus() === 403);
+  await admin.query('UPDATE hon.principals SET is_active=false WHERE id=$1', [ids.principal]); await assert.rejects(readWithoutEffects('inactive-principal denial', () => view.get(subject)), e => e.getStatus() === 403);
   await admin.query('UPDATE hon.principals SET is_active=true WHERE id=$1', [ids.principal]);
-  await admin.query("UPDATE hon.families SET status='ARCHIVED' WHERE id=$1", [ids.family]); await assert.rejects(view.get(subject), e => e.getStatus() === 403);
+  await admin.query("UPDATE hon.families SET status='ARCHIVED' WHERE id=$1", [ids.family]); await assert.rejects(readWithoutEffects('archived-family denial', () => view.get(subject)), e => e.getStatus() === 403);
   await admin.query("UPDATE hon.families SET status='ACTIVE' WHERE id=$1", [ids.family]);
-  await admin.query("UPDATE hon.schools SET status='ARCHIVED' WHERE id=$1", [ids.school]); await assert.rejects(view.get(subject), e => e.getStatus() === 403);
+  await admin.query("UPDATE hon.schools SET status='ARCHIVED' WHERE id=$1", [ids.school]); await assert.rejects(readWithoutEffects('archived-school denial', () => view.get(subject)), e => e.getStatus() === 403);
   await admin.query("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [ids.school]);
-  await admin.query("UPDATE hon.organizations SET status='SUSPENDED' WHERE id=$1", [ids.organization]); await assert.rejects(view.get(subject), e => e.getStatus() === 403);
+  await admin.query("UPDATE hon.organizations SET status='SUSPENDED' WHERE id=$1", [ids.organization]); await assert.rejects(readWithoutEffects('suspended-organization denial', () => view.get(subject)), e => e.getStatus() === 403);
   await admin.query("UPDATE hon.organizations SET status='ACTIVE' WHERE id=$1", [ids.organization]);
   const ambiguousHuman = randomUUID(); await admin.query("INSERT INTO hon.principals(id,principal_type,user_id,display_name) VALUES($1,'HUMAN_USER',$2,'PRIVATE_AMBIGUOUS')", [ambiguousHuman, ids.user]);
-  await assert.rejects(view.get(subject), e => e.getStatus() === 403); await admin.query('DELETE FROM hon.principals WHERE id=$1', [ambiguousHuman]);
+  await assert.rejects(readWithoutEffects('ambiguous-principal denial', () => view.get(subject)), e => e.getStatus() === 403); await admin.query('DELETE FROM hon.principals WHERE id=$1', [ambiguousHuman]);
   // Sibling with identical display name cannot receive guessed name-only data.
-  await admin.query("UPDATE hon.people SET given_name='Avery' WHERE id=$1", [ids.sibling]); const duplicate = await view.get(subject);
+  await admin.query("UPDATE hon.people SET given_name='Avery' WHERE id=$1", [ids.sibling]); const duplicate = await readWithoutEffects('duplicate-name Journey', () => view.get(subject));
   assert(duplicate.data.children.every(c => c.schedule.status === 'UNAVAILABLE' && c.schedule.reason === 'CHILD_MATCH_UNAVAILABLE'));
   await admin.query("UPDATE hon.people SET given_name='Blair' WHERE id=$1", [ids.sibling]);
   await admin.query('DELETE FROM hon.family_members WHERE family_id=$1 AND person_id=$2', [ids.family, ids.sibling]);
-  const removed = await view.get(subject); assert.equal(removed.data.children.length, 1); assert(!JSON.stringify(removed.data).includes('Blair'));
+  const removed = await readWithoutEffects('removed-child Journey', () => view.get(subject)); assert.equal(removed.data.children.length, 1); assert(!JSON.stringify(removed.data).includes('Blair'));
   const posture = (await admin.query(`SELECT p.prosecdef,p.proconfig,has_function_privilege($1,p.oid,'EXECUTE') runtime_execute,NOT EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname=$1)) OR a.is_grantable) closed FROM pg_proc p WHERE p.oid='hon.resolve_parent_journey_scopes(text)'::regprocedure`, [runtime.username])).rows[0];
   assert.equal(posture.prosecdef, true); assert.deepEqual(posture.proconfig, ['search_path=pg_catalog, hon']); assert.equal(posture.runtime_execute, true); assert.equal(posture.closed, true);
   const restricted = new pg.Client({ connectionString: runtime.toString(), ssl: false }); await restricted.connect();
