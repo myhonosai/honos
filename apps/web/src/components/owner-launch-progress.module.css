@@ -1,0 +1,17 @@
+.progress { margin: 22px 0; padding: 20px; border: 1px solid #284d69; border-radius: 16px; color: #e9f7ff; background: linear-gradient(135deg, rgba(13, 46, 69, .9), rgba(13, 26, 50, .92)); box-shadow: 0 12px 28px rgba(2, 9, 21, .18); }
+.eyebrow { margin: 0 0 6px; color: #69dce9; font: 700 .7rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .11em; }
+.progress h2 { margin: 0; color: #fff; font: 800 1.38rem/1.2 "Plus Jakarta Sans", Inter, sans-serif; }
+.description { max-width: 760px; margin: 9px 0 18px; color: #bfd1e4; line-height: 1.55; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.step { min-height: 126px; padding: 14px; border: 1px solid #31516c; border-radius: 12px; background: rgba(5, 20, 37, .5); }
+.step dt { color: #a9c8df; font-size: .77rem; }
+.step dd { margin: 11px 0 0; }
+.step strong { display: block; color: #f5fbff; font: 800 .94rem/1.35 "Plus Jakarta Sans", Inter, sans-serif; }
+.step span { display: block; margin-top: 5px; color: #a9bfd2; font-size: .78rem; line-height: 1.45; }
+.recorded { border-color: #3d8c8c; background: rgba(13, 76, 76, .24); }
+.recorded strong::before { content: '● '; color: #6aead4; }
+.notRecorded { border-style: dashed; }
+.unavailable { border-color: #795b2b; background: rgba(82, 54, 14, .18); }
+.unavailable strong::before { content: '— '; color: #ffd77d; }
+@media (max-width: 760px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .progress { padding: 16px; } .steps { grid-template-columns: 1fr; } .step { min-height: 0; } }

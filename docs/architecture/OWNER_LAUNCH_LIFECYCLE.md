@@ -1,6 +1,6 @@
 # Owner launch lifecycle — bounded conventional setup
 
-**Status:** adult-only bounded vertical (`0133`) retained unchanged; separate guardian-and-child extension (`0134`), saved-student confirmation (`0135`–`0136`), receipt-only first-class booking (`0137`), receipt-bound fixed-term membership DRAFT (`0138`) and the additive StaffDashboard confirmation-only progress presentation are completed bounded surfaces. They are not production readiness; final checkpoint evidence is recorded in TODO.
+**Status:** adult-only bounded vertical (`0133`) retained unchanged; separate guardian-and-child extension (`0134`), saved-student confirmation (`0135`–`0136`), receipt-only first-class booking (`0137`), receipt-bound fixed-term membership DRAFT (`0138`), receipt-backed Owner Launch setup progress, and the additive StaffDashboard confirmation-only progress presentation are completed bounded surfaces. They are not production readiness; final checkpoint evidence is recorded in TODO.
 
 This is the conventional path from an already provisioned and authorized school-owner context to saved program, class, student-registration, one canonical booking/waitlist receipt and one receipt-bound fixed-term membership DRAFT. The DRAFT is not activation. This is **not** public sign-up, parent onboarding, family readiness, enrollment-to-membership completion, attendance, payment setup or a complete school readiness checklist.
 
@@ -13,6 +13,12 @@ After the existing verified owner-launch context read succeeds, `/staff/launch` 
 This reuses the existing per-principal interface-theme preference contract and scoped `GET`/`PUT /organizations/:organizationId/schools/:schoolId/interface-theme` API. The saved value is scoped to the current authenticated principal plus its verified organization/school; it is never a tier, role, feature, permission, authority, entitlement, school-context, or data switch. The cards load only after the verified launch context provides that scope, disable while loading/saving, and state unavailable/error outcomes without claiming a save. The responsive shared picker retains semantic button labels, pressed state, keyboard operation, and a live status message.
 
 The three existing owner-launch commands and their fixed endpoint paths, bodies, direct-human markers, idempotency behavior, receipts and results are unchanged. The preference is sent only to the existing preference endpoint; no preference field enters a launch command, and no selector is added to a launch command. It has no provider, Action Engine, payment, membership, booking, attendance, communication, worker, or external effect. Focused preference API/UI regressions plus the complete web test, type-check, and build validation passed for this presentation-only delivery.
+
+### Receipt-backed Owner Launch setup progress
+
+After the existing verified owner-launch context and its existing selector-free booking/DRAFT confirmation reads settle, `/staff/launch` displays six passive facts: verified school context, first program, first class, student registration, first-class booking, and membership DRAFT. Each tile is only **RECORDED**, **NOT_RECORDED**, or **UNAVAILABLE**. Recorded means the exact existing context or receipt is present; it is never a school-readiness score, lifecycle completion claim, activation, payment, attendance, eligibility, parent-access, communication, or permission proof.
+
+The booking tile deliberately does not manufacture a seat/attendance outcome; it describes only a current receipt-linked booking confirmation. The membership tile is explicitly **DRAFT only — not active**. The guide makes no request beyond the page's existing fixed reads, stores no state, adds no command/link/selector, and has no provider, Action Engine, financial, automation, worker, or external effect. It is a visual guide over the same existing direct-human/current-school boundaries, not a new onboarding model.
 
 ## Purpose and routes
 

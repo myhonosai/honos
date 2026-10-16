@@ -6,6 +6,38 @@ import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design
 import { OwnerLaunchAccessError, postOwnerLaunch, postOwnerLaunchFirstClassBooking, postOwnerLaunchMembershipDraft, loadOwnerLaunchWithConfirmations } from './owner-launch-http';
 import { InterfaceThemePicker } from './interface-theme-picker';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
+import progressStyles from './owner-launch-progress.module.css';
+
+type OwnerLaunchProgressState = 'RECORDED' | 'NOT_RECORDED' | 'UNAVAILABLE';
+
+export function OwnerLaunchProgress({
+  context,
+  booking,
+  bookingState,
+  draftState,
+}: {
+  context: OwnerLaunchProjection;
+  booking: OwnerLaunchFirstClassBookingContext | null;
+  bookingState: 'NO_RECORDED_BOOKING'|'RECORDED_BOOKING'|'BOOKING_UNAVAILABLE';
+  draftState: 'NO_RECORDED_DRAFT'|'RECORDED_DRAFT'|'DRAFT_UNAVAILABLE';
+}): React.ReactElement {
+  const saved = context.guardianChildRegistration ?? context.registration;
+  const steps: Array<{ title: string; state: OwnerLaunchProgressState; detail: string }> = [
+    { title: 'Verified school context', state: 'RECORDED', detail: `${context.schoolName} · current ${context.tier} context` },
+    { title: 'First program', state: context.program ? 'RECORDED' : 'NOT_RECORDED', detail: context.program ? `${context.program.status} receipt recorded` : 'No first-program receipt is recorded.' },
+    { title: 'First class', state: context.classSession ? 'RECORDED' : 'NOT_RECORDED', detail: context.classSession ? `${context.classSession.status} receipt recorded` : 'No first-class receipt is recorded.' },
+    { title: 'Student registration', state: saved ? 'RECORDED' : 'NOT_RECORDED', detail: saved ? 'Registered — no booking' : 'No saved registration receipt is recorded.' },
+    { title: 'First class booking', state: !saved ? 'NOT_RECORDED' : bookingState === 'RECORDED_BOOKING' && booking ? 'RECORDED' : bookingState === 'NO_RECORDED_BOOKING' ? 'NOT_RECORDED' : 'UNAVAILABLE', detail: !saved ? 'Available only after a saved registration.' : bookingState === 'RECORDED_BOOKING' && booking ? `${booking.booking.status} booking confirmation recorded` : bookingState === 'NO_RECORDED_BOOKING' ? 'No receipt-linked booking is recorded.' : 'Current booking confirmation is unavailable.' },
+    { title: 'Membership DRAFT', state: !saved ? 'NOT_RECORDED' : draftState === 'RECORDED_DRAFT' ? 'RECORDED' : draftState === 'NO_RECORDED_DRAFT' ? 'NOT_RECORDED' : 'UNAVAILABLE', detail: !saved ? 'Available only after a saved registration.' : draftState === 'RECORDED_DRAFT' ? 'DRAFT only — not active' : draftState === 'NO_RECORDED_DRAFT' ? 'No receipt-linked membership DRAFT is recorded.' : 'Current DRAFT confirmation is unavailable.' },
+  ];
+  return <section className={progressStyles.progress} aria-labelledby="owner-launch-progress-title" aria-describedby="owner-launch-progress-description">
+    <p className={progressStyles.eyebrow}>SETUP PROGRESS / RECEIPT-BACKED</p>
+    <h2 id="owner-launch-progress-title">Your verified setup progress</h2>
+    <p id="owner-launch-progress-description" className={progressStyles.description}>Each tile is a narrow verified context or saved receipt. It is not a school-readiness score and does not claim activation, payment, attendance, eligibility, parent access, communication, or additional authority.</p>
+    <dl className={progressStyles.steps}>{steps.map((step) => <div key={step.title} className={`${progressStyles.step} ${step.state === 'RECORDED' ? progressStyles.recorded : step.state === 'UNAVAILABLE' ? progressStyles.unavailable : progressStyles.notRecorded}`}><dt>{step.title}</dt><dd><strong>{step.state === 'RECORDED' ? 'Recorded' : step.state === 'UNAVAILABLE' ? 'Unavailable' : 'Not recorded'}</strong><span>{step.detail}</span></dd></div>)}</dl>
+  </section>;
+}
+
 export function OwnerLaunch() {
   const [context,setContext]=useState<OwnerLaunchProjection|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('Load your verified school context to begin. HQ provisioning is separate.');
   const [programName,setProgramName]=useState(''),[className,setClassName]=useState(''),[startsAt,setStartsAt]=useState(''),[endsAt,setEndsAt]=useState(''),[capacity,setCapacity]=useState(10);
@@ -136,6 +168,7 @@ export function OwnerLaunch() {
     <section className="owner-launch-theme" aria-labelledby="owner-launch-interface-mode"><div><p className="owner-launch-theme-kicker">OPTIONAL PRESENTATION</p><h2 id="owner-launch-interface-mode">Choose your interface mode</h2><p>Big-Button / Phone favors large touch targets, Modern HON balances daily work, and Classic CRM favors dense keyboard-and-mouse controls.</p><p>This is a current-user presentation preference only. You can change it later; it never changes your school scope, tier, role, features, permissions, authority, data, or available launch actions.</p></div><InterfaceThemePicker current={interfaceTheme} onChange={theme=>void chooseInterfaceTheme(theme)} disabled={interfaceThemeState!=='READY'} busy={interfaceThemeState==='LOADING'||interfaceThemeState==='SAVING'} presentation="cards" ariaLabel="Optional interface mode for this owner launch" /><p className="owner-launch-theme-status" role="status" aria-live="polite">{interfaceThemeMessage}</p></section>
     <p role="status" aria-live="polite">{message}</p><button type="button" disabled={busy} onClick={()=>void reload()}>{busy?'Verifying…':'Load / refresh saved receipts'}</button>
     {context&&<>
+      <OwnerLaunchProgress context={context} booking={booking} bookingState={bookingState} draftState={draftState} />
       <section aria-label="Verified school context"><h2>1. Verified school context</h2><p>{context.schoolName} · {context.tier}</p><p>School receipt context: <code>{context.schoolId}</code></p></section>
       <section><h2>2. First program</h2>{context.program?<p>Saved program receipt: <code>{context.program.id}</code> · {context.program.status} · version {context.program.version}</p>:<form onSubmit={e=>{e.preventDefault();void submit('program');}}><label style={field}>Program name<input value={programName} onChange={e=>setProgramName(e.target.value)} maxLength={160} required /></label><button disabled={busy}>Save first program</button></form>}</section>
       <section><h2>3. First class</h2>{context.classSession?<p>Saved class receipt: <code>{context.classSession.id}</code> · {context.classSession.status} · version {context.classSession.version}</p>:context.program?<form onSubmit={e=>{e.preventDefault();void submit('class');}}><label style={field}>Class name<input value={className} onChange={e=>setClassName(e.target.value)} maxLength={160} required /></label><label style={field}>Starts (your local time)<input type="datetime-local" value={startsAt} onChange={e=>setStartsAt(e.target.value)} required /></label><label style={field}>Ends (your local time)<input type="datetime-local" value={endsAt} onChange={e=>setEndsAt(e.target.value)} required /></label><label style={field}>Capacity<input type="number" min={1} max={1000} value={capacity} onChange={e=>setCapacity(Number(e.target.value))} required /></label><p>Optional booking policy. This step saves a class; it does not book a student.</p><button disabled={busy}>Save first class</button></form>:<p>Save a program first.</p>}</section>
