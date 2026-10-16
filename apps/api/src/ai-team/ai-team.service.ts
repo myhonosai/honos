@@ -168,17 +168,11 @@ export class AiTeamService {
   }
 
   /** Checks the live database entitlement; no client tier assertion is accepted. */
-  private async requireCompleteEntitlement(client: PoolClient, organizationId: string): Promise<void> {
+  private async requireCompleteEntitlement(client: PoolClient): Promise<void> {
     const result = await client.query(
       `SELECT 1
-       FROM hon.organization_entitlements
-       WHERE organization_id = $1::uuid
-         AND tier = 'COMPLETE'::hon.plan_tier
-         AND status = 'ACTIVE'::hon.membership_status
-         AND effective_from <= now()
-         AND (effective_until IS NULL OR effective_until > now())
-       LIMIT 1`,
-      [organizationId],
+       FROM hon.read_current_organization_entitlement()
+       WHERE tier = 'COMPLETE'`,
     );
     if (!result.rowCount) {
       throw new ForbiddenException({
@@ -195,7 +189,7 @@ export class AiTeamService {
    */
   async list(context: CommandContext): Promise<AiTeamDirectory> {
     return this.database.withTenantTransaction(context, async (client) => {
-      await this.requireCompleteEntitlement(client, context.organizationId);
+      await this.requireCompleteEntitlement(client);
       const result = await client.query<PresentationPreferenceRow>(
         `SELECT
            id,
@@ -239,7 +233,7 @@ export class AiTeamService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
-      await this.requireCompleteEntitlement(client, context.organizationId);
+      await this.requireCompleteEntitlement(client);
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (
            organization_id, school_id, principal_id, idempotency_key, request_fingerprint, status, expires_at

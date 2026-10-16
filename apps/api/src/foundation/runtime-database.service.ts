@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
@@ -460,6 +460,33 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       );
       await client.query('COMMIT');
       if (!result.rows[0]) throw new Error('HON HQ overview projection did not return a result.');
+      return result.rows[0].data;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * One fixed, selector-free HQ customer-account projection. The database
+   * independently resolves live HQ authority; the READ ONLY snapshot makes
+   * audit, outbox, work, provider, payment, messaging, and domain effects
+   * impossible at this boundary.
+   */
+  async readHqSchoolDirectory(externalSubject: string): Promise<HqSchoolDirectory> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '3s'; SET LOCAL log_parameter_max_length_on_error = 0");
+      const result = await client.query<{ data: HqSchoolDirectory }>(
+        'SELECT hon.read_hq_school_directory($1) AS data',
+        [externalSubject],
+      );
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HON HQ school-directory projection did not return a result.');
       return result.rows[0].data;
     } catch (error) {
       await client.query('ROLLBACK');

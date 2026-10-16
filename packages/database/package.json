@@ -30,6 +30,8 @@
     "db:test-ai-providers": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-provider-control-plane.mjs",
     "db:setup-hq-overview": "node scripts/setup-hq-overview-validation.mjs",
     "db:test-hq-overview": "pnpm --filter @hon/contracts build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-hq-overview-security.mjs",
+    "db:setup-hq-schools": "node scripts/setup-hq-schools-validation.mjs",
+    "db:test-hq-schools": "pnpm --filter @hon/contracts build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-hq-schools-security.mjs",
     "db:test-operations-report": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-operations-report-security.mjs",
     "db:test-operations-summary": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-operations-summary-security.mjs",
     "db:test-command-center": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-command-center-security.mjs",

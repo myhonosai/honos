@@ -136,9 +136,7 @@ export class ActionEngineService {
     let currentAuthorityMode: ActionAuthorityMode | null = null;
     let reviewBlock: string | null = null;
     const action = actionDefinition(request.action_code);
-    const entitlement = (await client.query<OrganizationEntitlementRow>(`SELECT tier::text tier FROM hon.organization_entitlements
-      WHERE organization_id=$1 AND status='ACTIVE' AND effective_from<=clock_timestamp()
-      AND (effective_until IS NULL OR effective_until>clock_timestamp())`, [context.organizationId])).rows[0];
+    const entitlement = (await client.query<OrganizationEntitlementRow>('SELECT tier FROM hon.read_current_organization_entitlement()')).rows[0];
     if (!action || action.requiredPermission !== request.required_permission) reviewBlock = 'ACTION_REGISTRY_MISMATCH';
     else if (!entitlement) reviewBlock = 'TIER_ENTITLEMENT_REQUIRED';
     else {
@@ -248,13 +246,7 @@ export class ActionEngineService {
         throw new ForbiddenException({ code: 'PERMISSION_DENIED', detail: 'The registered action permission is no longer active in this school.' });
       }
       const entitlementResult = await client.query<OrganizationEntitlementRow>(
-        `SELECT tier::text AS tier
-         FROM hon.organization_entitlements
-         WHERE organization_id = $1
-           AND status = 'ACTIVE'
-           AND effective_from <= now()
-           AND (effective_until IS NULL OR effective_until > now())`,
-        [context.organizationId],
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
       );
       const entitlement = entitlementResult.rows[0];
       if (!entitlement) {
@@ -444,8 +436,7 @@ export class ActionEngineService {
         throw new ForbiddenException({ code: 'PERMISSION_DENIED', detail: 'The action requestor no longer has this school permission.' });
       }
       const entitlementResult = await client.query<OrganizationEntitlementRow>(
-        `SELECT tier::text AS tier FROM hon.organization_entitlements
-         WHERE organization_id=$1 AND status='ACTIVE' AND effective_from<=now() AND (effective_until IS NULL OR effective_until>now())`, [context.organizationId],
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
       );
       const entitlement = entitlementResult.rows[0];
       if (!entitlement) throw new ForbiddenException({ code: 'TIER_ENTITLEMENT_REQUIRED', detail: 'The organization no longer has an active entitlement for this action.' });

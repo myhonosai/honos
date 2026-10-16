@@ -9,6 +9,10 @@
       "title": "HON HQ | AI Command Center"
     },
     {
+      "path": "/hq/schools",
+      "title": "HON HQ | School Directory"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },

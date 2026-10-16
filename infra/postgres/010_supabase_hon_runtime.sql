@@ -83,7 +83,6 @@ FROM hon_runtime, PUBLIC;
 -- mutations in those areas use fixed SECURITY DEFINER procedures or a later
 -- reviewed domain command boundary.
 GRANT SELECT ON TABLE
- hon.organization_entitlements,
  hon.people,
  hon.families,
  hon.family_members,
@@ -932,4 +931,38 @@ DO $$ DECLARE r text; t text; a text; BEGIN
   END LOOP;
  END LOOP;
  GRANT EXECUTE ON FUNCTION hon.read_hq_platform_overview(text) TO hon_runtime;
+END $$;
+
+-- HQ School Management: exactly one selector-free customer-account projection.
+-- Source tables stay private; no support, impersonation, provider, payment,
+-- action, audit/outbox, or school-level authority is granted by this block.
+DO $$ DECLARE r text; t text; a text; BEGIN
+ FOREACH t IN ARRAY ARRAY['organizations','schools','organization_entitlements'] LOOP
+  EXECUTE format('REVOKE ALL ON hon.%I FROM hon_runtime,PUBLIC CASCADE',t);
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM hon_runtime,PUBLIC CASCADE',a,t);
+  END LOOP;
+ END LOOP;
+ REVOKE ALL ON FUNCTION hon.read_hq_school_directory(text) FROM PUBLIC,hon_runtime;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.read_hq_school_directory(text) FROM %I',r);
+  FOREACH t IN ARRAY ARRAY['organizations','schools','organization_entitlements'] LOOP
+    EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+   FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_hq_school_directory(text) TO hon_runtime;
+END $$;
+
+-- Conventional tenant services read only the current active tier through 0130's
+-- fixed no-argument projection. No direct table/column entitlement privileges,
+-- client execution, grant option, or runtime ownership/BYPASSRLS are introduced.
+DO $$ DECLARE r text; BEGIN
+ REVOKE ALL ON FUNCTION hon.read_current_organization_entitlement() FROM PUBLIC,hon_runtime;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.read_current_organization_entitlement() FROM %I',r);
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_current_organization_entitlement() TO hon_runtime;
 END $$;

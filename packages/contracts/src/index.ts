@@ -921,3 +921,5 @@ export * from './classpass.js';
 export * from './parent-classpass-view.js';
 
 export * from './ai-draft-work.js';
+
+export * from './hq-school-directory.js';

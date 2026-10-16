@@ -17,7 +17,7 @@ export class PipelineService {
     if (!cleanStages.some((stage) => !stage.terminalStatus)) throw new BadRequestException({ code: 'VALIDATION_FAILED', detail: 'A pipeline requires at least one non-terminal stage.' });
     const requestFingerprint = createHash('sha256').update(JSON.stringify({ name: input.name.trim(), stages: cleanStages })).digest('hex');
     return this.database.withTenantTransaction(context, async (client) => {
-      const entitlement = await client.query<{ tier: HonTier }>(`SELECT tier::text AS tier FROM hon.organization_entitlements WHERE organization_id=$1 AND status='ACTIVE' AND effective_from<=now() AND (effective_until IS NULL OR effective_until>now())`, [context.organizationId]);
+      const entitlement = await client.query<{ tier: HonTier }>('SELECT tier FROM hon.read_current_organization_entitlement()');
       if (!entitlement.rows[0] || !tierIncludesFeature(entitlement.rows[0].tier, 'crm.foundation')) throw new ForbiddenException({ code: 'TIER_ENTITLEMENT_REQUIRED', detail: 'An active HON CRM entitlement is required for pipeline setup.' });
       const reserve = await client.query<{ id: string }>(`INSERT INTO hon.idempotency_records (organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,expires_at) VALUES ($1,$2,$3,$4,$5,'IN_PROGRESS',now()+interval '24 hours') ON CONFLICT (organization_id,school_id,principal_id,idempotency_key) DO NOTHING RETURNING id`, [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey, requestFingerprint]);
       if (!reserve.rowCount) {

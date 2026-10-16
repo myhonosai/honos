@@ -109,10 +109,7 @@ export class MembershipService {
     const requestFingerprint = fingerprint(input);
     return this.database.withTenantTransaction(context, async (client) => {
       const entitlement = await client.query<{ tier: HonTier }>(
-        `SELECT tier::text AS tier FROM hon.organization_entitlements
-         WHERE organization_id = $1 AND status = 'ACTIVE' AND effective_from <= now()
-           AND (effective_until IS NULL OR effective_until > now())`,
-        [context.organizationId],
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
       );
       if (!entitlement.rows[0] || !tierIncludesFeature(entitlement.rows[0].tier, 'billing.foundation')) {
         throw new ForbiddenException({ code: 'TIER_ENTITLEMENT_REQUIRED', detail: 'An active HON billing entitlement is required for membership drafts.' });

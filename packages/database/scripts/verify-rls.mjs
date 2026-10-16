@@ -13,6 +13,7 @@ import { humanWorkTables, verifyHumanWorkSecurity } from './human-work-security.
 import { voiceTables, verifyVoiceSecurity } from './voice-security.mjs';
 import { retentionAcknowledgementTables, verifyRetentionAcknowledgementSecurity } from './retention-review-acknowledgement-security.mjs';
 import { requireRetentionAcknowledgementLocalUrls } from './retention-review-acknowledgement-local-guard.mjs';
+import { requireHqSchoolsLocalUrls } from './hq-schools-local-guard.mjs';
 import { verifyRetentionReviewSecurity } from './retention-review-security.mjs';
 import pg from 'pg';
 import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
@@ -25,15 +26,16 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS
 // PostgreSQL role grants and SECURITY DEFINER ACLs remain attached to `role`.
 // Local disposable validation aliases do not contain a dot and pass unchanged.
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username.split('.', 1)[0] : 'hon_runtime';
-if (!['hon_retention_acknowledgement_runtime','hon_classpass_runtime','hon_kiosk_handoff_runtime','hon_promotion_readiness_runtime','hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_attendance_runtime','hon_attendance_backfill_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_parent_billing_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (!['hon_retention_acknowledgement_runtime','hon_classpass_runtime','hon_kiosk_handoff_runtime','hon_promotion_readiness_runtime','hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_attendance_runtime','hon_attendance_backfill_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_parent_billing_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime','hon_hq_schools_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
 if (runtimeRoleName === 'hon_classpass_runtime') requireClassPassLocalUrls();
 if (runtimeRoleName === 'hon_retention_acknowledgement_runtime') requireRetentionAcknowledgementLocalUrls();
 if (runtimeRoleName === 'hon_kiosk_handoff_runtime') requireKioskHandoffLocalUrls();
 if (runtimeRoleName === 'hon_promotion_readiness_runtime') requirePromotionReadinessLocalUrls();
+if (runtimeRoleName === 'hon_hq_schools_runtime') requireHqSchoolsLocalUrls();
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    const db = runtimeRoleName === 'hon_retention_acknowledgement_runtime' ? '/hon_retention_acknowledgement_validation' : runtimeRoleName === 'hon_classpass_runtime' ? '/hon_classpass_validation' : runtimeRoleName === 'hon_kiosk_handoff_runtime' ? '/hon_kiosk_handoff_validation' : runtimeRoleName === 'hon_promotion_readiness_runtime' ? '/hon_promotion_readiness_validation' : runtimeRoleName === 'hon_attendance_runtime' ? '/hon_attendance_validation' : runtimeRoleName === 'hon_attendance_backfill_runtime' ? '/hon_attendance_backfill_validation' : runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_parent_billing_runtime' ? '/hon_parent_billing_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    const db = runtimeRoleName === 'hon_retention_acknowledgement_runtime' ? '/hon_retention_acknowledgement_validation' : runtimeRoleName === 'hon_classpass_runtime' ? '/hon_classpass_validation' : runtimeRoleName === 'hon_kiosk_handoff_runtime' ? '/hon_kiosk_handoff_validation' : runtimeRoleName === 'hon_promotion_readiness_runtime' ? '/hon_promotion_readiness_validation' : runtimeRoleName === 'hon_attendance_runtime' ? '/hon_attendance_validation' : runtimeRoleName === 'hon_attendance_backfill_runtime' ? '/hon_attendance_backfill_validation' : runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_parent_billing_runtime' ? '/hon_parent_billing_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : runtimeRoleName === 'hon_hq_schools_runtime' ? '/hon_hq_schools_validation' : '/hon_revenue_validation';
     if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
     if (runtimeRoleName === 'hon_attendance_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_attendance_owner' : runtimeRoleName))) throw new Error('Attendance verifier requires exact disposable-local aliases.');
     if (runtimeRoleName === 'hon_attendance_backfill_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_attendance_backfill_owner' : runtimeRoleName))) throw new Error('Attendance backfill verifier requires exact marked disposable-local aliases.');
@@ -365,6 +367,21 @@ try {
   if (!hqOverviewVerification) throw new Error('Missing canonical HQ-1 platform overview verification block.');
   await client.query(('DO $$' + hqOverviewVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
 
+  // HQ School Management must stay a separate selector-free function-only
+  // boundary: no source-table grant, client execution, caller GUC authority,
+  // grant option, or unreviewed response-shape drift is permitted.
+  const hqSchoolsCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const hqSchoolsVerification = hqSchoolsCanonical.split('-- HQ School Management exact verification:')[1]?.split('-- End HQ school directory exact verification.')[0];
+  if (!hqSchoolsVerification) throw new Error('Missing canonical HQ school-directory verification block.');
+  await client.query(('DO $$' + hqSchoolsVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
+
+  // The conventional runtime tier read is function-only too. Reject raw table
+  // and column SELECT (including PUBLIC), grantable/broad EXECUTE, selectors,
+  // unsafe ownership/runtime bypass, and active-period/context definition drift.
+  const entitlementVerification = hqSchoolsCanonical.split('-- Current organization entitlement exact verification:')[1]?.split('-- End current organization entitlement exact verification.')[0];
+  if (!entitlementVerification) throw new Error('Missing canonical current organization entitlement verification block.');
+  await client.query(('DO $$' + entitlementVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
+
   const revenueTables = ['revenue_plans','revenue_plan_versions','revenue_plan_requests'];
   const campaignTables = ['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions'];
   const campaignFunctions = [
@@ -581,7 +598,7 @@ try {
       }
     }
     for (const table of ['users', 'principals', 'roles', 'permissions', 'role_permissions', 'principal_role_grants',
-      ...documentTables, ...importTables, ...revenueTables, 'family_access_grants', 'organizations', 'schools', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
+      ...documentTables, ...importTables, ...revenueTables, 'family_access_grants', 'organizations', 'schools', 'organization_entitlements', 'hq_operator_grants', 'hq_onboarding_requests', 'crm_activities']) {
       if ((await client.query(`SELECT has_table_privilege('${runtimeRoleName}',$1,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('${runtimeRoleName}',$1,'SELECT,INSERT,UPDATE,REFERENCES') AS allowed`, [`hon.${table}`])).rows[0].allowed) {
         throw new Error(`Forbidden runtime directory/control-plane/activity privilege: hon.${table}`);
       }

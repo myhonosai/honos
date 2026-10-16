@@ -4,6 +4,7 @@ require('reflect-metadata');
 const { Test } = require('@nestjs/testing');
 const { HqController } = require('../dist/hq/hq.controller.js');
 const { HqOverviewService } = require('../dist/hq/hq-overview.service.js');
+const { HqSchoolDirectoryService } = require('../dist/hq/hq-school-directory.service.js');
 const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
 const { HonIdentityGuard } = require('../dist/foundation/hon-identity.guard.js');
 const status = n => error => error.getStatus?.() === n;
@@ -40,7 +41,7 @@ test('HQ overview endpoint permits no selector or execution route and returns on
     resolveHqOperatorScope: async (subject, permission) => { calls.push(['scope', subject, permission]); return role === 'REVOKED' ? null : { principalId: 'private-principal', hqRole: role }; },
     readHqPlatformOverview: async (subject) => { calls.push(['projection', subject]); return overview(role === 'HON_HQ_OPERATOR' ? 'OPERATOR' : 'OWNER'); },
   };
-  const module = await Test.createTestingModule({ controllers: [HqController], providers: [HqOverviewService, { provide: RuntimeDatabaseService, useValue: database }] })
+  const module = await Test.createTestingModule({ controllers: [HqController], providers: [HqOverviewService, HqSchoolDirectoryService, { provide: RuntimeDatabaseService, useValue: database }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-subject' }; return true; } }).compile();
   const app = module.createNestApplication(); app.setGlobalPrefix('v1'); await app.listen(0, '127.0.0.1');
   const base = `http://127.0.0.1:${app.getHttpServer().address().port}/v1/hq/overview`;

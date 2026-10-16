@@ -1865,3 +1865,142 @@ BEGIN
 END;
 $$;
 -- End HQ-1 platform overview exact verification.
+
+-- HQ School Management exact verification: a fixed, selector-free customer
+-- directory. It admits only the existing live HQ owner/operator resolver and
+-- exposes no direct source-table, client, support, or mutation authority.
+DO $$
+DECLARE
+  runtime_oid oid;
+  projection record;
+  table_name text;
+  role_name text;
+BEGIN
+  SELECT oid INTO runtime_oid FROM pg_roles WHERE rolname = 'hon_runtime';
+  IF runtime_oid IS NULL THEN RAISE EXCEPTION 'HQ school directory runtime missing'; END IF;
+  SELECT p.*, owner.rolsuper OR owner.rolbypassrls AS trusted_owner,
+    has_function_privilege('hon_runtime', p.oid, 'EXECUTE') AS runtime_execute,
+    has_function_privilege('hon_runtime', p.oid, 'EXECUTE WITH GRANT OPTION') AS runtime_grantable,
+    pg_get_functiondef(p.oid) AS definition
+  INTO projection
+  FROM pg_proc p JOIN pg_roles owner ON owner.oid = p.proowner
+  WHERE p.oid = 'hon.read_hq_school_directory(text)'::regprocedure;
+  IF projection.oid IS NULL OR projection.prosecdef IS DISTINCT FROM true
+    OR projection.provolatile <> 's'
+    OR projection.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+    OR projection.trusted_owner IS DISTINCT FROM true
+    OR projection.runtime_execute IS DISTINCT FROM true
+    OR projection.runtime_grantable IS DISTINCT FROM false
+    OR position('current_setting' IN projection.definition) <> 0
+    OR position('resolve_hq_operator_scope' IN projection.definition) = 0
+    OR position('hq.dashboard.view' IN projection.definition) = 0
+    OR position('HON_HQ_OWNER' IN projection.definition) = 0
+    OR position('HON_HQ_OPERATOR' IN projection.definition) = 0
+    OR position('jsonb_build_object' IN projection.definition) = 0
+    OR projection.definition ~* '\m(legal_name|email|principal|user_id|student|family|attendance|curriculum|payment|invoice|provider|credential|usage|cost|support|impersonation|audit|outbox|action)\M'
+    OR projection.definition ~* '\m(insert|update|delete|merge|call)\M'
+    OR EXISTS (
+      SELECT 1
+      FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+      WHERE acl.privilege_type <> 'EXECUTE'
+        OR acl.is_grantable
+        OR acl.grantor <> projection.proowner
+        OR (acl.grantee <> projection.proowner AND acl.grantee <> runtime_oid)
+    )
+    OR (SELECT count(*) FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+        WHERE acl.grantee = projection.proowner AND acl.privilege_type = 'EXECUTE' AND NOT acl.is_grantable) <> 1
+    OR (SELECT count(*) FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+        WHERE acl.grantee = runtime_oid AND acl.privilege_type = 'EXECUTE' AND NOT acl.is_grantable) <> 1 THEN
+    RAISE EXCEPTION 'Unsafe HQ school directory function ACL, authority, or definition';
+  END IF;
+  FOREACH table_name IN ARRAY ARRAY['organizations','schools','organization_entitlements'] LOOP
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_class c JOIN pg_roles owner ON owner.oid = c.relowner
+      WHERE c.oid = ('hon.' || table_name)::regclass
+        AND c.relrowsecurity AND c.relforcerowsecurity
+        AND (owner.rolsuper OR owner.rolbypassrls)
+        AND c.relowner <> runtime_oid
+    ) THEN RAISE EXCEPTION 'HQ school directory source is not forced RLS/private: %', table_name; END IF;
+    IF has_table_privilege('hon_runtime', 'hon.' || table_name, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime', 'hon.' || table_name, 'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'HQ school directory direct runtime source access: %', table_name;
+    END IF;
+  END LOOP;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name)
+      AND has_function_privilege(role_name, 'hon.read_hq_school_directory(text)', 'EXECUTE') THEN
+      RAISE EXCEPTION 'HQ school directory client execute: %', role_name;
+    END IF;
+  END LOOP;
+END;
+$$;
+-- End HQ school directory exact verification.
+
+-- Current organization entitlement exact verification: a no-argument tier-only
+-- read for conventional tenant transactions, never a raw source-table exception.
+DO $$
+DECLARE
+  runtime_oid oid;
+  projection record;
+  role_name text;
+BEGIN
+  SELECT oid INTO runtime_oid FROM pg_roles WHERE rolname = 'hon_runtime'
+    AND rolcanlogin AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication);
+  IF runtime_oid IS NULL OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member = runtime_oid) THEN
+    RAISE EXCEPTION 'Unsafe current organization entitlement runtime role';
+  END IF;
+  SELECT p.*, owner.rolsuper OR owner.rolbypassrls AS trusted_owner,
+    pg_get_function_result(p.oid) AS result_shape,
+    has_function_privilege('hon_runtime', p.oid, 'EXECUTE') AS runtime_execute,
+    has_function_privilege('hon_runtime', p.oid, 'EXECUTE WITH GRANT OPTION') AS runtime_grantable
+  INTO projection
+  FROM pg_proc p JOIN pg_roles owner ON owner.oid = p.proowner
+  WHERE p.oid = 'hon.read_current_organization_entitlement()'::regprocedure;
+  IF projection.oid IS NULL OR projection.proowner = runtime_oid
+    OR projection.trusted_owner IS DISTINCT FROM true
+    OR projection.prosecdef IS DISTINCT FROM true OR projection.provolatile <> 's'
+    OR projection.prolang <> (SELECT oid FROM pg_language WHERE lanname = 'sql')
+    OR projection.pronargs <> 0 OR projection.result_shape <> 'TABLE(tier text)'
+    OR projection.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+    OR projection.runtime_execute IS DISTINCT FROM true OR projection.runtime_grantable IS DISTINCT FROM false
+    OR (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'hon' AND p.proname = 'read_current_organization_entitlement') <> 1
+    OR trim(regexp_replace(projection.prosrc, '\s+', ' ', 'g')) IS DISTINCT FROM
+      'SELECT entitlement.tier::text FROM hon.organization_entitlements AS entitlement WHERE entitlement.organization_id = hon.current_organization_id() AND entitlement.status = ''ACTIVE''::hon.membership_status AND entitlement.effective_from <= current_timestamp AND (entitlement.effective_until IS NULL OR entitlement.effective_until > statement_timestamp())'
+    OR EXISTS (
+      SELECT 1 FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+      WHERE acl.privilege_type <> 'EXECUTE' OR acl.is_grantable OR acl.grantor <> projection.proowner
+        OR acl.grantee NOT IN (projection.proowner, runtime_oid)
+    )
+    OR (SELECT count(*) FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+        WHERE acl.grantee = runtime_oid AND acl.privilege_type = 'EXECUTE' AND NOT acl.is_grantable) <> 1
+    OR (SELECT count(*) FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+        WHERE acl.grantee = projection.proowner AND acl.privilege_type = 'EXECUTE' AND NOT acl.is_grantable) <> 1 THEN
+    RAISE EXCEPTION 'Unsafe current organization entitlement function definition, owner, or ACL';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_roles owner ON owner.oid = c.relowner
+    WHERE c.oid = 'hon.organization_entitlements'::regclass
+      AND c.relrowsecurity AND c.relforcerowsecurity AND c.relowner <> runtime_oid
+      AND (owner.rolsuper OR owner.rolbypassrls)
+  ) THEN RAISE EXCEPTION 'Unsafe entitlement source owner or forced RLS'; END IF;
+  IF has_table_privilege('hon_runtime', 'hon.organization_entitlements', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime', 'hon.organization_entitlements', 'SELECT,INSERT,UPDATE,REFERENCES')
+    OR EXISTS (SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+      WHERE c.oid = 'hon.organization_entitlements'::regclass AND acl.grantee IN (0, runtime_oid))
+    OR EXISTS (SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) acl
+      WHERE att.attrelid = 'hon.organization_entitlements'::regclass AND att.attnum > 0 AND NOT att.attisdropped
+        AND acl.grantee IN (0, runtime_oid)) THEN
+    RAISE EXCEPTION 'Forbidden raw entitlement table or column privilege';
+  END IF;
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) AND (
+      has_function_privilege(role_name, projection.oid, 'EXECUTE')
+      OR has_table_privilege(role_name, 'hon.organization_entitlements', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege(role_name, 'hon.organization_entitlements', 'SELECT,INSERT,UPDATE,REFERENCES')
+    ) THEN RAISE EXCEPTION 'Forbidden client entitlement privilege: %', role_name; END IF;
+  END LOOP;
+END;
+$$;
+-- End current organization entitlement exact verification.

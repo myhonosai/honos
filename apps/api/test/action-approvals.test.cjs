@@ -26,7 +26,7 @@ test('decision replay rechecks fixed reviewer authority after an idempotency loc
     if (sql.includes("set_config('app.hon_source'" ) || sql.startsWith('SET LOCAL')) return { rows: [], rowCount: 0 };
     if (sql.includes('require_human_action_review')) { reviewerChecks += 1; if (replayLocked) recheckedAfterReplay = true; return { rows: [], rowCount: 0 }; }
     if (sql.includes('FROM hon.action_policies')) return { rows: [{ authority_mode: 'CONFIRM', policy_version: 1 }], rowCount: 1 };
-    if (sql.includes('FROM hon.organization_entitlements')) return { rows: [{ tier: 'ESSENTIAL' }], rowCount: 1 };
+    if (sql === 'SELECT tier FROM hon.read_current_organization_entitlement()') { assert.deepEqual(args, []); return { rows: [{ tier: 'ESSENTIAL' }], rowCount: 1 }; }
     if (sql.includes('principal_has_school_permission')) return { rows: [{ allowed: true }], rowCount: 1 };
     if (sql.includes('crm_lead_target_is_current')) return { rows: [{ current: true }], rowCount: 1 };
     if (sql.includes('INSERT INTO hon.idempotency_records')) { fingerprint = args[4]; return { rows: [], rowCount: 0 }; }

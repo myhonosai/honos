@@ -70,13 +70,7 @@ export class LeadService {
       await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id',$2,true),set_config('app.hon_delegated_by_principal_id',$3,true)", [context.source, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
       if (context.principalType === 'HUMAN_USER' && context.source === 'HUMAN_UI' && !context.actionRequestId && !context.delegatedByPrincipalId) await client.query('SELECT hon.authorize_campaign_lead($1,$2::boolean)', [(context as CommandContext & { externalSubject?: string }).externalSubject ?? null, hasCampaign]);
       const entitlement = await client.query<{ tier: HonTier }>(
-        `SELECT tier::text AS tier
-         FROM hon.organization_entitlements
-         WHERE organization_id = $1
-           AND status = 'ACTIVE'
-           AND effective_from <= now()
-           AND (effective_until IS NULL OR effective_until > now())`,
-        [context.organizationId],
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
       );
       const activeEntitlement = entitlement.rows[0];
       if (!activeEntitlement || !tierIncludesFeature(activeEntitlement.tier, 'crm.foundation')) {

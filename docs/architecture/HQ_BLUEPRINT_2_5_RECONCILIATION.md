@@ -32,7 +32,7 @@ The supplied visual references are design constraints: premium but restrained Sa
 | HQ AI team cards/workspaces | **Partial presentation only** | The HQ-1 screen may show the fixed catalog with explicit `NO_RECORDED_WORK`; it cannot show decorative or permanent `WORKING` state. Reuse AI Team presentation patterns, work items, Action approvals, audit and usage ledgers when persisted workspaces are implemented. |
 | HON Core visual shell | **Planned visual concept / safe implementation later** | A compact Core, expanded text panel and reduced-motion fallback can be implemented without AI execution. It may not portray fabricated listening, thought, task or voice state. |
 | Voice | **Planned; provider-dependent** | UI permission, mute/interrupt and text fallback are safe later. Capture, transcription, streaming response, retention/deletion, voice synthesis and language support require evaluated providers, privacy/cost decisions, server controls and explicit activation. No continuous recording or background listening. |
-| HQ School Management | **Partially implemented foundation** | HQ provisioning/onboarding and global control-plane scope exist. Searchable directory, account workspace, purpose/time-limited audited support access and safe aggregate access are missing. HQ cannot gain unrestricted student/family/payment/instructional data or bypass RLS. |
+| HQ School Management | **Implemented bounded directory / broader workflow open** | HQ provisioning/onboarding, global control-plane scope and a fixed owner/operator-only school directory now exist. The directory exposes only organization/school display names, operational status, active entitlement tier and created time; it has no support access, contacts, users, private family/student data, payment/provider data or selector. Account workspace, purpose/time-limited audited support access and safe aggregate access remain open. HQ cannot gain unrestricted student/family/payment/instructional data or bypass RLS. |
 | Essential/Core/Complete enforcement | **Implemented across validated slices; cross-feature completion remains open** | Existing per-slice live entitlement checks and Complete AI controls are reusable. HQ consumption must remain operator-costed; schools must not gain HQ tools/data and ordinary included assistant usage must not be silently re-priced. |
 | Financial reporting / revenue director | **Planned authoritative projection** | Existing billing and usage ledgers are sources, not a finished HQ financial statement. Annual/lifetime/founder semantics must be explicitly modeled before any MRR/ARR claim. |
 | Support access / security oversight | **Planned** | Existing HQ separation, audit and RLS posture are prerequisites. Any access needs purpose, duration, screen identity, revalidation and audit—not impersonation by default. |
@@ -50,7 +50,7 @@ The supplied visual references are design constraints: premium but restrained Sa
 2. **HQ-1 — delivered contracts and access:** the fixed seven-executive catalog and HQ-only minimized platform overview are now available with no provider call, cross-tenant unrestricted table/browser access, or fake activity. Persisted executive workspaces remain separate work.
 3. **HQ-2 — visual proposals and overview shell:** produce reviewable light, dark and mobile visual concepts plus HON Core compact/expanded states, then extend the delivered no-fake-activity overview shell only with real authorized values or explicit unavailable/sample labels.
 4. **HQ-3 — durable executive workspaces:** wire cards/workspaces to real persisted HQ work/approval/result/usage evidence via the existing orchestration and Action Engine. Build text interaction before voice.
-5. **HQ-4 — school management:** add purpose-limited, audited HQ customer/account projections and a separate support-access workflow; never unrestricted impersonation.
+5. **HQ-4 — school management:** build on the delivered fixed minimized directory with purpose-limited, audited customer/account projections and a separate support-access workflow; never unrestricted impersonation.
 6. **HQ-5 — voice and externally activated capabilities:** only after provider evaluation, private transcript/recording lifecycle, cost/latency controls and explicit owner activation.
 
 ## Owner approvals still required
@@ -72,5 +72,6 @@ Every HQ vertical must demonstrate exact HQ-only scope, separate evidence from s
 - [HQ AI Provider Control Plane](HQ_AI_PROVIDER_CONTROL_PLANE.md)
 - [Durable AI Invocation Planning](AI_INVOCATION_PLANNING.md)
 - [HQ Platform Overview](HQ_PLATFORM_OVERVIEW.md)
+- [HQ School Directory](HQ_SCHOOL_DIRECTORY.md)
 - [Blueprint Update 2.2](BLUEPRINT_UPDATE_2_2_INTEGRATION_MAP.md)
 - [Blueprint Update 2.3](BLUEPRINT_UPDATE_2_3_INTEGRATION_MAP.md)

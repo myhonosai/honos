@@ -174,17 +174,11 @@ export class AiUsageService {
     return this.database.withTenantTransaction(context, async (client) => {
       // All selected ledger values are aggregated in one snapshot-consistent SQL
       // statement. No individual request, payload, correlation, or principal data
-      // is selected, and RLS remains active for both relations.
+      // is selected. Ledger RLS and the fixed context-bound tier projection apply.
       const result = await client.query<UsageReadRow>(
         `WITH active_entitlement AS (
-           SELECT tier::text AS "entitlementTier"
-           FROM hon.organization_entitlements
-           WHERE organization_id = $1::uuid
-             AND status = 'ACTIVE'::hon.membership_status
-             AND effective_from <= now()
-             AND (effective_until IS NULL OR effective_until > now())
-           ORDER BY effective_from DESC
-           LIMIT 1
+           SELECT tier AS "entitlementTier"
+           FROM hon.read_current_organization_entitlement()
          ),
          scoped_usage AS MATERIALIZED (
            SELECT modality::text AS modality, provider_code, model_code,
