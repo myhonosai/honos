@@ -1,6 +1,9 @@
 import { MarketingAssistantController, MarketingAssistantHumanUiGuard } from './marketing/marketing-assistant.controller.js';
 import { MarketingAssistantService } from './marketing/marketing-assistant.service.js';
 import { MARKETING_PROVIDER_RUNTIME, OpenRouterRuntime } from './ai/provider-runtime.js';
+import { ChadFollowUpAssistantController, ChadFollowUpAssistantHumanUiGuard } from './chad-follow-up-assistant/chad-follow-up-assistant.controller.js';
+import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-follow-up-assistant.service.js';
+import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { TeachingAssistantController, TeachingAssistantHumanUiGuard } from './teaching-assistant/teaching-assistant.controller.js';
 import { TeachingAssistantService } from './teaching-assistant/teaching-assistant.service.js';
 import { CLAIRE_PROVIDER_RUNTIME, OpenRouterClaireRuntime } from './ai/claire-provider-runtime.js';
@@ -183,6 +186,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     StaffPublicFormController, PublishedFormController,
     CampaignController,
     MarketingAssistantController,
+    ChadFollowUpAssistantController,
     TeachingAssistantController,
     RevenuePlanningController,
     StaffSearchController,
@@ -262,6 +266,9 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     MarketingAssistantService,
     MarketingAssistantHumanUiGuard,
     { provide: MARKETING_PROVIDER_RUNTIME, useFactory: () => new OpenRouterRuntime() }, CampaignHumanUiGuard,
+    ChadFollowUpAssistantService,
+    ChadFollowUpAssistantHumanUiGuard,
+    { provide: CHAD_PROVIDER_RUNTIME, useFactory: () => new OpenRouterChadRuntime() },
     TeachingAssistantService,
     TeachingAssistantHumanUiGuard,
     { provide: CLAIRE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterClaireRuntime() },

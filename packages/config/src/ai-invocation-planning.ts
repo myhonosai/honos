@@ -17,4 +17,5 @@ export const AI_INVOCATION_PLANNING_TASKS: Record<AiInvocationTaskClass, {
   ANALYZE: { workType: 'AI_ANALYZE', riskClass: 'MODERATE' },
   DRAFT_MARKETING: { workType: 'AI_DRAFT_MARKETING', riskClass: 'MODERATE' },
   DRAFT_TEACHING: { workType: 'AI_DRAFT_TEACHING', riskClass: 'MODERATE' },
+  DRAFT_FOLLOW_UP: { workType: 'AI_DRAFT_FOLLOW_UP', riskClass: 'MODERATE' },
 };

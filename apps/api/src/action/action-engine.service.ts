@@ -154,13 +154,17 @@ export class ActionEngineService {
     if (!reviewBlock && (!safeActionReviewPayload(request.normalized_payload) || payloadHash(request.normalized_payload) !== request.payload_hash)) reviewBlock = 'APPROVAL_PAYLOAD_UNSAFE';
     // The only existing typed executable adapter is CRM lead creation. Others
     // have catalog metadata but no reviewed domain revalidation adapter yet.
-    if (!reviewBlock && !['crm.lead.create','marketing.draft.save','teaching.draft.save'].includes(request.action_code)) reviewBlock = 'DOMAIN_REVALIDATION_UNAVAILABLE';
+    if (!reviewBlock && !['crm.lead.create','marketing.draft.save','teaching.draft.save','crm.follow_up_draft.propose'].includes(request.action_code)) reviewBlock = 'DOMAIN_REVALIDATION_UNAVAILABLE';
     if (!reviewBlock && request.action_code === 'marketing.draft.save') {
       const target=await client.query<{current:boolean}>('SELECT hon.marketing_action_is_current($1::uuid,$2::jsonb) AS current',[request.id,JSON.stringify(request.normalized_payload)]);
       if (target.rows[0]?.current !== true) reviewBlock='ACTION_TARGET_STALE';
     }
     if (!reviewBlock && request.action_code === 'teaching.draft.save') {
       const target=await client.query<{current:boolean}>('SELECT hon.teaching_action_is_current($1::uuid,$2::jsonb) AS current',[request.id,JSON.stringify(request.normalized_payload)]);
+      if (target.rows[0]?.current !== true) reviewBlock='ACTION_TARGET_STALE';
+    }
+    if (!reviewBlock && request.action_code === 'crm.follow_up_draft.propose') {
+      const target=await client.query<{current:boolean}>('SELECT hon.chad_follow_up_draft_is_current($1::uuid,$2::jsonb) AS current',[request.id,JSON.stringify(request.normalized_payload)]);
       if (target.rows[0]?.current !== true) reviewBlock='ACTION_TARGET_STALE';
     }
     if (!reviewBlock && request.action_code === 'crm.lead.create') {
@@ -411,6 +415,9 @@ export class ActionEngineService {
       if (request.status !== 'APPROVED') {
         throw new ConflictException({ code: 'POLICY_BLOCKED', detail: 'This action proposal is not approved for execution.' });
       }
+      if (request.action_code === 'crm.follow_up_draft.propose') {
+        throw new ForbiddenException({ code: 'ACTION_RESTRICTED', detail: 'A Chad follow-up draft is content-only; approval never permits Action Engine execution.' });
+      }
       // A CONFIRM proposal is valid for execution only while it retains the
       // immutable timed binding created for qualified human review. Reviewer
       // evidence remains RLS-visible only to qualified human reviewers.
@@ -563,6 +570,9 @@ export class ActionEngineService {
         VALUES($1::uuid,$2,$3,'action.request.decided',1,'ACTION_REQUEST',$4::uuid,2,$5::uuid,$6::uuid,$7::jsonb)`,[randomUUID(),context.organizationId,context.schoolId,r.id,context.correlationId,context.requestId,JSON.stringify(evidence)]);
       if (r.action_code==='marketing.draft.save' && input.decision==='DENIED') await client.query('SELECT hon.reject_marketing_draft($1::uuid)',[r.id]);
       if (r.action_code==='teaching.draft.save' && input.decision==='DENIED') await client.query('SELECT hon.reject_teaching_draft($1::uuid)',[r.id]);
+      // This only records a decision against immutable content. It never begins
+      // Action Engine execution, creates a communication, or changes a lead.
+      if (r.action_code==='crm.follow_up_draft.propose') await client.query('SELECT hon.transition_chad_follow_up_draft($1::uuid,$2)',[r.id,input.decision]);
       const response:HumanActionReceipt={actionRequestId:r.id,status:input.decision,actionCode:r.action_code,reviewedAt:updated.updated_at.toISOString(),payloadHash:r.payload_hash,policyVersion:r.policy_version,executionTriggered:false};
       await client.query(`UPDATE hon.idempotency_records SET status='COMPLETED',response_status=200,response_body=$5::jsonb WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND idempotency_key=$4`,[context.organizationId,context.schoolId,context.principalId,context.idempotencyKey,JSON.stringify(response)]);
       return response;

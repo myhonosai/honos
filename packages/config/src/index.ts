@@ -168,6 +168,13 @@ export const ACTION_CATALOG: readonly RegisteredAction[] = [
     riskClass: 'MODERATE',
   },
   {
+    code: 'crm.follow_up_draft.propose',
+    requiredPermission: 'crm.assistant.follow_up_draft',
+    minimumTier: 'COMPLETE',
+    platformAuthorityFloor: 'CONFIRM',
+    riskClass: 'MODERATE',
+  },
+  {
     code: 'marketing.social.publish',
     requiredPermission: 'marketing.social.publish',
     minimumTier: 'CORE',

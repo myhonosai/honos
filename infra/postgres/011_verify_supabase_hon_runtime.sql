@@ -1459,3 +1459,27 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='teaching.assistant.use' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Claire staff permission registry is unsafe'; END IF;
 END $$;
 -- End Claire Teaching Assistant exact verification.
+
+-- Chad CRM follow-up content proposal verification: exact private tables and
+-- callable boundaries only; it grants neither delivery nor execution.
+DO $$
+DECLARE expected record; t text; r text; safe boolean;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY['chad_follow_up_invocations','chad_follow_up_drafts']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Chad private table: %',t; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.guard_chad_follow_up()',false,false),('hon.resolve_chad_follow_up_scope(text)',true,true),('hon.require_chad_follow_up_actor(text)',false,true),('hon.chad_follow_up_event(uuid,text)',false,true),('hon.read_chad_follow_up_invocation(text,uuid)',true,true),('hon.begin_chad_follow_up_request(text,jsonb,uuid)',true,true),('hon.chad_follow_up_planning_reference(text,uuid)',true,true),('hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)',true,true),('hon.fail_chad_follow_up_invocation(text,uuid,text,text)',true,true),('hon.record_chad_follow_up_result(text,uuid,jsonb)',true,true),('hon.bind_chad_follow_up_proposal(text,uuid,uuid)',true,true),('hon.chad_follow_up_draft_is_current(uuid,jsonb)',true,true),('hon.transition_chad_follow_up_draft(uuid,text)',true,true)
+  ) AS x(signature,runtime_execute,security_definer) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime' AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Chad function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client Chad function execution: %.%',r,expected.signature; END IF; END LOOP;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='crm.assistant.follow_up_draft' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Chad permission registry is unsafe'; END IF;
+END $$;
+-- End Chad CRM follow-up content proposal verification.

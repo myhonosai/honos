@@ -8,6 +8,13 @@
 - [x] Run Claire security, API, and UI checks with the paid-call gate absent and a rejecting network sentinel.
 - [x] Validate separate-reviewer approval/denial, stale policy/expiry, replay/concurrency, quota, unknown outcome, redaction, and zero unintended Teaching Studio/student/attendance/testing/promotion/billing/communication effects.
 
+## Chad Complete CRM follow-up draft assistant — scoped checkpoint
+
+- [x] Add Complete-only direct-human `FOLLOW_UP_DRAFT` planning for one known current-school OPEN CRM lead/version with a closed purpose, private durable request/plan/usage/draft evidence, redacted audit, explicit paid-call gate, and no provider call in focused tests.
+- [x] Bind exact immutable content/lead/version/purpose/no-delivery payload to a CONFIRM Action Engine proposal with current qualified separate review, stale lead/policy checks, idempotency, expected version, and an explicit execution block.
+- [x] Add authenticated no-index `/staff/leads/assistant`, contracts, canonical Supabase grants/verifier, focused API/UI safety checks and architecture notes.
+- [ ] Separately implement a reviewed outbound communication composition/consent/queue/receipt workflow. Chad approval is content-only and must never send, deliver, queue, schedule, mutate CRM, or authorize financial/member actions.
+
 ## 1. Shared commercial tenancy, security, and entitlement foundation
 
 - [ ] Build PostgreSQL-first tenancy as HON Platform → Organization → School/subaccount → school-owned operational data. Every applicable operational row carries organization and school ownership; composite integrity prevents mixed-tenant relations; student copy/move preserves history and is authorized/audited rather than a silent ownership change.

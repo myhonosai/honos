@@ -698,6 +698,30 @@ BEGIN
 END $$;
 
 
+-- Chad CRM follow-up assistant: immutable content proposals only. No direct table,
+-- helper, communication queue, or delivery capability.
+BEGIN;
+DO $$
+DECLARE r text; t text; a text; f record;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['chad_follow_up_invocations','chad_follow_up_drafts'] LOOP
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t); END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+    FOREACH t IN ARRAY ARRAY['chad_follow_up_invocations','chad_follow_up_drafts'] LOOP
+      EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+      FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN('guard_chad_follow_up','resolve_chad_follow_up_scope','require_chad_follow_up_actor','chad_follow_up_event','read_chad_follow_up_invocation','begin_chad_follow_up_request','chad_follow_up_planning_reference','prepare_chad_follow_up_invocation','fail_chad_follow_up_invocation','record_chad_follow_up_result','bind_chad_follow_up_proposal','chad_follow_up_draft_is_current','transition_chad_follow_up_draft') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f.signature);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN GRANT EXECUTE ON FUNCTION hon.resolve_chad_follow_up_scope(text),hon.read_chad_follow_up_invocation(text,uuid),hon.begin_chad_follow_up_request(text,jsonb,uuid),hon.chad_follow_up_planning_reference(text,uuid),hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean),hon.fail_chad_follow_up_invocation(text,uuid,text,text),hon.record_chad_follow_up_result(text,uuid,jsonb),hon.bind_chad_follow_up_proposal(text,uuid,uuid),hon.chad_follow_up_draft_is_current(uuid,jsonb),hon.transition_chad_follow_up_draft(uuid,text) TO hon_runtime; END IF;
+END $$;
+COMMIT;
+
 -- Claire Teaching Assistant: private curriculum-only drafting records. No direct
 -- table/column or helper access; only these explicit server boundaries execute.
 BEGIN;

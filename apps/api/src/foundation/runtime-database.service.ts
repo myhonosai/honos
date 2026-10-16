@@ -161,6 +161,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     );
     return result.rows[0];
   }
+  async resolveChadFollowUpAssistantScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_chad_follow_up_scope($1)', [externalSubject],
+    )).rows[0];
+  }
   async resolveMarketplaceScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

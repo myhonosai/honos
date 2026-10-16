@@ -46,6 +46,8 @@ const expectedRlsTables = [
   'ai_team_presentation_preferences',
   'ai_usage_ledger',
   'ai_invocation_plans',
+  'chad_follow_up_invocations',
+  'chad_follow_up_drafts',
   'audit_events',
   'attendance_records',
   'billing_accounts',
