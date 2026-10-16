@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, type FormEvent } from 'react';
-import type { OperationalSnapshot, OwnerLaunchFirstClassBookingContext, OwnerLaunchFirstClassBookingContextProjection, OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
+import React, { useRef, useState, type FormEvent } from 'react';
+import type { OperationalSnapshot, OwnerLaunchFirstClassBookingContext, OwnerLaunchFirstClassBookingContextProjection, OwnerLaunchMembershipDraftConfirmation, OwnerLaunchMembershipDraftConfirmationReceipt, OwnerLaunchProjection, OwnerLaunchSavedStudentConfirmation, OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
 import { loadOwnerLaunchSavedStudents, loadStaffDashboard, StaffDashboardAccessError } from './staff-dashboard-http';
-import { loadOwnerLaunchFirstClassBookingContext } from './owner-launch-http';
+import { loadOwnerLaunch, loadOwnerLaunchFirstClassBookingContext, loadOwnerLaunchMembershipDraft } from './owner-launch-http';
 import styles from './staff-dashboard.module.css';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
@@ -20,63 +20,79 @@ function WorkflowLink({ href, children }: { href: string; children: React.ReactN
 function NoAggregate({ workflow, children }: { workflow: string; children: React.ReactNode }): React.ReactElement {
   return <article className={styles.unavailable}><span>NOT COUNTED HERE</span><p>{children}</p><WorkflowLink href={workflow}>Open the managed workflow</WorkflowLink></article>;
 }
-function SavedStudentConfirmation({ projection }: { projection: OwnerLaunchSavedStudentsProjection }): React.ReactElement {
-  if (projection.state === 'NO_RECORDED_REGISTRATIONS') return <section className={styles.savedConfirmation} aria-labelledby="saved-students-title">
-    <p className={styles.eyebrow}>OWNER LAUNCH / RECEIPT CONFIRMATION</p><h2 id="saved-students-title">Saved students</h2>
-    <p className={styles.savedEmpty}>No saved owner-launch registrations are recorded for your current direct owner-launch scope.</p>
-    <p className={styles.savedBoundary}>This is not a student or family directory. No booking, attendance, parent access, payment, or communication outcome is implied.</p>
-    <p className={styles.savedBoundary}>Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active. It is not an agreement, payment, invoice, schedule or communication.</p>
-    <WorkflowLink href="/staff/launch">Open owner launch</WorkflowLink>
-  </section>;
-  return <section className={styles.savedConfirmation} aria-labelledby="saved-students-title">
-    <p className={styles.eyebrow}>OWNER LAUNCH / RECEIPT CONFIRMATION</p><h2 id="saved-students-title">Saved students</h2>
-    <p className={styles.savedBoundary}>Up to five newest registrations saved by you in your direct owner-launch scope. This is not a student or family directory.</p>
-    <ul className={styles.savedList}>{projection.registrations.map((registration) => <li key={registration.registrationId}>
-      <strong>{registration.displayName}</strong><dl>
-        <div><dt>Student profile ID</dt><dd><code>{registration.studentProfileId}</code></dd></div>
-        <div><dt>Registration receipt</dt><dd><code>{registration.registrationId}</code></dd></div>
-        <div><dt>Saved</dt><dd>{utc(registration.createdAt)} UTC</dd></div>
-        <div><dt>Registration kind</dt><dd>{registration.registrationKind === 'NEW_CHILD_WITH_NEW_GUARDIAN' ? 'New child with new guardian' : 'New adult without guardian'}</dd></div>
-        <div><dt>Status</dt><dd>Registered — no booking</dd></div>
-      </dl>
-    </li>)}</ul>
-    <p className={styles.savedBoundary}>A saved registration does not assert family readiness, parent login/access, membership, booking, attendance, payment, or communication.</p>
-    <p className={styles.savedBoundary}>Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active. It is not an agreement, payment, invoice, schedule or communication.</p>
-    <WorkflowLink href="/staff/launch">Open owner launch</WorkflowLink>
-  </section>;
-}
-type VerifiedBookingConfirmation = { displayName: string; context: OwnerLaunchFirstClassBookingContext };
+type OwnerSavedReceipt = NonNullable<OwnerLaunchProjection['registration']> | NonNullable<OwnerLaunchProjection['guardianChildRegistration']>;
+export type VerifiedSavedStudent = { receipt: OwnerSavedReceipt; savedStudent: OwnerLaunchSavedStudentConfirmation };
+export type SavedStudentStep = { state: 'RECORDED'; verified: VerifiedSavedStudent } | { state: 'NO_RECORDED' | 'UNAVAILABLE' };
+export type BookingStep = { state: 'RECORDED'; confirmation: { displayName: string; context: OwnerLaunchFirstClassBookingContext } } | { state: 'NO_RECORDED' | 'UNAVAILABLE' };
+export type MembershipDraftStep = { state: 'RECORDED'; receipt: OwnerLaunchMembershipDraftConfirmationReceipt } | { state: 'NO_RECORDED' | 'UNAVAILABLE' };
+export type OwnerWorkflowProgress = { savedStudent: SavedStudentStep; booking: BookingStep | null; membershipDraft: MembershipDraftStep | null };
 
-/**
- * A booking context has no client-controlled school selector. It can appear on
- * this dashboard only when its immutable receipt/student pair is present in
- * the already verified, same-school saved-student confirmation.
- */
-export function bookingForVerifiedDashboard(
-  booking: OwnerLaunchFirstClassBookingContextProjection,
+function ownerReceipt(context: OwnerLaunchProjection): OwnerSavedReceipt | null | undefined {
+  if (context.registration && context.guardianChildRegistration) return undefined;
+  return context.guardianChildRegistration ?? context.registration;
+}
+
+/** A current owner context may enter this card only when its fixed scope is the independently verified report scope. */
+export function ownerContextMatchesVerifiedDashboard(context: OwnerLaunchProjection, snapshot: Pick<OperationalSnapshot, 'organizationId' | 'schoolId'>): boolean {
+  return context.organizationId === snapshot.organizationId && context.schoolId === snapshot.schoolId;
+}
+
+/** Bind the display-name confirmation to both the fixed owner receipt and the verified dashboard school. */
+export function savedStudentForVerifiedDashboard(
+  context: OwnerLaunchProjection,
   savedStudents: OwnerLaunchSavedStudentsProjection,
   snapshot: Pick<OperationalSnapshot, 'organizationId' | 'schoolId'>,
-): VerifiedBookingConfirmation | null {
-  if (booking.state !== 'RECORDED_BOOKING'
+): VerifiedSavedStudent | 'NO_RECORDED' | null {
+  if (!ownerContextMatchesVerifiedDashboard(context, snapshot)
     || savedStudents.organizationId !== snapshot.organizationId
     || savedStudents.schoolId !== snapshot.schoolId) return null;
-  const saved = savedStudents.registrations.find((registration) => registration.registrationId === booking.context.registrationId
-    && registration.studentProfileId === booking.context.student.studentProfileId);
-  return saved ? { displayName: saved.displayName, context: booking.context } : null;
+  const receipt = ownerReceipt(context);
+  if (receipt === undefined) return null;
+  if (!receipt && savedStudents.state === 'NO_RECORDED_REGISTRATIONS') return 'NO_RECORDED';
+  if (!receipt || savedStudents.state !== 'RECORDED_REGISTRATIONS') return null;
+  const savedStudent = savedStudents.registrations.find((registration) => registration.registrationId === receipt.registrationId
+    && registration.studentProfileId === receipt.studentProfileId);
+  return savedStudent ? { receipt, savedStudent } : null;
 }
 
-export function FirstClassBookingConfirmation({ confirmation }: { confirmation: VerifiedBookingConfirmation }): React.ReactElement {
-  const { displayName, context } = confirmation;
-  return <section className={styles.savedConfirmation} aria-labelledby="first-class-booking-confirmation-title">
-    <p className={styles.eyebrow}>OWNER LAUNCH / FIRST-CLASS CONFIRMATION ONLY</p><h2 id="first-class-booking-confirmation-title">First-class booking confirmation</h2>
-    <dl className={styles.savedList}>
-      <div><dt>Saved student</dt><dd><strong>{displayName}</strong></dd></div>
-      <div><dt>Class</dt><dd><strong>{context.classSession.name}</strong></dd></div>
-      <div><dt>Class time</dt><dd>{utc(context.classSession.startsAt)} – {utc(context.classSession.endsAt)} UTC</dd></div>
-      <div><dt>Class status</dt><dd>{context.classSession.status}</dd></div>
-      <div><dt>Booking status</dt><dd>{context.booking.status}</dd></div>
+/** Booking is factual only when its receipt/student/class trio is the exact saved owner-launch trio. */
+export function bookingForVerifiedDashboard(
+  booking: OwnerLaunchFirstClassBookingContextProjection,
+  context: OwnerLaunchProjection,
+  saved: VerifiedSavedStudent,
+): { displayName: string; context: OwnerLaunchFirstClassBookingContext } | null {
+  if (booking.state !== 'RECORDED_BOOKING'
+    || !context.classSession
+    || context.classSession.id !== saved.receipt.classSessionId
+    || booking.context.registrationId !== saved.receipt.registrationId
+    || booking.context.student.studentProfileId !== saved.receipt.studentProfileId
+    || booking.context.classSession.id !== saved.receipt.classSessionId
+    || booking.context.classSession.id !== context.classSession.id) return null;
+  return { displayName: saved.savedStudent.displayName, context: booking.context };
+}
+
+/** A DRAFT has no independent dashboard scope: its immutable receipt must be the already verified saved receipt. */
+export function membershipDraftForVerifiedDashboard(
+  confirmation: OwnerLaunchMembershipDraftConfirmation,
+  saved: VerifiedSavedStudent,
+): OwnerLaunchMembershipDraftConfirmationReceipt | null {
+  return confirmation.state === 'RECORDED_DRAFT' && confirmation.receipt.registrationId === saved.receipt.registrationId
+    ? confirmation.receipt : null;
+}
+
+export function OwnerWorkflowProgressCard({ progress }: { progress: OwnerWorkflowProgress }): React.ReactElement {
+  const saved = progress.savedStudent;
+  const booking = progress.booking;
+  const draft = progress.membershipDraft;
+  return <section className={styles.workflowProgress} aria-labelledby="owner-workflow-progress-title" aria-describedby="owner-workflow-progress-description">
+    <p className={styles.eyebrow}>OWNER LAUNCH / CONFIRMATION ONLY</p><h2 id="owner-workflow-progress-title">Saved-workflow progress</h2>
+    <p id="owner-workflow-progress-description" className={styles.progressDescription}>Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active. Confirmation-only view of the current owner&apos;s fixed saved receipts. It does not claim activation, payment, attendance, eligibility, parent access, or communication.</p>
+    <dl className={styles.progressSteps}>
+      <div><dt>School context</dt><dd><strong>Ready</strong><span>Verified current dashboard report</span></dd></div>
+      <div><dt>Saved student</dt><dd>{saved.state === 'RECORDED' ? <><strong>{saved.verified.savedStudent.displayName}</strong><span>Matching saved registration</span></> : <strong>{saved.state === 'NO_RECORDED' ? 'No recorded saved student' : 'Unavailable'}</strong>}</dd></div>
+      {booking && <div><dt>First class booking</dt><dd>{booking.state === 'RECORDED' ? <><strong>{booking.confirmation.context.classSession.name}</strong><span>{booking.confirmation.context.booking.status}</span></> : <strong>{booking.state === 'NO_RECORDED' ? 'No recorded first class booking' : 'Unavailable'}</strong>}</dd></div>}
+      {draft && <div><dt>Membership DRAFT</dt><dd>{draft.state === 'RECORDED' ? <><strong>DRAFT recorded</strong><span>Matching saved registration</span></> : <strong>{draft.state === 'NO_RECORDED' ? 'No recorded membership DRAFT' : 'Unavailable'}</strong>}</dd></div>}
     </dl>
-    <p className={styles.savedBoundary}>Confirmation only. This is not attendance, membership, payment, eligibility, parent access, or communication.</p>
   </section>;
 }
 function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React.ReactElement {
@@ -129,35 +145,74 @@ export function StaffDashboard(): React.ReactElement {
   const [schoolId, setSchoolId] = useState('');
   const [selection, setSelection] = useState<VerifiedSelection | null>(null);
   const [snapshot, setSnapshot] = useState<OperationalSnapshot | null>(null);
-  const [savedStudents, setSavedStudents] = useState<OwnerLaunchSavedStudentsProjection | null>(null);
-  const [savedStudentsUnavailable, setSavedStudentsUnavailable] = useState(false);
-  const [bookingConfirmation, setBookingConfirmation] = useState<VerifiedBookingConfirmation | null>(null);
+  const [ownerWorkflowProgress, setOwnerWorkflowProgress] = useState<OwnerWorkflowProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const generation = useRef(0);
 
-  function clear() { setSelection(null); setSnapshot(null); setSavedStudents(null); setSavedStudentsUnavailable(false); setBookingConfirmation(null); setError(''); }
+  function clear() { generation.current += 1; setSelection(null); setSnapshot(null); setOwnerWorkflowProgress(null); setError(''); }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
-    clear(); setLoading(true);
+    clear(); const requestGeneration = generation.current; setLoading(true);
+    const current = () => generation.current === requestGeneration;
     try {
       const next = await loadStaffDashboard(organizationId, schoolId);
+      if (!current()) return;
       setSnapshot(next);
       setSelection({ organizationId: next.organizationId, schoolId: next.schoolId, generatedAt: next.generatedAt, from: next.from, to: next.to });
+
+      // The owner-specific reads are intentionally unavailable to ordinary staff.
+      // Do not expose an owner card unless the fixed owner context agrees with the report.
+      let ownerContext: OwnerLaunchProjection;
       try {
-        const confirmation = await loadOwnerLaunchSavedStudents();
-        if (confirmation.organizationId !== next.organizationId || confirmation.schoolId !== next.schoolId) throw new Error('Saved registration scope does not match the verified dashboard school.');
-        setSavedStudents(confirmation);
-        try {
-          const booking = await loadOwnerLaunchFirstClassBookingContext();
-          setBookingConfirmation(bookingForVerifiedDashboard(booking, confirmation, next));
-        } catch { setBookingConfirmation(null); }
+        ownerContext = await loadOwnerLaunch();
+      } catch { return; }
+      if (!current() || !ownerContextMatchesVerifiedDashboard(ownerContext, next)) return;
+
+      let savedStudents: OwnerLaunchSavedStudentsProjection;
+      try {
+        savedStudents = await loadOwnerLaunchSavedStudents();
+      } catch {
+        if (current()) setOwnerWorkflowProgress({ savedStudent: { state: 'UNAVAILABLE' }, booking: null, membershipDraft: null });
+        return;
       }
-      catch { setSavedStudents(null); setBookingConfirmation(null); setSavedStudentsUnavailable(true); }
+      if (!current()) return;
+      const saved = savedStudentForVerifiedDashboard(ownerContext, savedStudents, next);
+      if (saved === 'NO_RECORDED') {
+        setOwnerWorkflowProgress({ savedStudent: { state: 'NO_RECORDED' }, booking: null, membershipDraft: null });
+        return;
+      }
+      if (!saved) {
+        setOwnerWorkflowProgress({ savedStudent: { state: 'UNAVAILABLE' }, booking: null, membershipDraft: null });
+        return;
+      }
+
+      const [bookingResult, draftResult] = await Promise.allSettled([
+        loadOwnerLaunchFirstClassBookingContext(),
+        loadOwnerLaunchMembershipDraft(),
+      ]);
+      if (!current()) return;
+      const booking: BookingStep = bookingResult.status === 'rejected' ? { state: 'UNAVAILABLE' }
+        : bookingResult.value.state === 'NO_RECORDED_BOOKING' ? { state: 'NO_RECORDED' }
+          : bookingResult.value.state === 'BOOKING_UNAVAILABLE' ? { state: 'UNAVAILABLE' }
+            : (() => {
+              const confirmation = bookingForVerifiedDashboard(bookingResult.value, ownerContext, saved);
+              return confirmation ? { state: 'RECORDED' as const, confirmation } : { state: 'UNAVAILABLE' as const };
+            })();
+      const membershipDraft: MembershipDraftStep = draftResult.status === 'rejected' ? { state: 'UNAVAILABLE' }
+        : draftResult.value.state === 'NO_RECORDED_DRAFT' ? { state: 'NO_RECORDED' }
+          : draftResult.value.state === 'DRAFT_UNAVAILABLE' ? { state: 'UNAVAILABLE' }
+            : (() => {
+              const receipt = membershipDraftForVerifiedDashboard(draftResult.value, saved);
+              return receipt ? { state: 'RECORDED' as const, receipt } : { state: 'UNAVAILABLE' as const };
+            })();
+      setOwnerWorkflowProgress({ savedStudent: { state: 'RECORDED', verified: saved }, booking, membershipDraft });
     } catch (reason) {
+      if (!current()) return;
       if (reason instanceof StaffDashboardAccessError) { setSelection(null); setSnapshot(null); }
       setError(reason instanceof Error ? reason.message : 'The operations dashboard is unavailable.');
-    } finally { setLoading(false); }
+    } finally { if (current()) setLoading(false); }
   }
 
   return <main className={styles.page}>
@@ -175,8 +230,6 @@ export function StaffDashboard(): React.ReactElement {
       {selection && <div className={styles.verified} role="status"><strong>Verified current school</strong><span>Organization <code>{selection.organizationId}</code></span><span>School <code>{selection.schoolId}</code></span><span>Window: {utc(selection.from)} – {utc(selection.to)} UTC</span><span>Generated: {utc(selection.generatedAt)} UTC</span></div>}
     </section>
     {snapshot && <OperationsCards snapshot={snapshot} />}
-    {snapshot && savedStudents && <SavedStudentConfirmation projection={savedStudents} />}
-    {snapshot && bookingConfirmation && <FirstClassBookingConfirmation confirmation={bookingConfirmation} />}
-    {snapshot && savedStudentsUnavailable && <section className={styles.savedUnavailable} aria-live="polite"><strong>Owner-launch saved-student confirmation unavailable.</strong><p>No registration is shown. The dashboard did not use its school inputs to search for a student.</p></section>}
+    {snapshot && ownerWorkflowProgress && <OwnerWorkflowProgressCard progress={ownerWorkflowProgress} />}
   </main>;
 }

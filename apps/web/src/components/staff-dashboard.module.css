@@ -61,5 +61,14 @@
 .savedList code { color: #bceff0; font-size: 12px; }
 .savedUnavailable { margin-top: 26px; padding: 17px; border: 1px dashed #526e84; border-radius: 12px; background: #102335; }
 .savedUnavailable p { margin: 7px 0 0; color: #c1d0e0; line-height: 1.5; }
+.workflowProgress { margin-top: 26px; padding: 19px 21px; border: 1px solid #4d8c88; border-radius: 14px; background: #123238; }
+.workflowProgress h2 { margin: 7px 0 0; font-size: 20px; }
+.progressDescription { max-width: 800px; margin: 9px 0 0; color: #c1d0e0; font-size: 13px; line-height: 1.5; }
+.progressSteps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin: 17px 0 0; }
+.progressSteps > div { min-width: 0; padding: 12px; border: 1px solid #416d70; border-radius: 9px; background: #0b1c2b; }
+.progressSteps dt { color: #b9cbdb; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.progressSteps dd { display: grid; gap: 4px; margin: 6px 0 0; color: #e4f0ef; font-size: 13px; overflow-wrap: anywhere; }
+.progressSteps strong { color: #f3f7fc; font-size: 14px; }
+.progressSteps span { color: #b9cbdb; font-size: 12px; line-height: 1.35; }
 @media (max-width: 980px) { .cards { grid-template-columns: 1fr; } .cardIntro { min-height: auto; } .queueGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 680px) { .page { padding: 25px 16px 58px; } .scopeSection { padding: 17px; } .scopeSection form fieldset { grid-template-columns: 1fr; } .scopeSection button { width: 100%; } .queueSection { padding: 18px; } .queueGrid { grid-template-columns: 1fr; } .verified { display: grid; } .savedConfirmation { padding: 18px; } .savedList dl { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { .page { padding: 25px 16px 58px; } .scopeSection { padding: 17px; } .scopeSection form fieldset { grid-template-columns: 1fr; } .scopeSection button { width: 100%; } .queueSection { padding: 18px; } .queueGrid { grid-template-columns: 1fr; } .verified { display: grid; } .savedConfirmation, .workflowProgress { padding: 18px; } .savedList dl, .progressSteps { grid-template-columns: 1fr; } }
