@@ -1,8 +1,8 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import type { OwnerLaunchProjection, OwnerLaunchFirstClassBookingReceipt } from '@hon/contracts';
-import { loadOwnerLaunch, OwnerLaunchAccessError, postOwnerLaunch, postOwnerLaunchFirstClassBooking } from './owner-launch-http';
+import type { OwnerLaunchProjection, OwnerLaunchFirstClassBookingReceipt, OwnerLaunchMembershipDraftReceipt } from '@hon/contracts';
+import { loadOwnerLaunch, OwnerLaunchAccessError, postOwnerLaunch, postOwnerLaunchFirstClassBooking, postOwnerLaunchMembershipDraft } from './owner-launch-http';
 export function OwnerLaunch() {
   const [context,setContext]=useState<OwnerLaunchProjection|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('Load your verified school context to begin. HQ provisioning is separate.');
   const [programName,setProgramName]=useState(''),[className,setClassName]=useState(''),[startsAt,setStartsAt]=useState(''),[endsAt,setEndsAt]=useState(''),[capacity,setCapacity]=useState(10);
@@ -10,15 +10,17 @@ export function OwnerLaunch() {
   const [givenName,setGivenName]=useState(''),[familyName,setFamilyName]=useState(''),[birthDate,setBirthDate]=useState(''),[attested,setAttested]=useState(false);
   const [guardianGivenName,setGuardianGivenName]=useState(''),[guardianFamilyName,setGuardianFamilyName]=useState(''),[guardianBirthDate,setGuardianBirthDate]=useState('');
   const [booking,setBooking]=useState<OwnerLaunchFirstClassBookingReceipt|null>(null);
+  const [membershipDraft,setMembershipDraft]=useState<OwnerLaunchMembershipDraftReceipt|null>(null);
+  const [planCode,setPlanCode]=useState(''),[termStart,setTermStart]=useState(''),[termEnd,setTermEnd]=useState(''),[currency,setCurrency]=useState('');
   const generation=useRef(0);
   const retry=useRef<{operation:string;fingerprint:string;key:string}|null>(null);
-  function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);retry.current=null;}
+  function clearPrivateInput() {setGivenName('');setFamilyName('');setBirthDate('');setGuardianGivenName('');setGuardianFamilyName('');setGuardianBirthDate('');setAttested(false);setPlanCode('');setTermStart('');setTermEnd('');setCurrency('');setMembershipDraft(null);retry.current=null;}
   useEffect(()=>{
-    const stale=()=>{generation.current++;setContext(null);setBooking(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();};
+    const stale=()=>{generation.current++;setContext(null);setBooking(null);setMembershipDraft(null);setBusy(false);setMessage('School state may have changed. Reload saved receipts before continuing.');clearPrivateInput();};
     window.addEventListener('focus',stale);document.addEventListener('visibilitychange',stale);
     return ()=>{generation.current++;window.removeEventListener('focus',stale);document.removeEventListener('visibilitychange',stale);};
   },[]);
-  async function reload() {const current=++generation.current;setBusy(true);setContext(null);setBooking(null);try {const loaded=await loadOwnerLaunch();if(current!==generation.current)return;setContext(loaded);setMessage('Saved creation receipts loaded. These are historical receipts, not current eligibility or class admission.');}catch(error){if(current!==generation.current)return;setMessage(error instanceof Error?error.message:'School launch is unavailable.');if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status))clearPrivateInput();}finally{if(current===generation.current)setBusy(false);}}
+  async function reload() {const current=++generation.current;setBusy(true);setContext(null);setBooking(null);setMembershipDraft(null);try {const loaded=await loadOwnerLaunch();if(current!==generation.current)return;setContext(loaded);setMessage('Saved creation receipts loaded. These are historical receipts, not current eligibility or class admission.');}catch(error){if(current!==generation.current)return;setMessage(error instanceof Error?error.message:'School launch is unavailable.');if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status))clearPrivateInput();}finally{if(current===generation.current)setBusy(false);}}
   async function submit(operation:'program'|'class'|'student') {
     if (!context || busy) return;
     const current=++generation.current;
@@ -59,6 +61,25 @@ export function OwnerLaunch() {
       setMessage(error instanceof Error?error.message:'Booking outcome is unavailable. Reload the saved receipt or retry the exact same request and key.');
     } finally {if(current===generation.current)setBusy(false);}
   }
+  async function draftMembership() {
+    const saved=context?.guardianChildRegistration??context?.registration;
+    if(!context || !saved || busy) return;
+    const current=++generation.current;
+    try {
+      const input={registrationId:saved.registrationId,expectedReceiptVersion:1 as const,planCode,termStartedAt:new Date(termStart).toISOString(),termEndsAt:new Date(termEnd).toISOString(),currency};
+      const fingerprint=JSON.stringify(input);
+      if(!retry.current || retry.current.operation!=='membership-draft' || retry.current.fingerprint!==fingerprint)retry.current={operation:'membership-draft',fingerprint,key:crypto.randomUUID()};
+      setBusy(true);setMembershipDraft(null);
+      const receipt=await postOwnerLaunchMembershipDraft(context,input,retry.current.key);
+      if(current!==generation.current)return;
+      setMembershipDraft(receipt);
+      setMessage('DRAFT only: fixed-term membership saved. No payment schedule, payment, activation, invoice or communication was created.');
+    } catch(error) {
+      if(current!==generation.current)return;
+      setMessage(error instanceof Error?error.message:'DRAFT outcome unavailable. Retry the exact same input and key; do not assume success.');
+      if(error instanceof OwnerLaunchAccessError&&[401,403].includes(error.status)){setContext(null);setBooking(null);clearPrivateInput();}
+    } finally {if(current===generation.current)setBusy(false);}
+  }
   const field={display:'grid',gap:6,marginBottom:12} as const;
   const saved=context?.guardianChildRegistration??context?.registration;
   return <main style={{maxWidth:840,margin:'2rem auto',padding:24}}>
@@ -79,6 +100,18 @@ export function OwnerLaunch() {
         </form>:<p>Save a class first. Registration authority is rechecked at the server.</p>}</section>
       <section><h2>5. Saved receipt</h2>{saved?<><p><strong>REGISTERED — NO BOOKING</strong></p>{context.guardianChildRegistration&&<p>One new guardian/child relationship recorded. Not family readiness, parent login, parent access, membership, payment, attendance or communication.</p>}<p>Receipt: <code>{saved.registrationId}</code></p><p>Student: <code>{saved.studentProfileId}</code></p><p>Program enrollment: <code>{saved.enrollmentId}</code> — program-only, not membership or class booking.</p><p>Saved at {saved.createdAt}</p></>:<p>No saved student registration receipt yet. An unavailable result is never success.</p>}</section>
       <section><h2>6. Book first class</h2>{saved&&context.classSession?<><p>Human-only exact saved-receipt action. It uses no student, family, program, class or school selector; the current server rechecks receipt relation, authority, tier, versions and canonical capacity.</p>{context.guardianChildRegistration&&<p>For a guardian-and-child receipt, this is a class booking decision only. It does not create parent login, parent access, family readiness, parent contact, membership, payment, attendance or eligibility success.</p>}{booking?<><p><strong>{booking.status}</strong> booking receipt recorded.</p><p>Booking: <code>{booking.bookingId}</code> · class: <code>{booking.classSessionId}</code> · version {booking.bookingVersion}</p></>:<><p>No booking is recorded by registration. A full class may return WAITLISTED; an unavailable result is not booking success.</p><button type="button" disabled={busy} onClick={()=>void bookFirstClass()}>{busy?'Verifying booking…':'Book first class'}</button></>}</>:<p>Save one registration receipt first. No booking action is available otherwise.</p>}</section>
+      {saved&&<section aria-label="Receipt-bound membership draft"><h2>7. Optional fixed-term membership DRAFT</h2>
+        <p>DRAFT only. No payment schedule, payment method, processor, payment, activation, invoice or communication. Activation remains a separate conventional human workflow and is not available here.</p>
+        <p>The saved receipt determines payer and participant: adult student for both, or recorded guardian as payer and child as participant. No person, account, family or school selector is available. One same-currency account is reused or, only if none exists, one is created; ambiguity needs staff.</p>
+        {membershipDraft?<><p><strong>DRAFT only — saved</strong></p><p>Membership: <code>{membershipDraft.membershipId}</code> · version {membershipDraft.membershipVersion}</p><p>Declared code: {membershipDraft.planCode} · {membershipDraft.currency} · {membershipDraft.termStartedAt} to {membershipDraft.termEndsAt}</p><p>{membershipDraft.billingAccountCreated?'One billing account created.':'One existing billing account reused.'} No price or auto-renewal is inferred.</p></>:<form onSubmit={e=>{e.preventDefault();void draftMembership();}}><fieldset disabled={busy}>
+          <legend>Explicit DRAFT declaration</legend>
+          <label style={field}>Opaque plan code<input value={planCode} onChange={e=>setPlanCode(e.target.value)} maxLength={80} autoComplete="off" required /></label><p>This bounded staff-declared code is not a price, catalog selection, discount or renewal promise.</p>
+          <label style={field}>Term starts (your local time)<input type="datetime-local" value={termStart} onChange={e=>setTermStart(e.target.value)} required /></label>
+          <label style={field}>Term ends (your local time)<input type="datetime-local" value={termEnd} onChange={e=>setTermEnd(e.target.value)} required /></label>
+          <label style={field}>Exact ISO currency code<input value={currency} onChange={e=>setCurrency(e.target.value)} minLength={3} maxLength={3} pattern="[A-Z]{3}" autoComplete="off" required /></label>
+          <button disabled={busy}>Save membership DRAFT only</button>
+        </fieldset></form>}
+      </section>}
     </>}
     <nav aria-label="Conventional staff modules"><Link href="/staff/dashboard">Staff dashboard</Link> · <Link href="/staff/attendance">Attendance</Link> · <Link href="/staff/curriculum/library">Curriculum library</Link></nav>
   </main>;

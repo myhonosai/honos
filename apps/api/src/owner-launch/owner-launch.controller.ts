@@ -5,7 +5,7 @@ import type { OwnerLaunchContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
-import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard } from './owner-launch-human-ui.guard.js';
+import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch-human-ui.guard.js';
 import { OwnerLaunchService } from './owner-launch.service.js';
 @Controller()
 @UseGuards(HonIdentityGuard)
@@ -60,4 +60,14 @@ export class OwnerLaunchController {
     response.setHeader('Cache-Control','private, no-store'); response.status(result.replayed?200:201);
     return {data:result.receipt,meta:{requestId:context.requestId,correlationId:context.correlationId,replayed:result.replayed}};
   }
+  @Post('owner-launch/membership-draft')
+  @UseGuards(OwnerLaunchMembershipDraftHumanUiGuard)
+  async draftMembership(@Headers('idempotency-key') key:string|undefined,@Body() input:unknown,@Req() request:HonRequest,@Res({passthrough:true}) response:Response) {
+    if(!key) throw new BadRequestException('Idempotency-Key required.');
+    const context=await this.context(request,key);
+    const result=await this.launch.draftMembership(context,input);
+    response.setHeader('Cache-Control','private, no-store'); response.status(result.replayed?200:201);
+    return {data:result.receipt,meta:{requestId:context.requestId,correlationId:context.correlationId,replayed:result.replayed}};
+  }
+
 }

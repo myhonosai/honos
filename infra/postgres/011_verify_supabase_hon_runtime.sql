@@ -2109,7 +2109,7 @@ DO $$ DECLARE t text; f record; b boolean; trigger_name text; trigger_type integ
  FOR f IN SELECT * FROM (VALUES
   ('hon.guard_enrollment_program_identity()',false,false),('hon.resolve_owner_launch_scope(text)',true,true),
   ('hon.require_owner_launch_actor(text)',false,true),('hon.lock_owner_launch_actor(text)',false,true),
-  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true),('hon.read_owner_launch_saved_students(text)',true,true),('hon.require_owner_launch_family_actor(text)',false,true),('hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)',true,true),('hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)',true,true)
+  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true),('hon.read_owner_launch_saved_students(text)',true,true),('hon.require_owner_launch_family_actor(text)',false,true),('hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)',true,true),('hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)',true,true),('hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid)',true,true)
  ) v(signature,can_execute,is_definer) LOOP
   SELECT p.prosecdef=f.is_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
    AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute

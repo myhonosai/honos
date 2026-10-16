@@ -1,4 +1,4 @@
-import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, type OwnerLaunchProjection, type RegisterStudentInput, type BookOwnerLaunchFirstClassInput } from '@hon/contracts';
+import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, type OwnerLaunchProjection, type RegisterStudentInput, type BookOwnerLaunchFirstClassInput } from '@hon/contracts';
 export class OwnerLaunchAccessError extends Error { constructor(message:string,readonly status:number) { super(message); } }
 export function ownerLaunchPath(context: Pick<OwnerLaunchProjection,'organizationId'|'schoolId'>, operation: 'program'|'class'|'student'|'guardian-child'): string {
   const suffix={program:'programs',class:'schedule/sessions',student:'student-registrations','guardian-child':'guardian-child-registrations'}[operation];
@@ -56,4 +56,22 @@ export async function postOwnerLaunchFirstClassBooking(context: OwnerLaunchProje
   const receipt=verifyOwnerLaunchFirstClassBookingReceipt(result.data,input);
   if(receipt.classSessionId!==context.classSession.id) throw new Error('Unverified saved class linkage.');
   return receipt;
+}
+
+/** One fixed, same-origin receipt-only DRAFT declaration. No activation or payment path. */
+export async function postOwnerLaunchMembershipDraft(context: OwnerLaunchProjection, value: unknown, key: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(key)) throw new Error('A generated retry key is required.');
+  const input=verifyDraftOwnerLaunchMembershipInput(value);
+  const saved=context.guardianChildRegistration??context.registration;
+  if(!saved || saved.registrationId!==input.registrationId) throw new Error('Only the exact saved registration receipt can declare a DRAFT membership.');
+  try {
+    const result=await request('/api/v1/owner-launch/membership-draft',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','Idempotency-Key':key,'X-HON-Human-Command':'owner-launch-membership-draft'},body:JSON.stringify(input)});
+    return verifyOwnerLaunchMembershipDraftReceipt(result.data,input);
+  } catch(error) {
+    if(error instanceof OwnerLaunchAccessError) {
+      const message=[401,403].includes(error.status)?'Direct human school/billing authority or active tier is unavailable. Saved context was cleared.':error.status===400?'Needs staff or invalid input: exact fixed terms and currency are required; ambiguous or different-currency accounts cannot be selected. No draft success is claimed.':error.status===409?'Saved receipt, declared draft or retry key conflicts. Retry exact input and key; do not create a second membership.':'DRAFT outcome unavailable. Retry the exact same input and key; do not assume payment, activation, invoice or communication.';
+      throw new OwnerLaunchAccessError(message,error.status);
+    }
+    throw error;
+  }
 }

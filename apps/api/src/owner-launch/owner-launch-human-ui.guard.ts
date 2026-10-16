@@ -19,3 +19,8 @@ export class OwnerLaunchGuardianChildHumanUiGuard extends OwnerLaunchHumanUiGuar
 export class OwnerLaunchFirstClassBookingHumanUiGuard extends OwnerLaunchHumanUiGuard {
   protected readonly command: string='owner-launch-first-class-booking';
 }
+
+@Injectable()
+export class OwnerLaunchMembershipDraftHumanUiGuard extends OwnerLaunchHumanUiGuard {
+  protected readonly command: string='owner-launch-membership-draft';
+}

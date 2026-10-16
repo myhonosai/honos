@@ -145,3 +145,37 @@ export function verifyGuardianChildRegistrationReceipt(value: unknown, input?: P
   if(row.registrationKind!=='NEW_CHILD_WITH_NEW_GUARDIAN') invalid();
   return {...verifyStudentRegistrationReceipt({registrationId:row.registrationId,studentProfileId:row.studentProfileId,enrollmentId:row.enrollmentId,programId:row.programId,classSessionId:row.classSessionId,status:row.status,createdAt:row.createdAt},input),familyId:ownerLaunchId(row.familyId),registrationKind:'NEW_CHILD_WITH_NEW_GUARDIAN'};
 }
+
+/** Receipt-only declaration. No price, schedule, payer, participant or activation authority. */
+export interface DraftOwnerLaunchMembershipInput {
+  registrationId: string; expectedReceiptVersion: 1; planCode: string; termStartedAt: string; termEndsAt: string; currency: string;
+}
+export interface OwnerLaunchMembershipDraftReceipt {
+  registrationId: string; membershipId: string; state: 'DRAFT'; membershipVersion: number; planCode: string;
+  termStartedAt: string; termEndsAt: string; currency: string; billingAccountCreated: boolean; recordedAt: string;
+}
+/** Fixed ISO 4217 code snapshot; no currency default, normalization, price or catalog inference. */
+const OWNER_LAUNCH_CURRENCIES: readonly string[] = ["AED", "AFN", "ALL", "AMD", "ANG", "AOA", "ARS", "AUD", "AWG", "AZN", "BAM", "BBD", "BDT", "BGN", "BHD", "BIF", "BMD", "BND", "BOB", "BRL", "BSD", "BTN", "BWP", "BYN", "BZD", "CAD", "CDF", "CHF", "CLP", "CNY", "COP", "CRC", "CUC", "CUP", "CVE", "CZK", "DJF", "DKK", "DOP", "DZD", "EGP", "ERN", "ETB", "EUR", "FJD", "FKP", "GBP", "GEL", "GHS", "GIP", "GMD", "GNF", "GTQ", "GYD", "HKD", "HNL", "HRK", "HTG", "HUF", "IDR", "ILS", "INR", "IQD", "IRR", "ISK", "JMD", "JOD", "JPY", "KES", "KGS", "KHR", "KMF", "KPW", "KRW", "KWD", "KYD", "KZT", "LAK", "LBP", "LKR", "LRD", "LSL", "LYD", "MAD", "MDL", "MGA", "MKD", "MMK", "MNT", "MOP", "MRU", "MUR", "MVR", "MWK", "MXN", "MYR", "MZN", "NAD", "NGN", "NIO", "NOK", "NPR", "NZD", "OMR", "PAB", "PEN", "PGK", "PHP", "PKR", "PLN", "PYG", "QAR", "RON", "RSD", "RUB", "RWF", "SAR", "SBD", "SCR", "SDG", "SEK", "SGD", "SHP", "SLE", "SLL", "SOS", "SRD", "SSP", "STN", "SVC", "SYP", "SZL", "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TWD", "TZS", "UAH", "UGX", "USD", "UYU", "UZS", "VES", "VND", "VUV", "WST", "XAF", "XCD", "XCG", "XDR", "XOF", "XPF", "XSU", "YER", "ZAR", "ZMW", "ZWG", "ZWL"];
+function launchTerm(value: unknown): string {
+  const term = text(value, 29);
+  if (!/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00))$/.test(term) || !Number.isFinite(Date.parse(term))) invalid();
+  const utcYear=new Date(term).getUTCFullYear();
+  if(utcYear<1 || utcYear>9999 || Number(term.slice(0,4))<1) invalid();
+  const date = term.slice(0,10);
+  if (new Date(`${date}T00:00:00.000Z`).toISOString().slice(0,10) !== date) invalid();
+  return term;
+}
+export function verifyDraftOwnerLaunchMembershipInput(value: unknown): DraftOwnerLaunchMembershipInput {
+  const row = ownerLaunchRecord(value, ['registrationId','expectedReceiptVersion','planCode','termStartedAt','termEndsAt','currency']);
+  const termStartedAt = launchTerm(row.termStartedAt), termEndsAt = launchTerm(row.termEndsAt);
+  if (row.expectedReceiptVersion !== 1 || Date.parse(termEndsAt) <= Date.parse(termStartedAt) || typeof row.currency !== 'string' || !OWNER_LAUNCH_CURRENCIES.includes(row.currency)) invalid();
+  return { registrationId: ownerLaunchId(row.registrationId), expectedReceiptVersion: 1, planCode: text(row.planCode,80), termStartedAt, termEndsAt, currency: row.currency };
+}
+export function verifyOwnerLaunchMembershipDraftReceipt(value: unknown, input?: DraftOwnerLaunchMembershipInput): OwnerLaunchMembershipDraftReceipt {
+  const row = ownerLaunchRecord(value, ['registrationId','membershipId','state','membershipVersion','planCode','termStartedAt','termEndsAt','currency','billingAccountCreated','recordedAt']);
+  const verified = verifyDraftOwnerLaunchMembershipInput({registrationId:row.registrationId,expectedReceiptVersion:1,planCode:row.planCode,termStartedAt:row.termStartedAt,termEndsAt:row.termEndsAt,currency:row.currency});
+  const recordedAt = launchTerm(row.recordedAt);
+  if (row.state !== 'DRAFT' || typeof row.billingAccountCreated !== 'boolean') invalid();
+  if (input && (verified.registrationId !== input.registrationId || verified.planCode !== input.planCode || verified.currency !== input.currency || Date.parse(verified.termStartedAt) !== Date.parse(input.termStartedAt) || Date.parse(verified.termEndsAt) !== Date.parse(input.termEndsAt))) invalid();
+  return {registrationId:verified.registrationId,membershipId:ownerLaunchId(row.membershipId),state:'DRAFT',membershipVersion:version(row.membershipVersion),planCode:verified.planCode,termStartedAt:verified.termStartedAt,termEndsAt:verified.termEndsAt,currency:verified.currency,billingAccountCreated:row.billingAccountCreated,recordedAt};
+}
