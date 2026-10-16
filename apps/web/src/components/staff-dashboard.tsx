@@ -45,7 +45,7 @@ function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React
       <article className={styles.card}>
         <header><p>MEMBERSHIP VIEW</p><h2>Membership &amp; plan</h2></header>
         <p className={styles.cardIntro}>Current membership states and invoice statuses created during the reporting window. Counts are not revenue or collection totals.</p>
-        <dl className={styles.metrics}><Metric label="Active memberships" value={memberships.ACTIVE} /><Metric label="Frozen" value={memberships.FROZEN} /><Metric label="Cancellation pending" value={memberships.CANCELLATION_PENDING} /><Metric label="Expired" value={memberships.EXPIRED} /><Metric label="Issued invoices" value={invoices.ISSUED} /><Metric label="Paid invoices" value={invoices.PAID} /><Metric label="Uncollectible invoices" value={invoices.UNCOLLECTIBLE} /></dl>
+        <dl className={styles.metrics}><Metric label="Student profiles" value={snapshot.studentProfiles.total} detail="Current-school aggregate" /><Metric label="Active memberships" value={memberships.ACTIVE} /><Metric label="Frozen" value={memberships.FROZEN} /><Metric label="Cancellation pending" value={memberships.CANCELLATION_PENDING} /><Metric label="Expired" value={memberships.EXPIRED} /><Metric label="Issued invoices" value={invoices.ISSUED} /><Metric label="Paid invoices" value={invoices.PAID} /><Metric label="Uncollectible invoices" value={invoices.UNCOLLECTIBLE} /></dl>
         <div className={styles.noData}><strong>Revenue-plan summary unavailable</strong><p>Saved plans are intentionally scoped to the dedicated human planning workflow; no target, amount, payment schedule, or payment method is shown here.</p></div>
         <WorkflowLink href="/staff/planning/revenue">Open human revenue planning</WorkflowLink>
         <WorkflowLink href="/staff/billing/renewals">Open membership renewal reviews</WorkflowLink>
@@ -54,6 +54,7 @@ function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React
     <section className={styles.queueSection} aria-labelledby="queue-title">
       <div><p className={styles.eyebrow}>HUMAN WORKFLOWS</p><h2 id="queue-title">Queue visibility without record enumeration</h2><p>These managed queues have safe, bounded list endpoints. They do not provide dashboard-wide aggregate counts, so this dashboard does not fetch rows, notes, IDs, or evidence just to make a number.</p></div>
       <div className={styles.queueGrid}>
+        <NoAggregate workflow="/staff/launch">Owner launch is a bounded conventional setup flow; this dashboard does not infer school readiness or student counts from private records.</NoAggregate>
         <NoAggregate workflow="/staff/crm/follow-ups">Follow-up counts are unavailable from the approved operations report.</NoAggregate>
         <NoAggregate workflow="/staff/billing/renewals">Renewal-review counts are unavailable from the approved operations report.</NoAggregate>
         <NoAggregate workflow="/staff/action-center/approvals">Approval counts are unavailable from the approved operations report.</NoAggregate>

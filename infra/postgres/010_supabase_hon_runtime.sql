@@ -1012,3 +1012,26 @@ DO $$ DECLARE t text; r text; a record; f text; BEGIN
  END LOOP;
  GRANT EXECUTE ON FUNCTION hon.read_staff_curriculum_library(text),hon.mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid),hon.read_parent_curriculum_library(text,uuid) TO hon_runtime;
 END $$;
+
+-- Owner launch exact grant reconciliation (no raw table or column grants).
+DO $$ DECLARE t text; r text; a record; f text; BEGIN
+ FOREACH t IN ARRAY ARRAY['student_registration_receipts','student_registration_outbox'] LOOP
+  EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+  END LOOP;
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a.attname,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a.attname,t,r);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['guard_enrollment_program_identity()','resolve_owner_launch_scope(text)','require_owner_launch_actor(text)','lock_owner_launch_actor(text)','register_owner_launch_student(text,jsonb,text,uuid,uuid)','read_owner_launch(text)'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I',f,r);
+  END LOOP;
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.resolve_owner_launch_scope(text),hon.register_owner_launch_student(text,jsonb,text,uuid,uuid),hon.read_owner_launch(text) TO hon_runtime;
+END $$;

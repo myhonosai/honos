@@ -57,8 +57,8 @@ describe('staff operations dashboard', () => {
     const http = readFileSync('src/components/staff-dashboard-http.ts', 'utf8');
     for (const text of ['verifySession', "redirect('/auth/login')", 'index: false', 'follow: false', 'force-dynamic']) expect(route).toContain(text);
     expect(component).toContain('setSnapshot(null)');
-    for (const text of ['Trial count unavailable', 'Revenue-plan summary unavailable', 'NOT COUNTED HERE']) expect(component).toContain(text);
-    for (const href of ['/staff/search', '/staff/planning/revenue', '/staff/crm/follow-ups', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(component).toContain(href);
+    for (const text of ['Student profiles', 'Current-school aggregate', 'Trial count unavailable', 'Revenue-plan summary unavailable', 'NOT COUNTED HERE']) expect(component).toContain(text);
+    for (const href of ['/staff/search', '/staff/planning/revenue', '/staff/launch', '/staff/crm/follow-ups', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(component).toContain(href);
     expect(http).toContain("method: 'GET'");
     expect(http).toContain("credentials: 'same-origin'");
     expect(http).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|from\s+['"][^'"]*(?:voice|action|ai|provider)/i);

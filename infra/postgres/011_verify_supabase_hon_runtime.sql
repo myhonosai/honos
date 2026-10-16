@@ -2092,3 +2092,55 @@ DO $$ DECLARE t text; c record; signature text; f record; expected_hash text; ex
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_resource_facts'::regclass AND contype='c' AND pg_get_constraintdef(oid)='CHECK ((state = ''INERT''::text))') THEN RAISE EXCEPTION 'Library permanently inert facts required'; END IF;
 END $$;
 -- End curriculum library exact verification.
+
+-- Owner launch exact verification:
+DO $$ DECLARE t text; f record; b boolean; trigger_name text; trigger_type integer; BEGIN
+ FOREACH t IN ARRAY ARRAY['student_registration_receipts','student_registration_outbox'] LOOP
+  SELECT c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND a.grantee<>c.relowner)
+  INTO b FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe owner launch table %',t; END IF;
+  FOR trigger_name,trigger_type IN SELECT * FROM (VALUES('registration_immutable',27),('registration_no_truncate',34)) v(n,k) LOOP
+   IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname=trigger_name AND tgtype=trigger_type AND tgfoid='hon.guard_curriculum_history()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe registration trigger %.%',t,trigger_name; END IF;
+  END LOOP;
+ END LOOP;
+ FOR f IN SELECT * FROM (VALUES
+  ('hon.guard_enrollment_program_identity()',false,false),('hon.resolve_owner_launch_scope(text)',true,true),
+  ('hon.require_owner_launch_actor(text)',false,true),('hon.lock_owner_launch_actor(text)',false,true),
+  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true)
+ ) v(signature,can_execute,is_definer) LOOP
+  SELECT p.prosecdef=f.is_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+   AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+  INTO b FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe owner launch function %',f.signature; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.student_registration_outbox'::regclass AND conname='student_registration_outbox_state_check' AND convalidated AND pg_get_constraintdef(oid)=$def$CHECK ((state = 'INERT'::text))$def$)
+ OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.student_registration_outbox'::regclass AND conname='student_registration_outbox_event_code_check' AND convalidated AND pg_get_constraintdef(oid)=$def$CHECK ((event_code = 'student.registered.v1'::text))$def$)
+ OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.student_curriculum_enrollments'::regclass AND conname='enrollment_program_scope_fk' AND contype='f' AND convalidated)
+ OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.student_curriculum_enrollments'::regclass AND conname='enrollment_truthful_target' AND contype='c' AND convalidated)
+ OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.student_curriculum_enrollments'::regclass AND tgname='enrollment_program_identity' AND tgfoid='hon.guard_enrollment_program_identity()'::regprocedure AND tgenabled='O' AND tgtype=19) THEN RAISE EXCEPTION 'Unsafe owner launch enrollment/outbox integrity'; END IF;
+END $$;
+DO $$ DECLARE f record; expected record; BEGIN
+ FOR f IN SELECT * FROM (VALUES
+ ('student_registration_receipts','registration_enrollment_relation_fk','FOREIGN KEY (enrollment_id, student_profile_id, program_id, organization_id, school_id) REFERENCES hon.student_curriculum_enrollments(id, student_profile_id, program_id, organization_id, school_id)'),
+ ('student_registration_receipts','registration_class_program_fk','FOREIGN KEY (class_session_id, program_id, organization_id, school_id) REFERENCES hon.class_sessions(id, program_id, organization_id, school_id)'),
+ ('student_registration_outbox','registration_outbox_scope_fk','FOREIGN KEY (registration_id, organization_id, school_id) REFERENCES hon.student_registration_receipts(id, organization_id, school_id)')
+ ) v(tbl,name,definition) LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',f.tbl)::regclass AND conname=f.name AND contype='f' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)=f.definition) THEN RAISE EXCEPTION 'Unsafe registration relation %.%',f.tbl,f.name; END IF;
+ END LOOP;
+ FOR expected IN SELECT * FROM (VALUES
+ ('student_registration_receipts',ARRAY['id','organization_id','school_id','actor_principal_id','student_profile_id','enrollment_id','program_id','class_session_id','idempotency_digest','fingerprint','receipt','created_at']::text[]),
+ ('student_registration_outbox',ARRAY['registration_id','organization_id','school_id','event_code','state']::text[])
+ ) v(tbl,cols) LOOP
+  IF (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid=format('hon.%I',expected.tbl)::regclass AND attnum>0 AND NOT attisdropped) IS DISTINCT FROM expected.cols
+   OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=format('hon.%I',expected.tbl)::regclass AND attnum>0 AND NOT attisdropped AND NOT attnotnull) THEN RAISE EXCEPTION 'Unsafe registration columns %',expected.tbl; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_index WHERE indexrelid='hon.enrollment_student_program_unique'::regclass AND indisunique AND indisvalid AND pg_get_expr(indpred,indrelid)='(program_id IS NOT NULL)')
+  OR has_column_privilege('hon_runtime','hon.student_curriculum_enrollments','program_id','UPDATE')
+  OR has_table_privilege('hon_runtime','hon.student_curriculum_enrollments','INSERT') THEN RAISE EXCEPTION 'Unsafe program enrollment command boundary'; END IF;
+END $$;
+-- End owner launch exact verification.

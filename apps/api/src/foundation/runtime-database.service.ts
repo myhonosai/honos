@@ -124,6 +124,20 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     }
   }
 
+  async resolveOwnerLaunchScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>('SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_owner_launch_scope($1)', [externalSubject])).rows[0];
+  }
+
+  async ownerLaunchCommand(context: import('@hon/contracts').OwnerLaunchContext, input?: import('@hon/contracts').RegisterStudentInput): Promise<unknown> {
+    return this.withTenantTransaction(context, async client => {
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)", [context.source, context.externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+      if (!input) return (await client.query<{ data: unknown }>('SELECT hon.read_owner_launch($1) data', [context.externalSubject])).rows[0]!.data;
+      return (await client.query<{ data: unknown }>('SELECT hon.register_owner_launch_student($1,$2::jsonb,$3,$4::uuid,$5::uuid) data', [context.externalSubject, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId])).rows[0]!.data;
+    });
+  }
+
   async resolveAuthorizedScope(
     externalSubject: string,
     schoolId: string,

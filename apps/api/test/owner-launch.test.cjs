@@ -1,0 +1,46 @@
+require('reflect-metadata');
+const assert=require('node:assert/strict');const {test}=require('node:test');
+const {OwnerLaunchService}=require('../dist/owner-launch/owner-launch.service.js');
+const {OwnerLaunchController}=require('../dist/owner-launch/owner-launch.controller.js');
+const {OwnerLaunchHumanUiGuard}=require('../dist/owner-launch/owner-launch-human-ui.guard.js');
+const {RuntimeDatabaseService}=require('../dist/foundation/runtime-database.service.js');
+const {spawnSync}=require('node:child_process');const {join}=require('node:path');
+const id=n=>`${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
+const context={organizationId:id('1'),schoolId:id('2'),principalId:id('3'),requestId:id('4'),correlationId:id('4'),idempotencyKey:id('5'),externalSubject:'verified',principalType:'HUMAN_USER',source:'HUMAN_UI'};
+const input={programId:id('6'),expectedProgramVersion:1,classSessionId:id('7'),expectedClassSessionVersion:1,givenName:'Adult',familyName:'Student',birthDate:'1990-02-03',attestation:'NEW_ADULT_NO_GUARDIAN_REQUIRED'};
+const receipt={registrationId:id('8'),studentProfileId:id('9'),enrollmentId:id('a'),programId:input.programId,classSessionId:input.classSessionId,status:'REGISTERED_NO_BOOKING',createdAt:'2026-10-16T00:00:00.000Z'};
+const status=n=>e=>e.getStatus()===n;
+test('registration service uses one narrow command; closes unexpected input and authority',async()=>{
+ let calls=0;const service=new OwnerLaunchService({ownerLaunchCommand:async(c,value)=>{calls++;assert.deepEqual(c,context);assert.deepEqual(value,input);return{receipt,replayed:false};}});
+ assert.deepEqual(await service.register(context,input),{receipt,replayed:false});
+ for(const patch of [{principalType:'AI_EMPLOYEE'},{principalType:'AUTOMATION'},{principalType:'INTEGRATION'},{source:'AI'},{delegatedByPrincipalId:id('b')},{actionRequestId:id('b')}])await assert.rejects(()=>service.register({...context,...patch},input),status(403));
+ for(const patch of [{guardianId:id('b')},{schoolId:id('2')},{parentLogin:true},{tier:'COMPLETE'},{givenName:''},{expectedProgramVersion:0},{birthDate:'2026-02-30'}])await assert.rejects(()=>service.register(context,{...input,...patch}),status(400));
+ await assert.rejects(()=>service.register({...context,idempotencyKey:''},input),status(409));assert.equal(calls,1);
+});
+test('registration validates receipt and maps denial/conflict/needs-staff/unknown honestly',async()=>{
+ for(const patch of [{email:'private'},{status:'BOOKED'},{programId:id('b')},{classSessionId:id('c')}])await assert.rejects(()=>new OwnerLaunchService({ownerLaunchCommand:async()=>({receipt:{...receipt,...patch},replayed:false})}).register(context,input),status(503));
+ for(const [code,n]of [['42501',403],['23505',409],['40001',409],['22023',400],['P0002',404],['XX000',503]])await assert.rejects(()=>new OwnerLaunchService({ownerLaunchCommand:async()=>{throw{code};}}).register(context,input),status(n));
+ await assert.rejects(()=>new OwnerLaunchService({ownerLaunchCommand:async()=>{throw{code:'22023',message:'REGISTRATION_NEEDS_STAFF'};}}).register(context,input),e=>e.getResponse().code==='REGISTRATION_NEEDS_STAFF');
+});
+test('controller derives one live scope and rejects selectors, foreign IDs and missing identity',async()=>{
+ const calls=[];const controller=new OwnerLaunchController({resolveOwnerLaunchScope:async sub=>{assert.equal(sub,'verified');return{organizationId:context.organizationId,schoolId:context.schoolId,principalId:context.principalId};}},{register:async(c,v)=>{calls.push([c,v]);return{receipt,replayed:false};}});
+ const response={setHeader(){},status(n){assert.equal(n,201);}};
+ const request={honIdentity:{externalSubject:'verified'},headers:{},query:{}};
+ const output=await controller.register(context.organizationId,context.schoolId,context.idempotencyKey,input,request,response);assert.deepEqual(output.data,receipt);assert.equal(calls[0][0].principalType,'HUMAN_USER');assert.equal(calls[0][0].source,'HUMAN_UI');assert.equal(calls[0][0].externalSubject,'verified');
+ for(const req of [{...request,query:{schoolId:context.schoolId}},{...request,headers:{'x-hon-action-request-id':id('b')}},{...request,headers:{'x-hon-delegated-by-principal-id':id('b')}}])await assert.rejects(()=>controller.register(context.organizationId,context.schoolId,context.idempotencyKey,input,req,response),status(400));
+ await assert.rejects(()=>controller.register(id('b'),context.schoolId,context.idempotencyKey,input,request,response),status(403));await assert.rejects(()=>controller.register(context.organizationId,context.schoolId,context.idempotencyKey,input,{headers:{}},response),status(403));assert.equal(calls.length,1);
+});
+test('registration CSRF guard requires configured exact public origin and explicit direct-human marker',()=>{
+ const prior=process.env.HON_PUBLIC_ORIGIN;process.env.HON_PUBLIC_ORIGIN='https://hon.example.test';
+ const run=(method,headers)=>new OwnerLaunchHumanUiGuard().canActivate({switchToHttp:()=>({getRequest:()=>({method,headers})})});
+ try{assert.equal(run('GET',{'sec-fetch-site':'same-origin'}),true);const headers={origin:'https://hon.example.test','sec-fetch-site':'same-origin','content-type':'application/json','x-hon-human-command':'owner-launch-student-registration'};assert.equal(run('POST',headers),true);for(const patch of [{origin:'https://evil.test'},{'sec-fetch-site':'cross-site'},{'x-hon-human-command':'other'},{'content-type':'text/plain'}])assert.throws(()=>run('POST',{...headers,...patch}));assert.throws(()=>run('GET',{'sec-fetch-site':'cross-site'}));}finally{if(prior===undefined)delete process.env.HON_PUBLIC_ORIGIN;else process.env.HON_PUBLIC_ORIGIN=prior;}
+});
+test('runtime adapter uses fixed functions and transaction-scoped context, never raw mutation',async()=>{
+ const seen=[];const db=new RuntimeDatabaseService();db.withTenantTransaction=async(c,work)=>work({query:async(sql,args)=>{seen.push([sql,args]);return{rows:[{data:{receipt,replayed:false}}]};}});
+ assert.deepEqual(await db.ownerLaunchCommand(context,input),{receipt,replayed:false});assert.match(seen.at(-1)[0],/^SELECT hon.register_owner_launch_student/);assert.equal(seen.at(-1)[1][0],'verified');assert(seen.every(([sql])=>!/(INSERT INTO|UPDATE|DELETE FROM) hon\./.test(sql)));
+});
+test('local fixture refuses remote targets, provider/execution credentials and unsafe output paths before writes',()=>{
+ const script=join(__dirname,'../../../packages/database/scripts/setup-owner-launch-validation.mjs');
+ const base={PATH:process.env.PATH,HOME:'/home/ubuntu',LANG:'C.UTF-8',HON_OWNER_LAUNCH_VALIDATION_TARGET:'postgresql://localhost:5432/hon_owner_launch_validation',HON_OWNER_LAUNCH_ENV_FILE:'/home/ubuntu/jobs/owner-invalid.env'};
+ for(const patch of [{HON_OWNER_LAUNCH_VALIDATION_TARGET:'postgresql://remote.test:5432/real'},{HON_OWNER_LAUNCH_ENV_FILE:'/tmp/private.env'},{HON_PROVIDER_KEY:'SENTINEL_SECRET'},{HON_ACTION_ENGINE_ENABLED:'1'},{STRIPE_SECRET_KEY:'SENTINEL_SECRET'},{HON_OWNER_LAUNCH_ENV_FILE:'/home/ubuntu/jobs/../outside.env'}]){const result=spawnSync(process.execPath,[script],{env:{...base,...patch},encoding:'utf8'});assert.notEqual(result.status,0);assert(!result.stderr.includes('SENTINEL_SECRET'));}
+});

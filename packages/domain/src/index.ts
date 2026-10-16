@@ -6,6 +6,7 @@ import type {
   TenantScope,
 } from '@hon/contracts';
 
+export * from './owner-launch.js';
 export * from './action-engine.js';
 export * from './action-gate.js';
 export * from './usage-economics.js';

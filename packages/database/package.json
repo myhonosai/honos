@@ -96,7 +96,9 @@
     "db:setup-retention-attention": "node scripts/setup-retention-review-acknowledgement-validation.mjs",
     "db:test-retention-attention": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-retention-review-acknowledgement-integrity.mjs",
     "db:setup-curriculum-library": "node scripts/setup-curriculum-library-validation.mjs",
-    "db:test-curriculum-library": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-curriculum-library-integrity.mjs"
+    "db:test-curriculum-library": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-curriculum-library-integrity.mjs",
+    "db:setup-owner-launch": "node scripts/setup-owner-launch-validation.mjs",
+    "db:test-owner-launch": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-owner-launch-integrity.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

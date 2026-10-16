@@ -1,3 +1,6 @@
+import { OwnerLaunchHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
+import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
+import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
 import { CurriculumLibraryService } from './curriculum/library.service.js';
 import { StaffCurriculumLibraryController, ParentCurriculumLibraryController, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard } from './curriculum/library.controller.js';
 import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
@@ -189,7 +192,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
 
 @Module({
   imports: [ClassPassModule, KioskModule],
-  controllers: [
+  controllers: [OwnerLaunchController,
     StaffCurriculumLibraryController, ParentCurriculumLibraryController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
@@ -270,7 +273,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [
+  providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,

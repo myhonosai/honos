@@ -1,6 +1,7 @@
 import { requireCurriculumLibraryLocalUrls } from './curriculum-library-local-guard.mjs';
 import { requireClassPassLocalUrls } from './classpass-local-guard.mjs';
 import { requirePromotionReadinessLocalUrls } from './promotion-readiness-local-guard.mjs';
+import { requireOwnerLaunchLocalUrls } from './owner-launch-local-guard.mjs';
 import { requireRetentionAcknowledgementLocalUrls } from './retention-review-acknowledgement-local-guard.mjs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -44,8 +45,12 @@ const files = (await readdir(migrationsDirectory))
 
 const client = new Client({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } });
 await client.connect();
-
 try {
+  if (new URL(databaseUrl).username === 'hon_owner_launch_owner') {
+    requireOwnerLaunchLocalUrls();
+    const marker=(await client.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
+    if(marker?.owner!=='hon_owner_launch_owner'||marker.marker!=='HON disposable owner_launch validation') throw new Error('Owner launch migrations refuse an unmarked local fixture.');
+  }
   if (new URL(databaseUrl).username === 'hon_retention_acknowledgement_owner') {
     requireRetentionAcknowledgementLocalUrls();
     const marker = (await client.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
@@ -172,15 +177,37 @@ try {
     if (new URL(databaseUrl).username === 'hon_retention_acknowledgement_owner') {
       sql = sql.replaceAll('hon_runtime', 'hon_retention_acknowledgement_runtime');
     }
-    // PostgreSQL treats these logging controls as superuser-only. A marked
-    // localhost validation owner deliberately has no superuser capability, so
-    // retain 0126's trusted-owner guard but leave its role-global mutation to
-    // the fixture's canonical grant replay (which runs as local postgres).
-    // Production/development migrations always execute 0126 unchanged.
-    if (file === '0126_kiosk_runtime_logging_reconciliation.sql' && localFixtureRuntimeAlias) {
-      sql = sql
-        .replace(/^\s*ALTER ROLE hon_[a-z0-9_]+_runtime SET log_parameter_max_length = 0;\n/gm, '')
-        .replace(/^\s*ALTER ROLE hon_[a-z0-9_]+_runtime SET log_parameter_max_length_on_error = 0;\n/gm, '');
+    if (new URL(databaseUrl).username === 'hon_owner_launch_owner') {
+      sql = sql.replaceAll('hon_runtime', 'hon_owner_launch_runtime');
+    }
+    // PostgreSQL allows a role-global setting only to a superuser or an
+    // ADMIN member of that exact runtime role. Guarded fixture owners create
+    // a non-privileged runtime login deliberately, so preserve 0126's
+    // trusted-owner guard while deferring only its role-global logging SET
+    // statements when this migration owner lacks that exact authority.
+    // Development/production migration owners still execute 0126 unchanged.
+    if (file === '0126_kiosk_runtime_logging_reconciliation.sql') {
+      const runtimeRole = sql.match(/ALTER ROLE ([a-z0-9_]+) SET log_parameter_max_length = 0;/)?.[1];
+      if (runtimeRole) {
+        const capability = await client.query(
+          `SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)
+                    OR EXISTS (
+                      SELECT 1
+                      FROM pg_auth_members membership
+                      JOIN pg_roles member_role ON member_role.oid = membership.member
+                      JOIN pg_roles target_role ON target_role.oid = membership.roleid
+                      WHERE member_role.rolname = current_user
+                        AND target_role.rolname = $1
+                        AND membership.admin_option
+                    ) AS allowed`,
+          [runtimeRole],
+        );
+        if (!capability.rows[0]?.allowed) {
+          sql = sql
+            .replace(/^\s*ALTER ROLE hon_[a-z0-9_]+_runtime SET log_parameter_max_length = 0;\n/gm, '')
+            .replace(/^\s*ALTER ROLE hon_[a-z0-9_]+_runtime SET log_parameter_max_length_on_error = 0;\n/gm, '');
+        }
+      }
     }
     await client.query(sql);
     await client.query('INSERT INTO hon.schema_migrations (filename) VALUES ($1)', [file]);

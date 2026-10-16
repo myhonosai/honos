@@ -223,6 +223,10 @@
     {
       "path": "/parent/curriculum-library",
       "title": "Family curriculum references"
+    },
+    {
+      "path": "/staff/launch",
+      "title": "Owner launch"
     }
   ]
 }
