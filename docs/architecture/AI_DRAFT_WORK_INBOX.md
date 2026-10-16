@@ -22,9 +22,9 @@ The result deliberately excludes prompts/briefs, generated draft text, raw provi
 
 ## UI and resumption
 
-The UI calls only fixed same-origin GET endpoints with credentials, no-store caching and a fixed command header. It treats access loss as unavailable, clears stale content, and validates the exact response envelope before display. A row may point to the existing agent-specific screen with an opaque invocation fragment; each original workbench still reads its own exact durable record through its existing controlled endpoint.
+The UI calls only fixed same-origin GET endpoints with credentials, no-store caching and a fixed command header. It treats access loss as unavailable, clears stale content, and validates the exact response envelope before display. The **Governed AI Work** workspace distinguishes unavailable, empty, error and recorded-state views; it contains fixed links to the existing bounded Marcus, Claire and Chad draft guides. A row may point to its existing agent-specific screen with an opaque invocation fragment; each original workbench still reads its own exact durable record through its existing controlled endpoint.
 
-The Inbox says **status**, never completed delivery. `AWAITING_APPROVAL`, `SAVED`, `REJECTED`, `UNKNOWN`, or any other state remains a statement about the existing durable assistant work only. A model/provider failure never implies success, and no inbox button can retry, approve, deliver, publish or save content.
+The Inbox says **recorded status**, never completed delivery or live agent availability. `AWAITING_APPROVAL`, `SAVED`, `REJECTED`, `UNKNOWN`, or any other state remains a statement about the existing durable assistant work only. Only an `AWAITING_APPROVAL` record with an opaque Action Engine request reference exposes a generic link to the existing qualified-human Action Center; it does not display or pass that reference as a URL selector, and the Action Center independently re-authorizes every visible approval. Terminal `APPROVED`/`REJECTED` records describe only that a historical handoff occurred and never claim review remains available. A model/provider failure never implies success, and no inbox button can retry, approve, deliver, publish or save content.
 
 ## Security invariants
 
