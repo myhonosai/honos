@@ -17,13 +17,14 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS
 // PostgreSQL role grants and SECURITY DEFINER ACLs remain attached to `role`.
 // Local disposable validation aliases do not contain a dot and pass unchanged.
 const runtimeRoleName = process.env.HON_RUNTIME_DATABASE_URL ? new URL(process.env.HON_RUNTIME_DATABASE_URL).username.split('.', 1)[0] : 'hon_runtime';
-if (!['hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
+if (!['hon_marketing_ai_runtime','hon_teaching_ai_runtime','hon_achievement_runtime','hon_marketplace_runtime','hon_runtime','hon_work_runtime','hon_voice_runtime','hon_approval_runtime','hon_parent_billing_runtime','hon_revenue_runtime','hon_campaign_runtime','hon_staff_runtime','hon_automation_runtime','hon_followup_runtime','hon_renewal_runtime','hon_community_runtime'].includes(runtimeRoleName)) throw new Error('Unknown verifier runtime role.');
 if (runtimeRoleName !== 'hon_runtime') {
   for (const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
     const url = new URL(process.env[key]);
-    const db = runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
+    const db = runtimeRoleName === 'hon_marketing_ai_runtime' ? '/hon_marketing_ai_validation' : runtimeRoleName === 'hon_teaching_ai_runtime' ? '/hon_teaching_ai_validation' : runtimeRoleName === 'hon_achievement_runtime' ? '/hon_achievement_validation' : runtimeRoleName === 'hon_marketplace_runtime' ? '/hon_marketplace_validation' : runtimeRoleName === 'hon_work_runtime' ? '/hon_work_validation' : runtimeRoleName === 'hon_voice_runtime' ? '/hon_voice_validation' : runtimeRoleName === 'hon_approval_runtime' ? '/hon_approval_validation' : runtimeRoleName === 'hon_parent_billing_runtime' ? '/hon_parent_billing_validation' : runtimeRoleName === 'hon_community_runtime' ? '/hon_community_validation' : runtimeRoleName === 'hon_renewal_runtime' ? '/hon_renewal_validation' : runtimeRoleName === 'hon_followup_runtime' ? '/hon_followup_validation' : runtimeRoleName === 'hon_automation_runtime' ? '/hon_automation_validation' : runtimeRoleName === 'hon_staff_runtime' ? '/hon_staff_validation' : runtimeRoleName === 'hon_campaign_runtime' ? '/hon_campaign_validation' : '/hon_revenue_validation';
     if (url.hostname !== 'localhost' || url.pathname !== db) throw new Error('Local verifier requires the guarded disposable localhost database.');
     if (runtimeRoleName === 'hon_marketing_ai_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_marketing_ai_owner' : runtimeRoleName))) throw new Error('Marketing Assistant verifier requires exact disposable-local aliases.');
+    if (runtimeRoleName === 'hon_parent_billing_runtime' && (url.port !== '5432' || url.username !== (key === 'DATABASE_URL' ? 'hon_parent_billing_owner' : runtimeRoleName))) throw new Error('Parent billing verifier requires exact disposable-local aliases.');
   }
 }
 
@@ -597,6 +598,19 @@ try {
       throw new Error('hon_runtime communication message privileges are not the required SELECT/INSERT/UPDATE, enum-usage, and no-DELETE minimum.');
     }
 
+    const parentBillingBoundary = (await client.query(`
+      SELECT p.prosecdef, p.provolatile, p.proconfig, r.rolsuper OR r.rolbypassrls AS trusted_owner,
+        has_function_privilege($1, p.oid, 'EXECUTE') AS execute,
+        EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+          WHERE acl.grantee NOT IN(p.proowner, (SELECT oid FROM pg_roles WHERE rolname = $1)) OR acl.is_grantable) AS broad_acl
+      FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
+      WHERE p.oid = 'hon.read_parent_billing_view(text)'::regprocedure
+    `, [runtimeRoleName])).rows[0];
+    if (!parentBillingBoundary?.trusted_owner || !parentBillingBoundary.prosecdef || parentBillingBoundary.provolatile !== 'v'
+      || !parentBillingBoundary.execute || parentBillingBoundary.broad_acl
+      || parentBillingBoundary.proconfig?.length !== 1 || parentBillingBoundary.proconfig[0] !== 'search_path=pg_catalog, hon') {
+      throw new Error('Unsafe parent billing fixed read projection boundary.');
+    }
     const runtimeOperationsReportingPrivileges = (await client.query(`
       SELECT
         has_table_privilege('${runtimeRoleName}', 'hon.invoices', 'SELECT') AS invoices_can_select,

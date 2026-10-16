@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { chmod, lstat, open, readFile, realpath, unlink } from 'node:fs/promises';
+import { lstat, readFile, realpath } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { basename, dirname, resolve } from 'node:path';
+import { createExclusiveValidationEnv } from './secure-validation-env.mjs';
 
 const target = process.env.HON_ACTION_APPROVAL_VALIDATION_TARGET;
 const envFile = process.env.HON_ACTION_APPROVAL_ENV_FILE;
@@ -11,7 +12,7 @@ const runtime = 'hon_approval_runtime';
 const marker = 'HON disposable action approval validation';
 const setupSelectors = new Set(['HON_ACTION_APPROVAL_VALIDATION_TARGET', 'HON_ACTION_APPROVAL_ENV_FILE']);
 const riskyEnvironment = Object.keys(process.env).filter((key) => !setupSelectors.has(key) && (/^(?:OPENROUTER|DIRECT_LLM_API|HEYGEN|HIGGSFIELD|OPENAI|ANTHROPIC|GOOGLE|STRIPE|SQUARE|TWILIO|SHOPIFY|META|FACEBOOK|INSTAGRAM|TIKTOK|SENDGRID|MAILGUN|POSTMARK|SLACK|DISCORD|AWS|AZURE|GCP|GOOGLE_CLOUD|SUPABASE)(?:_|$)/i.test(key)
-  || /^(?:HON_)?(?:AI|ACTION(?:_ENGINE)?|PROVIDER(?:S)?|PAYMENT(?:S)?|COMMUNICATION(?:S)?|MESSAGING|MESSAGE(?:S)?|DELIVERY|PUBLISH|CONSUMER|WORKER)(?:_|$)/i.test(key)));
+  || /^(?:HON_)?(?:AI|ACTION(?:_ENGINE)?|PROVIDER(?:S)?|EXTERNAL|PAYMENT(?:S)?|COMMUNICATION(?:S)?|MESSAGING|MESSAGE(?:S)?|DELIVERY|PUBLISH|CONSUMER|WORKER|EXECUTION)(?:_|$)/i.test(key)));
 
 if (target !== `postgresql://localhost:5432/${database}`) {
   throw new Error(`Explicit localhost:5432/${database} target required; all other targets are refused.`);
@@ -40,6 +41,10 @@ if (!envDirectory.startsWith(`${jobsRoot}/`)) {
 const resolvedEnvFile = `${envDirectory}/${basename(normalizedEnvFile)}`;
 if (resolvedEnvFile !== normalizedEnvFile) {
   throw new Error('Credential-file path must not traverse a symlinked directory.');
+}
+const envDirectoryStat = await lstat(envDirectory);
+if (!envDirectoryStat.isDirectory() || envDirectoryStat.isSymbolicLink() || envDirectoryStat.uid !== process.getuid()) {
+  throw new Error('Credential-file parent directory is unsafe.');
 }
 try {
   await lstat(resolvedEnvFile);
@@ -83,36 +88,25 @@ const urls = {
   DATABASE_URL: `postgresql://${owner}:${ownerPassword}@localhost:5432/${database}`,
   HON_RUNTIME_DATABASE_URL: `postgresql://${runtime}:${runtimePassword}@localhost:5432/${database}`,
 };
-let credentialFileCreated = false;
-try {
-  const handle = await open(resolvedEnvFile, 'wx', 0o600);
-  try {
-    await handle.writeFile(Object.entries(urls).map(([key, value]) => `export ${key}='${value}'`).join('\n') + '\n');
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  await chmod(resolvedEnvFile, 0o600);
-  const metadata = await lstat(resolvedEnvFile);
-  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.uid !== process.getuid() || (metadata.mode & 0o777) !== 0o600) {
-    throw new Error('Credential-file ownership or permissions are unsafe.');
-  }
-  credentialFileCreated = true;
+const credentialPayload = Object.entries(urls).map(([key, value]) => `export ${key}='${value}'`).join('\n') + '\n';
+createExclusiveValidationEnv({
+  directory: envDirectory,
+  filename: basename(resolvedEnvFile),
+  directoryStat: envDirectoryStat,
+  content: credentialPayload,
+  environment: safeProcessEnv,
+});
 
-  const migrated = spawnSync(process.execPath, [new URL('./migrate.mjs', import.meta.url).pathname], { env: { ...safeProcessEnv, ...urls }, encoding: 'utf8' });
-  if (migrated.status !== 0) {
-    throw new Error(`Disposable migration failed: ${migrated.stderr.replaceAll(ownerPassword, '[REDACTED]').replaceAll(runtimePassword, '[REDACTED]')}`);
-  }
-  console.log(migrated.stdout.trim());
-
-  const canonical = (await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8'))
-    .replaceAll('hon_runtime', runtime)
-    .replaceAll('FOR ROLE postgres', `FOR ROLE ${owner}`)
-    .replaceAll('DATABASE postgres', `DATABASE ${database}`);
-  psql(canonical, database);
-  psql(canonical, database);
-  console.log('Disposable localhost Action Engine approval database created; migrations and re-runnable canonical least-privilege grants applied. Generated credentials remain only in the fresh private mode-0600 job env file.');
-} catch (error) {
-  if (credentialFileCreated) await unlink(resolvedEnvFile).catch(() => undefined);
-  throw error;
+const migrated = spawnSync(process.execPath, [new URL('./migrate.mjs', import.meta.url).pathname], { env: { ...safeProcessEnv, ...urls }, encoding: 'utf8' });
+if (migrated.status !== 0) {
+  throw new Error(`Disposable migration failed: ${migrated.stderr.replaceAll(ownerPassword, '[REDACTED]').replaceAll(runtimePassword, '[REDACTED]')}`);
 }
+console.log(migrated.stdout.trim());
+
+const canonical = (await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8'))
+  .replaceAll('hon_runtime', runtime)
+  .replaceAll('FOR ROLE postgres', `FOR ROLE ${owner}`)
+  .replaceAll('DATABASE postgres', `DATABASE ${database}`);
+psql(canonical, database);
+psql(canonical, database);
+console.log('Disposable localhost Action Engine approval database created; migrations and re-runnable canonical least-privilege grants applied. Generated credentials remain only in the fresh private mode-0600 job env file.');

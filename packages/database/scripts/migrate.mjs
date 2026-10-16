@@ -59,6 +59,11 @@ try {
       if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_parent_journey_validation_sandbox' || runtime.hostname!=='localhost' || runtime.port!=='5432' || runtime.pathname!==owner.pathname || runtime.username!=='hon_parent_journey_sandbox_runtime') throw new Error('Parent Journey aliases require exact disposable localhost database.');
       sql=sql.replaceAll('hon_runtime','hon_parent_journey_sandbox_runtime');
     }
+    if (new URL(databaseUrl).username === 'hon_parent_billing_owner') {
+      const owner=new URL(databaseUrl), runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_parent_billing_validation' || runtime.hostname!=='localhost' || runtime.port!=='5432' || runtime.pathname!==owner.pathname || runtime.username!=='hon_parent_billing_runtime') throw new Error('Parent billing aliases require exact disposable localhost database.');
+      sql=sql.replaceAll('hon_runtime','hon_parent_billing_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_automation_owner') {
       const runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? ''); const owner = new URL(databaseUrl);
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_automation_validation' || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_automation_runtime') throw new Error('Automation aliases require exact disposable localhost database.');

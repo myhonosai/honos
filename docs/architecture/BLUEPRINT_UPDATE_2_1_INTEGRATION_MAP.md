@@ -3,6 +3,8 @@
 **Source of authority:** `docs/HON_MASTER_DIRECTIVE.md` plus the October 2026 enhancement directive.
 **Purpose:** sequence the enhancements through existing HON domain boundaries without replacing validated foundations or creating a parallel AI, CRM, identity, billing, or progression system.
 
+**Additive continuation:** [Blueprint Update 2.2](BLUEPRINT_UPDATE_2_2_INTEGRATION_MAP.md) adds ClassPass & Walk-In, Self-Service Kiosk, and AI Model Intelligence & Routing without changing this map's security or delivery constraints.
+
 ## Guiding constraints
 
 1. **Optional value:** Teaching, assessment, parent, Health Score, and AI-support capabilities remain optional additions. A school continues to operate with ordinary CRM, attendance, schedule, billing, curriculum, and staff workflows.
