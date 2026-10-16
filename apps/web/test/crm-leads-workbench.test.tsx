@@ -26,6 +26,17 @@ describe('bounded conventional CRM lead list', () => {
     } finally { fetcher.mockRestore(); }
   });
 
+  it('accepts only an idle untrusted scope prefill and still performs no automatic read or command', () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      const html = renderToStaticMarkup(<CrmLeadsWorkbench initialScope={{ organizationId, schoolId }} />);
+      expect(html).toContain(`value="${organizationId}"`);
+      expect(html).toContain(`value="${schoolId}"`);
+      expect(html).toContain('No verified school list is loaded.');
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { fetcher.mockRestore(); }
+  });
+
   it('uses the existing fixed same-origin list route and rejects extended, duplicate, or malformed lead projections', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response([row]));
     try {
@@ -45,6 +56,9 @@ describe('bounded conventional CRM lead list', () => {
     const source = readFileSync('src/components/crm-leads-workbench.tsx', 'utf8');
     const trial = readFileSync('src/components/trial-appointment-workbench.tsx', 'utf8');
     const trialRoute = readFileSync('src/app/staff/crm/trials/page.tsx', 'utf8');
+    const leadRoute = readFileSync('src/app/staff/crm/leads/page.tsx', 'utf8');
+    const dashboard = readFileSync('src/components/staff-dashboard.tsx', 'utf8');
+    const commandCenter = readFileSync('src/components/school-command-center.tsx', 'utf8');
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(source).toContain('Prepare trial appointment');
     expect(source).toContain('does not load or create an appointment');
@@ -52,6 +66,10 @@ describe('bounded conventional CRM lead list', () => {
     expect(trial).toContain('initialScope');
     expect(trialRoute).toContain("dynamic = 'force-dynamic'");
     expect(trialRoute).toContain('initialScope');
+    expect(leadRoute).toContain("dynamic = 'force-dynamic'");
+    expect(leadRoute).toContain('initialScope');
+    expect(dashboard).toContain('crmScopeHref');
+    expect(commandCenter).toContain('crmScopeHref');
     expect(manifest.routes.filter((entry: { path: string }) => entry.path === '/staff/crm/leads')).toHaveLength(1);
   });
 });

@@ -6,6 +6,8 @@
 
 The page starts empty. A human must enter one organization UUID, one school UUID, and an optional existing status filter. These values are route selectors only; the API independently resolves the authenticated human and exact current `crm.lead.read` school permission before returning any data.
 
+After a Staff Dashboard or School Command Center has itself returned a verified current-school snapshot, its CRM links may append only that snapshot's organization/school UUID pair as a convenience prefill. Those query values remain untrusted: the leads page stays empty and makes no automatic list request, while the trial page makes no automatic read or command. Both destination APIs independently resolve the signed-in human and exact school authority; no report, metric, preference, entitlement, role, action, approval, receipt, student/family fact, or provider state crosses the handoff.
+
 ## Returned projection
 
 The browser accepts at most 50 current-school rows and only the existing `LeadListItem` projection:

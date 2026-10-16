@@ -20,7 +20,11 @@ function Metric({ label, value, detail }: { label: string; value: number; detail
   return <div className={styles.metric}><dt>{label}</dt><dd>{value.toLocaleString('en-US')}</dd>{detail && <small>{detail}</small>}</div>;
 }
 function WorkflowLink({ href, children }: { href: string; children: React.ReactNode }): React.ReactElement {
-  return <a className={styles.workflowLink} href={href}>{children}<span aria-hidden="true">→</span></a>;
+  return <a className={styles.workflowLink} href={href}>{children} <span aria-hidden="true">→</span></a>;
+}
+
+function crmScopeHref(path: '/staff/crm/leads' | '/staff/crm/trials', organizationId: string, schoolId: string): string {
+  return `${path}?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
 }
 function NoAggregate({ workflow, children }: { workflow: string; children: React.ReactNode }): React.ReactElement {
   return <article className={styles.unavailable}><span>NOT COUNTED HERE</span><p>{children}</p><WorkflowLink href={workflow}>Open the managed workflow</WorkflowLink></article>;
@@ -122,8 +126,8 @@ function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React
         <dl className={styles.metrics}><Metric label="Open leads" value={leads.OPEN} /><Metric label="Won" value={leads.WON} /><Metric label="Lost" value={leads.LOST} /><Metric label="Archived" value={leads.ARCHIVED} /></dl>
         <div className={styles.noData}><strong>Trial count unavailable</strong><p>The operations report has no approved trial aggregate. This dashboard does not query appointment records or infer trial totals.</p></div>
         <WorkflowLink href="/staff/search">Find an exact lead in staff search</WorkflowLink>
-        <WorkflowLink href="/staff/crm/leads">Open bounded CRM leads</WorkflowLink>
-        <WorkflowLink href="/staff/crm/trials">Open bounded trial appointments</WorkflowLink>
+        <WorkflowLink href={crmScopeHref('/staff/crm/leads', snapshot.organizationId, snapshot.schoolId)}>Open bounded CRM leads (verify scope)</WorkflowLink>
+        <WorkflowLink href={crmScopeHref('/staff/crm/trials', snapshot.organizationId, snapshot.schoolId)}>Open bounded trial appointments (verify scope)</WorkflowLink>
       </article>
       <article className={styles.card}>
         <header><p>MEMBERSHIP VIEW</p><h2>Membership &amp; plan</h2></header>
@@ -299,8 +303,10 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   }
 
   const themeClass = interfaceTheme === 'big-button' ? styles.bigButton : interfaceTheme === 'classic' ? styles.classic : styles.modern;
+  const crmLeadsHref = selection ? crmScopeHref('/staff/crm/leads', selection.organizationId, selection.schoolId) : '/staff/crm/leads';
+  const trialAppointmentsHref = selection ? crmScopeHref('/staff/crm/trials', selection.organizationId, selection.schoolId) : '/staff/crm/trials';
   return <main className={`${styles.page} ${themeClass}`} data-interface-theme={interfaceTheme}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href="/staff/crm/leads">CRM leads</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
     <section className={styles.scopeSection} aria-labelledby="scope-heading">
