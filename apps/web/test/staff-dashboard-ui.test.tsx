@@ -155,7 +155,7 @@ describe('staff operations dashboard', () => {
     expect(component).toContain('change touch targets and density only');
     expect(component).toContain('if (!selection)');
     for (const text of ['Student profiles', 'Current-school aggregate', 'Trial count unavailable', 'Revenue-plan summary unavailable', 'NOT COUNTED HERE', 'Saved-workflow progress', 'Confirmation-only view']) expect(component).toContain(text);
-    for (const href of ['/staff/search', '/staff/planning/revenue', '/staff/launch', '/staff/crm/follow-ups', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(component).toContain(href);
+    for (const href of ['/staff/search', '/staff/crm/leads', '/staff/crm/trials', '/staff/planning/revenue', '/staff/launch', '/staff/crm/follow-ups', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(component).toContain(href);
     expect(http).toContain("method: 'GET'");
     expect(http).toContain("credentials: 'same-origin'");
     expect(http).toContain("'/api/v1/owner-launch/saved-students'");

@@ -121,6 +121,8 @@ function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React
         <dl className={styles.metrics}><Metric label="Open leads" value={leads.OPEN} /><Metric label="Won" value={leads.WON} /><Metric label="Lost" value={leads.LOST} /><Metric label="Archived" value={leads.ARCHIVED} /></dl>
         <div className={styles.noData}><strong>Trial count unavailable</strong><p>The operations report has no approved trial aggregate. This dashboard does not query appointment records or infer trial totals.</p></div>
         <WorkflowLink href="/staff/search">Find an exact lead in staff search</WorkflowLink>
+        <WorkflowLink href="/staff/crm/leads">Open bounded CRM leads</WorkflowLink>
+        <WorkflowLink href="/staff/crm/trials">Open bounded trial appointments</WorkflowLink>
       </article>
       <article className={styles.card}>
         <header><p>MEMBERSHIP VIEW</p><h2>Membership &amp; plan</h2></header>
@@ -297,7 +299,7 @@ export function StaffDashboard(): React.ReactElement {
 
   const themeClass = interfaceTheme === 'big-button' ? styles.bigButton : interfaceTheme === 'classic' ? styles.classic : styles.modern;
   return <main className={`${styles.page} ${themeClass}`} data-interface-theme={interfaceTheme}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href="/staff/crm/leads">CRM leads</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
     <section className={styles.scopeSection} aria-labelledby="scope-heading">

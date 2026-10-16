@@ -70,7 +70,7 @@ describe('School Command Center UI', () => {
     const http = readFileSync('src/components/command-center-http.ts', 'utf8');
     for (const text of ['verifySession', "redirect('/auth/login')", 'index: false', 'follow: false', 'force-dynamic']) expect(route).toContain(text);
     const routeSources = `${component}\n${http}`;
-    for (const href of ['/staff/dashboard', '/staff/search', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(routeSources).toContain(href);
+    for (const href of ['/staff/dashboard', '/staff/search', '/staff/crm/leads', '/staff/crm/trials', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(routeSources).toContain(href);
     expect(component).toContain('localStorage'); expect(component).toContain('Restore all hidden sections and cards');
     expect(http).toContain("method: 'GET'"); expect(http).toContain("credentials: 'same-origin'");
     expect(http).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|provider|payment/i);
