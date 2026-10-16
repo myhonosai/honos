@@ -105,6 +105,10 @@
       "title": "Human CRM follow-ups"
     },
     {
+      "path": "/staff/crm/leads",
+      "title": "Human CRM leads"
+    },
+    {
       "path": "/staff/crm/trials",
       "title": "Human CRM trial appointments"
     },

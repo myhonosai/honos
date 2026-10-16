@@ -18,10 +18,12 @@ function summary(appointment: CrmAppointmentSummary): React.ReactElement {
   return <dl><dt>Trial appointment</dt><dd><code>{appointment.id}</code> · {appointment.status} · version {appointment.version}</dd><dt>Lead</dt><dd><code>{appointment.crmLeadId}</code></dd><dt>Time</dt><dd>{appointment.startsAt} to {appointment.endsAt}</dd><dt>Location</dt><dd>{appointment.location ?? 'No location recorded'}</dd><dt>Recorded</dt><dd>{appointment.updatedAt}</dd></dl>;
 }
 
-export function TrialAppointmentWorkbench(): React.ReactElement {
-  const [organizationId, setOrganizationId] = useState('');
-  const [schoolId, setSchoolId] = useState('');
-  const [leadId, setLeadId] = useState('');
+export interface TrialAppointmentInitialScope { organizationId?: string | undefined; schoolId?: string | undefined; leadId?: string | undefined }
+
+export function TrialAppointmentWorkbench({ initialScope = {} }: { initialScope?: TrialAppointmentInitialScope }): React.ReactElement {
+  const [organizationId, setOrganizationId] = useState(initialScope.organizationId ?? '');
+  const [schoolId, setSchoolId] = useState(initialScope.schoolId ?? '');
+  const [leadId, setLeadId] = useState(initialScope.leadId ?? '');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [location, setLocation] = useState('');
@@ -91,8 +93,8 @@ export function TrialAppointmentWorkbench(): React.ReactElement {
   }
 
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN CRM / TRIAL APPOINTMENTS</p><h1>Schedule and record a trial</h1><p>One direct-human, exact-school CRM appointment at a time. Enter only IDs already known from an authorized staff workflow; the server decides scope and permission.</p></header>
+    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/leads">CRM leads</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
+    <header><p>HUMAN CRM / TRIAL APPOINTMENTS</p><h1>Schedule and record a trial</h1><p>One direct-human, exact-school CRM appointment at a time. Enter only IDs already known from an authorized staff workflow; any prefilled selector is untrusted and the server decides scope and permission.</p></header>
     <aside><strong>Appointment facts only.</strong><p>Scheduling creates one canonical CRM <code>TRIAL</code> appointment. It does not contact a lead, reserve a class seat, check anyone in, change a lead stage, create a student/family/enrollment/membership, accept consent, or make a financial, provider, AI, Action Engine, automation, calendar, or delivery claim.</p></aside>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
