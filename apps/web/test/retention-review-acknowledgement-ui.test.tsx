@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect, vi } from 'vitest';
 import { RetentionReviewSignalsWorkbench } from '../src/components/retention-review-signals';
 import { acknowledgeRetentionReviewEvidence, loadRetentionReviewAcknowledgementEvidence } from '../src/components/retention-review-signals-http';
+import { loadRetentionAttentionEvidence } from '../src/components/retention-attention-http';
 const school='11111111-1111-4111-8111-111111111111',membership='22222222-2222-4222-8222-222222222222',request='33333333-3333-4333-8333-333333333333';
 const observedAt='2026-10-16T00:00:00.000Z';
 const signals={schemaVersion:'RETENTION_REVIEW_SIGNALS_V1',membershipId:membership,observedAt,humanOnly:true,readOnly:true,evidenceOnly:true,predictionOrAutomaticAction:false,membershipTerm:{status:'AVAILABLE',membershipState:'ACTIVE',termStartedAt:'2026-01-01T00:00:00.000Z',termEndsAt:'2027-01-01T00:00:00.000Z',endingObservation:'ENDING_AFTER_30_DAYS',reason:null},renewalReview:{status:'UNAVAILABLE',latestReviewState:null,recordedAt:null,reason:'NO_EXPLICIT_RENEWAL_REVIEW_RECORDED'},followUp:{status:'UNAVAILABLE',reason:'NO_UNAMBIGUOUS_MEMBERSHIP_TO_FOLLOW_UP_RELATION'},attendance:{status:'INSUFFICIENT_DATA',windowFrom:'2026-09-18T00:00:00.000Z',windowTo:observedAt,recordedAttendanceCount:0,presentCount:0,lateCount:0,makeupCount:0,excusedAbsenceCount:0,unexcusedAbsenceCount:0,reason:'NO_RECORDED_ATTENDANCE_IN_WINDOW'},progression:{status:'UNAVAILABLE',curriculumEnrollmentCount:0,progressObservationCount:0,testingRecordCount:0,progressObservationAvailability:'UNAVAILABLE',testingObservationAvailability:'UNAVAILABLE',reason:'NO_CURRICULUM_ENROLLMENT_RECORDED'}};
@@ -34,7 +35,13 @@ describe('direct human retention acknowledgement UI',()=>{
   for(const text of ['generation.current++','current === generation.current','setEvidence(null)','setAcknowledgement(null)','retryKey.current = null',"window.addEventListener('focus'","document.addEventListener('visibilitychange'",'evidence && !acknowledgement','No downstream effect.'])expect(component).toContain(text);
   expect(component).not.toMatch(/resolved successfully|contact successful|renewal successful|payment successful|invokeLLM|executeAction|sendMessage/);
  });
- it('rejects unexpected authority in the input before any request',async()=>{
-  const fetch=vi.spyOn(globalThis,'fetch');try{await expect(acknowledgeRetentionReviewEvidence(school,membership,{...input,note:'private'} as typeof input)).rejects.toThrow();expect(fetch).not.toHaveBeenCalled();}finally{fetch.mockRestore();}
- });
+	 it('rejects unexpected authority in the input before any request',async()=>{
+	  const fetch=vi.spyOn(globalThis,'fetch');try{await expect(acknowledgeRetentionReviewEvidence(school,membership,{...input,note:'private'} as typeof input)).rejects.toThrow();expect(fetch).not.toHaveBeenCalled();}finally{fetch.mockRestore();}
+	 });
+	 it('loads factual attention evidence through the fixed same-origin no-store path only',async()=>{
+	  const factual={...evidence,attentionCodes:['RENEWAL_REVIEW_NOT_RECORDED']};
+	  const fetch=vi.spyOn(globalThis,'fetch').mockResolvedValue(response('retentionAttentionEvidence',factual));
+	  try { expect(await loadRetentionAttentionEvidence(school,membership)).toEqual(factual);expect(fetch.mock.calls[0]![0]).toContain('/staff/retention/review/attention-evidence?');expect(fetch.mock.calls[0]![1]).toMatchObject({method:'GET',credentials:'same-origin',cache:'no-store',referrerPolicy:'no-referrer'}); }
+	  finally { fetch.mockRestore(); }
+	 });
 });

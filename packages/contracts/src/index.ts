@@ -911,6 +911,7 @@ export * from './teaching-assistant.js';
 export * from './teaching-studio.js';
 
 export * from './retention-review-signals.js';
+export * from './retention-attention-alerts.js';
 
 export * from './chad-follow-up-assistant.js';
 

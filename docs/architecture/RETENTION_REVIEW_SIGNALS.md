@@ -26,6 +26,10 @@ The API exposes only:
 GET /v1/staff/retention/review?schoolId=<known-uuid>&membershipId=<known-uuid>
 GET /v1/staff/retention/review/acknowledgement-evidence?schoolId=<known-uuid>&membershipId=<known-uuid>
 POST /v1/staff/retention/review/acknowledgement?schoolId=<known-uuid>&membershipId=<known-uuid>
+GET /v1/staff/retention/review/attention-alerts?schoolId=<known-uuid>&membershipId=<known-uuid>
+GET /v1/staff/retention/review/attention-evidence?schoolId=<known-uuid>&membershipId=<known-uuid>
+POST /v1/staff/retention/review/attention-alerts/record?schoolId=<known-uuid>&membershipId=<known-uuid>
+POST /v1/staff/retention/review/attention-alerts/resolve?schoolId=<known-uuid>&membershipId=<known-uuid>
 ```
 
 The staff page is `/staff/retention/review`. It is authenticated, dynamic, `noindex`, same-origin and no-store. A direct human staff member may acknowledge only a fresh, verified, already displayed evidence observation through the fixed POST body `{ evidenceVersion, evidenceFingerprint, observedAt, idempotencyKey }`. The page clears the acknowledgement evidence and receipt whenever its known school/membership selection or verified read context changes.
@@ -86,10 +90,26 @@ Only a verified direct `HUMAN_USER` / `HUMAN_UI` with both `retention.review.rea
 
 Migration `0124` uses a private trusted-owner-only, FORCE RLS/no-policy, immutable evidence-key ledger, transaction advisory locks on both scoped idempotency and natural evidence keys, and a composite acknowledgement FK that is **DEFERRABLE INITIALLY DEFERRED**. The command reserves the unique evidence key before creating an acknowledgement, so a losing submission never leaves an orphan acknowledgement. For any pre-`0124` duplicates, the migration seeds one canonical key with deterministic newest ordering (`recorded_at DESC, id DESC`); it does not delete or rewrite immutable acknowledgements, receipts, audits or inert outbox history. New keys reuse that canonical acknowledgement, while existing keys retain their exact historical receipt replay.
 
+## Factual attention alerts
+
+Migration `0131` adds a deliberately narrow **factual attention** layer, not an alerting, workflow, or retention-automation system. A qualified direct human may create an alert only from a fresh, server-recomputed, redacted Retention Review observation and one of these closed facts:
+
+- `TERM_ENDING_WITHIN_30_DAYS`;
+- `TERM_ENDED`;
+- `RENEWAL_REVIEW_NOT_RECORDED`; or
+- `UNEXCUSED_ABSENCE_RECORDED` when recorded attendance is available and its exact unexcused count is positive.
+
+Missing attendance, progression, testing, contact, payment, provider, message, family, or follow-up data never creates an attention code. The alert root is immutable and deduplicated school-wide by organization, school, membership, code, evidence version/fingerprint, and observed timestamp. A distinct staff member or retry key for the same evidence reuses that same root; it may add only its own private idempotency receipt. One later direct-human **no-note** resolution history row may record exactly `REVIEW_COMPLETED`, `EVIDENCE_CHANGED`, or `NO_FURTHER_REVIEW_NEEDED`. It does not state or imply a successful contact, payment, renewal, retention outcome, recommendation, assignment, or downstream execution.
+
+The functions `read_retention_attention_alerts`, `read_retention_attention_evidence`, `record_retention_attention_alert`, and `resolve_retention_attention_alert` are fixed SECURITY DEFINER entries. Private roots, resolution history, receipts, and permanently **INERT** factual outbox records are forced-RLS, trusted-owner-only, and immutable. The runtime has no table access. Every creation/resolution rechecks direct-human authority before and after its stable locks. Reads enter `BEGIN READ ONLY` before any tenant or source context GUC is established; write commands use the ordinary transaction-bound context path.
+
+The same staff page shows alerts only after a known membership is read. It has no school-wide alert directory, note, assignment, follow-up, message, provider, Action Engine, AI, billing, payment, renewal, cancellation, attendance, curriculum, testing, or automation control. The two POST routes require exact same-origin JSON markers `retention-attention-record` and `retention-attention-resolve`; the guard normalizes only a trailing slash before matching those fixed routes.
+
 ## Validation
 
 - `pnpm db:test-retention-review` verifies function ACL posture, runtime-only execution, client/source-table denial, read-only forged-context denial, and zero mutation effects.
 - `pnpm db:setup-retention-review-acknowledgement` then `pnpm db:test-retention-review-acknowledgement` create/replay a descriptor-bound, marked localhost-only fixture with generated private credentials. The proof rejects remote/unmarked/provider/execution environments and verifies RLS/ACL/role/tier/context/replay/concurrency/fingerprint/atomicity/redaction/no-effect posture, including two concurrent distinct keys producing one acknowledgement/audit/inert-outbox and two deterministic receipts, plus evidence-key ledger drift/ACL denial; it tears down its marked fixture after a pass.
+- `pnpm db:setup-retention-attention` then `pnpm db:test-retention-attention` use that same descriptor-owned local fixture. Its integrated attention proof checks private schema/ACL/body drift, direct source-table/client denial, human/role/tier/HQ/family/nonhuman/delegated/action revocation, stale evidence, exact replay, two-human natural-key concurrency, one-resolution optimistic concurrency, read-only ordering, inert audit/outbox atomicity, redaction, and zero external effects. Run the test with only `HON_RETENTION_ACKNOWLEDGEMENT_ENV_FILE` supplied; the harness itself opens the private descriptor and refuses inherited database URLs.
 - API and browser tests verify strict schema validation, redaction, same-origin GET/POST behavior, human transport protection, stale UI clearing and protected route metadata.
 - `pnpm db:verify-rls` imports the Retention Review ACL verifier alongside the complete HON tenant/RLS inventory.
 - `infra/postgres/010_supabase_hon_runtime.sql` and `011_verify_supabase_hon_runtime.sql` contain the canonical fresh-role grant and verification statements.

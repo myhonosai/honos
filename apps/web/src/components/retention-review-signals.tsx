@@ -2,7 +2,9 @@
 
 import React, { type FormEvent, useState, useRef, useEffect } from 'react';
 import type { RetentionReviewSignals, RetentionReviewAcknowledgementEvidence, RetentionReviewAcknowledgement } from '@hon/contracts';
+import { RETENTION_ATTENTION_RESOLUTION_REASONS, type RetentionAttentionEvidence, type RetentionAttentionAlerts, type RetentionAttentionAlert, type RetentionAttentionCode, type RetentionAttentionResolutionReason } from '@hon/contracts';
 import { loadRetentionReviewSignals, loadRetentionReviewAcknowledgementEvidence, acknowledgeRetentionReviewEvidence, RetentionReviewUiError } from './retention-review-signals-http';
+import { loadRetentionAttentionAlerts, loadRetentionAttentionEvidence, recordRetentionAttentionAlert, resolveRetentionAttentionAlert } from './retention-attention-http';
 import styles from './billing-renewals-workbench.module.css';
 
 function utc(value: string | null) { return value ? `${value.replace('T', ' ').replace('.000Z', ' UTC')}` : 'Not recorded'; }
@@ -18,9 +20,22 @@ export function RetentionReviewSignalsWorkbench() {
   const [loading, setLoading] = useState(false);
   const [evidence, setEvidence] = useState<RetentionReviewAcknowledgementEvidence | null>(null);
   const [acknowledgement, setAcknowledgement] = useState<RetentionReviewAcknowledgement | null>(null);
+  const [attentionEvidence, setAttentionEvidence] = useState<RetentionAttentionEvidence | null>(null);
+  const [alerts, setAlerts] = useState<RetentionAttentionAlerts | null>(null);
+  const [attentionCode, setAttentionCode] = useState<RetentionAttentionCode | ''>('');
+  const [resolutionReason, setResolutionReason] = useState<RetentionAttentionResolutionReason>('REVIEW_COMPLETED');
+  const attentionKey = useRef<string | null>(null);
   const generation = useRef(0);
   const retryKey = useRef<string | null>(null);
-  const clear = () => { generation.current++; setSignals(null); setEvidence(null); setAcknowledgement(null); retryKey.current = null; setError(''); };
+  const clear = () => { generation.current++; setSignals(null); setEvidence(null); setAcknowledgement(null); retryKey.current = null; setAttentionEvidence(null); setAlerts(null); setAttentionCode(''); setResolutionReason('REVIEW_COMPLETED'); attentionKey.current = null; setError(''); };
+  useEffect(() => {
+    if (!attentionEvidence) return;
+    const remaining = Date.parse(attentionEvidence.signals.observedAt) + 300_000 - Date.now();
+    const expire = () => { setAttentionEvidence(null); setAttentionCode(''); attentionKey.current = null; };
+    if (remaining <= 0) { expire(); return; }
+    const timer = window.setTimeout(expire, remaining);
+    return () => window.clearTimeout(timer);
+  }, [attentionEvidence]);
   useEffect(() => {
     // Context returning from another tab/window must be verified again. No stale
     // response may repopulate a changed school/session/selector generation.
@@ -54,6 +69,42 @@ export function RetentionReviewSignalsWorkbench() {
     } catch (failure) { if (current === generation.current) { clear(); setError(failure instanceof RetentionReviewUiError ? failure.message : 'No verified acknowledgement is shown; the result may be unknown. Reload evidence before reviewing again.'); } }
     finally { if (current === generation.current || current + 1 === generation.current) setLoading(false); }
   }
+  async function verifyForAttention() {
+    clear(); setLoading(true); const current = generation.current;
+    try {
+      const result = await loadRetentionAttentionEvidence(schoolId.trim(), membershipId.trim());
+      if (current === generation.current) { setSignals(result.signals); setAttentionEvidence(result); setAttentionCode(result.attentionCodes[0] ?? ''); attentionKey.current = crypto.randomUUID(); }
+    } catch (failure) { if (current === generation.current) { clear(); setError(failure instanceof RetentionReviewUiError ? failure.message : 'No verified attention evidence is shown. Reload known context.'); } }
+    finally { if (current === generation.current || current + 1 === generation.current) setLoading(false); }
+  }
+  async function readAttentionState() {
+    if (!signals || loading) return;
+    const current = generation.current; setLoading(true); setAlerts(null); setAttentionEvidence(null); attentionKey.current = null; setError('');
+    try { const result = await loadRetentionAttentionAlerts(schoolId.trim(), signals.membershipId); if (current === generation.current) setAlerts(result); }
+    catch (failure) { if (current === generation.current) { clear(); setError(failure instanceof RetentionReviewUiError ? failure.message : 'No verified attention alert state is shown. Reload known context.'); } }
+    finally { if (current === generation.current || current + 1 === generation.current) setLoading(false); }
+  }
+  async function recordAttention() {
+    if (!signals || !attentionEvidence || !attentionCode || !attentionEvidence.attentionCodes.includes(attentionCode) || !attentionKey.current || loading) return;
+    const current = generation.current; setLoading(true); setAlerts(null); setError('');
+    try {
+      await recordRetentionAttentionAlert(schoolId.trim(), signals.membershipId, { evidenceVersion: attentionEvidence.evidenceVersion, evidenceFingerprint: attentionEvidence.evidenceFingerprint, observedAt: attentionEvidence.signals.observedAt, evidenceCode: attentionCode, idempotencyKey: attentionKey.current });
+      // Never present an immutable creation receipt as later current alert state.
+      const result = await loadRetentionAttentionAlerts(schoolId.trim(), signals.membershipId);
+      if (current === generation.current) { setAlerts(result); setAttentionEvidence(null); attentionKey.current = null; }
+    } catch (failure) { if (current === generation.current) { clear(); setError(failure instanceof RetentionReviewUiError ? failure.message : 'No verified attention alert state is shown; the result may be unknown. Reload verified context.'); } }
+    finally { if (current === generation.current || current + 1 === generation.current) setLoading(false); }
+  }
+  async function resolveAttention(alert: RetentionAttentionAlert) {
+    if (!signals || !alerts || loading || alert.state !== 'OPEN' || alert.alertVersion !== 1 || !alerts.alerts.some(verified => verified.alertId === alert.alertId && verified.alertVersion === 1 && verified.state === 'OPEN')) return;
+    const current = generation.current; setLoading(true); setAlerts(null); setAttentionEvidence(null); attentionKey.current = null; setError('');
+    try {
+      await resolveRetentionAttentionAlert(schoolId.trim(), signals.membershipId, { alertId: alert.alertId, expectedAlertVersion: 1, resolutionReason, idempotencyKey: crypto.randomUUID() });
+      const result = await loadRetentionAttentionAlerts(schoolId.trim(), signals.membershipId);
+      if (current === generation.current) setAlerts(result);
+    } catch (failure) { if (current === generation.current) { clear(); setError(failure instanceof RetentionReviewUiError ? failure.message : 'No verified attention alert state is shown; the resolution result may be unknown. Reload verified context.'); } }
+    finally { if (current === generation.current || current + 1 === generation.current) setLoading(false); }
+  }
   return <main className={styles.page}>
     <header><p className={styles.eyebrow}>RETENTION REVIEW SIGNALS</p><h1>Retention Review Signals</h1><p>Human-controlled, read-only observed facts for one known membership. This is evidence only: no score, prediction, readiness claim, financial recommendation, or automatic action.</p></header>
     <section className={styles.notice}><strong>Known-ID review only</strong><p>Enter an already-known current-school membership UUID. This page is not a student, family, membership, or staff directory; selectors never grant authority. Big-Button, Modern, and Classic modes only change presentation.</p></section>
@@ -71,6 +122,20 @@ export function RetentionReviewSignalsWorkbench() {
         {!evidence && <button type="button" disabled={loading} onClick={verifyForAcknowledgement}>Verify evidence for acknowledgement</button>}
         {evidence && !acknowledgement && <button type="button" disabled={loading} onClick={acknowledge}>Acknowledge evidence reviewed</button>}
         {acknowledgement && <p role="status"><strong>Evidence reviewed</strong>. No downstream effect.</p>}
+      </section>
+      <section className={styles.notice}><h2>Factual attention alerts</h2><p>Recorded attention only, never risk, prediction or recommendation. A resolution records review only; it cannot establish contact, payment, renewal or retention success. No assignment, note, follow-up, message or automatic action.</p>
+        <button type="button" disabled={loading} onClick={readAttentionState}>Load verified attention alert state</button>{' '}
+        <button type="button" disabled={loading} onClick={verifyForAttention}>Verify evidence for factual attention</button>
+        {attentionEvidence && <><p>Fresh server-verified observation: {utc(attentionEvidence.signals.observedAt)}. Only these displayed factual conditions qualify.</p>
+          {attentionEvidence.attentionCodes.length === 0 ? <p>No displayed fact qualifies. Missing attendance or progression never creates attention.</p> : <><label>Recorded attention code<select disabled={loading} value={attentionCode} onChange={event => { setAttentionCode(event.target.value as RetentionAttentionCode); attentionKey.current = crypto.randomUUID(); }}>{attentionEvidence.attentionCodes.map(code => <option key={code} value={code}>{code.replaceAll('_', ' ')}</option>)}</select></label><button type="button" disabled={loading || !attentionCode} onClick={recordAttention}>Record factual attention</button></>}
+        </>}
+        {alerts && <><p role="status">Verified known-membership attention state — latest at most 50 records. This is not a school alert directory.</p>
+          {alerts.alerts.length === 0 && <p>No recorded attention alerts are shown for this membership.</p>}
+          {alerts.alerts.some(alert => alert.state === 'OPEN') && <label>No-note review resolution reason<select disabled={loading} value={resolutionReason} onChange={event => setResolutionReason(event.target.value as RetentionAttentionResolutionReason)}>{RETENTION_ATTENTION_RESOLUTION_REASONS.map(reason => <option key={reason} value={reason}>{reason.replaceAll('_', ' ')}</option>)}</select></label>}
+          {alerts.alerts.map(alert => <article key={alert.alertId}><p><strong>{alert.evidenceCode.replaceAll('_', ' ')}</strong> — recorded attention: {alert.state}. Version {alert.alertVersion}.</p><p>Alert <code>{alert.alertId}</code>. Observed {utc(alert.observedAt)}; created {utc(alert.createdAt)}.</p>
+            {alert.state === 'RESOLVED' ? <p>Review resolution: {alert.resolutionReason?.replaceAll('_', ' ')} at {utc(alert.resolvedAt)}. No downstream outcome established.</p> : <button type="button" disabled={loading} onClick={() => resolveAttention(alert)}>Record review resolution</button>}
+          </article>)}
+        </>}
       </section>
       <section className={styles.notice}><strong>Limits and non-actions</strong><p>This projection never exposes names, contacts, family or payer information, private notes, invoice/payment/provider details, staff directory data, audit/outbox records, or AI data. It does not create a follow-up, send a message, collect/refund payment, modify a membership/renewal/attendance/curriculum/testing record, invoke automation or the Action Engine, or call an AI/provider.</p></section>
     </>}

@@ -22,6 +22,34 @@ export class RetentionReviewController {
     const requestId = randomUUID();
     return { ...scope, externalSubject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId, correlationId: requestId };
   }
+  @Get('attention-alerts')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async attentionAlerts(@Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    const context = await this.acknowledgementContext(query, request);
+    return { data: { retentionAttentionAlerts: await this.retention.attentionAlerts(context, query.membershipId as string) }, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+  @Get('attention-evidence')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async attentionEvidence(@Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    const context = await this.acknowledgementContext(query, request);
+    return { data: { retentionAttentionEvidence: await this.retention.attentionEvidence(context, query.membershipId as string) }, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+  @Post('attention-alerts/record')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async recordAttention(@Query() query: Record<string, unknown>, @Body() body: unknown, @Req() request: HonRequest) {
+    const context = await this.acknowledgementContext(query, request);
+    return { data: { retentionAttentionRecord: await this.retention.recordAttention(context, query.membershipId as string, body) }, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+  @Post('attention-alerts/resolve')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async resolveAttention(@Query() query: Record<string, unknown>, @Body() body: unknown, @Req() request: HonRequest) {
+    const context = await this.acknowledgementContext(query, request);
+    return { data: { retentionAttentionResolution: await this.retention.resolveAttention(context, query.membershipId as string, body) }, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
   @Get('acknowledgement-evidence')
   @Header('Cache-Control', 'private, no-store')
   @Header('Referrer-Policy', 'no-referrer')

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { verifyRetentionReviewAcknowledgementEvidence, verifyRetentionReviewAcknowledgementInput, verifyRetentionReviewAcknowledgement, type RetentionReviewAcknowledgementInput, communityUuid, verifyRetentionReviewSignals, type RetentionReviewSignals, type RetentionReviewSignalsContext } from '@hon/contracts';
+import { verifyRetentionAttentionEvidence, verifyRetentionAttentionAlerts, verifyRetentionAttentionRecordInput, verifyRetentionAttentionResolutionInput, verifyRetentionAttentionRecord, verifyRetentionAttentionResolution, type RetentionAttentionRecordInput, type RetentionAttentionResolutionInput } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 export function retentionReviewId(value: unknown): asserts value is string {
@@ -26,6 +27,37 @@ function boundaryError(error: unknown): never {
 @Injectable()
 export class RetentionReviewService {
   constructor(private readonly database: RuntimeDatabaseService) {}
+
+  private attentionError(error: unknown): never {
+    if (['40001','40P01','55P03'].includes((error as { code?: string }).code ?? '')) throw new ConflictException({ code: 'RETENTION_ATTENTION_CONFLICT', detail: 'Evidence, version or retry changed. No current alert state is shown. Reload verified evidence and alert state.' });
+    return boundaryError(error);
+  }
+  async attentionAlerts(context: RetentionReviewSignalsContext, membershipId: string) {
+    human(context); retentionReviewId(membershipId);
+    try { return verifyRetentionAttentionAlerts(await this.database.readRetentionAttentionAlerts(context, membershipId), membershipId); }
+    catch (error) { return this.attentionError(error); }
+  }
+  async attentionEvidence(context: RetentionReviewSignalsContext, membershipId: string) {
+    human(context); retentionReviewId(membershipId);
+    try { return verifyRetentionAttentionEvidence(await this.database.readRetentionAttentionEvidence(context, membershipId), membershipId); }
+    catch (error) { return this.attentionError(error); }
+  }
+  async recordAttention(context: RetentionReviewSignalsContext, membershipId: string, value: unknown) {
+    human(context); retentionReviewId(membershipId);
+    let input: RetentionAttentionRecordInput;
+    try { input = verifyRetentionAttentionRecordInput(value); }
+    catch { throw new BadRequestException({ code: 'VALIDATION_FAILED', detail: 'Only exact verified evidence, a closed derived code and a UUID retry key are accepted.' }); }
+    try { return verifyRetentionAttentionRecord(await this.database.recordRetentionAttentionAlert(context, membershipId, input), membershipId, input); }
+    catch (error) { return this.attentionError(error); }
+  }
+  async resolveAttention(context: RetentionReviewSignalsContext, membershipId: string, value: unknown) {
+    human(context); retentionReviewId(membershipId);
+    let input: RetentionAttentionResolutionInput;
+    try { input = verifyRetentionAttentionResolutionInput(value); }
+    catch { throw new BadRequestException({ code: 'VALIDATION_FAILED', detail: 'Only one exact alert, its open version, a closed no-note resolution reason and a UUID retry key are accepted.' }); }
+    try { return verifyRetentionAttentionResolution(await this.database.resolveRetentionAttentionAlert(context, membershipId, input), membershipId, input); }
+    catch (error) { return this.attentionError(error); }
+  }
 
   async acknowledgementEvidence(context: RetentionReviewSignalsContext, membershipId: string) {
     human(context); retentionReviewId(membershipId);

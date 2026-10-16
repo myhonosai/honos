@@ -966,3 +966,26 @@ DO $$ DECLARE r text; BEGIN
  END LOOP;
  GRANT EXECUTE ON FUNCTION hon.read_current_organization_entitlement() TO hon_runtime;
 END $$;
+
+-- Retention factual attention exact grants: private roots/history/receipts/inert facts only.
+DO $$ DECLARE r text; t text; f text; a text; BEGIN
+ FOREACH t IN ARRAY ARRAY['retention_attention_alerts','retention_attention_resolutions','retention_attention_record_receipts','retention_attention_resolution_receipts','retention_attention_outbox'] LOOP
+  EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+  END LOOP;
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['require_retention_attention_actor(text,text)','retention_attention_codes(jsonb)','retention_attention_projection(uuid,boolean)','read_retention_attention_alerts(text,uuid)','read_retention_attention_evidence(text,uuid)','record_retention_attention_alert(text,uuid,text,text,timestamptz,text,uuid,uuid,uuid)','resolve_retention_attention_alert(text,uuid,uuid,integer,text,uuid,uuid,uuid)'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I',f,r);
+  END LOOP;
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_retention_attention_alerts(text,uuid),hon.read_retention_attention_evidence(text,uuid),hon.record_retention_attention_alert(text,uuid,text,text,timestamptz,text,uuid,uuid,uuid),hon.resolve_retention_attention_alert(text,uuid,uuid,integer,text,uuid,uuid,uuid) TO hon_runtime;
+END $$;

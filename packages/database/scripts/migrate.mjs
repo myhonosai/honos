@@ -1,5 +1,6 @@
 import { requireClassPassLocalUrls } from './classpass-local-guard.mjs';
 import { requirePromotionReadinessLocalUrls } from './promotion-readiness-local-guard.mjs';
+import { requireRetentionAcknowledgementLocalUrls } from './retention-review-acknowledgement-local-guard.mjs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -43,6 +44,11 @@ const client = new Client({ connectionString: databaseUrl, ssl: databaseUrl.incl
 await client.connect();
 
 try {
+  if (new URL(databaseUrl).username === 'hon_retention_acknowledgement_owner') {
+    requireRetentionAcknowledgementLocalUrls();
+    const marker = (await client.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
+    if (marker?.owner !== 'hon_retention_acknowledgement_owner' || marker.marker !== 'HON disposable retention_acknowledgement validation') throw new Error('Retention migrations refuse an unmarked local fixture.');
+  }
   await client.query('CREATE SCHEMA IF NOT EXISTS hon');
   await client.query(`
     CREATE TABLE IF NOT EXISTS hon.schema_migrations (
@@ -152,6 +158,12 @@ try {
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_followup_validation'
         || runtime.hostname !== 'localhost' || runtime.port !== '5432' || runtime.pathname !== owner.pathname || runtime.username !== 'hon_followup_runtime') throw new Error('Follow-up aliases require the exact disposable localhost database.');
       sql = sql.replaceAll('hon_runtime', 'hon_followup_runtime');
+    }
+    // Exact descriptor-bound disposable retention alias only. This also makes
+    // the existing 0126 local-only logging deferral match; no shared hon_runtime
+    // role is altered, elevated or granted to this fixture migration owner.
+    if (new URL(databaseUrl).username === 'hon_retention_acknowledgement_owner') {
+      sql = sql.replaceAll('hon_runtime', 'hon_retention_acknowledgement_runtime');
     }
     // PostgreSQL treats these logging controls as superuser-only. A marked
     // localhost validation owner deliberately has no superuser capability, so

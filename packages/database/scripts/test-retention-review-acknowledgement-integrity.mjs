@@ -8,6 +8,7 @@ import pg from 'pg';
 import net from 'node:net';
 import http from 'node:http';
 import https from 'node:https';
+import { proveRetentionAttention } from './retention-attention-integrity.mjs';
 import { retentionAcknowledgementTables as privateTables, retentionAcknowledgementFunctions as functions, verifyRetentionAcknowledgementSecurity } from './retention-review-acknowledgement-security.mjs';
 import { verifyRetentionReviewSecurity } from './retention-review-security.mjs';
 const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
@@ -81,13 +82,13 @@ try{
  await owner.query("INSERT INTO hon.schools(id,organization_id,name,slug) VALUES($1,$3,'Local',$1::uuid::text),($2,$4,'Other',$2::uuid::text),($5,$3,'Sibling',$5::uuid::text)",[ids.school,ids.otherSchool,ids.org,ids.otherOrg,ids.siblingSchool]);
  await owner.query("INSERT INTO hon.organization_entitlements(organization_id,tier,status) VALUES($1,'ESSENTIAL','ACTIVE'),($2,'CORE','ACTIVE')",[ids.org,ids.otherOrg]);
  for(const [u,p,r,g,o,s,sub,person,billing,membership]of [[ids.user,ids.principal,ids.role,ids.grant,ids.org,ids.school,subject,ids.person,ids.billing,ids.membership],[ids.otherUser,ids.otherPrincipal,ids.otherRole,ids.otherGrant,ids.otherOrg,ids.otherSchool,otherSubject,ids.otherPerson,ids.otherBilling,ids.otherMembership]]){
-	  await owner.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$1::uuid::text||'@example.test','PII_CANARY_STAFF')",[u,sub]);
-	  await owner.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','PII_CANARY_STAFF')",[p,u]);
-	  await owner.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role,management_school_id) VALUES($1,$2,'OWNER','Owner',true,$3)",[r,o,s]);
-	  for(const permission of ['retention.review.read','retention.review.acknowledge',...(o===ids.org?['billing.membership.read','billing.renewal.manage','attendance.record','curriculum.progress.record']:[])])await owner.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)',[r,o,permission]);
-	  await owner.query('INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$5,$4)',[g,o,s,p,r]);
-	  await owner.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'PII_CANARY_CONTACT','PII_CANARY_PERSON')",[person,o,s]);
-	  await owner.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id) VALUES($1,$2,$3,$4)',[billing,o,s,person]);
+		  await owner.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$1::uuid::text||'@example.test','PII_CANARY_STAFF')",[u,sub]);
+		  await owner.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','PII_CANARY_STAFF')",[p,u]);
+		  await owner.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role,management_school_id) VALUES($1,$2,'OWNER','Owner',true,$3)",[r,o,s]);
+		  for(const permission of ['retention.review.read','retention.review.acknowledge','retention.review.alert.read','retention.review.alert.record','retention.review.alert.resolve',...(o===ids.org?['billing.membership.read','billing.renewal.manage','attendance.record','curriculum.progress.record']:[])])await owner.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)',[r,o,permission]);
+		  await owner.query('INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$5,$4)',[g,o,s,p,r]);
+		  await owner.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'PII_CANARY_CONTACT','PII_CANARY_PERSON')",[person,o,s]);
+		  await owner.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id) VALUES($1,$2,$3,$4)',[billing,o,s,person]);
 	  await owner.query("INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at) VALUES($1,$2,$3,$4,$5,'PII_CANARY_PLAN','ACTIVE',now()-interval '30 days',now()+interval '60 days')",[membership,o,s,billing,person]);
 	 }
 	 const fixtureRenewalRequestId=randomUUID();await fixtureOwnerContext(fixtureRenewalRequestId);
@@ -100,9 +101,10 @@ try{
 	 await owner.query("INSERT INTO hon.testing_events(id,organization_id,school_id,curriculum_id,name,starts_at,status) VALUES($1,$2,$3,$4,'Fixture testing event',clock_timestamp()+interval '1 day','OPEN')",[ids.testingEvent,ids.org,ids.school,ids.curriculum]);
 	 await owner.query('INSERT INTO hon.membership_renewal_reviews(id,organization_id,school_id,membership_id,created_by_principal_id) VALUES($1,$2,$3,$4,$5)',[ids.renewal,ids.org,ids.school,ids.membership,ids.principal]);
 	 await owner.query("INSERT INTO hon.membership_renewal_versions(renewal_id,organization_id,school_id,version,review_from,review_to,status,note,reason,reminder_needed,membership_facts,operation,actor_principal_id,source,request_id,recorded_at) SELECT $1,$2,$3,1,clock_timestamp()-interval '15 days',clock_timestamp()+interval '15 days','OPEN','Fixture renewal opened','Fixture renewal baseline',false,hon.renewal_membership_facts($4),'CREATE',$5,'HUMAN_UI',$6,clock_timestamp()-interval '2 days'",[ids.renewal,ids.org,ids.school,ids.membership,ids.principal,fixtureRenewalRequestId]);
-	 await owner.query("INSERT INTO hon.families(id,organization_id,school_id,display_name) VALUES($1,$2,$3,'PII_CANARY_FAMILY')",[ids.family,ids.org,ids.school]);
-	 await owner.query('COMMIT');
+		 await owner.query("INSERT INTO hon.families(id,organization_id,school_id,display_name) VALUES($1,$2,$3,'PII_CANARY_FAMILY')",[ids.family,ids.org,ids.school]);
+		 await owner.query('COMMIT');
  tables=(await owner.query("SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='hon' AND relkind='r' ORDER BY relname")).rows.map(r=>r.relname);
+ await proveRetentionAttention({owner,runtime,service,ids,context,other,checked,snapshot,raw,fixtureOwnerContext});
  // The original read remains READ ONLY, redacted and creates no evidence writes.
  const original=await checked(()=>service.read(context(),ids.membership));assert.equal(original.readOnly,true);assert.equal(original.membershipId,ids.membership);check();
  const e=await evidence(),value=input(e);assert(!JSON.stringify(e).includes('PII_CANARY'));check();

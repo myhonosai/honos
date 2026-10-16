@@ -2004,3 +2004,51 @@ BEGIN
 END;
 $$;
 -- End current organization entitlement exact verification.
+
+-- Retention factual attention exact verification:
+DO $$ DECLARE t text; f record; runtime_oid oid; executable boolean; signature text; expected_hash text; BEGIN
+ SELECT oid INTO runtime_oid FROM pg_roles WHERE rolname='hon_runtime';
+ IF runtime_oid IS NULL OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit AND NOT rolreplication) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) THEN RAISE EXCEPTION 'Retention attention restricted runtime required'; END IF;
+ FOREACH t IN ARRAY ARRAY['retention_attention_alerts','retention_attention_resolutions','retention_attention_record_receipts','retention_attention_resolution_receipts','retention_attention_outbox'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND c.relowner<>runtime_oid) OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=('hon.'||t)::regclass) THEN RAISE EXCEPTION 'Retention attention forced no-policy trusted RLS: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+   OR EXISTS(SELECT 1 FROM pg_attribute att JOIN pg_class c ON c.oid=att.attrelid,LATERAL aclexplode(att.attacl) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+   OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Retention attention table/column ACL surplus: %',t; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND NOT tgisinternal AND tgenabled='O' AND tgfoid='hon.guard_campaign_history()'::regprocedure AND tgtype IN(27,34))<>2 THEN RAISE EXCEPTION 'Retention attention immutable guards: %',t; END IF;
+  IF (SELECT array_agg(attname::text||':'||atttypid::regtype::text||':'||attnotnull::text ORDER BY attnum) FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped) IS DISTINCT FROM (CASE t
+   WHEN 'retention_attention_alerts' THEN ARRAY['id:uuid:true','organization_id:uuid:true','school_id:uuid:true','membership_id:uuid:true','actor_principal_id:uuid:true','evidence_code:text:true','evidence_version:text:true','evidence_fingerprint:text:true','observed_at:timestamp with time zone:true','created_at:timestamp with time zone:true']
+   WHEN 'retention_attention_resolutions' THEN ARRAY['id:uuid:true','organization_id:uuid:true','school_id:uuid:true','membership_id:uuid:true','alert_id:uuid:true','actor_principal_id:uuid:true','expected_alert_version:integer:true','resolution_reason:text:true','resolved_at:timestamp with time zone:true']
+   WHEN 'retention_attention_record_receipts' THEN ARRAY['id:uuid:true','organization_id:uuid:true','school_id:uuid:true','membership_id:uuid:true','actor_principal_id:uuid:true','alert_id:uuid:true','idempotency_digest:bytea:true']
+   WHEN 'retention_attention_resolution_receipts' THEN ARRAY['id:uuid:true','organization_id:uuid:true','school_id:uuid:true','membership_id:uuid:true','actor_principal_id:uuid:true','alert_id:uuid:true','resolution_id:uuid:true','idempotency_digest:bytea:true']
+   WHEN 'retention_attention_outbox' THEN ARRAY['id:uuid:true','organization_id:uuid:true','school_id:uuid:true','membership_id:uuid:true','alert_id:uuid:true','fact_version:integer:true','event_code:text:true','state:text:true']
+   END) THEN RAISE EXCEPTION 'Retention attention exact closed columns: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM pg_constraint fk WHERE fk.conrelid=('hon.'||t)::regclass AND fk.contype='f' AND fk.confrelid<>'hon.principals'::regclass AND (cardinality(fk.conkey)<3 OR fk.confdeltype<>'r' OR NOT fk.convalidated
+   OR NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=fk.conrelid AND a.attname='organization_id' AND a.attnum=ANY(fk.conkey)) OR NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=fk.conrelid AND a.attname='school_id' AND a.attnum=ANY(fk.conkey)))) THEN RAISE EXCEPTION 'Retention attention composite scope FK: %',t; END IF;
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['require_retention_attention_actor(text,text)','retention_attention_codes(jsonb)','retention_attention_projection(uuid,boolean)','read_retention_attention_alerts(text,uuid)','read_retention_attention_evidence(text,uuid)','record_retention_attention_alert(text,uuid,text,text,timestamptz,text,uuid,uuid,uuid)','resolve_retention_attention_alert(text,uuid,uuid,integer,text,uuid,uuid,uuid)'] LOOP
+  SELECT p.*,o.rolsuper,o.rolbypassrls INTO f FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=('hon.'||signature)::regprocedure;
+  executable:=signature=ANY(ARRAY['read_retention_attention_alerts(text,uuid)','read_retention_attention_evidence(text,uuid)','record_retention_attention_alert(text,uuid,text,text,timestamptz,text,uuid,uuid,uuid)','resolve_retention_attention_alert(text,uuid,uuid,integer,text,uuid,uuid,uuid)']);
+  expected_hash:=CASE f.proname
+   WHEN 'require_retention_attention_actor' THEN 'f12626ace67e3aa93e9f861a7d35358e'
+   WHEN 'retention_attention_codes' THEN 'ea2c9aa28af662f43feab68b4f04a4c9'
+   WHEN 'retention_attention_projection' THEN 'dbd15eebc44818997a54e2ec032674fa'
+   WHEN 'read_retention_attention_alerts' THEN '68db75da2883379c7f202951d261b165'
+   WHEN 'read_retention_attention_evidence' THEN '70b7f7d485da78b584a279e8c1c31d70'
+   WHEN 'record_retention_attention_alert' THEN 'd832cb12d92a6b221b7d2760bff74197'
+   WHEN 'resolve_retention_attention_alert' THEN '57bbac30f588cfbefb3e4a5a31a3c872'
+   END;
+  IF f.oid IS NULL OR f.proowner=runtime_oid OR NOT(f.rolsuper OR f.rolbypassrls) OR f.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] OR NOT f.prosecdef OR f.provolatile<>'v' OR f.prorettype<>'jsonb'::regtype AND f.proname<>'require_retention_attention_actor' OR md5(f.prosrc) IS DISTINCT FROM expected_hash THEN RAISE EXCEPTION 'Retention attention fixed function posture/body: %',signature; END IF;
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>f.proowner OR (a.grantee<>f.proowner AND (NOT executable OR a.grantee<>runtime_oid)))
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=f.proowner AND NOT a.is_grantable)<>1
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=runtime_oid AND NOT a.is_grantable)<>(CASE WHEN executable THEN 1 ELSE 0 END)
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE') IS DISTINCT FROM executable OR has_function_privilege('hon_runtime',f.oid,'EXECUTE WITH GRANT OPTION') THEN RAISE EXCEPTION 'Retention attention exact function-only ACL: %',signature; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.retention_attention_alerts'::regclass AND conname='retention_attention_natural_key' AND contype='u' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, membership_id, evidence_code, evidence_version, evidence_fingerprint, observed_at)') THEN RAISE EXCEPTION 'Retention attention school-wide natural evidence key required'; END IF;
+ FOREACH t IN ARRAY ARRAY['retention_attention_record_receipts','retention_attention_resolution_receipts'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=('hon.'||t)::regclass AND contype='u' AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_digest)') THEN RAISE EXCEPTION 'Retention attention scoped receipt key: %',t; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.retention_attention_resolutions'::regclass AND contype='u' AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (alert_id)') THEN RAISE EXCEPTION 'Retention attention one resolution only'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.retention_attention_outbox'::regclass AND contype='c' AND pg_get_constraintdef(oid)='CHECK ((state = ''INERT''::text))') THEN RAISE EXCEPTION 'Retention attention permanently inert fact required'; END IF;
+ IF (SELECT count(*) FROM hon.permissions WHERE code IN('retention.review.alert.read','retention.review.alert.record','retention.review.alert.resolve') AND is_sensitive AND is_staff_assignable)<>3 THEN RAISE EXCEPTION 'Retention attention exact sensitive staff permissions required'; END IF;
+END $$;
+-- End retention factual attention exact verification.

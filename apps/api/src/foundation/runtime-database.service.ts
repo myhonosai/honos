@@ -323,6 +323,33 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return row.data;
   }
 
+  private async retentionAttentionTransaction(context: RetentionReviewSignalsContext, readOnly: boolean, work: (client: PoolClient) => Promise<unknown>): Promise<unknown> {
+    const scopedWork = async (client: PoolClient) => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)", [context.source, context.externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'");
+      return work(client);
+    };
+    // PostgreSQL must enter READ ONLY before any context-setting statement. The
+    // fixed helper establishes tenant GUCs and checks context only after BEGIN
+    // READ ONLY; the attention-specific source/subject GUCs follow inside that
+    // same transaction. Command paths retain the ordinary write boundary.
+    return readOnly
+      ? this.withTenantReadOnlyTransaction(context, scopedWork)
+      : this.withTenantTransaction(context, scopedWork);
+  }
+  async readRetentionAttentionAlerts(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, true, async client => (await client.query('SELECT hon.read_retention_attention_alerts($1,$2::uuid) AS data', [context.externalSubject, membershipId])).rows[0]?.data);
+  }
+  async readRetentionAttentionEvidence(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, true, async client => (await client.query('SELECT hon.read_retention_attention_evidence($1,$2::uuid) AS data', [context.externalSubject, membershipId])).rows[0]?.data);
+  }
+  async recordRetentionAttentionAlert(context: RetentionReviewSignalsContext, membershipId: string, input: import('@hon/contracts').RetentionAttentionRecordInput): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, false, async client => (await client.query('SELECT hon.record_retention_attention_alert($1,$2::uuid,$3,$4,$5::timestamptz,$6,$7::uuid,$8::uuid,$9::uuid) AS data', [context.externalSubject, membershipId, input.evidenceVersion, input.evidenceFingerprint, input.observedAt, input.evidenceCode, input.idempotencyKey, context.requestId, context.correlationId])).rows[0]?.data);
+  }
+  async resolveRetentionAttentionAlert(context: RetentionReviewSignalsContext, membershipId: string, input: import('@hon/contracts').RetentionAttentionResolutionInput): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, false, async client => (await client.query('SELECT hon.resolve_retention_attention_alert($1,$2::uuid,$3::uuid,$4::integer,$5,$6::uuid,$7::uuid,$8::uuid) AS data', [context.externalSubject, membershipId, input.alertId, input.expectedAlertVersion, input.resolutionReason, input.idempotencyKey, context.requestId, context.correlationId])).rows[0]?.data);
+  }
+
   async readRetentionReviewAcknowledgementEvidence(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
     return this.withTenantTransaction(context, async client => {
       await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)", [context.source, context.externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);

@@ -1,3 +1,4 @@
+import { retentionAttentionTables, verifyRetentionAttentionSecurity } from './retention-attention-security.mjs';
 import { requireClassPassLocalUrls } from './classpass-local-guard.mjs';
 import { classpassTables, verifyClassPassSecurity } from './classpass-security.mjs';
 import { requireKioskHandoffLocalUrls } from './kiosk-handoff-local-guard.mjs';
@@ -46,6 +47,7 @@ if (runtimeRoleName !== 'hon_runtime') {
 
 const expectedRlsTables = [
   ...retentionAcknowledgementTables,
+  ...retentionAttentionTables,
   ...marketingAssistantTables,
   ...achievementTables,
   ...testingCertificateTables,
@@ -245,6 +247,7 @@ try {
   await verifyActionApprovalSecurity(client,runtimeRoleName);
   await verifyRetentionReviewSecurity(client,runtimeRoleName);
   await verifyRetentionAcknowledgementSecurity(client,runtimeRoleName);
+  await verifyRetentionAttentionSecurity(client,runtimeRoleName);
   const posture = (await client.query(`SELECT rolcanlogin,rolsuper,rolbypassrls,rolinherit,rolcreatedb,rolcreaterole,rolreplication,
     EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid) memberships,
     has_schema_privilege(r.rolname,'hon','CREATE') schema_create,
