@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, type FormEvent } from 'react';
-import type { OperationalSnapshot, OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
+import type { OperationalSnapshot, OwnerLaunchFirstClassBookingContext, OwnerLaunchFirstClassBookingContextProjection, OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
 import { loadOwnerLaunchSavedStudents, loadStaffDashboard, StaffDashboardAccessError } from './staff-dashboard-http';
+import { loadOwnerLaunchFirstClassBookingContext } from './owner-launch-http';
 import styles from './staff-dashboard.module.css';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
@@ -42,6 +43,40 @@ function SavedStudentConfirmation({ projection }: { projection: OwnerLaunchSaved
     <p className={styles.savedBoundary}>A saved registration does not assert family readiness, parent login/access, membership, booking, attendance, payment, or communication.</p>
     <p className={styles.savedBoundary}>Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active. It is not an agreement, payment, invoice, schedule or communication.</p>
     <WorkflowLink href="/staff/launch">Open owner launch</WorkflowLink>
+  </section>;
+}
+type VerifiedBookingConfirmation = { displayName: string; context: OwnerLaunchFirstClassBookingContext };
+
+/**
+ * A booking context has no client-controlled school selector. It can appear on
+ * this dashboard only when its immutable receipt/student pair is present in
+ * the already verified, same-school saved-student confirmation.
+ */
+export function bookingForVerifiedDashboard(
+  booking: OwnerLaunchFirstClassBookingContextProjection,
+  savedStudents: OwnerLaunchSavedStudentsProjection,
+  snapshot: Pick<OperationalSnapshot, 'organizationId' | 'schoolId'>,
+): VerifiedBookingConfirmation | null {
+  if (booking.state !== 'RECORDED_BOOKING'
+    || savedStudents.organizationId !== snapshot.organizationId
+    || savedStudents.schoolId !== snapshot.schoolId) return null;
+  const saved = savedStudents.registrations.find((registration) => registration.registrationId === booking.context.registrationId
+    && registration.studentProfileId === booking.context.student.studentProfileId);
+  return saved ? { displayName: saved.displayName, context: booking.context } : null;
+}
+
+export function FirstClassBookingConfirmation({ confirmation }: { confirmation: VerifiedBookingConfirmation }): React.ReactElement {
+  const { displayName, context } = confirmation;
+  return <section className={styles.savedConfirmation} aria-labelledby="first-class-booking-confirmation-title">
+    <p className={styles.eyebrow}>OWNER LAUNCH / FIRST-CLASS CONFIRMATION ONLY</p><h2 id="first-class-booking-confirmation-title">First-class booking confirmation</h2>
+    <dl className={styles.savedList}>
+      <div><dt>Saved student</dt><dd><strong>{displayName}</strong></dd></div>
+      <div><dt>Class</dt><dd><strong>{context.classSession.name}</strong></dd></div>
+      <div><dt>Class time</dt><dd>{utc(context.classSession.startsAt)} – {utc(context.classSession.endsAt)} UTC</dd></div>
+      <div><dt>Class status</dt><dd>{context.classSession.status}</dd></div>
+      <div><dt>Booking status</dt><dd>{context.booking.status}</dd></div>
+    </dl>
+    <p className={styles.savedBoundary}>Confirmation only. This is not attendance, membership, payment, eligibility, parent access, or communication.</p>
   </section>;
 }
 function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React.ReactElement {
@@ -96,10 +131,11 @@ export function StaffDashboard(): React.ReactElement {
   const [snapshot, setSnapshot] = useState<OperationalSnapshot | null>(null);
   const [savedStudents, setSavedStudents] = useState<OwnerLaunchSavedStudentsProjection | null>(null);
   const [savedStudentsUnavailable, setSavedStudentsUnavailable] = useState(false);
+  const [bookingConfirmation, setBookingConfirmation] = useState<VerifiedBookingConfirmation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  function clear() { setSelection(null); setSnapshot(null); setSavedStudents(null); setSavedStudentsUnavailable(false); setError(''); }
+  function clear() { setSelection(null); setSnapshot(null); setSavedStudents(null); setSavedStudentsUnavailable(false); setBookingConfirmation(null); setError(''); }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
@@ -112,8 +148,12 @@ export function StaffDashboard(): React.ReactElement {
         const confirmation = await loadOwnerLaunchSavedStudents();
         if (confirmation.organizationId !== next.organizationId || confirmation.schoolId !== next.schoolId) throw new Error('Saved registration scope does not match the verified dashboard school.');
         setSavedStudents(confirmation);
+        try {
+          const booking = await loadOwnerLaunchFirstClassBookingContext();
+          setBookingConfirmation(bookingForVerifiedDashboard(booking, confirmation, next));
+        } catch { setBookingConfirmation(null); }
       }
-      catch { setSavedStudents(null); setSavedStudentsUnavailable(true); }
+      catch { setSavedStudents(null); setBookingConfirmation(null); setSavedStudentsUnavailable(true); }
     } catch (reason) {
       if (reason instanceof StaffDashboardAccessError) { setSelection(null); setSnapshot(null); }
       setError(reason instanceof Error ? reason.message : 'The operations dashboard is unavailable.');
@@ -136,6 +176,7 @@ export function StaffDashboard(): React.ReactElement {
     </section>
     {snapshot && <OperationsCards snapshot={snapshot} />}
     {snapshot && savedStudents && <SavedStudentConfirmation projection={savedStudents} />}
+    {snapshot && bookingConfirmation && <FirstClassBookingConfirmation confirmation={bookingConfirmation} />}
     {snapshot && savedStudentsUnavailable && <section className={styles.savedUnavailable} aria-live="polite"><strong>Owner-launch saved-student confirmation unavailable.</strong><p>No registration is shown. The dashboard did not use its school inputs to search for a student.</p></section>}
   </main>;
 }

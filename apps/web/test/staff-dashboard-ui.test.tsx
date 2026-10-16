@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { StaffDashboard } from '../src/components/staff-dashboard';
+import type { OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
+import { bookingForVerifiedDashboard, FirstClassBookingConfirmation, StaffDashboard } from '../src/components/staff-dashboard';
 import { loadOwnerLaunchSavedStudents, loadStaffDashboard, ownerLaunchSavedStudentsPath, staffDashboardReportPath, StaffDashboardAccessError, verifyStaffDashboardSnapshot } from '../src/components/staff-dashboard-http';
+import { loadOwnerLaunchFirstClassBookingContext } from '../src/components/owner-launch-http';
 
 const organizationId = '11111111-1111-4111-8111-111111111111';
 const schoolId = '22222222-2222-4222-8222-222222222222';
@@ -20,7 +22,10 @@ const report = () => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 2, FAILED: 3, REQUIRES_ACTION: 4, UNKNOWN: 5, REFUNDED: 6 } },
 });
 const response = (operationalSnapshot: unknown) => ({ ok: true, json: async () => ({ data: { operationalSnapshot }, meta: { requestId: 'id', correlationId: 'id' } }) }) as Response;
-const savedStudents = { organizationId, schoolId, state: 'RECORDED_REGISTRATIONS', registrations: [{ registrationId: '33333333-3333-4333-8333-333333333333', studentProfileId: '44444444-4444-4444-8444-444444444444', displayName: 'Saved Student', createdAt: to, registrationKind: 'NEW_ADULT_NO_GUARDIAN', status: 'REGISTERED_NO_BOOKING' }] };
+const savedRegistration = { registrationId: '33333333-3333-4333-8333-333333333333', studentProfileId: '44444444-4444-4444-8444-444444444444', displayName: 'Saved Student', createdAt: to, registrationKind: 'NEW_ADULT_NO_GUARDIAN' as const, status: 'REGISTERED_NO_BOOKING' as const };
+const savedStudents = { organizationId, schoolId, state: 'RECORDED_REGISTRATIONS' as const, registrations: [savedRegistration] } satisfies OwnerLaunchSavedStudentsProjection;
+const bookingContext = { registrationId: savedRegistration.registrationId, student: { studentProfileId: savedRegistration.studentProfileId, displayName: 'Booking Read Name Is Not Used' }, classSession: { id: '55555555-5555-4555-8555-555555555555', name: 'First class', startsAt: '2026-06-03T10:00:00.000Z', endsAt: '2026-06-03T11:00:00.000Z', status: 'SCHEDULED', capacity: 10, bookingPolicy: 'OPTIONAL_BOOKING' }, booking: { id: '66666666-6666-4666-8666-666666666666', bookingKind: 'REGULAR', status: 'BOOKED', version: 1, recordedAt: to } } as const;
+const recordedBooking = { state: 'RECORDED_BOOKING', context: bookingContext } as const;
 
 describe('staff operations dashboard', () => {
   it('uses exactly the existing same-origin read-only operations report and reconstructs its aggregate DTO', async () => {
@@ -54,6 +59,28 @@ describe('staff operations dashboard', () => {
     }
   });
 
+  it('uses only the delivered fixed selector-free booking read and renders it only for a matching verified saved-student scope', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ data: recordedBooking }) } as Response);
+    try {
+      await expect(loadOwnerLaunchFirstClassBookingContext()).resolves.toEqual(recordedBooking);
+      expect(fetchSpy).toHaveBeenCalledWith('/api/v1/owner-launch/first-class-booking-context', { method: 'GET', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' });
+    } finally { fetchSpy.mockRestore(); }
+
+    const matched = bookingForVerifiedDashboard(recordedBooking, savedStudents, report());
+    expect(matched).toEqual({ displayName: 'Saved Student', context: bookingContext });
+    const card = renderToStaticMarkup(<FirstClassBookingConfirmation confirmation={matched!} />);
+    for (const value of ['OWNER LAUNCH / FIRST-CLASS CONFIRMATION ONLY', 'Saved Student', 'First class', 'Class time', 'SCHEDULED', 'BOOKED', 'Confirmation only. This is not attendance, membership, payment, eligibility, parent access, or communication.']) expect(card).toContain(value);
+    expect(card).not.toContain('Booking Read Name Is Not Used');
+    expect(card).not.toMatch(/<(?:a|button|form|input)\b/);
+
+    for (const booking of [
+      { ...recordedBooking, context: { ...bookingContext, registrationId: organizationId } },
+      { ...recordedBooking, context: { ...bookingContext, student: { ...bookingContext.student, studentProfileId: organizationId } } },
+      { state: 'NO_RECORDED_BOOKING', context: null } as const,
+    ]) expect(bookingForVerifiedDashboard(booking, savedStudents, report())).toBeNull();
+    expect(bookingForVerifiedDashboard(recordedBooking, { ...savedStudents, schoolId: organizationId }, report())).toBeNull();
+  });
+
   it('starts without fabricated metrics and exposes explicit unavailable states plus real managed-workflow links', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     try {
@@ -74,11 +101,16 @@ describe('staff operations dashboard', () => {
     expect(component).toContain('setSnapshot(null)');
     expect(component).toContain('confirmation.organizationId !== next.organizationId');
     expect(component).toContain('confirmation.schoolId !== next.schoolId');
+    expect(component).toContain('loadOwnerLaunchFirstClassBookingContext');
+    expect(component).toContain('bookingForVerifiedDashboard(booking, confirmation, next)');
+    expect(component).toContain('FIRST-CLASS CONFIRMATION ONLY');
     for (const text of ['Student profiles', 'Current-school aggregate', 'Trial count unavailable', 'Revenue-plan summary unavailable', 'NOT COUNTED HERE', 'Saved students', 'not a student or family directory']) expect(component).toContain(text);
     for (const href of ['/staff/search', '/staff/planning/revenue', '/staff/launch', '/staff/crm/follow-ups', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(component).toContain(href);
     expect(http).toContain("method: 'GET'");
     expect(http).toContain("credentials: 'same-origin'");
     expect(http).toContain("'/api/v1/owner-launch/saved-students'");
+    expect(component).not.toContain('loadOwnerLaunchWithConfirmations');
+    expect(component).not.toContain('loadOwnerLaunch(');
     expect(http).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|from\s+['"][^'"]*(?:voice|action|ai|provider)/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/dashboard')).toHaveLength(1);
