@@ -26,4 +26,10 @@ describe('human-governed readiness UI',()=>{
   const source=readFileSync('src/components/promotion-readiness-workbench.tsx','utf8');expect(source).toContain('generation.current === attempt');expect(source).toContain("from './testing-registration.module.css'");
   expect(JSON.parse(readFileSync('public/manus-routes.json','utf8')).routes.filter((r:{path:string})=>r.path==='/staff/testing/readiness')).toHaveLength(1);
  });
+ it('mounts Platform View only after the closed readiness response, derives its preference scope from returned organization/school facts, and keeps all readiness evidence presentation-only',()=>{
+  const source=readFileSync('src/components/promotion-readiness-workbench.tsx','utf8');
+  for(const token of ["if (!view)", 'view.organizationId', 'view.schoolId', "saveInterfaceThemePreference(scope, next, crypto.randomUUID(), 'SETTINGS')", 'preferenceGeneration.current', 'deterministic evidence, policy fingerprint, blockers', 'human-governed no-action posture', "data-interface-theme={theme}"]) expect(source).toContain(token);
+  expect(source).not.toMatch(/executeAction|invokeLLM|saveAttendanceRecord|decideActionReview|fetch\(['"]https?:\/\//);
+  const visual=readFileSync('src/components/promotion-readiness-platform-view.module.css','utf8');for(const token of ['#0a597a', '#48dcfa', '.bigButton', '.classic'])expect(visual).toContain(token);
+ });
 });

@@ -1,0 +1,20 @@
+.platformView { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); gap: 18px; align-items: start; margin: 18px 0; padding: 20px; border: 1px solid #31c9ed; border-radius: 16px; background: linear-gradient(135deg, #0a4260, #071b2c); color: #e5f8ff; }
+.eyebrow { margin: 0 0 7px; color: #65dff6; font-size: .72rem; font-weight: 800; letter-spacing: .12em; }
+.platformView h2 { margin: 0 0 8px; }
+.platformView p { line-height: 1.6; }
+.status { grid-column: 1 / -1; margin: 0; padding: 10px 12px; border-left: 3px solid #48dcfa; color: #d6f9ff; background: rgba(1, 12, 22, .45); }
+.modern { color: #ecf9ff; background: radial-gradient(circle at 100% 0, #0a597a 0, #071b2c 34%, #030912 100%); }
+.modern section, .modern aside { border-color: #1c526e; background: rgba(8, 30, 47, .94); box-shadow: 0 18px 42px rgba(0, 0, 0, .18); }
+.modern input, .modern button { border-color: #247a9e; color: #d4f8ff; background: #092c42; }
+.modern a { color: #63dcf5; }
+.bigButton { max-width: 760px; margin: 0 auto; color: #effaff; background: linear-gradient(160deg, #071a2b, #04111d); }
+.bigButton section, .bigButton aside { border-color: #2a6b87; border-radius: 18px; background: #082036; }
+.bigButton input, .bigButton button { min-height: 54px; font-size: 1rem; border-color: #2a86a8; color: #d4f8ff; background: #0b3854; }
+.bigButton label { gap: 10px; }
+.bigButton .platformView { grid-template-columns: 1fr; border-radius: 18px; background: linear-gradient(135deg, #0b4260, #071d31); }
+.classic { max-width: 1320px; margin: 0 auto; color: #17263c; background: #eef3f7; font-size: .92rem; }
+.classic section, .classic aside { margin: 12px 0; padding: 16px; border-radius: 5px; box-shadow: none; }
+.classic input, .classic button { min-height: 34px; padding: 7px 9px; border-radius: 4px; font-size: .9rem; }
+.classic .platformView { grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); margin: 12px 0; padding: 14px; border-radius: 5px; }
+.classic .status { padding: 7px 9px; }
+@media (max-width: 680px) { .platformView, .classic .platformView { grid-template-columns: 1fr; } .bigButton, .classic { margin: 0; } }
