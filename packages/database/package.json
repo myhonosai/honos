@@ -80,7 +80,9 @@
     "db:setup-attendance": "node scripts/setup-attendance-validation.mjs",
     "db:test-attendance": "pnpm --filter @hon/contracts build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-integrity.mjs",
     "db:setup-attendance-backfill": "node scripts/setup-attendance-backfill-validation.mjs",
-    "db:test-attendance-backfill": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-backfill-migration.mjs"
+    "db:test-attendance-backfill": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-backfill-migration.mjs",
+    "db:setup-promotion-readiness": "node scripts/setup-promotion-readiness-validation.mjs",
+    "db:test-promotion-readiness": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-promotion-readiness-integrity.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

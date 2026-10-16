@@ -1,3 +1,4 @@
+import { requirePromotionReadinessLocalUrls } from './promotion-readiness-local-guard.mjs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -41,6 +42,10 @@ try {
   for (const file of files) {
     if (applied.has(file)) continue;
     let sql = await readFile(join(migrationsDirectory.pathname, file), 'utf8');
+    if (new URL(databaseUrl).username === 'hon_promotion_readiness_owner') {
+      requirePromotionReadinessLocalUrls();
+      sql = sql.replaceAll('hon_runtime', 'hon_promotion_readiness_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_attendance_owner') {
       const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_attendance_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_attendance_runtime') throw new Error('Attendance aliases require exact disposable localhost database.');

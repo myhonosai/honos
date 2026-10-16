@@ -44,6 +44,7 @@ HON is intended to be a **broad functional beta** for the approved Ideal School 
 | Family-linked accounts and family billing | Guardian/family and parent-safe billing reads | **Implemented and validated as bounded read foundations** | Mutating family billing/payment workflows remain separately governed |
 | Staff permissions and instructor records | Roles, staff qualification and human curriculum/testing foundations | **Implemented and validated bounded slices** | Broader staff profile/workforce delivery remains open |
 | Attendance history and staff corrections | Existing sessions/bookings/attendance with guarded policy and function-only command boundary | **Implemented and tested bounded vertical** | Cross-domain progression/readiness and ClassPass admission remain distinct future domains |
+| Promotion readiness | Existing curriculum/rank/history/progress/attendance/testing/document evidence through a fixed staff read | **Implemented and tested bounded projection** | Policy authoring, wider instructor workflow integration and every promotion/testing action remain distinct human-governed work |
 | Mobile-responsive parent access | Parent Home/Journey/Billing/Testing bounded web surfaces | **Implemented and validated bounded web reads** | Purpose-built Expo Parent App is still open |
 | Parent notifications | Consent/communication architecture and intentionally unavailable parent receipt view | **Partial / receipt evidence not implemented** | Proven recipient delivery/receipt model and consent-safe projection |
 | Secure exports and multi-location management | Migration/import and Core multi-location summary slices | **Partial / bounded foundations** | Product-level export and multi-location operational workflow proof |
@@ -84,6 +85,8 @@ These are readiness states only. Only an authorized human instructor/administrat
 
 Bounded read calculation proves school/program/rank ownership, current evidence/version behavior, no automatic promotion, human-only approval, cross-school/RLS denial, explainable supporting inputs and no AI/payment/communication mutation.
 
+**Delivered bounded projection (migration 0116):** a staff-only fixed read accepts only an exact, closed `promotionReadinessV1` object stored on the current rank; unknown, missing or malformed historical JSON is a visible configuration blocker and is never interpreted as a default. It uses current rank/enrollment history or an existing human promotion timestamp, current-version requirement observations, nonfinancial attendance snapshots since the current rank, an exact open testing window, and the latest exact next-rank candidate. Its deterministic result is one of **not eligible**, **approaching**, **eligible for instructor review**, **approved for testing** (an already human-created pending candidate), or **testing completed** (an existing final candidate outcome)—not a promotion result. Optional document evidence is intentionally limited to the current staff viewer's acknowledgement of a current STAFF publication; it never infers student, family or guardian compliance. The projection is tenant/role/entitlement/RLS constrained, returns redacted IDs/timestamps/counts only, and creates no candidate, test approval, promotion, rank, certificate, document, audit/outbox, financial, communication, Action Engine, AI or provider effect.
+
 ## C. Private curriculum video library
 
 Reuse approved secure object storage/video providers when separately configured; do not build a media platform or expose source material to an external AI provider. Organize school-approved video/link records by discipline, curriculum category, belt/rank and program/audience. Parent/student projection requires verified program/rank/audience; instructor-only material remains private. Claire may reference only approved metadata/content through a future separately reviewed internal knowledge boundary.
@@ -104,7 +107,7 @@ Build on Migration Center and HQ onboarding foundations: school/profile/program/
 
 1. Preserve and complete current HQ task-profile control-plane milestone.
 2. Complete Essential/Core/Complete entitlement enforcement and governed AI employee/Action Engine integration against existing slices.
-3. Deliver advanced attendance categories and deterministic readiness before ClassPass admission affects progression signals.
+3. Use the completed advanced-attendance and deterministic-readiness boundaries before ClassPass admission affects progression signals.
 4. Deliver ClassPass & Walk-In on existing membership/billing/scheduling/capacity/attendance; then Kiosk on the bounded admission result.
 5. Add retention alerts and acknowledgements on already proven evidence/delivery boundaries.
 6. Add curriculum video library and guided onboarding/import extensions with existing storage/migration controls.

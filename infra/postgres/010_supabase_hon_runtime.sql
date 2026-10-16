@@ -807,3 +807,14 @@ DO $$ DECLARE a text; r text; BEGIN
 END $$;
 GRANT SELECT ON hon.attendance_records TO hon_runtime;
 COMMIT;
+
+-- Promotion readiness exact grants: no new table or helper authority.
+BEGIN;
+REVOKE ALL ON FUNCTION hon.read_promotion_readiness(text,uuid,uuid) FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.read_promotion_readiness(text,uuid,uuid) FROM %I',r);
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_promotion_readiness(text,uuid,uuid) TO hon_runtime;
+END $$;
+COMMIT;

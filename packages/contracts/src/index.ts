@@ -910,3 +910,5 @@ export * from './teaching-studio.js';
 export * from './retention-review-signals.js';
 
 export * from './chad-follow-up-assistant.js';
+
+export * from './promotion-readiness.js';

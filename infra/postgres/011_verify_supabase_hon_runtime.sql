@@ -1606,3 +1606,22 @@ BEGIN
  END LOOP;
 END $$;
 -- End advanced attendance exact verification.
+
+-- Promotion readiness exact verification:
+DO $$ DECLARE t text; BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner
+  WHERE p.oid='hon.read_promotion_readiness(text,uuid,uuid)'::regprocedure AND p.prosecdef AND p.provolatile='s'
+   AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (owner.rolsuper OR owner.rolbypassrls) AND owner.rolname<>'hon_runtime'
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+    AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.privilege_type<>'EXECUTE' OR a.is_grantable))) THEN
+  RAISE EXCEPTION 'Unsafe promotion readiness function or ACL'; END IF;
+ FOREACH t IN ARRAY ARRAY['curricula','curriculum_ranks','curriculum_requirements','student_curriculum_enrollments','student_profiles','curriculum_enrollment_history','curriculum_progress_observations','promotion_decisions','attendance_records','class_sessions','testing_events','testing_candidates','document_templates','document_publications','document_acknowledgements'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=format('hon.%I',t)::regclass AND relrowsecurity AND relforcerowsecurity) THEN RAISE EXCEPTION 'Readiness evidence lacks forced RLS'; END IF;
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['curriculum_enrollment_history','curriculum_progress_observations','document_templates','document_publications','document_acknowledgements'] LOOP
+  IF has_table_privilege('hon_runtime',format('hon.%I',t),'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_any_column_privilege('hon_runtime',format('hon.%I',t),'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Readiness must not grant private table access'; END IF;
+ END LOOP;
+END $$;
+-- End promotion readiness exact verification.

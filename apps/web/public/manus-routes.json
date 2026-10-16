@@ -179,6 +179,10 @@
     {
       "path": "/staff/marketing/assistant",
       "title": "Human Campaign Planning"
+    },
+    {
+      "path": "/staff/testing/readiness",
+      "title": "HON | Human promotion readiness"
     }
   ]
 }

@@ -1,3 +1,5 @@
+import { PromotionReadinessController } from './testing/promotion-readiness.controller.js';
+import { PromotionReadinessService } from './testing/promotion-readiness.service.js';
 import { MarketingAssistantController, MarketingAssistantHumanUiGuard } from './marketing/marketing-assistant.controller.js';
 import { MarketingAssistantService } from './marketing/marketing-assistant.service.js';
 import { MARKETING_PROVIDER_RUNTIME, OpenRouterRuntime } from './ai/provider-runtime.js';
@@ -244,6 +246,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     PromotionDecisionController,
     TestingCertificateController,
     TestingScorecardController,
+    PromotionReadinessController,
     ParentTestingRegistrationController,
     StaffTestingRegistrationController,
     ParentTestingStatusController,
@@ -332,6 +335,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     TestingCertificateService,
     TestingCertificateHumanUiGuard,
     TestingScorecardService,
+    PromotionReadinessService,
     TestingScorecardHumanUiGuard,
     TestingRegistrationService,
     TestingRegistrationHumanUiGuard,
