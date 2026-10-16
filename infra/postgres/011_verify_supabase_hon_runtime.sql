@@ -2109,7 +2109,7 @@ DO $$ DECLARE t text; f record; b boolean; trigger_name text; trigger_type integ
  FOR f IN SELECT * FROM (VALUES
   ('hon.guard_enrollment_program_identity()',false,false),('hon.resolve_owner_launch_scope(text)',true,true),
   ('hon.require_owner_launch_actor(text)',false,true),('hon.lock_owner_launch_actor(text)',false,true),
-  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true),('hon.read_owner_launch_saved_students(text)',true,true),('hon.require_owner_launch_family_actor(text)',false,true),('hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)',true,true),('hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)',true,true),('hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid)',true,true)
+  ('hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch(text)',true,true),('hon.read_owner_launch_saved_students(text)',true,true),('hon.require_owner_launch_family_actor(text)',false,true),('hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)',true,true),('hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)',true,true),('hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid)',true,true),('hon.read_owner_launch_membership_draft(text)',true,true)
  ) v(signature,can_execute,is_definer) LOOP
   SELECT p.prosecdef=f.is_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
    AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
@@ -2164,5 +2164,11 @@ DO $$ DECLARE f record; BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=format('hon.%I',f.tbl)::regclass AND contype='c' AND convalidated AND pg_get_constraintdef(oid)=f.definition) THEN RAISE EXCEPTION 'Unsafe child registration invariant %',f.tbl; END IF;
  END LOOP;
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.guardian_child_registration_receipts'::regclass AND contype='u' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_digest)') THEN RAISE EXCEPTION 'Child registration scoped replay key required'; END IF;
+END $$;
+DO $$ BEGIN
+ IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_membership_draft(text)'::regprocedure) IS DISTINCT FROM '77fe22668845ad87ce3005affb7c2113' THEN RAISE EXCEPTION 'Owner launch DRAFT confirmation body drift'; END IF;
+ IF has_table_privilege('hon_runtime','hon.audit_events','UPDATE,DELETE,TRUNCATE')
+ OR has_table_privilege('hon_runtime','hon.memberships','DELETE,TRUNCATE')
+ OR has_table_privilege('hon_runtime','hon.billing_accounts','UPDATE,DELETE,TRUNCATE') THEN RAISE EXCEPTION 'Unsafe owner launch canonical relation mutation grant'; END IF;
 END $$;
 -- End owner launch exact verification.

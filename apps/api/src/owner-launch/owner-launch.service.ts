@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { ownerLaunchRecord, verifyOwnerLaunchProjection, verifyOwnerLaunchSavedStudentsProjection, verifyRegisterStudentInput, verifyStudentRegistrationReceipt, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, type OwnerLaunchContext } from '@hon/contracts';
+import { ownerLaunchRecord, verifyOwnerLaunchProjection, verifyOwnerLaunchSavedStudentsProjection, verifyRegisterStudentInput, verifyStudentRegistrationReceipt, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, verifyOwnerLaunchMembershipDraftConfirmation, type OwnerLaunchContext } from '@hon/contracts';
 import { assertOwnerLaunchHuman, assertGuardianChildDistinct } from '@hon/domain';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 @Injectable()
@@ -22,6 +22,14 @@ export class OwnerLaunchService {
   async readSavedStudents(context: OwnerLaunchContext) {
     this.human(context);
     try { return verifyOwnerLaunchSavedStudentsProjection(await this.database.readOwnerLaunchSavedStudents(context)); } catch (error) { return this.failure(error); }
+  }
+  async readMembershipDraft(context: OwnerLaunchContext) {
+    this.human(context);
+    try { return verifyOwnerLaunchMembershipDraftConfirmation(await this.database.readOwnerLaunchMembershipDraft(context)); }
+    catch(error) {
+      if ((error as {code?:string}).code === '42501') throw new ForbiddenException({code:'MEMBERSHIP_DRAFT_FORBIDDEN',detail:'Current direct-human owner-launch and billing authority with an active tier are required. Clear saved DRAFT context.'});
+      throw new ServiceUnavailableException({code:'MEMBERSHIP_DRAFT_UNAVAILABLE',detail:'Current DRAFT confirmation is unavailable. No activation, agreement, payment, invoice, schedule or communication is claimed.'});
+    }
   }
   async register(context: OwnerLaunchContext, value: unknown) {
     this.human(context);

@@ -10,6 +10,7 @@ import https from 'node:https';
 import { ownerLaunchTables, ownerLaunchFunctions, verifyOwnerLaunchSecurity } from './owner-launch-security.mjs';
 import { proveOwnerLaunchGuardianChild } from './owner-launch-guardian-child-proof.mjs';
 import { proveOwnerLaunchFirstClassBooking } from './owner-launch-first-class-booking-proof.mjs';
+import { proveOwnerLaunchMembershipDraftConfirmation } from './owner-launch-membership-draft-confirmation-proof.mjs';
 import { proveOwnerLaunchMembershipDraft } from './owner-launch-membership-draft-proof.mjs';
 const { RuntimeDatabaseService }=await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 const { OwnerLaunchService }=await import('../../../apps/api/dist/owner-launch/owner-launch.service.js');
@@ -111,6 +112,7 @@ try {
 	 const ownSaved=await readSavedStudents();assert.equal(ownSaved.state,'RECORDED_REGISTRATIONS');assert.equal(ownSaved.registrations.length,5);assert(ownSaved.registrations.every(row=>row.status==='REGISTERED_NO_BOOKING'&&['NEW_ADULT_NO_GUARDIAN','NEW_CHILD_WITH_NEW_GUARDIAN'].includes(row.registrationKind)));assert(!JSON.stringify(ownSaved).match(/birth|email|phone|familyId|payment|attendance|grade|curriculum|rank/i));
 	 const otherSaved=await readSavedStudents(context(other));assert.equal(otherSaved.organizationId,other.organizationId);assert.equal(otherSaved.schoolId,other.schoolId);assert.equal(otherSaved.state,'RECORDED_REGISTRATIONS');assert.equal(otherSaved.registrations.length,1);assert.notEqual(otherSaved.registrations[0].registrationId,registered.receipt.registrationId);check();
 	 groups+=await proveOwnerLaunchFirstClassBooking({owner,service,programs,classes,bookings,scope,other,context,checked,raw,drift,ids,ownerRoleId:a.ownerRoleId});
+	 groups+=await proveOwnerLaunchMembershipDraftConfirmation({owner,service,scope,other,context,checked,raw,drift,ids,ownerRoleId:a.ownerRoleId,program,classSession,registered});
 	 groups+=await proveOwnerLaunchMembershipDraft({owner,service,accounts,memberships,scope,other,context,checked,raw,drift,ids,ownerRoleId:a.ownerRoleId,program,classSession});
 	 assert.equal((await runtime.query("SELECT nullif(current_setting('app.hon_school_id',true),'') context")).rows[0].context,null);assert.equal(externalCalls,0);
  console.log(`Owner launch proof passed: ${groups} assertion groups, ${operations} whole-table checked operations, ${driftProbes} rollback-only ACL/RLS probes, ${tables.length} HON table snapshots, zero external calls. Fixture remains marked localhost-only for regression checks.`);

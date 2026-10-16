@@ -1,4 +1,4 @@
-import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, type OwnerLaunchProjection, type RegisterStudentInput, type BookOwnerLaunchFirstClassInput } from '@hon/contracts';
+import { ownerLaunchId, ownerLaunchRecord, verifyOwnerLaunchProjection, verifyStudentRegistrationReceipt, verifyLaunchProgramReceipt, verifyLaunchClassReceipt, verifyRegisterStudentInput, verifyRegisterGuardianChildInput, verifyGuardianChildRegistrationReceipt, verifyBookOwnerLaunchFirstClassInput, verifyOwnerLaunchFirstClassBookingReceipt, verifyDraftOwnerLaunchMembershipInput, verifyOwnerLaunchMembershipDraftReceipt, verifyOwnerLaunchMembershipDraftConfirmation, type OwnerLaunchProjection, type RegisterStudentInput, type BookOwnerLaunchFirstClassInput } from '@hon/contracts';
 export class OwnerLaunchAccessError extends Error { constructor(message:string,readonly status:number) { super(message); } }
 export function ownerLaunchPath(context: Pick<OwnerLaunchProjection,'organizationId'|'schoolId'>, operation: 'program'|'class'|'student'|'guardian-child'): string {
   const suffix={program:'programs',class:'schedule/sessions',student:'student-registrations','guardian-child':'guardian-child-registrations'}[operation];
@@ -74,4 +74,24 @@ export async function postOwnerLaunchMembershipDraft(context: OwnerLaunchProject
     }
     throw error;
   }
+}
+
+/** Selector-free same-origin no-store GET; no human command marker, body or IDs. */
+export async function loadOwnerLaunchMembershipDraft() {
+  try {
+    const envelope=await request('/api/v1/owner-launch/membership-draft',{method:'GET',headers:{Accept:'application/json'}});
+    return verifyOwnerLaunchMembershipDraftConfirmation(envelope.data);
+  } catch(error) {
+    if(error instanceof OwnerLaunchAccessError) throw new OwnerLaunchAccessError([401,403].includes(error.status)?'Current human school/billing authority is unavailable. Saved DRAFT context was cleared.':'DRAFT confirmation unavailable. No activation, agreement, payment, invoice, schedule or communication is claimed.',error.status);
+    throw new Error('Unverified DRAFT confirmation. No saved membership configuration can be shown.');
+  }
+}
+
+/** Bind independent reads to the launch receipt; never display a stale/foreign confirmation. */
+export async function loadOwnerLaunchWithDraft() {
+  const context=await loadOwnerLaunch();
+  const confirmation=await loadOwnerLaunchMembershipDraft();
+  const saved=context.guardianChildRegistration??context.registration;
+  if(confirmation.receipt && confirmation.receipt.registrationId!==saved?.registrationId) throw new Error('DRAFT confirmation unavailable: saved receipt context changed. Reload before continuing.');
+  return {context,confirmation};
 }

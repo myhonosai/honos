@@ -25,6 +25,12 @@ export class OwnerLaunchController {
     response.setHeader('Cache-Control','private, no-store');
     return {data:await this.launch.readSavedStudents(await this.context(request))};
   }
+  @Get('owner-launch/membership-draft')
+  @UseGuards(OwnerLaunchHumanUiGuard)
+  async membershipDraft(@Req() request: HonRequest, @Res({passthrough:true}) response: Response) {
+    response.setHeader('Cache-Control','private, no-store');
+    return {data:await this.launch.readMembershipDraft(await this.context(request))};
+  }
   @Get('owner-launch')
   @UseGuards(OwnerLaunchHumanUiGuard)
   async read(@Req() request: HonRequest, @Res({passthrough:true}) response: Response) {

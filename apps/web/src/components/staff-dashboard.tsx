@@ -24,6 +24,7 @@ function SavedStudentConfirmation({ projection }: { projection: OwnerLaunchSaved
     <p className={styles.eyebrow}>OWNER LAUNCH / RECEIPT CONFIRMATION</p><h2 id="saved-students-title">Saved students</h2>
     <p className={styles.savedEmpty}>No saved owner-launch registrations are recorded for your current direct owner-launch scope.</p>
     <p className={styles.savedBoundary}>This is not a student or family directory. No booking, attendance, parent access, payment, or communication outcome is implied.</p>
+    <p className={styles.savedBoundary}>Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active. It is not an agreement, payment, invoice, schedule or communication.</p>
     <WorkflowLink href="/staff/launch">Open owner launch</WorkflowLink>
   </section>;
   return <section className={styles.savedConfirmation} aria-labelledby="saved-students-title">
@@ -39,6 +40,7 @@ function SavedStudentConfirmation({ projection }: { projection: OwnerLaunchSaved
       </dl>
     </li>)}</ul>
     <p className={styles.savedBoundary}>A saved registration does not assert family readiness, parent login/access, membership, booking, attendance, payment, or communication.</p>
+    <p className={styles.savedBoundary}>Owner-launch membership confirmation is DRAFT only: saved configuration, NOT active. It is not an agreement, payment, invoice, schedule or communication.</p>
     <WorkflowLink href="/staff/launch">Open owner launch</WorkflowLink>
   </section>;
 }
