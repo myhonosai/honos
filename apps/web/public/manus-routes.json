@@ -81,6 +81,10 @@
       "title": "Human Staff Availability and Qualifications"
     },
     {
+      "path": "/staff/instructor-qualifications",
+      "title": "HON | Human instructor qualification evidence"
+    },
+    {
       "path": "/staff/automation/rules",
       "title": "HON Staff | Automation Configuration Only"
     },

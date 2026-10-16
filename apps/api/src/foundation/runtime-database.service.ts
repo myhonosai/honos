@@ -237,6 +237,15 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     )).rows[0];
   }
 
+  /** Fixed direct-human workforce scope; the database rejects ambiguous school scope. */
+  async resolveInstructorQualificationScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_instructor_qualification_scope($1)',
+      [externalSubject],
+    )).rows[0];
+  }
+
   async resolveCampaignScope(externalSubject: string, permission: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(
@@ -588,6 +597,41 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const client = await this.getPool().connect();
     try {
       return await withTenantTransaction(client, context, work);
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Starts read-only before establishing tenant GUCs. PostgreSQL rejects
+   * `SET TRANSACTION READ ONLY` after any context-setting query, so read-only
+   * staff projections must use this boundary rather than changing transaction
+   * mode inside an already initialized tenant transaction.
+   */
+  async withTenantReadOnlyTransaction<T>(
+    context: TenantTransactionContext,
+    work: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN READ ONLY');
+      await client.query(
+        `SELECT
+          set_config('app.hon_organization_id', $1, true),
+          set_config('app.hon_school_id', $2, true),
+          set_config('app.hon_principal_id', $3, true),
+          set_config('app.hon_principal_type', $4, true),
+          set_config('app.hon_request_id', $5, true)`,
+        [context.organizationId, context.schoolId, context.principalId, context.principalType, context.requestId],
+      );
+      await client.query('SELECT hon.require_tenant_context()');
+      const result = await work(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     } finally {
       client.release();
     }

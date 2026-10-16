@@ -40,6 +40,8 @@ const expectedRlsTables = [
   'crm_follow_ups', 'crm_follow_up_versions', 'crm_follow_up_requests',
   'automation_rules', 'automation_rule_versions', 'automation_rule_requests',
   'staff_profiles', 'staff_planning_revisions', 'staff_planning_requests',
+  'instructor_qualifications', 'instructor_qualification_revisions', 'instructor_qualification_evidence',
+  'instructor_qualification_evidence_reviews', 'instructor_qualification_requests', 'instructor_qualification_outbox',
   'action_approvals',
   'action_policies',
   'action_requests',
@@ -284,6 +286,10 @@ try {
   const staffVerification = staffCanonical.split('-- Human staff planning exact verification:')[1]?.split('-- End human staff planning verification.')[0];
   if (!staffVerification) throw new Error('Missing canonical staff verification block.');
   await client.query(('DO $$' + staffVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
+  const qualificationCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const qualificationVerification = qualificationCanonical.split('-- Human instructor qualification evidence:')[1]?.split('-- End Human instructor qualification exact verification.')[0];
+  if (!qualificationVerification) throw new Error('Missing canonical instructor qualification verification block.');
+  await client.query(('DO $$' + qualificationVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
 
   const revenueTables = ['revenue_plans','revenue_plan_versions','revenue_plan_requests'];
   const campaignTables = ['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions'];

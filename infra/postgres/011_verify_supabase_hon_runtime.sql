@@ -1483,3 +1483,43 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='crm.assistant.follow_up_draft' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Chad permission registry is unsafe'; END IF;
 END $$;
 -- End Chad CRM follow-up content proposal verification.
+
+-- Human instructor qualification evidence: forced deny-all RLS/private references,
+-- direct human boundaries only, and an inert non-dispatchable evidence outbox.
+DO $$
+DECLARE expected record; t text; r text; safe boolean;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY['instructor_qualifications','instructor_qualification_revisions','instructor_qualification_evidence','instructor_qualification_evidence_reviews','instructor_qualification_requests','instructor_qualification_outbox']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe instructor qualification private table: %',t; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.instructor_qualification_outbox'::regclass AND conname='instructor_qualification_outbox_execution_allowed_check' AND contype='c' AND convalidated AND pg_get_constraintdef(oid)='CHECK ((NOT execution_allowed))') THEN RAISE EXCEPTION 'Instructor qualification outbox must stay inert'; END IF;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.instructor_qualification_safe_text(text,integer)',false,false),
+    ('hon.guard_instructor_qualification_history()',false,false),
+    ('hon.instructor_qualification_permission(uuid,uuid,uuid,text)',false,true),
+    ('hon.resolve_instructor_qualification_scope(text)',true,true),
+    ('hon.require_instructor_qualification_actor(text,text)',false,true),
+    ('hon.lock_instructor_qualification_actor(text,text,boolean)',false,true),
+    ('hon.instructor_qualification_definition_projection(uuid)',false,true),
+    ('hon.instructor_qualification_evidence_projection(uuid,uuid)',false,true),
+    ('hon.read_instructor_qualification(text,text,uuid,uuid)',true,true),
+    ('hon.mutate_instructor_qualification(text,text,uuid,uuid,jsonb,text,uuid,uuid)',true,true)
+  ) AS x(signature,runtime_execute,security_definer) LOOP
+    SELECT p.prosecdef=expected.security_definer
+      AND p.provolatile=CASE WHEN expected.signature='hon.instructor_qualification_safe_text(text,integer)' THEN 'i' ELSE 'v' END
+      AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe instructor qualification function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Client instructor qualification function execution: %.%',r,expected.signature; END IF; END LOOP;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='staff.instructor_qualification.read' AND is_sensitive AND is_staff_assignable)
+    OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='staff.instructor_qualification.manage' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Instructor qualification permission registry is unsafe'; END IF;
+END $$;
+-- End Human instructor qualification exact verification.

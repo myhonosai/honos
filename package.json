@@ -50,6 +50,8 @@
     "db:test-marketing-campaigns": "pnpm --filter @hon/database db:test-marketing-campaigns",
     "db:test-public-forms": "pnpm --filter @hon/database db:test-public-forms",
     "db:test-staff-availability": "pnpm --filter @hon/database db:test-staff-availability",
+    "db:setup-instructor-qualifications": "pnpm --filter @hon/database db:setup-instructor-qualifications",
+    "db:test-instructor-qualifications": "pnpm --filter @hon/database db:test-instructor-qualifications",
     "db:test-automation-rules": "pnpm --filter @hon/database db:test-automation-rules",
     "db:test-crm-follow-ups": "pnpm --filter @hon/database db:test-crm-follow-ups",
     "db:test-billing-renewals": "pnpm --filter @hon/database db:test-billing-renewals",

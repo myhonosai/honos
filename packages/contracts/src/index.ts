@@ -873,6 +873,8 @@ export * from './public-lead-forms.js';
 
 export * from './staff-availability.js';
 
+export * from './instructor-qualifications.js';
+
 export * from './automation-rules.js';
 
 export * from './crm-follow-ups.js';

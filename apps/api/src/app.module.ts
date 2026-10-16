@@ -147,6 +147,9 @@ import { StaffSearchService } from './search/staff-search.service.js';
 import { StaffAvailabilityController } from './staff-availability/staff-availability.controller.js';
 import { StaffAvailabilityService } from './staff-availability/staff-availability.service.js';
 import { StaffAvailabilityHumanUiGuard } from './staff-availability/staff-availability.dto.js';
+import { InstructorQualificationsController } from './instructor-qualifications/instructor-qualifications.controller.js';
+import { InstructorQualificationsService } from './instructor-qualifications/instructor-qualifications.service.js';
+import { InstructorQualificationsHumanUiGuard } from './instructor-qualifications/instructor-qualifications.dto.js';
 import { AutomationRuleController } from './automation-rules/automation-rule.controller.js';
 import { AutomationRuleService } from './automation-rules/automation-rule.service.js';
 import { AutomationRuleHumanUiGuard } from './automation-rules/automation-rule.dto.js';
@@ -183,6 +186,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     FollowUpController,
     AutomationRuleController,
     StaffAvailabilityController,
+    InstructorQualificationsController,
     StaffPublicFormController, PublishedFormController,
     CampaignController,
     MarketingAssistantController,
@@ -261,6 +265,7 @@ import { RetentionReviewHumanUiGuard } from './retention-review/retention-review
     FollowUpService, FollowUpHumanUiGuard,
     AutomationRuleService, AutomationRuleHumanUiGuard,
     StaffAvailabilityService, StaffAvailabilityHumanUiGuard,
+    InstructorQualificationsService, InstructorQualificationsHumanUiGuard,
     PublicFormService, PublicFormHumanUiGuard,
     CampaignService,
     MarketingAssistantService,

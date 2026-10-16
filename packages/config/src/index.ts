@@ -199,6 +199,8 @@ export { CAMPAIGN_COMMAND_REGISTRY } from './marketing-campaigns.js';
 
 export { STAFF_AVAILABILITY_COMMAND_REGISTRY } from './staff-availability.js';
 
+export { INSTRUCTOR_QUALIFICATION_COMMAND_REGISTRY } from './instructor-qualifications.js';
+
 export { TEACHING_STUDIO_COMMAND_REGISTRY } from './teaching-studio.js';
 
 export * from './automation-rules.js';
