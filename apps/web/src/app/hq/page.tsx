@@ -1,10 +1,13 @@
-import { HonReferenceSuite } from '../../components/hon-reference-suite';
+import { HqOverview } from '../../components/hq-overview';
 
 export const metadata = {
-  title: 'HON HQ | AI Command Center',
-  description: 'HON HQ design reference: the privileged, AI-native operating environment for the HON company.',
+  title: 'HON HQ | Platform Overview',
+  description: 'A governed, aggregate-only platform overview for authorized HON HQ operators.',
+  robots: { index: false, follow: false },
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function HqPage(): React.ReactElement {
-  return <HonReferenceSuite screen="hq" />;
+  return <HqOverview />;
 }

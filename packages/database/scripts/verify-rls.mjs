@@ -332,8 +332,17 @@ try {
 
   const hqAiCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
   const hqAiVerification = hqAiCanonical.split('-- HQ AI exact verification:')[1]?.split('-- End HQ AI exact verification.')[0];
-  if (!hqAiVerification) throw new Error('Missing canonical HQ AI exact verification block.');
+  if (!hqAiVerification) throw new Error('Missing canonical HQ AI verification block.');
   await client.query(('DO $$' + hqAiVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
+
+  // HQ-1 platform overview exact verification: the only permitted runtime
+  // capability is its selector-free fixed function. This assertion rejects
+  // broad EXECUTE, direct HQ/directory source access, caller GUC authority,
+  // and any non-read-only definition drift.
+  const hqOverviewCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const hqOverviewVerification = hqOverviewCanonical.split('-- HQ-1 platform overview exact verification:')[1]?.split('-- End HQ-1 platform overview exact verification.')[0];
+  if (!hqOverviewVerification) throw new Error('Missing canonical HQ-1 platform overview verification block.');
+  await client.query(('DO $$' + hqOverviewVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
 
   const revenueTables = ['revenue_plans','revenue_plan_versions','revenue_plan_requests'];
   const campaignTables = ['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions'];

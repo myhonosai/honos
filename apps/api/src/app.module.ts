@@ -146,6 +146,7 @@ import { CommunicationMessageController } from './communication/communication-me
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
+import { HqOverviewService } from './hq/hq-overview.service.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
 import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.js';
@@ -355,6 +356,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InvoiceService,
     HqOnboardingService,
     HqAiProviderService,
+    HqOverviewService,
   ],
 })
 export class AppModule {}

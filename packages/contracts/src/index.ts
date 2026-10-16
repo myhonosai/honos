@@ -900,6 +900,7 @@ export * from './voice.js';
 export * from './marketplace.js';
 export * from './achievements.js';
 export * from './testing-registration.js';
+export * from './hq-overview.js';
 
 export * from './parent-journey-view.js';
 

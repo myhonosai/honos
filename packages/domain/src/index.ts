@@ -81,3 +81,4 @@ export * from './attendance-policy.js';
 
 export * from './classpass.js';
 export * from './kiosk.js';
+export * from './hq-overview.js';

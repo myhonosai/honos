@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
-import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
+import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
 export interface ResolvedPrincipalScope {
@@ -439,6 +439,34 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       [externalSubject, permissionCode],
     );
     return result.rows[0];
+  }
+
+  /**
+   * One fixed, selector-free HQ aggregate projection. The database function
+   * independently resolves the exact HQ scope; no tenant/principal GUC or
+   * caller-provided role is established here. READ ONLY prevents every audit,
+   * outbox, work, Action Engine, provider, usage, financial, membership, school,
+   * or communication side effect even if a future implementation drifts.
+   */
+  async readHqPlatformOverview(externalSubject: string): Promise<HqPlatformOverview> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '3s'; SET LOCAL log_parameter_max_length_on_error = 0");
+      const result = await client.query<{ data: HqPlatformOverview }>(
+        'SELECT hon.read_hq_platform_overview($1) AS data',
+        [externalSubject],
+      );
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HON HQ overview projection did not return a result.');
+      return result.rows[0].data;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async resolveParentJourneyScopes(externalSubject: string): Promise<ResolvedParentFamilyScope[]> {

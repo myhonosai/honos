@@ -910,3 +910,26 @@ DO $$ DECLARE r text; t text; f text; a text; BEGIN
  END LOOP;
  GRANT EXECUTE ON FUNCTION hon.read_retention_review_acknowledgement_evidence(text,uuid),hon.acknowledge_retention_review_evidence(text,uuid,text,text,timestamptz,uuid,uuid,uuid) TO hon_runtime;
 END $$;
+
+-- HQ-1 platform overview: one aggregate-only fixed projection. No direct
+-- tenant-directory, onboarding, HQ provider/profile, work, billing, usage,
+-- identity, credential, or client execution privilege is introduced.
+DO $$ DECLARE r text; t text; a text; BEGIN
+ FOREACH t IN ARRAY ARRAY['organizations','schools','hq_onboarding_requests','hq_ai_provider_connections','hq_ai_task_profiles'] LOOP
+  EXECUTE format('REVOKE ALL ON hon.%I FROM hon_runtime,PUBLIC',t);
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM hon_runtime,PUBLIC',a,t);
+  END LOOP;
+ END LOOP;
+ REVOKE ALL ON FUNCTION hon.read_hq_platform_overview(text) FROM PUBLIC,hon_runtime;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.read_hq_platform_overview(text) FROM %I',r);
+  FOREACH t IN ARRAY ARRAY['organizations','schools','hq_onboarding_requests','hq_ai_provider_connections','hq_ai_task_profiles'] LOOP
+   EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r);
+   FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_hq_platform_overview(text) TO hon_runtime;
+END $$;

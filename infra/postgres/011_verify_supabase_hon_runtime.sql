@@ -1790,3 +1790,76 @@ DO $$ DECLARE t text; f record; runtime_oid oid; executable boolean; signature t
  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='retention.review.acknowledge' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Retention acknowledgement exact sensitive staff permission required'; END IF;
 END $$;
 -- End retention acknowledgement exact verification.
+
+-- HQ-1 platform overview exact verification: one fixed HQ-only aggregate read.
+-- It has no selector/GUC authority, no client EXECUTE, no direct private source
+-- table access, and no action, work, provider, financial, or audit side effects.
+DO $$
+DECLARE
+  runtime_oid oid;
+  projection record;
+  table_name text;
+  role_name text;
+BEGIN
+  SELECT oid INTO runtime_oid FROM pg_roles WHERE rolname = 'hon_runtime';
+  IF runtime_oid IS NULL THEN RAISE EXCEPTION 'HQ overview runtime missing'; END IF;
+
+  SELECT p.*, owner.rolsuper OR owner.rolbypassrls AS trusted_owner,
+    has_function_privilege('hon_runtime', p.oid, 'EXECUTE') AS runtime_execute,
+    has_function_privilege('hon_runtime', p.oid, 'EXECUTE WITH GRANT OPTION') AS runtime_grantable,
+    pg_get_functiondef(p.oid) AS definition
+  INTO projection
+  FROM pg_proc p JOIN pg_roles owner ON owner.oid = p.proowner
+  WHERE p.oid = 'hon.read_hq_platform_overview(text)'::regprocedure;
+
+  IF projection.oid IS NULL OR projection.prosecdef IS DISTINCT FROM true
+    OR projection.provolatile <> 's'
+    OR projection.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+    OR projection.trusted_owner IS DISTINCT FROM true
+    OR projection.runtime_execute IS DISTINCT FROM true
+    OR projection.runtime_grantable IS DISTINCT FROM false
+    OR position('current_setting' IN projection.definition) <> 0
+    OR position('resolve_hq_operator_scope' IN projection.definition) = 0
+    OR position('hq.dashboard.view' IN projection.definition) = 0
+    OR position('HON_HQ_OWNER' IN projection.definition) = 0
+    OR position('HON_HQ_OPERATOR' IN projection.definition) = 0
+    OR projection.definition ~* '\m(insert|update|delete|merge|call)\M'
+    OR EXISTS (
+      SELECT 1
+      FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+      WHERE acl.privilege_type <> 'EXECUTE'
+        OR acl.is_grantable
+        OR acl.grantor <> projection.proowner
+        OR (acl.grantee <> projection.proowner AND acl.grantee <> runtime_oid)
+    )
+    OR (SELECT count(*) FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+        WHERE acl.grantee = projection.proowner AND acl.privilege_type = 'EXECUTE' AND NOT acl.is_grantable) <> 1
+    OR (SELECT count(*) FROM aclexplode(coalesce(projection.proacl, acldefault('f', projection.proowner))) acl
+        WHERE acl.grantee = runtime_oid AND acl.privilege_type = 'EXECUTE' AND NOT acl.is_grantable) <> 1 THEN
+    RAISE EXCEPTION 'Unsafe HQ overview function ACL, authority, or definition';
+  END IF;
+
+  FOREACH table_name IN ARRAY ARRAY['organizations','schools','hq_onboarding_requests','hq_ai_provider_connections','hq_ai_task_profiles'] LOOP
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_class c JOIN pg_roles owner ON owner.oid = c.relowner
+      WHERE c.oid = ('hon.' || table_name)::regclass
+        AND c.relrowsecurity AND c.relforcerowsecurity
+        AND (owner.rolsuper OR owner.rolbypassrls)
+        AND c.relowner <> runtime_oid
+    ) THEN RAISE EXCEPTION 'HQ overview source is not forced RLS/private: %', table_name; END IF;
+    IF has_table_privilege('hon_runtime', 'hon.' || table_name, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime', 'hon.' || table_name, 'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'HQ overview direct runtime source access: %', table_name;
+    END IF;
+  END LOOP;
+
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name)
+      AND has_function_privilege(role_name, 'hon.read_hq_platform_overview(text)', 'EXECUTE') THEN
+      RAISE EXCEPTION 'HQ overview client execute: %', role_name;
+    END IF;
+  END LOOP;
+END;
+$$;
+-- End HQ-1 platform overview exact verification.
