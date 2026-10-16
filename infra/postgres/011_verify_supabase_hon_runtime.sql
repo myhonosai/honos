@@ -2052,3 +2052,43 @@ DO $$ DECLARE t text; f record; runtime_oid oid; executable boolean; signature t
  IF (SELECT count(*) FROM hon.permissions WHERE code IN('retention.review.alert.read','retention.review.alert.record','retention.review.alert.resolve') AND is_sensitive AND is_staff_assignable)<>3 THEN RAISE EXCEPTION 'Retention attention exact sensitive staff permissions required'; END IF;
 END $$;
 -- End retention factual attention exact verification.
+
+-- Curriculum library exact verification:
+DO $$ DECLARE t text; c record; signature text; f record; expected_hash text; executable boolean; runtime_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+ IF runtime_oid IS NULL THEN RAISE EXCEPTION 'Library restricted runtime missing'; END IF;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (NOT rolcanlogin OR rolsuper OR rolbypassrls OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication)) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Library unsafe runtime role'; END IF;
+ FOREACH t IN ARRAY ARRAY['curriculum_resources','curriculum_resource_versions','curriculum_resource_requests','curriculum_resource_facts'] LOOP
+  SELECT * INTO c FROM pg_class WHERE oid=to_regclass('hon.'||t);
+  IF c.oid IS NULL OR NOT c.relrowsecurity OR NOT c.relforcerowsecurity OR c.relowner=runtime_oid OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid) THEN RAISE EXCEPTION 'Library forced deny-all RLS: %',t; END IF;
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+   OR EXISTS(SELECT 1 FROM pg_attribute p CROSS JOIN LATERAL aclexplode(p.attacl) a WHERE p.attrelid=c.oid AND a.grantee<>c.relowner)
+   OR has_table_privilege('hon_runtime',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN RAISE EXCEPTION 'Library private table/column ACL: %',t; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=c.oid AND NOT tgisinternal AND tgenabled='O')<>2 THEN RAISE EXCEPTION 'Library immutable guards missing: %',t; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE oid=c.relowner AND (rolsuper OR rolbypassrls)) THEN RAISE EXCEPTION 'Library trusted table owner required: %',t; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=c.oid AND NOT tgisinternal AND tgenabled='O' AND tgfoid=(CASE WHEN t='curriculum_resources' THEN 'hon.guard_curriculum_resource()'::regprocedure ELSE 'hon.guard_curriculum_history()'::regprocedure END) AND tgtype IN(27,34))<>2 THEN RAISE EXCEPTION 'Library exact immutable guard functions/events required: %',t; END IF;
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['valid_curriculum_resource_url(text)','guard_curriculum_resource()','lock_curriculum_resource_actor(text)','curriculum_resource_projection(hon.curriculum_resources)','read_staff_curriculum_library(text)','mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)','read_parent_curriculum_library(text,uuid)'] LOOP
+  SELECT p.*,r.rolsuper,r.rolbypassrls INTO f FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=to_regprocedure('hon.'||signature);
+  executable:=signature=ANY(ARRAY['read_staff_curriculum_library(text)','mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)','read_parent_curriculum_library(text,uuid)']);
+  expected_hash:=CASE f.proname
+   WHEN 'valid_curriculum_resource_url' THEN '22469a4242d744d498c09f3460790a93'
+   WHEN 'guard_curriculum_resource' THEN '04c5ee9a43548efd7ae2a03b5f68d0c1'
+   WHEN 'lock_curriculum_resource_actor' THEN '72cca48e824d14f17bbf843211f1f61c'
+   WHEN 'curriculum_resource_projection' THEN 'b4fd2c24a8e0e84138b4e0862b31d15b'
+   WHEN 'read_staff_curriculum_library' THEN 'ff6afaae7d2cd119087fa27433a9ebcd'
+   WHEN 'mutate_curriculum_resource' THEN '00e261bfb2a5c1fabadfd6e020bcb691'
+   WHEN 'read_parent_curriculum_library' THEN '0dcd740136a3ee78f3720fa973ba1b9c'
+   END;
+  IF f.oid IS NULL OR f.proowner=runtime_oid OR NOT(f.rolsuper OR f.rolbypassrls) OR f.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+   OR f.prosecdef IS DISTINCT FROM (signature=ANY(ARRAY['lock_curriculum_resource_actor(text)','read_staff_curriculum_library(text)','mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)','read_parent_curriculum_library(text,uuid)'])) OR f.provolatile IS DISTINCT FROM (CASE WHEN signature=ANY(ARRAY['valid_curriculum_resource_url(text)','curriculum_resource_projection(hon.curriculum_resources)']) THEN 'i'::"char" ELSE 'v'::"char" END)
+   OR md5(f.prosrc) IS DISTINCT FROM expected_hash THEN RAISE EXCEPTION 'Library fixed function posture/body: %',signature; END IF;
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>f.proowner OR (a.grantee<>f.proowner AND (NOT executable OR a.grantee<>runtime_oid)))
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=f.proowner AND NOT a.is_grantable)<>1
+   OR (SELECT count(*) FROM aclexplode(coalesce(f.proacl,acldefault('f',f.proowner))) a WHERE a.grantee=runtime_oid AND NOT a.is_grantable)<>(CASE WHEN executable THEN 1 ELSE 0 END)
+   OR has_function_privilege('hon_runtime',f.oid,'EXECUTE') IS DISTINCT FROM executable OR has_function_privilege('hon_runtime',f.oid,'EXECUTE WITH GRANT OPTION') THEN RAISE EXCEPTION 'Library exact function-only ACL: %',signature; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_resource_requests'::regclass AND contype='p' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)='PRIMARY KEY (organization_id, school_id, principal_id, idempotency_key)') THEN RAISE EXCEPTION 'Library scoped receipt key required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_resources'::regclass AND contype='f' AND convalidated AND confrelid='hon.curriculum_ranks'::regclass AND pg_get_constraintdef(oid)='FOREIGN KEY (rank_id, curriculum_id, organization_id, school_id) REFERENCES hon.curriculum_ranks(id, curriculum_id, organization_id, school_id)') THEN RAISE EXCEPTION 'Library exact rank relationship required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.curriculum_resource_facts'::regclass AND contype='c' AND pg_get_constraintdef(oid)='CHECK ((state = ''INERT''::text))') THEN RAISE EXCEPTION 'Library permanently inert facts required'; END IF;
+END $$;
+-- End curriculum library exact verification.

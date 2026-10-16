@@ -211,6 +211,14 @@
     {
       "path": "/staff/kiosk",
       "title": "HON | Human Kiosk Handoff"
+    },
+    {
+      "path": "/staff/curriculum/library",
+      "title": "Private curriculum library"
+    },
+    {
+      "path": "/parent/curriculum-library",
+      "title": "Family curriculum references"
     }
   ]
 }

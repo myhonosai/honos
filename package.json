@@ -99,6 +99,8 @@
     "db:setup-retention-review-acknowledgement": "pnpm --filter @hon/database db:setup-retention-review-acknowledgement",
     "db:test-retention-review-acknowledgement": "pnpm --filter @hon/database db:test-retention-review-acknowledgement",
     "db:setup-retention-attention": "pnpm --filter @hon/database db:setup-retention-attention",
-    "db:test-retention-attention": "pnpm --filter @hon/database db:test-retention-attention"
+    "db:test-retention-attention": "pnpm --filter @hon/database db:test-retention-attention",
+    "db:setup-curriculum-library": "pnpm --filter @hon/database db:setup-curriculum-library",
+    "db:test-curriculum-library": "pnpm --filter @hon/database db:test-curriculum-library"
   }
 }

@@ -989,3 +989,26 @@ DO $$ DECLARE r text; t text; f text; a text; BEGIN
  END LOOP;
  GRANT EXECUTE ON FUNCTION hon.read_retention_attention_alerts(text,uuid),hon.read_retention_attention_evidence(text,uuid),hon.record_retention_attention_alert(text,uuid,text,text,timestamptz,text,uuid,uuid,uuid),hon.resolve_retention_attention_alert(text,uuid,uuid,integer,text,uuid,uuid,uuid) TO hon_runtime;
 END $$;
+
+-- Curriculum library exact grant reconciliation (no raw table or column grants).
+DO $$ DECLARE t text; r text; a record; f text; BEGIN
+ FOREACH t IN ARRAY ARRAY['curriculum_resources','curriculum_resource_versions','curriculum_resource_requests','curriculum_resource_facts'] LOOP
+  EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+  END LOOP;
+  FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',a.attname,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a.attname,t,r);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['valid_curriculum_resource_url(text)','guard_curriculum_resource()','lock_curriculum_resource_actor(text)','curriculum_resource_projection(hon.curriculum_resources)','read_staff_curriculum_library(text)','mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)','read_parent_curriculum_library(text,uuid)'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
+   EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I',f,r);
+  END LOOP;
+ END LOOP;
+ GRANT EXECUTE ON FUNCTION hon.read_staff_curriculum_library(text),hon.mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid),hon.read_parent_curriculum_library(text,uuid) TO hon_runtime;
+END $$;

@@ -1,3 +1,4 @@
+import { requireCurriculumLibraryLocalUrls } from './curriculum-library-local-guard.mjs';
 import { requireClassPassLocalUrls } from './classpass-local-guard.mjs';
 import { requirePromotionReadinessLocalUrls } from './promotion-readiness-local-guard.mjs';
 import { requireRetentionAcknowledgementLocalUrls } from './retention-review-acknowledgement-local-guard.mjs';
@@ -12,6 +13,7 @@ if (!databaseUrl) {
 }
 
 if (new URL(databaseUrl).username === 'hon_classpass_owner') requireClassPassLocalUrls();
+if (new URL(databaseUrl).username === 'hon_curriculum_library_owner') requireCurriculumLibraryLocalUrls();
 const migrationsDirectory = new URL('../migrations/', import.meta.url);
 const stopAfter = process.env.HON_MIGRATION_STOP_AFTER;
 const localFixtureRuntimeAlias = (() => {
@@ -49,6 +51,10 @@ try {
     const marker = (await client.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
     if (marker?.owner !== 'hon_retention_acknowledgement_owner' || marker.marker !== 'HON disposable retention_acknowledgement validation') throw new Error('Retention migrations refuse an unmarked local fixture.');
   }
+  if (new URL(databaseUrl).username === 'hon_curriculum_library_owner') {
+    const marker=(await client.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
+    if(marker?.owner!=='hon_curriculum_library_owner'||marker.marker!=='HON disposable curriculum_library validation') throw new Error('Library migrations refuse an unmarked local fixture.');
+  }
   await client.query('CREATE SCHEMA IF NOT EXISTS hon');
   await client.query(`
     CREATE TABLE IF NOT EXISTS hon.schema_migrations (
@@ -61,6 +67,7 @@ try {
   for (const file of files) {
     if (applied.has(file)) continue;
     let sql = await readFile(join(migrationsDirectory.pathname, file), 'utf8');
+    if (new URL(databaseUrl).username === 'hon_curriculum_library_owner') { requireCurriculumLibraryLocalUrls(); sql=sql.replaceAll('hon_runtime','hon_curriculum_library_runtime'); }
     if (new URL(databaseUrl).username === 'hon_promotion_readiness_owner') {
       requirePromotionReadinessLocalUrls();
       sql = sql.replaceAll('hon_runtime', 'hon_promotion_readiness_runtime');

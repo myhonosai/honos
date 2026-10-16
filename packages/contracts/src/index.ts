@@ -924,3 +924,4 @@ export * from './parent-classpass-view.js';
 export * from './ai-draft-work.js';
 
 export * from './hq-school-directory.js';
+export * from './curriculum-resource-library.js';

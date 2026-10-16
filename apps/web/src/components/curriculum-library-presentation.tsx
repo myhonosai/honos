@@ -1,0 +1,4 @@
+'use client';
+import React from 'react';
+export function LibrarySafety() {return <aside><strong>Metadata references only. No player or link preview.</strong><p>HON never fetches, copies, embeds, transcribes, summarizes, analyzes or sends a resource to AI. Opening a verified reference is your deliberate external-browser gesture only. References are optional, not requirements, practice completion, readiness, testing, promotion, payment, messages, Action Engine work or automation triggers.</p></aside>;}
+export function LibraryMode({mode,setMode}:{mode:string;setMode:(v:string)=>void}) {return <label>Presentation only<select value={mode} onChange={e=>setMode(e.target.value)}><option value="big-button">Big-Button</option><option value="modern">Modern</option><option value="classic">Classic</option></select></label>;}

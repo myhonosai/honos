@@ -1,3 +1,5 @@
+import { CurriculumLibraryService } from './curriculum/library.service.js';
+import { StaffCurriculumLibraryController, ParentCurriculumLibraryController, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard } from './curriculum/library.controller.js';
 import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
 import { ParentClassPassViewService } from './families/parent-classpass-view.service.js';
 import { ClassPassModule } from './classpass/classpass.module.js';
@@ -188,6 +190,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
 @Module({
   imports: [ClassPassModule, KioskModule],
   controllers: [
+    StaffCurriculumLibraryController, ParentCurriculumLibraryController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
     RetentionReviewController,
@@ -268,6 +271,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [
+    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,
     RetentionReviewService, RetentionReviewHumanUiGuard,
