@@ -70,5 +70,77 @@
 .progressSteps dd { display: grid; gap: 4px; margin: 6px 0 0; color: #e4f0ef; font-size: 13px; overflow-wrap: anywhere; }
 .progressSteps strong { color: #f3f7fc; font-size: 14px; }
 .progressSteps span { color: #b9cbdb; font-size: 12px; line-height: 1.35; }
+.platformView { display: grid; gap: 15px; margin-top: 26px; padding: 22px; border: 1px solid #3d6e78; border-radius: 16px; background: linear-gradient(135deg, #102b3b, #102033); }
+.platformView h2 { margin: 7px 0 0; font-size: 22px; }
+.platformView > div > p:last-child { max-width: 870px; margin: 8px 0 0; color: #c1d0e0; line-height: 1.55; }
+.platformView :global(.view-picker.view-picker-cards) { width: 100%; }
+.platformViewStatus { min-height: 21px; margin: 0; color: #c1d0e0; font-size: 13px; line-height: 1.5; }
+
+/* Platform View styling changes presentation density only; markup/data/actions remain shared. */
+.modern .cards { gap: 18px; }
+.modern .card { padding: 23px; }
+.modern .platformView { background: linear-gradient(135deg, #12303e, #102033); }
+
+.bigButton { padding-top: 30px; background: radial-gradient(circle at 80% 0%, rgba(81, 187, 177, .28), transparent 38%), #071426; }
+.bigButton nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; max-width: 560px; }
+.bigButton nav a { display: flex; align-items: center; min-height: 48px; padding: 11px 15px; border: 1px solid #36596a; border-radius: 10px; background: #102335; text-decoration: none; }
+.bigButton .header h1 { font-size: clamp(36px, 6vw, 56px); }
+.bigButton .notice, .bigButton .scopeSection, .bigButton .platformView, .bigButton .queueSection, .bigButton .workflowProgress { border-radius: 20px; }
+.bigButton .scopeSection { gap: 21px; padding: 28px; }
+.bigButton .scopeSection form fieldset { grid-template-columns: 1fr; gap: 16px; }
+.bigButton .scopeSection input { min-height: 54px; padding: 15px; font-size: 17px; }
+.bigButton .scopeSection button { width: 100%; min-height: 56px; font-size: 17px; }
+.bigButton .platformView { gap: 18px; padding: 27px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards) { grid-template-columns: 1fr; gap: 13px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards button) { min-height: 120px; padding: 20px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards strong) { font-size: 18px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards span) { font-size: 14px; }
+.bigButton .cards, .bigButton .queueGrid, .bigButton .progressSteps { grid-template-columns: 1fr; gap: 16px; }
+.bigButton .card { min-height: 0; padding: 27px; border-radius: 18px; }
+.bigButton .card h2 { font-size: 26px; }
+.bigButton .cardIntro { min-height: 0; font-size: 16px; }
+.bigButton .metrics { grid-template-columns: 1fr; gap: 12px; }
+.bigButton .metric { padding: 16px; border-radius: 12px; }
+.bigButton .metric dt { font-size: 14px; }
+.bigButton .metric dd { font-size: 30px; }
+.bigButton .workflowLink { min-height: 44px; padding-top: 20px; font-size: 16px; }
+.bigButton .unavailable { padding: 20px; border-radius: 14px; }
+
+.classic { padding-top: 27px; padding-bottom: 58px; background: #06101e; color: #dceafa; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.classic nav { gap: 6px 14px; margin-bottom: 22px; }
+.classic nav a { padding: 5px 7px; border: 1px solid #29435f; border-radius: 4px; background: #0b1a2a; font-size: 12px; text-decoration: none; }
+.classic .header { max-width: 980px; }
+.classic .header h1 { margin: 8px 0; font-size: clamp(28px, 4vw, 42px); }
+.classic .notice { margin: 18px 0; padding: 13px 16px; border-radius: 5px; }
+.classic .scopeSection, .classic .platformView, .classic .queueSection, .classic .workflowProgress { gap: 11px; padding: 16px; border-radius: 6px; }
+.classic .scopeSection form fieldset { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 9px; }
+.classic .scopeSection input { border-radius: 4px; padding: 9px; font-size: 13px; }
+.classic .scopeSection button { min-height: 38px; border-radius: 4px; padding: 8px 12px; font-size: 13px; }
+.classic .verified { gap: 6px 12px; padding: 10px 12px; border-radius: 4px; }
+.classic .platformView { margin-top: 18px; background: #0a1a2b; }
+.classic .platformView h2 { font-size: 19px; }
+.classic .platformView :global(.view-picker) { gap: 3px; padding: 3px; border-radius: 5px; }
+.classic .platformView :global(.view-picker button) { max-width: none; padding: 6px 8px; border-radius: 3px; }
+.classic .platformView :global(.view-picker strong) { font-size: 10px; }
+.classic .platformView :global(.view-picker span) { font-size: 8px; }
+.classic .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.classic .card { padding: 14px; border-radius: 5px; background: #0b1c2b; }
+.classic .card h2 { margin-top: 4px; font-size: 18px; }
+.classic .cardIntro { min-height: 0; margin: 8px 0 11px; font-size: 12px; line-height: 1.45; }
+.classic .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.classic .metric { padding: 8px; border-radius: 4px; }
+.classic .metric dt { font-size: 10px; }
+.classic .metric dd { margin-top: 3px; font-size: 19px; }
+.classic .metric small { font-size: 10px; }
+.classic .noData { margin-top: 10px; padding: 9px; border-radius: 4px; }
+.classic .noData p { font-size: 11px; }
+.classic .workflowLink { padding-top: 10px; font-size: 12px; }
+.classic .queueSection { margin-top: 20px; }
+.classic .queueGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 13px; }
+.classic .unavailable { padding: 11px; border-radius: 4px; }
+.classic .unavailable p { margin: 7px 0 10px; font-size: 12px; }
+.classic .workflowProgress { margin-top: 18px; }
+.classic .progressSteps { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 11px; }
+.classic .progressSteps > div { padding: 8px; border-radius: 4px; }
 @media (max-width: 980px) { .cards { grid-template-columns: 1fr; } .cardIntro { min-height: auto; } .queueGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .page { padding: 25px 16px 58px; } .scopeSection { padding: 17px; } .scopeSection form fieldset { grid-template-columns: 1fr; } .scopeSection button { width: 100%; } .queueSection { padding: 18px; } .queueGrid { grid-template-columns: 1fr; } .verified { display: grid; } .savedConfirmation, .workflowProgress { padding: 18px; } .savedList dl, .progressSteps { grid-template-columns: 1fr; } }

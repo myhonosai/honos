@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useRef, useState, type FormEvent } from 'react';
+import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { OperationalSnapshot, OwnerLaunchFirstClassBookingContext, OwnerLaunchFirstClassBookingContextProjection, OwnerLaunchMembershipDraftConfirmation, OwnerLaunchMembershipDraftConfirmationReceipt, OwnerLaunchProjection, OwnerLaunchSavedStudentConfirmation, OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
+import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { loadOwnerLaunchSavedStudents, loadStaffDashboard, StaffDashboardAccessError } from './staff-dashboard-http';
 import { loadOwnerLaunch, loadOwnerLaunchFirstClassBookingContext, loadOwnerLaunchMembershipDraft } from './owner-launch-http';
+import { InterfaceThemePicker } from './interface-theme-picker';
+import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
 import styles from './staff-dashboard.module.css';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
+type InterfaceThemeState = 'UNAVAILABLE' | 'LOADING' | 'READY' | 'SAVING' | 'ERROR';
 
 function utc(value: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(value));
@@ -140,6 +144,31 @@ function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React
   </>;
 }
 
+function PlatformViewSelector({
+  interfaceTheme,
+  interfaceThemeState,
+  interfaceThemeMessage,
+  onChange,
+}: {
+  interfaceTheme: HonInterfaceTheme;
+  interfaceThemeState: InterfaceThemeState;
+  interfaceThemeMessage: string;
+  onChange: (theme: HonInterfaceTheme) => void;
+}): React.ReactElement {
+  return <section className={styles.platformView} aria-labelledby="platform-view-heading">
+    <div><p className={styles.eyebrow}>PRESENTATION ONLY / VERIFIED SCHOOL</p><h2 id="platform-view-heading">Platform View</h2><p>Big-Button / Phone, Modern HON, and Classic CRM change touch targets and density only. They use the same verified report, owner-confirmation reads, permissions, workflow links, audit/security behavior, and current-school scope.</p></div>
+    <InterfaceThemePicker
+      current={interfaceTheme}
+      onChange={onChange}
+      disabled={interfaceThemeState !== 'READY'}
+      busy={interfaceThemeState === 'LOADING' || interfaceThemeState === 'SAVING'}
+      presentation={interfaceTheme === 'classic' ? 'compact' : 'cards'}
+      ariaLabel="Platform View for the verified current school"
+    />
+    <p className={styles.platformViewStatus} role="status" aria-live="polite">{interfaceThemeMessage}</p>
+  </section>;
+}
+
 export function StaffDashboard(): React.ReactElement {
   const [organizationId, setOrganizationId] = useState('');
   const [schoolId, setSchoolId] = useState('');
@@ -148,9 +177,60 @@ export function StaffDashboard(): React.ReactElement {
   const [ownerWorkflowProgress, setOwnerWorkflowProgress] = useState<OwnerWorkflowProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [interfaceTheme, setInterfaceTheme] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
+  const [interfaceThemeState, setInterfaceThemeState] = useState<InterfaceThemeState>('UNAVAILABLE');
+  const [interfaceThemeMessage, setInterfaceThemeMessage] = useState('Load a verified school dashboard to view or change your personal Platform View preference.');
   const generation = useRef(0);
+  const interfaceThemeGeneration = useRef(0);
 
-  function clear() { generation.current += 1; setSelection(null); setSnapshot(null); setOwnerWorkflowProgress(null); setError(''); }
+  function clear() {
+    generation.current += 1;
+    interfaceThemeGeneration.current += 1;
+    setSelection(null); setSnapshot(null); setOwnerWorkflowProgress(null); setError('');
+    setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME); setInterfaceThemeState('UNAVAILABLE');
+    setInterfaceThemeMessage('Load a verified school dashboard to view or change your personal Platform View preference.');
+  }
+  useEffect(() => () => { generation.current += 1; interfaceThemeGeneration.current += 1; }, []);
+  useEffect(() => {
+    if (!selection) {
+      interfaceThemeGeneration.current += 1;
+      setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME); setInterfaceThemeState('UNAVAILABLE');
+      setInterfaceThemeMessage('Load a verified school dashboard to view or change your personal Platform View preference.');
+      return;
+    }
+    const current = ++interfaceThemeGeneration.current;
+    const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
+    setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME); setInterfaceThemeState('LOADING');
+    setInterfaceThemeMessage('Loading your personal Platform View preference for this verified current school…');
+    void loadInterfaceThemePreference(scope).then((preference) => {
+      if (current !== interfaceThemeGeneration.current) return;
+      setInterfaceTheme(preference.interfaceTheme); setInterfaceThemeState('READY');
+      setInterfaceThemeMessage(preference.selectedVia === 'DEFAULT'
+        ? 'Modern HON is the visual default for this verified current school. Choosing another presentation is optional.'
+        : 'Saved for your current user and this verified current school only. It never changes data, permissions, authority, or workflow behavior.');
+    }).catch((reason) => {
+      if (current !== interfaceThemeGeneration.current) return;
+      setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME); setInterfaceThemeState('ERROR');
+      setInterfaceThemeMessage(`${reason instanceof Error ? reason.message : 'The personal Platform View preference is unavailable.'} Modern HON remains a visual default only; no preference was loaded or saved.`);
+    });
+    return () => { if (current === interfaceThemeGeneration.current) interfaceThemeGeneration.current += 1; };
+  }, [selection?.organizationId, selection?.schoolId]);
+  async function chooseInterfaceTheme(next: HonInterfaceTheme) {
+    if (!selection || interfaceThemeState !== 'READY') return;
+    const current = ++interfaceThemeGeneration.current;
+    const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
+    setInterfaceThemeState('SAVING'); setInterfaceThemeMessage('Saving your personal Platform View preference for this verified current school…');
+    try {
+      const preference = await saveInterfaceThemePreference(scope, next, crypto.randomUUID(), 'SETTINGS');
+      if (current !== interfaceThemeGeneration.current) return;
+      setInterfaceTheme(preference.interfaceTheme); setInterfaceThemeState('READY');
+      setInterfaceThemeMessage('Saved for your current user and this verified current school only. It never changes data, permissions, authority, or workflow behavior.');
+    } catch (reason) {
+      if (current !== interfaceThemeGeneration.current) return;
+      setInterfaceThemeState('ERROR');
+      setInterfaceThemeMessage(`${reason instanceof Error ? reason.message : 'The personal Platform View preference is unavailable.'} No presentation preference was saved.`);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
@@ -215,7 +295,8 @@ export function StaffDashboard(): React.ReactElement {
     } finally { if (current()) setLoading(false); }
   }
 
-  return <main className={styles.page}>
+  const themeClass = interfaceTheme === 'big-button' ? styles.bigButton : interfaceTheme === 'classic' ? styles.classic : styles.modern;
+  return <main className={`${styles.page} ${themeClass}`} data-interface-theme={interfaceTheme}>
     <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
@@ -229,6 +310,7 @@ export function StaffDashboard(): React.ReactElement {
       {error && <p className={styles.error} role="alert">{error}</p>}
       {selection && <div className={styles.verified} role="status"><strong>Verified current school</strong><span>Organization <code>{selection.organizationId}</code></span><span>School <code>{selection.schoolId}</code></span><span>Window: {utc(selection.from)} – {utc(selection.to)} UTC</span><span>Generated: {utc(selection.generatedAt)} UTC</span></div>}
     </section>
+    {snapshot && selection && <PlatformViewSelector interfaceTheme={interfaceTheme} interfaceThemeState={interfaceThemeState} interfaceThemeMessage={interfaceThemeMessage} onChange={(theme) => void chooseInterfaceTheme(theme)} />}
     {snapshot && <OperationsCards snapshot={snapshot} />}
     {snapshot && ownerWorkflowProgress && <OwnerWorkflowProgressCard progress={ownerWorkflowProgress} />}
   </main>;

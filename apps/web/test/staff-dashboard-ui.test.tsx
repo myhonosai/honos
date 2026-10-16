@@ -133,10 +133,11 @@ describe('staff operations dashboard', () => {
     } finally { fetchSpy.mockRestore(); }
   });
 
-  it('is a protected no-index staff route and imports no mutation, automation, AI, voice, external, or execution client', () => {
+  it('is a protected no-index staff route and adds only the verified current-school presentation preference save, never a dashboard business mutation or execution client', () => {
     const route = readFileSync('src/app/staff/dashboard/page.tsx', 'utf8');
     const component = readFileSync('src/components/staff-dashboard.tsx', 'utf8');
     const http = readFileSync('src/components/staff-dashboard-http.ts', 'utf8');
+    const preference = readFileSync('src/components/interface-theme-preference.ts', 'utf8');
     for (const text of ['verifySession', "redirect('/auth/login')", 'index: false', 'follow: false', 'force-dynamic']) expect(route).toContain(text);
     expect(component).toContain('setSnapshot(null)');
     expect(component).toContain('generation.current');
@@ -148,6 +149,11 @@ describe('staff operations dashboard', () => {
     expect(component).toContain('bookingForVerifiedDashboard(bookingResult.value, ownerContext, saved)');
     expect(component).toContain('membershipDraftForVerifiedDashboard(draftResult.value, saved)');
     expect(component).toContain('OWNER LAUNCH / CONFIRMATION ONLY');
+    expect(component).toContain('PlatformViewSelector');
+    expect(component).toContain('loadInterfaceThemePreference(scope)');
+    expect(component).toContain("saveInterfaceThemePreference(scope, next, crypto.randomUUID(), 'SETTINGS')");
+    expect(component).toContain('change touch targets and density only');
+    expect(component).toContain('if (!selection)');
     for (const text of ['Student profiles', 'Current-school aggregate', 'Trial count unavailable', 'Revenue-plan summary unavailable', 'NOT COUNTED HERE', 'Saved-workflow progress', 'Confirmation-only view']) expect(component).toContain(text);
     for (const href of ['/staff/search', '/staff/planning/revenue', '/staff/launch', '/staff/crm/follow-ups', '/staff/billing/renewals', '/staff/action-center/approvals', '/staff/work']) expect(component).toContain(href);
     expect(http).toContain("method: 'GET'");
@@ -156,6 +162,9 @@ describe('staff operations dashboard', () => {
     expect(component).not.toContain('loadOwnerLaunchWithConfirmations');
     expect(component).not.toContain('loadOwnerLaunchWithDraft');
     expect(http).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|from\s+['"][^'"]*(?:voice|action|ai|provider)/i);
+    expect(preference).toContain("selectedVia: SavedSelectedVia = 'ONBOARDING'");
+    expect(preference).toContain("value !== 'ONBOARDING' && value !== 'SETTINGS'");
+    expect(preference).not.toMatch(/localStorage|sessionStorage|invokeLLM|executeAction|sendMessage|provider/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/dashboard')).toHaveLength(1);
   });

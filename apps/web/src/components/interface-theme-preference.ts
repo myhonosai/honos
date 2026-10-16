@@ -4,6 +4,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const SELECTED_VIA = ['DEFAULT', 'ONBOARDING', 'SETTINGS'] as const;
 
 type SelectedVia = (typeof SELECTED_VIA)[number];
+type SavedSelectedVia = Exclude<SelectedVia, 'DEFAULT'>;
 export type InterfaceThemeScope = { organizationId: string; schoolId: string };
 export type InterfaceThemePreference = {
   interfaceTheme: HonInterfaceTheme;
@@ -33,6 +34,10 @@ function requireScope(scope: InterfaceThemeScope): { organizationId: string; sch
 }
 function requireTheme(value: HonInterfaceTheme): HonInterfaceTheme {
   if (!HON_INTERFACE_THEME_IDS.includes(value)) throw new Error('Choose one of the shared HON interface themes.');
+  return value;
+}
+function requireSavedSelectedVia(value: SavedSelectedVia): SavedSelectedVia {
+  if (value !== 'ONBOARDING' && value !== 'SETTINGS') throw new Error('The interface preference source must be the closed ONBOARDING or SETTINGS value.');
   return value;
 }
 function requireKey(value: string): string {
@@ -80,13 +85,14 @@ export async function loadInterfaceThemePreference(scope: InterfaceThemeScope): 
   return request(interfaceThemePreferencePath(scope), { method: 'GET', headers: { Accept: 'application/json' } });
 }
 
-/** Presentation-only ONBOARDING save; no tier, role, feature, authority, or launch-command input is accepted. */
-export async function saveInterfaceThemePreference(scope: InterfaceThemeScope, interfaceTheme: HonInterfaceTheme, idempotencyKey: string): Promise<InterfaceThemePreference> {
+/** Presentation-only save; the ONBOARDING default preserves OwnerLaunch's fixed transport. */
+export async function saveInterfaceThemePreference(scope: InterfaceThemeScope, interfaceTheme: HonInterfaceTheme, idempotencyKey: string, selectedVia: SavedSelectedVia = 'ONBOARDING'): Promise<InterfaceThemePreference> {
   const theme = requireTheme(interfaceTheme);
   const key = requireKey(idempotencyKey);
+  const via = requireSavedSelectedVia(selectedVia);
   return request(interfaceThemePreferencePath(scope), {
     method: 'PUT',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': key },
-    body: JSON.stringify({ interfaceTheme: theme, selectedVia: 'ONBOARDING' }),
+    body: JSON.stringify({ interfaceTheme: theme, selectedVia: via }),
   });
 }

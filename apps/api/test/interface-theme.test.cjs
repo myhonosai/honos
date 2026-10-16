@@ -52,8 +52,10 @@ test('interface theme preference controller preserves the existing principal-sco
 
 test('interface theme DTO accepts only the three shared presentation choices and onboarding/settings provenance', () => {
   for (const interfaceTheme of ['big-button', 'modern', 'classic']) {
-    const value = Object.assign(new UpdateInterfaceThemeDto(), { interfaceTheme, selectedVia: 'ONBOARDING' });
-    assert.equal(validateSync(value).length, 0);
+    for (const selectedVia of ['ONBOARDING', 'SETTINGS']) {
+      const value = Object.assign(new UpdateInterfaceThemeDto(), { interfaceTheme, selectedVia });
+      assert.equal(validateSync(value).length, 0);
+    }
   }
   for (const patch of [{ interfaceTheme: 'COMPLETE', selectedVia: 'ONBOARDING' }, { interfaceTheme: 'modern', selectedVia: 'ROLE' }, { interfaceTheme: 'modern', selectedVia: 'ONBOARDING', tier: 'CORE' }]) {
     const value = Object.assign(new UpdateInterfaceThemeDto(), patch);

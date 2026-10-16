@@ -17,20 +17,28 @@ const studentReceipt = { registrationId: id('5'), studentProfileId: id('6'), enr
 
 describe('owner launch interface mode selection', () => {
   it('uses the existing fixed current-user preference transport with no selector, tier, role, feature, or authority input', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' })).mockResolvedValueOnce(response(preference));
+    const settingsPreference = { interfaceTheme: 'big-button' as const, selectedVia: 'SETTINGS' as const, updatedAt: '2026-10-16T00:00:00.000Z' };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' })).mockResolvedValueOnce(response(preference)).mockResolvedValueOnce(response(settingsPreference));
     try {
       expect(await loadInterfaceThemePreference(scope)).toEqual({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' });
       expect(await saveInterfaceThemePreference(scope, 'classic', id('8'))).toEqual(preference);
+      expect(await saveInterfaceThemePreference(scope, 'big-button', id('9'), 'SETTINGS')).toEqual(settingsPreference);
       const path = `/api/v1/organizations/${id('1')}/schools/${id('2')}/interface-theme`;
       expect(fetch.mock.calls[0]).toEqual([path, { method: 'GET', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' }]);
       expect(fetch.mock.calls[1]).toEqual([path, { method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': id('8') }, body: JSON.stringify({ interfaceTheme: 'classic', selectedVia: 'ONBOARDING' }), credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' }]);
+      expect(fetch.mock.calls[2]).toEqual([path, { method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': id('9') }, body: JSON.stringify({ interfaceTheme: 'big-button', selectedVia: 'SETTINGS' }), credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' }]);
     } finally { fetch.mockRestore(); }
     expect(interfaceThemePreferencePath(scope)).toBe(`/api/v1/organizations/${id('1')}/schools/${id('2')}/interface-theme`);
     const blocked = vi.spyOn(globalThis, 'fetch');
-    try { expect(() => interfaceThemePreferencePath({ organizationId: 'https://evil.test', schoolId: scope.schoolId })).toThrow(); expect(blocked).not.toHaveBeenCalled(); } finally { blocked.mockRestore(); }
+    try {
+      expect(() => interfaceThemePreferencePath({ organizationId: 'https://evil.test', schoolId: scope.schoolId })).toThrow();
+      await expect(saveInterfaceThemePreference(scope, 'modern', id('9'), 'ROLE' as never)).rejects.toThrow('closed ONBOARDING or SETTINGS');
+      expect(blocked).not.toHaveBeenCalled();
+    } finally { blocked.mockRestore(); }
     const transport = readFileSync('src/components/interface-theme-preference.ts', 'utf8');
-    expect(transport).toContain("selectedVia: 'ONBOARDING'");
-    expect(transport).toContain("body: JSON.stringify({ interfaceTheme: theme, selectedVia: 'ONBOARDING' })");
+    expect(transport).toContain("selectedVia: SavedSelectedVia = 'ONBOARDING'");
+    expect(transport).toContain('requireSavedSelectedVia(selectedVia)');
+    expect(transport).toContain('body: JSON.stringify({ interfaceTheme: theme, selectedVia: via })');
     expect(transport).not.toMatch(/localStorage|sessionStorage|https?:\/\//);
   });
 
