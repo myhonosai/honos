@@ -25,4 +25,56 @@
 .results li a:hover { border-color: #86d8d0; background: #183644; }
 .results strong { font-size: 20px; color: #f3f7fc; }
 .error { padding: 18px; color: #ffbcc7; background: #3d1d2d; border-radius: 10px; }
-@media (max-width: 600px) { .page { padding: 24px 16px 55px; } .page form { padding: 16px; } .scope { grid-template-columns: 1fr; } }
+.platformView { display: grid; gap: 15px; margin-top: 26px; padding: 22px; border: 1px solid #3d6e78; border-radius: 16px; background: linear-gradient(135deg, #102b3b, #102033); }
+.platformView h2 { margin: 7px 0 0; font-size: 22px; }
+.platformView > div > p:last-child { max-width: 790px; margin: 8px 0 0; color: #c1d0e0; line-height: 1.55; }
+.platformView :global(.view-picker.view-picker-cards) { width: 100%; }
+.platformViewStatus { min-height: 21px; margin: 0; color: #c1d0e0; font-size: 13px; line-height: 1.5; }
+
+/* Platform View changes presentation density only; scoped search semantics remain shared. */
+.modern .results li a { padding: 24px; }
+.modern .platformView { background: linear-gradient(135deg, #12303e, #102033); }
+.bigButton { max-width: 1080px; padding-top: 30px; background: radial-gradient(circle at 80% 0%, rgba(81, 187, 177, .28), transparent 38%), #071426; }
+.bigButton nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; max-width: 560px; }
+.bigButton nav a { display: flex; align-items: center; min-height: 48px; padding: 11px 15px; border: 1px solid #36596a; border-radius: 10px; background: #102335; text-decoration: none; }
+.bigButton h1 { font-size: clamp(36px, 6vw, 56px); }
+.bigButton form, .bigButton .platformView, .bigButton .results li a { border-radius: 20px; }
+.bigButton form { gap: 23px; padding: 29px; }
+.bigButton fieldset { padding: 21px; }
+.bigButton .scope { grid-template-columns: 1fr; gap: 16px; }
+.bigButton input:not([type=checkbox]) { min-height: 54px; padding: 15px; font-size: 17px; }
+.bigButton .types { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.bigButton .types label { min-height: 48px; font-size: 16px; }
+.bigButton button { min-height: 56px; font-size: 17px; }
+.bigButton .platformView { gap: 18px; padding: 27px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards) { grid-template-columns: 1fr; gap: 13px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards button) { min-height: 120px; padding: 20px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards strong) { font-size: 18px; }
+.bigButton .platformView :global(.view-picker.view-picker-cards span) { font-size: 14px; }
+.bigButton .results li a { gap: 12px; padding: 25px; }
+.bigButton .results strong { font-size: 24px; }
+
+.classic { max-width: 1180px; padding-top: 27px; padding-bottom: 58px; background: #06101e; color: #dceafa; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.classic nav { gap: 6px 14px; margin-bottom: 22px; }
+.classic nav a { padding: 5px 7px; border: 1px solid #29435f; border-radius: 4px; background: #0b1a2a; font-size: 12px; text-decoration: none; }
+.classic h1 { margin: 8px 0; font-size: clamp(28px, 4vw, 42px); }
+.classic .notice { margin: 18px 0; padding: 13px 16px; border-radius: 5px; }
+.classic form, .classic .platformView { gap: 11px; padding: 16px; border-radius: 6px; }
+.classic fieldset { border-radius: 4px; padding: 11px; }
+.classic .scope { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 9px; }
+.classic input:not([type=checkbox]) { border-radius: 4px; padding: 9px; font-size: 13px; }
+.classic .types { gap: 4px 13px; }
+.classic .types label { min-height: 30px; font-size: 12px; }
+.classic button { min-height: 38px; border-radius: 4px; padding: 8px 12px; font-size: 13px; }
+.classic .platformView { margin-top: 18px; background: #0a1a2b; }
+.classic .platformView h2 { font-size: 19px; }
+.classic .platformView :global(.view-picker) { gap: 3px; padding: 3px; border-radius: 5px; }
+.classic .platformView :global(.view-picker button) { max-width: none; padding: 6px 8px; border-radius: 3px; }
+.classic .platformView :global(.view-picker strong) { font-size: 10px; }
+.classic .platformView :global(.view-picker span) { font-size: 8px; }
+.classic .results { margin-top: 20px; }
+.classic .results ul { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.classic .results li a { gap: 5px; border-radius: 4px; padding: 11px; font-size: 12px; }
+.classic .results strong { font-size: 16px; }
+.classic .results small { font-size: 10px; }
+@media (max-width: 600px) { .page { padding: 24px 16px 55px; } .page form { padding: 16px; } .scope { grid-template-columns: 1fr; } .classic .results ul { grid-template-columns: 1fr; } }
