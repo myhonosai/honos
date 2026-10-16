@@ -45,13 +45,13 @@ const HON_REFERENCE_PORTRAITS: Record<AiPortraitStyle, Partial<Record<HonAiTeamI
     lena: '/manus-storage/async-images/VluzKftrTvWQbFtDOK8WFX/image-4.webp',
   },
   chibi: {
-    alex: '/manus-storage/async-images/VluzKftrTvWQbFtDOK8WFX/image-5.webp',
-    chad: '/manus-storage/async-images/HmNqh56H1eFzVdWx4inODP/image-1.webp',
-    maya: '/manus-storage/async-images/HmNqh56H1eFzVdWx4inODP/image-2.webp',
-    marcus: '/manus-storage/async-images/HmNqh56H1eFzVdWx4inODP/image-3.webp',
-    jordan: '/manus-storage/async-images/HmNqh56H1eFzVdWx4inODP/image-4.webp',
-    claire: '/manus-storage/async-images/HmNqh56H1eFzVdWx4inODP/image-5.webp',
-    lena: '/manus-storage/async-images/e4Ky3CirPaY1YbFjPvht0h/image-1.webp',
+    alex: '/manus-storage/async-images/2vTK4xHtWX1lReJNsEaWJa/image-1.webp',
+    chad: '/manus-storage/async-images/2vTK4xHtWX1lReJNsEaWJa/image-2.webp',
+    maya: '/manus-storage/async-images/2vTK4xHtWX1lReJNsEaWJa/image-3.webp',
+    marcus: '/manus-storage/async-images/2vTK4xHtWX1lReJNsEaWJa/image-4.webp',
+    jordan: '/manus-storage/async-images/2vTK4xHtWX1lReJNsEaWJa/image-5.webp',
+    claire: '/manus-storage/async-images/8pSrWJ1PIWinTmSPGM3898/image-1.webp',
+    lena: '/manus-storage/async-images/8pSrWJ1PIWinTmSPGM3898/image-2.webp',
   },
 };
 
