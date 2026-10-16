@@ -919,3 +919,5 @@ export * from './promotion-readiness.js';
 export * from './classpass.js';
 
 export * from './parent-classpass-view.js';
+
+export * from './ai-draft-work.js';

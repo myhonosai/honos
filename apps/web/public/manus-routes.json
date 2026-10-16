@@ -121,6 +121,10 @@
       "title": "HON | Human Work Items"
     },
     {
+      "path": "/staff/ai-work",
+      "title": "HON | My AI Draft Work"
+    },
+    {
       "path": "/community/marketplace",
       "title": "HON | Private human marketplace"
     },

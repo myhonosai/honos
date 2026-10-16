@@ -116,6 +116,7 @@ try {
   const tables = ['teaching_ai_invocations', 'teaching_ai_drafts', 'teaching_studio_ai_drafts'];
   const allowedFunctions = new Set([
     'hon.resolve_teaching_assistant_scope(text)',
+    'hon.list_my_teaching_invocations(text)',
     'hon.read_teaching_invocation(text,uuid)',
     'hon.begin_teaching_request(text,jsonb,uuid)',
     'hon.teaching_planning_reference(text,uuid)',
@@ -133,6 +134,7 @@ try {
     'hon.resolve_teaching_assistant_scope(text)',
     'hon.require_teaching_assistant_actor(text,boolean)',
     'hon.teaching_assistant_event(uuid,text)',
+    'hon.list_my_teaching_invocations(text)',
     'hon.read_teaching_invocation(text,uuid)',
     'hon.begin_teaching_request(text,jsonb,uuid)',
     'hon.teaching_planning_reference(text,uuid)',
@@ -179,7 +181,7 @@ try {
     const roleCode = name === 'parent' ? 'PARENT' : `CLAIRE_${name.toUpperCase()}`;
     await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,$3,'PRIVATE role',false)", [actor.role, actor.organizationId, roleCode]);
     const permissions = name === 'requester' ? ['teaching.studio.read', 'teaching.assistant.use', 'ai.invocation.plan', 'action.approve']
-      : ['reviewer', 'reviewer2'].includes(name) ? ['action.approve']
+      : ['reviewer', 'reviewer2'].includes(name) ? ['teaching.studio.read', 'teaching.assistant.use', 'ai.invocation.plan', 'action.approve']
       : name === 'foreign' ? ['teaching.studio.read', 'teaching.assistant.use', 'ai.invocation.plan'] : [];
     for (const permission of permissions) await admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [actor.role, actor.organizationId, permission]);
     await admin.query("INSERT INTO hon.principal_role_grants(id,principal_id,organization_id,school_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,$2,clock_timestamp()-interval '1 day')", [actor.grant, actor.id, actor.organizationId, actor.schoolId, actor.role]);
@@ -204,11 +206,20 @@ try {
   await sqlDenied(() => runtimeSql.query("SELECT hon.require_teaching_assistant_actor('nope',true)"));
 
   const primaryKey = randomUUID();
-  const primary = await assistant.submit(context('requester', { idempotencyKey: primaryKey }), { curriculumId: curriculum, brief });
-  assert.equal(primary.status, 'AWAITING_APPROVAL');
-  assert.deepEqual(primary.draft, draft);
-  assert.equal(primary.customerCredits, 1);
-  assert.equal(generated, 1);
+	  const primary = await assistant.submit(context('requester', { idempotencyKey: primaryKey }), { curriculumId: curriculum, brief });
+	  assert.equal(primary.status, 'AWAITING_APPROVAL');
+	  assert.deepEqual(primary.draft, draft);
+	  assert.equal(primary.customerCredits, 1);
+	  assert.equal(generated, 1);
+	  const mine = await assistant.listMine(context('requester'));
+	  const mineItem = mine.find((item) => item.id === primary.id);
+	  assert(mineItem, 'Current requester must see the durable Claire work pointer.');
+	  assert.deepEqual(Object.keys(mineItem).sort(), ['actionRequestId', 'agentKey', 'id', 'reason', 'schoolId', 'sourceRecordId', 'status', 'updatedAt', 'workItemId']);
+	  assert.equal(mineItem.agentKey, 'claire'); assert.equal(mineItem.schoolId, school); assert.equal(mineItem.sourceRecordId, curriculum); assert.equal(mineItem.workItemId, primary.workItemId); assert.equal(mineItem.status, 'AWAITING_APPROVAL'); assert.equal(mineItem.actionRequestId, primary.actionRequestId);
+	  assert.equal(JSON.stringify(mineItem).includes(brief), false, 'Inbox pointer must not expose the private brief.');
+	  assert.equal(JSON.stringify(mineItem).includes(draft.content), false, 'Inbox pointer must not expose draft text.');
+	  assert.deepEqual(await assistant.listMine(context('reviewer')), [], 'Another qualified human must not see requester draft work.');
+	  await denied(() => assistant.listMine(context('requester', { source: 'AI' })));
   assert(!JSON.stringify(primary).includes(brief), 'Read projection must redact the private brief.');
   await admin.query(`GRANT SELECT ON hon.teaching_ai_invocations TO ${runtimeRole}`);
   try { assert.equal((await runtimeSql.query('SELECT * FROM hon.teaching_ai_invocations')).rowCount, 0, 'Forced RLS must hide actual rows from the restricted role without a policy.'); }

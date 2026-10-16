@@ -96,7 +96,7 @@ try {
     await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY')", [actor.id, actor.user]);
     await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,$3,'PRIVATE role',false)", [actor.role, actor.organizationId, name === 'parent' ? 'PARENT' : `CHAD_${name.toUpperCase()}`]);
     const permissions = name === 'requester' ? ['crm.lead.read', 'crm.assistant.follow_up_draft', 'ai.invocation.plan']
-      : name === 'reviewer' ? ['action.approve']
+      : name === 'reviewer' ? ['crm.lead.read', 'crm.assistant.follow_up_draft', 'ai.invocation.plan', 'action.approve']
         : name === 'parent' ? ['crm.lead.read', 'crm.assistant.follow_up_draft', 'ai.invocation.plan', 'action.approve']
           : ['crm.lead.read', 'crm.assistant.follow_up_draft', 'ai.invocation.plan'];
     for (const permission of permissions) await admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [actor.role, actor.organizationId, permission]);
@@ -121,11 +121,20 @@ try {
   await denied(() => assistant.submit(context('requester', { source: 'AI' }), input()));
 
   const firstContext = context();
-  const first = await assistant.submit(firstContext, input());
-  assert.equal(first.status, 'AWAITING_APPROVAL');
-  assert.equal(first.delivery, 'NOT_CREATED_OR_SENT');
-  assert.deepEqual(first.draft, draft);
-  assert.equal(first.customerCredits, 1); assert.equal(first.providerCostMicrounits, 600);
+	  const first = await assistant.submit(firstContext, input());
+	  assert.equal(first.status, 'AWAITING_APPROVAL');
+	  assert.equal(first.delivery, 'NOT_CREATED_OR_SENT');
+	  assert.deepEqual(first.draft, draft);
+	  assert.equal(first.customerCredits, 1); assert.equal(first.providerCostMicrounits, 600);
+	  const mine = await assistant.listMine(context());
+	  const mineItem = mine.find((item) => item.id === first.id);
+	  assert(mineItem, 'Current requester must see the durable Chad work pointer.');
+	  assert.deepEqual(Object.keys(mineItem).sort(), ['actionRequestId', 'agentKey', 'id', 'reason', 'schoolId', 'sourceRecordId', 'status', 'updatedAt', 'workItemId']);
+	  assert.equal(mineItem.agentKey, 'chad'); assert.equal(mineItem.schoolId, ids.school); assert.equal(mineItem.sourceRecordId, ids.lead); assert.equal(mineItem.workItemId, first.workItemId); assert.equal(mineItem.status, 'AWAITING_APPROVAL'); assert.equal(mineItem.actionRequestId, first.actionRequestId);
+	  assert.equal(JSON.stringify(mineItem).includes(draft.content), false, 'Inbox pointer must not expose private draft text.');
+	  assert.equal(JSON.stringify(mineItem).includes(sourceCode), false, 'Inbox pointer must not expose lead source details.');
+	  assert.deepEqual(await assistant.listMine(context('reviewer')), [], 'Another qualified human must not see requester draft work.');
+	  await denied(() => assistant.listMine(context('requester', { source: 'AI' })));
   const lifecycle = (await admin.query(`SELECT i.status,i.reason,w.work_type,w.status work_status,p.agent_key,p.task_class,p.provider_id,p.model_id
     FROM hon.chad_follow_up_invocations i JOIN hon.work_items w ON w.id=i.work_item_id JOIN hon.ai_invocation_plans p ON p.id=i.plan_id WHERE i.id=$1`, [first.id])).rows[0];
   assert.deepEqual(lifecycle, { status: 'AWAITING_APPROVAL', reason: null, work_type: 'AI_DRAFT_FOLLOW_UP', work_status: 'WAITING_FOR_APPROVAL', agent_key: 'chad', task_class: 'DRAFT_FOLLOW_UP', provider_id: 'OPENROUTER', model_id: 'approved/chad-local' });

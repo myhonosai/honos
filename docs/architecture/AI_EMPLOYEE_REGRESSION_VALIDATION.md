@@ -70,3 +70,11 @@ There is **no supported real-provider/live-paid test command** in this matrix, a
 ## Remaining boundary
 
 This coverage does not authorize a communication or delivery workflow. In particular, Chad approval is not recipient consent, a send, a queue insertion, a calendar action, or CRM mutation. Any future outbound workflow must be separately designed and verified for consent, recipient selection, delivery receipts, adapter authority, idempotency, reconciliation, and external side effects.
+
+## My AI Draft Work
+
+Migration `0128_my_ai_draft_work_inbox.sql` adds only requester-scoped fixed functions for Marcus, Claire and Chad. `/staff/ai-work` calls their fixed same-origin `mine` endpoints and returns at most 20 durable pointers per agent. It is not a general AI inbox, provider console, chat transcript, action queue or delivery surface.
+
+The output contains only opaque invocation/source/work/action references, agent key, current school, persisted status/reason and updated timestamp. It excludes draft/request/prompt content, names, lead/curriculum/campaign fields, model/provider/policy, tokens/cost/credits, credentials, work payload/result, approval payload, audit and raw provider data. Each list function runs the existing lock-based direct-human resolver in a normal transaction because the resolver itself rechecks live qualification with `FOR UPDATE`; the function remains a sealed read projection and does no DML. No list action invokes a provider, changes work, retries `UNKNOWN`, approves, saves, publishes, delivers or executes an Action Engine action.
+
+See [AI Draft Work Inbox](AI_DRAFT_WORK_INBOX.md) for the complete route, output and validation boundary.

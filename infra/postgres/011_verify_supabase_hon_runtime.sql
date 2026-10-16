@@ -1136,6 +1136,7 @@ BEGIN
   ('hon.marketing_event(uuid,text)',false,true,'v','search_path=pg_catalog, hon'),
   ('hon.guard_marketing_invocation()',false,false,'v','search_path=pg_catalog, hon'),
   ('hon.read_marketing_invocation(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+  ('hon.list_my_marketing_invocations(text)',true,true,'v','search_path=pg_catalog, hon'),
   ('hon.begin_marketing_request(text,jsonb,uuid)',true,true,'v','search_path=pg_catalog, hon'),
   ('hon.prepare_marketing_invocation(text,uuid,uuid,boolean)',true,true,'v','search_path=pg_catalog, hon'),
   ('hon.fail_marketing_invocation(text,uuid,text,text)',true,true,'v','search_path=pg_catalog, hon'),
@@ -1436,6 +1437,7 @@ BEGIN
     ('hon.require_teaching_assistant_actor(text,boolean)',false,true,'v','search_path=pg_catalog, hon'),
     ('hon.teaching_assistant_event(uuid,text)',false,true,'v','search_path=pg_catalog, hon'),
     ('hon.read_teaching_invocation(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.list_my_teaching_invocations(text)',true,true,'v','search_path=pg_catalog, hon'),
     ('hon.begin_teaching_request(text,jsonb,uuid)',true,true,'v','search_path=pg_catalog, hon'),
     ('hon.teaching_planning_reference(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
     ('hon.prepare_teaching_invocation(text,uuid,uuid,boolean)',true,true,'v','search_path=pg_catalog, hon'),
@@ -1473,7 +1475,7 @@ BEGIN
     IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Chad private table: %',t; END IF;
   END LOOP;
   FOR expected IN SELECT * FROM (VALUES
-    ('hon.guard_chad_follow_up()',false,false),('hon.resolve_chad_follow_up_scope(text)',true,true),('hon.require_chad_follow_up_actor(text)',false,true),('hon.chad_follow_up_event(uuid,text)',false,true),('hon.read_chad_follow_up_invocation(text,uuid)',true,true),('hon.begin_chad_follow_up_request(text,jsonb,uuid)',true,true),('hon.chad_follow_up_planning_reference(text,uuid)',true,true),('hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)',true,true),('hon.fail_chad_follow_up_invocation(text,uuid,text,text)',true,true),('hon.record_chad_follow_up_result(text,uuid,jsonb)',true,true),('hon.bind_chad_follow_up_proposal(text,uuid,uuid)',true,true),('hon.chad_follow_up_draft_is_current(uuid,jsonb)',true,true),('hon.transition_chad_follow_up_draft(uuid,text)',true,true)
+    ('hon.guard_chad_follow_up()',false,false),('hon.resolve_chad_follow_up_scope(text)',true,true),('hon.require_chad_follow_up_actor(text)',false,true),('hon.chad_follow_up_event(uuid,text)',false,true),('hon.read_chad_follow_up_invocation(text,uuid)',true,true),('hon.list_my_chad_follow_up_invocations(text)',true,true),('hon.begin_chad_follow_up_request(text,jsonb,uuid)',true,true),('hon.chad_follow_up_planning_reference(text,uuid)',true,true),('hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)',true,true),('hon.fail_chad_follow_up_invocation(text,uuid,text,text)',true,true),('hon.record_chad_follow_up_result(text,uuid,jsonb)',true,true),('hon.bind_chad_follow_up_proposal(text,uuid,uuid)',true,true),('hon.chad_follow_up_draft_is_current(uuid,jsonb)',true,true),('hon.transition_chad_follow_up_draft(uuid,text)',true,true)
   ) AS x(signature,runtime_execute,security_definer) LOOP
     SELECT p.prosecdef=expected.security_definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime' AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
     INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;

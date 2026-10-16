@@ -13,45 +13,30 @@ if (
   process.env.HON_TEACHING_AI_RESET !== 'LOCAL_DISPOSABLE_ONLY'
   || owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== `/${database}` || owner.username !== ownerRole
   || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== runtimeRole
-) {
-  throw new Error('Explicit LOCAL_DISPOSABLE_ONLY reset and exact localhost Claire owner/runtime aliases are required. No remote or other database is permitted.');
-}
-if (providerEnvironment.length) {
-  throw new Error(`Claire local validation refuses provider credentials, paid-call gates, or execution switches (${providerEnvironment.join(', ')}).`);
-}
+) throw new Error('Explicit LOCAL_DISPOSABLE_ONLY reset and exact localhost Claire owner/runtime aliases are required. No remote or other database is permitted.');
+if (providerEnvironment.length) throw new Error(`Claire local validation refuses provider credentials, paid-call gates, or execution switches (${providerEnvironment.join(', ')}).`);
 
-const maintenance = new URL(owner);
-maintenance.pathname = '/postgres';
-const admin = new pg.Client({ connectionString: maintenance.toString(), ssl: false });
-await admin.connect();
-try {
-  const roles = (await admin.query(`SELECT rolname, rolsuper, rolbypassrls, rolinherit, rolcreatedb, rolcreaterole, rolreplication, rolcanlogin
-    FROM pg_roles WHERE rolname = ANY($1::text[])`, [[ownerRole, runtimeRole]])).rows;
-  const migrationOwner = roles.find((role) => role.rolname === ownerRole);
-  const restrictedRuntime = roles.find((role) => role.rolname === runtimeRole);
-  if (!migrationOwner?.rolcanlogin || !migrationOwner.rolbypassrls
-    || !restrictedRuntime?.rolcanlogin
-    || ['rolsuper', 'rolbypassrls', 'rolinherit', 'rolcreatedb', 'rolcreaterole', 'rolreplication'].some((key) => restrictedRuntime[key])) {
-    throw new Error('Preprovisioned local BYPASSRLS migration owner and restricted non-inheriting runtime roles are required. This setup never creates, alters, or drops roles.');
-  }
-  const existing = (await admin.query(`SELECT pg_get_userbyid(datdba) AS owner, shobj_description(oid, 'pg_database') AS marker
-    FROM pg_database WHERE datname = $1`, [database])).rows[0];
-  if (existing && (existing.owner !== ownerRole || existing.marker !== marker)) {
-    throw new Error('The fixed Claire validation database name is occupied by an unrecognized database; refusing to reset it.');
-  }
-  await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE ${database} OWNER ${ownerRole}`);
-  await admin.query(`COMMENT ON DATABASE ${database} IS '${marker}'`);
-} finally {
-  await admin.end();
-}
+const psql = (sql, db = 'postgres') => execFileSync('sudo', ['-u', 'postgres', 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-d', db], { input: sql, encoding: 'utf8' });
+psql(`DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${ownerRole}' AND rolcanlogin AND NOT rolsuper AND rolbypassrls AND NOT rolinherit AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication)
+     OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${runtimeRole}' AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolinherit AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication) THEN
+    RAISE EXCEPTION 'Preprovisioned local BYPASSRLS migration owner and restricted non-inheriting runtime roles are required.';
+  END IF;
+  IF EXISTS(SELECT 1 FROM pg_database WHERE datname='${database}' AND (pg_get_userbyid(datdba)<>'${ownerRole}' OR shobj_description(oid,'pg_database') IS DISTINCT FROM '${marker}')) THEN
+    RAISE EXCEPTION 'The fixed Claire validation database name is occupied by an unrecognized database; refusing to reset it.';
+  END IF;
+END $$;
+DROP DATABASE IF EXISTS ${database} WITH (FORCE);
+CREATE DATABASE ${database} OWNER ${ownerRole};
+COMMENT ON DATABASE ${database} IS '${marker}';
+REVOKE ALL ON DATABASE ${database} FROM PUBLIC;
+GRANT CONNECT ON DATABASE ${database} TO ${ownerRole},${runtimeRole};`);
 
 execFileSync(process.execPath, [new URL('./migrate.mjs', import.meta.url).pathname], { env: process.env, stdio: 'inherit' });
 const client = new pg.Client({ connectionString: owner.toString(), ssl: false });
 await client.connect();
 try {
   await client.query(`GRANT USAGE ON SCHEMA hon TO ${runtimeRole}`);
-} finally {
-  await client.end();
-}
-console.log('Reset only marked hon_teaching_ai_validation on localhost and migrated using the guarded runtime-role alias. The restricted runtime receives schema usage plus migration-defined fixed functions only; no provider credential, gate, canonical default-privilege change, or remote target was accepted.');
+  await client.query(`GRANT EXECUTE ON FUNCTION hon.list_my_teaching_invocations(text) TO ${runtimeRole}`);
+} finally { await client.end(); }
+console.log('Reset only marked hon_teaching_ai_validation on localhost using local postgres for database lifecycle and the restricted runtime for no capability beyond migration-defined fixed functions. No provider credential, gate, canonical default-privilege change, or remote target was accepted.');

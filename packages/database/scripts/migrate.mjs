@@ -160,8 +160,8 @@ try {
     // Production/development migrations always execute 0126 unchanged.
     if (file === '0126_kiosk_runtime_logging_reconciliation.sql' && localFixtureRuntimeAlias) {
       sql = sql
-        .replace('    ALTER ROLE hon_runtime SET log_parameter_max_length = 0;\n', '')
-        .replace('    ALTER ROLE hon_runtime SET log_parameter_max_length_on_error = 0;\n', '');
+        .replace(/^\s*ALTER ROLE hon_[a-z0-9_]+_runtime SET log_parameter_max_length = 0;\n/gm, '')
+        .replace(/^\s*ALTER ROLE hon_[a-z0-9_]+_runtime SET log_parameter_max_length_on_error = 0;\n/gm, '');
     }
     await client.query(sql);
     await client.query('INSERT INTO hon.schema_migrations (filename) VALUES ($1)', [file]);

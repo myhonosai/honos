@@ -7,17 +7,17 @@ const employees = [
   {
     name: 'Marcus', agent: 'marcus', workType: 'AI_DRAFT_MARKETING', taskClass: 'DRAFT_MARKETING', action: 'marketing.draft.save',
     service: 'apps/api/src/marketing/marketing-assistant.service.ts', migration: 'packages/database/migrations/0089_marketing_assistant_runtime.sql',
-    test: 'packages/database/scripts/test-marketing-assistant-integrity.mjs', invocation: 'marketing_ai_invocations', drafts: 'marketing_ai_drafts',
+    test: 'packages/database/scripts/test-marketing-assistant-integrity.mjs', invocation: 'marketing_ai_invocations', drafts: 'marketing_ai_drafts', inbox: 'list_my_marketing_invocations',
   },
   {
     name: 'Claire', agent: 'claire', workType: 'AI_DRAFT_TEACHING', taskClass: 'DRAFT_TEACHING', action: 'teaching.draft.save',
     service: 'apps/api/src/teaching-assistant/teaching-assistant.service.ts', migration: 'packages/database/migrations/0100_claire_teaching_assistant.sql',
-    test: 'packages/database/scripts/test-teaching-assistant-integrity.mjs', invocation: 'teaching_ai_invocations', drafts: 'teaching_ai_drafts',
+    test: 'packages/database/scripts/test-teaching-assistant-integrity.mjs', invocation: 'teaching_ai_invocations', drafts: 'teaching_ai_drafts', inbox: 'list_my_teaching_invocations',
   },
   {
     name: 'Chad', agent: 'chad', workType: 'AI_DRAFT_FOLLOW_UP', taskClass: 'DRAFT_FOLLOW_UP', action: 'crm.follow_up_draft.propose',
     service: 'apps/api/src/chad-follow-up-assistant/chad-follow-up-assistant.service.ts', migration: 'packages/database/migrations/0107_chad_follow_up_draft_assistant.sql',
-    test: 'packages/database/scripts/test-chad-follow-up-assistant-integrity.mjs', invocation: 'chad_follow_up_invocations', drafts: 'chad_follow_up_drafts',
+    test: 'packages/database/scripts/test-chad-follow-up-assistant-integrity.mjs', invocation: 'chad_follow_up_invocations', drafts: 'chad_follow_up_drafts', inbox: 'list_my_chad_follow_up_invocations',
   },
 ];
 
@@ -27,10 +27,13 @@ for (const employee of employees) {
   // The service is only a composition layer: typed input -> shared planner ->
   // provider-neutral runtime -> existing Action Engine proposal. It has no
   // employee-specific tool/executor or provider credential escape hatch.
-  for (const token of ['this.plans.plan(', 'this.actions.proposeInTransaction(', 'this.provider.generate(', employee.action, "effectiveAuthorityMode!=='CONFIRM'"]) {
+  for (const token of ['this.plans.plan(', 'this.actions.proposeInTransaction(', 'this.provider.generate(', employee.action]) {
     assert(service.includes(token), `${employee.name} service is missing shared governed path: ${token}`);
   }
+  assert.match(service, /effectiveAuthorityMode\s*!==\s*'CONFIRM'/, `${employee.name} service must require CONFIRM authority for a draft proposal`);
   assert.doesNotMatch(service, /\bfetch\s*\(|process\.env|from ['"](?:node:https?|openai|@anthropic|axios)/, `${employee.name} service must not own transport or credentials`);
+  assert(service.includes('listMine('), `${employee.name} service must expose only a governed own-work projection.`);
+  assert(test.includes('listMine('), `${employee.name} proof must verify requester-only durable work visibility.`);
   for (const token of [employee.invocation, employee.drafts, employee.workType, employee.taskClass, `agent_key='${employee.agent}'`, 'hon.ai_invocation_plans', 'hon.ai_usage_ledger', 'WAITING_FOR_APPROVAL', 'PROVIDER_UNKNOWN']) {
     assert(migration.includes(token), `${employee.name} durable boundary is missing ${token}`);
   }

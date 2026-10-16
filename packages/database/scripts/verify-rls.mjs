@@ -209,6 +209,27 @@ try {
     throw new Error('Attendance requires SELECT-only records and the fixed atomic command.');
   }
   await verifyMarketingAssistantSecurity(client, runtimeRoleName);
+  // One fixed requester-only work pointer per implemented drafting slice. These
+  // projections expose no prompt/draft/provider/usage table and must remain
+  // sealed SECURITY DEFINER read boundaries for the restricted runtime only.
+  const inboxFunctions = runtimeRoleName === 'hon_marketing_ai_runtime'
+    ? ['hon.list_my_marketing_invocations(text)']
+    : runtimeRoleName === 'hon_teaching_ai_runtime'
+      ? ['hon.list_my_teaching_invocations(text)']
+      : ['hon.list_my_marketing_invocations(text)', 'hon.list_my_teaching_invocations(text)', 'hon.list_my_chad_follow_up_invocations(text)'];
+  for (const signature of inboxFunctions) {
+    const inbox = (await client.query(`SELECT
+      p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AS definition_safe,
+      (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>$2 AS owner_safe,
+      has_function_privilege($2,p.oid,'EXECUTE') AS runtime_execute,
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') AS public_execute,
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee=(SELECT oid FROM pg_roles WHERE rolname=$2) AND acl.privilege_type='EXECUTE' AND acl.is_grantable) AS runtime_grantable
+      FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature, runtimeRoleName])).rows[0];
+    if (!inbox?.definition_safe || !inbox.owner_safe || !inbox.runtime_execute || inbox.public_execute || inbox.runtime_grantable) throw new Error(`Unsafe AI Draft Work inbox function: ${signature}`);
+    for (const { rolname } of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
+      if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [rolname, signature])).rows[0].allowed) throw new Error(`Forbidden client AI Draft Work inbox execution: ${rolname}.${signature}`);
+    }
+  }
   await verifyAchievementSecurity(client,runtimeRoleName);
   await verifyTestingCertificateSecurity(client, runtimeRoleName);
   await verifyTestingScorecardSecurity(client, runtimeRoleName);

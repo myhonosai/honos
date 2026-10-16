@@ -538,7 +538,7 @@ COMMIT;
 
 -- Marketing Assistant: only fixed trusted boundaries; no table access or secret storage.
 DO $$ DECLARE r text; t text; a text; f record; BEGIN
- FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN('marketing_safe_text','marketing_owner','marketing_event','guard_marketing_invocation','read_marketing_invocation','begin_marketing_request','prepare_marketing_invocation','fail_marketing_invocation','record_marketing_result','bind_marketing_proposal','marketing_action_is_current','reject_marketing_draft','save_approved_marketing_draft','marketing_planning_reference','read_marketing_campaign_content') LOOP
+ FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN('marketing_safe_text','marketing_owner','marketing_event','guard_marketing_invocation','read_marketing_invocation','list_my_marketing_invocations','begin_marketing_request','prepare_marketing_invocation','fail_marketing_invocation','record_marketing_result','bind_marketing_proposal','marketing_action_is_current','reject_marketing_draft','save_approved_marketing_draft','marketing_planning_reference','read_marketing_campaign_content') LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f.signature);
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r); END LOOP;
  END LOOP;
@@ -551,7 +551,7 @@ DO $$ DECLARE r text; t text; a text; f record; BEGIN
   END LOOP;
  END LOOP;
 END $$;
-GRANT EXECUTE ON FUNCTION hon.read_marketing_invocation(text,uuid),hon.begin_marketing_request(text,jsonb,uuid),hon.prepare_marketing_invocation(text,uuid,uuid,boolean),hon.fail_marketing_invocation(text,uuid,text,text),hon.record_marketing_result(text,uuid,jsonb),hon.bind_marketing_proposal(text,uuid,uuid),hon.marketing_action_is_current(uuid,jsonb),hon.reject_marketing_draft(uuid),hon.save_approved_marketing_draft(text,uuid),hon.marketing_planning_reference(text,uuid),hon.read_marketing_campaign_content(text,uuid) TO hon_runtime;
+GRANT EXECUTE ON FUNCTION hon.read_marketing_invocation(text,uuid),hon.list_my_marketing_invocations(text),hon.begin_marketing_request(text,jsonb,uuid),hon.prepare_marketing_invocation(text,uuid,uuid,boolean),hon.fail_marketing_invocation(text,uuid,text,text),hon.record_marketing_result(text,uuid,jsonb),hon.bind_marketing_proposal(text,uuid,uuid),hon.marketing_action_is_current(uuid,jsonb),hon.reject_marketing_draft(uuid),hon.save_approved_marketing_draft(text,uuid),hon.marketing_planning_reference(text,uuid),hon.read_marketing_campaign_content(text,uuid) TO hon_runtime;
 
 -- Deterministic School Health Score: one fixed aggregate-only read projection.
 -- It adds no direct source-table privilege, provider capability, or write path.
@@ -713,11 +713,11 @@ BEGIN
       FOR a IN SELECT attname FROM pg_attribute WHERE attrelid=format('hon.%I',t)::regclass AND attnum>0 AND NOT attisdropped LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',a,t,r); END LOOP;
     END LOOP;
   END LOOP;
-  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN('guard_chad_follow_up','resolve_chad_follow_up_scope','require_chad_follow_up_actor','chad_follow_up_event','read_chad_follow_up_invocation','begin_chad_follow_up_request','chad_follow_up_planning_reference','prepare_chad_follow_up_invocation','fail_chad_follow_up_invocation','record_chad_follow_up_result','bind_chad_follow_up_proposal','chad_follow_up_draft_is_current','transition_chad_follow_up_draft') LOOP
+  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN('guard_chad_follow_up','resolve_chad_follow_up_scope','require_chad_follow_up_actor','chad_follow_up_event','read_chad_follow_up_invocation','list_my_chad_follow_up_invocations','begin_chad_follow_up_request','chad_follow_up_planning_reference','prepare_chad_follow_up_invocation','fail_chad_follow_up_invocation','record_chad_follow_up_result','bind_chad_follow_up_proposal','chad_follow_up_draft_is_current','transition_chad_follow_up_draft') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f.signature);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r); END LOOP;
   END LOOP;
-  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN GRANT EXECUTE ON FUNCTION hon.resolve_chad_follow_up_scope(text),hon.read_chad_follow_up_invocation(text,uuid),hon.begin_chad_follow_up_request(text,jsonb,uuid),hon.chad_follow_up_planning_reference(text,uuid),hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean),hon.fail_chad_follow_up_invocation(text,uuid,text,text),hon.record_chad_follow_up_result(text,uuid,jsonb),hon.bind_chad_follow_up_proposal(text,uuid,uuid),hon.chad_follow_up_draft_is_current(uuid,jsonb),hon.transition_chad_follow_up_draft(uuid,text) TO hon_runtime; END IF;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN GRANT EXECUTE ON FUNCTION hon.resolve_chad_follow_up_scope(text),hon.read_chad_follow_up_invocation(text,uuid),hon.list_my_chad_follow_up_invocations(text),hon.begin_chad_follow_up_request(text,jsonb,uuid),hon.chad_follow_up_planning_reference(text,uuid),hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean),hon.fail_chad_follow_up_invocation(text,uuid,text,text),hon.record_chad_follow_up_result(text,uuid,jsonb),hon.bind_chad_follow_up_proposal(text,uuid,uuid),hon.chad_follow_up_draft_is_current(uuid,jsonb),hon.transition_chad_follow_up_draft(uuid,text) TO hon_runtime; END IF;
 END $$;
 COMMIT;
 
@@ -734,7 +734,7 @@ BEGIN
     END LOOP;
   END LOOP;
   FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-    WHERE n.nspname='hon' AND p.proname IN('teaching_assistant_safe_text','guard_teaching_assistant','resolve_teaching_assistant_scope','require_teaching_assistant_actor','teaching_assistant_event','read_teaching_invocation','begin_teaching_request','teaching_planning_reference','prepare_teaching_invocation','fail_teaching_invocation','record_teaching_result','bind_teaching_proposal','teaching_action_is_current','reject_teaching_draft','save_approved_teaching_draft') LOOP
+    WHERE n.nspname='hon' AND p.proname IN('teaching_assistant_safe_text','guard_teaching_assistant','resolve_teaching_assistant_scope','require_teaching_assistant_actor','teaching_assistant_event','read_teaching_invocation','list_my_teaching_invocations','begin_teaching_request','teaching_planning_reference','prepare_teaching_invocation','fail_teaching_invocation','record_teaching_result','bind_teaching_proposal','teaching_action_is_current','reject_teaching_draft','save_approved_teaching_draft') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f.signature);
   END LOOP;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('hon_runtime','anon','authenticated','service_role') LOOP
@@ -745,12 +745,12 @@ BEGIN
       END LOOP;
     END LOOP;
     FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-      WHERE n.nspname='hon' AND p.proname IN('teaching_assistant_safe_text','guard_teaching_assistant','resolve_teaching_assistant_scope','require_teaching_assistant_actor','teaching_assistant_event','read_teaching_invocation','begin_teaching_request','teaching_planning_reference','prepare_teaching_invocation','fail_teaching_invocation','record_teaching_result','bind_teaching_proposal','teaching_action_is_current','reject_teaching_draft','save_approved_teaching_draft') LOOP
+      WHERE n.nspname='hon' AND p.proname IN('teaching_assistant_safe_text','guard_teaching_assistant','resolve_teaching_assistant_scope','require_teaching_assistant_actor','teaching_assistant_event','read_teaching_invocation','list_my_teaching_invocations','begin_teaching_request','teaching_planning_reference','prepare_teaching_invocation','fail_teaching_invocation','record_teaching_result','bind_teaching_proposal','teaching_action_is_current','reject_teaching_draft','save_approved_teaching_draft') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r);
     END LOOP;
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.resolve_teaching_assistant_scope(text),hon.read_teaching_invocation(text,uuid),hon.begin_teaching_request(text,jsonb,uuid),hon.teaching_planning_reference(text,uuid),hon.prepare_teaching_invocation(text,uuid,uuid,boolean),hon.fail_teaching_invocation(text,uuid,text,text),hon.record_teaching_result(text,uuid,jsonb),hon.bind_teaching_proposal(text,uuid,uuid),hon.teaching_action_is_current(uuid,jsonb),hon.reject_teaching_draft(uuid),hon.save_approved_teaching_draft(text,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.resolve_teaching_assistant_scope(text),hon.read_teaching_invocation(text,uuid),hon.list_my_teaching_invocations(text),hon.begin_teaching_request(text,jsonb,uuid),hon.teaching_planning_reference(text,uuid),hon.prepare_teaching_invocation(text,uuid,uuid,boolean),hon.fail_teaching_invocation(text,uuid,text,text),hon.record_teaching_result(text,uuid,jsonb),hon.bind_teaching_proposal(text,uuid,uuid),hon.teaching_action_is_current(uuid,jsonb),hon.reject_teaching_draft(uuid),hon.save_approved_teaching_draft(text,uuid) TO hon_runtime;
   END IF;
 END $$;
 COMMIT;
