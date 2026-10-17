@@ -10,6 +10,7 @@ import {
   type HonAiTeamMember,
   type HonInterfaceTheme,
 } from '@hon/design-system';
+import { PUBLIC_PLAN_CATALOG } from '@hon/config';
 import styles from './hon-reference-suite.module.css';
 
 type ReferenceScreen = keyof typeof HON_REFERENCE_SCREEN_STATES;
@@ -94,6 +95,14 @@ const hqMetrics = [
 
 function ReferenceNotice(): React.ReactElement {
   return <div className={styles.referenceNotice}>Design reference · representative sample state only · no tenant data is read or changed</div>;
+}
+
+function PublicPlanCatalog(): React.ReactElement {
+  return <section className={styles.publicPlanCatalog} aria-label="Public HON plan catalog">
+    <div><strong>Public plan catalog</strong><span>Non-binding display metadata · planning only</span></div>
+    <ul>{PUBLIC_PLAN_CATALOG.map((plan) => <li key={plan.tier}><b>{plan.displayName}</b><span>${plan.monthlyDisplayPriceUsd}/month</span><small>{plan.premiumAiCreditPlanningAllowance.toLocaleString()} premium AI credit planning allowance</small></li>)}</ul>
+    <p>These values do not activate live billing or an offer, create a subscription, charge a payment, issue an invoice, or grant credits.</p>
+  </section>;
 }
 
 function Mark({ compact = false }: { compact?: boolean }): React.ReactElement {
@@ -273,9 +282,11 @@ function MobileCompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme;
 export function HonReferenceSuite({ screen }: { screen: ReferenceScreen }): React.ReactElement {
   const [theme, setTheme] = useState<HonInterfaceTheme>('modern');
   const props = { theme, onTheme: setTheme };
-  if (screen === 'hq') return <HqReference {...props} />;
-  if (screen === 'core') return <CoreReference {...props} />;
-  if (screen === 'parent') return <ParentReference {...props} />;
-  if (screen === 'mobile') return <MobileCompleteReference {...props} />;
-  return <CompleteReference {...props} />;
+  const publicCatalog = screen === 'complete' || screen === 'core' ? <PublicPlanCatalog /> : null;
+  const reference = screen === 'hq' ? <HqReference {...props} />
+    : screen === 'core' ? <CoreReference {...props} />
+      : screen === 'parent' ? <ParentReference {...props} />
+        : screen === 'mobile' ? <MobileCompleteReference {...props} />
+          : <CompleteReference {...props} />;
+  return <>{publicCatalog}{reference}</>;
 }

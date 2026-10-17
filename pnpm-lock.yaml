@@ -86,6 +86,9 @@ importers:
       '@hon/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@hon/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@hon/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

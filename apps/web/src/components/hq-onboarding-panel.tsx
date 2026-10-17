@@ -1,11 +1,19 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { DEFAULT_PUBLIC_PLAN_TIER, PUBLIC_PLAN_CATALOG, type PublicPlanTier } from '@hon/config';
 
 type AccessState = 'checking' | 'available' | 'signed-out' | 'forbidden' | 'unavailable';
 type FormState = { kind: 'idle' } | { kind: 'submitting' } | { kind: 'success'; organizationId: string; schoolId: string } | { kind: 'error'; message: string };
 
-const initialForm = { legalName: '', displayName: '', schoolName: '', schoolSlug: '', timezone: 'America/Los_Angeles', initialTier: 'ESSENTIAL' };
+const initialForm: { legalName: string; displayName: string; schoolName: string; schoolSlug: string; timezone: string; initialTier: PublicPlanTier } = {
+  legalName: '',
+  displayName: '',
+  schoolName: '',
+  schoolSlug: '',
+  timezone: 'America/Los_Angeles',
+  initialTier: DEFAULT_PUBLIC_PLAN_TIER,
+};
 
 export function HqOnboardingPanel(): React.ReactElement {
   const [access, setAccess] = useState<AccessState>('checking');
@@ -49,7 +57,8 @@ export function HqOnboardingPanel(): React.ReactElement {
       <label>First school name<input required maxLength={120} value={form.schoolName} onChange={(event) => setForm({ ...form, schoolName: event.target.value })} placeholder="Example Martial Arts — Main" /></label>
       <label>School slug<input required maxLength={80} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={form.schoolSlug} onChange={(event) => setForm({ ...form, schoolSlug: event.target.value.toLowerCase() })} placeholder="example-main" /></label>
       <label>School timezone<input required maxLength={64} value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })} placeholder="America/Los_Angeles" /></label>
-      <label>Initial HON tier<select value={form.initialTier} onChange={(event) => setForm({ ...form, initialTier: event.target.value as 'ESSENTIAL' | 'CORE' | 'COMPLETE' })}><option value="ESSENTIAL">Essential — foundational school operations</option><option value="CORE">Core — advanced conventional operations</option><option value="COMPLETE">Complete — governed AI Office</option></select></label>
+      <label>Initial HON tier<select value={form.initialTier} onChange={(event) => setForm({ ...form, initialTier: event.target.value as PublicPlanTier })}>{PUBLIC_PLAN_CATALOG.map((plan) => <option key={plan.tier} value={plan.tier}>{plan.displayName} — ${plan.monthlyDisplayPriceUsd}/month · {plan.premiumAiCreditPlanningAllowance.toLocaleString()} premium AI credit planning allowance</option>)}</select></label>
+      <small className="hq-plan-catalog-note">Core and Complete values are non-binding public display metadata and planning allowances. This governed tenant-provisioning request does not activate live billing or an offer, create a subscription, issue an invoice, charge a payment, or grant credits.</small>
       <button type="submit" disabled={state.kind === 'submitting'}>{state.kind === 'submitting' ? 'Provisioning securely…' : 'Provision school tenant →'}</button>
       {state.kind === 'error' ? <output className="hq-form-error">{state.message}</output> : null}
     </form>

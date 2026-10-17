@@ -189,6 +189,8 @@ export function tierIncludesFeature(tier: HonTier, feature: string): boolean {
 
 export { AI_TEAM_CATALOG, aiTeamAgentDefinition } from './ai-team-catalog.js';
 
+export * from './public-plan-catalog.js';
+
 export { AI_INVOCATION_PLANNING_LIMITS, AI_INVOCATION_PLANNING_TASKS } from './ai-invocation-planning.js';
 export { AI_MODEL_EVALUATION_FIXTURE_MANIFEST } from './ai-model-evaluation.js';
 export { DOCUMENT_COMMAND_REGISTRY } from './documents.js';

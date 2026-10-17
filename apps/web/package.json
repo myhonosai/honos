@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@hon/auth": "workspace:*",
+    "@hon/config": "workspace:*",
     "@hon/contracts": "workspace:*",
     "@hon/design-system": "workspace:*",
     "next": "^15.1.3",
