@@ -213,6 +213,10 @@
       "title": "HON | Human testing registration reviews"
     },
     {
+      "path": "/staff/testing/candidates/register",
+      "title": "HON | Human Testing Candidate Registration"
+    },
+    {
       "path": "/staff/testing/certificates",
       "title": "HON | Human-issued testing certificates"
     },
