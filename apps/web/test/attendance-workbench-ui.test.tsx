@@ -4,6 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ATTENDANCE_CATEGORIES, type ConfigureAttendancePolicyInput, type RecordAttendanceInput } from '@hon/contracts';
 import { AttendanceWorkbench } from '../src/components/attendance-workbench';
+import { attendanceScopePrefill } from '../src/components/attendance-scope-prefill';
+import { attendanceScopeHref as dashboardAttendanceScopeHref } from '../src/components/staff-dashboard';
+import { attendanceScopeHref as commandCenterAttendanceScopeHref } from '../src/components/school-command-center';
 import {
   assertAttendanceEndpoint,
   attendancePaths,
@@ -40,6 +43,29 @@ describe('human staff attendance workbench', () => {
       expect(html).not.toContain('PRESENT');
       expect(html).not.toMatch(/type="(?:email|file)"/);
     } finally { fetcher.mockRestore(); }
+  });
+
+  it('prefills only untrusted organization and school selectors, leaves program/session/student blank, and stays idle', () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      const html = renderToStaticMarkup(<AttendanceWorkbench initialScope={{ organizationId: organization, schoolId: school }} />);
+      const inputValues = [...html.matchAll(/<input\b[^>]*\bvalue="([^"]*)"/g)].map((match) => match[1]);
+      expect(inputValues).toEqual([organization, school, '', '', '']);
+      expect(html).toContain('prefill only the organization and school selectors as untrusted URL values');
+      expect(html).toContain('Program, class session, and student profile always start blank');
+      expect(html).not.toContain(program);
+      expect(html).not.toContain(session);
+      expect(html).not.toContain(student);
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { fetcher.mockRestore(); }
+  });
+
+  it('accepts only bounded UUID-like URL values as lowercased untrusted prefill', () => {
+    expect(attendanceScopePrefill('AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA')).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(attendanceScopePrefill(organization)).toBe(organization);
+    for (const unsafe of [undefined, null, [organization], { organizationId: organization }, '', 'x'.repeat(36), organization.slice(0, -1), `${organization}?schoolId=${school}`, '11111111-1111-6111-8111-111111111111', '11111111-1111-4111-7111-111111111111']) {
+      expect(attendanceScopePrefill(unsafe)).toBeUndefined();
+    }
   });
 
   it('uses only generated fixed relative policy/record paths, direct-human header, expected versions, and idempotency keys', async () => {
@@ -112,5 +138,24 @@ describe('human staff attendance workbench', () => {
     for (const token of ['cookies', 'verifySession', 'HON_SESSION_COOKIE', "redirect('/auth/login')", 'force-dynamic', 'index: false']) expect(route).toContain(token);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/attendance')).toHaveLength(1);
+  });
+
+  it('uses exact verified-snapshot attendance links and keeps the route/workbench static boundary non-effectful', () => {
+    const expected = `/staff/attendance?organizationId=${organization}&schoolId=${school}`;
+    expect(dashboardAttendanceScopeHref(organization, school)).toBe(expected);
+    expect(commandCenterAttendanceScopeHref(organization, school)).toBe(expected);
+
+    const workbench = readFileSync('src/components/attendance-workbench.tsx', 'utf8');
+    const route = readFileSync('src/app/staff/attendance/page.tsx', 'utf8');
+    const dashboard = readFileSync('src/components/staff-dashboard.tsx', 'utf8');
+    const commandCenter = readFileSync('src/components/school-command-center.tsx', 'utf8');
+    expect(dashboard).toContain('attendanceScopeHref(snapshot.organizationId, snapshot.schoolId)');
+    expect(dashboard).toContain('const attendanceHref = selection ? attendanceScopeHref(selection.organizationId, selection.schoolId) : \'/staff/attendance\';');
+    expect(commandCenter).toContain('const attendanceHref = snapshot ? attendanceScopeHref(snapshot.organizationId, snapshot.schoolId) : \'/staff/attendance\';');
+    for (const source of [dashboard, commandCenter]) expect(source).toContain('<a href={attendanceHref}>Attendance workbench</a>');
+    expect(workbench).toContain('initialScope');
+    expect(workbench).not.toMatch(/useEffect|fetch\(|localStorage|sessionStorage|window\.location|invokeLLM|executeAction/);
+    for (const token of ['searchParams', 'attendanceScopePrefill(query.organizationId)', 'attendanceScopePrefill(query.schoolId)', 'cookies', 'verifySession', "redirect('/auth/login')"]) expect(route).toContain(token);
+    expect(route).not.toMatch(/programId|sessionId|studentProfileId|loadAttendance|saveAttendance|fetch\(/);
   });
 });

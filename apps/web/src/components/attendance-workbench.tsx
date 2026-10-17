@@ -29,8 +29,9 @@ import styles from './attendance-workbench.module.css';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type RecordDraft = { status: AttendanceStatus | ''; category: AttendanceCategory | ''; note: string };
 type RetainedCommand = { fingerprint: string; key: string };
+export type AttendanceInitialScope = { organizationId?: string | undefined; schoolId?: string | undefined };
 
-const blankScope = (): AttendanceKnownScope => ({ organizationId: '', schoolId: '', programId: '', sessionId: '', studentProfileId: '' });
+const blankScope = (initialScope: AttendanceInitialScope = {}): AttendanceKnownScope => ({ organizationId: initialScope.organizationId ?? '', schoolId: initialScope.schoolId ?? '', programId: '', sessionId: '', studentProfileId: '' });
 const blankRecord = (): RecordDraft => ({ status: '', category: '', note: '' });
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 
@@ -51,8 +52,8 @@ function recordDraftOf(record: AttendanceRecordSummary | null): RecordDraft {
   return record ? { status: record.status, category: record.category, note: record.note ?? '' } : blankRecord();
 }
 
-export function AttendanceWorkbench(): React.ReactElement {
-  const [scope, setScope] = useState<AttendanceKnownScope>(blankScope);
+export function AttendanceWorkbench({ initialScope = {} }: { initialScope?: AttendanceInitialScope } = {}): React.ReactElement {
+  const [scope, setScope] = useState<AttendanceKnownScope>(() => blankScope(initialScope));
   const [policy, setPolicy] = useState<AttendanceProgressionPolicy | null>(null);
   const [policyDraft, setPolicyDraft] = useState<AttendanceCategoryPolicy[]>([]);
   const [record, setRecord] = useState<AttendanceRecordSummary | null>(null);
@@ -183,7 +184,7 @@ export function AttendanceWorkbench(): React.ReactElement {
 
     <section>
       <h2>1 / Exact already-known scope</h2>
-      <p>Enter the five UUIDs you already know. There is no directory, name search, freeform route, query authority, parent access, HQ access, AI selector, or URL input. Changing any selector clears loaded policy, current record, command result, and retained retry keys.</p>
+      <p>Enter the five UUIDs you already know. A verified dashboard or Command Center may prefill only the organization and school selectors as untrusted URL values; it grants no authority and does not load anything. Program, class session, and student profile always start blank and must be manually entered as already-known IDs. There is no directory, name search, freeform route, query authority, parent access, HQ access, or AI selector. Changing any selector clears loaded policy, current record, command result, and retained retry keys.</p>
       <div className={styles.scopeGrid}>
         {([
           ['organizationId', 'Organization UUID'], ['schoolId', 'School UUID'], ['programId', 'Program UUID'], ['sessionId', 'Class session UUID'], ['studentProfileId', 'Student profile UUID'],
