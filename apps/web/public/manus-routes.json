@@ -245,6 +245,10 @@
       "title": "Private curriculum library"
     },
     {
+      "path": "/staff/curriculum/progress",
+      "title": "HON | Human Curriculum Progress"
+    },
+    {
       "path": "/parent/curriculum-library",
       "title": "Family curriculum references"
     },
