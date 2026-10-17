@@ -32,8 +32,8 @@ export class PromotionDecisionController {
 
   /**
    * This endpoint is deliberately a direct human-instructor command, not an
-   * Action Engine proposal or executor. Its only accepted input is the final
-   * decision and the instructor's rationale.
+   * Action Engine proposal or executor. Its only accepted input is the expected
+   * candidate version, final decision, and instructor's rationale.
    */
   @Post(':candidateId/promotion-decision')
   async decide(

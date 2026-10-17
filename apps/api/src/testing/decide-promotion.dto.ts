@@ -3,10 +3,14 @@ import {
   type DecidePromotionInput,
   type PromotionDecisionStatus,
 } from '@hon/contracts';
-import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsString, MaxLength, Min } from 'class-validator';
 
 /** A human instructor's final decision for an already-final testing candidate. */
 export class DecidePromotionDto implements DecidePromotionInput {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @IsIn([...PROMOTION_DECISION_STATUSES])
   status!: PromotionDecisionStatus;
 

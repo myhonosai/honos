@@ -689,6 +689,7 @@ export type PromotionDecisionStatus = (typeof PROMOTION_DECISION_STATUSES)[numbe
 
 /** This human-only command intentionally has no actor, AI, or source fields. */
 export interface DecidePromotionInput {
+  expectedVersion: number;
   status: PromotionDecisionStatus;
   rationale: string;
 }

@@ -221,6 +221,10 @@
       "title": "HON | Human Testing Candidate Outcome"
     },
     {
+      "path": "/staff/testing/promotion-decisions",
+      "title": "HON | Final Human Promotion Decision"
+    },
+    {
       "path": "/staff/testing/certificates",
       "title": "HON | Human-issued testing certificates"
     },

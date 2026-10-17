@@ -65,6 +65,7 @@ interface IdempotencyRecord {
 }
 
 interface NormalizedDecisionInput {
+  expectedVersion: number;
   status: PromotionDecisionStatus;
   rationale: string;
 }
@@ -82,6 +83,9 @@ function asIso(value: Date | string): string {
 }
 
 function normalizeInput(input: DecidePromotionInput): NormalizedDecisionInput {
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
+    throw validationError('expectedVersion must be a positive whole number.');
+  }
   if (!PROMOTION_DECISION_STATUSES.includes(input.status)) {
     throw validationError('Promotion decision status must be PROMOTED, DEFERRED, or NOT_PROMOTED.');
   }
@@ -90,7 +94,7 @@ function normalizeInput(input: DecidePromotionInput): NormalizedDecisionInput {
   }
   const rationale = input.rationale.trim();
   if (!rationale) throw validationError('rationale is required and cannot be blank.');
-  return { status: input.status, rationale };
+  return { expectedVersion: input.expectedVersion, status: input.status, rationale };
 }
 
 function toSummary(row: PromotionDecisionRow): PromotionDecisionSummary {
@@ -160,6 +164,15 @@ export class PromotionDecisionService {
       );
       const candidate = candidateResult.rows[0];
       if (!candidate) throw new NotFoundException('Testing candidate was not found in this school.');
+      // A matching completed command can replay only while it still identifies
+      // the same current candidate version. New commands never reserve or
+      // mutate idempotency state for a stale candidate observation.
+      if (candidate.version !== normalized.expectedVersion) {
+        throw new ConflictException({
+          code: 'VERSION_CONFLICT',
+          detail: 'The testing candidate has changed. Refresh it and retry with its current version and a new Idempotency-Key.',
+        });
+      }
       if (!TESTING_CANDIDATE_RESULTS.includes(candidate.result)) {
         throw new Error('HON testing candidate query returned an invalid result.');
       }
