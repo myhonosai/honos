@@ -8,6 +8,7 @@ This repository is the active, security-sensitive HON OS codebase. **Read [`docs
 2. [`docs/HON_MASTER_DIRECTIVE.md`](docs/HON_MASTER_DIRECTIVE.md)
 3. [`TODO.md`](TODO.md)
 4. The exact relevant operating contract under `docs/architecture/` or `docs/`
+5. [`docs/hon/README.md`](docs/hon/README.md) when work touches commercial policy, public plans, HQ autonomy, AI credit economics, referrals, contests, growth, or owner business vision. Those documents are future business intent, not permission to activate money, providers, messaging, or live entitlements.
 
 ## Non-negotiables
 

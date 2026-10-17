@@ -16,11 +16,12 @@
 Resolve conflicts using this order:
 
 1. **Latest explicit owner direction** and already approved owner policy decisions.
-2. [`HON_MASTER_DIRECTIVE.md`](HON_MASTER_DIRECTIVE.md) — core product, security, tier, AI, and architecture authority.
-3. [`TODO.md`](../TODO.md) — dependency-aware delivery outcomes and real validation evidence.
-4. Relevant domain operating contract under `docs/architecture/` or `docs/`.
-5. Reconciliation documents, especially [`architecture/VISUAL_MODULE_BLUEPRINT_RECONCILIATION.md`](architecture/VISUAL_MODULE_BLUEPRINT_RECONCILIATION.md).
-6. Existing implemented contracts, tests, and migrations.
+2. [`hon/README.md`](hon/README.md) and its linked owner business/commercial documents when they apply — future business intent that cannot relax security or activate commercial effects by itself.
+3. [`HON_MASTER_DIRECTIVE.md`](HON_MASTER_DIRECTIVE.md) — core product, security, tier, AI, and architecture authority.
+4. [`TODO.md`](../TODO.md) — dependency-aware delivery outcomes and real validation evidence.
+5. Relevant domain operating contract under `docs/architecture/` or `docs/`.
+6. Reconciliation documents, especially [`architecture/VISUAL_MODULE_BLUEPRINT_RECONCILIATION.md`](architecture/VISUAL_MODULE_BLUEPRINT_RECONCILIATION.md).
+7. Existing implemented contracts, tests, and migrations.
 
 Visual mockups, reference screens, illustrative prices, sample metrics, names, agent activity, and screenshots are **direction only**. They never authorize a live fact, new permission, provider call, payment, message, deployment, or external action.
 
