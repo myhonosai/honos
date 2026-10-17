@@ -9,6 +9,11 @@ const EMPTY_SCOPE = { organizationId: '', schoolId: '' };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function display(value: string): string { return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short', hour12: false }).format(new Date(value)) + ' UTC'; }
 function validScope(scope: typeof EMPTY_SCOPE): boolean { return UUID.test(scope.organizationId) && UUID.test(scope.schoolId); }
+export function classBookingHandoffHref(scope: typeof EMPTY_SCOPE, sessionId: unknown): string | undefined {
+  if (!validScope(scope) || typeof sessionId !== 'string' || !UUID.test(sessionId)) return undefined;
+  const query = new URLSearchParams({ organizationId: scope.organizationId.toLowerCase(), schoolId: scope.schoolId.toLowerCase(), sessionId: sessionId.toLowerCase() });
+  return `/staff/schedule/bookings?${query.toString()}`;
+}
 
 /** Deliberately bounded read/selection aid; it never creates a booking or changes a session. */
 export function ClassSessionsRead(): React.ReactElement {
@@ -37,6 +42,8 @@ export function ClassSessionsRead(): React.ReactElement {
       setSessions(null); setSelected(null); setError(reason instanceof Error ? reason.message : 'Class Sessions is unavailable.');
     } finally { if (current === generation.current) setBusy(false); }
   }
+  const selectedReturned = selected && sessions?.some(session => session.sessionId === selected.sessionId) ? selected : null;
+  const bookingHref = selectedReturned ? classBookingHandoffHref(scope, selectedReturned.sessionId) : undefined;
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/schedule/sessions/create">Create a class session</a><a href="/staff/schedule/bookings">Manual class booking</a></nav>
     <header><p>HON / CONVENTIONAL STAFF OPERATIONS</p><h1>Class Sessions</h1><p>Select from one bounded, current-school operational session list. This page begins blank and makes no request until you enter an exact current-school scope and explicitly load it.</p></header>
@@ -48,7 +55,7 @@ export function ClassSessionsRead(): React.ReactElement {
       {sessions && sessions.length === 0 && <p className={styles.empty}>No sessions are returned in this fixed bounded window. This is not an availability or seat result.</p>}
     </section>
     {sessions && sessions.length > 0 && <section aria-labelledby="returned-sessions"><h2 id="returned-sessions">Bounded returned sessions</h2><p>Choose one returned operational record. Selecting a row is local-only; it does not book, reserve, waitlist, check in, change, or guarantee a session.</p><div className={styles.records}>{sessions.map((session) => <article key={session.sessionId} className={styles.record} aria-label={`Class session ${session.name}`}><div className={styles.actions}><strong>{session.name}</strong><button type="button" onClick={() => setSelected(session)} aria-pressed={selected?.sessionId === session.sessionId}>{selected?.sessionId === session.sessionId ? 'Selected' : 'Select session'}</button></div><dl><dt>UTC start / end</dt><dd>{display(session.startsAt)} / {display(session.endsAt)}</dd><dt>Room</dt><dd>{session.roomName ?? 'No room recorded'}</dd><dt>Capacity / booking policy</dt><dd>{session.capacity} / {session.bookingPolicy}</dd><dt>Persisted status</dt><dd>{session.status}</dd><dt>Created at</dt><dd>{display(session.createdAt)}</dd></dl></article>)}</div></section>}
-    {selected && <section aria-label="Selected class session" className={styles.record}><h2>Selected session</h2><p><strong>{selected.name}</strong> is selected in this browser only. Its technical ID is intentionally not needed to make this selection.</p><p>This selection does not establish eligibility, instructor availability, booking/waitlist, attendance, enrollment, capacity/seat guarantee, ClassPass, membership/payment, or any action. If a separate manual booking is needed, that independent workflow reauthorizes every exact selector.</p><a href="/staff/schedule/bookings">Open independent manual booking workflow</a></section>}
+    {selectedReturned && <section aria-label="Selected class session" className={styles.record}><h2>Selected session</h2><p><strong>{selectedReturned.name}</strong> is selected in this browser only. Its technical ID is intentionally not needed to make this selection.</p><p>This selection does not establish eligibility, instructor availability, booking/waitlist, attendance, enrollment, capacity/seat guarantee, ClassPass, membership/payment, or any action. If a separate manual booking is needed, that independent workflow reauthorizes every exact selector.</p>{bookingHref && <a href={bookingHref}>Open manual booking with these untrusted selectors</a>}</section>}
     <p>Scope inputs, bounded results and selection remain memory-only. Editing scope, clearing, access loss, remounting or reload clears them. No polling, search, calendar integration, auto-selection, automatic booking, mutation or retry occurs.</p>
   </main>;
 }

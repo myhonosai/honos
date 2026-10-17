@@ -2,9 +2,9 @@
 
 ## Delivered scope
 
-`/staff/schedule/bookings` is a **conventional, direct-human staff booking workbench**. The existing dynamic `/staff` layout verifies the signed application session before rendering. The page is dynamic and no-index, takes no query/prefill inputs and starts with four blank ID fields, an unselected kind and no receipt. It is included once in `apps/web/public/manus-routes.json`; all other manifest entries are unchanged.
+`/staff/schedule/bookings` is a **conventional, direct-human staff booking workbench**. The existing dynamic `/staff` layout verifies the signed application session before rendering. The page is dynamic and no-index, accepts only the exact closed `organizationId`/`schoolId`/`sessionId` UUID query shape from a selected bounded Class Sessions result, and remains otherwise blank/idle with an unselected kind and no receipt. The handoff leaves the student UUID blank and cannot issue a request, allocate a key or establish scope authority. It is included once in `apps/web/public/manus-routes.json`; all other manifest entries are unchanged.
 
-Only these already-known identifiers are accepted: organization UUID, school UUID, class session UUID and student profile UUID. Browser ID validation accepts complete UUIDs (versions 1–5), with no names, URLs, whitespace, query selectors or inferred relationships. IDs are **untrusted selectors**, never proof of current school authority, identity, eligibility, enrollment or availability.
+Only these already-known identifiers are accepted: organization UUID, school UUID, class session UUID and student profile UUID. Browser ID validation accepts complete UUIDs (versions 1–5), with no names, URLs, whitespace or inferred relationships. The closed three-selector handoff may prefill only organization/school/session; any missing, duplicate, extra or non-UUID query value clears the whole prefill. IDs are **untrusted selectors**, never proof of current school authority, identity, eligibility, enrollment or availability.
 
 The immutable selectable kinds come from the existing `CLASS_BOOKING_KINDS`:
 
@@ -41,7 +41,7 @@ The request always uses:
 - `X-HON-Human-Command: class-booking`
 - one generated UUID-v4 `Idempotency-Key`
 
-There is no GET, discovery/load path, arbitrary URL transport, caller-selected method or automatic I/O. Key allocation occurs only in the explicit confirmed submit handler, **after local ID and kind validation**. Merely mounting, typing, selecting or confirming performs no request and allocates no key. Rapid duplicate submits/retries are blocked synchronously. Inputs are disabled during the outstanding command.
+There is no GET, discovery/load path, arbitrary URL transport, caller-selected method or automatic I/O. Key allocation occurs only in the explicit confirmed submit handler, **after local ID and kind validation**. Merely mounting, receiving a selector prefill, typing, selecting or confirming performs no request and allocates no key. Rapid duplicate submits/retries are blocked synchronously. Inputs are disabled during the outstanding command.
 
 ## Narrow HTTP guard: why it was necessary
 
@@ -85,7 +85,7 @@ Ordinary 400/404/409/413/415/422 rejections do not retain retry. Error responses
 
 No directory, list, roster, people/family/program search, calendar or current-status lookup; no session create/edit/cancel or booking edit/cancel; no eligibility/identity/enrollment/availability inference; no ClassPass grant/redemption; no attendance, progression, testing, membership, payment, message, provider, AI, Action Engine, automation or external-delivery changes.
 
-The new page is a direct route/manifest entry, not a new dashboard handoff or school-selector trust mechanism.
+The page is a direct route/manifest entry, not a new dashboard handoff or school-selector trust mechanism. Its only session handoff is a closed, untrusted three-UUID prefill from an already selected bounded Class Sessions row; the session list remains unable to provide a student, booking kind, confirmation, authority, seat/waitlist outcome or command.
 
 ## Validation evidence
 

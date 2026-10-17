@@ -49,7 +49,7 @@ Migration `0147_current_school_class_sessions_read.sql` grants the permission on
 
 The projection does **not** expose or query instructors, students/roster, families, enrollment, eligibility, attendance, bookings/waitlist, ClassPass, membership/payment, providers, AI, Action Engine, aggregates, generic search/directory data, or any mutation/effect. It creates no audit, outbox, idempotency, booking, notification, calendar, provider, or payment record.
 
-The page's **Select session** control is memory-only. It cannot book, reserve, waitlist, check in, modify, or guarantee a seat. The link to the existing manual booking workflow transfers no scope or authority; that workflow independently authorizes its own exact inputs.
+The page's **Select session** control is memory-only. It cannot book, reserve, waitlist, check in, modify, or guarantee a seat. Only after an item from the verified bounded response is selected, the page may offer a normal link containing exactly that page's organization, school and selected-session UUIDs as **untrusted URL selectors** for the manual booking workbench. It transfers no roster, student, kind, receipt/status, capacity/waitlist fact, entitlement, authority, or command. The destination remains idle and independently authorizes every exact input before its canonical booking command.
 
 The existing class-session creation receipt has one clean destination link to the bounded read. It carries no UUID prefill, session ID, scope, authority, or capability.
 
@@ -57,4 +57,4 @@ The existing class-session creation receipt has one clean destination link to th
 
 `pnpm db:setup-class-sessions-read` creates only the marked disposable localhost database and private job-directory credentials. `pnpm db:test-class-sessions-read` proves the 50-row bound/window/order/minimum shape, denied direct table reads and helper execution, forced RLS/function ACLs, no-write behavior, cross-school suppression, and direct-human/current-school/permission/entitlement/HQ/family/mixed-role/nonhuman/delegated/action denials.
 
-Focused API and browser contracts, the disposable 0147 integrity proof, root `pnpm test`, root `pnpm check`, root `pnpm build`, and `git diff --check` passed locally. The fixture is localhost-only and does not exercise any remote/shared database, provider, payment, or deployment.
+Focused API/browser contracts, the disposable 0147 integrity proof, the session-to-booking idle-handoff UI tests, root `pnpm test`, root `pnpm check`, root `pnpm build`, and `git diff --check` passed locally. The fixture is localhost-only and does not exercise any remote/shared database, provider, payment, or deployment.

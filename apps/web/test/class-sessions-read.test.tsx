@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { ClassSessionsReadAccessError, classSessionsReadPath, loadCurrentSchoolClassSessions, parseClassSessionsRead } from '../src/components/class-sessions-read-http';
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual, useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.cells)) hooks.cells[i] = initial; return [hooks.cells[i], (value: unknown) => { hooks.cells[i] = typeof value === 'function' ? (value as (v: unknown) => unknown)(hooks.cells[i]) : value; }]; }, useRef: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.cells)) hooks.cells[i] = { current: initial }; return hooks.cells[i]; }, useEffect: (effect: () => (() => void) | void) => { const i = hooks.cursor++; if (!(i in hooks.cells)) { hooks.cells[i] = { setup: effect }; hooks.effects.push(() => { (hooks.cells[i] as { cleanup?: (() => void) | undefined }).cleanup = effect() || undefined; }); } } }; });
-import { ClassSessionsRead } from '../src/components/class-sessions-read';
+import { ClassSessionsRead, classBookingHandoffHref } from '../src/components/class-sessions-read';
 import Page, { dynamic, metadata } from '../src/app/staff/schedule/sessions/page';
 const id = (n: string) => `${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
 const scope = { organizationId: id('1'), schoolId: id('2') };
@@ -33,11 +33,18 @@ describe('bounded current-school Class Sessions browser read', () => {
     for (const status of [401, 403]) { fetcher.mockResolvedValueOnce(Response.json({}, { status })); await expect(loadCurrentSchoolClassSessions(scope.organizationId, scope.schoolId)).rejects.toBeInstanceOf(ClassSessionsReadAccessError); }
     for (const response of [new Response('bad', { status: 200, headers: { 'Content-Type': 'application/json' } }), Response.json(envelope(), { status: 201 }), Response.json({ data: [{ ...session, bookingId: id('6') }], meta: envelope().meta }, { status: 200 }), new Response('x'.repeat(64_001), { status: 200, headers: { 'Content-Type': 'application/json' } })]) { fetcher.mockResolvedValueOnce(response); await expect(loadCurrentSchoolClassSessions(scope.organizationId, scope.schoolId)).rejects.toThrow(); }
   });
-  it('starts blank and idle, lists only after an explicit valid scope load, and selection is local-only', async () => {
+  it('starts blank and idle, renders the exact booking handoff only after a loaded row is selected, and never auto-navigates or posts', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(envelope()));
     expect([field('organizationId').props.value, field('schoolId').props.value]).toEqual(['', '']); expect(text(render())).toContain('No session list is shown'); expect(fetcher).not.toHaveBeenCalled(); submit(); await settle(); expect(fetcher).not.toHaveBeenCalled();
+    expect(elements(render()).filter(element => element.type === 'a' && String(element.props.href).includes('/staff/schedule/bookings?')).length).toBe(0);
     edit('organizationId', scope.organizationId); edit('schoolId', scope.schoolId); submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(1); expect(text(render())).toContain('Morning fundamentals');
+    expect(elements(render()).filter(element => element.type === 'a' && String(element.props.href).includes('/staff/schedule/bookings?')).length).toBe(0);
     const select = elements(render()).find((element) => element.type === 'button' && text(element) === 'Select session')!; select.props.onClick(); expect(text(render())).toContain('Selected session'); expect(text(render())).toContain('technical ID is intentionally not needed'); expect(fetcher).toHaveBeenCalledTimes(1);
+    const handoff = elements(render()).find(element => element.type === 'a' && text(element) === 'Open manual booking with these untrusted selectors')!;
+    expect(handoff.props.href).toBe(`/staff/schedule/bookings?organizationId=${scope.organizationId}&schoolId=${scope.schoolId}&sessionId=${session.sessionId}`); expect(handoff.props.onClick).toBeUndefined();
+    expect(fetcher.mock.calls.map(([, request]) => (request as RequestInit).method)).toEqual(['GET']);
+    expect(classBookingHandoffHref({ organizationId: 'not-a-uuid', schoolId: scope.schoolId }, session.sessionId)).toBeUndefined();
+    expect(classBookingHandoffHref(scope, `${session.sessionId}?studentProfileId=${id('5')}`)).toBeUndefined();
   });
   it('is protected dynamic/noindex, listed once, and declares no search, booking, mutation, roster, availability or downstream executor', () => {
     const page = Page(); expect(page.type).toBe(ClassSessionsRead); expect(dynamic).toBe('force-dynamic'); expect(metadata.robots).toEqual({ index: false, follow: false });

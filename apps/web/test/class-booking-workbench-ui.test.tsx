@@ -20,7 +20,7 @@ const response = (data: unknown = booking, status = 201) => Response.json({ data
 type Element = ReactElement<Record<string, any>>;
 function elements(node: unknown): Element[] { if (Array.isArray(node)) return node.flatMap(elements); if (!React.isValidElement(node)) return []; const e = node as Element; return [e, ...elements(e.props.children)]; }
 function text(node: unknown): string { if (Array.isArray(node)) return node.map(text).join(' '); if (React.isValidElement(node)) return text((node as Element).props.children); return typeof node === 'string' || typeof node === 'number' ? String(node) : ''; }
-function render(): Element { hooks.cursor = 0; const tree = ClassBookingWorkbench() as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
+function render(props?: { initialPrefill?: unknown }): Element { hooks.cursor = 0; const tree = ClassBookingWorkbench(props) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
 function unmount(): void { for (const cell of hooks.cells) if (cell && typeof cell === 'object' && 'cleanup' in cell) (cell as { cleanup?: () => void }).cleanup?.(); }
 const button = (label: string) => elements(render()).find(e => e.type === 'button' && text(e) === label);
 const field = (name: string) => elements(render()).find(e => e.props.name === name)!;
@@ -47,6 +47,18 @@ describe('bounded direct-human manual booking UI', () => {
     expect(text(render())).toContain('Returned booking receipt:  BOOKED');
     submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(1);
     expect(button('Retry exact unchanged booking command')).toBeUndefined();
+  });
+
+  it('accepts only the closed three-selector prefill, leaves student/kind/confirmation blank, and performs no automatic I/O or key allocation', () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch'); const allocate = vi.spyOn(crypto, 'randomUUID');
+    const prefilled = elements(render({ initialPrefill: { organizationId: ids.organizationId, schoolId: ids.schoolId, sessionId: ids.sessionId } }));
+    expect(prefilled.filter(e => e.type === 'input' && e.props.type !== 'checkbox').map(e => e.props.value)).toEqual([ids.organizationId, ids.schoolId, ids.sessionId, '']);
+    expect(prefilled.find(e => e.props.name === 'bookingKind')!.props.value).toBe(''); expect(prefilled.find(e => e.type === 'input' && e.props.type === 'checkbox')!.props.checked).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
+    hooks.cells = []; hooks.cursor = 0; hooks.effects = [];
+    const cleared = elements(render({ initialPrefill: { organizationId: ids.organizationId, schoolId: ids.schoolId, sessionId: ids.sessionId, studentProfileId: ids.studentProfileId } }));
+    expect(cleared.filter(e => e.type === 'input' && e.props.type !== 'checkbox').map(e => e.props.value)).toEqual(['', '', '', '']);
+    expect(fetcher).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
   });
 
   it('retains only exact uncertain path/body/key for a separate human retry, blocks fresh submit and stale retry handlers, and clears on every ID or kind edit', async () => {

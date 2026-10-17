@@ -7,6 +7,8 @@ import StaffLayout from '../src/app/staff/layout';
 import StaffClassBookingsPage, { dynamic, metadata } from '../src/app/staff/schedule/bookings/page';
 import { ClassBookingWorkbench } from '../src/components/class-booking-workbench';
 afterEach(() => vi.restoreAllMocks());
+const id = (n: string) => `${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
+const selectors = { organizationId: id('1'), schoolId: id('2'), sessionId: id('3') };
 
 describe('protected staff manual class-booking page', () => {
   it('inherits the existing fail-closed staff session gate and renders only after it succeeds', async () => {
@@ -17,15 +19,22 @@ describe('protected staff manual class-booking page', () => {
     expect(await StaffLayout({ children: child })).toBe(child);
     expect(session.require).toHaveBeenCalledTimes(2);
   });
-  it('is dynamic/no-index and has no query, prefill, IDs, directory reads or auto commands', () => {
+  it('is dynamic/no-index and accepts only the exact closed three-UUID handoff without any automatic command', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     const key = vi.spyOn(crypto, 'randomUUID');
-    const page = StaffClassBookingsPage();
-    expect(page.type).toBe(ClassBookingWorkbench); expect(page.props).toEqual({});
+    const page = await StaffClassBookingsPage({ searchParams: Promise.resolve(selectors) });
+    expect(page.type).toBe(ClassBookingWorkbench); expect(page.props).toEqual({ initialPrefill: selectors });
     expect(dynamic).toBe('force-dynamic'); expect(metadata.robots).toEqual({ index: false, follow: false });
     expect(fetcher).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
     const source = readFileSync('src/app/staff/schedule/bookings/page.tsx', 'utf8');
-    expect(source).not.toMatch(/searchParams|initialScope|organizationId|schoolId|sessionId|studentProfileId|fetch\(|load[A-Z]|submitClassBooking|prepareClassBooking/);
+    for (const query of [
+      { ...selectors, studentProfileId: id('4') },
+      { ...selectors, schoolId: [selectors.schoolId, selectors.schoolId] },
+      { ...selectors, sessionId: `${selectors.sessionId}?studentProfileId=${id('4')}` },
+      { organizationId: selectors.organizationId, schoolId: selectors.schoolId },
+    ]) expect((await StaffClassBookingsPage({ searchParams: Promise.resolve(query) })).props).toEqual({ initialPrefill: undefined });
+    expect(source).toContain('searchParams'); expect(source).toContain('exactClassBookingSelectorPrefill');
+    expect(source).not.toMatch(/studentProfileId|bookingKind|fetch\(|load[A-Z]|submitClassBooking|prepareClassBooking/);
   });
   it('declares the exact route once in the unchanged complete static route manifest', () => {
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
