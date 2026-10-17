@@ -22,9 +22,10 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { CreateInvoiceDraftDto } from './create-invoice-draft.dto.js';
 import { IssueInvoiceDto } from './issue-invoice.dto.js';
 import { InvoiceService } from './invoice.service.js';
+import { InvoiceHumanUiGuard } from './invoice-human-ui.guard.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/billing/invoices')
-@UseGuards(HonIdentityGuard)
+@UseGuards(HonIdentityGuard, InvoiceHumanUiGuard)
 export class InvoiceController {
   constructor(
     private readonly database: RuntimeDatabaseService,

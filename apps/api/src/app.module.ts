@@ -69,6 +69,7 @@ import { BillingAccountController } from './billing/billing-account.controller.j
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { InvoiceController } from './billing/invoice.controller.js';
 import { InvoiceService } from './billing/invoice.service.js';
+import { InvoiceHumanUiGuard } from './billing/invoice-human-ui.guard.js';
 import { HqController } from './hq/hq.controller.js';
 import { IdentityController } from './foundation/identity.controller.js';
 import { PipelineController } from './crm/pipeline.controller.js';
@@ -389,6 +390,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipActivationHumanUiGuard,
     BillingAccountService,
     InvoiceService,
+    InvoiceHumanUiGuard,
     HqOnboardingService,
     HqAiProviderService,
     HqOverviewService,
