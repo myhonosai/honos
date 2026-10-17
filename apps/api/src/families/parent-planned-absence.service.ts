@@ -150,6 +150,7 @@ export class ParentPlannedAbsenceService {
     requestedFamilyId: string,
     context: CommandContext,
     input: CreatePlannedAbsenceRequestInput,
+    selectorFreeSubject?: string,
   ): Promise<{ plannedAbsenceRequest: PlannedAbsenceRequestSummary; replayed: boolean }> {
     // This command is deliberately unavailable to automated, AI, integration,
     // staff, or Action Engine callers. The parent resolver and controller derive
@@ -168,6 +169,13 @@ export class ParentPlannedAbsenceService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      const revalidate = async () => {
+        if (selectorFreeSubject === undefined) return;
+        await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+        await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id',$2,true),set_config('app.hon_delegated_by_principal_id',$3,true)", [context.source, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+        await client.query('SELECT hon.lock_parent_planned_absence_request($1,$2::uuid,$3::uuid,$4)', [selectorFreeSubject, normalized.studentProfileId, requestedFamilyId, resolvedScope.accessLevel]);
+      };
+      await revalidate();
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (
            organization_id, school_id, principal_id, idempotency_key, request_fingerprint, status, expires_at
@@ -326,6 +334,7 @@ export class ParentPlannedAbsenceService {
         ],
       );
 
+      await revalidate();
       return { plannedAbsenceRequest, replayed: false };
     });
   }

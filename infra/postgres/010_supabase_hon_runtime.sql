@@ -232,6 +232,8 @@ REVOKE ALL ON FUNCTION hon.resolve_parent_journey_scopes(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_billing_view(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_testing_status(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_planned_absence_history(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.require_parent_planned_absence_scope(text) FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.read_parent_planned_absence_request_context(text),hon.lock_parent_planned_absence_request(text,uuid,uuid,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_message_history(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.resolve_testing_registration_review_scopes(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.read_parent_testing_registration_view(text,uuid) FROM PUBLIC;
@@ -258,6 +260,13 @@ GRANT EXECUTE ON FUNCTION hon.read_parent_testing_status(text) TO hon_runtime;
 -- Fixed guardian-family planned-absence history only. It grants no request,
 -- review, schedule, booking, attendance, makeup, message, or table capability.
 GRANT EXECUTE ON FUNCTION hon.read_parent_planned_absence_history(text) TO hon_runtime;
+-- Minimal subject-only child choices and locked human canonical-request revalidation.
+GRANT EXECUTE ON FUNCTION hon.read_parent_planned_absence_request_context(text),hon.lock_parent_planned_absence_request(text,uuid,uuid,text) TO hon_runtime;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.require_parent_planned_absence_scope(text),hon.read_parent_planned_absence_request_context(text),hon.lock_parent_planned_absence_request(text,uuid,uuid,text) FROM %I',r);
+ END LOOP;
+END $$;
 -- Parent message history returns only receipt-evidence-unavailable. It grants
 -- no queue, delivery, recipient, sender, provider, or message-content access.
 GRANT EXECUTE ON FUNCTION hon.read_parent_message_history(text) TO hon_runtime;

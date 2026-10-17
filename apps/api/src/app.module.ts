@@ -87,6 +87,8 @@ import { ParentPlannedAbsenceController } from './families/parent-planned-absenc
 import { ParentPlannedAbsenceService } from './families/parent-planned-absence.service.js';
 import { ParentPlannedAbsenceHistoryController, ParentPlannedAbsenceHistoryReadGuard } from './families/parent-planned-absence-history.controller.js';
 import { ParentPlannedAbsenceHistoryService } from './families/parent-planned-absence-history.service.js';
+import { ParentPlannedAbsenceRequestController, ParentPlannedAbsenceRequestGuard } from './families/parent-planned-absence-request.controller.js';
+import { ParentPlannedAbsenceRequestService } from './families/parent-planned-absence-request.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
 import { ParentMessageHistoryService } from './families/parent-message-history.service.js';
 import { CrmLeadActionTool } from './crm/crm-lead-action.tool.js';
@@ -233,6 +235,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentFamilyScheduleController,
     ParentPlannedAbsenceController,
     ParentPlannedAbsenceHistoryController,
+    ParentPlannedAbsenceRequestController,
     ParentMessageHistoryController,
     LeadController,
     TrialAppointmentController,
@@ -322,6 +325,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceService,
     ParentPlannedAbsenceHistoryService,
     ParentPlannedAbsenceHistoryReadGuard,
+    ParentPlannedAbsenceRequestService,
+    ParentPlannedAbsenceRequestGuard,
     ParentMessageHistoryService,
     ParentMessageHistoryReadGuard,
     LeadService,

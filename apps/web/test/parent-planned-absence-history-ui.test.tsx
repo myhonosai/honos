@@ -38,16 +38,16 @@ describe('family-safe planned-absence history', () => {
 
   it('starts in a real loading state without SSR fetches or fabricated family history', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
-    try { const html = renderToStaticMarkup(<ParentPlannedAbsenceHistory/>); expect(fetcher).not.toHaveBeenCalled(); expect(html).toContain('Loading recorded planned-absence status'); expect(html).toContain('History only. Nothing changes here.'); expect(html).not.toMatch(/Avery|Ideal Martial Arts|PRIVATE_|Eian/); } finally { fetcher.mockRestore(); }
+    try { const html = renderToStaticMarkup(<ParentPlannedAbsenceHistory/>); expect(fetcher).not.toHaveBeenCalled(); expect(html).toContain('loading recorded planned-absence status'); expect(html).toContain('Submission only. No automatic outcome.'); expect(html).not.toMatch(/Avery|Ideal Martial Arts|PRIVATE_|Eian/); } finally { fetcher.mockRestore(); }
   });
 
-  it('protects/no-indexes the dynamic route and keeps UI read-only with explicit empty/access/error states', () => {
+  it('protects/no-indexes the dynamic route and keeps human submission separate from read-only redacted history', () => {
     const route = readFileSync('src/app/parent/planned-absences/page.tsx', 'utf8'); const component = readFileSync('src/components/parent-planned-absence-history.tsx', 'utf8'); const http = readFileSync('src/components/parent-planned-absence-history-http.ts', 'utf8');
     for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false']) expect(route).toContain(token);
     expect(route).not.toMatch(/searchParams|familyId|studentProfileId|requestId/);
     for (const token of ['No planned-absence request for a current child', 'Guardian family access unavailable', 'No verified absence history shown', 'setView(null)', 'pending.current?.abort()', "'visibilitychange'"]) expect(component).toContain(token);
-    expect(component).not.toMatch(/<input|useSearchParams|localStorage|sessionStorage|method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|reviewNote/i);
-    expect(http + component).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|from\s+['"][^'"]*(?:voice|action|ai|provider|billing)/i);
+    expect(component).not.toMatch(/useSearchParams|localStorage|sessionStorage|schoolId|familyId|invokeLLM|executeAction|sendMessage|reviewNote/i);
+    expect(http + component).not.toMatch(/invokeLLM|executeAction|sendMessage|from\s+['"][^'"]*(?:voice|action|ai\/|provider|billing)/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')); expect(manifest.routes.filter((route: { path: string }) => route.path === '/parent/planned-absences')).toEqual([{ path: '/parent/planned-absences', title: 'HON | Planned absence history' }]);
   });
 });

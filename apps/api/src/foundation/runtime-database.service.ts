@@ -657,6 +657,21 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     }
   }
 
+  /** Minimal subject-only choices; no tenant GUC, table read, or command effect. */
+  async readParentPlannedAbsenceRequestContext(externalSubject: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>('SELECT hon.read_parent_planned_absence_request_context($1) AS data', [externalSubject]);
+      if (!result.rows[0]) throw new Error('HON parent absence context unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
   async resolveParentJourneyScopes(externalSubject: string): Promise<ResolvedParentFamilyScope[]> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<ResolvedParentFamilyScope>(

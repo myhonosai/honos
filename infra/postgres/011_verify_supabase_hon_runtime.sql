@@ -2252,3 +2252,26 @@ BEGIN
 END;
 $$;
 -- End staff reporting schools exact verification.
+
+-- Parent planned absence request exact verification:
+DO $$ DECLARE f record; b boolean; t text; BEGIN
+ FOR f IN SELECT * FROM (VALUES
+ ('hon.require_parent_planned_absence_scope(text)',false,'f9d538be1d3f5f8a955a462f3f22906b'),
+ ('hon.read_parent_planned_absence_request_context(text)',true,'16c97abd7813ff2a7d97d1d07a873909'),
+ ('hon.lock_parent_planned_absence_request(text,uuid,uuid,text)',true,'fff25c11c9a60bc6eb13e75c233f16ef')
+ ) v(signature,can_execute,body_hash) LOOP
+  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>'hon_runtime'
+   AND md5(p.prosrc)=f.body_hash
+   AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.can_execute
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.can_execute OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+   AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+  INTO b FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+  IF b IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent absence function %',f.signature; END IF;
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['families','family_members','student_profiles','family_access_grants','people','planned_absence_requests'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity) THEN RAISE EXCEPTION 'Parent absence requires forced RLS: %',t; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.planned_absence_requests'::regclass AND tgname='planned_absence_requests_student_family_integrity' AND tgfoid='hon.enforce_planned_absence_student_family()'::regprocedure AND tgenabled='O')
+ OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.planned_absence_requests'::regclass AND tgname='planned_absence_requests_initial_state' AND tgfoid='hon.enforce_planned_absence_initial_state()'::regprocedure AND tgenabled='O') THEN RAISE EXCEPTION 'Canonical planned-absence constraints required'; END IF;
+END $$;
+-- End parent planned absence request exact verification.
