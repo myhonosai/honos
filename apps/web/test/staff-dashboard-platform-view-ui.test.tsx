@@ -51,6 +51,10 @@ const response = (data: unknown) => ({ ok: true, status: 200, json: async () => 
 const reportPath = (currentSchoolId = schoolId) => `/api/v1/organizations/${organizationId}/schools/${currentSchoolId}/reports/operations`;
 const themePath = (currentSchoolId = schoolId) => `/api/v1/organizations/${organizationId}/schools/${currentSchoolId}/interface-theme`;
 
+const resolverPath = '/api/v1/staff/current-reporting-school';
+const resolverResponse = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
+const resolvedScope = { state: 'RESOLVED', organizationId, schoolId } as const;
+
 type Props = Record<string, unknown>;
 function elements(node: unknown): React.ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
@@ -63,7 +67,7 @@ function text(node: unknown): string {
   if (React.isValidElement<Props>(node)) return typeof node.type === 'function' ? text((node.type as (props: Props) => unknown)(node.props)) : text(node.props.children);
   return typeof node === 'string' || typeof node === 'number' ? String(node) : '';
 }
-function render(): React.ReactElement<Props> { hooks.cursor = 0; return StaffDashboard() as React.ReactElement<Props>; }
+function render(initialScope?: { organizationId?: string; schoolId?: string }): React.ReactElement<Props> { hooks.cursor = 0; return StaffDashboard(initialScope ? { initialScope } : undefined) as React.ReactElement<Props>; }
 function input(index: number): React.ReactElement<Props> {
   const field = elements(render()).filter((element) => element.type === 'input')[index];
   expect(field).toBeDefined();
@@ -100,7 +104,8 @@ describe('Staff Dashboard verified Platform View selector', () => {
     });
 
     expect(text(render())).not.toContain('Platform View');
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual(['/api/v1/staff/current-reporting-school']);
+    expect(fetch.mock.calls.some(([path]) => String(path).includes('/interface-theme'))).toBe(false);
     fillVerifiedScope();
     await submit();
     await vi.waitFor(() => {
@@ -184,5 +189,121 @@ describe('Staff Dashboard verified Platform View selector', () => {
     expect(text(tree)).not.toContain('Platform View');
     expect(tree.props['data-interface-theme']).toBe('modern');
     expect(fetch.mock.calls.filter(([path]) => path === themePath())).toHaveLength(1);
+  });
+});
+
+describe('Staff Dashboard exact-one automatic current reporting school', () => {
+  it.each(['single staff', 'single owner qualifying through the existing reporting permission'])('loads %s without UUID entry and keeps preference/owner reads behind exact-scope report verification', async () => {
+    let finishReport!: (value: Response) => void;
+    const pendingReport = new Promise<Response>((resolve) => { finishReport = resolve; });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse(resolvedScope);
+      if (path === reportPath()) return pendingReport;
+      if (path === themePath()) return response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' });
+      return { ok: false, status: 403 } as Response;
+    });
+    expect(text(render())).not.toContain('Verified operational summary');
+    await vi.waitFor(() => expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, reportPath()]));
+    expect(text(render())).not.toContain('Platform View');
+    expect(fetch.mock.calls.some(([path]) => String(path).includes('/interface-theme') || String(path).includes('/owner-launch'))).toBe(false);
+    finishReport(response({ operationalSnapshot: report() }));
+    await vi.waitFor(() => {
+      expect(text(render())).toContain('Verified current school');
+      expect(text(render())).toContain('Modern HON is the visual default');
+    });
+    expect(input(0).props.value).toBe(organizationId);
+    expect(input(1).props.value).toBe(schoolId);
+    expect(fetch.mock.calls.filter(([path]) => path === resolverPath)).toHaveLength(1);
+    expect(fetch.mock.calls.filter(([path]) => path === reportPath())).toHaveLength(1);
+    expect(fetch.mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0);
+  });
+
+  it.each(['zero', 'multiple', 'mixed staff+HQ', 'mixed staff+family', 'unauthorized owner'])('does not fetch a report or preference for %s nonresolution and preserves inert query-prefilled manual fallback', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' }));
+    render({ organizationId, schoolId: nextSchoolId });
+    await vi.waitFor(() => expect(text(render())).toContain('Manual entry of already-known staff-context IDs is required'));
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath]);
+    expect(input(0).props.value).toBe(organizationId);
+    expect(input(1).props.value).toBe(nextSchoolId);
+    expect(text(render())).not.toContain('Platform View');
+    expect(elements(render()).some((element) => element.type === 'form')).toBe(true);
+  });
+
+  it('does not let a query-prefilled different school bypass the resolver or the report', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse(resolvedScope);
+      if (path === reportPath()) return response({ operationalSnapshot: report() });
+      return { ok: false, status: 403 } as Response;
+    });
+    render({ organizationId: nextSchoolId, schoolId: nextSchoolId });
+    await vi.waitFor(() => expect(text(render())).toContain('Verified current school'));
+    expect(fetch.mock.calls.filter(([path]) => String(path).endsWith('/reports/operations')).map(([path]) => path)).toEqual([reportPath()]);
+    expect(input(0).props.value).toBe(organizationId);
+    expect(input(1).props.value).toBe(schoolId);
+  });
+
+  it.each([401, 403, 503, 'malformed', 'extras', 'mismatch'])('clears all report/presentation data after initial %s failure and never fetches a preference', async (failure) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse(resolvedScope);
+      if (path === reportPath()) {
+        if (typeof failure === 'number') return { ok: false, status: failure } as Response;
+        if (failure === 'malformed') return response({ operationalSnapshot: null });
+        if (failure === 'extras') return response({ operationalSnapshot: { ...report(), privateNote: 'PRIVATE' } });
+        return response({ operationalSnapshot: report(nextSchoolId) });
+      }
+      throw new Error('No follow-on read may run after report failure');
+    });
+    render();
+    await vi.waitFor(() => expect(elements(render()).some((element) => element.props.role === 'alert')).toBe(true));
+    const tree = render();
+    expect(text(tree)).not.toContain('Platform View');
+    expect(text(tree)).not.toContain('Student profiles');
+    expect(tree.props['data-interface-theme']).toBe('modern');
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, reportPath()]);
+  });
+
+  it.each([401, 403, 503, 'extras', 'malformed'])('keeps the dashboard cleared and performs no report or preference read after resolver %s failure', async (failure) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(typeof failure === 'number' ? new Response('', { status: failure })
+      : resolverResponse(failure === 'extras' ? { ...resolvedScope, candidates: [] } : { state: 'RESOLVED' }));
+    render({ organizationId, schoolId });
+    await vi.waitFor(() => expect(elements(render()).some((element) => element.props.role === 'alert')).toBe(true));
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath]);
+    expect(text(render())).not.toContain('Platform View');
+    expect(text(render())).not.toContain('Student profiles');
+  });
+
+  it('allows independently authorized manual entry after nonresolution', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => path === resolverPath ? resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' })
+      : path === reportPath() ? response({ operationalSnapshot: report() }) : { ok: false, status: 403 } as Response);
+    render();
+    await vi.waitFor(() => expect(text(render())).toContain('Manual entry'));
+    fillVerifiedScope(); await submit();
+    expect(text(render())).toContain('Verified current school');
+    expect(fetch.mock.calls.filter(([path]) => path === reportPath())).toHaveLength(1);
+  });
+
+  it('does not apply a stale resolver result after a manual field edit', async () => {
+    let finishResolver!: (value: Response) => void;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise<Response>((resolve) => { finishResolver = resolve; }));
+    render(); fillVerifiedScope(nextSchoolId);
+    finishResolver(resolverResponse(resolvedScope));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath]);
+    expect(input(1).props.value).toBe(nextSchoolId);
+    expect(text(render())).not.toContain('Platform View');
+  });
+
+  it('deduplicates the initial resolver read during development effect replay without persistent storage', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' }));
+    render();
+    for (const cell of hooks.cells) {
+      if (cell && typeof cell === 'object' && 'dependencies' in cell) {
+        const effect = cell as { dependencies?: readonly unknown[]; cleanup?: () => void };
+        if (effect.dependencies?.length === 0) { effect.cleanup?.(); delete effect.dependencies; }
+      }
+    }
+    render();
+    await vi.waitFor(() => expect(text(render())).toContain('Manual entry'));
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath]);
   });
 });

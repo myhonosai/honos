@@ -3,7 +3,8 @@
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { OperationalSnapshot, OwnerLaunchFirstClassBookingContext, OwnerLaunchFirstClassBookingContextProjection, OwnerLaunchMembershipDraftConfirmation, OwnerLaunchMembershipDraftConfirmationReceipt, OwnerLaunchProjection, OwnerLaunchSavedStudentConfirmation, OwnerLaunchSavedStudentsProjection } from '@hon/contracts';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
-import { loadOwnerLaunchSavedStudents, loadStaffDashboard, StaffDashboardAccessError } from './staff-dashboard-http';
+import { loadOwnerLaunchSavedStudents, loadStaffDashboard } from './staff-dashboard-http';
+import { loadCurrentStaffReportingSchool, type CurrentStaffReportingSchool } from './current-staff-reporting-school-http';
 import { loadOwnerLaunch, loadOwnerLaunchFirstClassBookingContext, loadOwnerLaunchMembershipDraft } from './owner-launch-http';
 import { InterfaceThemePicker } from './interface-theme-picker';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
@@ -192,15 +193,42 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   const [interfaceThemeMessage, setInterfaceThemeMessage] = useState('Load a verified school dashboard to view or change your personal Platform View preference.');
   const generation = useRef(0);
   const interfaceThemeGeneration = useRef(0);
+  const resolverRead = useRef<Promise<CurrentStaffReportingSchool> | null>(null);
+  const [scopeMessage, setScopeMessage] = useState('No verified school is selected. No operational data is shown.');
 
   function clear() {
     generation.current += 1;
     interfaceThemeGeneration.current += 1;
-    setSelection(null); setSnapshot(null); setOwnerWorkflowProgress(null); setError('');
+    setSelection(null); setSnapshot(null); setOwnerWorkflowProgress(null); setError(''); setLoading(false);
+    setScopeMessage('No verified school is selected. No operational data is shown.');
     setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME); setInterfaceThemeState('UNAVAILABLE');
     setInterfaceThemeMessage('Load a verified school dashboard to view or change your personal Platform View preference.');
   }
   useEffect(() => () => { generation.current += 1; interfaceThemeGeneration.current += 1; }, []);
+  useEffect(() => {
+    clear(); setLoading(true);
+    const requestGeneration = generation.current;
+    let active = true;
+    const current = () => active && generation.current === requestGeneration;
+    // One read per mounted instance, including React's development effect replay.
+    // This promise is not a stored school preference or a cross-mount cache.
+    resolverRead.current ??= loadCurrentStaffReportingSchool();
+    void resolverRead.current.then(async (scope) => {
+      if (!current()) return;
+      if (scope.state === 'MANUAL_ENTRY_REQUIRED') {
+        setScopeMessage('Automatic current-school selection is unavailable. Manual entry of already-known staff-context IDs is required. No candidates or operational data are shown.');
+        setLoading(false);
+        return;
+      }
+      // Query-prefilled fields never enter this automatic path or grant authority.
+      await readDashboard(scope.organizationId, scope.schoolId, requestGeneration);
+    }).catch((reason) => {
+      if (!current()) return;
+      clear();
+      setError(reason instanceof Error ? reason.message : 'Current staff reporting scope is unavailable.');
+    });
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     if (!selection) {
       interfaceThemeGeneration.current += 1;
@@ -245,10 +273,17 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
     event.preventDefault();
     if (loading) return;
     clear(); const requestGeneration = generation.current; setLoading(true);
+    await readDashboard(organizationId, schoolId, requestGeneration);
+  }
+  async function readDashboard(requestedOrganizationId: string, requestedSchoolId: string, requestGeneration: number) {
     const current = () => generation.current === requestGeneration;
     try {
-      const next = await loadStaffDashboard(organizationId, schoolId);
+      const next = await loadStaffDashboard(requestedOrganizationId, requestedSchoolId);
       if (!current()) return;
+      if (next.organizationId !== requestedOrganizationId.trim().toLowerCase() || next.schoolId !== requestedSchoolId.trim().toLowerCase()) {
+        throw new Error('The operations report did not verify the exact current school. Dashboard content was cleared.');
+      }
+      setOrganizationId(next.organizationId); setSchoolId(next.schoolId);
       setSnapshot(next);
       setSelection({ organizationId: next.organizationId, schoolId: next.schoolId, generatedAt: next.generatedAt, from: next.from, to: next.to });
 
@@ -300,7 +335,7 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
       setOwnerWorkflowProgress({ savedStudent: { state: 'RECORDED', verified: saved }, booking, membershipDraft });
     } catch (reason) {
       if (!current()) return;
-      if (reason instanceof StaffDashboardAccessError) { setSelection(null); setSnapshot(null); }
+      clear();
       setError(reason instanceof Error ? reason.message : 'The operations dashboard is unavailable.');
     } finally { if (current()) setLoading(false); }
   }
@@ -314,11 +349,11 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
     <section className={styles.scopeSection} aria-labelledby="scope-heading">
-      <div><h2 id="scope-heading">Current verified school</h2><p>Enter already-known staff-context IDs. Loading validates the exact organization, school, active human session, and <code>reporting.view</code> authority through the existing school operations report.</p></div>
+      <div><h2 id="scope-heading">Current verified school</h2><p>A single eligible current school loads automatically without entering IDs. Manual fallback: enter already-known staff-context IDs. Loading validates the exact organization, school, active human session, and <code>reporting.view</code> authority through the existing school operations report.</p></div>
       <form onSubmit={submit} aria-busy={loading}>
         <fieldset disabled={loading}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label><button type="submit">{loading ? 'Verifying school…' : 'Load verified dashboard'}</button></fieldset>
       </form>
-      {!selection && !loading && !error && <p className={styles.scopeState} role="status">No verified school is selected. No operational data is shown.</p>}
+      {!selection && !loading && !error && <p className={styles.scopeState} role="status">{scopeMessage}</p>}
       {loading && <p className={styles.scopeState} role="status">Checking current school access and loading the aggregate-only operations report…</p>}
       {error && <p className={styles.error} role="alert">{error}</p>}
       {selection && <div className={styles.verified} role="status"><strong>Verified current school</strong><span>Organization <code>{selection.organizationId}</code></span><span>School <code>{selection.schoolId}</code></span><span>Window: {utc(selection.from)} – {utc(selection.to)} UTC</span><span>Generated: {utc(selection.generatedAt)} UTC</span></div>}

@@ -4,6 +4,11 @@ import { withTenantTransaction, type TenantTransactionContext } from '@hon/datab
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 
+export interface ResolvedStaffReportingScope {
+  organizationId: string;
+  schoolId: string;
+}
+
 export interface ResolvedPrincipalScope {
   principalId: string;
   organizationId: string;
@@ -122,6 +127,23 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       this.postureCheck = undefined;
       throw error;
     }
+  }
+
+  /** Dashboard-only default. No selector, principal metadata, or candidate list. */
+  async resolveCurrentStaffReportingScope(externalSubject: string): Promise<ResolvedStaffReportingScope | undefined> {
+    await this.assertRuntimePosture();
+    const result = await this.getPool().query<ResolvedStaffReportingScope>(
+      'SELECT organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_current_staff_reporting_scope($1)',
+      [externalSubject],
+    );
+    if (result.rows.length !== 1) return undefined;
+    const scope = result.rows[0]!;
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (Object.keys(scope).length !== 2 || typeof scope.organizationId !== 'string' || typeof scope.schoolId !== 'string'
+      || !uuid.test(scope.organizationId) || !uuid.test(scope.schoolId)) {
+      throw new ServiceUnavailableException('Current staff reporting scope is unavailable.');
+    }
+    return { organizationId: scope.organizationId, schoolId: scope.schoolId };
   }
 
   async resolveOwnerLaunchScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {

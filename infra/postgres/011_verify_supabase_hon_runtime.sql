@@ -2178,3 +2178,32 @@ DO $$ BEGIN
  OR has_table_privilege('hon_runtime','hon.billing_accounts','UPDATE,DELETE,TRUNCATE') THEN RAISE EXCEPTION 'Unsafe owner launch canonical relation mutation grant'; END IF;
 END $$;
 -- End owner launch exact verification.
+
+-- Current staff reporting scope exact verification:
+DO $$
+DECLARE boundary_safe boolean; table_name text;
+BEGIN
+  SELECT p.prosecdef AND p.provolatile = 's'
+    AND p.proconfig = ARRAY['search_path=pg_catalog, hon']::text[]
+    AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname <> 'hon_runtime'
+    AND p.proargnames = ARRAY['p_subject','organization_id','school_id']::text[]
+    AND p.proallargtypes = ARRAY['text'::regtype,'uuid'::regtype,'uuid'::regtype]::oid[]
+    AND has_function_privilege('hon_runtime', p.oid, 'EXECUTE')
+    AND NOT EXISTS (
+      SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+      WHERE acl.grantee <> p.proowner
+        AND (acl.grantee <> (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime')
+          OR acl.is_grantable OR acl.privilege_type <> 'EXECUTE')
+    )
+    AND (SELECT count(*) FROM pg_proc other WHERE other.pronamespace = p.pronamespace AND other.proname = p.proname) = 1
+  INTO boundary_safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid = p.proowner
+  WHERE p.oid = 'hon.resolve_current_staff_reporting_scope(text)'::regprocedure;
+  IF boundary_safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe current staff reporting scope boundary'; END IF;
+  FOREACH table_name IN ARRAY ARRAY['organizations','schools','roles','role_permissions','principal_role_grants','family_access_grants','hq_operator_grants'] LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid = ('hon.' || table_name)::regclass AND relrowsecurity AND relforcerowsecurity) THEN
+      RAISE EXCEPTION 'Current staff reporting scope requires forced RLS: %', table_name;
+    END IF;
+  END LOOP;
+END;
+$$;
+-- End current staff reporting scope exact verification.

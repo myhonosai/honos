@@ -139,6 +139,7 @@ import { AiTeamController } from './ai-team/ai-team.controller.js';
 import { AiTeamService } from './ai-team/ai-team.service.js';
 import { OperationsReportController } from './reports/operations-report.controller.js';
 import { OperationsReportService } from './reports/operations-report.service.js';
+import { CurrentStaffReportingSchoolController, CurrentStaffReportingSchoolNoStoreGuard } from './reports/current-staff-reporting-school.controller.js';
 import { CommunicationConsentController } from './communication/communication-consent.controller.js';
 import { CommunicationConsentService } from './communication/communication-consent.service.js';
 import { OperationsSummaryController } from './reports/operations-summary.controller.js';
@@ -193,6 +194,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
 @Module({
   imports: [ClassPassModule, KioskModule],
   controllers: [OwnerLaunchController,
+    CurrentStaffReportingSchoolController,
     StaffCurriculumLibraryController, ParentCurriculumLibraryController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
@@ -274,6 +276,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
+    CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,
