@@ -1,0 +1,376 @@
+.pricingPage {
+  min-height: 100vh;
+  padding: clamp(22px, 5vw, 70px);
+  color: #edf5ff;
+  background:
+    radial-gradient(circle at 84% 9%, rgba(116, 79, 245, 0.32), transparent 28%),
+    radial-gradient(circle at 9% 47%, rgba(36, 141, 230, 0.22), transparent 31%),
+    #071026;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.hero,
+.planSection,
+.presentationSection,
+.boundary {
+  width: min(1120px, 100%);
+  margin-inline: auto;
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(31px, 6vw, 72px);
+  border: 1px solid rgba(116, 175, 255, 0.38);
+  border-radius: 28px;
+  background: linear-gradient(130deg, rgba(12, 30, 70, 0.97), rgba(25, 22, 78, 0.92));
+  box-shadow: 0 26px 70px rgba(3, 11, 38, 0.42);
+}
+
+.signal {
+  position: absolute;
+  z-index: -1;
+  right: -9%;
+  bottom: -62%;
+  width: min(570px, 62vw);
+  aspect-ratio: 1;
+  border: 1px solid rgba(99, 211, 255, 0.65);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(77, 129, 255, 0.35), transparent 63%);
+  box-shadow: 0 0 90px 24px rgba(112, 75, 248, 0.22);
+}
+
+.eyebrow {
+  margin: 0;
+  color: #83d9ff;
+  font: 700 10px/1.3 "JetBrains Mono", monospace;
+  letter-spacing: 0.13em;
+}
+
+.hero h1,
+.sectionHeading h2 {
+  margin: 15px 0 0;
+  font: 800 clamp(34px, 5.1vw, 66px) / 0.98 "Plus Jakarta Sans", sans-serif;
+  letter-spacing: -0.065em;
+}
+
+.hero h1 { max-width: 920px; }
+
+.heroCopy {
+  max-width: 650px;
+  margin: 21px 0 0;
+  color: #c6d7f5;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.referenceLabel {
+  display: inline-flex;
+  margin: 28px 0 0;
+  padding: 8px 11px;
+  border: 1px solid rgba(124, 190, 255, 0.35);
+  border-radius: 99px;
+  color: #a9c8f9;
+  background: rgba(4, 16, 48, 0.38);
+  font: 700 9px/1.35 "JetBrains Mono", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.planSection,
+.presentationSection { margin-top: clamp(44px, 7vw, 84px); }
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 21px;
+}
+
+.sectionHeading h2 { font-size: clamp(26px, 3.3vw, 43px); }
+
+.sectionHeading > p {
+  max-width: 290px;
+  margin: 0;
+  color: #9fb2d1;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px;
+}
+
+.planCard {
+  position: relative;
+  overflow: hidden;
+  min-height: 428px;
+  padding: clamp(22px, 3vw, 35px);
+  border: 1px solid rgba(108, 152, 229, 0.37);
+  border-radius: 22px;
+  background: linear-gradient(148deg, rgba(19, 35, 77, 0.98), rgba(10, 18, 45, 0.97));
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.19);
+}
+
+.planCard:nth-child(2) {
+  border-color: rgba(180, 133, 255, 0.48);
+  background: linear-gradient(148deg, rgba(37, 25, 89, 0.96), rgba(11, 20, 51, 0.99));
+}
+
+.planCard::after {
+  position: absolute;
+  right: -37px;
+  bottom: -47px;
+  width: 160px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(98, 194, 255, 0.4);
+  border-radius: 50%;
+  box-shadow: 0 0 38px rgba(74, 145, 255, 0.22);
+  content: "";
+}
+
+.planCard:nth-child(2)::after {
+  border-color: rgba(196, 142, 255, 0.5);
+  box-shadow: 0 0 38px rgba(158, 99, 255, 0.3);
+}
+
+.cardTopline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #eaf4ff;
+  font: 700 12px "Plus Jakarta Sans", sans-serif;
+}
+
+.cardTopline small,
+.boundary > span {
+  padding: 5px 7px;
+  border: 1px solid rgba(130, 190, 255, 0.37);
+  border-radius: 6px;
+  color: #91cfff;
+  background: rgba(44, 108, 185, 0.18);
+  font: 700 8px/1 "JetBrains Mono", monospace;
+  letter-spacing: 0.09em;
+}
+
+.planCard:nth-child(2) .cardTopline small {
+  border-color: rgba(206, 158, 255, 0.4);
+  color: #d5b6ff;
+  background: rgba(117, 72, 176, 0.2);
+}
+
+.planCard h3 {
+  position: relative;
+  z-index: 1;
+  max-width: 360px;
+  margin: 27px 0 0;
+  color: #fff;
+  font: 800 clamp(25px, 3vw, 35px) / 1.05 "Plus Jakarta Sans", sans-serif;
+  letter-spacing: -0.05em;
+}
+
+.planDetail {
+  position: relative;
+  z-index: 1;
+  min-height: 45px;
+  max-width: 425px;
+  margin: 15px 0 0;
+  color: #c0cee6;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.priceBlock {
+  position: relative;
+  z-index: 1;
+  margin-top: 25px;
+  padding-top: 19px;
+  border-top: 1px solid rgba(147, 179, 230, 0.22);
+}
+
+.priceBlock > span,
+.planMetadata dt {
+  display: block;
+  color: #97acd1;
+  font: 700 9px/1.35 "JetBrains Mono", monospace;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.priceBlock strong {
+  display: block;
+  margin-top: 7px;
+  color: #fff;
+  font: 800 40px/1 "Plus Jakarta Sans", sans-serif;
+  letter-spacing: -0.06em;
+}
+
+.priceBlock strong small {
+  margin-left: 5px;
+  color: #acc4e6;
+  font: 700 13px Inter, sans-serif;
+  letter-spacing: 0;
+}
+
+.priceBlock p {
+  margin: 7px 0 0;
+  color: #7fdcf0;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.planMetadata {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 25px 0 0;
+}
+
+.planMetadata div {
+  padding: 11px;
+  border: 1px solid rgba(142, 171, 221, 0.17);
+  border-radius: 10px;
+  background: rgba(3, 11, 34, 0.23);
+}
+
+.planMetadata dd {
+  margin: 6px 0 0;
+  color: #e4edff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.presentationSection {
+  padding: clamp(23px, 4vw, 42px);
+  border: 1px solid rgba(125, 158, 224, 0.3);
+  border-radius: 24px;
+  background: rgba(13, 25, 57, 0.68);
+}
+
+.presentationGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.presentationGrid article {
+  padding: 17px;
+  border: 1px solid rgba(127, 158, 220, 0.26);
+  border-radius: 14px;
+  background: rgba(7, 15, 39, 0.46);
+}
+
+.presentationGrid span {
+  display: block;
+  color: #e9f3ff;
+  font: 700 14px "Plus Jakarta Sans", sans-serif;
+}
+
+.presentationGrid p {
+  margin: 8px 0 0;
+  color: #aabbd6;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.neutralityNote {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px 24px;
+  margin-top: 18px;
+  padding: 15px 17px;
+  border-left: 2px solid #6ccaff;
+  border-radius: 5px 13px 13px 5px;
+  background: rgba(15, 52, 99, 0.39);
+}
+
+.neutralityNote p {
+  margin: 0;
+  color: #c3d6ef;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.neutralityNote p:last-child {
+  grid-column: 1 / -1;
+  color: #8ca7cb;
+  font: 700 9px/1.5 "JetBrains Mono", monospace;
+  letter-spacing: 0.04em;
+}
+
+.neutralityNote ul {
+  display: flex;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.neutralityNote li {
+  padding: 5px 7px;
+  border: 1px solid rgba(155, 128, 244, 0.36);
+  border-radius: 99px;
+  color: #d4c2ff;
+  background: rgba(84, 52, 144, 0.2);
+  font: 700 8px "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.boundary {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 194, 94, 0.38);
+  border-radius: 15px;
+  color: #e9ddbf;
+  background: linear-gradient(100deg, rgba(100, 64, 15, 0.42), rgba(40, 28, 55, 0.69));
+}
+
+.boundary > span {
+  border-color: rgba(255, 204, 111, 0.47);
+  color: #ffce78;
+  background: transparent;
+  letter-spacing: 0.1em;
+}
+
+.boundary strong {
+  display: block;
+  color: #fff5d9;
+  font: 700 14px "Plus Jakarta Sans", sans-serif;
+}
+
+.boundary p {
+  max-width: 820px;
+  margin: 7px 0 0;
+  color: #dacaa5;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .pricingPage { padding: 16px; }
+  .hero { padding: 30px 22px; border-radius: 21px; }
+  .hero h1 { font-size: clamp(33px, 10vw, 51px); }
+  .sectionHeading { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .sectionHeading > p { max-width: 510px; }
+  .planGrid,
+  .presentationGrid,
+  .planMetadata,
+  .neutralityNote { grid-template-columns: 1fr; }
+  .planCard { min-height: 0; }
+  .neutralityNote ul { flex-wrap: wrap; }
+  .boundary { flex-direction: column; align-items: flex-start; }
+}

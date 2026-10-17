@@ -31,6 +31,7 @@ The catalog marks both values as:
 ## Updated existing surfaces
 
 - The existing public **Complete** (`/`) and **Core** (`/core`) design-reference pages display the canonical Core/Complete catalog and explicitly state that the values do not activate billing or an offer, create a subscription, charge a payment, issue an invoice, or grant credits.
+- The public **`/pricing`** design-reference route consumes `PUBLIC_PLAN_CATALOG` and renders only **Core** at **$149/month** and **Complete** at **$249/month**. It is static display/planning metadata: it creates no billing, subscription, payment, offer, credit grant, signup, checkout, account, provider, marketing, migration, repricing, or legacy-data behavior. Its approved positioning is **“HON OS — The AI-powered operating system for martial arts schools”**; Core is **“Run your school. Grow your business.”** with complete conventional school CRM/marketing plus contextual HON assistance, and Complete is **“Your school. Your AI team.”** with all Core plus a governed AI workforce. The Three Platform Views and realistic/anime/chibi visual presentations remain independent and tier-neutral.
 - The existing authorized **HQ onboarding** tier selector consumes the same catalog, defaults to Core, and exposes only Core and Complete. The adjacent notice distinguishes its pre-existing governed tenant-provisioning request from commercial activation: selecting an initial tier still creates the normal organization entitlement for that request, but does not activate live billing or an offer, create a subscription, issue an invoice, charge a payment, or grant credits.
 - The existing **Big-Button / Phone**, **Modern HON**, and **Classic CRM** presentation modes remain independent of plan/tier. They change presentation density only; no mode receives a tier mapping, entitlement gate, or plan-specific behavior.
 
@@ -38,7 +39,7 @@ The catalog marks both values as:
 
 This vertical intentionally does **not** add or change:
 
-1. A live public pricing, signup, checkout, terms, or self-service onboarding page.
+1. A live commercial public pricing, signup, checkout, terms, or self-service onboarding page.
 2. Offer/product lifecycle, price enforcement, currency/tax handling, discounts, grandfathering, plan changes, cancellation, migration, or customer repricing.
 3. Subscription, invoice, payment method, charge, provider, deployment, or external API behavior.
 4. AI credit issuance, irreversible grants, balance tracking, reservation, metering, provider-cost accounting, warning thresholds, or reconciliation.
@@ -54,9 +55,10 @@ pnpm --filter @hon/contracts check
 pnpm --filter @hon/config check
 pnpm --filter @hon/web check
 pnpm --filter @hon/web exec vitest run test/public-plan-catalog.test.ts
-# 5 tests passed
+# 7 tests passed, including the static `/pricing` design route, Core/Complete-only rendering,
+# Essential omission, non-activation/no-write boundary, approved positioning, and visual neutrality
 
 git diff --check
 ```
 
-The focused test covers the exact Core/Complete values; Essential omission and legacy compatibility; default selection; non-activation language on public reference/HQ surfaces; absence of catalog transport/persistence calls; and all three tier-neutral interface modes.
+The focused test covers the exact Core/Complete values; Essential omission and legacy compatibility; default selection; non-activation language on public reference/HQ/pricing surfaces; absence of catalog transport/persistence calls; the pricing page's no-checkout/no-write/no-migration/repricing/legacy-query boundary; approved positioning; and all three tier-neutral interface modes plus the realistic/anime/chibi presentation boundary.
