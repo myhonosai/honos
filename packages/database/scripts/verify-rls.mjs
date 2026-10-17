@@ -63,6 +63,7 @@ if (runtimeRoleName !== 'hon_runtime') {
 }
 
 const expectedRlsTables = [
+  'hq_entitlement_requests', 'hq_entitlement_audit', 'hq_entitlement_outbox',
   ...ownerLaunchTables,
   ...curriculumLibraryTables,
   ...retentionAcknowledgementTables,
@@ -411,6 +412,9 @@ try {
   if (!entitlementVerification) throw new Error('Missing canonical current organization entitlement verification block.');
   await client.query(('DO $$' + entitlementVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
 
+  const hqEntitlementVerification = hqSchoolsCanonical.split('-- HQ entitlement transition exact verification:')[1]?.split('-- End HQ entitlement transition exact verification.')[0];
+  if (!hqEntitlementVerification) throw new Error('Missing canonical HQ entitlement transition verification.');
+  await client.query(('DO $$' + hqEntitlementVerification.split('DO $$')[1]).replaceAll('hon_runtime', runtimeRoleName));
   const revenueTables = ['revenue_plans','revenue_plan_versions','revenue_plan_requests'];
   const campaignTables = ['marketing_campaigns','marketing_campaign_versions','marketing_campaign_requests','crm_lead_attributions'];
   const campaignFunctions = [

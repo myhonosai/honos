@@ -39,6 +39,8 @@
     "db:test-hq-overview": "pnpm --filter @hon/database db:test-hq-overview",
     "db:setup-hq-schools": "pnpm --filter @hon/database db:setup-hq-schools",
     "db:test-hq-schools": "pnpm --filter @hon/database db:test-hq-schools",
+    "db:setup-hq-entitlement": "pnpm --filter @hon/database db:setup-hq-entitlement",
+    "db:test-hq-entitlement": "pnpm --filter @hon/database db:test-hq-entitlement",
     "test:ai-model-evaluation": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/domain exec vitest run test/ai-model-evaluation.test.ts",
     "db:test-operations-report": "pnpm --filter @hon/database db:test-operations-report",
     "db:test-operations-summary": "pnpm --filter @hon/database db:test-operations-summary",

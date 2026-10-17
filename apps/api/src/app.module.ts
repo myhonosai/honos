@@ -165,6 +165,9 @@ import { CommunicationMessageService } from './communication/communication-messa
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
 import { HqOverviewService } from './hq/hq-overview.service.js';
+import { HqEntitlementController } from './hq/hq-entitlement.controller.js';
+import { HqEntitlementService } from './hq/hq-entitlement.service.js';
+import { HqEntitlementHumanUiGuard } from './hq/hq-entitlement.dto.js';
 import { HqSchoolDirectoryService } from './hq/hq-school-directory.service.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
@@ -289,6 +292,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqController,
     HqOnboardingController,
     HqAiProviderController,
+    HqEntitlementController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
@@ -393,6 +397,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InvoiceHumanUiGuard,
     HqOnboardingService,
     HqAiProviderService,
+    HqEntitlementService,
+    HqEntitlementHumanUiGuard,
     HqOverviewService,
     HqSchoolDirectoryService,
   ],

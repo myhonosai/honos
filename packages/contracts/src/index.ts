@@ -1,3 +1,4 @@
+export * from './hq-entitlement.js';
 export * from './owner-launch.js';
 export * from './human-work-items.js';
 export * from './marketing-campaigns.js';

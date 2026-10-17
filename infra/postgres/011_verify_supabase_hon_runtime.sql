@@ -2321,3 +2321,40 @@ DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles W
  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='crm.lead.close' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Exact staff CRM close permission required'; END IF;
 END $$;
 -- End CRM-only lead close exact verification.
+
+-- HQ entitlement transition exact verification:
+DO $$ DECLARE f record; p record; t text; runtime_oid oid := (SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  IF runtime_oid IS NULL OR EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication))
+    OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Restricted HQ entitlement runtime required'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.guard_hq_entitlement_evidence()','918eb49dd64a752e408f32dfe38da61f',false,false,'trigger'),
+    ('hon.require_hq_entitlement_actor(text)','39a28e82a9f0168ea33e82731d761289',false,true,'uuid'),
+    ('hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)','773d89c5cb55b57addaf50640ff21717',true,true,'jsonb')
+  ) expected(signature,source_md5,runtime_allowed,definer,return_type) LOOP
+    SELECT proc.*,owner.rolsuper,owner.rolbypassrls,owner.rolname owner_name INTO p FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
+    IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.provolatile<>'v' OR p.prokind<>'f' OR p.proretset
+      OR p.prorettype<>f.return_type::regtype OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      OR NOT(p.rolsuper OR p.rolbypassrls) OR p.owner_name IN ('hon_runtime','anon','authenticated','service_role') OR md5(p.prosrc)<>f.source_md5
+      OR (SELECT count(*) FROM pg_proc other WHERE other.pronamespace=p.pronamespace AND other.proname=p.proname)<>1 THEN RAISE EXCEPTION 'Canonical HQ entitlement function required: %',f.signature; END IF;
+    IF EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantor<>p.proowner OR acl.privilege_type<>'EXECUTE' OR acl.is_grantable OR (acl.grantee<>p.proowner AND (acl.grantee<>runtime_oid OR NOT f.runtime_allowed)))
+      OR has_function_privilege('hon_runtime',p.oid,'EXECUTE') IS DISTINCT FROM f.runtime_allowed
+      OR (SELECT count(*) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))))<>(CASE WHEN f.runtime_allowed THEN 2 ELSE 1 END) THEN RAISE EXCEPTION 'Exact HQ entitlement function ACL required: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['organization_entitlements','hq_entitlement_requests','hq_entitlement_audit','hq_entitlement_outbox'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity AND (o.rolsuper OR o.rolbypassrls) AND o.rolname NOT IN('hon_runtime','anon','authenticated','service_role'))
+      OR EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+      OR EXISTS(SELECT 1 FROM pg_attribute col JOIN pg_class c ON c.oid=col.attrelid,LATERAL aclexplode(col.attacl) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,REFERENCES') THEN RAISE EXCEPTION 'Private FORCE-RLS HQ entitlement table required: %',t; END IF;
+    IF t<>'organization_entitlements' THEN
+      IF EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+        OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname='hq_entitlement_immutable' AND tgfoid='hon.guard_hq_entitlement_evidence()'::regprocedure AND tgenabled='O' AND tgtype=27)
+        OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgname='hq_entitlement_no_truncate' AND tgfoid='hon.guard_hq_entitlement_evidence()'::regprocedure AND tgenabled='O' AND tgtype=34) THEN RAISE EXCEPTION 'Immutable private HQ entitlement evidence required: %',t; END IF;
+    END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_attribute a JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid='hon.organization_entitlements'::regclass AND a.attname='version' AND a.atttypid='integer'::regtype AND a.attnotnull AND pg_get_expr(d.adbin,d.adrelid)='1')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.organization_entitlements'::regclass AND convalidated AND contype='c' AND pg_get_constraintdef(oid)='CHECK ((version > 0))')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.hq_entitlement_requests'::regclass AND convalidated AND NOT condeferrable AND contype='p' AND pg_get_constraintdef(oid)='PRIMARY KEY (actor_principal_id, idempotency_key)')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.hq_entitlement_outbox'::regclass AND convalidated AND NOT condeferrable AND contype='u' AND pg_get_constraintdef(oid)='UNIQUE (audit_id)') THEN RAISE EXCEPTION 'HQ entitlement version/receipt/outbox invariants required'; END IF;
+END $$;
+-- End HQ entitlement transition exact verification.

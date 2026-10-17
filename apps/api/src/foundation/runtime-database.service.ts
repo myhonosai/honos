@@ -2,8 +2,8 @@ import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestj
 import { Pool, type PoolClient } from 'pg';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
+import type { HqEntitlementTransitionInput, HqEntitlementTransitionReceipt } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
-
 export interface ResolvedStaffReportingScope {
   organizationId: string;
   schoolId: string;
@@ -882,6 +882,24 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.hq_ai_control_plane_read($1) AS data', [externalSubject],
     );
     return result.rows[0]!.data;
+  }
+
+  /** Separate HQ path: selectors never become tenant context or actor authority. */
+  async transitionOrganizationEntitlementFromHq(externalSubject: string, organizationId: string,
+    input: HqEntitlementTransitionInput, key: string, fingerprint: string, requestId: string, correlationId: string): Promise<HqEntitlementTransitionReceipt> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='3s'");
+      const result = await client.query<{ data: HqEntitlementTransitionReceipt }>(
+        'SELECT hon.transition_organization_entitlement_from_hq($1,$2::uuid,$3,$4::integer,$5::uuid,$6,$7::uuid,$8::uuid) AS data',
+        [externalSubject,organizationId,input.targetTier,input.expectedVersion,key,fingerprint,requestId,correlationId]);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HQ_ENTITLEMENT_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 
   async writeAiControlPlaneFromHq(externalSubject: string, kind: AiControlPlaneKind, payload: AiProviderConnectionWrite | AiCatalogEntryWrite | AiRoutingPolicyWrite | AiTaskProfileWrite, idempotencyKey: string, requestId: string): Promise<{ recordId: string; version: number; replayed: boolean }> {
