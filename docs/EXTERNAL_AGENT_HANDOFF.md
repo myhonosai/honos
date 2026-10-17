@@ -134,6 +134,10 @@ The appearance controls must remain visible/easy to access, not removed:
 
 Read [`architecture/VISUAL_MODULE_BLUEPRINT_RECONCILIATION.md`](architecture/VISUAL_MODULE_BLUEPRINT_RECONCILIATION.md) before visual work.
 
+### Active parallel visual collaboration hold
+
+Claude Code is currently creating experimental visual designs and alternative portraits on a separate GitHub branch and in separate asset folders. Treat original HON branding, portrait assets, hosted source mappings, HQ concept frames, and shared visual components as protected until an explicit owner comparison decision is recorded. Do not modify, regenerate, delete, remap, or merge an experimental replacement into a protected visual path. Continue nonvisual product development where it does not require a shared visual edit. Read [`architecture/VISUAL_COLLABORATION_PROTOCOL.md`](architecture/VISUAL_COLLABORATION_PROTOCOL.md) and [`architecture/VISUAL_ASSET_INVENTORY_2026-10-17.md`](architecture/VISUAL_ASSET_INVENTORY_2026-10-17.md) before any visual contribution.
+
 ---
 
 ## 6. Current implemented baseline
