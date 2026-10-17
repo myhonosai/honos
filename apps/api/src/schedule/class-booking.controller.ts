@@ -18,11 +18,12 @@ import type { Response } from 'express';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { ClassBookingHumanUiGuard } from './class-booking-human-ui.guard.js';
 import { ClassBookingService, type ClassBookingCommandContext } from './class-booking.service.js';
 import { CreateClassBookingDto } from './create-class-booking.dto.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/schedule/sessions')
-@UseGuards(HonIdentityGuard)
+@UseGuards(HonIdentityGuard, ClassBookingHumanUiGuard)
 export class ClassBookingController {
   constructor(
     private readonly database: RuntimeDatabaseService,

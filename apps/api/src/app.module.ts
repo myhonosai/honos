@@ -128,6 +128,7 @@ import { AttendancePolicyService } from './schedule/attendance-policy.service.js
 import { AttendancePolicyController } from './schedule/attendance-policy.controller.js';
 import { AttendanceHumanUiGuard } from './schedule/attendance-human-ui.guard.js';
 import { ClassBookingController } from './schedule/class-booking.controller.js';
+import { ClassBookingHumanUiGuard } from './schedule/class-booking-human-ui.guard.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
 import { PlannedAbsenceReviewController } from './schedule/planned-absence-review.controller.js';
 import { PlannedAbsenceReviewService } from './schedule/planned-absence-review.service.js';
@@ -353,6 +354,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AttendanceService,
     AttendancePolicyService,
     AttendanceHumanUiGuard,
+    ClassBookingHumanUiGuard,
     ClassBookingService,
     PlannedAbsenceReviewService,
     PlannedAbsenceReviewQueueService,

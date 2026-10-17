@@ -93,6 +93,10 @@
       "title": "Human Staff Availability and Qualifications"
     },
     {
+      "path": "/staff/schedule/bookings",
+      "title": "HON | Staff Manual Class Booking"
+    },
+    {
       "path": "/staff/attendance",
       "title": "HON | Human Attendance Workbench"
     },
