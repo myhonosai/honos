@@ -69,4 +69,11 @@ psql(`DO $$ DECLARE object_identity text; BEGIN
 END $$;`, database);
 const canonical = (await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8')).replaceAll('hon_runtime', runtime).replaceAll('FOR ROLE postgres', `FOR ROLE ${owner}`).replaceAll('DATABASE postgres', `DATABASE ${database}`);
 psql(canonical, database); psql(canonical, database);
+// 010 is a baseline reconciliation and deliberately revokes every runtime
+// function grant. Reassert only the fixed, function-only boundaries added by
+// 0141--0143 after that baseline; helpers and all table access stay revoked.
+psql(`GRANT EXECUTE ON FUNCTION hon.resolve_current_staff_reporting_scope(text),
+  hon.read_staff_reporting_schools(text),
+  hon.read_parent_planned_absence_request_context(text),
+  hon.lock_parent_planned_absence_request(text,uuid,uuid,text) TO ${runtime};`, database);
 console.log('Disposable localhost owner_launch database created; migrations and canonical least-privilege grants applied. Generated credentials remain only in the fresh private mode-0600 job env file.');

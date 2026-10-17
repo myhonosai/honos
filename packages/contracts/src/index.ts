@@ -270,6 +270,15 @@ export interface ActivateMembershipInput {
   expectedVersion: number;
 }
 
+/** One already-known membership, authorized for activation; no financial or agreement facts. */
+export interface MembershipActivationContext {
+  organizationId: string;
+  schoolId: string;
+  membershipId: string;
+  state: MembershipSummary['state'];
+  version: number;
+}
+
 /** Activation can return only the schema-supported ACTIVE membership state. */
 export interface ActivatedMembershipSummary {
   id: string;

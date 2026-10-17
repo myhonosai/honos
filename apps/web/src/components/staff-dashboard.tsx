@@ -141,6 +141,7 @@ function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React
         <div className={styles.noData}><strong>Revenue-plan summary unavailable</strong><p>Saved plans are intentionally scoped to the dedicated human planning workflow; no target, amount, payment schedule, or payment method is shown here.</p></div>
         <WorkflowLink href="/staff/planning/revenue">Open human revenue planning</WorkflowLink>
         <WorkflowLink href="/staff/billing/renewals">Open membership renewal reviews</WorkflowLink>
+        <WorkflowLink href="/staff/billing/memberships">Activate an already-known membership only (verify authority)</WorkflowLink>
       </article>
     </section>
     <section className={styles.queueSection} aria-labelledby="queue-title">

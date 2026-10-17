@@ -62,6 +62,7 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
     await administrator.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.schools WHERE id IN ($1, $2)', [ids.schoolA, ids.schoolB]);
+    await administrator.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.organizations WHERE id = $1', [ids.organization]);
     await administrator.query('COMMIT');
   } catch (error) {
@@ -110,6 +111,7 @@ try {
       'INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, $2, $2)',
       [ids.organization, 'Billing Membership Activation Integrity Test'],
     );
+    await administrator.query("INSERT INTO hon.organization_entitlements (organization_id, tier, status) VALUES ($1, 'ESSENTIAL', 'ACTIVE')", [ids.organization]);
     await administrator.query(
       `INSERT INTO hon.schools (id, organization_id, name, slug) VALUES
        ($1, $2, 'Membership Activation School A', $3), ($4, $2, 'Membership Activation School B', $5)`,
@@ -181,6 +183,50 @@ try {
   }
 
   const request = { honIdentity: { externalSubject } };
+  const tables = (await administrator.query("SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='hon' AND c.relkind='r' ORDER BY c.relname")).rows.map(row => row.relname);
+  async function snapshot() {
+    const result = {};
+    for (const table of tables) {
+      assert(/^[a-z_]+$/.test(table), 'Unsafe snapshot table.');
+      result[table] = (await administrator.query(`SELECT md5(coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text)::text, '[]')) AS hash FROM hon.${table} t`)).rows[0].hash;
+    }
+    return result;
+  }
+  const before = await snapshot();
+  const read = () => controller.activationContext(ids.organization, ids.schoolA, ids.membershipA, {}, request);
+  assert(JSON.stringify((await read()).data) === JSON.stringify({ organizationId: ids.organization, schoolId: ids.schoolA, membershipId: ids.membershipA, state: 'DRAFT', version: 1 }), 'Known membership read must return only exact school, membership, state and version.');
+  assert(JSON.stringify(await snapshot()) === JSON.stringify(before), 'The known membership read changed HON data.');
+  for (const tier of ['ESSENTIAL', 'CORE', 'COMPLETE']) {
+    await administrator.query('UPDATE hon.organization_entitlements SET tier=$2::hon.plan_tier WHERE organization_id=$1', [ids.organization, tier]);
+    assert((await read()).data.state === 'DRAFT', 'An existing billing tier was denied.');
+  }
+  await administrator.query("UPDATE hon.organization_entitlements SET tier='ESSENTIAL', status='SUSPENDED' WHERE organization_id=$1", [ids.organization]);
+  await expectStatus(403, read, 'Inactive billing entitlement exposed activation context.');
+  await expectStatus(403, () => controller.activate(ids.organization, ids.schoolA, ids.membershipA, 'tier-denied', { expectedVersion: 1 }, request, responseCapture()), 'Inactive billing entitlement allowed activation.');
+  await administrator.query("UPDATE hon.organization_entitlements SET status='ACTIVE' WHERE organization_id=$1", [ids.organization]);
+  await expectStatus(404, () => controller.activationContext(ids.organization, ids.schoolA, ids.membershipB, {}, request), 'Read exposed a foreign school membership.');
+  await expectStatus(403, () => controller.activationContext(randomUUID(), ids.schoolA, ids.membershipA, {}, request), 'Read accepted a mismatched organization.');
+  await administrator.query("UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(), revoked_by_principal_id=$1 WHERE principal_id=$1", [ids.principal]);
+  await expectStatus(403, read, 'Revoked permission exposed activation context.');
+  await expectStatus(403, () => controller.activate(ids.organization, ids.schoolA, ids.membershipA, 'revoked-denied', { expectedVersion: 1 }, request, responseCapture()), 'Revoked permission allowed activation.');
+  await administrator.query('UPDATE hon.principal_role_grants SET revoked_at=NULL, revoked_by_principal_id=NULL WHERE principal_id=$1', [ids.principal]);
+  // Hold the membership lock until the command is observed waiting, then revoke
+  // exact authority before release. The service must recheck and roll back.
+  await administrator.query('BEGIN');
+  await administrator.query('SELECT id FROM hon.memberships WHERE id=$1 FOR UPDATE', [ids.staleMembership]);
+  const waiting = controller.activate(ids.organization, ids.schoolA, ids.staleMembership, 'post-lock-revoked', { expectedVersion: 1 }, request, responseCapture()).then(value => ({ value }), error => ({ error }));
+  let observedWait = false;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    observedWait = (await runtime.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE '%FROM hon.memberships%' AND query LIKE '%FOR UPDATE%') AS waiting")).rows[0].waiting;
+    if (observedWait) break;
+    await administrator.query('SELECT pg_sleep(0.01)');
+  }
+  if (!observedWait) { await administrator.query('ROLLBACK'); await waiting; throw new Error('Membership lock wait was not observed.'); }
+  await administrator.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='billing.membership.activate'", [ids.ownerRole]);
+  await administrator.query('COMMIT');
+  const waited = await waiting;
+  assert(waited.error?.getStatus() === 403, 'Permission revocation during membership lock wait allowed activation.');
+  await administrator.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'billing.membership.activate')", [ids.ownerRole, ids.organization]);
   const activationKey = `membership-activate-${randomUUID()}`;
   const firstResponse = responseCapture();
   const activated = await controller.activate(
@@ -318,6 +364,37 @@ try {
     && row?.prior_state === 'DRAFT' && row?.next_state === 'ACTIVE',
   'Membership activation did not retain atomic evidence, DRAFT-to-ACTIVE-only semantics, or its no-invoice/payment/term/schedule/communication/Action-Engine side-effect boundary.');
 
+  // No agreement/signature, method, payer authorization, schedule or invoice
+  // exists for this normal canonical DRAFT. Exact authorized non-owner staff
+  // activation remains independent; no legal-signature model is invented.
+  const unsignedId = randomUUID();
+  await administrator.query(`INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state)
+    VALUES($1,$2,$3,$4,$5,'UNSIGNED_UNSCHEDULED','DRAFT')`, [unsignedId, ids.organization, ids.schoolA, ids.accountA, ids.personA]);
+  await administrator.query("UPDATE hon.roles SET code='CUSTOM_ACTIVATOR', is_system_role=false, management_school_id=$2 WHERE id=$1", [ids.ownerRole, ids.schoolA]);
+  const unsignedBefore = (await administrator.query('SELECT to_jsonb(m) AS data FROM hon.memberships m WHERE id=$1', [unsignedId])).rows[0].data;
+  const unsignedKey = randomUUID();
+  const unsigned = () => controller.activate(ids.organization, ids.schoolA, unsignedId, unsignedKey, { expectedVersion: 1 }, request, responseCapture());
+  const concurrent = await Promise.all([unsigned(), unsigned()]);
+  assert(concurrent.every(r => r.data.state === 'ACTIVE' && r.data.version === 2) && concurrent.filter(r => r.meta.replayed).length === 1, 'Concurrent exact staff retries did not yield one unsigned/no-payment activation.');
+  const unsignedAfter = (await administrator.query('SELECT to_jsonb(m) AS data FROM hon.memberships m WHERE id=$1', [unsignedId])).rows[0].data;
+  assert(JSON.stringify(unsignedAfter) === JSON.stringify({ ...unsignedBefore, state: 'ACTIVE', version: 2 }), 'Unsigned activation changed fields other than membership state/version.');
+  assert((await administrator.query('SELECT count(*)::integer AS n FROM hon.document_acknowledgements WHERE organization_id=$1', [ids.organization])).rows[0].n === 0, 'Acknowledgement/signature evidence must not be created or required.');
+  assert((await administrator.query('SELECT count(*)::integer AS n FROM hon.membership_payment_schedules WHERE membership_id=$1', [unsignedId])).rows[0].n === 0, 'Unscheduled activation created a billing schedule.');
+  assert((await administrator.query("SELECT count(*)::integer AS n FROM hon.audit_events WHERE entity_id=$1 AND action_code='billing.membership.activate'", [unsignedId])).rows[0].n === 1, 'Unsigned activation duplicated audit evidence.');
+  assert((await administrator.query("SELECT count(*)::integer AS n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='billing.membership.activated'", [unsignedId])).rows[0].n === 1, 'Unsigned activation duplicated outbox evidence.');
+  await administrator.query("UPDATE hon.roles SET code='OWNER', is_system_role=true, management_school_id=NULL WHERE id=$1", [ids.ownerRole]);
+  await administrator.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='billing.membership.activate'", [ids.ownerRole]);
+  await expectStatus(403, unsigned, 'Replay granted authority after exact permission removal.');
+  await administrator.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'billing.membership.activate')", [ids.ownerRole, ids.organization]);
+  assert((await read()).data.state === 'ACTIVE' && (await read()).data.version === 2, 'Activation context did not truthfully observe ACTIVE.');
+
+  const after = await snapshot();
+  for (const table of tables) {
+    if (!['memberships', 'audit_events', 'outbox_events', 'idempotency_records'].includes(table)) {
+      assert(before[table] === after[table], `Activation changed unrelated HON table ${table}.`);
+    }
+  }
+  console.log(`Verified ${tables.length} whole-HON-table snapshots: read has zero writes; activation changes only canonical memberships/audit/outbox/idempotency, with zero agreement/payment/provider/communication effects.`);
   console.log('Verified human-only tenant-scoped DRAFT-to-ACTIVE membership activation, exact permission/grants, RLS lookup, version/idempotency conflicts, atomic billing.membership.activate/billing.membership.activated v1 evidence, and no invoice/payment/term/schedule/communication/Action-Engine side effects.');
 } finally {
   try {

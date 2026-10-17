@@ -121,6 +121,10 @@
       "title": "Human membership renewal reviews"
     },
     {
+      "path": "/staff/billing/memberships",
+      "title": "Human membership activation only"
+    },
+    {
       "path": "/community",
       "title": "Private human HON owner community"
     },

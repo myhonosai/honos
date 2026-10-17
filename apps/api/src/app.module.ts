@@ -60,6 +60,7 @@ import { InterfaceThemeController } from './preferences/interface-theme.controll
 import { InterfaceThemeService } from './preferences/interface-theme.service.js';
 import { MembershipController } from './billing/membership.controller.js';
 import { MembershipService } from './billing/membership.service.js';
+import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { InvoiceController } from './billing/invoice.controller.js';
@@ -370,6 +371,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    MembershipActivationHumanUiGuard,
     BillingAccountService,
     InvoiceService,
     HqOnboardingService,

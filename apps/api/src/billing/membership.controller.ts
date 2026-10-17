@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, ForbiddenException, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Header, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
 import type { CommandContext } from '@hon/contracts';
@@ -9,6 +9,7 @@ import { ActivateMembershipDto } from './activate-membership.dto.js';
 import { CancelMembershipDto } from './cancel-membership.dto.js';
 import { CreateMembershipDto } from './create-membership.dto.js';
 import { MembershipService } from './membership.service.js';
+import { MembershipActivationHumanUiGuard } from './membership-activation-human-ui.guard.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/billing/memberships')
 @UseGuards(HonIdentityGuard)
@@ -37,6 +38,30 @@ export class MembershipController {
     return { data: result.membership, meta: { requestId, correlationId: requestId, replayed: result.replayed } };
   }
 
+  /** No list/search or related-record context: exactly one already-known ID. */
+  @Get(':membershipId/activation-context')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(MembershipActivationHumanUiGuard)
+  async activationContext(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('membershipId', new ParseUUIDPipe()) membershipId: string,
+    @Query() query: Record<string, unknown>,
+    @Req() request: HonRequest,
+  ) {
+    if (Object.keys(query).length) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'billing.membership.activate');
+    if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) {
+      throw new ForbiddenException('HON membership activation is not authorized for this school.');
+    }
+    const requestId = randomUUID();
+    const context: CommandContext = { ...scope, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey: '', source: 'HUMAN_UI' };
+    const data = await this.memberships.readActivationContext(context, membershipId);
+    return { data, meta: { requestId, correlationId: requestId } };
+  }
+
   /**
    * A human operator activates exactly one RLS-visible DRAFT membership. The
    * guarded boundary resolves all authority and attribution; the body carries
@@ -44,6 +69,8 @@ export class MembershipController {
    */
   @Post(':membershipId/activate')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(MembershipActivationHumanUiGuard)
   async activate(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
@@ -62,6 +89,7 @@ export class MembershipController {
     }
     const identity = request.honIdentity;
     if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    if (Object.keys(request.query ?? {}).length) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
     const scope = await this.database.resolveAuthorizedScope(
       identity.externalSubject,
       schoolId,

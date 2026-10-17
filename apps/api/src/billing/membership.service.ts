@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import type { PoolClient } from 'pg';
 import { tierIncludesFeature } from '@hon/config';
 import type {
   ActivateMembershipInput,
@@ -16,6 +17,7 @@ import type {
   CreateMembershipInput,
   HonTier,
   MembershipSummary,
+  MembershipActivationContext,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -182,6 +184,38 @@ export class MembershipService {
     });
   }
 
+  /** Only lifecycle state/version for one known RLS-visible ID. No related joins or effects. */
+  async readActivationContext(context: CommandContext, membershipId: string): Promise<MembershipActivationContext> {
+    this.assertHumanActivationContext(context, false);
+    if (!UUID.test(membershipId)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    return this.database.withTenantReadOnlyTransaction(context, async client => {
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'");
+      await this.assertLiveActivationAuthority(client, context);
+      const result = await client.query<{ state: MembershipSummary['state']; version: number }>(
+        `SELECT state::text AS state, version FROM hon.memberships
+         WHERE id = $1::uuid AND organization_id = $2::uuid AND school_id = $3::uuid LIMIT 1`,
+        [membershipId, context.organizationId, context.schoolId],
+      );
+      const row = result.rows[0];
+      if (!row) throw new NotFoundException({ code: 'BILLING_MEMBERSHIP_NOT_FOUND', detail: 'The membership is not available in this school.' });
+      return { organizationId: context.organizationId, schoolId: context.schoolId, membershipId, state: row.state, version: row.version };
+    });
+  }
+
+  private async assertLiveActivationAuthority(client: PoolClient, context: CommandContext): Promise<void> {
+    const result = await client.query<{ authorized: boolean; tier: HonTier | null }>(
+      `SELECT hon.principal_has_school_permission($1::uuid, $2::uuid, $3::uuid, 'billing.membership.activate') AS authorized,
+              entitlement.tier
+       FROM (SELECT 1) AS boundary LEFT JOIN hon.read_current_organization_entitlement() AS entitlement ON true`,
+      [context.principalId, context.organizationId, context.schoolId],
+    );
+    const row = result.rows[0];
+    if (!row?.authorized) throw new ForbiddenException({ code: 'MEMBERSHIP_ACTIVATION_FORBIDDEN', detail: 'Current membership activation permission is required.' });
+    if (!row.tier || !tierIncludesFeature(row.tier, 'billing.foundation')) {
+      throw new ForbiddenException({ code: 'TIER_ENTITLEMENT_REQUIRED', detail: 'An active HON billing entitlement is required.' });
+    }
+  }
+
   /**
    * Activates exactly one RLS-visible DRAFT membership. This transition neither
    * creates nor requires an invoice, and deliberately performs no payment,
@@ -207,6 +241,7 @@ export class MembershipService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      await this.assertLiveActivationAuthority(client, context);
       // This ID-only locked lookup relies on transaction-local RLS. A record in
       // another school is intentionally indistinguishable from a missing one.
       const currentResult = await client.query<MembershipActivationRow>(
@@ -259,6 +294,9 @@ export class MembershipService {
         );
         const record = existing.rows[0];
         if (!record) throw new Error('HON membership activation idempotency record unexpectedly missing.');
+        // Re-resolve live authority after both membership and idempotency waits,
+        // including replay: a prior result never grants ongoing authority.
+        await this.assertLiveActivationAuthority(client, context);
         if (record.request_fingerprint !== requestFingerprint) {
           throw new ConflictException({
             code: 'IDEMPOTENCY_KEY_REUSED',
@@ -274,6 +312,7 @@ export class MembershipService {
         });
       }
 
+      await this.assertLiveActivationAuthority(client, context);
       if (current.state !== 'DRAFT') {
         throw new ConflictException({
           code: 'MEMBERSHIP_NOT_DRAFT',
@@ -680,7 +719,7 @@ export class MembershipService {
     };
   }
 
-  private assertHumanActivationContext(context: CommandContext): void {
+  private assertHumanActivationContext(context: CommandContext, requireKey = true): void {
     if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
       throw new ForbiddenException({
         code: 'HUMAN_COMMAND_REQUIRED',
@@ -694,9 +733,9 @@ export class MembershipService {
       });
     }
     if (
-      !context.idempotencyKey
+      requireKey && (!context.idempotencyKey
       || context.idempotencyKey !== context.idempotencyKey.trim()
-      || context.idempotencyKey.length > 200
+      || context.idempotencyKey.length > 200)
     ) {
       throw new ConflictException({
         code: 'IDEMPOTENCY_KEY_REQUIRED',
