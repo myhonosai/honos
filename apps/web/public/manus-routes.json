@@ -217,6 +217,10 @@
       "title": "HON | Human Testing Candidate Registration"
     },
     {
+      "path": "/staff/testing/candidates/grade",
+      "title": "HON | Human Testing Candidate Outcome"
+    },
+    {
       "path": "/staff/testing/certificates",
       "title": "HON | Human-issued testing certificates"
     },
