@@ -62,10 +62,10 @@ describe('public plan catalog', () => {
     });
   });
 
-  it('uses the catalog only for existing public references and HQ tier choice, with explicit non-activation language', () => {
-    expect(referenceSource).toContain('PUBLIC_PLAN_CATALOG');
-    expect(referenceSource).toContain('Public plan catalog');
-    expect(referenceSource).toContain('These values do not activate live billing or an offer');
+  it('keeps the catalog on the dedicated pricing reference and governed HQ tier selector, never a school command reference', () => {
+    expect(referenceSource).not.toContain('PUBLIC_PLAN_CATALOG');
+    expect(referenceSource).not.toContain('Public plan catalog');
+    expect(referenceSource).not.toMatch(/(?:monthlyDisplayPriceUsd|premiumAiCreditPlanningAllowance|planning allowance|grant credits)/i);
     expect(hqOnboardingSource).toContain('initialTier: DEFAULT_PUBLIC_PLAN_TIER');
     expect(hqOnboardingSource).toContain('PUBLIC_PLAN_CATALOG.map');
     expect(hqOnboardingSource).not.toContain('<option value="ESSENTIAL"');

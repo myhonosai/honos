@@ -105,6 +105,7 @@ export function ClassSessionWorkbench(): React.ReactElement {
         {result.classSession.roomName && <><dt>Returned room</dt><dd>{result.classSession.roomName}</dd></>}<dt>UTC start / end</dt><dd>{result.classSession.startsAt} / {result.classSession.endsAt}</dd>
         <dt>Returned capacity / booking policy</dt><dd>{result.classSession.capacity} / {result.classSession.bookingPolicy}</dd><dt>Returned status / version</dt><dd>{result.classSession.status} / {result.classSession.version}</dd><dt>Created at</dt><dd>{result.classSession.createdAt}</dd></dl>
       <p>The returned <code>SCHEDULED</code> record is not a recurring calendar, instructor availability, booking, attendance, roster or capacity guarantee, ClassPass allowance, payment or membership outcome. It does not create provider, AI, Action Engine, automation or communication effects.</p>
+      <p><a href="/staff/schedule/sessions">Open bounded Class Sessions</a> to independently verify a current school and select a returned session. This link passes no scope or authority.</p>
     </section>}
     <p>Inputs, receipts and uncertainty-only exact retries are memory-only. Every input edit clears confirmation, receipt and retry; access loss clears every input and fact. Reload/remount starts idle. No persistence, polling, list, search or refresh exists.</p>
   </main>;

@@ -9,7 +9,6 @@ import {
   type HonAiTeamMember,
   type HonInterfaceTheme,
 } from '@hon/design-system';
-import { PUBLIC_PLAN_CATALOG } from '@hon/config';
 import styles from './hon-reference-suite.module.css';
 
 type ReferenceScreen = keyof typeof HON_REFERENCE_SCREEN_STATES;
@@ -132,14 +131,6 @@ function ReferenceNotice(): React.ReactElement {
   return <div className={styles.referenceNotice}>Design reference · representative sample state only · no tenant data is read or changed</div>;
 }
 
-function PublicPlanCatalog(): React.ReactElement {
-  return <section className={styles.publicPlanCatalog} aria-label="Public HON plan catalog">
-    <div><strong>Public plan catalog</strong><span>Non-binding display metadata · planning only</span></div>
-    <ul>{PUBLIC_PLAN_CATALOG.map((plan) => <li key={plan.tier}><b>{plan.displayName}</b><span>${plan.monthlyDisplayPriceUsd}/month</span><small>{plan.premiumAiCreditPlanningAllowance.toLocaleString()} premium AI credit planning allowance</small></li>)}</ul>
-    <p>These values do not activate live billing or an offer, create a subscription, charge a payment, issue an invoice, or grant credits.</p>
-  </section>;
-}
-
 function Mark({ compact = false }: { compact?: boolean }): React.ReactElement {
   return <div className={`${styles.mark} ${compact ? styles.markCompact : ''}`} aria-label="HON for Martial Arts"><strong>HON</strong><span>For Martial Arts</span></div>;
 }
@@ -151,7 +142,10 @@ type ReferenceAppearanceProps = {
   onPortraitStyle: (style: AiPortraitStyle) => void;
 };
 
-function AppearanceDock({ theme, onTheme, portraitStyle, onPortraitStyle, showAvatarOptions = true }: ReferenceAppearanceProps & { showAvatarOptions?: boolean }): React.ReactElement {
+type AppearanceDockVariant = 'full' | 'inline';
+
+function AppearanceDock({ theme, onTheme, portraitStyle, onPortraitStyle, showAvatarOptions = true, variant = 'full' }: ReferenceAppearanceProps & { showAvatarOptions?: boolean; variant?: AppearanceDockVariant }): React.ReactElement {
+  const isInline = variant === 'inline';
   const reset = () => {
     onTheme('modern');
     onPortraitStyle('realistic');
@@ -163,8 +157,8 @@ function AppearanceDock({ theme, onTheme, portraitStyle, onPortraitStyle, showAv
     }
   };
 
-  return <section className={styles.appearanceDock} aria-label="HON reference appearance">
-    <details className={styles.appearanceDockDetails} open>
+  return <section className={`${styles.appearanceDock} ${isInline ? styles.appearanceDockInline : ''}`} aria-label="HON reference appearance">
+    <details className={styles.appearanceDockDetails} open={!isInline}>
       <summary className={styles.appearanceDockSummary}><span>Appearance</span><b>{REFERENCE_THEME_OPTIONS.find((option) => option.id === theme)?.label}</b><i aria-hidden="true">⌄</i></summary>
       <div className={styles.appearanceDockBody}>
         <header className={styles.appearanceDockHeading}><div><span>HON VISUAL REFERENCE</span><strong>Appearance</strong></div><button type="button" onClick={reset}>Reset</button></header>
@@ -269,11 +263,10 @@ function CompleteReference({ theme, onTheme, portraitStyle, onPortraitStyle }: R
   if (theme === 'classic') return <ClassicComplete theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} />;
   return <main className={`${styles.referencePage} ${styles.completePage} ${styles[`presentation_${theme}`]}`}>
     <ReferenceNotice />
-    <AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} />
     <div className={styles.desktopShell}>
       <Sidebar mode="school" />
       <section className={styles.commandCanvas}>
-        <header className={styles.canvasHeader}><div><span className={styles.contextLabel}>HON COMPLETE · SCHOOL OWNER VIEW</span><h1>An AI team that knows<br />what needs attention.</h1></div><div className={styles.schoolSelect}><span>⌂</span><div><strong>Ideal Martial Arts</strong><small>San Gabriel · Design reference</small></div><b>⌄</b></div></header>
+        <header className={styles.canvasHeader}><div><span className={styles.contextLabel}>HON COMPLETE · SCHOOL OWNER VIEW</span><h1>An AI team that knows<br />what needs attention.</h1></div><div className={styles.schoolHeaderControls}><div className={styles.schoolSelect}><span>⌂</span><div><strong>Ideal Martial Arts</strong><small>San Gabriel · Design reference</small></div><b>⌄</b></div><AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} variant="inline" /></div></header>
         <section className={styles.completeHero}>
           <div className={styles.heroPortrait} style={{ '--agent-color': agent.color, '--hero-image': 'none' } as React.CSSProperties}><HeroAgentPortrait agent={agent} portraitStyle={portraitStyle} /><div className={styles.heroCopy}><span>{agent.name.toUpperCase()} · SELECTED</span><strong>{agent.name} is ready to coordinate your next move.</strong><p>Switch employees, ask one question, and keep every action inside permissions, policy, and approval.</p></div></div>
           <div className={styles.heroContext}><p>Today at a glance</p><strong>Tue, Oct 14</strong><ul><li><b>191</b> Active Students <span>↗ 3</span></li><li><b>24</b> New Leads <span>↗ 6</span></li><li><b>8</b> Trial Classes <span>↗ 2</span></li></ul></div>
@@ -354,11 +347,10 @@ export function HonReferenceSuite({ screen }: { screen: ReferenceScreen }): Reac
   }, [appearanceHydrated, portraitStyle, theme]);
 
   const props: ReferenceAppearanceProps = { theme, onTheme: setTheme, portraitStyle, onPortraitStyle: setPortraitStyle };
-  const publicCatalog = screen === 'complete' || screen === 'core' ? <PublicPlanCatalog /> : null;
   const reference = screen === 'hq' ? <HqReference {...props} />
     : screen === 'core' ? <CoreReference {...props} />
       : screen === 'parent' ? <ParentReference {...props} />
         : screen === 'mobile' ? <MobileCompleteReference {...props} />
           : <CompleteReference {...props} />;
-  return <>{publicCatalog}{reference}</>;
+  return reference;
 }

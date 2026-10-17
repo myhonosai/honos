@@ -36,14 +36,25 @@ describe('HON reference appearance dock', () => {
     expect(source).not.toMatch(/\bfetch\(/);
   });
 
-  it('uses a desktop floating header and an accessible mobile details disclosure without horizontal scrolling', () => {
-    expect(dock).toContain('<details className={styles.appearanceDockDetails} open>');
+  it('places the Modern Complete compact dock directly below the school selector as a closed inline details disclosure', () => {
+    const completeReference = source.slice(source.indexOf('function CompleteReference'), source.indexOf('function HqReference'));
+    const beforeDesktopShell = completeReference.slice(0, completeReference.indexOf('<div className={styles.desktopShell}>'));
+    const schoolSelectIndex = completeReference.indexOf('styles.schoolSelect');
+    const inlineDockIndex = completeReference.indexOf('variant="inline"');
+
+    expect(source).toContain("type AppearanceDockVariant = 'full' | 'inline'");
+    expect(dock).toContain('open={!isInline}');
     expect(dock).toContain('<summary className={styles.appearanceDockSummary}>');
-    expect(styles).toContain('.appearanceDock{position:sticky');
-    expect(styles).toContain('.appearanceOptionGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))');
-    expect(styles).toContain('@media (max-width:760px)');
-    expect(styles).toContain('.appearanceDockDetails:not([open]) .appearanceDockBody{display:none}');
-    expect(styles).toContain('.appearanceOptionGrid{grid-template-columns:1fr}');
+    expect(completeReference).toContain('className={styles.schoolHeaderControls}');
+    expect(schoolSelectIndex).toBeGreaterThan(-1);
+    expect(inlineDockIndex).toBeGreaterThan(schoolSelectIndex);
+    expect(beforeDesktopShell).not.toContain('<AppearanceDock');
+    expect(dock).not.toContain('role="dialog"');
+    expect(styles).toContain('.schoolHeaderControls{display:grid');
+    expect(styles).toContain('.appearanceDock.appearanceDockInline{position:static');
+    expect(styles).toContain('.appearanceDockInline .appearanceDockDetails:not([open]) .appearanceDockBody{display:none}');
+    expect(styles).toContain('.appearanceDockInline .appearanceOptionGrid{grid-template-columns:1fr}');
+    expect(styles).toContain('@media(max-width:820px){.schoolHeaderControls');
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)');
   });
 

@@ -82,6 +82,11 @@ try {
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_classpass_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_classpass_runtime') throw new Error('ClassPass aliases require exact disposable localhost database.');
       sql = sql.replaceAll('hon_runtime', 'hon_classpass_runtime');
     }
+    if (new URL(databaseUrl).username === 'hon_class_sessions_read_owner') {
+      const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_class_sessions_read_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_class_sessions_read_runtime') throw new Error('Class Sessions aliases require exact disposable localhost database.');
+      sql = sql.replaceAll('hon_runtime', 'hon_class_sessions_read_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_attendance_owner') {
       const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_attendance_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_attendance_runtime') throw new Error('Attendance aliases require exact disposable localhost database.');

@@ -124,6 +124,9 @@ import { ProgramService } from './programs/program.service.js';
 import { ClassSessionController } from './schedule/class-session.controller.js';
 import { ClassSessionHumanUiGuard } from './schedule/class-session-human-ui.guard.js';
 import { ClassSessionService } from './schedule/class-session.service.js';
+import { ClassSessionsReadController } from './schedule/class-sessions-read.controller.js';
+import { ClassSessionsReadHumanUiGuard } from './schedule/class-sessions-read-human-ui.guard.js';
+import { ClassSessionsReadService } from './schedule/class-sessions-read.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
 import { AttendancePolicyService } from './schedule/attendance-policy.service.js';
@@ -258,6 +261,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CurriculumController,
     ProgramController,
     ClassSessionController,
+    ClassSessionsReadController,
     AttendanceController,
     AttendancePolicyController,
     ClassBookingController,
@@ -358,6 +362,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ProgramService,
     ClassSessionService,
     ClassSessionHumanUiGuard,
+    ClassSessionsReadService,
+    ClassSessionsReadHumanUiGuard,
     AttendanceService,
     AttendancePolicyService,
     AttendanceHumanUiGuard,

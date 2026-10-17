@@ -14,6 +14,8 @@
     "db:test-outbox": "node scripts/test-outbox-leases.mjs",
     "db:test-curriculum": "node scripts/test-curriculum-integrity.mjs",
     "db:test-booking": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-booking-integrity.mjs",
+    "db:setup-class-sessions-read": "node scripts/setup-class-sessions-read-validation.mjs",
+    "db:test-class-sessions-read": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-sessions-read-integrity.mjs",
     "db:test-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-knowledge-integrity.mjs",
     "db:test-parent-schedule": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-schedule-security.mjs",
     "db:test-parent-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-knowledge-security.mjs",
