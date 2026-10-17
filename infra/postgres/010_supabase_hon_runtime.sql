@@ -1064,3 +1064,19 @@ DO $$ DECLARE r text; BEGIN
  END LOOP;
 END $$;
 GRANT EXECUTE ON FUNCTION hon.resolve_current_staff_reporting_scope(text),hon.read_staff_reporting_schools(text) TO hon_runtime;
+
+-- CRM-only lead close exact reconciliation:
+REVOKE ALL ON TABLE hon.crm_lead_close_requests FROM PUBLIC;
+REVOKE ALL ON FUNCTION hon.guard_crm_lead_close_history(), hon.crm_lead_close_has_permission(uuid,uuid,uuid,text),
+  hon.resolve_crm_lead_close_scope(text,uuid), hon.require_crm_lead_close_actor(text), hon.guard_crm_lead_close_update(),
+  hon.close_crm_lead(text,uuid,jsonb,uuid,uuid,uuid) FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','hon_runtime') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.crm_lead_close_requests FROM %I',r);
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.guard_crm_lead_close_history(), hon.crm_lead_close_has_permission(uuid,uuid,uuid,text), hon.resolve_crm_lead_close_scope(text,uuid), hon.require_crm_lead_close_actor(text), hon.guard_crm_lead_close_update(), hon.close_crm_lead(text,uuid,jsonb,uuid,uuid,uuid) FROM %I',r);
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.resolve_crm_lead_close_scope(text,uuid), hon.close_crm_lead(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End CRM-only lead close exact reconciliation.

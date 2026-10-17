@@ -2294,3 +2294,30 @@ DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles W
  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='schedule.planned_absence.review' AND is_staff_assignable) THEN RAISE EXCEPTION 'Canonical review permission required'; END IF;
 END $$;
 -- End planned absence review exact verification.
+
+-- CRM-only lead close exact verification:
+DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+ IF runtime_oid IS NULL OR EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication)) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Restricted CRM close runtime required'; END IF;
+ FOR f IN SELECT * FROM (VALUES
+ ('hon.guard_crm_lead_close_history()','2a83879e999f9d1858ec5f1438e9763a',false,false),
+ ('hon.crm_lead_close_has_permission(uuid,uuid,uuid,text)','37e23a9753e678215568e7d41062a708',false,true),
+ ('hon.resolve_crm_lead_close_scope(text,uuid)','7380ca81c43880a7b520796512a9efea',true,true),
+ ('hon.require_crm_lead_close_actor(text)','68b00d4367ac0168df9ef6c40bd784e6',false,true),
+ ('hon.guard_crm_lead_close_update()','f775069fe766751c7a16f0c4beb9b469',false,false),
+ ('hon.close_crm_lead(text,uuid,jsonb,uuid,uuid,uuid)','997766c485ee5825e481a233e9c400e2',true,true)
+ ) expected(signature,source_md5,runtime_allowed,definer) LOOP
+  SELECT proc.*,owner.rolsuper,owner.rolbypassrls INTO p FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
+  IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.provolatile<>'v' OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] OR NOT(p.rolsuper OR p.rolbypassrls) OR p.proowner=runtime_oid OR md5(p.prosrc)<>f.source_md5 OR (SELECT count(*) FROM pg_proc other WHERE other.pronamespace=p.pronamespace AND other.proname=p.proname)<>1 THEN RAISE EXCEPTION 'Canonical CRM close function required: %',f.signature; END IF;
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>runtime_oid OR NOT f.runtime_allowed OR acl.is_grantable)) OR has_function_privilege('hon_runtime',p.oid,'EXECUTE') IS DISTINCT FROM f.runtime_allowed THEN RAISE EXCEPTION 'Exact CRM close function ACL required: %',f.signature; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid='hon.crm_lead_close_requests'::regclass AND relrowsecurity AND relforcerowsecurity)
+  OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='crm_lead_close_requests')
+  OR has_table_privilege('hon_runtime','hon.crm_lead_close_requests','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+  OR has_any_column_privilege('hon_runtime','hon.crm_lead_close_requests','SELECT,INSERT,UPDATE,REFERENCES')
+  OR EXISTS(SELECT 1 FROM pg_class c, LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid='hon.crm_lead_close_requests'::regclass AND a.grantee<>c.relowner) THEN RAISE EXCEPTION 'Private CRM close FORCE-RLS receipt required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_lead_close_requests'::regclass AND tgname='crm_lead_close_immutable' AND tgfoid='hon.guard_crm_lead_close_history()'::regprocedure AND tgenabled='O' AND tgtype=27)
+  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_lead_close_requests'::regclass AND tgname='crm_lead_close_no_truncate' AND tgfoid='hon.guard_crm_lead_close_history()'::regprocedure AND tgenabled='O' AND tgtype=34)
+  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_leads'::regclass AND tgname='crm_lead_close_update_guard' AND tgfoid='hon.guard_crm_lead_close_update()'::regprocedure AND tgenabled='O' AND tgtype=19) THEN RAISE EXCEPTION 'Canonical CRM close triggers required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='crm.lead.close' AND is_sensitive AND is_staff_assignable) THEN RAISE EXCEPTION 'Exact staff CRM close permission required'; END IF;
+END $$;
+-- End CRM-only lead close exact verification.
