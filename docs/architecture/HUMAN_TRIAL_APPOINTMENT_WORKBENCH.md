@@ -25,6 +25,12 @@ The browser accepts entered organization, school, lead and appointment identifie
 
 The workbench does not retain appointment state across reload. It purposely does not offer a generic appointment selector, history reader, lead directory, or browser persistence. Staff must use an established authorized CRM workflow to find another record.
 
+## Follow-up handoff
+
+Only a current in-memory receipt that this workbench has already verified as terminal `COMPLETED`, `NO_SHOW`, or `CANCELLED` shows an ordinary **Create human follow-up** anchor. The anchor is exactly `/staff/crm/follow-ups?leadId=<crmLeadId>` and carries no appointment ID, organization/school, status, time, note, outcome text, version, or other receipt fact. `SCHEDULED` receipts never show it.
+
+The anchor performs no write. The Follow-ups destination treats its one UUID as an untrusted local draft prefill, starts idle without a request or lead lookup, and requires its own explicit authorized queue load before a create form can use it. It does not continue, infer, or authorize trial state; all existing server lead/scope/permission/version/idempotency checks remain final.
+
 ## Explicit non-effects
 
 A scheduled appointment or recorded outcome does **not**:
@@ -39,4 +45,4 @@ No `BOOKED`, `WAITLISTED`, attendance, enrollment, membership, payment, consent,
 
 ## Validation evidence
 
-The focused web coverage proves the page starts without fetching or a fabricated receipt, validates strict same-origin scheduling/outcome response linkage, rejects foreign/consultation/non-scheduled/private/extra response data, uses generated idempotency keys, constrains outcomes to an exact scheduled receipt/version, registers only `/staff/crm/trials`, and has no browser persistence/AI/message/execution capability. Workspace `pnpm test`, `pnpm check`, `pnpm build`, and `git diff --check` remain checkpoint requirements.
+The focused web coverage proves the page starts without fetching or a fabricated receipt, validates strict same-origin scheduling/outcome response linkage, rejects foreign/consultation/non-scheduled/private/extra response data, uses generated idempotency keys, constrains outcomes to an exact scheduled receipt/version, exposes a UUID-only follow-up link only for terminal receipts, registers only `/staff/crm/trials`, and has no browser persistence/AI/message/execution capability. Workspace `pnpm test`, `pnpm check`, `pnpm build`, and `git diff --check` remain checkpoint requirements.

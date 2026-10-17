@@ -70,6 +70,10 @@ The same-origin API has only the following staff routes:
 
 The conventional mobile-styled workbench at `/staff/crm/follow-ups` starts empty and performs no fetch or fake save until the user loads a queue. It uses exact IDs and retained uncertain-request keys, distinguishes reload-current from retry-exact, validates returned current records, and presents truthful empty/error/refresh states. It does not contain an email recipient field, staff directory/search, background timer, local/session persistence, automatic retry, fake sample record, AI invocation, send, or execute control.
 
+### Bounded lead handoff
+
+An already authorized CRM lead row, or the current in-memory **terminal** trial receipt (`COMPLETED`, `NO_SHOW`, or `CANCELLED`), may render an ordinary navigation link containing only `?leadId=<uuid>`. This UUID is an untrusted local draft prefill, never scope or lead authority. Opening the Follow-ups page makes no request; the existing human still explicitly loads the existing authorized queue, and only then can the prefilled ID populate a new draft with the existing current-principal assignee default. Malformed input, queue/status changes, pagination, authorization failure, and form reset clear or consume the prefill. No lead lookup, contact/status/outcome inference, automatic follow-up, message, appointment mutation, enrollment, membership, payment, provider, AI, Action Engine, automation, or persistence is added.
+
 ## Database boundary, evidence, and least privilege
 
 Runtime has no direct table or column access to the three follow-up tables, global directory/IAM tables, or helper/trigger functions. The only runtime callable functions are:

@@ -26,6 +26,12 @@ Each returned lead has one ordinary **Prepare trial appointment** link. It carri
 - it does **not** schedule, send, retry, reserve, or execute anything;
 - the trial command's server boundary still resolves human identity, exact scope, permission, type, state, and concurrency before any mutation.
 
+## Follow-up handoff
+
+Each rendered, already-authorized row also has an ordinary **Create human follow-up** anchor. Its URL is exactly `/staff/crm/follow-ups?leadId=<uuid>`: it carries only the existing lead UUID, never organization/school, contact, status, version, appointment, or trial facts.
+
+The Follow-ups route treats that value as a bounded, untrusted, one-time local draft prefill. It makes no request on mount, performs no lead lookup, and cannot expose the create form until the human explicitly loads the existing authorized queue. Only that server-derived queue may supply the current own-assignee default; access failure, refresh/pagination, queue/status changes, and form reset discard or clear the prefill. Nothing is persisted in browser storage, and the established server lead/scope/permission/version/idempotency checks remain final.
+
 ## Explicit non-effects
 
 This view does not create/edit/archive a lead; change a status or pipeline; save notes; send a message; schedule/record a trial; reserve/check in a class; create a student, family, enrollment, membership, payment, agreement, consent, or communication; call a provider or model; invoke the Action Engine; or create automation, work, or external delivery.
@@ -34,4 +40,4 @@ It is not a family/parent/HQ/global directory and does not relax RLS, tenant sco
 
 ## Validation evidence
 
-Focused web coverage proves the empty/no-request posture, fixed same-origin no-store request, 50-row/redaction/shape/duplicate rejection, no direct mutation/provider/AI/persistence capability, route registration, and untrusted no-command trial selector handoff. Workspace `pnpm test`, `pnpm check`, `pnpm build`, and `git diff --check` remain checkpoint requirements.
+Focused web coverage proves the empty/no-request posture, fixed same-origin no-store request, 50-row/redaction/shape/duplicate rejection, UUID-only lead handoff, no direct mutation/provider/AI/persistence capability, route registration, and untrusted no-command trial/follow-up selector handoffs. Workspace `pnpm test`, `pnpm check`, `pnpm build`, and `git diff --check` remain checkpoint requirements.

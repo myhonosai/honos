@@ -2,20 +2,23 @@
 import React, { useRef, useState, type FormEvent } from 'react';
 import { CRM_FOLLOW_UP_HELP, type FollowUpInput, type FollowUpRecord, type FollowUpQueue, type FollowUpStatus, type FollowUpOperation, type FollowUpTransition } from '@hon/contracts';
 import { loadFollowUps, readFollowUp, mutateFollowUp, followUpFingerprint, FollowUpAccessError } from './crm-follow-ups-http';
+import { crmFollowUpLeadId } from './crm-follow-up-handoff';
 import styles from './staff-availability-workbench.module.css';
-const initial = (assigneeId = ''): FollowUpInput => ({ expectedVersion: 0, leadId: '', assigneeId, subject: '', note: '', dueAt: null, priority: 'NORMAL' });
+const initial = (assigneeId = '', leadId = ''): FollowUpInput => ({ expectedVersion: 0, leadId, assigneeId, subject: '', note: '', dueAt: null, priority: 'NORMAL' });
 const fields = (r: FollowUpRecord): FollowUpInput => ({ expectedVersion:r.version,leadId:r.leadId,assigneeId:r.assigneeId,subject:r.subject,note:r.note,dueAt:r.dueAt,priority:r.priority });
-export function CrmFollowUpsWorkbench(): React.ReactElement {
+export function CrmFollowUpsWorkbench({ initialLeadId }: { initialLeadId?: string | undefined } = {}): React.ReactElement {
   const [context,setContext] = useState<FollowUpQueue | null>(null), [selected,setSelected] = useState<FollowUpRecord | null>(null), [draft,setDraft] = useState<FollowUpInput>(initial);
   const [queue,setQueue] = useState<'mine' | 'team'>('mine'), [status,setStatus] = useState<FollowUpStatus | 'ALL'>('OPEN'), [busy,setBusy] = useState(false), [error,setError] = useState(''), [notice,setNotice] = useState(''), [knownId,setKnownId] = useState('');
   const retry = useRef<{ fingerprint:string; key:string; op:FollowUpOperation; id:string | null; input:FollowUpInput | FollowUpTransition } | null>(null);
+  const pendingLeadId = useRef(crmFollowUpLeadId(initialLeadId) ?? '');
   const [uncertain,setUncertain] = useState(false), [needsRefresh,setNeedsRefresh] = useState(false);
-  async function run(work: () => Promise<void>) { setBusy(true); setError(''); setNotice(''); try { await work(); } catch (e) { if (e instanceof FollowUpAccessError) { setContext(null); setSelected(null); setDraft(initial()); } setError(e instanceof Error ? e.message : 'No verified result.'); } finally { setBusy(false); } }
+  async function run(work: () => Promise<void>) { setBusy(true); setError(''); setNotice(''); try { await work(); } catch (e) { if (e instanceof FollowUpAccessError) { pendingLeadId.current=''; setContext(null); setSelected(null); setDraft(initial()); } setError(e instanceof Error ? e.message : 'No verified result.'); } finally { setBusy(false); } }
   function choose(r: FollowUpRecord | null) { setNeedsRefresh(false); setSelected(r); setDraft(r ? fields(r) : initial(context?.principalId)); }
   function edit(p: Partial<FollowUpInput>) { setDraft(d => ({ ...d,...p })); setNotice(''); }
   async function load(after: string | null = null) { await run(async () => {
+    const prefilledLeadId = after === null ? pendingLeadId.current : ''; pendingLeadId.current='';
     setContext(null); setSelected(null); setDraft(initial());
-    const c = await loadFollowUps(queue,status,after); setContext(c); setDraft(initial(c.principalId));
+    const c = await loadFollowUps(queue,status,after); setContext(c); setDraft(initial(c.principalId,prefilledLeadId));
   }); }
   async function open(id: string) { await run(async () => {
     setSelected(null); setDraft(initial(context?.principalId)); const r = await readFollowUp(id);
@@ -35,9 +38,9 @@ export function CrmFollowUpsWorkbench(): React.ReactElement {
   async function save(e: FormEvent) { e.preventDefault(); await run(() => submit(selected ? 'UPDATE':'CREATE',selected?.followUpId ?? null,draft)); }
   return <main className={styles.page}>
     <nav><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN CRM · ESSENTIAL / CORE / COMPLETE</p><h1>CRM follow-ups</h1><p>Your next human step, kept in one place.</p></header>
+    <header><p>HUMAN CRM · ESSENTIAL / CORE / COMPLETE</p><h1>CRM follow-ups</h1><p>Your next human step, kept in one place. A lead ID handoff remains an untrusted local draft until this page explicitly loads its authorized queue.</p></header>
     <aside><strong>Records only. No automated outreach.</strong><p>{CRM_FOLLOW_UP_HELP}</p><p>Permissions: crm.follow_up.self_manage for your current assignments; crm.follow_up.manage for team records and assigning other known eligible staff. Both require exact school crm.lead.read. No staff directory or external recipients.</p></aside>
-    <section><h2>Authorized school queue</h2><div className={styles.row}><label>Queue<select disabled={busy} value={queue} onChange={e => {setQueue(e.target.value as 'mine'|'team');setContext(null);setSelected(null);}}><option value="mine">My assignments</option><option value="team">Team · managers only</option></select></label><label>Status<select disabled={busy} value={status} onChange={e => {setStatus(e.target.value as FollowUpStatus|'ALL');setContext(null);setSelected(null);}}><option>OPEN</option><option>COMPLETED</option><option>CANCELLED</option><option>ALL</option></select></label><button disabled={busy} onClick={() => void load()}>Load / refresh queue</button></div><p>Up to 50 records per page, ordered by record ID. Due dates use UTC; they do not trigger work. Queue content omits subject, private note and lead contact data.</p></section>
+    <section><h2>Authorized school queue</h2><div className={styles.row}><label>Queue<select disabled={busy} value={queue} onChange={e => {pendingLeadId.current='';setQueue(e.target.value as 'mine'|'team');setContext(null);setSelected(null);setDraft(initial());}}><option value="mine">My assignments</option><option value="team">Team · managers only</option></select></label><label>Status<select disabled={busy} value={status} onChange={e => {pendingLeadId.current='';setStatus(e.target.value as FollowUpStatus|'ALL');setContext(null);setSelected(null);setDraft(initial());}}><option>OPEN</option><option>COMPLETED</option><option>CANCELLED</option><option>ALL</option></select></label><button disabled={busy} onClick={() => void load()}>Load / refresh queue</button></div><p>Up to 50 records per page, ordered by record ID. Due dates use UTC; they do not trigger work. Queue content omits subject, private note and lead contact data.</p></section>
     {busy && <p role="status">Checking the current human school boundary…</p>}
     {error && <p role="alert" className={styles.error}>{error} No save is assumed after an uncertain response.</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
