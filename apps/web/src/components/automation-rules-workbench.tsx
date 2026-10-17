@@ -3,14 +3,16 @@ import React, { useRef, useState, type FormEvent } from 'react';
 import { AUTOMATION_RULE_HELP, type AutomationRule, type AutomationRuleInput, type AutomationRuleList, type AutomationEvaluationPlan, type AutomationTrigger } from '@hon/contracts';
 import { automationFingerprint, automationRuleInput, loadAutomationRules, saveAutomationRule, dryRunAutomationRule, readAutomationRuleVersion } from './automation-rules-http';
 import styles from './staff-availability-workbench.module.css';
-const initial = (): AutomationRuleInput => ({ expectedVersion: 0, name: '', enabled: false, triggerKind: 'LEAD_CREATED', conditions: { source: 'ANY', minimumAggregateVersion: 1 }, proposal: { kind: 'MANUAL_REVIEW_TEMPLATE', category: 'LEAD_TRIAGE', priority: 'NORMAL' }, posture: { authority: 'NONE', approval: 'HUMAN_REVIEW_REQUIRED' }, schedule: { mode: 'MANUAL_ONLY', effectiveFrom: '', endsOn: null, cooldownMinutes: 0 } });
-export function AutomationRulesWorkbench(): React.ReactElement {
-  const [context, setContext] = useState<AutomationRuleList | null>(null), [selected, setSelected] = useState<AutomationRule | null>(null), [draft, setDraft] = useState<AutomationRuleInput>(initial);
+const DEFAULT_TRIGGER: AutomationTrigger = 'LEAD_CREATED';
+export function automationRuleTriggerPrefill(value: unknown): AutomationTrigger { return value === 'LEAD_CREATED' || value === 'TRIAL_NO_SHOW' ? value : DEFAULT_TRIGGER; }
+export function automationRuleInitialDraft(triggerKind: AutomationTrigger = DEFAULT_TRIGGER): AutomationRuleInput { return { expectedVersion: 0, name: '', enabled: false, triggerKind, conditions: { source: 'ANY', minimumAggregateVersion: 1 }, proposal: { kind: 'MANUAL_REVIEW_TEMPLATE', category: triggerKind === 'LEAD_CREATED' ? 'LEAD_TRIAGE' : 'TRIAL_ATTENDANCE_REVIEW', priority: 'NORMAL' }, posture: { authority: 'NONE', approval: 'HUMAN_REVIEW_REQUIRED' }, schedule: { mode: 'MANUAL_ONLY', effectiveFrom: '', endsOn: null, cooldownMinutes: 0 } }; }
+export function AutomationRulesWorkbench({ initialTrigger = DEFAULT_TRIGGER }: { initialTrigger?: AutomationTrigger } = {}): React.ReactElement {
+  const [context, setContext] = useState<AutomationRuleList | null>(null), [selected, setSelected] = useState<AutomationRule | null>(null), [draft, setDraft] = useState<AutomationRuleInput>(() => automationRuleInitialDraft(initialTrigger));
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState(''), [plan, setPlan] = useState<AutomationEvaluationPlan | null>(null), [history, setHistory] = useState<AutomationRule | null>(null), [historyVersion, setHistoryVersion] = useState('1');
-  const [date, setDate] = useState(''), [elapsed, setElapsed] = useState(''), [eventVersion, setEventVersion] = useState('1'), [eventSource, setEventSource] = useState<'HUMAN_UI' | 'PUBLIC_API'>('HUMAN_UI'), [eventKind, setEventKind] = useState<AutomationTrigger>('LEAD_CREATED');
+  const [date, setDate] = useState(''), [elapsed, setElapsed] = useState(''), [eventVersion, setEventVersion] = useState('1'), [eventSource, setEventSource] = useState<'HUMAN_UI' | 'PUBLIC_API'>('HUMAN_UI'), [eventKind, setEventKind] = useState<AutomationTrigger>(initialTrigger);
   const retry = useRef<{ fingerprint: string; key: string } | null>(null);
   async function run(work: () => Promise<void>) { setBusy(true); setError(''); setNotice(''); setPlan(null); setHistory(null); try { await work(); } catch (e) { setError(e instanceof Error ? e.message : 'No verified result.'); } finally { setBusy(false); } }
-  function choose(r: AutomationRule | null) { setSelected(r); setDraft(r ? { ...automationRuleInput(r), expectedVersion: r.version } : initial()); setPlan(null); setHistory(null); setNotice(''); setError(''); }
+  function choose(r: AutomationRule | null) { setSelected(r); setDraft(r ? { ...automationRuleInput(r), expectedVersion: r.version } : automationRuleInitialDraft(initialTrigger)); setPlan(null); setHistory(null); setNotice(''); setError(''); }
   function edit(p: Partial<AutomationRuleInput>) { setDraft(d => ({ ...d, ...p })); setPlan(null); setHistory(null); setNotice(''); }
   async function load() { await run(async () => { const c = await loadAutomationRules(); setContext(c); choose(null); }); }
   async function save(e: FormEvent) { e.preventDefault(); await run(async () => {

@@ -26,6 +26,20 @@ describe('bounded conventional CRM lead list', () => {
     } finally { fetcher.mockRestore(); }
   });
 
+  it('exposes dedicated trigger-only automation tabs without a CRM fact handoff', () => {
+    const source = readFileSync('src/components/crm-leads-workbench.tsx', 'utf8');
+    const automationTabs = source.slice(source.indexOf('crm-lead-automation'), source.indexOf('crm-lead-scope'));
+    expect(automationTabs).toContain('CRM automation tabs');
+    expect(automationTabs).toContain('href="/staff/automation/rules?trigger=LEAD_CREATED"');
+    expect(automationTabs).toContain('href="/staff/automation/rules?trigger=TRIAL_NO_SHOW"');
+    expect(automationTabs).toContain('Lead automation');
+    expect(automationTabs).toContain('No-show automation');
+    expect([...automationTabs.matchAll(/href="([^"]+)"/g)].map((match) => match[1])).toEqual([
+      '/staff/automation/rules?trigger=LEAD_CREATED',
+      '/staff/automation/rules?trigger=TRIAL_NO_SHOW'
+    ]);
+  });
+
   it('accepts only an idle untrusted scope prefill and still performs no automatic read or command', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     try {
