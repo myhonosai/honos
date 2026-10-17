@@ -140,6 +140,7 @@ import { AiTeamService } from './ai-team/ai-team.service.js';
 import { OperationsReportController } from './reports/operations-report.controller.js';
 import { OperationsReportService } from './reports/operations-report.service.js';
 import { CurrentStaffReportingSchoolController, CurrentStaffReportingSchoolNoStoreGuard } from './reports/current-staff-reporting-school.controller.js';
+import { StaffReportingSchoolsController } from './reports/staff-reporting-schools.controller.js';
 import { CommunicationConsentController } from './communication/communication-consent.controller.js';
 import { CommunicationConsentService } from './communication/communication-consent.service.js';
 import { OperationsSummaryController } from './reports/operations-summary.controller.js';
@@ -251,6 +252,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AiInvocationPlanController,
     AiTeamController,
     OperationsReportController,
+    StaffReportingSchoolsController,
     OperationsSummaryController,
     CommandCenterController,
     HealthScoreController,

@@ -1,7 +1,7 @@
 .page { min-height: 100vh; margin: 0; padding: 40px max(24px, calc((100vw - 1200px) / 2 + 24px)) 80px; background: radial-gradient(circle at 84% 0%, rgba(44, 111, 151, .22), transparent 34%), #071426; color: #e7eef9; font-family: var(--font-body, Arial, sans-serif); }
 .page nav { display: flex; flex-wrap: wrap; gap: 12px 22px; margin-bottom: 34px; }
 .page a { color: #98dce2; }
-.page a:focus-visible, .page button:focus-visible, .page input:focus-visible { outline: 3px solid #86d8d0; outline-offset: 3px; }
+.page a:focus-visible, .page button:focus-visible, .page input:focus-visible, .page select:focus-visible { outline: 3px solid #86d8d0; outline-offset: 3px; }
 .header { max-width: 800px; }
 .eyebrow { margin: 0; color: #8ad6d0; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
 .header h1 { margin: 12px 0; font-size: clamp(32px, 5vw, 50px); line-height: 1.12; }
@@ -13,7 +13,7 @@
 .scopeSection p { margin: 7px 0 0; }
 .scopeSection form fieldset { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 14px; margin: 0; padding: 0; border: 0; }
 .scopeSection label { display: grid; gap: 7px; font-size: 14px; font-weight: 700; }
-.scopeSection input { min-width: 0; box-sizing: border-box; border: 1px solid #48637f; border-radius: 8px; padding: 13px; background: #081729; color: #f3f7fc; font: inherit; }
+.scopeSection input, .scopeSection select { min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid #48637f; border-radius: 8px; padding: 13px; background: #081729; color: #f3f7fc; font: inherit; }
 .scopeSection button { align-self: end; min-height: 47px; border: 0; border-radius: 9px; padding: 12px 17px; background: #8cddd3; color: #0a2630; font: inherit; font-weight: 800; cursor: pointer; }
 .scopeSection button:disabled { cursor: wait; opacity: .65; }
 .scopeState { padding: 14px 16px; border-radius: 9px; background: #0b1a2a; color: #cbd8e6; }
@@ -142,5 +142,10 @@
 .classic .workflowProgress { margin-top: 18px; }
 .classic .progressSteps { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 11px; }
 .classic .progressSteps > div { padding: 8px; border-radius: 4px; }
+.scopeSection form fieldset.schoolChooser { grid-template-columns: minmax(0, 1fr) auto; }
+.bigButton .scopeSection form fieldset.schoolChooser { grid-template-columns: 1fr; }
+.bigButton .scopeSection select { min-height: 54px; padding: 15px; font-size: 17px; }
+.classic .scopeSection select { border-radius: 4px; padding: 9px; font-size: 13px; }
+@media (max-width: 680px) { .scopeSection form fieldset.schoolChooser { grid-template-columns: 1fr; } }
 @media (max-width: 980px) { .cards { grid-template-columns: 1fr; } .cardIntro { min-height: auto; } .queueGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .page { padding: 25px 16px 58px; } .scopeSection { padding: 17px; } .scopeSection form fieldset { grid-template-columns: 1fr; } .scopeSection button { width: 100%; } .queueSection { padding: 18px; } .queueGrid { grid-template-columns: 1fr; } .verified { display: grid; } .savedConfirmation, .workflowProgress { padding: 18px; } .savedList dl, .progressSteps { grid-template-columns: 1fr; } }

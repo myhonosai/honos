@@ -2207,3 +2207,48 @@ BEGIN
 END;
 $$;
 -- End current staff reporting scope exact verification.
+-- Staff reporting schools exact verification:
+DO $$
+DECLARE boundary_safe boolean; table_name text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
+    AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication))
+    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime'))
+    OR has_schema_privilege('hon_runtime', 'hon', 'CREATE') THEN
+    RAISE EXCEPTION 'Staff reporting schools require a restricted runtime role';
+  END IF;
+  SELECT p.prosecdef AND p.provolatile = 's' AND p.prokind = 'f' AND p.proretset
+    AND p.prorettype = 'record'::regtype AND language.lanname = 'sql'
+    AND p.proconfig = ARRAY['search_path=pg_catalog, hon']::text[]
+    AND (owner_role.rolsuper OR owner_role.rolbypassrls)
+    AND owner_role.rolname NOT IN ('hon_runtime', 'anon', 'authenticated', 'service_role')
+    AND p.proargnames = ARRAY['p_subject','organization_id','school_id','organization_name','school_name']::text[]
+    AND p.proallargtypes = ARRAY['text'::regtype,'uuid'::regtype,'uuid'::regtype,'text'::regtype,'text'::regtype]::oid[]
+    AND p.proargmodes = ARRAY['i','t','t','t','t']::"char"[]
+    AND md5(p.prosrc) = '51fc4ca0ed315550cb104c3ce2a0b855'
+    AND has_function_privilege('hon_runtime', p.oid, 'EXECUTE')
+    AND NOT EXISTS (
+      SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+      WHERE acl.grantor <> p.proowner OR acl.is_grantable OR acl.privilege_type <> 'EXECUTE'
+        OR acl.grantee NOT IN (p.proowner, (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime'))
+    )
+    AND (SELECT count(*) FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner)))) = 2
+    AND (SELECT count(*) FROM pg_proc other WHERE other.pronamespace = p.pronamespace AND other.proname = p.proname) = 1
+  INTO boundary_safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid = p.proowner
+    JOIN pg_language language ON language.oid = p.prolang
+  WHERE p.oid = 'hon.read_staff_reporting_schools(text)'::regprocedure;
+  IF boundary_safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe staff reporting schools boundary'; END IF;
+  FOREACH table_name IN ARRAY ARRAY['organizations','schools','roles','role_permissions','principal_role_grants','family_access_grants','hq_operator_grants'] LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid = ('hon.' || table_name)::regclass AND relrowsecurity AND relforcerowsecurity) THEN
+      RAISE EXCEPTION 'Staff reporting schools require forced RLS: %', table_name;
+    END IF;
+  END LOOP;
+  FOREACH table_name IN ARRAY ARRAY['users','principals','permissions','organizations','schools','roles','role_permissions','principal_role_grants','family_access_grants','hq_operator_grants'] LOOP
+    IF has_table_privilege('hon_runtime', 'hon.' || table_name, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime', 'hon.' || table_name, 'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Forbidden reporting schools directory access: %', table_name;
+    END IF;
+  END LOOP;
+END;
+$$;
+-- End staff reporting schools exact verification.

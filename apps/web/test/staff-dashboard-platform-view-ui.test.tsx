@@ -54,6 +54,12 @@ const themePath = (currentSchoolId = schoolId) => `/api/v1/organizations/${organ
 const resolverPath = '/api/v1/staff/current-reporting-school';
 const resolverResponse = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
 const resolvedScope = { state: 'RESOLVED', organizationId, schoolId } as const;
+const selectorPath = '/api/v1/staff/reporting-schools';
+const choices = [
+  { organizationId, schoolId, organizationName: 'Local Organization', schoolName: 'North School' },
+  { organizationId, schoolId: nextSchoolId, organizationName: 'Local Organization', schoolName: 'South School' },
+];
+const selectionResponse = () => resolverResponse({ state: 'SELECTION_REQUIRED', schools: choices });
 
 type Props = Record<string, unknown>;
 function elements(node: unknown): React.ReactElement<Props>[] {
@@ -219,10 +225,10 @@ describe('Staff Dashboard exact-one automatic current reporting school', () => {
   });
 
   it.each(['zero', 'multiple', 'mixed staff+HQ', 'mixed staff+family', 'unauthorized owner'])('does not fetch a report or preference for %s nonresolution and preserves inert query-prefilled manual fallback', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' }));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' }));
     render({ organizationId, schoolId: nextSchoolId });
     await vi.waitFor(() => expect(text(render())).toContain('Manual entry of already-known staff-context IDs is required'));
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath]);
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath]);
     expect(input(0).props.value).toBe(organizationId);
     expect(input(1).props.value).toBe(nextSchoolId);
     expect(text(render())).not.toContain('Platform View');
@@ -273,7 +279,7 @@ describe('Staff Dashboard exact-one automatic current reporting school', () => {
   });
 
   it('allows independently authorized manual entry after nonresolution', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => path === resolverPath ? resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' })
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => path === resolverPath || path === selectorPath ? resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' })
       : path === reportPath() ? response({ operationalSnapshot: report() }) : { ok: false, status: 403 } as Response);
     render();
     await vi.waitFor(() => expect(text(render())).toContain('Manual entry'));
@@ -294,7 +300,7 @@ describe('Staff Dashboard exact-one automatic current reporting school', () => {
   });
 
   it('deduplicates the initial resolver read during development effect replay without persistent storage', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' }));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' }));
     render();
     for (const cell of hooks.cells) {
       if (cell && typeof cell === 'object' && 'dependencies' in cell) {
@@ -304,6 +310,208 @@ describe('Staff Dashboard exact-one automatic current reporting school', () => {
     }
     render();
     await vi.waitFor(() => expect(text(render())).toContain('Manual entry'));
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath]);
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath]);
+  });
+});
+
+function schoolSelect(): React.ReactElement<Props> {
+  const select = elements(render()).find((element) => element.type === 'select');
+  expect(select).toBeDefined(); return select!;
+}
+function chooseSchool(value: string): void {
+  (schoolSelect().props.onChange as (event: { target: { value: string } }) => void)({ target: { value } });
+}
+async function waitForChoices(): Promise<void> {
+  render();
+  await vi.waitFor(() => expect(elements(render()).some((element) => element.type === 'select')).toBe(true));
+}
+function clickButton(label: string): void { (pickerButton(label).props.onClick as () => void)(); }
+
+describe('Staff Dashboard explicit ordinary multi-school chooser', () => {
+  it('shows accessible human-readable choices without UUID fields, report, preferences, owner reads, or an automatic user choice', async () => {
+    let finishReport!: (value: Response) => void;
+    const pendingReport = new Promise<Response>((resolve) => { finishReport = resolve; });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' });
+      if (path === selectorPath) return selectionResponse();
+      if (path === reportPath(nextSchoolId)) return pendingReport;
+      if (path === themePath(nextSchoolId)) return response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' });
+      return { ok: false, status: 403 } as Response;
+    });
+    render({ organizationId: id('8'), schoolId: id('8') });
+    await waitForChoices();
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath]);
+    expect(schoolSelect().props.value).toBe('');
+    expect(schoolSelect().props.required).toBe(true);
+    expect(schoolSelect().props['aria-describedby']).toBe('reporting-school-choice-help');
+    expect(elements(render()).find((element) => element.type === 'label' && element.props.htmlFor === 'reporting-school-choice')).toBeDefined();
+    const tree = render();
+    expect(text(tree)).toMatch(/North School\s+—\s+Local Organization/);
+    expect(text(tree)).toMatch(/South School\s+—\s+Local Organization/);
+    expect(text(tree)).toContain('Use manual known-ID entry');
+    expect(text(tree)).not.toContain('Organization UUID');
+    expect(text(tree)).not.toContain('School UUID');
+    expect(text(tree)).not.toContain('Platform View');
+    expect(text(tree)).not.toContain('Student profiles');
+    expect(elements(tree).find((element) => element.type === 'button' && text(element) === 'Load verified dashboard')?.props.disabled).toBe(true);
+    chooseSchool(nextSchoolId);
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath]);
+    const reading = submit();
+    await vi.waitFor(() => expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath, reportPath(nextSchoolId)]));
+    expect(text(render())).not.toContain('Platform View');
+    expect(fetch.mock.calls.some(([path]) => String(path).includes('/interface-theme') || String(path).includes('/owner-launch'))).toBe(false);
+    finishReport(response({ operationalSnapshot: report(nextSchoolId) })); await reading;
+    await vi.waitFor(() => expect(text(render())).toContain('Modern HON is the visual default'));
+    expect(text(render())).toMatch(/Verified current school\s+South School\s+—\s+Local Organization/);
+    expect(fetch.mock.calls.filter(([path]) => String(path).endsWith('/reports/operations')).map(([path]) => path)).toEqual([reportPath(nextSchoolId)]);
+    expect(fetch.mock.calls.filter(([path]) => String(path).endsWith('/interface-theme')).map(([path]) => path)).toEqual([themePath(nextSchoolId)]);
+    expect(fetch.mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0);
+  });
+
+  it('binds both exact selectors to the offered cross-organization choice, not prefilled fields or a DOM-supplied UUID', async () => {
+    const otherOrganizationId = id('4');
+    const path = `/api/v1/organizations/${otherOrganizationId}/schools/${nextSchoolId}/reports/operations`;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (requestPath) => {
+      if (requestPath === resolverPath) return resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' });
+      if (requestPath === selectorPath) return resolverResponse({ state: 'SELECTION_REQUIRED', schools: [choices[0], { ...choices[1], organizationId: otherOrganizationId }] });
+      if (requestPath === path) return response({ operationalSnapshot: { ...report(nextSchoolId), organizationId: otherOrganizationId } });
+      return { ok: false, status: 403 } as Response;
+    });
+    render({ organizationId, schoolId }); await waitForChoices();
+    chooseSchool(id('7')); await submit();
+    expect(text(render())).toContain('Choose an available school');
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath]);
+    chooseSchool(nextSchoolId); await submit();
+    expect(text(render())).toContain('Verified current school');
+    expect(fetch.mock.calls.filter(([path]) => String(path).endsWith('/reports/operations')).map(([path]) => path)).toEqual([path]);
+  });
+
+  it.each([401, 403, 503, 'malformed', 'extras', 'mismatch'])('clears the old scoped report/theme on selection, then keeps them cleared after selected report %s', async (failure) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' });
+      if (path === selectorPath) return selectionResponse();
+      if (path === reportPath()) return response({ operationalSnapshot: report() });
+      if (path === themePath()) return response({ interfaceTheme: 'classic', selectedVia: 'SETTINGS', updatedAt: to });
+      if (path === reportPath(nextSchoolId)) {
+        if (typeof failure === 'number') return { ok: false, status: failure } as Response;
+        if (failure === 'malformed') return response({ operationalSnapshot: null });
+        if (failure === 'extras') return response({ operationalSnapshot: { ...report(nextSchoolId), privateNote: 'PRIVATE' } });
+        return response({ operationalSnapshot: report() });
+      }
+      return { ok: false, status: 403 } as Response;
+    });
+    await waitForChoices(); chooseSchool(schoolId); await submit();
+    await vi.waitFor(() => expect(render().props['data-interface-theme']).toBe('classic'));
+    chooseSchool(nextSchoolId);
+    expect(text(render())).not.toContain('Platform View'); expect(text(render())).not.toContain('Student profiles');
+    expect(render().props['data-interface-theme']).toBe('modern');
+    expect(fetch.mock.calls.filter(([path]) => path === reportPath(nextSchoolId))).toHaveLength(0);
+    await submit();
+    expect(elements(render()).some((element) => element.props.role === 'alert')).toBe(true);
+    expect(text(render())).not.toContain('Platform View'); expect(text(render())).not.toContain('Student profiles');
+    expect(schoolSelect().props.value).toBe(''); expect(render().props['data-interface-theme']).toBe('modern');
+    expect(fetch.mock.calls.filter(([path]) => String(path).includes('/interface-theme')).map(([path]) => path)).toEqual([themePath()]);
+  });
+
+  it.each([401, 403, 503, 'extras', 'malformed', 'duplicate', 'over-cap'])('does not show a list, report or preferences after selector %s output', async (failure) => {
+    const data = failure === 'extras' ? { state: 'SELECTION_REQUIRED', schools: choices, count: 2 }
+      : failure === 'duplicate' ? { state: 'SELECTION_REQUIRED', schools: [choices[0], choices[0]] }
+        : failure === 'over-cap' ? { state: 'SELECTION_REQUIRED', schools: Array(21).fill(choices[0]) }
+          : { state: 'SELECTION_REQUIRED' };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => path === resolverPath ? resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' })
+      : typeof failure === 'number' ? new Response('', { status: failure }) : resolverResponse(data));
+    render({ organizationId, schoolId });
+    await vi.waitFor(() => expect(elements(render()).some((element) => element.props.role === 'alert')).toBe(true));
+    expect(elements(render()).some((element) => element.type === 'select')).toBe(false);
+    expect(text(render())).not.toContain('Student profiles'); expect(text(render())).not.toContain('Platform View');
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath]);
+    expect(input(0).props.value).toBe(organizationId);
+  });
+
+  it('requires explicit manual fallback and clears the report/theme when switching either way; every reload revalidates', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' });
+      if (path === selectorPath) return selectionResponse();
+      if (path === reportPath()) return response({ operationalSnapshot: report() });
+      if (path === themePath()) return response({ interfaceTheme: 'big-button', selectedVia: 'SETTINGS', updatedAt: to });
+      return { ok: false, status: 403 } as Response;
+    });
+    await waitForChoices(); chooseSchool(schoolId); await submit();
+    await vi.waitFor(() => expect(render().props['data-interface-theme']).toBe('big-button'));
+    await submit();
+    expect(fetch.mock.calls.filter(([path]) => path === reportPath())).toHaveLength(2);
+    clickButton('Use manual known-ID entry');
+    expect(text(render())).not.toContain('Platform View'); expect(render().props['data-interface-theme']).toBe('modern');
+    expect(elements(render()).some((element) => element.type === 'select')).toBe(false);
+    fillVerifiedScope(); await submit();
+    expect(fetch.mock.calls.filter(([path]) => path === reportPath())).toHaveLength(3);
+    clickButton('Choose from authorized schools');
+    expect(schoolSelect().props.value).toBe(''); expect(text(render())).not.toContain('Student profiles');
+    expect(render().props['data-interface-theme']).toBe('modern');
+  });
+
+  it('ignores stale in-flight reports and preferences after the school choice is edited', async () => {
+    let finishReport!: (value: Response) => void;
+    let finishPreference!: (value: Response) => void;
+    let firstRead = true;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' });
+      if (path === selectorPath) return selectionResponse();
+      if (path === reportPath()) return new Promise<Response>((resolve) => { finishReport = resolve; });
+      if (path === reportPath(nextSchoolId) && firstRead) { firstRead = false; return response({ operationalSnapshot: report(nextSchoolId) }); }
+      if (path === themePath(nextSchoolId)) return new Promise<Response>((resolve) => { finishPreference = resolve; });
+      return { ok: false, status: 403 } as Response;
+    });
+    await waitForChoices(); chooseSchool(schoolId);
+    const pending = submit();
+    await vi.waitFor(() => expect(finishReport).toBeDefined());
+    chooseSchool(nextSchoolId); finishReport(response({ operationalSnapshot: report() })); await pending;
+    expect(text(render())).not.toContain('Student profiles'); expect(text(render())).not.toContain('Platform View');
+    await submit();
+    await vi.waitFor(() => { render(); expect(finishPreference).toBeDefined(); });
+    chooseSchool(schoolId);
+    finishPreference(response({ interfaceTheme: 'classic', selectedVia: 'SETTINGS', updatedAt: to }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(render().props['data-interface-theme']).toBe('modern'); expect(text(render())).not.toContain('Platform View');
+    expect(fetch.mock.calls.filter(([path]) => path === themePath())).toHaveLength(0);
+  });
+});
+
+describe('Staff Dashboard selector lifetime without school persistence', () => {
+  it('ignores a late choice response after manual scope editing without fetching a report', async () => {
+    let finishSelector!: (value: Response) => void;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => path === resolverPath
+      ? resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' }) : new Promise<Response>((resolve) => { finishSelector = resolve; }));
+    render(); await vi.waitFor(() => expect(finishSelector).toBeDefined());
+    fillVerifiedScope(nextSchoolId); finishSelector(selectionResponse());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(elements(render()).some((element) => element.type === 'select')).toBe(false);
+    expect(input(1).props.value).toBe(nextSchoolId);
+    expect(text(render())).not.toContain('Platform View');
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([resolverPath, selectorPath]);
+  });
+
+  it('derives choices again on a fresh mount and never restores a previous school choice or report', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => {
+      if (path === resolverPath) return resolverResponse({ state: 'MANUAL_ENTRY_REQUIRED' });
+      if (path === selectorPath) return selectionResponse();
+      if (path === reportPath()) return response({ operationalSnapshot: report() });
+      if (path === themePath()) return response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' });
+      return { ok: false, status: 403 } as Response;
+    });
+    await waitForChoices(); chooseSchool(schoolId); await submit();
+    await vi.waitFor(() => expect(text(render())).toContain('Modern HON is the visual default'));
+    for (const cell of hooks.cells) {
+      if (cell && typeof cell === 'object' && 'cleanup' in cell) (cell as { cleanup?: () => void }).cleanup?.();
+    }
+    hooks.cells = []; hooks.cursor = 0;
+    await waitForChoices();
+    expect(schoolSelect().props.value).toBe('');
+    expect(text(render())).not.toContain('Student profiles'); expect(text(render())).not.toContain('Platform View');
+    expect(fetch.mock.calls.filter(([path]) => path === resolverPath)).toHaveLength(2);
+    expect(fetch.mock.calls.filter(([path]) => path === selectorPath)).toHaveLength(2);
+    expect(fetch.mock.calls.filter(([path]) => path === reportPath())).toHaveLength(1);
+    expect(fetch.mock.calls.filter(([path]) => path === themePath())).toHaveLength(1);
+    expect(fetch.mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method !== 'GET')).toHaveLength(0);
   });
 });

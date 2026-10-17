@@ -3,6 +3,7 @@ import { requireCurriculumLibraryLocalUrls } from './curriculum-library-local-gu
 import { retentionAttentionTables, verifyRetentionAttentionSecurity } from './retention-attention-security.mjs';
 import { requireClassPassLocalUrls } from './classpass-local-guard.mjs';
 import { verifyCurrentStaffReportingScopeSecurity } from './current-staff-reporting-scope-security.mjs';
+import { verifyStaffReportingSchoolsSecurity } from './staff-reporting-schools-security.mjs';
 import { classpassTables, verifyClassPassSecurity } from './classpass-security.mjs';
 import { requireKioskHandoffLocalUrls } from './kiosk-handoff-local-guard.mjs';
 import { kioskTables, verifyKioskHandoffSecurity } from './kiosk-handoff-security.mjs';
@@ -210,6 +211,7 @@ await client.connect();
 try {
   await verifyOwnerLaunchSecurity(client,runtimeRoleName);
   await verifyCurrentStaffReportingScopeSecurity(client, runtimeRoleName);
+  await verifyStaffReportingSchoolsSecurity(client, runtimeRoleName);
   const attendanceCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
   const attendanceVerification = attendanceCanonical.split('-- Advanced attendance exact verification:')[1]?.split('-- End advanced attendance exact verification.')[0];
   if (!attendanceVerification) throw new Error('Missing canonical attendance verification.');

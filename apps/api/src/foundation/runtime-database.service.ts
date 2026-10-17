@@ -9,6 +9,11 @@ export interface ResolvedStaffReportingScope {
   schoolId: string;
 }
 
+export interface StaffReportingSchoolChoice extends ResolvedStaffReportingScope {
+  organizationName: string;
+  schoolName: string;
+}
+
 export interface ResolvedPrincipalScope {
   principalId: string;
   organizationId: string;
@@ -144,6 +149,46 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       throw new ServiceUnavailableException('Current staff reporting scope is unavailable.');
     }
     return { organizationId: scope.organizationId, schoolId: scope.schoolId };
+  }
+
+  /** Dashboard-only subject read. No tenant GUC, caller selector or table query. */
+  async readStaffReportingSchools(externalSubject: string): Promise<StaffReportingSchoolChoice[]> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const posture = await client.query<{ safe: boolean }>(`SELECT current_user = 'hon_runtime'
+        AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication)
+        AND NOT EXISTS (SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid) AS safe
+        FROM pg_roles WHERE rolname = current_user`);
+      if (posture.rows[0]?.safe !== true) throw new ServiceUnavailableException('Staff reporting schools are unavailable.');
+      const result = await client.query<StaffReportingSchoolChoice>(
+        'SELECT organization_id AS "organizationId", school_id AS "schoolId", organization_name AS "organizationName", school_name AS "schoolName" FROM hon.read_staff_reporting_schools($1)',
+        [externalSubject],
+      );
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const unsafeName = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/u;
+      const safeName = (value: unknown): value is string => typeof value === 'string' && value.length > 0
+        && Array.from(value).length <= 120 && value.trim() === value && !unsafeName.test(value);
+      const seen = new Set<string>();
+      if (result.rows.length === 1 || result.rows.length > 20) throw new ServiceUnavailableException('Staff reporting schools are unavailable.');
+      const schools = result.rows.map((school) => {
+        if (Object.keys(school).length !== 4 || typeof school.organizationId !== 'string' || typeof school.schoolId !== 'string'
+          || !uuid.test(school.organizationId) || !uuid.test(school.schoolId)
+          || !safeName(school.organizationName) || !safeName(school.schoolName) || seen.has(school.schoolId.toLowerCase())) {
+          throw new ServiceUnavailableException('Staff reporting schools are unavailable.');
+        }
+        seen.add(school.schoolId.toLowerCase());
+        return { organizationId: school.organizationId.toLowerCase(), schoolId: school.schoolId.toLowerCase(),
+          organizationName: school.organizationName, schoolName: school.schoolName };
+      });
+      await client.query('COMMIT');
+      return schools;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { client.release(); }
   }
 
   async resolveOwnerLaunchScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {

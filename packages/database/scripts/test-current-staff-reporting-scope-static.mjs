@@ -8,7 +8,7 @@ const body = sql.split('AS $$')[1]?.split('$$;')[0];
 
 test('latest additive migration seals a fixed subject-only exact-one staff reporting resolver', async () => {
   const migrations = (await readdir(new URL('../migrations/', import.meta.url))).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort();
-  assert.equal(migrations.at(-1), '0141_current_staff_reporting_scope.sql');
+  assert(migrations.includes('0141_current_staff_reporting_scope.sql'));
   assert.match(sql, /^BEGIN;/);
   assert.match(sql, /COMMIT;\s*$/);
   assert.match(sql, /CREATE FUNCTION hon\.resolve_current_staff_reporting_scope\(p_subject text\)/);
