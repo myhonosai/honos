@@ -1,16 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import { tierIncludesFeature } from '@hon/config';
 import {
   CLASS_SESSION_BOOKING_POLICIES,
   type ClassSessionBookingPolicy,
   type ClassSessionSummary,
   type CommandContext,
   type CreateClassSessionInput,
+  type HonTier,
   type ScheduleItemStatus,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -118,6 +121,15 @@ export class ClassSessionService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      const entitlement = await client.query<{ tier: HonTier }>(
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
+      );
+      if (!entitlement.rows[0] || !tierIncludesFeature(entitlement.rows[0].tier, 'scheduling.attendance')) {
+        throw new ForbiddenException({
+          code: 'TIER_ENTITLEMENT_REQUIRED',
+          detail: 'An active HON scheduling entitlement is required for class-session creation.',
+        });
+      }
       const program = await client.query<{ id: string }>(
         'SELECT id FROM hon.programs WHERE id = $1::uuid',
         [normalized.programId],

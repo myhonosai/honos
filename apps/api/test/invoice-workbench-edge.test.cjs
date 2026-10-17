@@ -67,6 +67,58 @@ test('existing service rejects nonhuman sources and delegated/action issue befor
   assert.doesNotMatch(readFileSync(join(__dirname, '../src/billing/invoice.service.ts'), 'utf8'), /Payment\w*Service|Communication\w*Service|ActionEngineService|Provider\w*Service|fetch\(|invokeProvider/);
 });
 
+test('invoice draft and issue read active billing entitlement before idempotency or invoice locks; denial and Essential replay preserve that boundary', async () => {
+  const context = { organizationId, schoolId, principalId, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: randomUUID() };
+  const draft = { id: invoiceId, billingAccountId, membershipId, status: 'DRAFT', currency: 'USD', subtotalMinor: 1250, discountMinor: 0, totalMinor: 1250, dueAt: '2030-05-01T16:15:30.000Z', version: 1, createdAt: '2026-10-17T00:00:00.000Z' };
+  const issued = { ...draft, status: 'ISSUED', version: 2 };
+
+  for (const [name, invoke, replay] of [
+    ['draft', (service) => service.createDraft(context, input), draft],
+    ['issue', (service) => service.issue(context, invoiceId, { expectedVersion: 1 }), issued],
+  ]) {
+    const deniedCalls = [];
+    const denied = new InvoiceService({ withTenantTransaction: async (_context, work) => work({ query: async (sql, args = []) => {
+      deniedCalls.push({ sql, args });
+      assert.equal(deniedCalls.length, 1, 'a missing entitlement cannot reach invoice or idempotency work');
+      assert.match(sql, /SELECT tier FROM hon\.read_current_organization_entitlement\(\)/);
+      assert.deepEqual(args, []);
+      assert.doesNotMatch(sql, /organization_entitlements/i);
+      return { rows: [], rowCount: 0 };
+    } }) });
+    await assert.rejects(() => invoke(denied), (error) => error.getStatus?.() === 403 && error.getResponse().code === 'TIER_ENTITLEMENT_REQUIRED');
+    assert.equal(deniedCalls.length, 1);
+
+    const calls = [];
+    let requestFingerprint;
+    const service = new InvoiceService({ withTenantTransaction: async (_context, work) => work({ query: async (sql, args = []) => {
+      calls.push({ sql, args });
+      assert.doesNotMatch(sql, /organization_entitlements/i);
+      if (sql.includes('hon.read_current_organization_entitlement()')) {
+        assert.equal(calls.length, 1, 'the entitlement reader is the first tenant operation');
+        assert.deepEqual(args, []);
+        return { rows: [{ tier: 'ESSENTIAL' }], rowCount: 1 };
+      }
+      if (sql.includes('FROM hon.invoices') && sql.includes('FOR UPDATE')) {
+        assert.equal(name, 'issue');
+        return { rows: [draft], rowCount: 1 };
+      }
+      if (sql.includes('INSERT INTO hon.idempotency_records')) {
+        requestFingerprint = args[4];
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('SELECT request_fingerprint, status, response_body') && sql.includes('hon.idempotency_records')) {
+        assert.equal(typeof requestFingerprint, 'string');
+        return { rows: [{ request_fingerprint: requestFingerprint, status: 'COMPLETED', response_body: replay }], rowCount: 1 };
+      }
+      throw new Error(`Unexpected ${name} replay query: ${sql}`);
+    } }) });
+    const result = await invoke(service);
+    assert.deepEqual(result, { invoice: replay, replayed: true });
+    assert.match(calls[0].sql, /read_current_organization_entitlement/);
+    if (name === 'issue') assert(calls.findIndex(({ sql }) => sql.includes('FROM hon.invoices')) < calls.findIndex(({ sql }) => sql.includes('INSERT INTO hon.idempotency_records')));
+  }
+});
+
 test('real loopback HTTP runs identity, trusted-human transport and exact live permission/DTO before only canonical createDraft/issue; envelope/replays unchanged', async () => {
   const before = process.env.HON_PUBLIC_ORIGIN;
   const calls = [], resolutions = [];

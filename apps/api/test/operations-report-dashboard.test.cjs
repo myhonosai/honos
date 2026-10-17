@@ -54,10 +54,36 @@ test('operations snapshot service allowlists aggregate output and excludes injec
     invoicesDraft: 0, invoicesIssued: 5, invoicesPaid: 6, invoicesVoid: 7, invoicesUncollectible: 8,
     paymentsPending: 0, paymentsProcessing: 1, paymentsSucceeded: 2, paymentsFailed: 3, paymentsRequiresAction: 4, paymentsUnknown: 5, paymentsRefunded: 6,
     personName: 'PRIVATE_PERSON', rawNote: 'PRIVATE_NOTE', paymentMethodToken: 'PRIVATE_TOKEN', actionEvidence: { private: true } };
-  let sql = '';
-  const service = new OperationsReportService({ withTenantTransaction: async (_context, work) => work({ query: async (statement) => { sql = statement; return { rows: [selected] }; } }) });
+  const statements = [];
+  const service = new OperationsReportService({ withTenantTransaction: async (_context, work) => work({ query: async (statement, args = []) => {
+    statements.push({ statement, args });
+    assert.doesNotMatch(statement, /organization_entitlements/i);
+    if (statement.includes('hon.read_current_organization_entitlement()')) {
+      assert.equal(statements.length, 1, 'the entitlement reader is the first report transaction operation');
+      assert.deepEqual(args, []);
+      return { rows: [{ tier: 'ESSENTIAL' }], rowCount: 1 };
+    }
+    return { rows: [selected], rowCount: 1 };
+  } }) });
   const output = await service.read({ organizationId, schoolId, principalId: '33333333-3333-4333-8333-333333333333', principalType: 'HUMAN_USER', requestId: '44444444-4444-4444-8444-444444444444' }, { from, to });
   assert.doesNotMatch(JSON.stringify(output), /PRIVATE_|personName|rawNote|paymentMethodToken|actionEvidence/);
   assert.deepEqual(Object.keys(output), ['organizationId', 'schoolId', 'generatedAt', 'from', 'to', 'studentProfiles', 'leads', 'classSessions', 'attendance', 'memberships', 'invoices', 'paymentAttempts']);
-  assert.doesNotMatch(sql, /notes|payment_method|provider|action_requests|action_approvals/i);
+  assert.equal(statements.length, 2);
+  assert.doesNotMatch(statements[1].statement, /notes|payment_method|provider|action_requests|action_approvals/i);
+});
+
+test('operations report denies a missing active school-operations entitlement before aggregation', async () => {
+  const statements = [];
+  const service = new OperationsReportService({ withTenantTransaction: async (_context, work) => work({ query: async (statement, args = []) => {
+    statements.push({ statement, args });
+    assert.equal(statements.length, 1, 'no aggregate query may run without an entitlement');
+    assert.match(statement, /SELECT tier FROM hon\.read_current_organization_entitlement\(\)/);
+    assert.deepEqual(args, []);
+    return { rows: [], rowCount: 0 };
+  } }) });
+  await assert.rejects(
+    () => service.read({ organizationId, schoolId, principalId: '33333333-3333-4333-8333-333333333333', principalType: 'HUMAN_USER', requestId: '44444444-4444-4444-8444-444444444444' }, { from, to }),
+    (error) => error.getStatus?.() === 403 && error.getResponse().code === 'TIER_ENTITLEMENT_REQUIRED',
+  );
+  assert.equal(statements.length, 1);
 });

@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import type { OperationalSnapshot } from '@hon/contracts';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { tierIncludesFeature } from '@hon/config';
+import type { HonTier, OperationalSnapshot } from '@hon/contracts';
 import type { TenantTransactionContext } from '@hon/database';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -133,6 +134,15 @@ export class OperationsReportService {
   ): Promise<OperationalSnapshot> {
     const range = normalizeOperationsReportRange(input);
     return this.database.withTenantTransaction(context, async (client) => {
+      const entitlement = await client.query<{ tier: HonTier }>(
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
+      );
+      if (!entitlement.rows[0] || !tierIncludesFeature(entitlement.rows[0].tier, 'school-os.foundation')) {
+        throw new ForbiddenException({
+          code: 'TIER_ENTITLEMENT_REQUIRED',
+          detail: 'An active HON school operations entitlement is required for operations reports.',
+        });
+      }
       const result = await client.query<OperationalSnapshotRow>(
         `WITH
            scoped_student_profiles AS MATERIALIZED (

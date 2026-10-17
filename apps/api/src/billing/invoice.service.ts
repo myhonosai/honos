@@ -7,10 +7,12 @@ import {
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import { tierIncludesFeature } from '@hon/config';
 import {
   ISO_4217_CURRENCIES,
   type CommandContext,
   type CreateInvoiceDraftInput,
+  type HonTier,
   type InvoiceDraftSummary,
   type InvoiceIssuedSummary,
   type IssueInvoiceInput,
@@ -129,6 +131,15 @@ export class InvoiceService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      const entitlement = await client.query<{ tier: HonTier }>(
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
+      );
+      if (!entitlement.rows[0] || !tierIncludesFeature(entitlement.rows[0].tier, 'billing.foundation')) {
+        throw new ForbiddenException({
+          code: 'TIER_ENTITLEMENT_REQUIRED',
+          detail: 'An active HON billing entitlement is required for invoice drafts.',
+        });
+      }
       const replay = await this.reserveIdempotency(client, context, requestFingerprint);
       if (replay) return { invoice: replay, replayed: true };
 
@@ -309,6 +320,15 @@ export class InvoiceService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      const entitlement = await client.query<{ tier: HonTier }>(
+        'SELECT tier FROM hon.read_current_organization_entitlement()',
+      );
+      if (!entitlement.rows[0] || !tierIncludesFeature(entitlement.rows[0].tier, 'billing.foundation')) {
+        throw new ForbiddenException({
+          code: 'TIER_ENTITLEMENT_REQUIRED',
+          detail: 'An active HON billing entitlement is required for invoice issuance.',
+        });
+      }
       // This lookup is deliberately only ID-constrained: transaction-local RLS
       // hides a record outside the permission-derived organization and school.
       const currentResult = await client.query<InvoiceIssuanceRow>(
