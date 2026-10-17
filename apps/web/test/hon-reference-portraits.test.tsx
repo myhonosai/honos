@@ -12,17 +12,17 @@ describe('HON AI portrait presentation variants', () => {
         expect(source).toContain(`${agent}: '/manus-storage/async-images/`);
       }
     }
-    for (const label of ['3D Realistic', 'Modern Anime', 'Chibi Cute']) expect(source).toContain(label);
+    for (const label of ['3D Realistic', 'Modern Anime', 'Chibi']) expect(source).toContain(label);
   });
 
   it('applies a selected style across modern, classic, big-button, HQ, and mobile reference presentations', () => {
-    for (const text of ['portraitFor(agent, portraitStyle)', 'PortraitStyleSwitcher', 'classicAgentStack', 'portraitStyle={portraitStyle}', 'AgentVisual agent={member}']) expect(source).toContain(text);
-    expect(styles).toContain('.portraitStyleSwitcher');
+    for (const text of ['portraitFor(agent, portraitStyle)', 'AppearanceDock', 'classicAgentStack', 'portraitStyle={portraitStyle}', 'AgentVisual agent={member}']) expect(source).toContain(text);
+    expect(styles).toContain('.appearanceDock');
     expect(styles).toContain('.classicAgentStack');
   });
 
   it('states and preserves the presentation-only boundary', () => {
-    expect(source).toContain('Presentation assets only · agent identity, authority, routes, and tools never change.');
+    expect(source).toContain('Presentation only · visual styles never change agent identity, authority, routes, tools, data, actions, permissions, history, usage, or Action Engine authority.');
     expect(source).toContain('onError={() => setFailed(true)}');
     expect(source).toContain('portraitFallback');
     expect(styles).toContain('.portraitFallback');

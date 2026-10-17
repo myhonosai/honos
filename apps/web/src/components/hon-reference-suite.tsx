@@ -4,7 +4,6 @@ import { ParentJourneyUnavailable } from './parent-journey-unavailable';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   HON_AI_TEAM,
-  HON_INTERFACE_THEMES,
   HON_REFERENCE_SCREEN_STATES,
   type HonAiTeamId,
   type HonAiTeamMember,
@@ -20,11 +19,47 @@ const hqNavigation = ['Home', 'AI Team', 'AI Providers', 'Schools', 'Onboarding'
 
 type AiPortraitStyle = 'realistic' | 'anime' | 'chibi';
 
+const REFERENCE_THEME_OPTIONS = [
+  { id: 'big-button', label: 'Big-Button / Phone', detail: 'Touch-first' },
+  { id: 'modern', label: 'Modern HON', detail: 'Balanced' },
+  { id: 'classic', label: 'Classic CRM', detail: 'High density' },
+] as const satisfies readonly { id: HonInterfaceTheme; label: string; detail: string }[];
+
+const REFERENCE_THEME_STORAGE_KEY = 'hon.reference.appearance.theme.v1';
+const REFERENCE_AVATAR_STORAGE_KEY = 'hon.reference.appearance.avatar-style.v1';
+
 const AI_PORTRAIT_STYLE_LABELS: Record<AiPortraitStyle, { label: string; detail: string }> = {
   realistic: { label: '3D Realistic', detail: 'Cinematic' },
   anime: { label: 'Modern Anime', detail: 'Illustrated' },
-  chibi: { label: 'Chibi Cute', detail: 'Playful' },
+  chibi: { label: 'Chibi', detail: 'Playful' },
 };
+
+function allowedReferenceTheme(value: string | null): HonInterfaceTheme | null {
+  return REFERENCE_THEME_OPTIONS.some((option) => option.id === value) ? value as HonInterfaceTheme : null;
+}
+
+function allowedPortraitStyle(value: string | null): AiPortraitStyle | null {
+  return Object.hasOwn(AI_PORTRAIT_STYLE_LABELS, value ?? '') ? value as AiPortraitStyle : null;
+}
+
+function readReferenceAppearance<T>(key: string, validate: (value: string | null) => T | null): T | null {
+  try {
+    const value = window.localStorage.getItem(key);
+    const allowed = validate(value);
+    if (value !== null && allowed === null) window.localStorage.removeItem(key);
+    return allowed;
+  } catch {
+    return null;
+  }
+}
+
+function saveReferenceAppearance(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Reference-only visual preferences must remain usable when storage is unavailable.
+  }
+}
 
 const HON_REFERENCE_PORTRAITS: Record<AiPortraitStyle, Partial<Record<HonAiTeamId, string>>> = {
   realistic: {
@@ -109,12 +144,36 @@ function Mark({ compact = false }: { compact?: boolean }): React.ReactElement {
   return <div className={`${styles.mark} ${compact ? styles.markCompact : ''}`} aria-label="HON for Martial Arts"><strong>HON</strong><span>For Martial Arts</span></div>;
 }
 
-function PresentationThemeSwitcher({ theme, onChange }: { theme: HonInterfaceTheme; onChange: (theme: HonInterfaceTheme) => void }): React.ReactElement {
-  return <section className={styles.themeSwitcher} aria-label="HON presentation mode"><span>Presentation</span><div>{HON_INTERFACE_THEMES.map((option) => <button key={option.id} type="button" aria-pressed={theme === option.id} onClick={() => onChange(option.id)}><strong>{option.label}</strong><small>{option.id === 'modern' ? 'Recommended' : option.id === 'big-button' ? 'Touch-first' : 'High density'}</small></button>)}</div><p>Presentation only · the same school scope, permissions, and actions stay in effect.</p></section>;
-}
+type ReferenceAppearanceProps = {
+  theme: HonInterfaceTheme;
+  onTheme: (theme: HonInterfaceTheme) => void;
+  portraitStyle: AiPortraitStyle;
+  onPortraitStyle: (style: AiPortraitStyle) => void;
+};
 
-function PortraitStyleSwitcher({ style, onChange }: { style: AiPortraitStyle; onChange: (style: AiPortraitStyle) => void }): React.ReactElement {
-  return <section className={styles.portraitStyleSwitcher} aria-label="AI team visual style"><span>AI AVATARS</span><div>{(Object.keys(AI_PORTRAIT_STYLE_LABELS) as AiPortraitStyle[]).map((option) => <button key={option} type="button" aria-pressed={style === option} onClick={() => onChange(option)}><strong>{AI_PORTRAIT_STYLE_LABELS[option].label}</strong><small>{AI_PORTRAIT_STYLE_LABELS[option].detail}</small></button>)}</div><p>Presentation assets only · agent identity, authority, routes, and tools never change.</p></section>;
+function AppearanceDock({ theme, onTheme, portraitStyle, onPortraitStyle, showAvatarOptions = true }: ReferenceAppearanceProps & { showAvatarOptions?: boolean }): React.ReactElement {
+  const reset = () => {
+    onTheme('modern');
+    onPortraitStyle('realistic');
+    try {
+      window.localStorage.removeItem(REFERENCE_THEME_STORAGE_KEY);
+      window.localStorage.removeItem(REFERENCE_AVATAR_STORAGE_KEY);
+    } catch {
+      // Reset remains an in-memory visual reset when local storage is unavailable.
+    }
+  };
+
+  return <section className={styles.appearanceDock} aria-label="HON reference appearance">
+    <details className={styles.appearanceDockDetails} open>
+      <summary className={styles.appearanceDockSummary}><span>Appearance</span><b>{REFERENCE_THEME_OPTIONS.find((option) => option.id === theme)?.label}</b><i aria-hidden="true">⌄</i></summary>
+      <div className={styles.appearanceDockBody}>
+        <header className={styles.appearanceDockHeading}><div><span>HON VISUAL REFERENCE</span><strong>Appearance</strong></div><button type="button" onClick={reset}>Reset</button></header>
+        <fieldset className={styles.appearanceControl}><legend>Presentation mode</legend><div className={styles.appearanceOptionGrid}>{REFERENCE_THEME_OPTIONS.map((option, index) => <button key={option.id} type="button" aria-pressed={theme === option.id} aria-label={`Select ${option.label} presentation mode`} onClick={() => onTheme(option.id)}><i aria-hidden="true">0{index + 1}</i><span><strong>{option.label}</strong><small>{option.detail}</small></span></button>)}</div></fieldset>
+        {showAvatarOptions && <fieldset className={styles.appearanceControl}><legend>AI avatar style</legend><div className={styles.appearanceOptionGrid}>{(Object.keys(AI_PORTRAIT_STYLE_LABELS) as AiPortraitStyle[]).map((option, index) => <button key={option} type="button" aria-pressed={portraitStyle === option} aria-label={`Select ${AI_PORTRAIT_STYLE_LABELS[option].label} avatar style`} onClick={() => onPortraitStyle(option)}><i aria-hidden="true">A{index + 1}</i><span><strong>{AI_PORTRAIT_STYLE_LABELS[option].label}</strong><small>{AI_PORTRAIT_STYLE_LABELS[option].detail}</small></span></button>)}</div></fieldset>}
+        <p className={styles.appearanceBoundary}>Presentation only · visual styles never change agent identity, authority, routes, tools, data, actions, permissions, history, usage, or Action Engine authority.</p>
+      </div>
+    </details>
+  </section>;
 }
 
 function AgentPortrait({ agent, selected, onSelect, status = 'Ready', portraitStyle = 'realistic' }: { agent: HonAiTeamMember; selected?: boolean; onSelect?: () => void; status?: string; portraitStyle?: AiPortraitStyle }): React.ReactElement {
@@ -180,9 +239,9 @@ function ApprovalPreview(): React.ReactElement {
   </article>;
 }
 
-function BigButtonComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void; portraitStyle: AiPortraitStyle; onPortraitStyle: (style: AiPortraitStyle) => void }): React.ReactElement {
+function BigButtonComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: ReferenceAppearanceProps): React.ReactElement {
   const alex = HON_AI_TEAM[0];
-  return <main className={`${styles.referencePage} ${styles.bigButtonExperience}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><PortraitStyleSwitcher style={portraitStyle} onChange={onPortraitStyle} /><section className={styles.bigAppShell}>
+  return <main className={`${styles.referencePage} ${styles.bigButtonExperience}`}><ReferenceNotice /><AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} /><section className={styles.bigAppShell}>
     <header className={styles.bigAppHeader}><Mark compact /><div className={styles.bigSchoolSwitch}>◉ Ideal Martial Arts⌄</div><span>◔</span><span className={styles.bigAvatar}>MD</span></header>
     <section className={styles.bigGreeting}><div><span>HON COMPLETE · TOUCH-FIRST</span><h1>Good morning,<br />Master David!</h1><p>Your AI team is here to help you grow your school.</p><button type="button">◉ Ask Alex anything… <b>⌁</b></button></div><AgentVisual agent={alex} portraitStyle={portraitStyle} className={styles.bigGreetingPortrait} /></section>
     <section className={styles.bigTeamCard}><header><strong>Your AI Team</strong><button type="button">View All ›</button></header>{HON_AI_TEAM.slice(0,4).map((agent, index)=><div key={agent.id}><AgentVisual agent={agent} portraitStyle={portraitStyle} className={styles.bigTeamPortrait} /><span><b>{agent.name}</b><small>{agent.signal} · {index === 1 ? 'Working' : 'Ready'}</small></span><i style={{background: agent.color}} /></div>)}</section>
@@ -192,9 +251,9 @@ function BigButtonComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: {
   </section></main>;
 }
 
-function ClassicComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void; portraitStyle: AiPortraitStyle; onPortraitStyle: (style: AiPortraitStyle) => void }): React.ReactElement {
+function ClassicComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: ReferenceAppearanceProps): React.ReactElement {
  const menu=['Dashboard','AI Team','Students','Programs','Classes','Attendance','Schedule','Testing','Leads','Marketing','Messages','Campaigns','Billing','Reports','Documents','Settings'];
- return <main className={`${styles.referencePage} ${styles.classicExperience}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><PortraitStyleSwitcher style={portraitStyle} onChange={onPortraitStyle} /><section className={styles.classicAppShell}>
+ return <main className={`${styles.referencePage} ${styles.classicExperience}`}><ReferenceNotice /><AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} /><section className={styles.classicAppShell}>
    <aside className={styles.classicRail}><Mark compact /><small>MAIN</small>{menu.map((m,i)=><button type="button" key={m} className={i===0?styles.classicActive:''}><i>{['◉','✦','♟','◈','▣','✓','◷','◆','●','↗','◌','✧','$','▥','□','⚙'][i]}</i>{m}</button>)}<footer>◌ Support<br />? Help Center</footer></aside>
    <section className={styles.classicCanvas}><header className={styles.classicTopbar}><div>◉ Ideal Martial Arts⌄</div><label>⌕ Search students, leads, classes…</label><div className={styles.classicAgentStack} aria-label="AI team visual style preview">{HON_AI_TEAM.slice(0, 3).map((agent) => <AgentVisual key={agent.id} agent={agent} portraitStyle={portraitStyle} className={styles.classicAgentPortrait} />)}</div><span>◔</span><span>♧</span><b>MD</b></header><div className={styles.classicHeading}><div><h1>Dashboard</h1><p>Overview of your school’s performance and activity.</p></div><button type="button">Oct 1 – Oct 31, 2026⌄</button></div>
    <section className={styles.classicMetrics}>{[['♟','191','Active Students','+3 This Month'],['▣','24','Today’s Classes','+6% This Month'],['◈','7','New Leads','+40%'],['$','$31,850','Monthly Revenue','+12%']].map(([i,v,l,d])=><article key={l}><i>{i}</i><div><strong>{v}</strong><span>{l}</span><small>{d}</small></div></article>)}</section>
@@ -203,16 +262,14 @@ function ClassicComplete({ theme, onTheme, portraitStyle, onPortraitStyle }: { t
  </section></main>;
 }
 
-function CompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+function CompleteReference({ theme, onTheme, portraitStyle, onPortraitStyle }: ReferenceAppearanceProps): React.ReactElement {
   const [active, setActive] = useState<HonAiTeamId>('alex');
-  const [portraitStyle, setPortraitStyle] = useState<AiPortraitStyle>('realistic');
   const agent = useMemo(() => HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0], [active]);
-  if (theme === 'big-button') return <BigButtonComplete theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={setPortraitStyle} />;
-  if (theme === 'classic') return <ClassicComplete theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={setPortraitStyle} />;
+  if (theme === 'big-button') return <BigButtonComplete theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} />;
+  if (theme === 'classic') return <ClassicComplete theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} />;
   return <main className={`${styles.referencePage} ${styles.completePage} ${styles[`presentation_${theme}`]}`}>
     <ReferenceNotice />
-    <PresentationThemeSwitcher theme={theme} onChange={onTheme} />
-    <PortraitStyleSwitcher style={portraitStyle} onChange={setPortraitStyle} />
+    <AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} />
     <div className={styles.desktopShell}>
       <Sidebar mode="school" />
       <section className={styles.commandCanvas}>
@@ -230,14 +287,12 @@ function CompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme; onThe
   </main>;
 }
 
-function HqReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+function HqReference({ theme, onTheme, portraitStyle, onPortraitStyle }: ReferenceAppearanceProps): React.ReactElement {
   const [active, setActive] = useState<HonAiTeamId>('alex');
-  const [portraitStyle, setPortraitStyle] = useState<AiPortraitStyle>('realistic');
   const agent = HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0];
   return <main className={`${styles.referencePage} ${styles.hqPage}`}>
     <ReferenceNotice />
-    <PresentationThemeSwitcher theme={theme} onChange={onTheme} />
-    <PortraitStyleSwitcher style={portraitStyle} onChange={setPortraitStyle} />
+    <AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} />
     <div className={styles.desktopShell}>
       <Sidebar mode="hq" />
       <section className={styles.hqCanvas}>
@@ -251,10 +306,10 @@ function HqReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (t
   </main>;
 }
 
-function CoreReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+function CoreReference({ theme, onTheme, portraitStyle, onPortraitStyle }: ReferenceAppearanceProps): React.ReactElement {
   return <main className={`${styles.referencePage} ${styles.corePage}`}>
     <ReferenceNotice />
-    <PresentationThemeSwitcher theme={theme} onChange={onTheme} />
+    <AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} showAvatarOptions={false} />
     <div className={styles.desktopShell}>
       <Sidebar mode="school" />
       <section className={styles.coreCanvas}>
@@ -267,21 +322,38 @@ function CoreReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: 
   </main>;
 }
 
-function ParentReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+function ParentReference({ theme, onTheme, portraitStyle, onPortraitStyle }: ReferenceAppearanceProps): React.ReactElement {
   const [panel, setPanel] = useState<'home' | 'progress' | 'schedule'>('home');
-  return <main className={`${styles.referencePage} ${styles.parentPage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><section className={styles.parentStage}><header><Mark compact /><div><span>PARENT APP + EIAN</span><h1>Family-safe. Clear. Encouraging.</h1><p>The native Parent App uses its own verified family scope and a conventional experience that remains useful without Eian.</p></div></header><div className={styles.phoneGrid}><article className={styles.phoneFrame}><div className={styles.phoneTop}><b>9:41</b><span>◒ ▴ ▪</span></div><div className={styles.eianHero}><div><p>Hi there!</p><h2>I’m Eian.</h2><span>I can help with schedules, makeups, progress, and more.</span></div><img src="/ai/eian.webp" alt="" /></div><CommandLane compact agent={{ id: 'alex', name: 'Eian', title: 'Family Guide', signal: 'Care', color: '#287eff', portrait: '/ai/eian.webp' }} /><div className={styles.parentShortcuts}>{[['▣', 'My Schedule'], ['◈', 'My Progress'], ['↻', 'Makeup Class'], ['✦', 'Events']].map(([icon, label]) => <button onClick={() => setPanel(label === 'My Progress' ? 'progress' : label === 'My Schedule' ? 'schedule' : 'home')} type="button" key={label}><i>{icon}</i>{label}</button>)}</div><div className={styles.phoneNav}><button className={panel === 'home' ? styles.phoneActive : ''} onClick={() => setPanel('home')}>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''} onClick={() => setPanel('schedule')}>Schedule</button><button onClick={() => setPanel('home')}>Eian</button><button>Messages</button><button>More</button></div></article><article className={styles.phoneFrame}><div className={styles.phoneTop}><button type="button">←</button><b>{panel === 'progress' ? 'My Progress' : panel === 'schedule' ? 'Class Schedule' : 'Student Journey'}</b><span>●</span></div>{panel === 'schedule' ? <div className={styles.mobileSchedule}><h3>October 2026</h3>{[['3:30 PM', 'Tiny Tigers'], ['4:30 PM', 'Green Belt'], ['5:30 PM', 'All Ages']].map(([time, item]) => <p key={item}><time>{time}</time><span>{item}<small>Ideal Martial Arts</small></span></p>)}<button type="button">Book a makeup class</button></div> : <div className={styles.progressPane}><ParentJourneyUnavailable /></div>}<div className={styles.phoneNav}><button>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''}>Schedule</button><button className={panel === 'progress' ? styles.phoneActive : ''}>Progress</button><button>Messages</button><button>More</button></div></article></div></section></main>;
+  return <main className={`${styles.referencePage} ${styles.parentPage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} showAvatarOptions={false} /><section className={styles.parentStage}><header><Mark compact /><div><span>PARENT APP + EIAN</span><h1>Family-safe. Clear. Encouraging.</h1><p>The native Parent App uses its own verified family scope and a conventional experience that remains useful without Eian.</p></div></header><div className={styles.phoneGrid}><article className={styles.phoneFrame}><div className={styles.phoneTop}><b>9:41</b><span>◒ ▴ ▪</span></div><div className={styles.eianHero}><div><p>Hi there!</p><h2>I’m Eian.</h2><span>I can help with schedules, makeups, progress, and more.</span></div><img src="/ai/eian.webp" alt="" /></div><CommandLane compact agent={{ id: 'alex', name: 'Eian', title: 'Family Guide', signal: 'Care', color: '#287eff', portrait: '/ai/eian.webp' }} /><div className={styles.parentShortcuts}>{[['▣', 'My Schedule'], ['◈', 'My Progress'], ['↻', 'Makeup Class'], ['✦', 'Events']].map(([icon, label]) => <button onClick={() => setPanel(label === 'My Progress' ? 'progress' : label === 'My Schedule' ? 'schedule' : 'home')} type="button" key={label}><i>{icon}</i>{label}</button>)}</div><div className={styles.phoneNav}><button className={panel === 'home' ? styles.phoneActive : ''} onClick={() => setPanel('home')}>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''} onClick={() => setPanel('schedule')}>Schedule</button><button onClick={() => setPanel('home')}>Eian</button><button>Messages</button><button>More</button></div></article><article className={styles.phoneFrame}><div className={styles.phoneTop}><button type="button">←</button><b>{panel === 'progress' ? 'My Progress' : panel === 'schedule' ? 'Class Schedule' : 'Student Journey'}</b><span>●</span></div>{panel === 'schedule' ? <div className={styles.mobileSchedule}><h3>October 2026</h3>{[['3:30 PM', 'Tiny Tigers'], ['4:30 PM', 'Green Belt'], ['5:30 PM', 'All Ages']].map(([time, item]) => <p key={item}><time>{time}</time><span>{item}<small>Ideal Martial Arts</small></span></p>)}<button type="button">Book a makeup class</button></div> : <div className={styles.progressPane}><ParentJourneyUnavailable /></div>}<div className={styles.phoneNav}><button>Home</button><button className={panel === 'schedule' ? styles.phoneActive : ''}>Schedule</button><button className={panel === 'progress' ? styles.phoneActive : ''}>Progress</button><button>Messages</button><button>More</button></div></article></div></section></main>;
 }
 
-function MobileCompleteReference({ theme, onTheme }: { theme: HonInterfaceTheme; onTheme: (theme: HonInterfaceTheme) => void }): React.ReactElement {
+function MobileCompleteReference({ theme, onTheme, portraitStyle, onPortraitStyle }: ReferenceAppearanceProps): React.ReactElement {
   const [active, setActive] = useState<HonAiTeamId>('alex');
-  const [portraitStyle, setPortraitStyle] = useState<AiPortraitStyle>('realistic');
   const agent = HON_AI_TEAM.find((member) => member.id === active) ?? HON_AI_TEAM[0];
-  return <main className={`${styles.referencePage} ${styles.mobilePage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><PresentationThemeSwitcher theme={theme} onChange={onTheme} /><PortraitStyleSwitcher style={portraitStyle} onChange={setPortraitStyle} /><section className={styles.mobileStage}><header><Mark compact /><div><span>MOBILE HON COMPLETE</span><h1>Big-button AI command, without losing control.</h1><p>A touch-first presentation mode of the same governed application.</p></div></header><article className={styles.mobileCompletePhone}><div className={styles.phoneTop}><b>9:41</b><strong>HON</strong><span>◒ ▴</span></div><div className={styles.mobileSchool}>⌂ Ideal Martial Arts <b>⌄</b></div><div className={styles.mobileAgents}>{HON_AI_TEAM.slice(0, 4).map((member) => <button key={member.id} className={active === member.id ? styles.mobileAgentActive : ''} style={{ '--agent-color': member.color } as React.CSSProperties} onClick={() => setActive(member.id)} type="button"><AgentVisual agent={member} portraitStyle={portraitStyle} className={styles.mobileAgentPortrait} /><span>{member.name}</span></button>)}</div><div className={styles.mobileGreeting}><span>{agent.name.toUpperCase()} · {agent.title.toUpperCase()}</span><h2>What should we work on today?</h2><p>Touch a priority or start a voice/text request.</p></div><CommandLane agent={agent} compact /><div className={styles.mobileActions}>{[['◎', 'Show today’s priorities'], ['◉', 'Check enrollments'], ['▥', 'Review revenue'], ['✦', 'Improve retention']].map(([icon, label]) => <button type="button" key={label}><i>{icon}</i>{label}<span>→</span></button>)}</div><div className={styles.mobileWork}><span>TEAM WORK</span><p><i />Chad is organizing 5 lead follow-ups <b>Working</b></p><p><i />Maya has 2 parent messages ready <b>Ready</b></p></div><div className={styles.phoneNav}><button className={styles.phoneActive}>Home</button><button>School</button><button>AI Team</button><button>Work</button><button>More</button></div></article></section></main>;
+  return <main className={`${styles.referencePage} ${styles.mobilePage} ${styles[`presentation_${theme}`]}`}><ReferenceNotice /><AppearanceDock theme={theme} onTheme={onTheme} portraitStyle={portraitStyle} onPortraitStyle={onPortraitStyle} /><section className={styles.mobileStage}><header><Mark compact /><div><span>MOBILE HON COMPLETE</span><h1>Big-button AI command, without losing control.</h1><p>A touch-first presentation mode of the same governed application.</p></div></header><article className={styles.mobileCompletePhone}><div className={styles.phoneTop}><b>9:41</b><strong>HON</strong><span>◒ ▴</span></div><div className={styles.mobileSchool}>⌂ Ideal Martial Arts <b>⌄</b></div><div className={styles.mobileAgents}>{HON_AI_TEAM.slice(0, 4).map((member) => <button key={member.id} className={active === member.id ? styles.mobileAgentActive : ''} style={{ '--agent-color': member.color } as React.CSSProperties} onClick={() => setActive(member.id)} type="button"><AgentVisual agent={member} portraitStyle={portraitStyle} className={styles.mobileAgentPortrait} /><span>{member.name}</span></button>)}</div><div className={styles.mobileGreeting}><span>{agent.name.toUpperCase()} · {agent.title.toUpperCase()}</span><h2>What should we work on today?</h2><p>Touch a priority or start a voice/text request.</p></div><CommandLane agent={agent} compact /><div className={styles.mobileActions}>{[['◎', 'Show today’s priorities'], ['◉', 'Check enrollments'], ['▥', 'Review revenue'], ['✦', 'Improve retention']].map(([icon, label]) => <button type="button" key={label}><i>{icon}</i>{label}<span>→</span></button>)}</div><div className={styles.mobileWork}><span>TEAM WORK</span><p><i />Chad is organizing 5 lead follow-ups <b>Working</b></p><p><i />Maya has 2 parent messages ready <b>Ready</b></p></div><div className={styles.phoneNav}><button className={styles.phoneActive}>Home</button><button>School</button><button>AI Team</button><button>Work</button><button>More</button></div></article></section></main>;
 }
 
 export function HonReferenceSuite({ screen }: { screen: ReferenceScreen }): React.ReactElement {
+  // Defaults render on both server and first client paint; local preferences load only after hydration.
   const [theme, setTheme] = useState<HonInterfaceTheme>('modern');
-  const props = { theme, onTheme: setTheme };
+  const [portraitStyle, setPortraitStyle] = useState<AiPortraitStyle>('realistic');
+  const [appearanceHydrated, setAppearanceHydrated] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = readReferenceAppearance(REFERENCE_THEME_STORAGE_KEY, allowedReferenceTheme);
+    const savedPortraitStyle = readReferenceAppearance(REFERENCE_AVATAR_STORAGE_KEY, allowedPortraitStyle);
+    if (savedTheme) setTheme(savedTheme);
+    if (savedPortraitStyle) setPortraitStyle(savedPortraitStyle);
+    setAppearanceHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!appearanceHydrated) return;
+    saveReferenceAppearance(REFERENCE_THEME_STORAGE_KEY, theme);
+    saveReferenceAppearance(REFERENCE_AVATAR_STORAGE_KEY, portraitStyle);
+  }, [appearanceHydrated, portraitStyle, theme]);
+
+  const props: ReferenceAppearanceProps = { theme, onTheme: setTheme, portraitStyle, onPortraitStyle: setPortraitStyle };
   const publicCatalog = screen === 'complete' || screen === 'core' ? <PublicPlanCatalog /> : null;
   const reference = screen === 'hq' ? <HqReference {...props} />
     : screen === 'core' ? <CoreReference {...props} />
