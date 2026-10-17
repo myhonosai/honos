@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import React, { useRef, useState } from 'react';
 import { loadTestingScorecard, recordTestingScorecardEvaluation, TestingScorecardAccessError, type TestingScorecardAssessment, type TestingScorecardView } from './testing-scorecard-http';
+import { testingScorecardInitialIds } from './testing-scorecard-handoff';
 import s from './testing-registration.module.css';
 
 const uuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -11,8 +12,8 @@ function label(value: TestingScorecardAssessment) { return value === 'OBSERVED' 
 
 type Retry = { schoolId: string; testingCandidateId: string; testingEventId: string; criterionCode: string; assessment: TestingScorecardAssessment; candidateVersion: number; eventVersion: number; scorecardVersion: number; key: string };
 
-export function TestingScorecardWorkbench(): React.ReactElement {
-  const [schoolId, setSchoolId] = useState(''); const [testingCandidateId, setTestingCandidateId] = useState(''); const [testingEventId, setTestingEventId] = useState('');
+export function TestingScorecardWorkbench({ initialKnownIds }: { initialKnownIds?: unknown } = {}): React.ReactElement {
+  const [schoolId, setSchoolId] = useState(() => testingScorecardInitialIds(initialKnownIds).schoolId); const [testingCandidateId, setTestingCandidateId] = useState(() => testingScorecardInitialIds(initialKnownIds).testingCandidateId); const [testingEventId, setTestingEventId] = useState(() => testingScorecardInitialIds(initialKnownIds).testingEventId);
   const [criterionCode, setCriterionCode] = useState(''); const [assessment, setAssessment] = useState<TestingScorecardAssessment>('OBSERVED');
   const [view, setView] = useState<TestingScorecardView | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const retry = useRef<Retry | null>(null);

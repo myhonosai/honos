@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { TestingCandidateAccessError, TestingCandidateUncertainError, prepareTestingCandidateRegistration, submitTestingCandidateRegistration, validateTestingCandidateDraft,
   type TestingCandidateKnownIds, type TestingCandidateRegistrationReceipt, type PreparedTestingCandidateRegistration } from './testing-candidate-registration-http';
+import { pendingCandidateScorecardHref } from './testing-scorecard-handoff';
 import styles from './attendance-workbench.module.css';
 
 const EMPTY_IDS: TestingCandidateKnownIds = { organizationId: '', schoolId: '', testingEventId: '', studentCurriculumEnrollmentId: '', targetRankId: '' };
@@ -74,6 +75,7 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
     if (retained.current !== command || active.current || !mounted.current) return;
     void send(command);
   }
+  const scorecardHref = receipt ? pendingCandidateScorecardHref(ids.schoolId, receipt.candidate.id, receipt.candidate.testingEventId) : undefined;
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a></nav>
@@ -104,6 +106,7 @@ export function TestingCandidateRegistrationWorkbench(): React.ReactElement {
       <dl><dt>Candidate UUID</dt><dd>{receipt.candidate.id}</dd><dt>Testing event UUID</dt><dd>{receipt.candidate.testingEventId}</dd>
         <dt>Student curriculum enrollment UUID</dt><dd>{receipt.candidate.studentCurriculumEnrollmentId}</dd><dt>Target rank UUID</dt><dd>{receipt.candidate.targetRankId}</dd>
         <dt>Candidate result / version</dt><dd>{receipt.candidate.result} / {receipt.candidate.version}</dd><dt>Created at</dt><dd>{receipt.candidate.createdAt}</dd></dl>
+      {scorecardHref && <p><a href={scorecardHref}>Open independent testing scorecard</a> with these untrusted selectors prefilled. The scorecard stays idle until a separately authorized human load.</p>}
       <p>Only canonical PENDING candidate facts are displayed. No private notes, actor, authority, audit or outbox payload is displayed. No grading, promotion or certificate action is exposed.</p>
     </section>}
     <p>Inputs, receipts and uncertainty-only exact retries are memory-only. Edits reset confirmation, receipt and retry. Every command attempt clears the visible note and confirmation; a new command requires an edit or explicit start over. Access loss clears every input and fact. Remount/reload starts idle. No storage, polling or automatic retry exists.</p>
