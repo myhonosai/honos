@@ -122,6 +122,7 @@ import { ParentTestingStatusService } from './testing/parent-testing-status.serv
 import { ProgramController } from './programs/program.controller.js';
 import { ProgramService } from './programs/program.service.js';
 import { ClassSessionController } from './schedule/class-session.controller.js';
+import { ClassSessionHumanUiGuard } from './schedule/class-session-human-ui.guard.js';
 import { ClassSessionService } from './schedule/class-session.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
@@ -356,6 +357,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CurriculumRankService,
     ProgramService,
     ClassSessionService,
+    ClassSessionHumanUiGuard,
     AttendanceService,
     AttendancePolicyService,
     AttendanceHumanUiGuard,

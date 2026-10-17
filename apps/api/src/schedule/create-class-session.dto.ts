@@ -11,6 +11,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  MinLength,
   Min,
 } from 'class-validator';
 
@@ -19,6 +20,7 @@ export class CreateClassSessionDto implements CreateClassSessionInput {
   programId!: string;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(160)
   name!: string;
 

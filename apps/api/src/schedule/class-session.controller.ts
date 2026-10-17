@@ -19,11 +19,12 @@ import type { CommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { ClassSessionHumanUiGuard } from './class-session-human-ui.guard.js';
 import { ClassSessionService } from './class-session.service.js';
 import { CreateClassSessionDto } from './create-class-session.dto.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/schedule/sessions')
-@UseGuards(HonIdentityGuard)
+@UseGuards(HonIdentityGuard, ClassSessionHumanUiGuard)
 export class ClassSessionController {
   constructor(
     private readonly database: RuntimeDatabaseService,

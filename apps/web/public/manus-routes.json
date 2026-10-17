@@ -97,6 +97,10 @@
       "title": "HON | Staff Manual Class Booking"
     },
     {
+      "path": "/staff/schedule/sessions/create",
+      "title": "HON | Human Class-session Creation"
+    },
+    {
       "path": "/staff/attendance",
       "title": "HON | Human Attendance Workbench"
     },
