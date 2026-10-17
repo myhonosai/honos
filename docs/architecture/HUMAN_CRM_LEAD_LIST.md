@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`/staff/crm/leads` is a conventional, **read-only** staff surface over the existing `GET /organizations/:organizationId/schools/:schoolId/crm/leads` boundary. It provides a practical entry point to the already-built CRM lead and trial workflow without creating a new directory, CRM model, customer-access model, or cross-school search.
+The list inside `/staff/crm/leads` is a conventional, **read-only projection** over the existing `GET /organizations/:organizationId/schools/:schoolId/crm/leads` boundary. The same page now hosts separate explicit [canonical intake](HUMAN_CRM_LEAD_CREATE.md) and [CRM-only close](HUMAN_CRM_LEAD_CLOSE.md) panels, not a second CRM or a generic mutation directory. List authorization and handoffs remain independent of creation receipts.
 
 The page starts empty. A human must enter one organization UUID, one school UUID, and an optional existing status filter. These values are route selectors only; the API independently resolves the authenticated human and exact current `crm.lead.read` school permission before returning any data.
 
@@ -34,7 +34,9 @@ The Follow-ups route treats that value as a bounded, untrusted, one-time local d
 
 ## Explicit non-effects
 
-This view does not create/edit/archive a lead; change a status or pipeline; save notes; send a message; schedule/record a trial; reserve/check in a class; create a student, family, enrollment, membership, payment, agreement, consent, or communication; call a provider or model; invoke the Action Engine; or create automation, work, or external delivery.
+The list read itself does not create/edit/archive a lead, change a status/pipeline, save notes or execute a command. Only a separate confirmed canonical intake can create a lead/contact; only a freshly loaded OPEN row/version can prepare the separate explicit CRM-only close. Any create/close attempt leaves the list unchanged and requires an explicit reload before another close. Creation receipts never supply close rows or inferred list counts/status/filter membership.
+
+Neither the list nor those two bounded panels sends messages, schedules/records a trial, reserves/checks in a class, creates a student/family/enrollment/membership/payment/agreement/consent/communication, calls a provider or model, invokes the Action Engine, or executes automation, work or external delivery. Trial/follow-up navigation remains only untrusted selector prefill.
 
 It is not a family/parent/HQ/global directory and does not relax RLS, tenant scope, or least-privilege access.
 

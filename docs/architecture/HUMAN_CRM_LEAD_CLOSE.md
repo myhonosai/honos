@@ -4,6 +4,8 @@
 
 `/staff/crm/leads` remains the existing bounded, authorized CRM lead list. A close panel can appear **only** for a returned current `OPEN` list row. It accepts one explicit human choice—`WON` or `LOST`—an optional private internal close note, and a second confirmation. The browser never creates a panel from a query parameter, knows no lead directory beyond the pre-existing list projection, and does not rewrite its loaded list after a close. A human must explicitly reload the list to see a later authorized state.
 
+The separate [canonical intake panel](HUMAN_CRM_LEAD_CREATE.md) does not supply a close row. Its creation receipt never offers close; a create attempt disables preparation from any older loaded row until **Load CRM leads** independently reauthorizes and reloads current row/version facts.
+
 The fixed command is:
 
 ```text

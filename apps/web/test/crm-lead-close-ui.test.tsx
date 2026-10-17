@@ -8,6 +8,7 @@ import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 // handlers without adding a DOM/testing dependency or an application capability.
 const hooks=vi.hoisted(()=>({values:[] as unknown[],cursor:0}));
 vi.mock('react',async()=>{const actual=await vi.importActual<typeof import('react')>('react');return {...actual,
+ useEffect:()=>undefined,
  useState:(initial:unknown)=>{const i=hooks.cursor++;if(!(i in hooks.values))hooks.values[i]=initial;return [hooks.values[i],(value:unknown)=>{hooks.values[i]=typeof value==='function'?(value as (v:unknown)=>unknown)(hooks.values[i]):value;}];},
  useRef:(initial:unknown)=>{const i=hooks.cursor++;if(!(i in hooks.values))hooks.values[i]={current:initial};return hooks.values[i];}
 };});

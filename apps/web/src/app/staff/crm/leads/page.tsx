@@ -1,3 +1,7 @@
+import React from 'react';
+import { createHash } from 'node:crypto';
+import { cookies } from 'next/headers';
+import { HON_SESSION_COOKIE } from '@hon/auth';
 import { CrmLeadsWorkbench } from '../../../../components/crm-leads-workbench';
 
 export const dynamic = 'force-dynamic';
@@ -10,5 +14,9 @@ function value(input: unknown): string | undefined {
 
 export default async function CrmLeadsPage({ searchParams }: CrmLeadsPageProps) {
   const query = await searchParams;
-  return <CrmLeadsWorkbench initialScope={{ organizationId: value(query.organizationId), schoolId: value(query.schoolId) }} />;
+  // The shared staff layout verifies this signed session. This opaque React key
+  // only remounts memory state after session changes; it is never API authority.
+  const token = (await cookies()).get(HON_SESSION_COOKIE)?.value ?? '';
+  const sessionViewKey = createHash('sha256').update(token).digest('hex');
+  return <CrmLeadsWorkbench key={sessionViewKey} initialScope={{ organizationId: value(query.organizationId), schoolId: value(query.schoolId) }} />;
 }

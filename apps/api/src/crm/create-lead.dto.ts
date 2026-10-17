@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
+import type { CreateHumanCrmLeadInput } from '@hon/contracts';
 import {
+  Allow,
   IsEmail,
   IsISO8601,
   IsObject,
@@ -66,4 +68,11 @@ export class CreateLeadDto {
   @IsOptional()
   @IsObject()
   attribution?: Record<string, string>;
+}
+
+/** Exact validation is shared with the browser, without transformation/coercion. */
+export class CreateHumanLeadDto implements CreateHumanCrmLeadInput {
+  @Allow() declare pipelineId: string;
+  @Allow() declare pipelineStageId: string;
+  @Allow() declare primaryContact: CreateHumanCrmLeadInput['primaryContact'];
 }
