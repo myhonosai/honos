@@ -127,6 +127,7 @@ function OperationsCards({ snapshot }: { snapshot: OperationalSnapshot }): React
         <p className={styles.cardIntro}>Class sessions and attendance outcomes for sessions beginning in the verified window.</p>
         <dl className={styles.metrics}><Metric label="Scheduled" value={classes.scheduled} /><Metric label="Completed" value={classes.completed} /><Metric label="Cancelled" value={classes.cancelled} /><Metric label="Present" value={attendance.PRESENT} /><Metric label="Late" value={attendance.LATE} /><Metric label="Unexcused absence" value={attendance.UNEXCUSED_ABSENCE} /><Metric label="Excused absence" value={attendance.EXCUSED_ABSENCE} /><Metric label="Makeup" value={attendance.MAKEUP} /></dl>
         <WorkflowLink href="/staff/search">Find an exact class or student in staff search</WorkflowLink>
+        <WorkflowLink href="/staff/schedule/sessions/create">Create a class session</WorkflowLink>
         <WorkflowLink href={attendanceScopeHref(snapshot.organizationId, snapshot.schoolId)}>Open attendance workbench (verify scope)</WorkflowLink>
       </article>
       <article className={styles.card}>
