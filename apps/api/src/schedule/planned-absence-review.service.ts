@@ -10,7 +10,8 @@ import type { PoolClient } from 'pg';
 import {
   PLANNED_ABSENCE_REQUEST_STATUSES,
   PLANNED_ABSENCE_REVIEW_DECISIONS,
-  type CommandContext,
+  validatePlannedAbsenceReviewInput,
+  type PlannedAbsenceReviewContext,
   type DecidePlannedAbsenceRequestInput,
   type PlannedAbsenceRequestStatus,
   type PlannedAbsenceReviewDecision,
@@ -56,6 +57,7 @@ function asIso(value: Date | string): string {
 }
 
 function normalizeInput(input: DecidePlannedAbsenceRequestInput): NormalizedDecisionInput {
+  try { validatePlannedAbsenceReviewInput(input); } catch { throw validationError('Only a bounded decision, nonempty review note and expected version are accepted.'); }
   if (!input || !PLANNED_ABSENCE_REVIEW_DECISIONS.includes(input.decision)) {
     throw validationError('decision must be APPROVED or DECLINED.');
   }
@@ -104,7 +106,7 @@ export class PlannedAbsenceReviewService {
    * payment, or communication state, and it is not Action Engine executable.
    */
   async decide(
-    context: CommandContext,
+    context: PlannedAbsenceReviewContext,
     requestId: string,
     input: DecidePlannedAbsenceRequestInput,
   ): Promise<{ plannedAbsenceRequest: PlannedAbsenceReviewSummary; replayed: boolean }> {
@@ -114,6 +116,7 @@ export class PlannedAbsenceReviewService {
     if (context.actionRequestId || context.delegatedByPrincipalId) {
       throw new ForbiddenException('Planned absence review cannot be proposed or executed through delegated actions.');
     }
+    if (typeof context.externalSubject !== 'string' || !context.externalSubject.trim() || context.externalSubject.length > 200) throw new ForbiddenException('Verified current human subject is required.');
     if (!UUID.test(requestId)) throw validationError('requestId must be a UUID.');
 
     const normalized = normalizeInput(input);
@@ -122,6 +125,9 @@ export class PlannedAbsenceReviewService {
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)", [context.source, context.externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? '']);
+      await client.query('SELECT hon.lock_planned_absence_review_actor($1)', [context.externalSubject]);
       // The lock lookup runs only after transaction-local tenant context is set.
       // RLS therefore makes an out-of-scope request indistinguishable from absent.
       const currentResult = await client.query<PlannedAbsenceRequestRow>(

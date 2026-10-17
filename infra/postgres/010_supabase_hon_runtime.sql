@@ -267,6 +267,16 @@ DO $$ DECLARE r text; BEGIN
   EXECUTE format('REVOKE ALL ON FUNCTION hon.require_parent_planned_absence_scope(text),hon.read_parent_planned_absence_request_context(text),hon.lock_parent_planned_absence_request(text,uuid,uuid,text) FROM %I',r);
  END LOOP;
 END $$;
+-- Current direct-human review queue and authority lock only; never expose the
+-- private actor helper or grant a directory/history/export capability.
+REVOKE ALL ON FUNCTION hon.require_planned_absence_review_actor(text) FROM hon_runtime, PUBLIC;
+REVOKE ALL ON FUNCTION hon.resolve_planned_absence_review_scope(text),hon.lock_planned_absence_review_actor(text),hon.read_staff_planned_absence_review_queue(text) FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.resolve_planned_absence_review_scope(text),hon.require_planned_absence_review_actor(text),hon.lock_planned_absence_review_actor(text),hon.read_staff_planned_absence_review_queue(text) FROM %I',r);
+ END LOOP;
+END $$;
+GRANT EXECUTE ON FUNCTION hon.resolve_planned_absence_review_scope(text),hon.lock_planned_absence_review_actor(text),hon.read_staff_planned_absence_review_queue(text) TO hon_runtime;
 -- Parent message history returns only receipt-evidence-unavailable. It grants
 -- no queue, delivery, recipient, sender, provider, or message-content access.
 GRANT EXECUTE ON FUNCTION hon.read_parent_message_history(text) TO hon_runtime;
@@ -1044,3 +1054,13 @@ DO $$ DECLARE t text; r text; a record; f text; BEGIN
  END LOOP;
  GRANT EXECUTE ON FUNCTION hon.resolve_owner_launch_scope(text),hon.register_owner_launch_student(text,jsonb,text,uuid,uuid),hon.read_owner_launch(text),hon.read_owner_launch_saved_students(text),hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid),hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid),hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid),hon.read_owner_launch_membership_draft(text),hon.read_owner_launch_first_class_booking_context(text) TO hon_runtime;
 END $$;
+
+-- Preserve 0141/0142's existing function-only authority across the blanket
+-- function revocation above; no new directory/table capability is introduced.
+REVOKE ALL ON FUNCTION hon.resolve_current_staff_reporting_scope(text),hon.read_staff_reporting_schools(text) FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION hon.resolve_current_staff_reporting_scope(text),hon.read_staff_reporting_schools(text) FROM %I',r);
+ END LOOP;
+END $$;
+GRANT EXECUTE ON FUNCTION hon.resolve_current_staff_reporting_scope(text),hon.read_staff_reporting_schools(text) TO hon_runtime;

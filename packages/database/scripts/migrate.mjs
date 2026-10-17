@@ -117,6 +117,11 @@ try {
       if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_approval_validation' || runtime.hostname!=='localhost' || runtime.port!=='5432' || runtime.pathname!==owner.pathname || runtime.username!=='hon_approval_runtime') throw new Error('Approval aliases require exact disposable localhost database.');
       sql=sql.replaceAll('hon_runtime','hon_approval_runtime');
     }
+    if (new URL(databaseUrl).username === 'hon_absence_review_owner') {
+      const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
+      if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_absence_review_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_absence_review_runtime') throw new Error('Review aliases require exact disposable localhost database.');
+      sql = sql.replaceAll('hon_runtime', 'hon_absence_review_runtime');
+    }
     if (new URL(databaseUrl).username === 'hon_parent_journey_sandbox_owner') {
       const owner=new URL(databaseUrl), runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
       if(owner.hostname!=='localhost' || owner.port!=='5432' || owner.pathname!=='/hon_parent_journey_validation_sandbox' || runtime.hostname!=='localhost' || runtime.port!=='5432' || runtime.pathname!==owner.pathname || runtime.username!=='hon_parent_journey_sandbox_runtime') throw new Error('Parent Journey aliases require exact disposable localhost database.');

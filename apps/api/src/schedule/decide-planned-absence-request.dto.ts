@@ -3,7 +3,7 @@ import {
   type DecidePlannedAbsenceRequestInput,
   type PlannedAbsenceReviewDecision,
 } from '@hon/contracts';
-import { IsIn, IsInt, IsNotEmpty, IsString, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /** Human staff's final decision on an already submitted planned-absence request. */
 export class DecidePlannedAbsenceRequestDto implements DecidePlannedAbsenceRequestInput {
@@ -17,5 +17,6 @@ export class DecidePlannedAbsenceRequestDto implements DecidePlannedAbsenceReque
 
   @IsInt()
   @Min(1)
+  @Max(2_147_483_646)
   expectedVersion!: number;
 }

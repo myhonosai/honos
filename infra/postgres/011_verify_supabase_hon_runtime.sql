@@ -2275,3 +2275,22 @@ DO $$ DECLARE f record; b boolean; t text; BEGIN
  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.planned_absence_requests'::regclass AND tgname='planned_absence_requests_initial_state' AND tgfoid='hon.enforce_planned_absence_initial_state()'::regprocedure AND tgenabled='O') THEN RAISE EXCEPTION 'Canonical planned-absence constraints required'; END IF;
 END $$;
 -- End parent planned absence request exact verification.
+
+-- Planned absence review exact verification:
+DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+ IF runtime_oid IS NULL OR EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication)) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) THEN RAISE EXCEPTION 'Restricted review runtime required'; END IF;
+ FOR f IN SELECT * FROM (VALUES
+ ('resolve_planned_absence_review_scope','1a550ec1dffbbb97c907121bd4738f81',true),
+ ('require_planned_absence_review_actor','621ec2f50ad2d3e1d7d27d7b39bbeb69',false),
+ ('lock_planned_absence_review_actor','dcebc46b1019c65bd399c7f6e944ecb9',true),
+ ('read_staff_planned_absence_review_queue','1e8b83a138801e854a0a1bddee9daf77',true)
+ ) expected(name,source_md5,runtime_allowed) LOOP
+  SELECT proc.*,owner.rolsuper,owner.rolbypassrls INTO p FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure('hon.'||f.name||'(text)');
+  IF p.oid IS NULL OR NOT p.prosecdef OR p.provolatile<>'v' OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon'] OR NOT(p.rolsuper OR p.rolbypassrls) OR p.proowner=runtime_oid OR md5(p.prosrc)<>f.source_md5 THEN RAISE EXCEPTION 'Canonical review function required: %',f.name; END IF;
+  IF EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>runtime_oid OR NOT f.runtime_allowed OR acl.is_grantable)) OR has_function_privilege('hon_runtime',p.oid,'EXECUTE') IS DISTINCT FROM f.runtime_allowed THEN RAISE EXCEPTION 'Exact review function ACL required: %',f.name; END IF;
+ END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='hon' AND c.relname='planned_absence_requests' AND c.relrowsecurity AND c.relforcerowsecurity) OR (SELECT count(*) FROM pg_policies WHERE schemaname='hon' AND tablename='planned_absence_requests')<>1 OR NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='planned_absence_requests' AND policyname='planned_absence_requests_tenant_isolation' AND qual='((organization_id = hon.current_organization_id()) AND (school_id = hon.current_school_id()))' AND with_check=qual) THEN RAISE EXCEPTION 'Original planned absence FORCE RLS policy required'; END IF;
+ IF has_table_privilege('hon_runtime','hon.planned_absence_requests','DELETE,TRUNCATE,REFERENCES,TRIGGER') OR NOT has_table_privilege('hon_runtime','hon.planned_absence_requests','SELECT') OR NOT has_table_privilege('hon_runtime','hon.planned_absence_requests','INSERT') OR NOT has_table_privilege('hon_runtime','hon.planned_absence_requests','UPDATE') THEN RAISE EXCEPTION 'Original bounded command table grants required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='schedule.planned_absence.review' AND is_staff_assignable) THEN RAISE EXCEPTION 'Canonical review permission required'; END IF;
+END $$;
+-- End planned absence review exact verification.

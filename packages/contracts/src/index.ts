@@ -15,6 +15,7 @@ export * from './parent-billing-view.js';
 export * from './parent-testing-status.js';
 export * from './parent-planned-absence-history.js';
 export * from './parent-planned-absence-request.js';
+export * from './planned-absence-review.js';
 export * from './parent-message-history.js';
 export * from './attendance-policy.js';
 export * from './kiosk.js';

@@ -127,6 +127,8 @@ import { ClassBookingController } from './schedule/class-booking.controller.js';
 import { ClassBookingService } from './schedule/class-booking.service.js';
 import { PlannedAbsenceReviewController } from './schedule/planned-absence-review.controller.js';
 import { PlannedAbsenceReviewService } from './schedule/planned-absence-review.service.js';
+import { PlannedAbsenceReviewQueueController, PlannedAbsenceReviewQueueService } from './schedule/planned-absence-review-queue.controller.js';
+import { PlannedAbsenceReviewHumanUiGuard } from './schedule/planned-absence-review-human-ui.guard.js';
 import { KnowledgeArticleController } from './knowledge/knowledge-article.controller.js';
 import { KnowledgeArticleService } from './knowledge/knowledge-article.service.js';
 import { ParentFamilyKnowledgeController } from './knowledge/parent-family-knowledge.controller.js';
@@ -249,6 +251,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AttendancePolicyController,
     ClassBookingController,
     PlannedAbsenceReviewController,
+    PlannedAbsenceReviewQueueController,
     KnowledgeArticleController,
     ParentFamilyKnowledgeController,
     WorkItemController,
@@ -344,6 +347,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AttendanceHumanUiGuard,
     ClassBookingService,
     PlannedAbsenceReviewService,
+    PlannedAbsenceReviewQueueService,
+    PlannedAbsenceReviewHumanUiGuard,
     KnowledgeArticleService,
     ParentFamilyKnowledgeService,
     WorkItemService, WorkItemHumanUiGuard,

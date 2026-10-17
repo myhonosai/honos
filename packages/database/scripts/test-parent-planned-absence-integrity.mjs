@@ -5,6 +5,11 @@ const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for planned-absence integrity tests.');
 if (!process.env.HON_RUNTIME_DATABASE_URL) throw new Error('HON_RUNTIME_DATABASE_URL is required for planned-absence integrity tests.');
 
+const ownerUrl = new URL(process.env.DATABASE_URL), runtimeUrl = new URL(process.env.HON_RUNTIME_DATABASE_URL);
+if (ownerUrl.hostname !== 'localhost' || ownerUrl.port !== '5432' || ownerUrl.pathname !== '/hon_absence_review_validation' || ownerUrl.username !== 'hon_absence_review_owner'
+  || runtimeUrl.hostname !== ownerUrl.hostname || runtimeUrl.port !== ownerUrl.port || runtimeUrl.pathname !== ownerUrl.pathname || runtimeUrl.username !== 'hon_absence_review_runtime') throw new Error('Only the exact disposable localhost planned-absence database is permitted.');
+if (Object.keys(process.env).some(key => /^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(key))) throw new Error('No provider credentials or execution switches permitted.');
+
 const connectionOptions = (connectionString) => ({
   connectionString,
   ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
@@ -83,6 +88,7 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.family_access_grants WHERE principal_id = $1', [ids.parentPrincipal]);
     await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.staffPrincipal]);
     await administrator.query('DELETE FROM hon.roles WHERE id = $1', [ids.ownerRole]);
+    await administrator.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.student_profiles WHERE id = ANY($1::uuid[])', [[ids.studentProfileA, ids.studentProfileB, ids.studentProfileC]]);
     await administrator.query('DELETE FROM hon.family_members WHERE family_id = ANY($1::uuid[])', [[ids.familyA, ids.familyB, ids.familyC]]);
     await administrator.query('DELETE FROM hon.families WHERE id = ANY($1::uuid[])', [[ids.familyA, ids.familyB, ids.familyC]]);
@@ -139,6 +145,7 @@ try {
       'INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, $2, $2)',
       [ids.organization, 'Planned Absence Integrity Test'],
     );
+    await administrator.query("INSERT INTO hon.organization_entitlements (organization_id, tier) VALUES ($1, 'ESSENTIAL')", [ids.organization]);
     await administrator.query(
       `INSERT INTO hon.schools (id, organization_id, name, slug) VALUES
        ($1, $2, 'Planned Absence School A', $3),
@@ -246,7 +253,7 @@ try {
     throw error;
   }
 
-  const request = { honIdentity: { externalSubject } };
+  const request = { method: 'POST', query: {}, headers: {}, honIdentity: { externalSubject } };
   const firstKey = `planned-absence-${randomUUID()}`;
   const firstResponse = responseCapture();
   const first = await controller.requestPlannedAbsence(
@@ -319,7 +326,7 @@ try {
     && created.rows[0]?.review_note === null,
   'The parent command created review data or a non-submitted planned absence status.');
 
-  const staffRequest = { honIdentity: { externalSubject: staffExternalSubject } };
+  const staffRequest = { method: 'POST', query: {}, headers: {}, honIdentity: { externalSubject: staffExternalSubject } };
   const reviewInput = { decision: 'APPROVED', reviewNote: 'Approved for family travel.', expectedVersion: 1 };
   await expectStatus(403, () => reviewController.decide(
     ids.organization, ids.schoolA, first.data.id, `parent-review-${randomUUID()}`, reviewInput, request, responseCapture(),
@@ -354,16 +361,17 @@ try {
   assert(reviewResponse.statusCode === 200 && !reviewed.meta.replayed
     && reviewed.data.status === 'APPROVED'
     && reviewed.data.version === 2
-    && reviewed.data.reviewedByPrincipalId === ids.staffPrincipal
-    && reviewed.data.reviewNote === reviewInput.reviewNote,
-  'The staff review did not atomically record the approved decision and authenticated reviewer attribution.');
+    && !('reviewedByPrincipalId' in reviewed.data) && !('reviewNote' in reviewed.data),
+  'The staff review did not return a minimal approved decision receipt.');
+  const attributed = (await administrator.query('SELECT reviewed_by_principal_id, review_note FROM hon.planned_absence_requests WHERE id = $1', [first.data.id])).rows[0];
+  assert(attributed.reviewed_by_principal_id === ids.staffPrincipal && attributed.review_note === reviewInput.reviewNote, 'Authenticated attribution and note must remain internal on the canonical record.');
 
   const reviewReplayResponse = responseCapture();
   const reviewReplay = await reviewController.decide(
     ids.organization, ids.schoolA, first.data.id, reviewKey, reviewInput, staffRequest, reviewReplayResponse,
   );
   assert(reviewReplayResponse.statusCode === 200 && reviewReplay.meta.replayed
-    && reviewReplay.data.id === reviewed.data.id && reviewReplay.data.reviewedByPrincipalId === ids.staffPrincipal,
+    && reviewReplay.data.id === reviewed.data.id && !('reviewedByPrincipalId' in reviewReplay.data),
   'A matching planned-absence review idempotency command did not replay its original response.');
   await expectStatus(409, () => reviewController.decide(
     ids.organization, ids.schoolA, first.data.id, reviewKey,
@@ -393,7 +401,7 @@ try {
     { decision: 'DECLINED', reviewNote: 'Please coordinate another date.', expectedVersion: 2 }, staffRequest, responseCapture(),
   );
   assert(declined.data.status === 'DECLINED' && declined.data.version === 3
-    && declined.data.reviewedByPrincipalId === ids.staffPrincipal,
+    && !('reviewedByPrincipalId' in declined.data) && !('reviewNote' in declined.data),
   'A version-matched submitted planned absence request was not declined by the authenticated staff reviewer.');
   await expectStatus(403, () => plannedAbsenceReviews.decide({
     organizationId: ids.organization,

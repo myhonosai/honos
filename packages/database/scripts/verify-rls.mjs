@@ -1,4 +1,5 @@
 import { verifyParentPlannedAbsenceRequestSecurity } from './parent-planned-absence-request-security.mjs';
+import { verifyPlannedAbsenceReviewSecurity } from './planned-absence-review-security.mjs';
 import { curriculumLibraryTables,verifyCurriculumLibrarySecurity } from './curriculum-library-security.mjs';
 import { requireCurriculumLibraryLocalUrls } from './curriculum-library-local-guard.mjs';
 import { retentionAttentionTables, verifyRetentionAttentionSecurity } from './retention-attention-security.mjs';
@@ -213,6 +214,7 @@ try {
   await verifyOwnerLaunchSecurity(client,runtimeRoleName);
   await verifyCurrentStaffReportingScopeSecurity(client, runtimeRoleName);
   await verifyParentPlannedAbsenceRequestSecurity(client, runtimeRoleName);
+  await verifyPlannedAbsenceReviewSecurity(client, runtimeRoleName);
   await verifyStaffReportingSchoolsSecurity(client, runtimeRoleName);
   const attendanceCanonical = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
   const attendanceVerification = attendanceCanonical.split('-- Advanced attendance exact verification:')[1]?.split('-- End advanced attendance exact verification.')[0];

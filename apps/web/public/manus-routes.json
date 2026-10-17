@@ -97,6 +97,10 @@
       "title": "HON | Human Attendance Workbench"
     },
     {
+      "path": "/staff/attendance/planned-absences",
+      "title": "HON | Human Planned Absence Review"
+    },
+    {
       "path": "/staff/instructor-qualifications",
       "title": "HON | Human instructor qualification evidence"
     },
