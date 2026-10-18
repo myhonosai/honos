@@ -1,5 +1,10 @@
 # HON Delivery Backlog
 
+## Codex HQ Phase 3 — read-only Champions management
+
+- [ ] First complete slice on `codex/hq-champions-management`: connect Growth & Referrals and Champions Club overview to the merged M5 aggregate overview and M1 program-configuration GETs. Preserve server aggregates, exact policy/financial states, HQ-only authorization, stale/denied/error handling, existing leaderboard, approved artwork and appearance groups. Verify actual app screenshots with isolated authorized fixtures, tests/build and existing security proofs before expanding.
+- [ ] Subsequent slices: authorized school search/statistics/history/milestones and reward ledger/status filters. These APIs exist; their frontend integration is not implemented by the first overview slice. Do not infer awards from the 5/10/20/30 roadmap, calculate totals from truncated lists, issue rewards, mutate backend/CRM, implement contest commands, or activate providers. Language & Region remains an approved documentation-only roadmap in PR #17.
+
 ## Codex HQ Champions Club integration — owner-authorized follow-up
 
 - [x] Deliver the real HQ all-time/UTC-month leaderboard from merged M1–M3 APIs on `codex/hq-champions-integration`, stacked [PR #11](https://github.com/myhonosai/honos/pull/11) on visual PR #8. Source `9a53fba`: official server order/ranks/positions, closed contracts, filters/refresh, stale/empty/error/access states and separate confidential HQ holds; View and AI Style have distinct rounded groups. [Verification 39111391462](https://github.com/myhonosai/honos/actions/runs/39111391462): all three jobs passed, 581 web tests (nine new), 390 API / 188 domain / 91 auth tests, eight disposable-local database proofs, 45 browser checks / zero failures, 12 axe scans / zero reported violations, 25 PNG captures. [Actual desktop/mobile evidence](docs/visuals/codex/hq-champions-integration/README.md) inspected. Owner/manual device review pending. No backend/CRM changes, production mutations, financial issuance, M4, merge or deployment.
