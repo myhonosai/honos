@@ -1,6 +1,6 @@
 # HQ command-room background candidate
 
-Owner-requested refinement toward supplied `9075.jpg`, on `codex/hq-modern-implementation` / PR #8. **Archived comparison: the owner subsequently requested no buildings and a Jarvis-inspired abstract command center. This image is no longer used by the active HQ UI.**
+Owner-requested refinement toward supplied `9075.jpg`, on `codex/hq-modern-implementation` / PR #8. **Active candidate, pending owner review.** The owner subsequently asked to restore this command-center background, make agent panels see-through and integrate the speaking area with HON. The temporary abstract variant remains in branch history for comparison.
 
 `command-room.png` is a new decorative architectural background produced with built-in image generation. It contains no interface, people, metrics or operational content. It is copied unchanged from the session's generated original. No paid external image API was used.
 

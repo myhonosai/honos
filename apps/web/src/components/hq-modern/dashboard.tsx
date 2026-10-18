@@ -68,9 +68,11 @@ function CommandStage(): React.ReactElement {
     <div className={styles.commandLineup}>
       <div className={styles.commandCore}>
         <div className={styles.orbFrame}><span className={styles.coreOrbits} data-hq-orbits aria-hidden="true"><i/><i/><i/></span><HonCore/><strong aria-hidden="true">HON</strong></div>
-        <div className={styles.coreCaption}><h2>HON</h2><p>Executive AI Coordinator</p></div>
-        <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label="Expand HON conversation"><HqIcon name="mic" size={19}/><span>Ask HON anything</span><HqIcon name="expand" size={15}/></button>
-        <small>Conversation unavailable · Microphone off</small>
+        <div className={styles.honDock} data-hq-conversation-dock>
+          <div className={styles.coreCaption}><h2>HON</h2><p>Executive AI Coordinator</p></div>
+          <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label="Expand HON conversation"><HqIcon name="mic" size={22}/><span>Ask HON anything</span><HqIcon name="expand" size={15}/></button>
+          <small className={styles.coreState}>Conversation unavailable · Microphone off</small>
+        </div>
       </div>
       <div className={styles.stageTeam}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.stageExecutive} style={{ '--stage-column': index < 3 ? index + 1 : index + 2 } as CSSProperties} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={`View ${executive.displayName}'s ${executive.domain.toLowerCase().replaceAll('_', ' ')} workspace`}>
         <ExecutivePortrait index={index} name={executive.displayName}/>

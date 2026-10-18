@@ -165,6 +165,14 @@ try {
       await page.getByRole('heading', { name: 'Your executive team', exact: true }).waitFor({ timeout: 20000 });
       await screenshot(page, `${label}-dashboard-full`);
       assert.equal(await page.getByRole('link', { name: /^View .* workspace$/ }).count(), 6);
+      if (width > 1250) {
+        const dock = await page.locator('[data-hq-conversation-dock]').evaluate((node) => {
+          const panel = node.getBoundingClientRect();
+          const orb = node.previousElementSibling.getBoundingClientRect();
+          return { overlaps: panel.top < orb.bottom && panel.bottom > orb.top, centered: Math.abs((panel.left + panel.right) / 2 - (orb.left + orb.right) / 2) < 2 };
+        });
+        assert(dock.overlaps && dock.centered, 'HON speaking dock must overlap the front of the orb and remain centered');
+      }
       await noOverflow(page, label);
       await screenshot(page, `${label}-dashboard-viewport`, false);
     });
@@ -257,7 +265,7 @@ try {
     await context.close();
   }
 
-  await check('Abstract HQ and decorative motion pause, keyboard restore and preference change', async () => {
+  await check('HQ command backdrop and decorative motion pause, keyboard restore and preference change', async () => {
     const moving = await contextFor({ width: 1440, height: 1000 }, true, 'no-preference');
     try {
       await moving.page.goto(`${origin}/hq`, { waitUntil: 'domcontentloaded' });
@@ -266,7 +274,7 @@ try {
       assert(await motion.isEnabled());
       assert.equal(await motion.getAttribute('aria-pressed'), 'true');
       const background = await moving.page.locator('[data-hq-background]').evaluate((node) => getComputedStyle(node).backgroundImage);
-      assert(!background.includes('url('), 'HQ must use an abstract surface, not the architectural image');
+      assert(background.includes('/hq-assets/reference-refinement/command-room.png'), 'HQ must render the owner-requested command-center backdrop');
       const orbit = moving.page.locator('[data-hq-orbits] > i').first();
       assert.notEqual(await orbit.evaluate((node) => getComputedStyle(node).animationName), 'none');
       await motion.press('Space');
