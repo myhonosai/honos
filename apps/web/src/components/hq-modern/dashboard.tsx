@@ -58,13 +58,14 @@ export function CompanySnapshot(): React.ReactElement {
 }
 
 export function GrowthLinks(): React.ReactElement {
-  return <section className={`${styles.panel} ${styles.growthPanel}`} aria-labelledby="hq-growth-title"><div className={styles.sectionHeader}><h2 id="hq-growth-title">Growth &amp; Referrals</h2><span className={styles.badge}>Planned</span></div><p>Champions Club &amp; founder campaigns</p><div className={styles.growthLinks}>{HQ_GROWTH.map((item) => <Link key={item.path} href={item.path}><HqIcon name={item.icon} size={18}/><span>{item.title}</span><HqIcon name="chevron" size={14}/></Link>)}</div><p className={styles.finePrint}>Owner-controlled contests &amp; rewards. No activation from this interface.</p></section>;
+  return <section className={`${styles.panel} ${styles.growthPanel}`} aria-labelledby="hq-growth-title"><div className={styles.sectionHeader}><h2 id="hq-growth-title">Growth &amp; Referrals</h2><span className={styles.badge}>Planned</span></div><p>Champions Club &amp; founder campaigns</p><div className={styles.growthLinks}>{HQ_GROWTH.map((item) => <Link key={item.path} href={item.path}><HqIcon name={item.icon} size={18}/><span>{item.title}</span><HqIcon name="chevron" size={14}/></Link>)}</div><Link className={styles.growthOpen} href="/hq/growth">Open Growth &amp; Referrals <HqIcon name="chevron" size={16}/></Link><p className={styles.finePrint}>Owner-controlled contests &amp; rewards. No activation from this interface.</p></section>;
 }
 
 export function HqModernDashboard(): React.ReactElement {
   const { openAssistant } = useHqModern();
   return <>
     <div className={styles.dashboard}>
+      <div className={styles.dashboardPrimary}>
       <section className={`${styles.panel} ${styles.hero}`} aria-labelledby="hon-command-title">
         <div className={styles.heroHeading}><div><h2>HON</h2><p>Executive AI Coordinator</p></div><button type="button" onClick={openAssistant} aria-label="Expand HON conversation"><HqIcon name="expand"/>Expand</button></div>
         <HonCore/><h2 id="hon-command-title" className={styles.heroQuestion}>What would you like to move forward?</h2>
@@ -72,10 +73,13 @@ export function HqModernDashboard(): React.ReactElement {
         <div className={styles.promptLinks}><Link href="/hq/schools"><HqIcon name="school"/>Review school directory</Link><Link href="/hq/executives"><HqIcon name="team"/>Meet the executive team</Link></div>
         <HonComposer context="Overview"/>
       </section>
-      <div className={styles.attentionSlot}><NeedsAttention/></div>
       <div className={styles.teamSlot}><ExecutiveCards/></div>
+      </div>
+      <div className={styles.dashboardRail}>
+      <div className={styles.attentionSlot}><NeedsAttention/></div>
       <div className={styles.snapshotSlot}><CompanySnapshot/></div>
       <div className={styles.growthSlot}><GrowthLinks/></div>
+      </div>
     </div>
     <div className={styles.governance}><HqIcon name="shield" size={28}/><div><strong>You retain final approval.</strong><p>Owner → HON → Executives → Shared Action Engine</p></div><span>Permissions · Policy · Approval · Audit</span></div>
   </>;
