@@ -1,4 +1,4 @@
-import { HqOverview } from '../../components/hq-overview';
+import { HqModernDashboard } from '../../components/hq-modern/dashboard';
 
 export const metadata = {
   title: 'HON HQ | Platform Overview',
@@ -9,5 +9,5 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default function HqPage(): React.ReactElement {
-  return <HqOverview />;
+  return <HqModernDashboard />;
 }

@@ -1,0 +1,184 @@
+{
+  "sourceSha": "c9fe94f78012215db894fd964363d332ba807b84",
+  "fixtureOnly": true,
+  "productionDataUsed": false,
+  "checks": [
+    "desktop: dashboard, responsive layout and screenshots",
+    "desktop: appearance choices preserve the six HQ identities",
+    "desktop: dashboard accessibility",
+    "desktop: expanded assistant accessibility",
+    "desktop: assistant expand, draft continuity, disabled services and keyboard restore",
+    "desktop: executive workspace, unavailable tabs and persistent subpage assistant",
+    "desktop: navigation, menu focus and non-executing contest lifecycle",
+    "tablet: dashboard, responsive layout and screenshots",
+    "tablet: appearance choices preserve the six HQ identities",
+    "tablet: dashboard accessibility",
+    "tablet: expanded assistant accessibility",
+    "tablet: assistant expand, draft continuity, disabled services and keyboard restore",
+    "tablet: executive workspace, unavailable tabs and persistent subpage assistant",
+    "tablet: navigation, menu focus and non-executing contest lifecycle",
+    "mobile: dashboard, responsive layout and screenshots",
+    "mobile: appearance choices preserve the six HQ identities",
+    "mobile: dashboard accessibility",
+    "mobile: expanded assistant accessibility",
+    "mobile: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile: navigation, menu focus and non-executing contest lifecycle",
+    "mobile-narrow: dashboard, responsive layout and screenshots",
+    "mobile-narrow: appearance choices preserve the six HQ identities",
+    "mobile-narrow: dashboard accessibility",
+    "mobile-narrow: expanded assistant accessibility",
+    "mobile-narrow: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile-narrow: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile-narrow: navigation, menu focus and non-executing contest lifecycle",
+    "Existing independent school directory transport",
+    "Fail-closed HQ overview 403",
+    "Fail-closed HQ overview 401",
+    "Fail-closed HQ overview 503",
+    "Fail-closed HQ overview malformed",
+    "Unsigned browser session cannot render HQ content",
+    "No browser JavaScript errors",
+    "No mutation, provider or arbitrary API request"
+  ],
+  "failures": [],
+  "screenshots": [
+    "desktop-dashboard-full.png",
+    "desktop-dashboard-viewport.png",
+    "desktop-chibi.png",
+    "desktop-assistant-expanded.png",
+    "desktop-workspace-assistant.png",
+    "desktop-growth-contests.png",
+    "tablet-dashboard-full.png",
+    "tablet-dashboard-viewport.png",
+    "tablet-assistant-expanded.png",
+    "mobile-dashboard-full.png",
+    "mobile-dashboard-viewport.png",
+    "mobile-assistant-expanded.png",
+    "mobile-workspace-assistant.png",
+    "mobile-growth-contests.png",
+    "mobile-narrow-dashboard-full.png",
+    "mobile-narrow-dashboard-viewport.png",
+    "mobile-narrow-assistant-expanded.png",
+    "desktop-hq-access-denied.png"
+  ],
+  "accessibility": [
+    {
+      "label": "desktop-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-narrow-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    }
+  ],
+  "blockedExternalHosts": [
+    "fonts.googleapis.com"
+  ],
+  "pageErrors": [],
+  "apiRequests": [
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    }
+  ]
+}
