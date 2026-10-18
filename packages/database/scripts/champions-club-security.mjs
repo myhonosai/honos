@@ -1,6 +1,8 @@
 // Champions Club foundation (0148): private deny-all tables reachable only through fixed functions.
-export const championsClubTables = ['champions_policies','champions_referral_codes','champions_attributions','champions_attribution_history','champions_requests','champions_audit','champions_outbox'];
-const evidenceTables = ['champions_attribution_history','champions_requests','champions_audit','champions_outbox'];
+export const championsClubTables = ['champions_policies','champions_referral_codes','champions_attributions','champions_attribution_history','champions_requests','champions_audit','champions_outbox',
+ 'champions_reward_policies','champions_reward_entries','champions_reward_history'];
+const evidenceTables = ['champions_attribution_history','champions_requests','champions_audit','champions_outbox','champions_reward_history'];
+const rewardTables = ['champions_reward_policies','champions_reward_entries'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const championsClubFunctions = [
  ['hon.guard_champions_evidence()',false,false],
@@ -23,6 +25,17 @@ export const championsClubFunctions = [
  ['hon.capture_champions_attribution(text,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.read_champions_attributions_from_hq(text,text)',true,true],
+ // 0149 reward accounting
+ ['hon.guard_champions_rewards()',false,false],
+ ['hon.champions_reward_policy_json(hon.champions_reward_policies)',false,false],
+ ['hon.champions_reward_json(hon.champions_reward_entries)',false,true],
+ ['hon.read_champions_reward_program_from_hq(text)',true,true],
+ ['hon.create_champions_reward_policy_draft(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.publish_champions_reward_policy(text,uuid,uuid,uuid,uuid)',true,true],
+ ['hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid)',true,true],
+ ['hon.decide_champions_reward(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_champions_reward_ledger_from_hq(text,text)',true,true],
+ ['hon.read_champions_school_rewards(text,uuid)',true,true],
 ];
 export async function verifyChampionsClubSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe Champions Club runtime role.');
@@ -33,7 +46,7 @@ export async function verifyChampionsClubSecurity(client, runtime) {
    AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND a.grantee<>c.relowner) safe
    FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=$1::regclass`,[`hon.${table}`,runtime])).rows[0];
   if (r?.safe!==true) throw new Error(`Unsafe Champions Club table ${table}`);
-  const guard = evidenceTables.includes(table) ? 'guard_champions_evidence' : 'guard_champions_records';
+  const guard = evidenceTables.includes(table) ? 'guard_champions_evidence' : rewardTables.includes(table) ? 'guard_champions_rewards' : 'guard_champions_records';
   const rowTrigger = evidenceTables.includes(table) ? 'champions_immutable' : 'champions_guarded';
   for (const [name,type] of [[rowTrigger,27],['champions_no_truncate',34]]) {
    const t=(await client.query(`SELECT count(*)=1 safe FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=$2 AND tgtype=$3

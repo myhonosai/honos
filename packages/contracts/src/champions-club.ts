@@ -20,6 +20,10 @@ export const CHAMPIONS_COMMANDS = {
   publishPolicy: 'champions-policy-publish',
   captureAttribution: 'champions-attribution-capture',
   decideAttribution: 'champions-attribution-decide',
+  createRewardPolicyDraft: 'champions-reward-policy-draft',
+  publishRewardPolicy: 'champions-reward-policy-publish',
+  reconcileRewards: 'champions-rewards-reconcile',
+  decideReward: 'champions-reward-decide',
 } as const;
 export type ChampionsCommand = typeof CHAMPIONS_COMMANDS[keyof typeof CHAMPIONS_COMMANDS];
 
@@ -79,6 +83,9 @@ const isUuid = (value: unknown): value is string => typeof value === 'string' &&
 const isTimestamp = (value: unknown): value is string => typeof value === 'string' && TIMESTAMP.test(value) && Number.isFinite(Date.parse(value));
 const isName = (value: unknown): value is string => typeof value === 'string' && value.length >= 1 && value.length <= 300;
 const nullable = <T>(value: unknown, check: (v: unknown) => v is T): boolean => value === null || check(value);
+/** Shared with the reward accounting contracts (champions-club-rewards.ts). */
+export { invalid as championsInvalid, drift as championsDrift, record as championsRecord, exactKeys as championsExactKeys,
+  isInt as championsIsInt, isUuid as championsIsUuid, isTimestamp as championsIsTimestamp, nullable as championsNullable };
 
 export function championsUuid(value: unknown): string {
   if (!isUuid(value)) invalid();

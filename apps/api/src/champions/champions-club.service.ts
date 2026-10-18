@@ -5,12 +5,16 @@ import {
   validateChampionsAttributionStateFilter, validateChampionsDecisionInput, validateChampionsPolicyDraftInput,
   validateChampionsPolicyDraftReceipt, validateChampionsPolicyPublishReceipt, validateChampionsProgram,
   validateChampionsReferralCodeReceipt, validateChampionsSchoolView,
+  validateChampionsRewardDecisionInput, validateChampionsRewardDecisionReceipt, validateChampionsRewardLedger,
+  validateChampionsRewardPolicyDraftInput, validateChampionsRewardPolicyDraftReceipt, validateChampionsRewardPolicyPublishReceipt,
+  validateChampionsRewardProgram, validateChampionsRewardReconcileReceipt, validateChampionsRewardStatusFilter, validateChampionsSchoolRewards,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ChampionsClubOperation } from '../foundation/runtime-database.service.js';
 
 // Business-rule refusals the UI may show verbatim. Any other database message stays private.
 const RULE_REFUSALS = new Set(['CHAMPIONS_SELF_REFERRAL','CHAMPIONS_ATTRIBUTION_NOT_ELIGIBLE','CHAMPIONS_POLICY_UNDECIDED',
-  'CHAMPIONS_PAYMENT_SOURCE_UNAVAILABLE','CHAMPIONS_QUALIFICATION_NOT_MET','CHAMPIONS_ATTRIBUTION_EXPIRED']);
+  'CHAMPIONS_PAYMENT_SOURCE_UNAVAILABLE','CHAMPIONS_QUALIFICATION_NOT_MET','CHAMPIONS_ATTRIBUTION_EXPIRED',
+  'CHAMPIONS_REWARD_RULE_UNDECIDED','CHAMPIONS_REWARD_SUBSTITUTE_MISMATCH','CHAMPIONS_PRIZE_OVER_BUDGET','CHAMPIONS_CLAWBACK_NOT_PERMITTED']);
 const STATE_CONFLICTS = new Set(['CHAMPIONS_VERSION_CONFLICT','CHAMPIONS_TRANSITION_NOT_ALLOWED','CHAMPIONS_POLICY_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
@@ -51,6 +55,35 @@ export class ChampionsClubService {
   async decideAttribution(subject: string, attributionId: unknown, body: unknown, key: unknown) {
     const [attribution, input, idempotencyKey] = parse(() => [championsUuid(attributionId), validateChampionsDecisionInput(body), championsUuid(key)] as const);
     return this.run('decideAttribution', [subject, attribution, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateChampionsAttributionReceipt);
+  }
+
+  // ---------- reward accounting (Milestone 2; liabilities only) ----------
+  async readRewardProgram(subject: string) {
+    return this.run('readRewardProgram', [subject], validateChampionsRewardProgram);
+  }
+  async createRewardPolicyDraft(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateChampionsRewardPolicyDraftInput(body), championsUuid(key)] as const);
+    return this.run('createRewardPolicyDraft', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateChampionsRewardPolicyDraftReceipt);
+  }
+  async publishRewardPolicy(subject: string, policyId: unknown, key: unknown) {
+    const [policy, idempotencyKey] = parse(() => [championsUuid(policyId), championsUuid(key)]);
+    return this.run('publishRewardPolicy', [subject, policy, idempotencyKey, randomUUID(), randomUUID()], validateChampionsRewardPolicyPublishReceipt);
+  }
+  async reconcileRewards(subject: string, schoolId: unknown, key: unknown) {
+    const [school, idempotencyKey] = parse(() => [championsUuid(schoolId), championsUuid(key)]);
+    return this.run('reconcileRewards', [subject, school, idempotencyKey, randomUUID(), randomUUID()], validateChampionsRewardReconcileReceipt);
+  }
+  async decideReward(subject: string, entryId: unknown, body: unknown, key: unknown) {
+    const [entry, input, idempotencyKey] = parse(() => [championsUuid(entryId), validateChampionsRewardDecisionInput(body), championsUuid(key)] as const);
+    return this.run('decideReward', [subject, entry, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateChampionsRewardDecisionReceipt);
+  }
+  async readRewardLedger(subject: string, status: unknown) {
+    const filter = parse(() => validateChampionsRewardStatusFilter(status));
+    return this.run('readRewardLedger', [subject, filter], validateChampionsRewardLedger);
+  }
+  async readSchoolRewards(subject: string, schoolId: unknown) {
+    const school = parse(() => championsUuid(schoolId));
+    return this.run('readSchoolRewards', [subject, school], validateChampionsSchoolRewards);
   }
 
   private async run<T>(operation: ChampionsClubOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {
