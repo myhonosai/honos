@@ -1,0 +1,80 @@
+# HON OS continuous integration.
+# Runs on pull requests to main and on manual dispatch only: no schedule, no deployment, no secrets.
+# Pushes directly to main are intentionally NOT a trigger until the owner approves the expected
+# Actions minutes (see docs/CI.md).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  CI: 'true'
+
+jobs:
+  verify:
+    name: Test, typecheck, build, migrations
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies (lockfile only)
+        run: pnpm install --frozen-lockfile
+      - name: pnpm test
+        run: pnpm test
+      - name: pnpm check
+        run: pnpm check
+      - name: pnpm build
+        run: pnpm build
+      - name: pnpm db:check (migration file contract)
+        run: pnpm db:check
+      - name: Verify the build left tracked files unchanged
+        run: git diff --exit-code
+
+  database:
+    name: Disposable PostgreSQL security proofs
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies (lockfile only)
+        run: pnpm install --frozen-lockfile
+      - name: Build packages used by the proofs
+        run: pnpm prepare:workspace && pnpm --filter @hon/api build
+      - name: Start the runner's preinstalled local PostgreSQL (disposable, localhost only)
+        run: |
+          sudo systemctl start postgresql.service
+          for _ in $(seq 1 30); do pg_isready -h /var/run/postgresql -p 5432 && break; sleep 1; done
+          pg_isready -h /var/run/postgresql -p 5432
+          sudo -u postgres psql -X -tAc "SELECT version()"
+      - name: Run guarded disposable-database proofs
+        run: .github/scripts/run-db-proofs.sh
