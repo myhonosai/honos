@@ -2,7 +2,7 @@
 
 ## Codex HQ Modern frontend — owner-authorized 2026-10-18
 
-- [ ] Refine the HQ frontend toward the owner's supplied `9075.jpg` reference: immersive command-room setting, six portrait-led executives around HON, glass/cyan panels and denser verified operational cards. Keep previous review artifacts, all security boundaries and HQ/school separation; capture new real desktop/mobile screenshots before owner review.
+- [x] Refine the HQ frontend toward the owner's supplied `9075.jpg` reference: immersive command-room setting, six portrait-led executives around HON, glass/cyan panels and denser verified operational cards. Preserve previous assets/review evidence and HQ/security boundaries. Revised source `c9fe94f`: 36 browser checks passed, zero failures; eight axe scans, zero violations; real [desktop/mobile gallery](docs/visuals/codex/hq-reference-refinement/README.md). Owner visual, physical-device keyboard and screen-reader review remain pending; no merge/deployment.
 
 - [x] Implement approved responsive HQ dashboard and navigation on `codex/hq-modern-implementation`, tracking issue #4 / PR #8; preserve PR #3 and existing HQ authorization/data contracts. Owner visual acceptance remains pending.
 - [x] Add persistent non-executing HON interface, catalog-based executive workspace entries, appearance controls, and honest planned/unavailable management interfaces. No operational AI, voice, financial or referral action is claimed.

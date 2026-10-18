@@ -6,6 +6,10 @@ Tracking: [#4](https://github.com/myhonosai/honos/issues/4). Branch: `codex/hq-m
 
 The owner requested a closer match to supplied `9075.jpg` after the first runtime review. [Reference refinement notes](visuals/codex/hq-reference-refinement/README.md) track the revised command-room composition and new runtime evidence. The previous screenshot gallery remains preserved; its results do not establish verification of this newer layout. Original executive portraits and HON orb sources remain unchanged. This revision awaits owner visual review.
 
+The revised application source `c9fe94f` now has real desktop/mobile captures and a passing [browser run 39107056742](https://github.com/myhonosai/honos/actions/runs/39107056742): 36 checks, zero failures; eight axe scans, zero reported violations; 18 PNG screenshots. Mobile width/attention order/portrait readability were corrected after inspecting actual captures. [Current gallery](visuals/codex/hq-reference-refinement/README.md).
+
+The same revised source passed both existing [CI jobs 39107056740](https://github.com/myhonosai/honos/actions/runs/39107056740): tests/check/build, migration-file contract and disposable-local database proofs. The subsequent screenshot/documentation checkpoint changes no application code.
+
 ## Ownership and scope
 
 Owner assignment of 2026-10-18 authorizes the approved HQ frontend, including the dashboard, responsive navigation, persistent assistant presentation, executive workspace entry points and planned management interfaces. Merge/deployment are not authorized.
