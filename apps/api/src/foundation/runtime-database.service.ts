@@ -107,6 +107,19 @@ const SAAS_BILLING_CALLS = {
   createInvoiceDraft: { sql: 'SELECT hon.create_saas_invoice_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   commandInvoice: { sql: 'SELECT hon.command_saas_invoice($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   recordPaymentEvidence: { sql: 'SELECT hon.record_saas_payment_evidence($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // B3: premium AI credit accounting (no purchase, top-up, overage or provider call).
+  readCreditProgram: { sql: 'SELECT hon.read_saas_credit_program_from_hq($1) AS data', arity: 1, readOnly: true },
+  readOrganizationCredits: { sql: 'SELECT hon.read_saas_organization_credits_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setCreditProgram: { sql: 'SELECT hon.set_saas_credit_program($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  recordCostEvidence: { sql: 'SELECT hon.record_saas_provider_cost_evidence($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  createPricingDraft: { sql: 'SELECT hon.create_saas_pricing_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishPricing: { sql: 'SELECT hon.publish_saas_pricing($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  commandAllowance: { sql: 'SELECT hon.command_saas_credit_allowance($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  resolveCreditReservation: { sql: 'SELECT hon.resolve_saas_credit_reservation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSchoolCredits: { sql: 'SELECT hon.read_saas_school_credits($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  estimatePremiumOperation: { sql: 'SELECT hon.estimate_saas_premium_operation($1,$2::uuid,$3,$4::integer) AS data', arity: 4, readOnly: true },
+  reservePremiumCredits: { sql: 'SELECT hon.reserve_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  settlePremiumCredits: { sql: 'SELECT hon.settle_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 

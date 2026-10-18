@@ -14,7 +14,8 @@ export type SaasCatalogStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
 export type SaasFounderEligibility = 'UNDECIDED' | 'NO_PRIOR_CATALOG_SUBSCRIPTION' | 'ANY_ACTIVE_ORGANIZATION';
 export type SaasPolicyCode = 'ANNUAL_BILLING' | 'TAXES' | 'PRORATION' | 'PLAN_CHANGE_TIMING' | 'CANCELLATION_TIMING' | 'REFUND_EXECUTION'
   | 'PAYMENT_PROVIDER' | 'FOUNDER_SLOT_RETURN' | 'CREDIT_ROLLOVER' | 'TOP_UP_PRICING'
-  | 'REFUND_GUARANTEE' | 'FOUNDER_PROGRAM' | 'FOUNDER_RESERVATION_HOLD' | 'FOUNDER_ALLOWANCE';
+  | 'REFUND_GUARANTEE' | 'FOUNDER_PROGRAM' | 'FOUNDER_RESERVATION_HOLD' | 'FOUNDER_ALLOWANCE'
+  | 'PLAN_ALLOWANCES' | 'PREMIUM_OPERATIONS' | 'SUSPENDED_ALLOWANCE' | 'PAYMENT_ATTESTATION';
 /** PROPOSED and DECIDED record owner direction only; actionsEnabled stays false until a reviewed migration enables an action. */
 export type SaasPolicyStatus = 'UNDECIDED' | 'PROPOSED' | 'DECIDED';
 export type SaasReservationStatus = 'RESERVED' | 'ALLOCATED' | 'RELEASED' | 'EXPIRED';
@@ -23,7 +24,8 @@ export type SaasSubscriptionStatus = 'PENDING_ACTIVATION' | 'IN_SERVICE' | 'SUSP
 export type SaasSubscriptionReason = 'RECORDED' | 'SERVICE_STARTED' | 'OWNER_HOLD' | 'ACCOUNT_REVIEW' | 'SCHOOL_REQUEST' | 'REVIEW_RESOLVED' | 'PERIOD_ELAPSED' | 'RECORDED_IN_ERROR';
 
 export const SAAS_POLICY_CODES: readonly SaasPolicyCode[] = ['ANNUAL_BILLING','CANCELLATION_TIMING','CREDIT_ROLLOVER','FOUNDER_ALLOWANCE','FOUNDER_PROGRAM',
-  'FOUNDER_RESERVATION_HOLD','FOUNDER_SLOT_RETURN','PAYMENT_PROVIDER','PLAN_CHANGE_TIMING','PRORATION','REFUND_EXECUTION','REFUND_GUARANTEE','TAXES','TOP_UP_PRICING'];
+  'FOUNDER_RESERVATION_HOLD','FOUNDER_SLOT_RETURN','PAYMENT_ATTESTATION','PAYMENT_PROVIDER','PLAN_ALLOWANCES','PLAN_CHANGE_TIMING','PREMIUM_OPERATIONS',
+  'PRORATION','REFUND_EXECUTION','REFUND_GUARANTEE','SUSPENDED_ALLOWANCE','TAXES','TOP_UP_PRICING'];
 export const SAAS_RESERVATION_STATUSES: readonly SaasReservationStatus[] = ['RESERVED','ALLOCATED','RELEASED','EXPIRED'];
 export const SAAS_SUBSCRIPTION_STATUSES: readonly SaasSubscriptionStatus[] = ['PENDING_ACTIVATION','IN_SERVICE','SUSPENDED','VOIDED'];
 const RESERVATION_REASONS: readonly SaasReservationReason[] = ['RESERVED','SUBSCRIPTION_RECORDED','OWNER_RELEASED','SCHOOL_DECLINED','NOT_ELIGIBLE','HOLD_EXPIRED','SUBSCRIPTION_VOIDED'];
@@ -51,6 +53,12 @@ export const SAAS_COMMANDS = {
   createInvoiceDraft: 'saas-invoice-draft',
   invoiceCommand: 'saas-invoice-command',
   recordPaymentEvidence: 'saas-payment-evidence',
+  setCreditProgram: 'saas-credit-program',
+  recordCostEvidence: 'saas-cost-evidence',
+  createPricingDraft: 'saas-pricing-draft',
+  publishPricing: 'saas-pricing-publish',
+  allowanceCommand: 'saas-credit-allowance',
+  resolveCreditReservation: 'saas-credit-resolve',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
