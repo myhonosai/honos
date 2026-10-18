@@ -1,4 +1,4 @@
-import { HqExecutiveTeam } from '../../../components/hq-executive-team';
+import { HqModernExecutives } from '../../../components/hq-modern/pages';
 
 export const metadata = {
   title: 'HON HQ | Executive Team',
@@ -9,5 +9,5 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default function HqExecutivesPage(): React.ReactElement {
-  return <HqExecutiveTeam />;
+  return <HqModernExecutives />;
 }

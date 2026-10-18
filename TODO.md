@@ -1,5 +1,11 @@
 # HON Delivery Backlog
 
+## Codex HQ Modern frontend — owner-authorized 2026-10-18
+
+- [ ] Implement approved responsive HQ dashboard and navigation on `codex/hq-modern-implementation`, tracking issue #4; preserve PR #3 and existing HQ authorization/data contracts.
+- [ ] Add persistent non-executing HON interface, catalog-based executive workspace entries, appearance controls, and honest planned/unavailable management interfaces.
+- [ ] Record actual interaction, responsive, accessibility, regression and build evidence; no merge/deployment or backend/provider activation. Details: `docs/CODEX_HQ_IMPLEMENTATION.md`.
+
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
 
 ## Claire AI Teaching Assistant — scoped validation TODO
