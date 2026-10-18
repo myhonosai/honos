@@ -70,13 +70,14 @@ const BOTTOM_NAV_END: { label: string; href: string; icon: IconName }[] = [
   { label: 'Schedule', href: '/staff/schedule/sessions', icon: 'schedule' },
 ];
 
-// Existing governed workspaces only. Employees without a dedicated workbench open the shared AI draft inbox.
+// Existing governed workspaces that match an employee's approved role. Everyone else (including Claire,
+// Business Performance Manager) opens the shared AI draft inbox until a dedicated workspace exists.
+// The curriculum/teaching assistant is a separate capability and is deliberately not linked as Claire's role.
 const AGENT_WORKSPACES: Record<string, { href: string; label: string }> = {
   chad: { href: '/staff/leads/assistant', label: 'follow-up draft workspace' },
   marcus: { href: '/staff/marketing/assistant', label: 'marketing draft workspace' },
-  claire: { href: '/staff/teaching-assistant', label: 'curriculum support workspace' },
 };
-const DEFAULT_AGENT_WORKSPACE = { href: '/staff/ai-work', label: 'AI draft inbox' };
+const DEFAULT_AGENT_WORKSPACE = { href: '/staff/ai-work', label: 'AI draft inbox (dedicated workspace not yet available)' };
 
 const HON_JUMP_LINKS: { label: string; href: string; icon: IconName }[] = [
   { label: "Today's classes", href: '/staff/schedule/sessions', icon: 'schedule' },

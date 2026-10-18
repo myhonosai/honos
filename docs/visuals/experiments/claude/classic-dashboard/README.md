@@ -69,10 +69,14 @@ Protected shared files untouched: `app.config.ts`, `layout.tsx`, `globals.css`, 
 | Owner request | Change |
 | --- | --- |
 | Less vertical scrolling on mobile; prioritize quick actions, today, urgent alerts, AI access | Phone home order is now: quick actions → compact key figures (3 columns) → Today at a glance → top 3 urgent alerts (+ "View all 5 in Command Center") → AI team row. The eight detailed sections collapse under **More details** as tap-to-expand rows with a one-line summary (e.g. "5 classes · 1 cancelled", "1 overdue"). Phone page height: **6,004px → 1,953px (−67%)** |
-| More compact AI employee cards, all seven, direct workspace access | Desktop: one row of seven compact cards (portrait, name, role). Phone: swipeable avatar row. Each card links to that employee's existing workspace: Chad → `/staff/leads/assistant`, Marcus → `/staff/marketing/assistant`, Claire → `/staff/teaching-assistant`, the others → the shared AI draft inbox `/staff/ai-work`. A single line states "no work recorded in this sample" |
+| More compact AI employee cards, all seven, direct workspace access | Desktop: one row of seven compact cards (portrait, name, role). Phone: swipeable avatar row. Each card links to that employee's existing workspace: Chad → `/staff/leads/assistant`, Marcus → `/staff/marketing/assistant`; Alex, Maya, Jordan, **Claire** and Lena → the shared AI draft inbox `/staff/ai-work`, labeled "dedicated workspace not yet available". A single line states "no work recorded in this sample" |
 | Persistent HON assistant entry point, not pretending to be connected | Floating **HON** button bottom-right on desktop/tablet (same placement pattern as the HQ concept frames) and a raised **Ask HON** centre slot in the phone bottom bar. It opens a panel labeled **Preview · not connected** with navigation-only "Jump to" links, a **disabled** message field, voice **off**, and a link to the existing governed `/staff/voice` handoff workspace. No AI backend, no network call, no microphone |
 | Preserve originals / branding | Unchanged: no new image assets; original portraits and the hosted HON mark referenced read-only |
 | Consistent with the developing HQ design, Classic distinct | Shared patterns: dark navy shell, left sidebar with grouped navigation, persistent HON button bottom-right. Classic stays denser and flatter (tables, tinted active state, no hero imagery). No HQ file touched; Codex leads HQ |
+
+## Claire role correction (owner decision, 2026-10-18)
+
+Claire is officially HON's **Business Performance Manager** (business analytics, performance reporting, KPIs, financial insights and recommendations). Her card no longer opens the existing curriculum/teaching assistant; it opens the shared AI draft inbox with an explicit "dedicated workspace not yet available" label. The teaching assistant (`/staff/teaching-assistant`, `apps/api/src/teaching-assistant`) is unchanged and not deleted; any reassignment of that functionality is a separate, owner-approved task.
 
 ## Responsive behavior
 

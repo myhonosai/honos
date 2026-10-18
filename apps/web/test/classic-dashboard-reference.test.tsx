@@ -57,7 +57,9 @@ describe('Classic school dashboard reference', () => {
     for (const member of HON_AI_TEAM) expect(markup).toMatch(new RegExp(`aria-label="${member.name}, [^"]+\\. Open [^"]+"`));
     expect(markup).toContain('href="/staff/leads/assistant"');
     expect(markup).toContain('href="/staff/marketing/assistant"');
-    expect(markup).toContain('href="/staff/teaching-assistant"');
+    expect(markup).not.toContain('/staff/teaching-assistant');
+    expect(markup).toContain('aria-label="Claire, Business Performance Manager. Open AI draft inbox (dedicated workspace not yet available)"');
+    expect(markup).toMatch(/<a [^>]*href="\/staff\/ai-work"[^>]*aria-label="Claire, /);
     expect(PORTRAIT_STYLES.map((style) => style.label)).toEqual(['Realistic', 'Anime', 'Chibi']);
     for (const member of HON_AI_TEAM) {
       expect(portraitSource(member.id, 'realistic')).toBe(member.portrait);
