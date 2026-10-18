@@ -94,7 +94,7 @@ async function screenshot(page, name, fullPage = true) {
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots
   // when the terminal cannot download File Service artifacts. No credentials or live data.
-  if (name === 'desktop-dashboard-full' || name === 'mobile-dashboard-full') {
+  if (name === 'desktop-dashboard-full' || name === 'mobile-dashboard-full' || name === 'mobile-dashboard-viewport') {
     const preview = await page.screenshot({ type: 'jpeg', quality: 72, fullPage, animations: 'disabled' });
     await writeFile(join(resultsRoot, `${name}.jpg`), preview);
     const encoded = preview.toString('base64');
@@ -132,6 +132,7 @@ async function contextFor(viewport, authenticated = true) {
   });
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
+  page.setDefaultNavigationTimeout(20000);
   page.on('pageerror', (error) => report.pageErrors.push(String(error.message).slice(0, 1000)));
   return { context, page };
 }
@@ -149,7 +150,7 @@ try {
   for (const [label, width, height] of [['desktop', 1440, 1000], ['tablet', 834, 1112], ['mobile', 390, 844], ['mobile-narrow', 320, 800]]) {
     const { context, page } = await contextFor({ width, height });
     await check(`${label}: dashboard, responsive layout and screenshots`, async () => {
-      await page.goto(`${origin}/hq`, { waitUntil: 'networkidle' });
+      await page.goto(`${origin}/hq`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Your executive team', exact: true }).waitFor({ timeout: 20000 });
       await screenshot(page, `${label}-dashboard-full`);
       assert.equal(await page.getByRole('link', { name: /^View .* workspace$/ }).count(), 6);
@@ -201,7 +202,7 @@ try {
     });
     await check(`${label}: executive workspace, unavailable tabs and persistent subpage assistant`, async () => {
       // Fresh page makes this proof independent of a prior interaction assertion failure.
-      await page.goto(`${origin}/hq`, { waitUntil: 'networkidle' });
+      await page.goto(`${origin}/hq`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Your executive team', exact: true }).waitFor();
       await page.locator('a[href="/hq/executives/chase"]').first().click();
       await page.waitForURL('**/hq/executives/chase');
@@ -217,7 +218,7 @@ try {
       await noOverflow(page, `${label} workspace`);
     });
     await check(`${label}: navigation, menu focus and non-executing contest lifecycle`, async () => {
-      await page.goto(`${origin}/hq/executives/chase`, { waitUntil: 'networkidle' });
+      await page.goto(`${origin}/hq/executives/chase`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Chase', exact: true }).waitFor();
       if (width < 1100) {
         const menu = page.getByRole('button', { name: 'Open HQ navigation', exact: true });
@@ -243,14 +244,14 @@ try {
 
   const { context, page } = await contextFor({ width: 1440, height: 1000 });
   await check('Existing independent school directory transport', async () => {
-    await page.goto(`${origin}/hq/schools`, { waitUntil: 'networkidle' });
+    await page.goto(`${origin}/hq/schools`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: 'No schools are available in this directory.', exact: true }).waitFor();
     assert(report.apiRequests.some((request) => request.path === '/v1/hq/schools'));
   });
   for (const [mode, heading] of [['403', 'This account has no current HQ authority.'], ['401', 'Sign in to verify HQ access.'], ['503', 'The HQ overview could not be verified.'], ['malformed', 'The HQ overview could not be verified.']]) {
     await check(`Fail-closed HQ overview ${mode}`, async () => {
       apiMode = mode;
-      await page.goto(`${origin}/hq`, { waitUntil: 'networkidle' });
+      await page.goto(`${origin}/hq`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: heading, exact: true }).waitFor();
       assert.equal(await page.getByRole('heading', { name: 'Your executive team', exact: true }).count(), 0);
       if (mode === '403') await screenshot(page, 'desktop-hq-access-denied');
@@ -260,7 +261,7 @@ try {
   await check('Unsigned browser session cannot render HQ content', async () => {
     const anonymous = await contextFor({ width: 390, height: 844 }, false);
     try {
-      await anonymous.page.goto(`${origin}/hq`, { waitUntil: 'networkidle' });
+      await anonymous.page.goto(`${origin}/hq`, { waitUntil: 'domcontentloaded' });
       assert(new URL(anonymous.page.url()).pathname === '/auth/login');
       assert.equal(await anonymous.page.getByRole('heading', { name: 'Your executive team', exact: true }).count(), 0);
     } finally { await anonymous.context.close(); }
