@@ -279,6 +279,10 @@
     {
       "path": "/staff/launch",
       "title": "Owner launch"
+    },
+    {
+      "path": "/reference/classic-dashboard",
+      "title": "HON Classic | School Dashboard (reference)"
     }
   ]
 }

@@ -14,9 +14,11 @@
 
 | Owner | Task | Branch / PR | Claimed paths | Since |
 | --- | --- | --- | --- | --- |
-| Claude Code | Task 1: visual system + reference screens (owner-approved; paused pending owner proof-screen review). Existing approved images are retained; no generated portrait/brand assets. | `ccr-c2933356-uza21g` (this session) | `apps/web/src/components/hon-reference-suite.tsx`, `apps/web/src/components/hon-reference-suite.module.css`, `apps/web/src/app/page.tsx`, `apps/web/src/app/core/page.tsx`, `apps/web/src/app/complete-mobile/page.tsx`, `apps/web/src/components/hon-ui/**`, `apps/web/src/app/hq/reference/**`, `packages/design-system/src/visual-tokens.ts`, `packages/design-system/src/index.ts` (**additive exports only**), `apps/web/src/app/layout.tsx` (icon line only), `apps/web/src/components/hon-control-shell.tsx` (logo line only), `apps/web/test/hon-reference-appearance.test.tsx`, `apps/web/test/hon-reference-portraits.test.tsx`, `apps/web/test/hon-ui-*.test.tsx` | 2026-10-17 |
+| Claude Code | Classic School Dashboard proof (owner-approved 2026-10-18; isolated, reference-only) | `ccr-c2933356-uza21g` · tracking issue #2 | `apps/web/src/app/reference/classic-dashboard/**`, `apps/web/src/components/classic-dashboard/**`, `apps/web/test/classic-dashboard-reference.test.tsx`, `docs/visuals/experiments/claude/classic-dashboard/**`; shared append: one `/reference/classic-dashboard` entry in `apps/web/public/manus-routes.json` | 2026-10-18 |
 
 ## Explicitly NOT claimed by Claude (Manus continues)
+
+Claude does **not** edit the protected shared visual files listed in `docs/architecture/VISUAL_COLLABORATION_PROTOCOL.md` / `VISUAL_ASSET_INVENTORY_2026-10-17.md` (including `hon-reference-suite.*`, `hon-control-shell.*`, `layout.tsx`, `globals.css`, `interface-theme-*`, `app.config.ts`, `public/ai/**`). Any future promotion of approved Claude work into those files needs a separate owner-approved plan.
 
 `apps/api/**`, `packages/{database,contracts,domain,auth,config}/**`, `apps/web/src/app/globals.css`, all live `/staff/*`, `/hq/*` (except `/hq/reference/**`), `/parent/*` pages and their components, `apps/web/src/components/pricing-reference.tsx`, `apps/web/src/components/interface-theme-picker.tsx`, existing approved assets in `apps/web/public/ai/`.
 
