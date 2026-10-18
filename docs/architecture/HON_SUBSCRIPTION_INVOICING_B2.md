@@ -1,6 +1,6 @@
 # HON Subscription Billing — Milestone B2: HON Invoices and Payment Evidence
 
-**Status:** implemented and tested on disposable databases. Not merged, not deployed, not commercially active. Migration `0155_hon_invoices_payment_evidence.sql`.
+**Status:** implemented, tested and merged (`3d6e818`). Not deployed, not commercially active. Migration `0155_hon_invoices_payment_evidence.sql`.
 
 **Scope boundary.** This covers **HON invoicing schools**. It shares no table, function or route with school-to-family billing:
 - Separate from `billing_accounts`, `memberships`, `invoices`, `membership_payment_schedules` and `apps/api/src/billing`.
@@ -152,6 +152,8 @@ An invoice counts as paid only while its net evidence covers its total, so a ref
 - Pre-service (advance) invoicing, automatic invoice generation per period, the school-facing invoice view and invoice documents (PDF).
 
 ## 7. Proposed B3 — monthly AI credit allowances, reservations, consumption, release and warnings
+
+> **Implemented in B3:** see [HON_PREMIUM_CREDITS_B3.md](HON_PREMIUM_CREDITS_B3.md). The proposal below is kept for history.
 
 This is accounting only: no provider calls and no automatic charges.
 

@@ -21,6 +21,25 @@ function subject(req: HonRequest): string {
  * operator authority is resolved in the database. There is no checkout, charge, collection, invoice
  * delivery, refund execution or credit route.
  */
+/**
+ * School view of the HON premium credit allowance. Staff with ai.premium.request at the exact school;
+ * the path is only a selector. Reads only: reservations are made by the premium job runtime, and
+ * there is no purchase or top-up route.
+ */
+@Controller('schools/:schoolId/ai-credits')
+@UseGuards(HonIdentityGuard)
+export class SaasCreditsSchoolController {
+  constructor(private readonly billing: SaasBillingService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async summary(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.billing.readSchoolCredits(subject(req), schoolId) };
+  }
+  @Get('estimate') @UseGuards(SaasReadGuard) @SaasReadQuery(['operation','units'])
+  async estimate(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Query() query: unknown) {
+    return { data: await this.billing.estimatePremiumOperation(subject(req), schoolId, query) };
+  }
+}
+
 @Controller('hq/saas')
 @UseGuards(HonIdentityGuard)
 export class SaasBillingHqController {
@@ -86,6 +105,40 @@ export class SaasBillingHqController {
   @Post('invoices/:invoiceId/commands') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.invoiceCommand)
   async invoiceCommand(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.billing.commandInvoice(subject(req), invoiceId, body, key) };
+  }
+  // ---------- B3: premium AI credits (HQ) ----------
+  @Get('credits') @UseGuards(SaasReadGuard)
+  async credits(@Req() req: HonRequest) {
+    return { data: await this.billing.readCreditProgram(subject(req)) };
+  }
+  @Post('credits/program') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.setCreditProgram)
+  async creditProgram(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.setCreditProgram(subject(req), body, key) };
+  }
+  @Post('credits/cost-evidence') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.recordCostEvidence)
+  async costEvidence(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.recordCostEvidence(subject(req), body, key) };
+  }
+  @Post('credits/pricing-drafts') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.createPricingDraft)
+  async pricingDraft(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.createPricingDraft(subject(req), body, key) };
+  }
+  @Post('credits/pricing-drafts/:pricingId/publish') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.publishPricing)
+  async publishPricing(@Req() req: HonRequest, @Param('pricingId') pricingId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    assertEmptyBody(body);
+    return { data: await this.billing.publishPricing(subject(req), pricingId, key) };
+  }
+  @Post('credits/allowances') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.allowanceCommand)
+  async allowance(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.commandAllowance(subject(req), body, key) };
+  }
+  @Post('credits/reservations/:reservationId/resolve') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.resolveCreditReservation)
+  async resolve(@Req() req: HonRequest, @Param('reservationId') reservationId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.resolveCreditReservation(subject(req), reservationId, body, key) };
+  }
+  @Get('organizations/:organizationId/credits') @UseGuards(SaasReadGuard)
+  async organizationCredits(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
+    return { data: await this.billing.readOrganizationCredits(subject(req), organizationId) };
   }
   @Post('invoices/:invoiceId/payment-evidence') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.recordPaymentEvidence)
   async evidence(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
