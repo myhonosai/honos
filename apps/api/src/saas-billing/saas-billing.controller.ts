@@ -17,8 +17,9 @@ function subject(req: HonRequest): string {
 }
 
 /**
- * HON subscription catalog and records (B1), HQ only. HQ owner or operator authority is resolved
- * in the database. There is no checkout, charge, invoice, refund or credit route.
+ * HON subscription catalog and records (B1), invoices and payment evidence (B2), HQ only. HQ owner or
+ * operator authority is resolved in the database. There is no checkout, charge, collection, invoice
+ * delivery, refund execution or credit route.
  */
 @Controller('hq/saas')
 @UseGuards(HonIdentityGuard)
@@ -65,5 +66,29 @@ export class SaasBillingHqController {
   @Get('organizations/:organizationId/subscription') @UseGuards(SaasReadGuard)
   async organization(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
     return { data: await this.billing.readOrganizationSubscription(subject(req), organizationId) };
+  }
+  @Get('organizations/:organizationId/payment-standing') @UseGuards(SaasReadGuard)
+  async standing(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
+    return { data: await this.billing.readPaymentStanding(subject(req), organizationId) };
+  }
+  @Get('invoices') @UseGuards(SaasReadGuard) @SaasReadQuery(['status'])
+  async invoices(@Req() req: HonRequest, @Query('status') status: unknown) {
+    return { data: await this.billing.readInvoices(subject(req), status) };
+  }
+  @Post('invoices') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.createInvoiceDraft)
+  async draftInvoice(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.createInvoiceDraft(subject(req), body, key) };
+  }
+  @Get('invoices/:invoiceId') @UseGuards(SaasReadGuard)
+  async invoice(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string) {
+    return { data: await this.billing.readInvoice(subject(req), invoiceId) };
+  }
+  @Post('invoices/:invoiceId/commands') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.invoiceCommand)
+  async invoiceCommand(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.commandInvoice(subject(req), invoiceId, body, key) };
+  }
+  @Post('invoices/:invoiceId/payment-evidence') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.recordPaymentEvidence)
+  async evidence(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.recordPaymentEvidence(subject(req), invoiceId, body, key) };
   }
 }
