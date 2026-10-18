@@ -444,6 +444,11 @@ try {
       await page.goto(`${origin}/hq/growth/champions-club/schools?schoolId=${fixtureId(1)}&role=OWNER`, { waitUntil: 'domcontentloaded' });
       const selection = page.getByLabel('Choose school', { exact: true }); await selection.waitFor();
       assert.equal(await selection.inputValue(), '');
+      if (width <= 600) {
+        const control = await selection.boundingBox();
+        assert(control && control.y + control.height <= height - 64, 'Mobile school selection must be visible above the fixed bottom navigation on initial load');
+      }
+      await page.getByLabel('Search school or organization').focus(); await page.keyboard.press('Tab'); assert(await selection.evaluate((node) => document.activeElement === node));
       assert.equal(report.apiRequests.filter((r) => r.path.endsWith('/statistics')).length, prior, 'URL selectors must not fetch a school');
       await selection.selectOption(fixtureId(1)); await page.locator(`[data-school-records="${fixtureId(1)}"]`).waitFor();
       await page.getByText('2 remaining · backend reported', { exact: true }).waitFor();

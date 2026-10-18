@@ -68,12 +68,11 @@ export function HqSchoolReferrals(): React.ReactElement {
   const state = useChampionsDetailRead(`${directoryRevision}:${schoolId}:${revision}`, schoolId ? load : null);
   const schools = directory.kind === 'ready' ? directory.data.schools.filter((s) => `${s.schoolDisplayName} ${s.organizationDisplayName}`.toLocaleLowerCase('en-US').includes(query.trim().toLocaleLowerCase('en-US'))) : [];
   return <div className={styles.management}>
-    <section className={`${base.panel} ${styles.intro}`}><span className={base.badge}>Champions Club · HQ</span><h2>School referral details</h2><p>Choose a verified school identity to retrieve independently authorized referral records. Financial activation and fulfillment remain disabled.</p></section>
-    <ChampionsDetailNav/>
+    <section className={`${base.panel} ${styles.intro}`}><span className={base.badge}>Champions Club · HQ</span><h2>School referral details</h2></section>
     <section className={base.panel}><div className={styles.introHeading}><h2>Find a school</h2><button type="button" disabled={directory.kind === 'loading'} onClick={() => { setSelected(null); setQuery(''); setDirectoryRevision((r) => r + 1); }}>Refresh school directory</button></div>
       <DetailState state={directory}/>
       {directory.kind === 'ready' && <>
-        <p className={styles.note}>Search only the returned authorized directory. Selection is not impersonation, school access or Champions Club authority. URL parameters never select a school.</p>
+        <p className={styles.note}>Search or choose a school to view its referral records.</p>
         {directory.data.schools.length === 0 ? <p role="status">No authorized school identities were returned.</p> : <div className={detail.selection}>
           <label>Search school or organization<input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setSelected(null); }} autoComplete="off"/></label>
           <div><label htmlFor="champions-school-selection">Choose school</label><select id="champions-school-selection" value={schoolId ?? ''} onChange={(e) => setSelected(e.target.value ? { schoolId: e.target.value, revision: directoryRevision } : null)}><option value="">Select a school…</option>{schools.map((s) => <option key={s.schoolId} value={s.schoolId}>{s.schoolDisplayName} — {s.organizationDisplayName}</option>)}</select></div>
@@ -81,6 +80,7 @@ export function HqSchoolReferrals(): React.ReactElement {
         </div>}
       </>}
     </section>
+    <ChampionsDetailNav/>
     {schoolId && <button className={detail.refresh} type="button" disabled={state.kind === 'loading'} onClick={() => setRevision((r) => r + 1)}>Refresh school referrals</button>}
     <div aria-live="polite" aria-busy={state.kind === 'loading'} className={styles.results}><DetailState state={state}/>{state.kind === 'ready' && <><Retrieved at={state.retrievedAt}/><SchoolReferralResults data={state.data}/></>}{state.kind === 'idle' && directory.kind === 'ready' && <p className={styles.note}>Select a school to load its referral statistics. No school is selected automatically.</p>}</div>
   </div>;
