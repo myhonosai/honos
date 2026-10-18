@@ -84,6 +84,7 @@ const CHAMPIONS_CLUB_CALLS = {
   readContests: { sql: 'SELECT hon.read_champions_contests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
   readContest: { sql: 'SELECT hon.read_champions_contest_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readSchoolContests: { sql: 'SELECT hon.read_champions_contests_for_school($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readOverview: { sql: 'SELECT hon.read_champions_overview_from_hq($1) AS data', arity: 1, readOnly: true },
 } as const;
 export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 

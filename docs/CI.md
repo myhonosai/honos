@@ -24,6 +24,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `champions-club` | `test-champions-club-rewards-integrity.mjs` | Champions Club reward accounting: ladder accrual, reversal review, owner approvals, liabilities, no billing or entitlement effect |
 | `champions-club` | `test-champions-club-leaderboard-integrity.mjs` | Champions Club leaderboards: QUALIFIED-only standings, ties, holds, privacy opt-in, school statistics |
 | `champions-club` | `test-champions-club-contests-integrity.mjs` | Champions Club contests: HQ lifecycle and gates, pause-exact standings, frozen results, winner review, liabilities |
+| `champions-club` | `test-champions-club-journey-integrity.mjs` | Champions Club end-to-end journey through the API service with automatic reward reconciliation and audit consistency |
 
 ## Safety controls
 
@@ -60,7 +61,7 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 
 ## Known limitations
 
-- **9 of 74** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
+- **10 of 75** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.

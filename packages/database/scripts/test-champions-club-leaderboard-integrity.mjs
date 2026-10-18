@@ -196,7 +196,10 @@ try{
  assert.equal(evidence.open,0);assert.equal(evidence.audits,evidence.completed);assert.equal(evidence.inert,evidence.audits);
  // Holds and preferences never touched attributions (except the explicit REVERSE above), rewards or billing.
  const after=await snapshot();
- for(const t of ['champions_reward_entries','organization_entitlements','memberships','invoices'])assert.deepEqual(after[t],before[t],t);
+ for(const t of ['organization_entitlements','memberships','invoices'])assert.deepEqual(after[t],before[t],t);
+ // M5: the REVERSE decision reconciled S3's permanent liabilities (2 credits + 2 welcome credits); nothing else accrued.
+ const newEntries=(await admin.query('SELECT referrer_school_id, reward_kind FROM hon.champions_reward_entries')).rows;
+ assert.equal(newEntries.length,4);assert(newEntries.every(e=>e.referrer_school_id===S[3].school));
  assert.equal(after.champions_attributions.filter(r=>!before.champions_attributions.includes(r)).length,1);
 
  // ---------- API service on real output ----------

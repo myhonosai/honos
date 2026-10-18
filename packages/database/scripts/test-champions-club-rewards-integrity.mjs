@@ -181,8 +181,9 @@ try{
  // ---------- reversals: liabilities go to review, never silently erased ----------
  const reversedRef=referred.at(-1);
  assert.equal((await decideAttribution(reversedRef.attribution,2)).attribution.state,'REVERSED');
+ // M5: the reversal itself reconciles, so both liabilities are already in review; a manual pass finds nothing left.
  const r29=await reconcile('operator');
- assert.equal(r29.qualifiedCount,29);assert.equal(r29.flaggedForReview,2);assert.equal(r29.accrued,0);
+ assert.equal(r29.qualifiedCount,29);assert.equal(r29.flaggedForReview,0);assert.equal(r29.accrued,0);
  const lifetimeReview=(await entries()).find(e=>e.id===lifetime.id);assert.equal(lifetimeReview.status,'REVERSAL_REVIEW');assert.equal(lifetimeReview.status_before_review,'ACCRUED');
  const welcomeReview=(await entries()).find(e=>e.attribution_id===reversedRef.attribution);assert.equal(welcomeReview.status,'REVERSAL_REVIEW');
  await sqlDeny(()=>decide('owner',lifetime.id,{decision:'VOID',expectedVersion:2,reasonCode:'BASIS_REVERSED'}),'23514','CHAMPIONS_REWARD_RULE_UNDECIDED');
@@ -196,7 +197,8 @@ try{
  assert.equal((await entries()).find(e=>e.id===welcomeReview.id).status,'REVERSAL_REVIEW','A reversed referral welcome stays in review.');
  const newest=referred.at(-1);
  assert.equal((await decideAttribution(newest.attribution,2)).attribution.state,'REVERSED');
- assert.equal((await reconcile('operator')).flaggedForReview,2);
+ assert.equal((await reconcile('operator')).flaggedForReview,0,'Already flagged by the reversal itself.');
+ assert.equal((await entries()).find(e=>e.id===lifetime.id).status,'REVERSAL_REVIEW');
 
  // ---------- owner decides the clawback rule and prize budget (new policy version) ----------
  // The new ladder moves the first free-month milestone to 6; earned milestones are not duplicated.
