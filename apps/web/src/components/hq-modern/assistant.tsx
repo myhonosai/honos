@@ -1,16 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { HonCore } from './shell';
+import { HonCore, useHqModern } from './shell';
 import { HqIcon } from './icon';
 import styles from './hq-modern.module.css';
 
 export function HonComposer({ context, compact = false }: { context: string; compact?: boolean }): React.ReactElement {
-  const [draft, setDraft] = useState('');
-  useEffect(() => { setDraft(''); }, [context]);
+  const { draft, setDraft } = useHqModern();
   return <div className={styles.composer}>
     <label className={styles.srOnly} htmlFor={compact ? 'hon-panel-draft' : 'hon-dashboard-draft'}>Unsent message draft for HON</label>
-    <div className={styles.composerInput}>
+    <div className={styles.composerInput} data-page-context={context}>
       <textarea id={compact ? 'hon-panel-draft' : 'hon-dashboard-draft'} maxLength={2000} rows={compact ? 3 : 1} placeholder="Message HON…" value={draft} onChange={(event) => setDraft(event.target.value)} aria-describedby={compact ? 'hon-panel-status' : 'hon-dashboard-status'}/>
       <button type="button" disabled aria-label="Send unavailable: HQ conversation service is not connected"><HqIcon name="arrow"/></button>
     </div>
@@ -33,7 +32,11 @@ export function HonAssistant({ context, onMinimize }: { context: string; onMinim
     if (!mobile) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    const root = panel.current?.closest('[data-view]');
+    const targets = root?.querySelectorAll<HTMLElement>('#hq-main, header, nav, footer, section[aria-label="HQ appearance"]');
+    const changed = [...(targets ?? [])].filter((element) => !panel.current?.contains(element) && !element.inert);
+    changed.forEach((element) => { element.inert = true; });
+    return () => { document.body.style.overflow = previous; changed.forEach((element) => { element.inert = false; }); };
   }, [mobile]);
   return <aside id="hon-assistant" ref={panel} className={styles.assistantPanel} role={mobile ? 'dialog' : 'complementary'} aria-modal={mobile ? true : undefined} aria-label="HON assistant" onKeyDown={(event) => {
     if (event.key === 'Escape') { event.preventDefault(); onMinimize(); }

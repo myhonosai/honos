@@ -15,7 +15,7 @@ const overview: HqPlatformOverview = {
 };
 
 vi.mock('../src/components/hq-modern/shell', () => ({
-  useHqModern: () => ({ overview, art: 'realistic', view: 'modern', openAssistant: vi.fn() }),
+  useHqModern: () => ({ overview, art: 'realistic', view: 'modern', draft: '', setDraft: vi.fn(), openAssistant: vi.fn() }),
   HonCore: () => <span aria-label="HON Core"/>,
 }));
 import { HqModernDashboard, CompanySnapshot, NeedsAttention } from '../src/components/hq-modern/dashboard';

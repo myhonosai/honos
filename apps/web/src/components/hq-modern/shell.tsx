@@ -11,7 +11,7 @@ import { HonAssistant } from './assistant';
 import styles from './hq-modern.module.css';
 
 type AccessState = { kind: 'loading' | 'unauthorized' | 'forbidden' | 'unavailable' } | { kind: 'ready'; overview: HqPlatformOverview };
-type HqContextValue = { overview: HqPlatformOverview; view: HqView; art: HqArt; openAssistant: () => void };
+type HqContextValue = { overview: HqPlatformOverview; view: HqView; art: HqArt; draft: string; setDraft: (value: string) => void; openAssistant: () => void };
 const HqContext = createContext<HqContextValue | null>(null);
 
 export function useHqModern(): HqContextValue {
@@ -33,6 +33,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
   const [art, setArt] = useState<HqArt>('realistic');
   const [menu, setMenu] = useState(false);
   const [assistant, setAssistant] = useState(false);
+  const [draft, setDraft] = useState('');
   const menuButton = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLDialogElement>(null);
   const assistantButton = useRef<HTMLButtonElement>(null);
@@ -44,6 +45,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     let current = true;
     setAccess({ kind: 'loading' });
     setAssistant(false);
+    setDraft('');
     loadHqOverview().then(
       (overview) => { if (current) setAccess({ kind: 'ready', overview }); },
       (error: unknown) => {
@@ -53,7 +55,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     return () => { current = false; };
   }, [revision]);
 
-  useEffect(() => { setMenu(false); }, [path]);
+  useEffect(() => { setMenu(false); setDraft(''); }, [path]);
   useEffect(() => {
     const dialog = drawer.current;
     if (menu && dialog && !dialog.open) dialog.showModal();
@@ -102,9 +104,10 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         <small>Presentation only</small>
       </section>
       {art === 'anime' && <p className={styles.artNotice} role="status">Anime portraits are awaiting approved artwork. Executive identities remain unchanged.</p>}
-      {access.kind === 'ready' ? <HqContext.Provider value={{ overview: access.overview, art, view, openAssistant }}>
+      {access.kind === 'ready' ? <HqContext.Provider value={{ overview: access.overview, art, view, draft, setDraft, openAssistant }}>
         <div className={`${styles.contentLayout} ${assistant ? styles.withAssistant : ''}`}>
           <ContentElement id="hq-main" tabIndex={-1} className={styles.main}>{children}</ContentElement>
+          {assistant && <div className={styles.assistantBackdrop} aria-hidden="true" onClick={closeAssistant}/>}
           {assistant && <HonAssistant context={hqPageLabel(path)} onMinimize={closeAssistant}/>}
         </div>
         {(!assistant && path !== '/hq') && <button ref={assistantButton} type="button" className={styles.assistantLauncher} onClick={openAssistant} aria-expanded={false} aria-controls="hon-assistant"><HonCore small/><strong>Ask HON anywhere</strong><HqIcon name="expand"/></button>}
