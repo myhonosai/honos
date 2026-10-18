@@ -3,8 +3,12 @@
 // Private deny-all tables reachable only through fixed functions.
 export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
  'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
- 'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence'];
-const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence'];
+ 'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence',
+ 'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
+ 'saas_credit_reservations','saas_credit_ledger','saas_credit_threshold_events'];
+const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
+ 'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events'];
+const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
 const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
 const invoicingTables = ['saas_invoice_sequences','saas_invoices'];
 // [signature, runtime may execute, SECURITY DEFINER]
@@ -49,6 +53,34 @@ export const saasBillingFunctions = [
  ['hon.create_saas_invoice_draft(text,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.command_saas_invoice(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.record_saas_payment_evidence(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0156 premium credit accounting
+ ['hon.guard_saas_credits()',false,false],
+ ['hon.guard_saas_operation_prices()',false,false],
+ ['hon.require_saas_school_actor(text,uuid)',false,true],
+ ['hon.saas_credit_program_active()',false,false],
+ ['hon.saas_allowance_period(hon.saas_subscriptions,timestamptz)',false,false],
+ ['hon.saas_allowance_balance(uuid)',false,false],
+ ['hon.saas_allowance_json(uuid)',false,false],
+ ['hon.saas_credit_reservation_json(hon.saas_credit_reservations,boolean)',false,false],
+ ['hon.saas_pricing_json(uuid,boolean)',false,false],
+ ['hon.saas_cost_evidence_json(hon.saas_provider_cost_evidence)',false,false],
+ ['hon.saas_credit_program_json()',false,false],
+ ['hon.saas_record_thresholds(uuid,timestamptz)',false,true],
+ ['hon.saas_current_allowance(uuid,uuid,timestamptz)',false,true],
+ ['hon.saas_published_operation(text)',false,false],
+ ['hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)',false,true],
+ ['hon.read_saas_credit_program_from_hq(text)',true,true],
+ ['hon.read_saas_organization_credits_from_hq(text,uuid)',true,true],
+ ['hon.set_saas_credit_program(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.record_saas_provider_cost_evidence(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.create_saas_pricing_draft(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.publish_saas_pricing(text,uuid,uuid,uuid,uuid)',true,true],
+ ['hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_school_credits(text,uuid)',true,true],
+ ['hon.estimate_saas_premium_operation(text,uuid,text,integer)',true,true],
+ ['hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');
@@ -62,6 +94,8 @@ export async function verifySaasBillingSecurity(client, runtime) {
   const [guard,rowTrigger,rowType] = evidenceTables.includes(table) ? ['guard_saas_evidence','saas_immutable',27]
    : catalogRowTables.includes(table) ? ['guard_saas_catalog_rows','saas_catalog_rows',31]
    : table === 'saas_invoice_lines' ? ['guard_saas_invoice_lines','saas_invoice_lines_rows',31]
+   : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
+   : creditTables.includes(table) ? ['guard_saas_credits','saas_guarded',27]
    : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];
   for (const [name,type] of [[rowTrigger,rowType],['saas_no_truncate',34]]) {
    const t=(await client.query(`SELECT count(*)=1 safe FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=$2 AND tgtype=$3

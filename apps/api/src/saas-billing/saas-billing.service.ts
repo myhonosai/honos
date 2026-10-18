@@ -7,6 +7,11 @@ import {
   validateSaasSubscriptionList, validateSaasSubscriptionRecordInput, validateSaasSubscriptionReceipt, validateSaasSubscriptionStatusFilter,
   validateSaasInvoiceCommand, validateSaasInvoiceCommandReceipt, validateSaasInvoiceDetail, validateSaasInvoiceDraftInput, validateSaasInvoiceList,
   validateSaasInvoiceReceipt, validateSaasInvoiceStatusFilter, validateSaasPaymentEvidenceInput, validateSaasPaymentEvidenceReceipt, validateSaasPaymentStanding,
+  validateSaasAllowanceCommand, validateSaasAllowanceReceipt, validateSaasCostEvidenceInput, validateSaasCostEvidenceReceipt,
+  validateSaasCreditEstimate, validateSaasCreditEstimateQuery, validateSaasCreditProgramInput, validateSaasCreditProgramReceipt,
+  validateSaasCreditProgramView, validateSaasCreditReservationReceipt, validateSaasCreditReserveInput, validateSaasCreditResolveInput,
+  validateSaasCreditResolveReceipt, validateSaasCreditSettleInput, validateSaasOrganizationCredits, validateSaasPricingDraftInput,
+  validateSaasPricingPublishReceipt, validateSaasPricingReceipt, validateSaasSchoolCredits,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
 
@@ -18,7 +23,10 @@ const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED',
   'SAAS_INVOICE_NOT_BILLABLE','SAAS_INVOICE_PERIOD_NOT_STARTED','SAAS_INVOICE_EXISTS','SAAS_INVOICE_TOO_MANY_LINES','SAAS_INVOICE_NEGATIVE_TOTAL',
   'SAAS_INVOICE_TAX_UNRESOLVED','SAAS_INVOICE_ZERO_TOTAL','SAAS_INVOICE_HAS_EVIDENCE','SAAS_INVOICE_NOT_ISSUED','SAAS_EVIDENCE_IN_FUTURE',
   'SAAS_EVIDENCE_DUPLICATE_REFERENCE','SAAS_PAYMENT_EXCEEDS_BALANCE','SAAS_EVIDENCE_RELATED_MISMATCH','SAAS_REVERSAL_EXCEEDS_PAYMENT',
-  'SAAS_EVIDENCE_BEFORE_PAYMENT']);
+  'SAAS_EVIDENCE_BEFORE_PAYMENT',
+  'SAAS_PRICING_NOT_PUBLISHED','SAAS_PROVIDER_UNKNOWN','SAAS_COST_BELOW_BILLED','SAAS_COST_PERIOD_INVALID','SAAS_PRICING_COST_EVIDENCE_MISMATCH',
+  'SAAS_PRICING_UNDECIDED','SAAS_ALLOWANCE_PERIOD_UNAVAILABLE','SAAS_SUBSCRIPTION_NOT_ACTIVE','SAAS_CREDITS_NOT_ACTIVE','SAAS_NO_PREMIUM_ALLOWANCE',
+  'SAAS_OPERATION_NOT_PRICED','SAAS_OPERATION_NOT_IN_PLAN','SAAS_OPERATION_UNITS_EXCEEDED','SAAS_CREDITS_EXHAUSTED','SAAS_FINAL_EXCEEDS_RESERVATION']);
 const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
@@ -94,6 +102,60 @@ export class SaasBillingService {
   async recordPaymentEvidence(subject: string, invoiceId: unknown, body: unknown, key: unknown) {
     const [invoice, input, idempotencyKey] = parse(() => [saasUuid(invoiceId), validateSaasPaymentEvidenceInput(body), saasUuid(key)] as const);
     return this.run('recordPaymentEvidence', [subject, invoice, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasPaymentEvidenceReceipt);
+  }
+
+  // ---------- B3: premium AI credit accounting ----------
+  async readCreditProgram(subject: string) {
+    return this.run('readCreditProgram', [subject], validateSaasCreditProgramView);
+  }
+  async readOrganizationCredits(subject: string, organizationId: unknown) {
+    const organization = parse(() => saasUuid(organizationId));
+    return this.run('readOrganizationCredits', [subject, organization], validateSaasOrganizationCredits);
+  }
+  async setCreditProgram(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasCreditProgramInput(body), saasUuid(key)] as const);
+    return this.run('setCreditProgram', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreditProgramReceipt);
+  }
+  async recordCostEvidence(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasCostEvidenceInput(body), saasUuid(key)] as const);
+    return this.run('recordCostEvidence', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCostEvidenceReceipt);
+  }
+  async createPricingDraft(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasPricingDraftInput(body), saasUuid(key)] as const);
+    return this.run('createPricingDraft', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasPricingReceipt);
+  }
+  async publishPricing(subject: string, pricingId: unknown, key: unknown) {
+    const [pricing, idempotencyKey] = parse(() => [saasUuid(pricingId), saasUuid(key)]);
+    return this.run('publishPricing', [subject, pricing, idempotencyKey, randomUUID(), randomUUID()], validateSaasPricingPublishReceipt);
+  }
+  async commandAllowance(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasAllowanceCommand(body), saasUuid(key)] as const);
+    return this.run('commandAllowance', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasAllowanceReceipt);
+  }
+  async resolveCreditReservation(subject: string, reservationId: unknown, body: unknown, key: unknown) {
+    const [reservation, input, idempotencyKey] = parse(() => [saasUuid(reservationId), validateSaasCreditResolveInput(body), saasUuid(key)] as const);
+    return this.run('resolveCreditReservation', [subject, reservation, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreditResolveReceipt);
+  }
+  async readSchoolCredits(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.run('readSchoolCredits', [subject, school], validateSaasSchoolCredits);
+  }
+  async estimatePremiumOperation(subject: string, schoolId: unknown, query: unknown) {
+    const [school, { operation, units }] = parse(() => [saasUuid(schoolId), validateSaasCreditEstimateQuery(query)] as const);
+    return this.run('estimatePremiumOperation', [subject, school, operation, String(units)], validateSaasCreditEstimate);
+  }
+  /**
+   * Premium job runtime only (no HTTP route): reserve before a provider call. The same idempotency
+   * key on a retry returns the original reservation and never holds credits twice.
+   */
+  async reservePremiumCredits(subject: string, schoolId: unknown, body: unknown, key: unknown) {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateSaasCreditReserveInput(body), saasUuid(key)] as const);
+    return this.run('reservePremiumCredits', [subject, school, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreditReservationReceipt);
+  }
+  /** Premium job runtime only (no HTTP route): settle after the provider call (SUCCEEDED, FAILED or UNKNOWN). */
+  async settlePremiumCredits(subject: string, reservationId: unknown, body: unknown, key: unknown) {
+    const [reservation, input, idempotencyKey] = parse(() => [saasUuid(reservationId), validateSaasCreditSettleInput(body), saasUuid(key)] as const);
+    return this.run('settlePremiumCredits', [subject, reservation, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreditReservationReceipt);
   }
 
   private async run<T>(operation: SaasBillingOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {
