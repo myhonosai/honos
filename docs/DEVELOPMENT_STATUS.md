@@ -51,7 +51,8 @@
 | HQ control plane | **Partial** | Overview, school directory, AI provider catalog/routing policy, non-commercial Core↔Complete transition | Subscriptions, credits ledger, support access, contests; **HQ visual implementation is assigned to Codex** |
 | Staff roles, availability, qualifications, documents, work items, automation rules, community, marketplace | **Partial** | Human-governed foundations with tests | Broader workflows and execution engines |
 | Presentation modes (Big-Button, Modern, Classic) | **Partial** | Persisted per user/school on selected staff screens; reference screens | Not applied platform-wide; HQ and family preferences deferred |
-| HON Champions Club | **Partial** (M1, M2 merged; M3 PR pending) | Referral codes, attribution, qualification gates ([M1](architecture/CHAMPIONS_CLUB_BACKEND.md)); reward liabilities ledger ([M2](architecture/CHAMPIONS_CLUB_REWARD_ACCOUNTING.md)); leaderboards and statistics ([M3](architecture/CHAMPIONS_CLUB_LEADERBOARD.md)) | Contests, fulfillment; financial activation disabled pending owner terms and billing |
+| HON Champions Club | **Partial** (M1–M5 merged; [readiness](architecture/CHAMPIONS_CLUB_READINESS.md)) | Referral codes, attribution, qualification gates ([M1](architecture/CHAMPIONS_CLUB_BACKEND.md)); reward liabilities ledger ([M2](architecture/CHAMPIONS_CLUB_REWARD_ACCOUNTING.md)); leaderboards and statistics ([M3](architecture/CHAMPIONS_CLUB_LEADERBOARD.md)); HQ contest management ([M4](architecture/CHAMPIONS_CLUB_CONTESTS.md)) | Scheduler, fulfillment, notifications; financial activation disabled pending owner terms and billing |
+| HON subscription catalog (HON billing schools) | **Partial** (B1 PR pending; [design](architecture/HON_SUBSCRIPTION_CATALOG_B1.md)) | Versioned Core/Complete catalog with regular, founder and lifetime offers; Essential legacy only; atomic founder inventory; per-organization subscription records linked to entitlements; undecided policies refused | Invoices and payment evidence (B2), credit allowances (B3), refunds (B4), provider (B5); charges and credit grants pinned off |
 | CI / engineering operations | **Partial** (this PR) | CI for test/check/build/migrations + 5 database proofs on PRs | No push-to-main CI yet (cost decision), no deployment pipeline, monitoring, backups or runbooks in the repo |
 
 ## 3. Visual-only prototypes
@@ -65,7 +66,7 @@
 
 ## 4. Missing features (no implementation found)
 
-- HON's own subscription billing: checkout, founder and lifetime offers, the 30-day refund guarantee, $100 welcome credit.
+- HON's own subscription billing: checkout, invoices, payment evidence, the 30-day refund guarantee, $100 welcome credit (plan catalog, founder inventory and subscription records: see section 2, B1 PR pending).
 - **HON Champions Club** rewards ledger, verified leaderboard and HQ contest builder (referral codes and attribution: see section 2, Partial, PR pending).
 - Premium AI credit allowance, balance, reservation and 75/90/100% warnings (usage ledger table exists; no allowance or balance).
 - Payment processor integration (Stripe Connect / Square), payouts, reconciliation.

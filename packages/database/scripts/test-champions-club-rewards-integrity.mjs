@@ -11,7 +11,7 @@ const {ChampionsClubService}=await import('../../../apps/api/dist/champions/cham
 const runtimeDatabase=new RuntimeDatabaseService(),service=new ChampionsClubService(runtimeDatabase);
 const httpStatus=(n,code)=>e=>{assert.equal(e.getStatus?.(),n,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;};
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
-const championsTables=['champions_outbox','champions_audit','champions_leaderboard_holds','champions_leaderboard_preferences','champions_reward_history','champions_reward_entries','champions_reward_policies','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
+const championsTables=['champions_outbox','champions_audit','champions_contest_history','champions_contest_winners','champions_contest_results','champions_contest_pauses','champions_contest_schools','champions_contest_prizes','champions_contests','champions_leaderboard_holds','champions_leaderboard_preferences','champions_reward_history','champions_reward_entries','champions_reward_policies','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
 const ids=Object.fromEntries(['orgA','schoolA','orgR1','schoolR1','staffRole','r1Role','m1Policy','code'].map(k=>[k,randomUUID()]));
 const humans=Object.fromEntries(['owner','operator','support','staff','r1staff'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`rewards-${k}-${randomUUID()}`}]));
 const referred=[];// [{org, attribution}]
@@ -181,8 +181,9 @@ try{
  // ---------- reversals: liabilities go to review, never silently erased ----------
  const reversedRef=referred.at(-1);
  assert.equal((await decideAttribution(reversedRef.attribution,2)).attribution.state,'REVERSED');
+ // M5: the reversal itself reconciles, so both liabilities are already in review; a manual pass finds nothing left.
  const r29=await reconcile('operator');
- assert.equal(r29.qualifiedCount,29);assert.equal(r29.flaggedForReview,2);assert.equal(r29.accrued,0);
+ assert.equal(r29.qualifiedCount,29);assert.equal(r29.flaggedForReview,0);assert.equal(r29.accrued,0);
  const lifetimeReview=(await entries()).find(e=>e.id===lifetime.id);assert.equal(lifetimeReview.status,'REVERSAL_REVIEW');assert.equal(lifetimeReview.status_before_review,'ACCRUED');
  const welcomeReview=(await entries()).find(e=>e.attribution_id===reversedRef.attribution);assert.equal(welcomeReview.status,'REVERSAL_REVIEW');
  await sqlDeny(()=>decide('owner',lifetime.id,{decision:'VOID',expectedVersion:2,reasonCode:'BASIS_REVERSED'}),'23514','CHAMPIONS_REWARD_RULE_UNDECIDED');
@@ -196,7 +197,8 @@ try{
  assert.equal((await entries()).find(e=>e.id===welcomeReview.id).status,'REVERSAL_REVIEW','A reversed referral welcome stays in review.');
  const newest=referred.at(-1);
  assert.equal((await decideAttribution(newest.attribution,2)).attribution.state,'REVERSED');
- assert.equal((await reconcile('operator')).flaggedForReview,2);
+ assert.equal((await reconcile('operator')).flaggedForReview,0,'Already flagged by the reversal itself.');
+ assert.equal((await entries()).find(e=>e.id===lifetime.id).status,'REVERSAL_REVIEW');
 
  // ---------- owner decides the clawback rule and prize budget (new policy version) ----------
  // The new ladder moves the first free-month milestone to 6; earned milestones are not duplicated.

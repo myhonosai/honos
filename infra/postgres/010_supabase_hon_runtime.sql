@@ -1213,3 +1213,68 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End Champions Club leaderboard exact reconciliation.
+
+-- Champions Club contests exact reconciliation:
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['champions_contests','champions_contest_prizes','champions_contest_schools','champions_contest_pauses',
+      'champions_contest_results','champions_contest_winners','champions_contest_history'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC CASCADE',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I CASCADE',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid = ('hon.'||t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC CASCADE',col,t);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_champions_contests()','hon.champions_contest_counts(uuid,timestamptz)','hon.champions_contest_standings(uuid)',
+      'hon.champions_contest_json(hon.champions_contests)','hon.champions_contest_write_config(uuid,jsonb,boolean)',
+      'hon.command_champions_contest(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_champions_contests_from_hq(text,text)',
+      'hon.read_champions_contest_from_hq(text,uuid)','hon.read_champions_contests_for_school(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.command_champions_contest(text,uuid,jsonb,uuid,uuid,uuid), hon.read_champions_contests_from_hq(text,text),
+      hon.read_champions_contest_from_hq(text,uuid), hon.read_champions_contests_for_school(text,uuid)
+      TO hon_runtime;
+  END IF;
+END $$;
+-- End Champions Club contests exact reconciliation.
+
+-- Champions Club integration exact reconciliation:
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.champions_reconcile_core(uuid,uuid,timestamptz)','hon.read_champions_overview_from_hq(text)',
+      'hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid)','hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_champions_overview_from_hq(text), hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid),
+      hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End Champions Club integration exact reconciliation.
+
+-- HON subscription catalog (B1) exact reconciliation:
+DO $$ DECLARE r text; f text; BEGIN
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace AND p.proname ~ 'saas' LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_catalog_from_hq(text), hon.create_saas_catalog_draft(text,jsonb,uuid,uuid,uuid),
+      hon.publish_saas_catalog(text,uuid,uuid,uuid,uuid), hon.read_saas_founder_reservations_from_hq(text,text),
+      hon.reserve_saas_founder_offer(text,jsonb,uuid,uuid,uuid), hon.release_saas_founder_reservation(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.read_saas_subscriptions_from_hq(text,text), hon.read_saas_organization_subscription_from_hq(text,uuid),
+      hon.record_saas_subscription(text,jsonb,uuid,uuid,uuid), hon.command_saas_subscription(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End HON subscription catalog exact reconciliation.

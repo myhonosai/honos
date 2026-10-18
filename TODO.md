@@ -684,6 +684,20 @@ Details: [CI](docs/CI.md) · [Development status](docs/DEVELOPMENT_STATUS.md).
 - [x] M2 (PR pending, not merged): migration 0149 records earned rewards as liabilities only. Versioned reward terms (owner ladder: $100 at 1–4, $100 welcome per referral, 6 then 12 total free months with full AI allowance, prize at 20, lifetime at 30), ledger kept separately by kind, idempotent reconciliation, reversal review, owner-only approve/void/retain with per-plan substitution, prize budget and clawback rules configurable and `UNDECIDED`. No FULFILLED state; `financial_activation` pinned false; proof asserts no billing/entitlement/membership/invoice effect. Details: [reward accounting](docs/architecture/CHAMPIONS_CLUB_REWARD_ACCOUNTING.md).
 - [x] M2 merged to `main` with owner approval (PR #9, merge commit `13d98c9`).
 - [x] M3 (PR pending, not merged): migration 0150 adds QUALIFIED-only all-time and UTC monthly standings (shared tie ranks, reached-first order; active schools only; HQ fraud-review holds that change nothing else), anonymous-by-default school display preference with self-service opt-in, and per-school statistics (state counts, 12-month series, milestone progress, identity-free history). Details: [leaderboards](docs/architecture/CHAMPIONS_CLUB_LEADERBOARD.md).
-- [ ] M4 contest engine (and contest standings) · M5 integration (reconcile after each attribution decision), fulfillment design once HON billing exists, and security review.
+- [x] M3 merged to `main` with owner approval (PR #10, merge commit `ba1866a`).
+- [x] M4 (PR pending, not merged): migration 0152 adds HQ-managed referral contests: closed draft configuration, owner-only scheduling with completeness/budget/gift-card gates, duplicate, manual activate/pause/resume/end with truthful START_DUE/END_DUE (no scheduler exists), window- and pause-exact QUALIFIED-only contest standings separate from the permanent leaderboard, frozen results, winner proposal with owner tie resolution/dispute/reject/reassign/approve, and budgeted prize liabilities. Public listing, financial activation and owner approval pinned. Details: [contests](docs/architecture/CHAMPIONS_CLUB_CONTESTS.md).
+- [x] M4 merged to `main` with owner approval (PR #12, merge commit `77fd2bd`; contest migration renumbered 0152 to leave 0151 to Manus).
+- [x] M5 (merged `50d44d9` with owner approval): migration 0153 runs the unchanged M2 reconciliation inside every attribution decision (rewards follow QUALIFY/REJECT/REFUND/REVERSE atomically), adds the HQ overview read, an end-to-end journey proof, the M1–M4 integration audit, stable API contracts for Codex, a readiness matrix and the HON billing handoff. Details: [readiness](docs/architecture/CHAMPIONS_CLUB_READINESS.md) · [API contracts](docs/architecture/CHAMPIONS_CLUB_API_CONTRACTS.md) · [billing handoff](docs/handoff/HON_SUBSCRIPTION_BILLING_HANDOFF.md).
+- [ ] Owner decisions and dependencies for commercial activation: see the readiness document (program terms, clawback, substitutes, prizes/taxes, gift-card legality, scheduler, HON billing, signup capture).
 
 Details: [Champions Club backend](docs/architecture/CHAMPIONS_CLUB_BACKEND.md).
+
+## HON Subscription Billing — Claude Code (owner review)
+
+HON billing schools; separate from school-to-family billing. Plan: [handoff](docs/handoff/HON_SUBSCRIPTION_BILLING_HANDOFF.md).
+
+- [x] B1 (PR pending, not merged): migration 0154 adds a versioned Core/Complete catalog (regular, founder monthly, founder lifetime; Essential legacy only), canonical Core vs Complete capabilities, owner-configurable atomic founder inventory, per-organization subscription records linked to (never writing) `organization_entitlements`, and explicit UNDECIDED policies that refuse annual offers, plan changes and cancellation. Charges, credit grants and payment claims are pinned off. Details: [B1 design and contracts](docs/architecture/HON_SUBSCRIPTION_CATALOG_B1.md).
+- [ ] B2: HON invoices and payment-evidence ledger (owner decisions: invoice format, taxes, attestation authority).
+- [ ] B3: premium AI credit allowance and reservation accounting (owner decisions: rollover, premium classification, provider-cost source).
+- [ ] B4: 30-day refund guarantee workflow and Champions fulfillment design.
+- [ ] B5: payment provider in test mode (separately approved).

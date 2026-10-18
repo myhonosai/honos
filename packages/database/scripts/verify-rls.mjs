@@ -29,6 +29,7 @@ import pg from 'pg';
 import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
 import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
+import { saasBillingTables, verifySaasBillingSecurity } from './saas-billing-security.mjs';
 import { readFile } from 'node:fs/promises';
 
 const { Client } = pg;
@@ -78,6 +79,7 @@ const expectedRlsTables = [
   ...voiceTables,
   ...communityTables,
   ...championsClubTables,
+  ...saasBillingTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
   'crm_follow_ups', 'crm_follow_up_versions', 'crm_follow_up_requests',
   'crm_lead_close_requests',
@@ -271,6 +273,7 @@ try {
 	await verifyMarketplaceSecurity(client, runtimeRoleName);
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyChampionsClubSecurity(client, runtimeRoleName);
+  await verifySaasBillingSecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
   await verifyHumanWorkSecurity(client,runtimeRoleName);
   await verifyActionApprovalSecurity(client,runtimeRoleName);
