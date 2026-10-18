@@ -2,6 +2,8 @@
 
 ## Codex HQ Modern frontend — owner-authorized 2026-10-18
 
+- [ ] Apply the owner's Jarvis-inspired refinement: remove buildings from the active HQ presentation; use abstract depth, softer layered glass, an orbital HON focal point and controllable/reduced ambient motion. Preserve originals, prior screenshots, HQ data/security boundaries and six executive workspaces; verify actual desktop/mobile UI before review.
+
 - [x] Refine the HQ frontend toward the owner's supplied `9075.jpg` reference: immersive command-room setting, six portrait-led executives around HON, glass/cyan panels and denser verified operational cards. Preserve previous assets/review evidence and HQ/security boundaries. Revised source `c9fe94f`: 36 browser checks passed, zero failures; eight axe scans, zero violations; real [desktop/mobile gallery](docs/visuals/codex/hq-reference-refinement/README.md). Owner visual, physical-device keyboard and screen-reader review remain pending; no merge/deployment.
 
 - [x] Implement approved responsive HQ dashboard and navigation on `codex/hq-modern-implementation`, tracking issue #4 / PR #8; preserve PR #3 and existing HQ authorization/data contracts. Owner visual acceptance remains pending.

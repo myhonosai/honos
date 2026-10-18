@@ -21,6 +21,8 @@ const paths: Record<string, React.ReactNode> = {
   mic: <><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/></>,
   expand: <path d="M14 3h7v7m0-7-7 7M3 14v7h7m-7 0 7-7"/>,
   minimize: <path d="M4 12h16"/>,
+  pause: <><path d="M8 4v16M16 4v16"/></>,
+  play: <path d="m7 3 14 9-14 9Z"/>,
   attention: <><circle cx="12" cy="12" r="10"/><path d="M12 6v7m0 4h.01"/></>,
   shield: <><path d="m12 2 9 4v6c0 6-9 10-9 10S3 18 3 12V6Z"/><path d="m8 12 3 3 6-6"/></>,
   more: <><circle cx="4" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="20" cy="12" r="1"/></>,

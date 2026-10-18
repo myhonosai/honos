@@ -121,8 +121,8 @@ async function accessibility(page, label) {
   report.accessibility.push({ label, violations: result.violations, incompleteCount: result.incomplete.length });
   assert.equal(result.violations.length, 0, `${label}: ${result.violations.map((item) => item.id).join(', ')}`);
 }
-async function contextFor(viewport, authenticated = true) {
-  const context = await browser.newContext({ viewport, reducedMotion: 'reduce', serviceWorkers: 'block' });
+async function contextFor(viewport, authenticated = true, reducedMotion = 'reduce') {
+  const context = await browser.newContext({ viewport, reducedMotion, serviceWorkers: 'block' });
   await context.grantPermissions([], { origin });
   await context.route('**/*', (route) => {
     const url = new URL(route.request().url());
@@ -167,6 +167,10 @@ try {
       await screenshot(page, `${label}-dashboard-viewport`, false);
     });
     await check(`${label}: appearance choices preserve the six HQ identities`, async () => {
+      const motion = page.getByRole('button', { name: 'Ambient motion', exact: true });
+      assert(await motion.isDisabled(), 'Reduced-motion preference must prevent ambient animation');
+      assert.equal(await motion.getAttribute('aria-pressed'), 'false');
+      assert.equal(await page.locator('[data-motion]').getAttribute('data-motion'), 'off');
       const views = page.getByRole('group', { name: 'Platform view' });
       for (const [name, key] of [['Big Button', 'big-button'], ['Classic', 'classic'], ['Modern', 'modern']]) {
         await views.getByRole('button', { name, exact: true }).click();
@@ -250,6 +254,30 @@ try {
     });
     await context.close();
   }
+
+  await check('Abstract HQ and decorative motion pause, keyboard restore and preference change', async () => {
+    const moving = await contextFor({ width: 1440, height: 1000 }, true, 'no-preference');
+    try {
+      await moving.page.goto(`${origin}/hq`, { waitUntil: 'domcontentloaded' });
+      await moving.page.getByRole('heading', { name: 'Your executive team', exact: true }).waitFor();
+      const motion = moving.page.getByRole('button', { name: 'Ambient motion', exact: true });
+      assert(await motion.isEnabled());
+      assert.equal(await motion.getAttribute('aria-pressed'), 'true');
+      const background = await moving.page.locator('[data-hq-background]').evaluate((node) => getComputedStyle(node).backgroundImage);
+      assert(!background.includes('url('), 'HQ must use an abstract surface, not the architectural image');
+      const orbit = moving.page.locator('[data-hq-orbits] > i').first();
+      assert.notEqual(await orbit.evaluate((node) => getComputedStyle(node).animationName), 'none');
+      await motion.press('Space');
+      await moving.page.waitForFunction(() => document.querySelector('[data-motion]')?.getAttribute('data-motion') === 'off');
+      assert.equal(await orbit.evaluate((node) => getComputedStyle(node).animationName), 'none');
+      await motion.press('Enter');
+      await moving.page.waitForFunction(() => document.querySelector('[data-motion]')?.getAttribute('data-motion') === 'on');
+      await moving.page.emulateMedia({ reducedMotion: 'reduce' });
+      await moving.page.waitForFunction(() => document.querySelector('[data-motion]')?.getAttribute('data-motion') === 'off');
+      assert(await motion.isDisabled());
+      assert.equal(await orbit.evaluate((node) => getComputedStyle(node).animationName), 'none');
+    } finally { await moving.context.close(); }
+  });
 
   const { context, page } = await contextFor({ width: 1440, height: 1000 });
   await check('Existing independent school directory transport', async () => {

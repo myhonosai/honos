@@ -4,6 +4,8 @@ Tracking: [#4](https://github.com/myhonosai/honos/issues/4). Branch: `codex/hq-m
 
 ## Current visual revision
 
+The latest owner clarification requests **no buildings**, using `8948.jpg` / Jarvis as inspiration for interface depth and immersion. [Abstract command-center notes](visuals/codex/hq-holographic/README.md) track the new active revision. Earlier architectural artwork/screenshots remain archived; the active HQ uses abstract CSS light/orbits instead. Decorative motion has a pause control and respects reduced-motion preferences; it never represents a live agent or voice state.
+
 The owner requested a closer match to supplied `9075.jpg` after the first runtime review. [Reference refinement notes](visuals/codex/hq-reference-refinement/README.md) track the revised command-room composition and new runtime evidence. The previous screenshot gallery remains preserved; its results do not establish verification of this newer layout. Original executive portraits and HON orb sources remain unchanged. This revision awaits owner visual review.
 
 The revised application source `c9fe94f` now has real desktop/mobile captures and a passing [browser run 39107056742](https://github.com/myhonosai/honos/actions/runs/39107056742): 36 checks, zero failures; eight axe scans, zero reported violations; 18 PNG screenshots. Mobile width/attention order/portrait readability were corrected after inspecting actual captures. [Current gallery](visuals/codex/hq-reference-refinement/README.md).

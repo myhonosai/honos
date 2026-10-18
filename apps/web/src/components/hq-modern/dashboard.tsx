@@ -67,7 +67,7 @@ function CommandStage(): React.ReactElement {
     <div className={styles.stageHeader}><div><h2 id="hq-team-title">Your executive team</h2><p>Six specialists. One company command center.</p></div><Link href="/hq/executives">View team <HqIcon name="chevron" size={15}/></Link></div>
     <div className={styles.commandLineup}>
       <div className={styles.commandCore}>
-        <div className={styles.orbFrame}><HonCore/><strong aria-hidden="true">HON</strong></div>
+        <div className={styles.orbFrame}><span className={styles.coreOrbits} data-hq-orbits aria-hidden="true"><i/><i/><i/></span><HonCore/><strong aria-hidden="true">HON</strong></div>
         <div className={styles.coreCaption}><h2>HON</h2><p>Executive AI Coordinator</p></div>
         <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label="Expand HON conversation"><HqIcon name="mic" size={19}/><span>Ask HON anything</span><HqIcon name="expand" size={15}/></button>
         <small>Conversation unavailable · Microphone off</small>

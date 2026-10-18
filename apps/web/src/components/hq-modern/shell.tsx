@@ -20,7 +20,7 @@ export function useHqModern(): HqContextValue {
   return value;
 }
 
-/** Static artwork, never an indicator of listening, health or executive work. */
+/** Decorative artwork, never an indicator of listening, health or executive work. */
 export function HonCore({ small = false }: { small?: boolean }): React.ReactElement {
   return <span className={small ? styles.coreSmall : styles.core} role="img" aria-label="HON Core" />;
 }
@@ -31,6 +31,8 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
   const [revision, setRevision] = useState(0);
   const [view, setView] = useState<HqView>('modern');
   const [art, setArt] = useState<HqArt>('realistic');
+  const [ambientMotion, setAmbientMotion] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(true);
   const [menu, setMenu] = useState(false);
   const [assistant, setAssistant] = useState(false);
   const [draft, setDraft] = useState('');
@@ -40,6 +42,13 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
   const assistantOpener = useRef<HTMLElement | null>(null);
   // Existing independently authorized pages already own their main landmark.
   const ContentElement = path === '/hq/schools' || path === '/hq/ai-providers' ? 'div' : 'main';
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => { setReducedMotion(query.matches); setAmbientMotion(!query.matches); };
+    update(); query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     let current = true;
@@ -86,7 +95,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     <footer className={styles.railFooter}><span className={styles.ownerAvatar} aria-hidden="true">HQ</span><span>HQ workspace</span><Link href="/auth/login">Account</Link></footer>
   </>;
 
-  return <div className={styles.shell} data-view={view} data-art={art}>
+  return <div className={styles.shell} data-view={view} data-art={art} data-motion={!reducedMotion && ambientMotion ? 'on' : 'off'}>
     <a className={styles.skip} href="#hq-main">Skip to main content</a>
     <aside className={styles.sidebar}>{nav}</aside>
     <dialog ref={drawer} className={styles.drawer} aria-label="HQ navigation menu" onCancel={(event) => { event.preventDefault(); setMenu(false); }} onClick={(event) => { if (event.target === drawer.current) setMenu(false); }}>
@@ -101,6 +110,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
       <section className={styles.appearance} aria-label="HQ appearance">
         <div role="group" aria-label="Platform view"><span>View</span>{HQ_VIEWS.map((option) => <button type="button" key={option.key} aria-pressed={view === option.key} onClick={() => setView(option.key)}>{option.label}</button>)}</div>
         <div role="group" aria-label="AI portrait style"><span>AI style</span>{HQ_ART.map((option) => <button type="button" key={option.key} aria-pressed={art === option.key} onClick={() => setArt(option.key)}>{option.label}</button>)}</div>
+        <button type="button" className={styles.motionControl} aria-label="Ambient motion" aria-pressed={!reducedMotion && ambientMotion} disabled={reducedMotion} onClick={() => setAmbientMotion((value) => !value)} title={reducedMotion ? 'Motion is off because your device prefers reduced motion' : 'Pause or resume decorative motion'}><HqIcon name={ambientMotion && !reducedMotion ? 'pause' : 'play'} size={14}/><span>Motion</span><small>{!reducedMotion && ambientMotion ? 'On' : 'Off'}</small></button>
         <small>Presentation only</small>
       </section>
       {art === 'anime' && <p className={styles.artNotice} role="status">Anime portraits are awaiting approved artwork. Executive identities remain unchanged.</p>}
