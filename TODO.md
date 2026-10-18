@@ -1,5 +1,13 @@
 # HON Delivery Backlog
 
+## Codex HQ — school referrals and reward management (2026-10-18)
+
+- [x] Owner-authorized PR #19 merged after final green CI/browser and clean-main checks: `ececf75d8e300f957fb99416babb95c1064688fb`. No deployment or financial activation.
+- [ ] On `codex/hq-school-reward-management`, deliver explicit authenticated school-directory selection, independently authorized HQ statistics, official rank, bounded referral history and server milestone progress. Preserve approved HQ shell/art/assistant/appearance. No CRM/backend/shared security changes or inferred awards.
+- [ ] Connect the existing global reward ledger/program, exact status filters, authoritative liability groups and bounded recent records. Distinguish recorded/approved/review/voided from fulfillment. Do not sum limited entries for totals or filter them into complete school history.
+- [ ] Complete school reward history remains unavailable pending Claude's authorized paginated HQ contract; concrete requirements coordinated on PR #13. No staff-endpoint fallback or hypothetical API implementation. Review existing contest reads for a future milestone only; no commands, rewards, spending, publication or production data mutations.
+- [ ] Verify unit/API-boundary/authorization/empty/error/stale behavior, full CI and actual desktop/mobile browser/accessibility evidence; open a separate PR for owner review. English/Korean/Spanish remains future documentation-only scope in PR #17.
+
 ## Codex HQ Phase 3 — read-only Champions management
 
 - [x] Connect `/hq/growth` and `/hq/growth/champions-club` to real M5 overview/M1 program reads in [PR #19](https://github.com/myhonosai/honos/pull/19), source `14e02b3`, based on accepted B3 main `512eddb`. Verified configuration, all five referral states, exact aggregate totals and non-voided liabilities; no paid/fulfilled claims. [CI 39158351246](https://github.com/myhonosai/honos/actions/runs/39158351246) passed both jobs: 590 web / 408 API / 188 domain / 91 auth tests, typecheck/build, 155 migration checks and 13 disposable-local proofs (227 forced-RLS tables). [Browser 39158351200](https://github.com/myhonosai/honos/actions/runs/39158351200): 53 checks passed, 33 captures, 16 axe scans / zero violations. Actual [desktop/mobile gallery](docs/visuals/codex/hq-champions-management/README.md) inspected; mobile totals/refresh and assistant clearance verified. No backend/CRM/original-art changes, production mutations, reward activation, merge or deployment of #19.

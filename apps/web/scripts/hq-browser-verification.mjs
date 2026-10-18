@@ -8,9 +8,10 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, appendFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
-import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateChampionsLeaderboardQuery, validateChampionsHqLeaderboard, validateChampionsOverview, validateChampionsProgram } from '@hon/contracts';
+import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateChampionsLeaderboardQuery, validateChampionsHqLeaderboard, validateChampionsOverview, validateChampionsProgram, validateChampionsHqSchoolStatistics, validateChampionsRewardLedger, validateChampionsRewardProgram, validateChampionsRewardStatusFilter } from '@hon/contracts';
 import { leaderboardFixture } from './fixtures/hq-champions-leaderboard.mjs';
 import { championsManagementFixture } from './fixtures/hq-champions-management.mjs';
+import { fixtureId, schoolDirectoryFixture, schoolReferralFixture, rewardLedgerFixture, rewardProgramFixture } from './fixtures/hq-school-rewards.mjs';
 
 if (process.env.GITHUB_ACTIONS !== 'true' && process.env.HON_HQ_BROWSER_LOCAL !== '1') throw new Error('Use the temporary CI workflow or explicitly opt into disposable local browser verification.');
 for (const key of ['DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'STRIPE_SECRET_KEY']) {
@@ -46,6 +47,11 @@ let leaderboardDelay = 0;
 let managementMode = 'ready';
 let managementUpdated = false;
 let managementDelay = 0;
+let directoryMode = 'empty';
+let schoolMode = 'ready';
+let rewardMode = 'ready';
+let detailDelay = 0;
+let detailUpdated = false;
 const overview = {
   asOf: '2026-10-17T12:00:00.000Z', callerHqRole: 'OWNER', organizationCount: 2, schoolCount: 3,
   onboarding: { availability: 'AVAILABLE', requestCount: 4, inProgressRequestCount: 1, completedRequestCount: 3 },
@@ -67,8 +73,41 @@ const api = createServer((request, response) => {
     response.writeHead(403); response.end('{}'); return;
   }
   const url = new URL(path, 'http://127.0.0.1');
-  if (request.method !== 'GET' || !['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/leaderboard', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname)) {
+  const schoolPath = [1, 2].map((id) => `/v1/hq/champions/schools/${fixtureId(id)}/statistics`).includes(url.pathname);
+  const rewardPath = ['/v1/hq/champions/rewards/program', '/v1/hq/champions/rewards/ledger'].includes(url.pathname);
+  if (request.method !== 'GET' || !schoolPath && !rewardPath && !['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/leaderboard', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname)) {
     response.writeHead(405); response.end('{}'); return;
+  }
+  if (schoolPath || rewardPath) {
+    const isProgram = url.pathname.endsWith('/program');
+    let status = null;
+    try {
+      if (request.headers['content-length'] && request.headers['content-length'] !== '0') throw Error();
+      if (schoolPath || isProgram) { if (url.search) throw Error(); }
+      else {
+        if ([...url.searchParams.keys()].some((key) => key !== 'status') || url.searchParams.getAll('status').length > 1) throw Error();
+        status = validateChampionsRewardStatusFilter(url.searchParams.get('status') ?? undefined);
+      }
+    } catch { response.writeHead(400); response.end('{}'); return; }
+    const mode = schoolPath ? schoolMode : rewardMode;
+    if (['401', '403', '503'].includes(mode) || isProgram && rewardMode === 'program-denied') {
+      response.writeHead(isProgram && rewardMode === 'program-denied' ? 403 : Number(mode)); response.end('{"private":"private-reward-note"}'); return;
+    }
+    const schoolId = url.pathname.split('/')[5];
+    const data = schoolPath ? validateChampionsHqSchoolStatistics(schoolReferralFixture({ schoolId, empty: schoolMode === 'empty', updated: detailUpdated }))
+      : isProgram ? validateChampionsRewardProgram(rewardProgramFixture({ empty: schoolMode === 'empty' || rewardMode === 'empty' }))
+      : validateChampionsRewardLedger(rewardLedgerFixture({ status, empty: rewardMode === 'empty', updated: detailUpdated }));
+    const body = mode === 'invalid-json' ? 'unreadable' : JSON.stringify({ data: mode === 'malformed' ? { ...data, privateNote: 'private-reward-note' }
+      : schoolPath && mode === 'mismatch' ? { ...data, schoolId: fixtureId(2) }
+      : isProgram && mode === 'mismatch' ? { ...data, published: { ...data.published, policyVersion: 3 } } : data });
+    const finish = () => { if (!response.destroyed) response.end(body); };
+    if (detailDelay) setTimeout(finish, detailDelay); else finish();
+    return;
+  }
+  if (url.pathname === '/v1/hq/schools') {
+    if (url.search) { response.writeHead(400); response.end('{}'); return; }
+    if (['401', '403', '503'].includes(directoryMode)) { response.writeHead(Number(directoryMode)); response.end('{}'); return; }
+    response.end(JSON.stringify({ data: { directory: schoolDirectoryFixture({ empty: directoryMode === 'empty' }) } })); return;
   }
   if (['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname)) {
     if (url.search || request.headers['content-length'] && request.headers['content-length'] !== '0') { response.writeHead(400); response.end('{}'); return; }
@@ -154,7 +193,7 @@ async function screenshot(page, name, fullPage = true) {
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots
   // when the terminal cannot download File Service artifacts. No credentials or live data.
-  if (['desktop-champions-overview', 'mobile-champions-overview', 'mobile-champions-viewport', 'desktop-dashboard-full', 'mobile-dashboard-full', 'mobile-dashboard-viewport', 'desktop-leaderboard-all-time', 'desktop-leaderboard-monthly', 'mobile-leaderboard-all-time', 'mobile-leaderboard-monthly', 'mobile-leaderboard-viewport'].includes(name)) {
+  if (['desktop-school-referrals', 'mobile-school-referrals', 'mobile-school-viewport', 'desktop-reward-management', 'mobile-reward-management', 'desktop-champions-overview', 'mobile-champions-overview', 'mobile-champions-viewport', 'desktop-dashboard-full', 'mobile-dashboard-full', 'mobile-dashboard-viewport', 'desktop-leaderboard-all-time', 'desktop-leaderboard-monthly', 'mobile-leaderboard-all-time', 'mobile-leaderboard-monthly', 'mobile-leaderboard-viewport'].includes(name)) {
     const preview = await page.screenshot({ type: 'jpeg', quality: 72, fullPage, animations: 'disabled' });
     await writeFile(join(resultsRoot, `${name}.jpg`), preview);
     const encoded = preview.toString('base64');
@@ -399,8 +438,132 @@ try {
       await page.keyboard.press('Escape');
       await assistant.waitFor({ state: 'detached' });
     });
+    await check(`${label}: explicit authorized school selection, official milestones and responsive history`, async () => {
+      directoryMode = 'ready'; schoolMode = 'ready'; rewardMode = 'ready'; detailUpdated = false;
+      const prior = report.apiRequests.filter((r) => r.path.endsWith('/statistics')).length;
+      await page.goto(`${origin}/hq/growth/champions-club/schools?schoolId=${fixtureId(1)}&role=OWNER`, { waitUntil: 'domcontentloaded' });
+      const selection = page.getByLabel('Choose school', { exact: true }); await selection.waitFor();
+      assert.equal(await selection.inputValue(), '');
+      assert.equal(report.apiRequests.filter((r) => r.path.endsWith('/statistics')).length, prior, 'URL selectors must not fetch a school');
+      await selection.selectOption(fixtureId(1)); await page.locator(`[data-school-records="${fixtureId(1)}"]`).waitFor();
+      await page.getByText('2 remaining · backend reported', { exact: true }).waitFor();
+      await page.getByText('Later threshold · remaining not provided', { exact: true }).first().waitFor();
+      await page.getByRole('heading', { name: 'Complete school reward history unavailable', exact: true }).waitFor();
+      assert.equal(await page.locator('[data-referral-state="qualified"]').textContent(), '8');
+      await noOverflow(page, `${label} school details`);
+      for (const name of ['Big Button', 'Classic', 'Modern']) {
+        await page.getByRole('group', { name: 'Platform view' }).getByRole('button', { name, exact: true }).click(); await noOverflow(page, `${label} schools ${name}`);
+      }
+      await screenshot(page, `${label}-school-referrals`);
+      if (label === 'mobile') await screenshot(page, 'mobile-school-viewport', false);
+      await accessibility(page, `${label}-school-referrals`);
+      await selection.selectOption(fixtureId(2)); await page.locator(`[data-school-records="${fixtureId(2)}"]`).waitFor();
+      assert(!(await page.getByText('Reason: owner review', { exact: false }).isVisible()));
+      const hold = page.getByText('Confidential HQ leaderboard review', { exact: true });
+      await hold.focus(); await page.keyboard.press('Enter'); await page.getByText('Reason: owner review', { exact: false }).waitFor();
+      await page.getByLabel('Search school or organization').fill('no matching school');
+      assert.equal(await page.locator('[data-school-records]').count(), 0);
+      await page.getByText('No matching schools in the returned directory.', { exact: true }).waitFor();
+    });
+    await check(`${label}: global reward records, liability scope, filters and responsive accessibility`, async () => {
+      schoolMode = 'ready'; rewardMode = 'ready';
+      await page.goto(`${origin}/hq/growth/rewards`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Authoritative outstanding liabilities', exact: true }).waitFor();
+      await page.getByText('USD 45,000.00', { exact: true }).waitFor();
+      await page.locator('ol').getByText('Voided reward record', { exact: true }).waitFor();
+      assert.equal(await page.getByRole('button', { name: /issue|approve|pay|publish|fulfill|reconcile/i }).count(), 0);
+      await noOverflow(page, `${label} rewards`);
+      await screenshot(page, `${label}-reward-management`, false);
+      await accessibility(page, `${label}-reward-management`);
+      await page.getByLabel('Recent-record status').selectOption('VOIDED');
+      await page.getByRole('heading', { name: 'Recent global reward records', exact: true }).waitFor();
+      assert.equal(await page.locator('ol > li').count(), 1);
+      await page.getByText('USD 45,000.00', { exact: true }).waitFor();
+      await page.locator('ol').getByText('Voided reward record', { exact: true }).waitFor();
+      await page.getByLabel('Recent-record status').selectOption('APPROVED');
+      await page.getByRole('heading', { name: 'Recent global reward records', exact: true }).waitFor();
+      assert.equal(await page.locator('ol > li').count(), 1);
+      await noOverflow(page, `${label} rewards filtered`);
+    });
     await context.close();
   }
+  directoryMode = 'empty';
+
+  const details = await contextFor({ width: 390, height: 844 });
+  try {
+    const page = details.page;
+    const openSchool = async () => {
+      await page.goto(`${origin}/hq/growth/champions-club/schools`, { waitUntil: 'domcontentloaded' });
+      await page.getByLabel('Choose school', { exact: true }).waitFor();
+      await page.getByLabel('Choose school', { exact: true }).selectOption(fixtureId(1));
+      await page.locator('[data-school-records]').waitFor();
+    };
+    await check('School refresh, selection and directory changes clear facts and ignore obsolete responses', async () => {
+      directoryMode = 'ready'; schoolMode = 'ready'; rewardMode = 'ready'; detailUpdated = false; await openSchool();
+      detailDelay = 600; detailUpdated = true;
+      await page.getByRole('button', { name: 'Refresh school referrals', exact: true }).click();
+      assert.equal(await page.locator('[data-school-records]').count(), 0);
+      await page.locator('[data-school-records]').waitFor(); assert.equal(await page.locator('[data-referral-state="qualified"]').textContent(), '9');
+      await page.getByRole('button', { name: 'Refresh school referrals', exact: true }).click();
+      await page.getByLabel('Choose school', { exact: true }).selectOption(fixtureId(2));
+      await page.locator(`[data-school-records="${fixtureId(2)}"]`).waitFor(); await delay(750);
+      assert.equal(await page.locator(`[data-school-records="${fixtureId(1)}"]`).count(), 0);
+      await page.getByRole('button', { name: 'Refresh school directory', exact: true }).click();
+      assert.equal(await page.locator('[data-school-records]').count(), 0);
+      await page.getByLabel('Choose school', { exact: true }).waitFor(); assert.equal(await page.getByLabel('Choose school', { exact: true }).inputValue(), '');
+      detailDelay = 0; detailUpdated = false;
+    });
+    await check('School denied, malformed, wrong-school and policy-race responses expose no prior records', async () => {
+      for (const mode of ['401', '403', '503', 'invalid-json', 'malformed', 'mismatch']) {
+        schoolMode = 'ready'; rewardMode = 'ready'; await openSchool(); schoolMode = mode;
+        await page.getByRole('button', { name: 'Refresh school referrals', exact: true }).click();
+        await page.getByRole('heading', { name: mode === '401' ? 'Sign in to view these records' : mode === '403' ? 'HQ access denied' : mode === '503' ? 'Authorized records unavailable' : 'Records could not be verified', exact: true }).waitFor();
+        assert.equal(await page.locator('[data-school-records]').count(), 0); assert(!(await page.locator('body').innerText()).includes('private-reward-note'));
+      }
+      schoolMode = 'ready'; rewardMode = 'ready'; await openSchool(); rewardMode = 'mismatch';
+      await page.getByRole('button', { name: 'Refresh school referrals', exact: true }).click(); await page.getByRole('heading', { name: 'Records could not be verified', exact: true }).waitFor();
+    });
+    await check('Authorized zero school counts, no history and undecided milestone policy are distinct from failures', async () => {
+      schoolMode = 'empty'; rewardMode = 'ready'; await openSchool();
+      await page.getByText('No referral history events were returned for this school.', { exact: true }).waitFor();
+      assert.equal(await page.locator('[data-referral-state="qualified"]').textContent(), '0');
+      await page.getByText('Policy undecided', { exact: true }).waitFor();
+    });
+    await check('Directory denial removes identities and school details without granting another context', async () => {
+      schoolMode = 'ready'; rewardMode = 'ready'; await openSchool(); directoryMode = '403';
+      await page.getByRole('button', { name: 'Refresh school directory', exact: true }).click(); await page.getByRole('heading', { name: 'HQ access denied', exact: true }).waitFor();
+      assert.equal(await page.getByLabel('Choose school', { exact: true }).count(), 0); assert.equal(await page.locator('[data-school-records]').count(), 0);
+    });
+    await check('Reward refresh/filter clears facts, retains official aggregate scope and ignores delayed windows', async () => {
+      schoolMode = 'ready'; rewardMode = 'ready'; detailUpdated = false;
+      await page.goto(`${origin}/hq/growth/rewards`, { waitUntil: 'domcontentloaded' }); await page.getByText('USD 45,000.00', { exact: true }).waitFor();
+      detailDelay = 600; detailUpdated = true; await page.getByRole('button', { name: 'Refresh reward records', exact: true }).click();
+      assert.equal(await page.getByText('USD 45,000.00', { exact: true }).count(), 0);
+      await page.getByLabel('Recent-record status').selectOption('VOIDED'); await page.getByRole('heading', { name: 'Recent global reward records', exact: true }).waitFor(); await delay(750);
+      assert.equal(await page.locator('ol > li').count(), 1); await page.getByText('USD 45,100.00', { exact: true }).waitFor(); detailDelay = 0; detailUpdated = false;
+    });
+    await check('Reward empty, denied and invalid states never retain old liabilities or imply payment', async () => {
+      for (const mode of ['empty', '401', '403', '503', 'invalid-json', 'malformed', 'program-denied']) {
+        rewardMode = 'ready'; await page.goto(`${origin}/hq/growth/rewards`, { waitUntil: 'domcontentloaded' }); await page.getByText('USD 45,000.00', { exact: true }).waitFor(); rewardMode = mode;
+        await page.getByRole('button', { name: 'Refresh reward records', exact: true }).click();
+        if (mode === 'empty') await page.getByText('No non-voided liability groups were returned.', { exact: true }).waitFor();
+        else await page.getByRole('heading', { name: mode === '401' ? 'Sign in to view these records' : ['403', 'program-denied'].includes(mode) ? 'HQ access denied' : mode === '503' ? 'Authorized records unavailable' : 'Records could not be verified', exact: true }).waitFor();
+        assert.equal(await page.getByText('USD 45,000.00', { exact: true }).count(), 0); assert(!(await page.locator('body').innerText()).includes('private-reward-note'));
+      }
+    });
+    await check('School and reward APIs independently deny school, family, support and unsigned identities', async () => {
+      rewardMode = 'ready'; schoolMode = 'ready';
+      const paths = [`/api/v1/hq/champions/schools/${fixtureId(1)}/statistics`, '/api/v1/hq/champions/rewards/program', '/api/v1/hq/champions/rewards/ledger'];
+      for (const subject of ['hon-school-fixture', 'hon-family-fixture', 'hon-support-fixture']) {
+        const denied = await contextFor({ width: 390, height: 844 }, true, 'reduce', subject);
+        try { for (const path of paths) { const response = await denied.context.request.get(`${origin}${path}`); assert.equal(response.status(), 403); } } finally { await denied.context.close(); }
+      }
+      const unsigned = await contextFor({ width: 390, height: 844 }, false);
+      try { for (const path of paths) assert.equal((await unsigned.context.request.get(`${origin}${path}`)).status(), 401); } finally { await unsigned.context.close(); }
+      const operator = await contextFor({ width: 390, height: 844 }, true, 'reduce', 'hon-hq-operator-fixture');
+      try { for (const path of paths) assert.equal((await operator.context.request.get(`${origin}${path}`)).status(), 200); } finally { await operator.context.close(); }
+    });
+  } finally { directoryMode = 'empty'; schoolMode = 'ready'; rewardMode = 'ready'; detailDelay = 0; detailUpdated = false; await details.context.close(); }
 
   const management = await contextFor({ width: 390, height: 844 });
   try {
@@ -596,6 +759,9 @@ try {
     assert(report.apiRequests.every((request) => {
       const url = new URL(request.path, 'http://127.0.0.1');
       return request.method === 'GET' && (['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(request.path)
+        || [1, 2].some((id) => request.path === `/v1/hq/champions/schools/${fixtureId(id)}/statistics`)
+        || request.path === '/v1/hq/champions/rewards/program'
+        || (url.pathname === '/v1/hq/champions/rewards/ledger' && [...url.searchParams.keys()].every((key) => key === 'status'))
         || (['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname) && url.search === '?schoolId=untrusted')
         || (url.pathname === '/v1/hq/champions/leaderboard' && [...url.searchParams.keys()].every((key) => ['period', 'month'].includes(key))));
     }));

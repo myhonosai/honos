@@ -50,6 +50,7 @@ export const HQ_PLANNED: Readonly<Record<string, { title: string; description: s
 
 /** Unknown paths never become assistant context. Query values are intentionally excluded. */
 export function hqPageLabel(path: string): string {
+  if (path === '/hq/growth/champions-club/schools') return 'School referrals';
   const fixed = [...HQ_NAV, ...HQ_GROWTH].find((item) => item.path === path);
   if (fixed) return fixed.title;
   const executive = HQ_EXECUTIVES.find((entry) => path === `/hq/executives/${entry.executiveKey}`);
