@@ -175,6 +175,9 @@ import { HqEntitlementHumanUiGuard } from './hq/hq-entitlement.dto.js';
 import { ChampionsHqController, ChampionsSchoolController } from './champions/champions-club.controller.js';
 import { ChampionsClubService } from './champions/champions-club.service.js';
 import { ChampionsCommandGuard, ChampionsReadGuard } from './champions/champions-club.guards.js';
+import { SaasBillingHqController } from './saas-billing/saas-billing.controller.js';
+import { SaasBillingService } from './saas-billing/saas-billing.service.js';
+import { SaasCommandGuard, SaasReadGuard } from './saas-billing/saas-billing.guards.js';
 import { HqSchoolDirectoryService } from './hq/hq-school-directory.service.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
@@ -302,6 +305,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
+    SaasBillingHqController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
@@ -412,6 +416,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
+    SaasBillingService, SaasCommandGuard, SaasReadGuard,
     HqOverviewService,
     HqSchoolDirectoryService,
   ],

@@ -1,0 +1,83 @@
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import {
+  saasUuid, validateSaasCatalogDraftInput, validateSaasCatalogDraftReceipt, validateSaasCatalogPublishReceipt, validateSaasCatalogView,
+  validateSaasFounderReleaseInput, validateSaasFounderReservationList, validateSaasFounderReservationReceipt, validateSaasFounderReserveInput,
+  validateSaasOrganizationSubscription, validateSaasReservationStatusFilter, validateSaasSubscriptionCommand, validateSaasSubscriptionCommandReceipt,
+  validateSaasSubscriptionList, validateSaasSubscriptionRecordInput, validateSaasSubscriptionReceipt, validateSaasSubscriptionStatusFilter,
+} from '@hon/contracts';
+import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
+
+// Business-rule refusals the UI may show verbatim. Any other database message stays private.
+const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED','SAAS_FOUNDER_LIMIT_BELOW_USAGE','SAAS_OFFER_NOT_AVAILABLE',
+  'SAAS_OFFER_NOT_FOUNDER','SAAS_FOUNDER_WINDOW_CLOSED','SAAS_FOUNDER_NOT_ELIGIBLE','SAAS_FOUNDER_ALREADY_RESERVED','SAAS_FOUNDER_SOLD_OUT',
+  'SAAS_ENTITLEMENT_NOT_ACTIVE','SAAS_ENTITLEMENT_MISMATCH','SAAS_SUBSCRIPTION_EXISTS','SAAS_FOUNDER_RESERVATION_REQUIRED',
+  'SAAS_FOUNDER_RESERVATION_MISMATCH','SAAS_FOUNDER_RESERVATION_EXPIRED','SAAS_NO_BILLING_PERIODS','SAAS_PERIOD_NOT_ENDED']);
+const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT']);
+
+function parse<T>(work: () => T): T {
+  try { return work(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); }
+}
+
+/** HON billing schools (B1 recordkeeping). Never touches school-to-family billing, payments or credits. */
+@Injectable()
+export class SaasBillingService {
+  constructor(private readonly database: RuntimeDatabaseService) {}
+
+  async readCatalog(subject: string) {
+    return this.run('readCatalog', [subject], validateSaasCatalogView);
+  }
+  async createCatalogDraft(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasCatalogDraftInput(body), saasUuid(key)] as const);
+    return this.run('createCatalogDraft', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCatalogDraftReceipt);
+  }
+  async publishCatalog(subject: string, catalogId: unknown, key: unknown) {
+    const [catalog, idempotencyKey] = parse(() => [saasUuid(catalogId), saasUuid(key)]);
+    return this.run('publishCatalog', [subject, catalog, idempotencyKey, randomUUID(), randomUUID()], validateSaasCatalogPublishReceipt);
+  }
+  async readFounderReservations(subject: string, status: unknown) {
+    const filter = parse(() => validateSaasReservationStatusFilter(status));
+    return this.run('readFounderReservations', [subject, filter], validateSaasFounderReservationList);
+  }
+  async reserveFounder(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasFounderReserveInput(body), saasUuid(key)] as const);
+    return this.run('reserveFounder', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasFounderReservationReceipt);
+  }
+  async releaseFounder(subject: string, reservationId: unknown, body: unknown, key: unknown) {
+    const [reservation, input, idempotencyKey] = parse(() => [saasUuid(reservationId), validateSaasFounderReleaseInput(body), saasUuid(key)] as const);
+    return this.run('releaseFounder', [subject, reservation, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasFounderReservationReceipt);
+  }
+  async readSubscriptions(subject: string, status: unknown) {
+    const filter = parse(() => validateSaasSubscriptionStatusFilter(status));
+    return this.run('readSubscriptions', [subject, filter], validateSaasSubscriptionList);
+  }
+  async readOrganizationSubscription(subject: string, organizationId: unknown) {
+    const organization = parse(() => saasUuid(organizationId));
+    return this.run('readOrganizationSubscription', [subject, organization], validateSaasOrganizationSubscription);
+  }
+  async recordSubscription(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasSubscriptionRecordInput(body), saasUuid(key)] as const);
+    return this.run('recordSubscription', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasSubscriptionReceipt);
+  }
+  async commandSubscription(subject: string, subscriptionId: unknown, body: unknown, key: unknown) {
+    const [subscription, command, idempotencyKey] = parse(() => [saasUuid(subscriptionId), validateSaasSubscriptionCommand(body), saasUuid(key)] as const);
+    return this.run('commandSubscription', [subject, subscription, JSON.stringify(command), idempotencyKey, randomUUID(), randomUUID()], validateSaasSubscriptionCommandReceipt);
+  }
+
+  private async run<T>(operation: SaasBillingOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {
+    let data: unknown;
+    try { data = await this.database.callSaasBilling(operation, params); }
+    catch (error) {
+      const { code, message } = (error ?? {}) as { code?: string; message?: string };
+      if (code === '42501') throw new ForbiddenException({ code: 'SAAS_FORBIDDEN' });
+      if (code === 'P0002') throw new NotFoundException({ code: 'SAAS_UNAVAILABLE' });
+      if (code === '40001') throw new ConflictException({ code: STATE_CONFLICTS.has(message ?? '') ? message : 'SAAS_VERSION_CONFLICT' });
+      if (code === '23505') throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
+      if (code === '55P03' || code === '57014') throw new ConflictException({ code: 'SAAS_OUTCOME_UNKNOWN', detail: 'Retry the identical request with the same key; do not assume the command took effect.' });
+      if (code === '23514' && RULE_REFUSALS.has(message ?? '')) throw new UnprocessableEntityException({ code: message });
+      if (['22023','22P02','22003','22007','22008','23514'].includes(code ?? '')) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+      throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    }
+    try { return validate(data); } catch { throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' }); }
+  }
+}
