@@ -21,6 +21,7 @@ export * from './parent-message-history.js';
 export * from './attendance-policy.js';
 export * from './crm-lead-close.js';
 export * from './crm-lead-create.js';
+export * from './crm-intake-stages.js';
 export * from './kiosk.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;

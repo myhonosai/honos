@@ -40,15 +40,28 @@ describe('bounded conventional CRM lead list', () => {
     ]);
   });
 
-  it('accepts only an idle untrusted scope prefill and still performs no automatic read or command', () => {
+  it('keeps URL scope prefill inert and never exposes its UUIDs or performs an automatic CRM list read or command', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     try {
       const html = renderToStaticMarkup(<CrmLeadsWorkbench initialScope={{ organizationId, schoolId }} />);
-      expect(html).toContain(`value="${organizationId}"`);
-      expect(html).toContain(`value="${schoolId}"`);
+      expect(html).not.toContain(organizationId);
+      expect(html).not.toContain(schoolId);
+      expect(html).not.toContain('Organization UUID');
+      expect(html).not.toContain('School UUID');
       expect(html).toContain('No verified school list is loaded.');
       expect(fetcher).not.toHaveBeenCalled();
     } finally { fetcher.mockRestore(); }
+  });
+
+  it('clears scope and configured intake stages when inactive, then requires a fresh reporting-school resolution on return', () => {
+    const source = readFileSync('src/components/crm-leads-workbench.tsx', 'utf8');
+    expect(source).toContain('scopeEpoch.current++; resolverRead.current = null; selectorRead.current = null; clearList(); setScope(null);');
+    expect(source).toContain("setScopeState('RESOLVING')");
+    expect(source).toContain("window.addEventListener('blur', leave)");
+    expect(source).toContain("window.addEventListener('focus', resume)");
+    expect(source).toContain("document.addEventListener('visibilitychange', visibility)");
+    expect(source).toContain('setScopeReload(value => value + 1)');
+    expect(source).toContain('}, [scopeReload]);');
   });
 
   it('uses the existing fixed same-origin list route and rejects extended, duplicate, or malformed lead projections', async () => {

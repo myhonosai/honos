@@ -52,6 +52,9 @@ import { ReadinessController } from './health/readiness.controller.js';
 import { LeadController } from './crm/lead.controller.js';
 import { LeadService } from './crm/lead.service.js';
 import { LeadCreateHumanUiGuard } from './crm/lead-create-human-ui.guard.js';
+import { CrmIntakeStagesController } from './crm/crm-intake-stages.controller.js';
+import { CrmIntakeStagesService } from './crm/crm-intake-stages.service.js';
+import { CrmIntakeStagesHumanUiGuard } from './crm/crm-intake-stages-human-ui.guard.js';
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
@@ -257,6 +260,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceRequestController,
     ParentMessageHistoryController,
     LeadController,
+    CrmIntakeStagesController,
     LeadCloseController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
@@ -355,6 +359,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentMessageHistoryReadGuard,
     LeadService,
     LeadCreateHumanUiGuard,
+    CrmIntakeStagesService,
+    CrmIntakeStagesHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
     TrialAppointmentService,
