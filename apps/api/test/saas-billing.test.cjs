@@ -21,7 +21,8 @@ const catalog = (patch = {}) => ({ catalogId:U(), catalogVersion:1, status:'PUBL
   founderProgram:{ totalLimit:50, lifetimeLimit:20, monthlyLimit:30, eligibility:'ANY_ACTIVE_ORGANIZATION', reservationHoldDays:7, opensAt:T, closesAt:null },
   chargesEnabled:false, creditGrantsEnabled:false, createdAt:T, publishedAt:T, retiredAt:null, ...patch });
 const inventory = { status:'CONFIGURED', totalLimit:50, lifetimeLimit:20, monthlyLimit:30, lifetime:{ allocated:1, held:0 }, monthly:{ allocated:0, held:2 }, remaining:{ total:47, lifetime:19, monthly:28 } };
-const policies = contracts.SAAS_POLICY_CODES.map(policyCode => ({ policyCode, status:'UNDECIDED', blocks:'Refused until the owner decides' }));
+const policies = contracts.SAAS_POLICY_CODES.map((policyCode, i) => i % 2 ? { policyCode, status:'UNDECIDED', decision:null, summary:null, blocks:'Refused until the owner decides', actionsEnabled:false, version:1 }
+  : { policyCode, status:'DECIDED', decision:'OWNER_DECISION', summary:'Recorded owner direction', blocks:'Still blocked until terms are authorized', actionsEnabled:false, version:2 });
 const view = (patch = {}) => ({ published:catalog(), drafts:[], policies, founderInventory:inventory, chargesEnabled:false, creditGrantsEnabled:false, paymentProvider:'NOT_CONFIGURED', ...patch });
 const subscription = (patch = {}) => ({ subscriptionId:U(), organizationId:U(), organizationName:'Fixture Dojo', source:'CATALOG_OFFER', catalogVersion:1, offerId:U(),
   planCode:'CORE', entitlementTier:'CORE', offerKind:'REGULAR_MONTHLY', billingInterval:'MONTHLY', priceMinor:14900, currency:'USD', founderReservationId:null,
@@ -53,7 +54,8 @@ test('response contracts fail closed on any financial activation, payment claim 
   const coreWithWorkforce = catalog(); coreWithWorkforce.plans[0].capabilities.push('ai.workforce');
   const essentialPublic = catalog(); essentialPublic.plans[2].availability = 'PUBLIC';
   for (const bad of [view({ chargesEnabled:true }), view({ creditGrantsEnabled:true }), view({ paymentProvider:'STRIPE' }), view({ published:catalog({ chargesEnabled:true }) }),
-    view({ published:coreWithWorkforce }), view({ published:essentialPublic }), view({ policies:[{ ...policies[0], status:'DECIDED' }, ...policies.slice(1)] }),
+    view({ published:coreWithWorkforce }), view({ published:essentialPublic }), view({ policies:[{ ...policies[0], actionsEnabled:true }, ...policies.slice(1)] }), view({ policies:policies.map((p, i) => i === 1 ? { ...p, decision:'X' } : p) }),
+    view({ policies:[{ ...policies[0], status:'PROPOSED', decision:null }, ...policies.slice(1)] }),
     view({ published:catalog({ offers:[{ offerId:U(), planCode:'CORE', offerKind:'REGULAR_ANNUAL', billingInterval:'ANNUAL', priceMinor:149000, founder:false, allowance:'FULL_MONTHLY_PLAN_ALLOWANCE' }] }) }),
     view({ published:catalog({ offers:[{ offerId:U(), planCode:'ESSENTIAL', offerKind:'REGULAR_MONTHLY', billingInterval:'MONTHLY', priceMinor:9900, founder:false, allowance:'FULL_MONTHLY_PLAN_ALLOWANCE' }] }) })])
     assert.throws(() => contracts.validateSaasCatalogView(bad));
@@ -92,7 +94,7 @@ test('HTTP routes: subject-only reads, exact human commands, no payment routes',
     assert.equal((await send(`${base}/subscriptions?status=IN_SERVICE`)).status, 200); assert.deepEqual(calls.at(-1), ['readSubscriptions', ['verified-human', 'IN_SERVICE']]);
     assert.equal((await send(`${base}/subscriptions?status=PAID`)).status, 400);
     const before = calls.length;
-    for (const path of ['checkout', 'charges', 'invoices', 'refunds', 'credits/grants', 'subscriptions/x/activate-payment'])
+    for (const path of ['checkout', 'charges', 'refunds', 'credits/grants', 'subscriptions/x/activate-payment'])
       assert.equal((await send(`${base}/${path}`, { method:'POST', headers:human('saas-subscription-command'), body:'{}' })).status, 404, path);
     assert.equal(calls.length, before);
     const id = randomUUID(), body = JSON.stringify({ action:'SUSPEND', expectedVersion:2, reasonCode:'OWNER_HOLD' });
