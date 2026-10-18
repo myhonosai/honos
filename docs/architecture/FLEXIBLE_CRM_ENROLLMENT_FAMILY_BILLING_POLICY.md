@@ -66,10 +66,9 @@ Membership, billing status, agreement state and payment authorization remain ind
 
 1. **Delivered:** Implement default reuse plus explicit additional-account reason/audit policy over the existing billing-account model.
 2. **Delivered:** Expose it through a strict direct-human staff surface with server-authorized selectors and no financial-provider effects.
-3. Implement explicit adult lead conversion with preserved lead/trial attribution and bounded duplicate review.
-4. Implement explicit guardian-child lead conversion, preserving guardian and child identities separately.
+3. **Delivered foundation:** Implement explicit adult and guardian-child lead registration with preserved source lead/trial attribution, fresh separate child identity for guardian-child, immutable audit/outbox evidence, and bounded `NEEDS_STAFF_REVIEW` on ambiguity. This deliberately does not link or merge any pre-existing person, student, family or contact.
+4. Add verified existing-record linking, multi-child convenience and contact correction only after their own ambiguity/review contracts exist.
 5. Reuse the existing canonical membership-DRAFT path once payer, participant and account relations are verified; do not build a parallel membership model.
-6. Add verified existing-record linking and multi-child convenience only after their own ambiguity/review contracts exist.
 
 ## Non-negotiables
 
