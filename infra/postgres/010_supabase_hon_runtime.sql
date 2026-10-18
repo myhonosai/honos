@@ -1129,7 +1129,7 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
       'hon.champions_claim_request(uuid,uuid,text,text,uuid,uuid)',
       'hon.champions_record(uuid,uuid,text,text,text,uuid,uuid,jsonb,jsonb,jsonb,timestamptz)',
       'hon.champions_fingerprint(text[])','hon.champions_ts(timestamptz)','hon.champions_policy_json(hon.champions_policies)',
-      'hon.champions_attribution_json(hon.champions_attributions)',
+      'hon.champions_attribution_json(hon.champions_attributions)','hon.champions_orgs_share_user(uuid,uuid)',
       'hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)','hon.read_champions_school_view(text,uuid)',
       'hon.read_champions_program_from_hq(text)','hon.create_champions_policy_draft(text,jsonb,uuid,uuid,uuid)',
       'hon.publish_champions_policy(text,uuid,uuid,uuid,uuid)','hon.capture_champions_attribution(text,jsonb,uuid,uuid,uuid)',

@@ -14,6 +14,7 @@ export const championsClubFunctions = [
  ['hon.champions_ts(timestamptz)',false,false],
  ['hon.champions_policy_json(hon.champions_policies)',false,false],
  ['hon.champions_attribution_json(hon.champions_attributions)',false,true],
+ ['hon.champions_orgs_share_user(uuid,uuid)',false,false],
  ['hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)',true,true],
  ['hon.read_champions_school_view(text,uuid)',true,true],
  ['hon.read_champions_program_from_hq(text)',true,true],

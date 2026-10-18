@@ -488,6 +488,16 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
     'decidedAt',CASE WHEN a.decided_at IS NULL THEN NULL ELSE hon.champions_ts(a.decided_at) END)
 $$;
 
+-- The same human (one user identity) may not appear on both sides of a referral. Any role
+-- grant counts, revoked or not. Checked at capture and again at qualification, because a
+-- newly provisioned organization usually has no staff grants yet when it is captured.
+CREATE FUNCTION hon.champions_orgs_share_user(p_referrer uuid, p_referred uuid) RETURNS boolean
+LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
+  SELECT EXISTS (SELECT 1 FROM hon.principal_role_grants g1 JOIN hon.principals p1 ON p1.id = g1.principal_id
+    JOIN hon.principals p2 ON p2.user_id = p1.user_id JOIN hon.principal_role_grants g2 ON g2.principal_id = p2.id
+    WHERE g1.organization_id = p_referrer AND g2.organization_id = p_referred)
+$$;
+
 -- Records that a newly provisioned organization was referred by a school's code. Never
 -- triggered by a URL alone: an HQ human records it against an existing organization.
 CREATE FUNCTION hon.capture_champions_attribution(p_subject text, p jsonb, p_key uuid, p_request uuid, p_correlation uuid)
@@ -515,11 +525,7 @@ BEGIN
   IF code_row.status <> 'ACTIVE' OR referred.status <> 'ACTIVE' THEN
     RAISE EXCEPTION 'CHAMPIONS_ATTRIBUTION_NOT_ELIGIBLE' USING ERRCODE = '23514';
   END IF;
-  IF code_row.organization_id = referred_id
-    -- The same human (one user identity) may not appear on both sides of a referral.
-    OR EXISTS (SELECT 1 FROM hon.principal_role_grants g1 JOIN hon.principals p1 ON p1.id = g1.principal_id
-      JOIN hon.principals p2 ON p2.user_id = p1.user_id JOIN hon.principal_role_grants g2 ON g2.principal_id = p2.id
-      WHERE g1.organization_id = code_row.organization_id AND g2.organization_id = referred_id) THEN
+  IF code_row.organization_id = referred_id OR hon.champions_orgs_share_user(code_row.organization_id, referred_id) THEN
     RAISE EXCEPTION 'CHAMPIONS_SELF_REFERRAL' USING ERRCODE = '23514';
   END IF;
   -- No retroactive attribution of organizations that existed before the code was issued.
@@ -580,7 +586,7 @@ BEGIN
   END IF;
   target := CASE decision WHEN 'QUALIFY' THEN 'QUALIFIED' WHEN 'REJECT' THEN 'REJECTED' WHEN 'REFUND' THEN 'REFUNDED' ELSE 'REVERSED' END;
   actor := hon.require_champions_hq_actor(p_subject, decision <> 'REJECT');
-  LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants IN SHARE MODE;
+  LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants, hon.principal_role_grants IN SHARE MODE;
   actor := hon.require_champions_hq_actor(p_subject, decision <> 'REJECT');
   replay := hon.champions_claim_request(actor, p_key, 'champions.attribution.decide',
     hon.champions_fingerprint(ARRAY['champions.attribution.decide', p_attribution::text, p::text]), p_request, p_correlation);
@@ -611,6 +617,9 @@ BEGIN
       WHERE o.id = prior.referred_organization_id AND o.status = 'ACTIVE' AND e.status = 'ACTIVE'
         AND e.effective_from <= at AND (e.effective_until IS NULL OR e.effective_until > at)) THEN
       RAISE EXCEPTION 'CHAMPIONS_QUALIFICATION_NOT_MET' USING ERRCODE = '23514';
+    END IF;
+    IF hon.champions_orgs_share_user(prior.referrer_organization_id, prior.referred_organization_id) THEN
+      RAISE EXCEPTION 'CHAMPIONS_SELF_REFERRAL' USING ERRCODE = '23514';
     END IF;
     evidence := jsonb_build_object('source','HQ_OWNER_ATTESTATION','reference',p->'evidence'->>'reference',
       'paidInvoiceCount',paid_invoices,'firstPaidAt',hon.champions_ts(first_paid));
@@ -665,7 +674,7 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
       'hon.champions_claim_request(uuid,uuid,text,text,uuid,uuid)',
       'hon.champions_record(uuid,uuid,text,text,text,uuid,uuid,jsonb,jsonb,jsonb,timestamptz)',
       'hon.champions_fingerprint(text[])','hon.champions_ts(timestamptz)','hon.champions_policy_json(hon.champions_policies)',
-      'hon.champions_attribution_json(hon.champions_attributions)',
+      'hon.champions_attribution_json(hon.champions_attributions)','hon.champions_orgs_share_user(uuid,uuid)',
       'hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)','hon.read_champions_school_view(text,uuid)',
       'hon.read_champions_program_from_hq(text)','hon.create_champions_policy_draft(text,jsonb,uuid,uuid,uuid)',
       'hon.publish_champions_policy(text,uuid,uuid,uuid,uuid)','hon.capture_champions_attribution(text,jsonb,uuid,uuid,uuid)',

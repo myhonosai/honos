@@ -11,9 +11,9 @@ const runtimeDatabase=new RuntimeDatabaseService(),service=new ChampionsClubServ
 const httpStatus=(n,code)=>e=>{assert.equal(e.getStatus?.(),n,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;};
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
 const championsTables=['champions_outbox','champions_audit','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
-const ids=Object.fromEntries(['orgA','orgB','orgC','orgD','orgR','orgE','orgOld','orgSuspended','orgUnentitled','schoolA','schoolA2','schoolB','schoolD','schoolU','staffRole','plainRole','parentRole','dualRoleA','dualRoleD','unentitledRole'].map(k=>[k,randomUUID()]));
+const ids=Object.fromEntries(['orgA','orgB','orgC','orgD','orgR','orgE','orgS','orgOld','orgSuspended','orgUnentitled','schoolA','schoolA2','schoolB','schoolD','schoolU','staffRole','plainRole','parentRole','dualRoleA','dualRoleD','dualRoleS','unentitledRole','schoolS'].map(k=>[k,randomUUID()]));
 const humans=Object.fromEntries(['owner','operator','operatorNoPerm','support','staff','staffNoPerm','parent','hqStaff','inactive','dual','unentitled'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`champions-${k}-${randomUUID()}`}]));
-const orgs=()=>[ids.orgA,ids.orgB,ids.orgC,ids.orgD,ids.orgR,ids.orgE,ids.orgOld,ids.orgSuspended,ids.orgUnentitled];
+const orgs=()=>[ids.orgA,ids.orgB,ids.orgC,ids.orgD,ids.orgR,ids.orgE,ids.orgS,ids.orgOld,ids.orgSuspended,ids.orgUnentitled];
 const sqlDeny=(fn,code='42501',message)=>assert.rejects(fn,e=>{assert.equal(e.code,code,e.stack);if(message)assert.equal(e.message,message);return true;});
 const call=async(fn,args,types)=>(await restricted.query(`SELECT hon.${fn}(${args.map((_,i)=>`$${i+1}${types?.[i]?`::${types[i]}`:''}`).join(',')}) r`,args)).rows[0].r;
 const keys=()=>[randomUUID(),randomUUID(),randomUUID()];
@@ -102,7 +102,7 @@ try{
 
  // Referred organizations are created after the code exists (no retroactive attribution).
  await admin.query('BEGIN');
- await addOrg(ids.orgB);await addOrg(ids.orgC);await addOrg(ids.orgR);await addOrg(ids.orgSuspended,{status:'SUSPENDED'});
+ await addOrg(ids.orgB);await addOrg(ids.orgC);await addOrg(ids.orgR);await addOrg(ids.orgS);await addOrg(ids.orgSuspended,{status:'SUSPENDED'});
  await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1::uuid,$2,'Referred fixture school',$1::text,'America/New_York')",[ids.schoolB,ids.orgB]);
  await admin.query('COMMIT');
 
@@ -199,6 +199,15 @@ try{
  await sqlDeny(()=>decide('operator',c.attributionId,{decision:'REFUND',reasonCode:'REFUND_ISSUED',expectedVersion:1}),'42501');
  const rejected=await decide('operator',c.attributionId,{decision:'REJECT',reasonCode:'ATTRIBUTION_EXPIRED',expectedVersion:1});
  assert.equal(rejected.attribution.state,'REJECTED');assert.equal(rejected.attribution.qualifiedAt,null);
+ // A shared user that appears only after capture is still caught at qualification.
+ const sAttr=(await capture('operator',{referralCode:code,referredOrganizationId:ids.orgS})).attribution;
+ await admin.query('BEGIN');
+ await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1::uuid,$2,'Late-grant fixture school',$1::text,'America/New_York')",[ids.schoolS,ids.orgS]);
+ await admin.query("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,'LATE_OWNER','Fixture role')",[ids.dualRoleS,ids.orgS]);
+ await grant('dual',ids.dualRoleS,ids.orgS,ids.schoolS);
+ await admin.query('COMMIT');
+ await sqlDeny(()=>decide('owner',sAttr.attributionId,qualifyBody(1)),'23514','CHAMPIONS_SELF_REFERRAL');
+ assert.equal((await decide('operator',sAttr.attributionId,{decision:'REJECT',reasonCode:'SELF_REFERRAL',expectedVersion:1})).attribution.state,'REJECTED');
  // A refund inside the guarantee period ends a PENDING referral without qualification.
  const r=(await capture('operator',{referralCode:code,referredOrganizationId:ids.orgR})).attribution;
  const refunded=await decide('owner',r.attributionId,{decision:'REFUND',reasonCode:'REFUND_ISSUED',expectedVersion:1});
@@ -207,9 +216,9 @@ try{
 
  // ---------- reads ----------
  const view=await schoolView('staff');
- assert.deepEqual(view.referrals,{pending:0,qualified:0,rejected:1,refunded:1,reversed:1});assert.equal(view.referralCode.code,code);
+ assert.deepEqual(view.referrals,{pending:0,qualified:0,rejected:2,refunded:1,reversed:1});assert.equal(view.referralCode.code,code);
  assert.equal(JSON.stringify(view).includes(ids.orgB),false,'Referring school never sees referred organization identity.');
- const all=await listHq('operator');assert.equal(all.attributions.length,3);assert.equal(all.limit,100);
+ const all=await listHq('operator');assert.equal(all.attributions.length,4);assert.equal(all.limit,100);
  assert.deepEqual((await listHq('owner','REVERSED')).attributions.map(a=>a.attributionId),[b.attributionId]);
  await sqlDeny(()=>listHq('operator','BOGUS'),'22023');
  for(const who of ['operatorNoPerm','support','staff'])await sqlDeny(()=>listHq(who),'42501');
@@ -220,8 +229,8 @@ try{
  assert.deepEqual(history,[{from_state:null,to_state:'PENDING',version:1,state_reason:'CAPTURED'},{from_state:'PENDING',to_state:'QUALIFIED',version:2,state_reason:'QUALIFICATION_VERIFIED'},{from_state:'QUALIFIED',to_state:'REVERSED',version:3,state_reason:'PAYMENT_REVERSED'}]);
  const evidence=(await admin.query("SELECT (SELECT count(*)::int FROM hon.champions_requests WHERE status='COMPLETED') completed,(SELECT count(*)::int FROM hon.champions_requests WHERE status<>'COMPLETED') open,(SELECT count(*)::int FROM hon.champions_audit) audits,(SELECT count(*)::int FROM hon.champions_outbox) outbox,(SELECT count(*)::int FROM hon.champions_outbox WHERE payload->'internalOnly'='true'::jsonb AND payload->'executionAllowed'='false'::jsonb) inert")).rows[0];
  assert.equal(evidence.open,0,'Failed commands leave no request receipt.');assert.equal(evidence.audits,evidence.completed);assert.equal(evidence.outbox,evidence.audits);assert.equal(evidence.inert,evidence.outbox);
- // 2 issues, 3 captures, 4 drafts, 3 publishes, 4 decisions.
- assert.equal(evidence.completed,16);
+ // 2 issues, 4 captures, 4 drafts, 3 publishes, 5 decisions.
+ assert.equal(evidence.completed,18);
  for(const sql of ["UPDATE hon.champions_audit SET entity_type='POLICY'","DELETE FROM hon.champions_outbox","TRUNCATE hon.champions_attribution_history","UPDATE hon.champions_requests SET operation='x'","DELETE FROM hon.champions_attributions","UPDATE hon.champions_attributions SET state='QUALIFIED', version=version+1 WHERE state='REJECTED'","UPDATE hon.champions_policies SET welcome_credit_minor=0","UPDATE hon.champions_policies SET status='DRAFT' WHERE status='RETIRED'","UPDATE hon.champions_referral_codes SET status='ACTIVE', revoked_at=NULL WHERE status='REVOKED'","DELETE FROM hon.champions_referral_codes"])
   await sqlDeny(()=>admin.query(sql),'42501');
  await sqlDeny(()=>admin.query('UPDATE hon.champions_policies SET financial_rewards_enabled=true'),'42501');
@@ -229,9 +238,9 @@ try{
  try{await sqlDeny(()=>admin.query('UPDATE hon.champions_policies SET financial_rewards_enabled=true'),'23514');}finally{await admin.query('ALTER TABLE hon.champions_policies ENABLE TRIGGER champions_guarded');}
  // Nothing outside the Champions Club tables changed (entitlement status was restored above).
  const after=await snapshot();
- for(const t of Object.keys(before))if(t!=='organizations'&&t!=='organization_entitlements'&&t!=='schools')assert.deepEqual(after[t],before[t],t);
- const strip=rows=>rows.map(r=>{const o=JSON.parse(r);delete o.updated_at;return JSON.stringify(o);}).filter(r=>![ids.orgB,ids.orgC,ids.orgR,ids.orgSuspended,ids.schoolB].some(id=>r.includes(id)));
- for(const t of ['organizations','organization_entitlements','schools'])assert.deepEqual(strip(after[t]),strip(before[t]),t);
+ // Rows the fixture itself adds after the baseline (referred organizations, the late grant) are excluded; updated_at is ignored.
+ const strip=rows=>rows.map(r=>{const o=JSON.parse(r);delete o.updated_at;return JSON.stringify(o);}).filter(r=>![ids.orgB,ids.orgC,ids.orgR,ids.orgS,ids.orgSuspended,ids.schoolB,ids.schoolS,ids.dualRoleS].some(id=>r.includes(id)));
+ for(const t of Object.keys(before))assert.deepEqual(strip(after[t]),strip(before[t]),t);
  // ---------- API service against the real database: closed response contracts accept actual output ----------
  const apiView=await service.readSchoolView(humans.staff.subject,ids.schoolA.toUpperCase());
  assert.deepEqual(apiView,view);
@@ -240,7 +249,7 @@ try{
  for(const who of ['parent','hqStaff','owner'])await assert.rejects(()=>service.issueReferralCode(humans[who].subject,ids.schoolA,randomUUID()),httpStatus(403,'CHAMPIONS_FORBIDDEN'));
  await assert.rejects(()=>service.readProgram(humans.staff.subject),httpStatus(403));
  assert.equal((await service.readProgram(humans.operator.subject)).published.policyId,immediate.policyId);
- assert.equal((await service.readAttributions(humans.owner.subject,undefined)).attributions.length,3);
+ assert.equal((await service.readAttributions(humans.owner.subject,undefined)).attributions.length,4);
  assert.equal((await service.readAttributions(humans.owner.subject,'REFUNDED')).attributions[0].attributionId,r.attributionId);
  await admin.query('BEGIN');await addOrg(ids.orgE);await admin.query('COMMIT');
  await assert.rejects(()=>service.captureAttribution(humans.operator.subject,{referralCode:code,referredOrganizationId:ids.orgA},randomUUID()),httpStatus(422,'CHAMPIONS_SELF_REFERRAL'));
@@ -260,7 +269,7 @@ try{
  assert.deepEqual(await service.publishPolicy(humans.owner.subject,apiDraft.policyId,apiPublishKey),{...apiPublished,replayed:true});
  await assert.rejects(()=>service.publishPolicy(humans.owner.subject,undecided.policyId,randomUUID()),httpStatus(422,'CHAMPIONS_POLICY_UNDECIDED'));
  await assert.rejects(()=>service.createPolicyDraft(humans.operator.subject,terms({paymentVerificationSource:'CARD_PROCESSOR'}),randomUUID()),httpStatus(400,'INVALID_CHAMPIONS_INPUT'));
- console.log('PASS: Champions Club foundation authority (HQ owner/operator/support, school staff, parent, HQ-dual, inactive, unentitled, context-bound), referral code issue/replay, self/duplicate/retroactive/suspended/revoked attribution denial, undecided-policy and unavailable-payment-source qualification denial, refund-window/minimum-paid/entitlement/expiry qualification gates, QUALIFIED->REVERSED, PENDING->REJECTED and PENDING->REFUNDED transitions, idempotent replay and key reuse, immutable history/audit/inert outbox, financial rewards pinned disabled, no unrelated table effects, and the API service end to end with closed response contracts on real database output.');
+ console.log('PASS: Champions Club foundation authority (HQ owner/operator/support, school staff, parent, HQ-dual, inactive, unentitled, context-bound), referral code issue/replay, self (at capture and at qualification)/duplicate/retroactive/suspended/revoked attribution denial, undecided-policy and unavailable-payment-source qualification denial, refund-window/minimum-paid/entitlement/expiry qualification gates, QUALIFIED->REVERSED, PENDING->REJECTED and PENDING->REFUNDED transitions, idempotent replay and key reuse, immutable history/audit/inert outbox, financial rewards pinned disabled, no unrelated table effects, and the API service end to end with closed response contracts on real database output.');
 }finally{
  try{await restricted.query('ROLLBACK').catch(()=>{});await cleanup();}finally{await Promise.all([admin.end(),restricted.end(),runtimeDatabase.onModuleDestroy()]);}
 }

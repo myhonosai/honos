@@ -31,7 +31,7 @@ Migration: [`0148_champions_club_foundation.sql`](../../packages/database/migrat
 
 | Rule | Behavior |
 | --- | --- |
-| Self-referral | Refused if the referred organization is the referrer, or any user holds a role in both organizations (`CHAMPIONS_SELF_REFERRAL`) |
+| Self-referral | Refused if the referred organization is the referrer, or any user has ever held a role in both organizations (`CHAMPIONS_SELF_REFERRAL`). Checked at capture **and again at qualification**, because a newly provisioned school usually has no staff grants yet when it is captured |
 | Duplicate | One attribution per referred organization, ever (`CHAMPIONS_DUPLICATE_ATTRIBUTION`) |
 | Retroactive | An organization created before the code was issued cannot be attributed |
 | Inactive | Revoked codes and non-ACTIVE organizations cannot be attributed |
