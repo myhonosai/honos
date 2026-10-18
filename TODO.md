@@ -2,9 +2,9 @@
 
 ## Codex HQ Modern frontend — owner-authorized 2026-10-18
 
-- [ ] Implement approved responsive HQ dashboard and navigation on `codex/hq-modern-implementation`, tracking issue #4; preserve PR #3 and existing HQ authorization/data contracts.
-- [ ] Add persistent non-executing HON interface, catalog-based executive workspace entries, appearance controls, and honest planned/unavailable management interfaces.
-- [ ] Record actual interaction, responsive, accessibility, regression and build evidence; no merge/deployment or backend/provider activation. Details: `docs/CODEX_HQ_IMPLEMENTATION.md`.
+- [x] Implement approved responsive HQ dashboard and navigation on `codex/hq-modern-implementation`, tracking issue #4 / PR #8; preserve PR #3 and existing HQ authorization/data contracts. Owner visual acceptance remains pending.
+- [x] Add persistent non-executing HON interface, catalog-based executive workspace entries, appearance controls, and honest planned/unavailable management interfaces. No operational AI, voice, financial or referral action is claimed.
+- [x] Record real browser interaction/responsive/accessibility evidence: source `c71b6fb`, 36 checks passed, 0 failed; eight axe scans with zero violations at four viewport sizes. [Desktop/mobile review gallery](docs/visuals/codex/hq-modern/README.md). [Normal CI 39103263609](https://github.com/myhonosai/honos/actions/runs/39103263609) on that same source passed both jobs: tests/check/build/migration contract and disposable-local security proofs. Physical-device keyboard, screen-reader and owner review remain pending. No merge/deployment or backend/provider activation. Details: `docs/CODEX_HQ_IMPLEMENTATION.md`.
 
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
 

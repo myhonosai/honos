@@ -22,18 +22,20 @@ Approved concept exports are copied unchanged into a new HQ-only asset folder. C
 
 ## Milestones
 
-- [ ] Responsive foundation, dashboard, navigation and appearance controls.
-- [ ] Persistent assistant and executive presentation workspaces.
-- [ ] Existing HQ data integration and planned management surfaces.
-- [ ] Functional/responsive/accessibility/regression evidence and review PR.
+- [x] Responsive foundation, dashboard, navigation and appearance controls; real screenshots ready for owner review.
+- [x] Persistent assistant and executive presentation workspaces; conversation/voice/task execution remain unavailable.
+- [x] Existing HQ aggregate/directory integration and planned management surfaces; no new backend workflows.
+- [x] Functional/responsive/automated-accessibility evidence and review PR; physical-device, screen-reader and owner visual review remain pending.
 
-Validation results and screenshots will be added after execution; no successful checks are assumed.
+Actual browser evidence and desktop/mobile images: [HQ review gallery](visuals/codex/hq-modern/README.md). Owner acceptance is separate from implemented frontend milestones.
+
+Verified source `c71b6fb`: existing [CI 39103263609](https://github.com/myhonosai/honos/actions/runs/39103263609) passed both jobs (tests, checks, full application build, migration-file contract and disposable-local PostgreSQL security proofs). Temporary [browser run 39103263735](https://github.com/myhonosai/honos/actions/runs/39103263735) passed 36 checks, failed zero and produced 18 PNG screenshots, with zero reported violations across eight axe scans. Screen-reader, physical-device software-keyboard and owner visual review remain pending. No migration or live business workflow was introduced.
 
 ## Environment recovery and publication
 
 The terminal cannot reach its configured proxy (`curl (7)` at `proxy:8080`). React/Next/TypeScript/Vitest are absent and uncached. No lockfile or network controls were changed. All original source files were exported through the connected GitHub application and verified by Git blob SHA. The baseline tree exactly matches upstream `c0331df`; the working source tree is also checked against the published GitHub tree. Local snapshot commit IDs differ from upstream; published commits use the actual latest-main parent.
 
-The branch includes main `22ef492` (owner-approved CI/docs). Implementation is reviewable in PR #8. Existing GitHub CI installs locked dependencies successfully; local browser previews still require terminal-network permission or environment repair. Earlier generated images are design references, not runtime screenshots.
+The branch includes main `22ef492` (owner-approved CI/docs). Implementation is reviewable in PR #8. Existing GitHub CI installs locked dependencies successfully. The supported cloud status reports an enforced unrestricted HTTP policy but exposes no repair capability, while the terminal's proxy remains unreachable. No further failed downloads, lockfile changes or network-control bypasses were attempted. Real preview verification therefore runs in the existing GitHub CI environment. Earlier generated images remain design references only.
 
 ## Temporary browser verification — owner authorized
 
@@ -45,4 +47,8 @@ Pinned `playwright-core` and `axe-core` tools are installed under runner temp wi
 
 Remove the temporary workflow after owner visual sign-off. Automated accessibility checks supplement manual review and do not establish complete WCAG compliance.
 
-Review-tool access: the artifact downloader returns a File Service ZIP reference, which this terminal cannot consume through its Sediment-only download tool. Two JPEG screenshot previews (desktop/mobile, synthetic fixtures only) and the sanitized report are therefore also emitted through the private Actions log for connected read-only review. These log copies follow the repository's log-retention policy, while the full PNG artifact expires after three days. No real records, cookies, ephemeral signing keys or application logs are included.
+Review-tool access: the artifact downloader returns a File Service ZIP reference, which this terminal cannot consume through its Sediment-only download tool. Three JPEG screenshot previews (desktop full page, mobile full page and mobile viewport, synthetic fixtures only) and the sanitized report are therefore also emitted through the private Actions log for connected read-only review. These log copies follow the repository's log-retention policy, while the full PNG artifact expires after three days. No real records, cookies, ephemeral signing keys or application logs are included.
+
+## Backend coordination
+
+Claude's [Champions Club backend tracking issue #6](https://github.com/myhonosai/honos/issues/6) defines the future closed `champions-club.ts` contracts and separates HQ from school endpoints. Its current milestone is still in progress, with leaderboard and contest contracts planned for later milestones. This frontend does not call unpublished endpoints. Financial figures and actions stay unavailable until the approved services, policy and billing boundaries exist. Claude's backend work and Classic Dashboard files are outside this change.
