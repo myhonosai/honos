@@ -657,3 +657,12 @@ Details: [Human Testing Scorecard Foundation](docs/architecture/HUMAN_TESTING_SC
 - [ ] Add the remaining database proofs to CI fixture by fixture, measuring minutes as you go.
 
 Details: [CI](docs/CI.md) · [Development status](docs/DEVELOPMENT_STATUS.md).
+
+## HON Champions Club backend — Claude Code (owner review; tracking issue #6)
+- [x] M1: migration 0148 adds school-owned referral codes, HQ-recorded attribution (one per referred organization) with versioned PENDING/QUALIFIED/REJECTED/REFUNDED/REVERSED states and closed reasons, a versioned program policy, immutable history, idempotency, audit and inert outbox. Forced deny-all RLS, function-only runtime access, direct-human subject resolution only.
+- [x] M1: self-referral (same org or shared user), duplicate, retroactive, revoked-code and inactive-org denial; qualification gated on a published complete policy, attribution window, refund window/minimum paid period/invoices, active referred entitlement, and an available payment-verification source (`HON_BILLING` fails closed). Financial rewards pinned `DISABLED` by constraint.
+- [x] M1: typed contracts (`packages/contracts/src/champions-club.ts`), school and HQ API under `/v1/schools/:schoolId/champions/*` and `/v1/hq/champions/*`, API tests, guarded disposable-localhost integrity proof (also in CI), `verify-rls` now 192 tables.
+- [ ] Owner decisions before any financial activation: program term values, payment-verification source, clawbacks and caps, founder/annual/paid-lifetime substitute rewards, rewards between milestones, prize taxes, contest terms, Essential participation.
+- [ ] M2 welcome credit and milestone entitlement accounting (liabilities only, nothing applied) · M3 leaderboard and HQ admin reads · M4 contest engine · M5 integration and security review.
+
+Details: [Champions Club backend](docs/architecture/CHAMPIONS_CLUB_BACKEND.md).

@@ -51,6 +51,7 @@
 | HQ control plane | **Partial** | Overview, school directory, AI provider catalog/routing policy, non-commercial Core↔Complete transition | Subscriptions, credits ledger, support access, contests; **HQ visual implementation is assigned to Codex** |
 | Staff roles, availability, qualifications, documents, work items, automation rules, community, marketplace | **Partial** | Human-governed foundations with tests | Broader workflows and execution engines |
 | Presentation modes (Big-Button, Modern, Classic) | **Partial** | Persisted per user/school on selected staff screens; reference screens | Not applied platform-wide; HQ and family preferences deferred |
+| HON Champions Club | **Partial** (PR pending, not merged) | Referral codes, HQ-recorded attribution, qualification states and gates, versioned policy, API and DB proofs ([design](architecture/CHAMPIONS_CLUB_BACKEND.md)) | Rewards ledger, leaderboard, contests; financial rewards disabled pending owner terms and billing |
 | CI / engineering operations | **Partial** (this PR) | CI for test/check/build/migrations + 5 database proofs on PRs | No push-to-main CI yet (cost decision), no deployment pipeline, monitoring, backups or runbooks in the repo |
 
 ## 3. Visual-only prototypes
@@ -65,7 +66,7 @@
 ## 4. Missing features (no implementation found)
 
 - HON's own subscription billing: checkout, founder and lifetime offers, the 30-day refund guarantee, $100 welcome credit.
-- **HON Champions Club**: referral links, attribution, verified leaderboard, rewards ledger, HQ contest builder.
+- **HON Champions Club** rewards ledger, verified leaderboard and HQ contest builder (referral codes and attribution: see section 2, Partial, PR pending).
 - Premium AI credit allowance, balance, reservation and 75/90/100% warnings (usage ledger table exists; no allowance or balance).
 - Payment processor integration (Stripe Connect / Square), payouts, reconciliation.
 - Outbound SMS / email / push delivery and receipts.
@@ -81,7 +82,7 @@
 | Self-serve signup and school provisioning | Missing (HQ-assisted onboarding exists) |
 | HON subscription checkout (Core / Complete, founder, lifetime) | Missing |
 | 30-day money-back refund workflow | Missing |
-| Champions Club referrals, leaderboard, contests | Missing |
+| Champions Club referrals, leaderboard, contests | Partial: attribution foundation only, rewards disabled |
 | School payment processing (optional HON Payments) | Missing / Blocked (provider and owner approval) |
 | Messaging to families and leads | Blocked (consent/queue foundations exist; no delivery) |
 | Meta / Google marketing connectors | Missing / Blocked |
