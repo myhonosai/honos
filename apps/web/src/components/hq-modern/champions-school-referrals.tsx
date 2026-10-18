@@ -69,7 +69,7 @@ export function HqSchoolReferrals(): React.ReactElement {
   const schools = directory.kind === 'ready' ? directory.data.schools.filter((s) => `${s.schoolDisplayName} ${s.organizationDisplayName}`.toLocaleLowerCase('en-US').includes(query.trim().toLocaleLowerCase('en-US'))) : [];
   return <div className={styles.management}>
     <section className={`${base.panel} ${styles.intro}`}><span className={base.badge}>Champions Club · HQ</span><h2>School referral details</h2></section>
-    <section className={base.panel}><div className={styles.introHeading}><h2>Find a school</h2><button type="button" disabled={directory.kind === 'loading'} onClick={() => { setSelected(null); setQuery(''); setDirectoryRevision((r) => r + 1); }}>Refresh school directory</button></div>
+    <section className={base.panel}><div className={styles.introHeading}><h2>Find a school</h2></div>
       <DetailState state={directory}/>
       {directory.kind === 'ready' && <>
         <p className={styles.note}>Search or choose a school to view its referral records.</p>
@@ -79,6 +79,7 @@ export function HqSchoolReferrals(): React.ReactElement {
           {!schools.length && <p role="status">No matching schools in the returned directory.</p>}
         </div>}
       </>}
+      <button className={`${detail.refresh} ${detail.directoryRefresh}`} type="button" disabled={directory.kind === 'loading'} onClick={() => { setSelected(null); setQuery(''); setDirectoryRevision((r) => r + 1); }}>Refresh school directory</button>
     </section>
     <ChampionsDetailNav/>
     {schoolId && <button className={detail.refresh} type="button" disabled={state.kind === 'loading'} onClick={() => setRevision((r) => r + 1)}>Refresh school referrals</button>}

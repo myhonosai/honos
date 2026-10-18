@@ -3,6 +3,7 @@
 .selection>div{display:grid;gap:8px;min-width:0;align-content:start}
 .selection input,.selection select{width:100%;min-width:0;min-height:44px;background:#0a2635;color:#effaff;border:1px solid #5b879a;border-radius:9px;padding:10px;font:inherit}
 .refresh{justify-self:start;background:#0c3446!important;border-color:#4f8eaa!important}
+.directoryRefresh{margin-top:16px}
 .capitalize{text-transform:capitalize}
 .ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
 .ladder>section{border:1px solid #3c6477;border-radius:12px;padding:14px;background:#0b2a3bd9;overflow-wrap:anywhere}
