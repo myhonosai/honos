@@ -8,7 +8,7 @@ HON HQ can create, configure, schedule, run, pause, end and settle referral cont
 - lists a contest publicly
 - creates an external obligation
 
-Migration: [`0151_champions_club_contests.sql`](../../packages/database/migrations/0151_champions_club_contests.sql). Contracts: [`champions-club-contests.ts`](../../packages/contracts/src/champions-club-contests.ts).
+Migration: [`0152_champions_club_contests.sql`](../../packages/database/migrations/0152_champions_club_contests.sql). Contracts: [`champions-club-contests.ts`](../../packages/contracts/src/champions-club-contests.ts).
 
 ## Separation from the permanent program
 

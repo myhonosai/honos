@@ -51,7 +51,7 @@ export const championsClubFunctions = [
  ['hon.read_champions_leaderboard_for_school(text,uuid,text,text)',true,true],
  ['hon.read_champions_school_statistics(text,uuid)',true,true],
  ['hon.set_champions_leaderboard_preference(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
- // 0151 contests
+ // 0152 contests
  ['hon.guard_champions_contests()',false,false],
  ['hon.champions_contest_counts(uuid,timestamptz)',false,false],
  ['hon.champions_contest_standings(uuid)',false,false],
