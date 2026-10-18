@@ -2,7 +2,8 @@
 
 ## Codex HQ Champions Club integration — owner-authorized follow-up
 
-- [ ] Deliver the real HQ all-time/UTC-month leaderboard from merged M1–M3 APIs on `codex/hq-champions-integration`, stacked on PR #8: server rankings only, closed contracts, explicit loading/empty/error/access states, refresh, stale-response isolation and confidential HQ-only holds. Separate the View and AI Style control boundaries. Prove privacy, desktop/mobile behavior and CI before expanding read-only overview work. No mutations, financial issuance, hypothetical M4, CRM edits, merge or deployment.
+- [x] Deliver the real HQ all-time/UTC-month leaderboard from merged M1–M3 APIs on `codex/hq-champions-integration`, stacked [PR #11](https://github.com/myhonosai/honos/pull/11) on visual PR #8. Source `9a53fba`: official server order/ranks/positions, closed contracts, filters/refresh, stale/empty/error/access states and separate confidential HQ holds; View and AI Style have distinct rounded groups. [Verification 39111391462](https://github.com/myhonosai/honos/actions/runs/39111391462): all three jobs passed, 581 web tests (nine new), 390 API / 188 domain / 91 auth tests, eight disposable-local database proofs, 45 browser checks / zero failures, 12 axe scans / zero reported violations, 25 PNG captures. [Actual desktop/mobile evidence](docs/visuals/codex/hq-champions-integration/README.md) inspected. Owner/manual device review pending. No backend/CRM changes, production mutations, financial issuance, M4, merge or deployment.
+- [ ] Follow up with Phase 3 read-only program status, attribution state lists, school statistics/milestones and reward-liability page integration using only merged contracts. Existing liabilities are not paid rewards. Contest M4 remains Claude-owned; financial activation/issuance stays disabled.
 
 ## Codex HQ Modern frontend — owner-authorized 2026-10-18
 

@@ -40,4 +40,10 @@ Local React/Next/TypeScript/Vitest dependencies remain absent. This exported che
 
 Phase 3 program/attribution/statistics/milestone/liability page integrations remain separate follow-up work. Their merged contracts were verified, but those pages retain truthful unconnected states in this slice. Reward liabilities are not payments; no issuance, reward reconciliation/approval, financial activation, contest lifecycle or hypothetical M4 API is added. Claude's backend and Manus's school CRM/enrollment/membership files are untouched.
 
-Actual CI results, screenshots and remaining manual review will be recorded after execution. Physical-device keyboard, screen-reader and owner review are separate from automated accessibility checks.
+## Actual verification and review
+
+Application source `9a53fba` passed all three jobs in [run 39111391462](https://github.com/myhonosai/honos/actions/runs/39111391462): repository tests/typecheck/full application build/migration contract/clean source; disposable-local database security proofs; and actual browser verification. Web: 581 tests / 108 files, including nine new integration tests. API: 390 tests; domain: 188; auth: 91. All eight disposable-database proofs passed, including canonical M1–M3 rank/order/exclusion/privacy and HQ authority on real database output.
+
+Browser: 45 checks passed, zero failed; 12 axe scans with zero reported violations; 25 PNG captures. Four viewport widths, all presentation modes, period/month/refresh, stale/empty/invalid/denied states, confidential review separation, fixture identity denial and operator access were verified. Actual screenshot inspection drove compact mobile spacing and a non-obstructing assistant entry. Desktop/tablet use a compact HON orb; mobile uses the existing persistent HON bottom-navigation button to open the same assistant.
+
+[Real desktop/mobile/monthly captures and sanitized report](visuals/codex/hq-champions-integration/README.md). These are the actual production build with synthetic authorized localhost fixtures, not live customer records. The evidence-only checkpoint changes no application code. Physical-device software keyboard, screen-reader and owner review remain pending; automated checks do not establish complete WCAG conformance.

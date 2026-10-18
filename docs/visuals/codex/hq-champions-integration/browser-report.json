@@ -1,0 +1,444 @@
+{
+  "sourceSha": "9a53fba89fa44fca50753a563ca07d49fd6c989b",
+  "fixtureOnly": true,
+  "productionDataUsed": false,
+  "checks": [
+    "desktop: dashboard, responsive layout and screenshots",
+    "desktop: appearance choices preserve the six HQ identities",
+    "desktop: dashboard accessibility",
+    "desktop: expanded assistant accessibility",
+    "desktop: assistant expand, draft continuity, disabled services and keyboard restore",
+    "desktop: executive workspace, unavailable tabs and persistent subpage assistant",
+    "desktop: navigation, menu focus and non-executing contest lifecycle",
+    "desktop: official leaderboard periods, confidential reviews and responsive bounds",
+    "tablet: dashboard, responsive layout and screenshots",
+    "tablet: appearance choices preserve the six HQ identities",
+    "tablet: dashboard accessibility",
+    "tablet: expanded assistant accessibility",
+    "tablet: assistant expand, draft continuity, disabled services and keyboard restore",
+    "tablet: executive workspace, unavailable tabs and persistent subpage assistant",
+    "tablet: navigation, menu focus and non-executing contest lifecycle",
+    "tablet: official leaderboard periods, confidential reviews and responsive bounds",
+    "mobile: dashboard, responsive layout and screenshots",
+    "mobile: appearance choices preserve the six HQ identities",
+    "mobile: dashboard accessibility",
+    "mobile: expanded assistant accessibility",
+    "mobile: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile: navigation, menu focus and non-executing contest lifecycle",
+    "mobile: official leaderboard periods, confidential reviews and responsive bounds",
+    "mobile-narrow: dashboard, responsive layout and screenshots",
+    "mobile-narrow: appearance choices preserve the six HQ identities",
+    "mobile-narrow: dashboard accessibility",
+    "mobile-narrow: expanded assistant accessibility",
+    "mobile-narrow: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile-narrow: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile-narrow: navigation, menu focus and non-executing contest lifecycle",
+    "mobile-narrow: official leaderboard periods, confidential reviews and responsive bounds",
+    "Leaderboard refresh clears facts, shows loading and retrieves changed official data",
+    "Leaderboard discards an obsolete delayed response after a filter change",
+    "Leaderboard empty, denied, unavailable and invalid responses reveal no stale rankings or holds",
+    "HQ leaderboard independently denies school, family, support and unsigned identities",
+    "HQ command backdrop and decorative motion pause, keyboard restore and preference change",
+    "Existing independent school directory transport",
+    "Fail-closed HQ overview 403",
+    "Fail-closed HQ overview 401",
+    "Fail-closed HQ overview 503",
+    "Fail-closed HQ overview malformed",
+    "Unsigned browser session cannot render HQ content",
+    "No browser JavaScript errors",
+    "No mutation, provider or arbitrary API request"
+  ],
+  "failures": [],
+  "screenshots": [
+    "desktop-dashboard-full.png",
+    "desktop-dashboard-viewport.png",
+    "desktop-chibi.png",
+    "desktop-assistant-expanded.png",
+    "desktop-workspace-assistant.png",
+    "desktop-growth-contests.png",
+    "desktop-leaderboard-all-time.png",
+    "desktop-leaderboard-monthly.png",
+    "tablet-dashboard-full.png",
+    "tablet-dashboard-viewport.png",
+    "tablet-assistant-expanded.png",
+    "tablet-leaderboard-all-time.png",
+    "mobile-dashboard-full.png",
+    "mobile-dashboard-viewport.png",
+    "mobile-assistant-expanded.png",
+    "mobile-workspace-assistant.png",
+    "mobile-growth-contests.png",
+    "mobile-leaderboard-all-time.png",
+    "mobile-leaderboard-viewport.png",
+    "mobile-leaderboard-monthly.png",
+    "mobile-narrow-dashboard-full.png",
+    "mobile-narrow-dashboard-viewport.png",
+    "mobile-narrow-assistant-expanded.png",
+    "mobile-narrow-leaderboard-all-time.png",
+    "desktop-hq-access-denied.png"
+  ],
+  "accessibility": [
+    {
+      "label": "desktop-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-narrow-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    }
+  ],
+  "blockedExternalHosts": [
+    "fonts.googleapis.com"
+  ],
+  "pageErrors": [],
+  "apiRequests": [
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    }
+  ]
+}
