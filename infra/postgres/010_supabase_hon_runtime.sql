@@ -1213,3 +1213,34 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End Champions Club leaderboard exact reconciliation.
+
+-- Champions Club contests exact reconciliation:
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['champions_contests','champions_contest_prizes','champions_contest_schools','champions_contest_pauses',
+      'champions_contest_results','champions_contest_winners','champions_contest_history'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC CASCADE',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I CASCADE',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid = ('hon.'||t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC CASCADE',col,t);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_champions_contests()','hon.champions_contest_counts(uuid,timestamptz)','hon.champions_contest_standings(uuid)',
+      'hon.champions_contest_json(hon.champions_contests)','hon.champions_contest_write_config(uuid,jsonb,boolean)',
+      'hon.command_champions_contest(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_champions_contests_from_hq(text,text)',
+      'hon.read_champions_contest_from_hq(text,uuid)','hon.read_champions_contests_for_school(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.command_champions_contest(text,uuid,jsonb,uuid,uuid,uuid), hon.read_champions_contests_from_hq(text,text),
+      hon.read_champions_contest_from_hq(text,uuid), hon.read_champions_contests_for_school(text,uuid)
+      TO hon_runtime;
+  END IF;
+END $$;
+-- End Champions Club contests exact reconciliation.

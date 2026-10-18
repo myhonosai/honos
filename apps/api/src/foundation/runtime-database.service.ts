@@ -80,6 +80,10 @@ const CHAMPIONS_CLUB_CALLS = {
   readSchoolLeaderboard: { sql: 'SELECT hon.read_champions_leaderboard_for_school($1,$2::uuid,$3,$4) AS data', arity: 4, readOnly: true },
   readSchoolStatistics: { sql: 'SELECT hon.read_champions_school_statistics($1,$2::uuid) AS data', arity: 2, readOnly: true },
   setLeaderboardPreference: { sql: 'SELECT hon.set_champions_leaderboard_preference($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  commandContest: { sql: 'SELECT hon.command_champions_contest($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readContests: { sql: 'SELECT hon.read_champions_contests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readContest: { sql: 'SELECT hon.read_champions_contest_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readSchoolContests: { sql: 'SELECT hon.read_champions_contests_for_school($1,$2::uuid) AS data', arity: 2, readOnly: true },
 } as const;
 export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 

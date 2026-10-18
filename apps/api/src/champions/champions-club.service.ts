@@ -11,13 +11,17 @@ import {
   validateChampionsHoldInput, validateChampionsHoldReceipt, validateChampionsHqLeaderboard, validateChampionsHqSchoolStatistics,
   validateChampionsLeaderboardQuery, validateChampionsPreferenceInput, validateChampionsPreferenceReceipt, validateChampionsSchoolLeaderboard,
   validateChampionsSchoolStatistics,
+  validateChampionsContestCommand, validateChampionsContestDetail, validateChampionsContestList, validateChampionsContestReceipt,
+  validateChampionsContestStatusFilter, validateChampionsSchoolContests,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ChampionsClubOperation } from '../foundation/runtime-database.service.js';
 
 // Business-rule refusals the UI may show verbatim. Any other database message stays private.
 const RULE_REFUSALS = new Set(['CHAMPIONS_SELF_REFERRAL','CHAMPIONS_ATTRIBUTION_NOT_ELIGIBLE','CHAMPIONS_POLICY_UNDECIDED',
   'CHAMPIONS_PAYMENT_SOURCE_UNAVAILABLE','CHAMPIONS_QUALIFICATION_NOT_MET','CHAMPIONS_ATTRIBUTION_EXPIRED',
-  'CHAMPIONS_REWARD_RULE_UNDECIDED','CHAMPIONS_REWARD_SUBSTITUTE_MISMATCH','CHAMPIONS_PRIZE_OVER_BUDGET','CHAMPIONS_CLAWBACK_NOT_PERMITTED']);
+  'CHAMPIONS_REWARD_RULE_UNDECIDED','CHAMPIONS_REWARD_SUBSTITUTE_MISMATCH','CHAMPIONS_PRIZE_OVER_BUDGET','CHAMPIONS_CLAWBACK_NOT_PERMITTED',
+  'CHAMPIONS_CONTEST_INCOMPLETE','CHAMPIONS_CONTEST_WINDOW_PASSED','CHAMPIONS_CONTEST_OVER_BUDGET','CHAMPIONS_GIFT_CARDS_NOT_PERMITTED',
+  'CHAMPIONS_CONTEST_NOT_STARTED','CHAMPIONS_CONTEST_WINNER_NOT_ELIGIBLE','CHAMPIONS_CONTEST_WINNERS_UNRESOLVED','CHAMPIONS_CONTEST_PRIZES_OVERLAP']);
 const STATE_CONFLICTS = new Set(['CHAMPIONS_VERSION_CONFLICT','CHAMPIONS_TRANSITION_NOT_ALLOWED','CHAMPIONS_POLICY_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
@@ -113,6 +117,30 @@ export class ChampionsClubService {
   async setLeaderboardPreference(subject: string, schoolId: unknown, body: unknown, key: unknown) {
     const [school, input, idempotencyKey] = parse(() => [championsUuid(schoolId), validateChampionsPreferenceInput(body), championsUuid(key)] as const);
     return this.run('setLeaderboardPreference', [subject, school, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateChampionsPreferenceReceipt);
+  }
+
+  // ---------- contests (Milestone 4; HQ-controlled, liabilities only) ----------
+  /** CREATE targets no contest; every other action targets exactly one. */
+  async commandContest(subject: string, contestId: unknown, body: unknown, key: unknown) {
+    const [contest, command, idempotencyKey] = parse(() => {
+      const c = validateChampionsContestCommand(body);
+      const id = contestId === undefined ? null : championsUuid(contestId);
+      if ((c.action === 'CREATE') !== (id === null)) throw new Error('INVALID_CHAMPIONS_INPUT');
+      return [id, c, championsUuid(key)] as const;
+    });
+    return this.run('commandContest', [subject, contest, JSON.stringify(command), idempotencyKey, randomUUID(), randomUUID()], validateChampionsContestReceipt);
+  }
+  async readContests(subject: string, status: unknown) {
+    const filter = parse(() => validateChampionsContestStatusFilter(status));
+    return this.run('readContests', [subject, filter], validateChampionsContestList);
+  }
+  async readContest(subject: string, contestId: unknown) {
+    const contest = parse(() => championsUuid(contestId));
+    return this.run('readContest', [subject, contest], validateChampionsContestDetail);
+  }
+  async readSchoolContests(subject: string, schoolId: unknown) {
+    const school = parse(() => championsUuid(schoolId));
+    return this.run('readSchoolContests', [subject, school], validateChampionsSchoolContests);
   }
 
   private async run<T>(operation: ChampionsClubOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {

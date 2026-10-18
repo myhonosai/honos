@@ -48,6 +48,9 @@ export class ChampionsSchoolController {
   @Post('leaderboard-preference') @HttpCode(200) @UseGuards(ChampionsCommandGuard) @ChampionsCommandName(CHAMPIONS_COMMANDS.setLeaderboardPreference)
   async preference(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.champions.setLeaderboardPreference(subject(req), schoolId, body, key) };
+  }  @Get('contests') @UseGuards(ChampionsReadGuard)
+  async contests(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.champions.readSchoolContests(subject(req), schoolId) };
   }
 }
 
@@ -121,5 +124,22 @@ export class ChampionsHqController {
   @Post('leaderboard/holds') @HttpCode(200) @UseGuards(ChampionsCommandGuard) @ChampionsCommandName(CHAMPIONS_COMMANDS.setLeaderboardHold)
   async hold(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.champions.setLeaderboardHold(subject(req), body, key) };
+  }
+  // Contests: HQ-controlled lifecycle; prizes are liabilities only, never issued here.
+  @Get('contests') @UseGuards(ChampionsReadGuard) @ChampionsReadQuery(['status'])
+  async contests(@Req() req: HonRequest, @Query('status') status: unknown) {
+    return { data: await this.champions.readContests(subject(req), status) };
+  }
+  @Post('contests') @HttpCode(200) @UseGuards(ChampionsCommandGuard) @ChampionsCommandName(CHAMPIONS_COMMANDS.contestCommand)
+  async createContest(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.champions.commandContest(subject(req), undefined, body, key) };
+  }
+  @Get('contests/:contestId') @UseGuards(ChampionsReadGuard)
+  async contest(@Req() req: HonRequest, @Param('contestId') contestId: string) {
+    return { data: await this.champions.readContest(subject(req), contestId) };
+  }
+  @Post('contests/:contestId/commands') @HttpCode(200) @UseGuards(ChampionsCommandGuard) @ChampionsCommandName(CHAMPIONS_COMMANDS.contestCommand)
+  async contestCommand(@Req() req: HonRequest, @Param('contestId') contestId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.champions.commandContest(subject(req), contestId, body, key) };
   }
 }

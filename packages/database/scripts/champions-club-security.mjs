@@ -1,9 +1,11 @@
 // Champions Club foundation (0148): private deny-all tables reachable only through fixed functions.
 export const championsClubTables = ['champions_policies','champions_referral_codes','champions_attributions','champions_attribution_history','champions_requests','champions_audit','champions_outbox',
- 'champions_reward_policies','champions_reward_entries','champions_reward_history','champions_leaderboard_preferences','champions_leaderboard_holds'];
-const evidenceTables = ['champions_attribution_history','champions_requests','champions_audit','champions_outbox','champions_reward_history'];
+ 'champions_reward_policies','champions_reward_entries','champions_reward_history','champions_leaderboard_preferences','champions_leaderboard_holds',
+ 'champions_contests','champions_contest_prizes','champions_contest_schools','champions_contest_pauses','champions_contest_results','champions_contest_winners','champions_contest_history'];
+const evidenceTables = ['champions_attribution_history','champions_requests','champions_audit','champions_outbox','champions_reward_history','champions_contest_results','champions_contest_history'];
 const rewardTables = ['champions_reward_policies','champions_reward_entries'];
 const leaderboardTables = ['champions_leaderboard_preferences','champions_leaderboard_holds'];
+const contestTables = ['champions_contests','champions_contest_prizes','champions_contest_schools','champions_contest_pauses','champions_contest_winners'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const championsClubFunctions = [
  ['hon.guard_champions_evidence()',false,false],
@@ -49,6 +51,16 @@ export const championsClubFunctions = [
  ['hon.read_champions_leaderboard_for_school(text,uuid,text,text)',true,true],
  ['hon.read_champions_school_statistics(text,uuid)',true,true],
  ['hon.set_champions_leaderboard_preference(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0151 contests
+ ['hon.guard_champions_contests()',false,false],
+ ['hon.champions_contest_counts(uuid,timestamptz)',false,false],
+ ['hon.champions_contest_standings(uuid)',false,false],
+ ['hon.champions_contest_json(hon.champions_contests)',false,false],
+ ['hon.champions_contest_write_config(uuid,jsonb,boolean)',false,false],
+ ['hon.command_champions_contest(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_champions_contests_from_hq(text,text)',true,true],
+ ['hon.read_champions_contest_from_hq(text,uuid)',true,true],
+ ['hon.read_champions_contests_for_school(text,uuid)',true,true],
 ];
 export async function verifyChampionsClubSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe Champions Club runtime role.');
@@ -59,7 +71,7 @@ export async function verifyChampionsClubSecurity(client, runtime) {
    AND NOT EXISTS(SELECT 1 FROM pg_attribute att CROSS JOIN LATERAL aclexplode(att.attacl) a WHERE att.attrelid=c.oid AND a.grantee<>c.relowner) safe
    FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=$1::regclass`,[`hon.${table}`,runtime])).rows[0];
   if (r?.safe!==true) throw new Error(`Unsafe Champions Club table ${table}`);
-  const guard = evidenceTables.includes(table) ? 'guard_champions_evidence' : rewardTables.includes(table) ? 'guard_champions_rewards' : leaderboardTables.includes(table) ? 'guard_champions_leaderboard' : 'guard_champions_records';
+  const guard = evidenceTables.includes(table) ? 'guard_champions_evidence' : rewardTables.includes(table) ? 'guard_champions_rewards' : leaderboardTables.includes(table) ? 'guard_champions_leaderboard' : contestTables.includes(table) ? 'guard_champions_contests' : 'guard_champions_records';
   const rowTrigger = evidenceTables.includes(table) ? 'champions_immutable' : 'champions_guarded';
   for (const [name,type] of [[rowTrigger,27],['champions_no_truncate',34]]) {
    const t=(await client.query(`SELECT count(*)=1 safe FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=$2 AND tgtype=$3
