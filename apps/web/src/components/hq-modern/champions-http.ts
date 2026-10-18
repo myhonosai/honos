@@ -25,7 +25,7 @@ export async function loadHqChampionsLeaderboard(selection: LeaderboardSelection
   try {
     response = await fetch(`${PATH}?${params}`, {
       method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
-      referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal,
+      referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, ...(signal ? { signal } : {}),
     });
   } catch (error) {
     if (signal?.aborted) throw error;
