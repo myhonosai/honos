@@ -1109,3 +1109,42 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End HQ entitlement transition exact reconciliation.
+
+-- Champions Club foundation exact reconciliation:
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['champions_policies','champions_referral_codes','champions_attributions','champions_attribution_history',
+      'champions_requests','champions_audit','champions_outbox'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC CASCADE',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I CASCADE',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid = ('hon.'||t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC CASCADE',col,t);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_champions_evidence()','hon.guard_champions_records()','hon.champions_refuse_context()',
+      'hon.require_champions_hq_actor(text,boolean)','hon.require_champions_school_actor(text,uuid)',
+      'hon.champions_claim_request(uuid,uuid,text,text,uuid,uuid)',
+      'hon.champions_record(uuid,uuid,text,text,text,uuid,uuid,jsonb,jsonb,jsonb,timestamptz)',
+      'hon.champions_fingerprint(text[])','hon.champions_ts(timestamptz)','hon.champions_policy_json(hon.champions_policies)',
+      'hon.champions_attribution_json(hon.champions_attributions)',
+      'hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)','hon.read_champions_school_view(text,uuid)',
+      'hon.read_champions_program_from_hq(text)','hon.create_champions_policy_draft(text,jsonb,uuid,uuid,uuid)',
+      'hon.publish_champions_policy(text,uuid,uuid,uuid,uuid)','hon.capture_champions_attribution(text,jsonb,uuid,uuid,uuid)',
+      'hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_champions_attributions_from_hq(text,text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid), hon.read_champions_school_view(text,uuid),
+      hon.read_champions_program_from_hq(text), hon.create_champions_policy_draft(text,jsonb,uuid,uuid,uuid),
+      hon.publish_champions_policy(text,uuid,uuid,uuid,uuid), hon.capture_champions_attribution(text,jsonb,uuid,uuid,uuid),
+      hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid), hon.read_champions_attributions_from_hq(text,text)
+      TO hon_runtime;
+  END IF;
+END $$;
+-- End Champions Club foundation exact reconciliation.
