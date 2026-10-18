@@ -34,3 +34,13 @@ Validation results and screenshots will be added after execution; no successful 
 The terminal cannot reach its configured proxy (`curl (7)` at `proxy:8080`). React/Next/TypeScript/Vitest are absent and uncached. No lockfile or network controls were changed. All original source files were exported through the connected GitHub application and verified by Git blob SHA. The baseline tree exactly matches upstream `c0331df`; the working source tree is also checked against the published GitHub tree. Local snapshot commit IDs differ from upstream; published commits use the actual latest-main parent.
 
 The branch includes main `22ef492` (owner-approved CI/docs). Implementation is reviewable in PR #8. Existing GitHub CI installs locked dependencies successfully; local browser previews still require terminal-network permission or environment repair. Earlier generated images are design references, not runtime screenshots.
+
+## Temporary browser verification — owner authorized
+
+The owner explicitly authorized `.github/workflows/hq-browser-verification.yml` to obtain real UI evidence using the existing GitHub Actions environment. It is limited to this repository's Codex HQ branch/PR, uses pinned checkout/setup/artifact actions and a read-only token, and never uses `pull_request_target`, secrets, deployments or production services. The established `ci.yml` remains unchanged.
+
+The production web build runs only on localhost with a randomly signed disposable session and an allowlisted synthetic overview/directory server. Browser requests to external hosts and all browser WebSockets are blocked; send/microphone controls remain disabled. Screenshots prominently say `LOCAL TEST FIXTURE · NO LIVE DATA`. External fonts may use system fallbacks during this isolated run.
+
+Pinned `playwright-core` and `axe-core` tools are installed under runner temp with lifecycle scripts disabled; the repository lockfile is unchanged, and the preinstalled Chrome is used without a browser download. The harness covers 1440px desktop, 834px tablet, 390px mobile and 320px narrow mobile, appearance controls, assistant focus/drafts, navigation, unavailable workspaces, contest non-execution, signed-session/denied/malformed responses, overflow and automated WCAG-tagged axe rules. Screenshots and a sanitized report are uploaded for **three days**; no traces, cookies, secrets or application logs are uploaded.
+
+Remove the temporary workflow after owner visual sign-off. Automated accessibility checks supplement manual review and do not establish complete WCAG compliance.
