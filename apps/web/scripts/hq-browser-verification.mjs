@@ -89,7 +89,16 @@ async function check(name, operation) {
   catch (error) { report.failures.push({ name, message: String(error.message).slice(0, 1600) }); console.log(`FAIL ${name}: ${String(error.message).slice(0, 1600)}`); }
 }
 async function screenshot(page, name, fullPage = true) {
-  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    const sources = new Set();
+    for (const element of document.querySelectorAll('[role="img"], [data-hq-background]')) {
+      for (const match of getComputedStyle(element).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g)) sources.add(match[1]);
+    }
+    await Promise.all([...sources].map(async (source) => {
+      const image = new Image(); image.src = source; await image.decode();
+    }));
+  });
   await page.screenshot({ path: join(resultsRoot, `${name}.png`), fullPage, animations: 'disabled' });
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots
@@ -231,7 +240,7 @@ try {
         assert(await menu.evaluate((node) => document.activeElement === node), 'Menu did not restore opener focus');
         await menu.click();
         await drawer.getByRole('link', { name: 'Referral Contests', exact: true }).click();
-      } else await page.getByRole('link', { name: 'Referral Contests', exact: true }).click();
+      } else await page.getByRole('navigation', { name: 'HQ navigation', exact: true }).getByRole('link', { name: 'Referral Contests', exact: true }).click();
       await page.waitForURL('**/hq/growth/contests');
       await page.getByRole('group', { name: 'Contest lifecycle preview' }).getByRole('button', { name: 'Launch', exact: true }).click();
       await page.getByRole('heading', { name: 'Launch — planned', exact: true }).waitFor();

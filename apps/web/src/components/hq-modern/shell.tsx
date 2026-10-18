@@ -92,10 +92,10 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     <dialog ref={drawer} className={styles.drawer} aria-label="HQ navigation menu" onCancel={(event) => { event.preventDefault(); setMenu(false); }} onClick={(event) => { if (event.target === drawer.current) setMenu(false); }}>
       <div><button type="button" className={styles.closeMenu} aria-label="Close navigation" onClick={() => setMenu(false)}><HqIcon name="close"/></button>{nav}</div>
     </dialog>
-    <div className={styles.workspace}>
+    <div className={styles.workspace} data-hq-background>
       <header className={styles.topbar}>
         <button ref={menuButton} type="button" className={styles.menuButton} aria-label="Open HQ navigation" aria-expanded={menu} onClick={() => setMenu(true)}><HqIcon name="menu"/></button>
-        <div><p className={styles.eyebrow}>HON HQ / {path === '/hq' ? 'Overview' : hqPageLabel(path)}</p><h1>{path === '/hq' ? 'Lead with clarity.' : hqPageLabel(path)}</h1><p className={styles.subtitle}>{path === '/hq' ? 'Your company. In command with AI.' : 'Your company. One governed workspace.'}</p></div>
+        <div><p className={styles.eyebrow}>HON HQ / {path === '/hq' ? 'Company command center' : hqPageLabel(path)}</p><h1>{path === '/hq' ? 'Your company. In command.' : hqPageLabel(path)}</h1><p className={styles.subtitle}>{path === '/hq' ? 'One workspace for HON and your executive team.' : 'Your company. One governed workspace.'}</p></div>
         <span className={styles.ownerAvatar} title="Company control plane" aria-label="HQ workspace">HQ</span>
       </header>
       <section className={styles.appearance} aria-label="HQ appearance">

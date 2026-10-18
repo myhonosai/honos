@@ -191,3 +191,200 @@
 @media(max-width:600px){.shell{font-size:13px}.workspace{padding:18px 15px 150px}.topbar{gap:10px;margin-bottom:18px}.topbar h1{font-size:25px}.topbar .eyebrow{font-size:8px;letter-spacing:.1em}.topbar .subtitle{font-size:11px}.topbar .ownerAvatar{width:34px;height:34px;font-size:11px}.appearance{padding:7px 8px;margin-bottom:12px}.appearance button{min-height:40px;font-size:10px;padding:6px 7px}.appearance>div>span{font-size:10px;width:42px}.panel{padding:16px;border-radius:11px}.hero{padding:16px}.heroHeading h2{font-size:25px}.heroHeading p{font-size:10px}.heroHeading button{font-size:10px}.hero>.core{display:none}.heroHeading:before{content:'';width:43px;height:43px;flex-shrink:0;border-radius:50%;background-image:url('/hq-assets/approved-modern.png');background-size:991.25% 620%;background-position:46.634% 17.788%}.heroHeading>div{flex:1}.heroQuestion{font-size:17px!important;text-align:left;margin:15px 0!important}.conversationEmpty,.promptLinks{display:none}.composerInput textarea{font-size:13px;min-height:42px}.composerFooter{gap:8px}.composerFooter .voice{font-size:11px;min-height:40px}.finePrint{font-size:10px}.attention h2{font-size:18px}.attentionRow{min-height:51px;font-size:12px}.badge{font-size:9px}.sectionHeader h2{font-size:18px}.sectionHeader>a{font-size:10px}.executiveGrid{gap:8px}.executiveCard{flex-direction:column;gap:8px;padding:9px}.portrait,.portraitFallback{width:100%;height:auto;min-height:0;aspect-ratio:1.1;max-height:none}.executiveCard>div{flex:1;padding:0}.executiveCard h3{font-size:16px}.executiveCard p{font-size:11px}.executiveCard small{font-size:10px;min-height:28px}.executiveCard>div>span{min-height:38px;font-size:11px}.metricRow{min-height:72px}.growthLinks{grid-template-columns:1fr;gap:0}.growthLinks a{font-size:12px;min-height:46px}.governance{padding:14px;gap:10px}.governance strong{font-size:12px}.governance p{font-size:9px}.mobileNav{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:7px 6px calc(7px + env(safe-area-inset-bottom));border-top:1px solid #27425d;background:#091725f5;backdrop-filter:blur(15px);z-index:35}.mobileNav a,.mobileNav button{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;min-height:49px;padding:5px 2px!important;font-size:9px;border:0;color:#c7d8ec;border-radius:7px}.mobileNav a[aria-current=page]{color:var(--hq-cyan);background:#0c2a3c}.assistantLauncher{left:15px;right:15px;bottom:calc(76px + env(safe-area-inset-bottom));padding:5px 11px!important;min-height:48px;font-size:11px}.assistantLauncher>.coreSmall{height:31px;width:31px}.assistantLauncher>svg{margin-left:auto}.assistantPanel{inset:12px 10px calc(78px + env(safe-area-inset-bottom));border-radius:15px}.assistantPanel>header{padding:14px}.assistantBody{padding:16px}.assistantPanel>.composer{padding:12px}.assistantPanel>footer{font-size:10px}.assistantPanel:focus-within{max-height:calc(100dvh - 90px)}.profileHero{padding:20px;gap:15px}.profileHero>.portrait,.profileHero>.portraitFallback{width:100px;height:100px}.profileHero h2{font-size:26px}.profileHero .primary{width:100%}.profileHero>div{flex-basis:calc(100% - 120px)}.plannedGrid{grid-template-columns:1fr}.moduleIntro{padding:20px}.moduleIntro h2{font-size:25px}.moduleIntro p{font-size:13px}.tabBar{gap:6px}.tabBar button{font-size:11px;flex:1 1 40%}.pageFooter>button{margin-left:0}.accessState{padding:25px 18px;margin:20px 0}.accessState h2{font-size:22px}.withAssistant .executiveGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.shell[data-view=big-button] .executiveGrid{grid-template-columns:1fr}.shell[data-view=big-button] .executiveCard{flex-direction:row}.shell[data-view=big-button] .portrait,.shell[data-view=big-button] .portraitFallback{width:100px;height:100px}.shell[data-view=big-button] .appearance button{font-size:10px;min-height:44px}.shell[data-view=classic] .executiveCard{flex-direction:row;flex-wrap:wrap}.shell[data-view=classic] .portrait,.shell[data-view=classic] .portraitFallback{width:55px;height:55px;aspect-ratio:1;min-height:55px}.shell[data-view=classic] .executiveCard>div{flex-basis:100%}}
 @media(prefers-reduced-motion:reduce){.shell *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 @media(max-width:800px){.assistantBackdrop{display:block;position:fixed;inset:0;background:#0009;z-index:39}.assistantPanel{box-shadow:0 15px 45px #0008}}
+
+/* Owner reference refinement: isolated HQ styling, no shared school surfaces. */
+.shell{--hq-bg:#030b15;--hq-panel:#061728;--hq-line:#16486a;--hq-muted:#b8cce2;--hq-cyan:#39d9ff;background:#030b15}
+.sidebar{width:210px;padding:22px 10px 15px;background:linear-gradient(165deg,#03111eee,#020b16);border-color:#17405b}
+.brand{padding:0 12px 22px}
+.brand strong{font-size:25px}
+.brand span{font-size:9px;letter-spacing:.11em}
+.navigation{gap:3px}
+.navigation a,.navigation summary{min-height:43px;padding:10px;font-size:12px;border-radius:6px}
+.navigation a[aria-current=page]{color:#fff;background:linear-gradient(100deg,#0465eb,#064dbe);border-color:#2598ff;box-shadow:inset 3px 0 #55e9ff,0 0 16px #007aff24}
+.growthNav a{font-size:10px;min-height:38px;padding-left:22px}
+.railFooter{padding:20px 5px 0;gap:7px;font-size:10px}
+.workspace{margin-left:210px;padding:22px 20px 18px;max-width:none;min-height:100dvh;background-image:linear-gradient(180deg,#020b1526 0,#020b154d 240px,#030b15ed 620px,#030b15 760px),url('/hq-assets/reference-refinement/command-room.png');background-position:center top;background-size:100% 760px;background-repeat:no-repeat}
+.topbar{min-height:70px;margin-bottom:12px;gap:12px}
+.topbar>div{text-align:center}
+.topbar h1{font-size:clamp(25px,2.6vw,38px);text-shadow:0 2px 18px #000}
+.subtitle{font-size:13px;text-shadow:0 2px 8px #000}
+.eyebrow{font-size:9px;color:#b7d9f3!important}
+.appearance{gap:14px;padding:5px 10px;margin-bottom:12px;min-height:46px;border-color:#1d5c80;background:#041324e8;border-radius:8px;box-shadow:inset 0 0 16px #1688d30a;justify-content:flex-end}
+.appearance>div>span{font-size:10px}
+.appearance button{min-height:34px;padding:5px 12px;font-size:10px;border-radius:6px}
+.appearance button[aria-pressed=true],.tabBar button[aria-pressed=true]{color:white;background:linear-gradient(180deg,#087fff,#0356cb);border-color:#63c9ff;box-shadow:0 0 12px #008cff52}
+.appearance>small{margin-left:0;font-size:9px}
+.panel{border-color:#17496a;border-radius:9px;background:linear-gradient(135deg,#071b2cf5,#04111ef5);box-shadow:inset 0 0 22px #1289d008,0 5px 18px #0003}
+.shell[data-view] .dashboard{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.commandStage{display:grid;gap:12px;min-width:0}
+.stageHeader{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:0 3px}
+.stageHeader h2{font-size:14px;letter-spacing:0;text-shadow:0 1px 8px #000}
+.stageHeader p{font-size:10px;text-shadow:0 1px 8px #000}
+.stageHeader>a{font-size:11px;display:flex;align-items:center;gap:4px;color:#a3edff;min-height:36px}
+.commandLineup{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(190px,1.6fr) repeat(3,minmax(0,1fr));align-items:end;gap:10px;padding:4px 0 6px}
+.stageTeam{display:contents}
+.stageExecutive{grid-column:var(--stage-column);grid-row:1;display:flex;flex-direction:column;align-items:stretch;min-height:255px;padding:6px;border:1px solid #2382b6;border-radius:9px;background:linear-gradient(165deg,#0c3a5559,#031425f5 62%);box-shadow:inset 0 0 16px #08adff17,0 0 12px #0078bc26;transition:border-color .15s,box-shadow .15s}
+.stageExecutive:hover{border-color:#67eaff;box-shadow:inset 0 0 24px #08adff22,0 0 18px #00b7ff35}
+.stageExecutive>.portrait,.stageExecutive>.portraitFallback{width:100%;height:auto;aspect-ratio:1;min-height:0;border-radius:5px;border:1px solid #3a91bb66}
+.stageExecutive>.portraitFallback{font-size:42px}
+.stageIdentity{padding:8px 1px 7px;text-align:center;flex:1}
+.stageIdentity h3{font-size:15px;color:#fff;letter-spacing:-.015em}
+.stageIdentity p{font-size:10px;color:#d4eaff;line-height:1.4;min-height:28px}
+.stageIdentity small{display:block;font-size:9px;line-height:1.4;color:#b0cbe1;margin-top:4px;min-height:26px}
+.workspaceEntry{display:flex;align-items:center;justify-content:center;gap:7px;min-height:32px;padding:5px;border:1px solid #2b9bcc;border-radius:5px;background:#06304b;color:#b7f4ff;font-size:10px;box-shadow:0 0 9px #009dff21}
+.commandCore{grid-column:4;grid-row:1;display:flex;flex-direction:column;align-items:center;align-self:stretch;justify-content:flex-end;gap:6px;position:relative;isolation:isolate;padding-bottom:2px;text-align:center}
+.orbFrame{position:relative;filter:drop-shadow(0 0 18px #00a5ff77)}
+.orbFrame:after{content:'';position:absolute;inset:auto -16px -12px;height:17px;border:1px solid #35cfff99;border-radius:50%;box-shadow:0 0 12px #00b7ff77,inset 0 0 12px #00b7ff44;z-index:-1}
+.orbFrame>.core{width:clamp(145px,12.8vw,190px);margin:0;box-shadow:0 0 35px #008cff4d}
+.orbFrame>strong{position:absolute;inset:0;display:grid;place-items:center;color:white;font-size:28px;font-weight:800;letter-spacing:.04em;text-shadow:0 0 8px #00337b,0 0 14px #00234c}
+.coreCaption{padding-top:8px}
+.coreCaption h2{font-size:16px}
+.coreCaption p{font-size:10px;color:#cde7ff}
+.shell .honEntry{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;max-width:230px;min-height:42px;border:1px solid #4fcbff;border-radius:8px;background:linear-gradient(180deg,#0572dc,#033d83);box-shadow:inset 0 0 12px #0bb3ff66,0 0 18px #008cff66;color:#fff;padding:8px;font-size:12px}
+.commandCore>small{font-size:9px;line-height:1.5;color:#c7ddf1;background:#031326db;padding:3px 6px;border-radius:4px}
+.commandBar{display:grid;grid-template-columns:220px minmax(0,1fr);align-items:center;gap:7px 16px;border:1px solid #267faa;border-radius:9px;background:linear-gradient(110deg,#063354ed,#031326f5);box-shadow:inset 0 0 20px #009dff24,0 0 18px #0087ff17;padding:11px 14px}
+.commandPrompt{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.commandPrompt>svg{color:#6fe7ff;filter:drop-shadow(0 0 7px #0cf)}
+.commandPrompt h2{font-size:14px;letter-spacing:-.02em}
+.commandPrompt>span{flex-basis:100%;font-size:9px;color:#bfd3e7;line-height:1.5}
+.commandBar>.composer{grid-column:2}
+.commandBar .composerInput{background:#041628;border-color:#276c93;border-radius:7px;padding:3px}
+.commandBar .composerInput textarea{min-height:38px;font-size:12px;resize:vertical}
+.commandBar .composerInput button{min-height:38px;width:38px;padding:6px}
+.commandBar .composerFooter{margin-top:5px;gap:8px}
+.commandBar .composerFooter>.voice{min-height:29px;font-size:10px;padding:3px 7px}
+.commandBar .composerFooter>small{font-size:9px}
+.commandBar .finePrint{margin-top:4px!important;font-size:9px}
+.commandShortcuts{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.commandShortcuts>a{display:flex;align-items:center;justify-content:center;gap:10px;min-height:32px;padding:5px 8px;border:1px solid #205576;border-radius:5px;background:#062039b3;font-size:10px;color:#c9e9ff}
+.commandShortcuts>a:hover{border-color:#48d7ff;background:#07304d}
+.performanceStrip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.performanceTile{display:flex;gap:12px;align-items:center;border:1px solid #194f75;border-radius:7px;padding:12px;background:linear-gradient(120deg,#0a2940ed,#031324f5);box-shadow:inset 0 0 17px #008fff0a}
+.performanceTile:hover{border-color:#4dbee6}
+.metricIcon{display:grid;place-items:center;width:38px;height:40px;flex-shrink:0;border:1px solid #1f7298;border-radius:6px;background:#0341604d;color:#60e7ff;box-shadow:0 0 10px #00b7ff17}
+.performanceTile h2{font-size:10px;font-weight:500;letter-spacing:0;color:#cae0f5}
+.performanceTile strong{display:block;font-size:24px;line-height:1.3;color:white}
+.performanceTile small{display:block;font-size:9px;color:#a2d6e8}
+.managementGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.managementGrid>div>.panel{height:100%;padding:15px}
+.managementGrid h2{font-size:16px}
+.managementGrid .attentionRow{min-height:46px;font-size:11px}
+.managementGrid .metricRow{min-height:65px}
+.managementGrid .metricRow h3{font-size:14px}
+.managementGrid .growthLinks{display:grid;margin-top:10px}
+.managementGrid .growthLinks a{font-size:11px;min-height:42px;padding:8px 0}
+.managementGrid .growthOpen{display:none}
+.managementGrid .finePrint{font-size:10px}
+.governance{margin-top:12px;padding:12px 15px;border-color:#1b5879;border-radius:8px;background:linear-gradient(90deg,#082b42db,#041221);font-size:11px}
+.pageFooter{margin-top:12px;font-size:9px}
+.withAssistant .commandLineup{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(140px,1.5fr) repeat(3,minmax(0,1fr));gap:5px}
+.withAssistant .stageExecutive{min-height:220px;padding:4px}
+.withAssistant .stageIdentity h3{font-size:13px}
+.withAssistant .stageIdentity small{display:none}
+.withAssistant .orbFrame>.core{width:140px}
+.withAssistant .commandCore>small{font-size:8px}
+.withAssistant .commandBar{grid-template-columns:1fr}
+.withAssistant .commandBar>.composer{grid-column:auto}
+.withAssistant .managementGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.withAssistant .growthSlot{grid-column:1/-1}
+.shell[data-view=big-button] .workspaceEntry{min-height:44px;font-size:12px}
+.shell[data-view=big-button] .performanceStrip{grid-template-columns:repeat(3,minmax(0,1fr))}
+.shell[data-view=big-button] .commandShortcuts>a{min-height:44px;font-size:12px}
+.shell[data-view=classic] .stageExecutive,.shell[data-view=classic] .commandBar{border-radius:4px}
+@media(max-width:1250px){
+  .workspace{padding-inline:16px}
+  .commandLineup,.withAssistant .commandLineup{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+  .commandCore{grid-column:1/-1;grid-row:1;flex-direction:row;align-items:center;justify-content:center;gap:18px;padding:0 0 12px}
+  .orbFrame>.core,.withAssistant .orbFrame>.core{width:94px}
+  .orbFrame>strong{font-size:22px}
+  .orbFrame:after{inset-inline:-8px}
+  .coreCaption{padding:0;text-align:left}
+  .shell .honEntry{width:auto;max-width:230px;padding-inline:14px}
+  .commandCore>small{max-width:120px;text-align:left}
+  .stageExecutive{grid-column:auto;grid-row:2;min-height:220px}
+  .stageIdentity small{font-size:9px;min-height:37px}
+  .performanceTile{gap:8px;padding:10px}
+  .metricIcon{width:30px;height:34px}
+  .managementGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .growthSlot{grid-column:1/-1}
+  .managementGrid .growthLinks{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 18px}
+}
+@media(max-width:1100px){
+  .workspace{margin-left:0;padding:20px}
+  .topbar>div{text-align:left}
+  .appearance{justify-content:flex-start}
+  .commandLineup{gap:10px}
+  .stageExecutive{min-height:235px}
+  .withAssistant .stageExecutive{min-height:190px}
+  .performanceStrip{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .skip{left:15px}
+}
+@media(max-width:800px){
+  .shell[data-view] .dashboard{display:flex;flex-direction:column;gap:12px}
+  .commandStage,.commandLineup,.managementGrid{display:contents}
+  .commandCore{order:0;justify-content:flex-start;flex-direction:row;gap:12px;align-items:center;padding:14px;border:1px solid #2e89b0;border-radius:9px;background:linear-gradient(120deg,#083752e8,#041628ed)}
+  .orbFrame>.core,.withAssistant .orbFrame>.core{width:66px}
+  .orbFrame>strong{font-size:18px}
+  .orbFrame:after{display:none}
+  .coreCaption h2{font-size:23px}
+  .coreCaption p{font-size:10px}
+  .shell .honEntry{width:44px;max-width:44px;min-width:44px;margin-left:auto;padding:8px}
+  .honEntry>span,.honEntry>svg:first-child,.commandCore>small{display:none}
+  .commandBar{order:1;display:grid;grid-template-columns:minmax(0,1fr);padding:12px;gap:9px}
+  .commandBar>.composer{grid-column:1}
+  .commandPrompt h2{font-size:15px}
+  .commandPrompt>span{font-size:9px}
+  .commandShortcuts{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .commandShortcuts>a{min-height:40px;font-size:10px;justify-content:space-between}
+  .performanceStrip{order:2;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .performanceTile{padding:9px;gap:7px}
+  .performanceTile strong{font-size:21px}
+  .performanceTile small{font-size:8px}
+  .attentionSlot{order:3}.snapshotSlot{order:4}.growthSlot{order:5;grid-column:auto}
+  .stageHeader{order:6;margin-top:4px;padding:0 2px}
+  .stageHeader h2{font-size:18px}
+  .stageTeam{order:7;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .stageExecutive,.withAssistant .stageExecutive{grid-column:auto!important;grid-row:auto;min-height:0;padding:6px}
+  .stageIdentity h3{font-size:14px}
+  .stageIdentity p{font-size:10px;min-height:28px}
+  .stageIdentity small{display:none}
+  .workspaceEntry{min-height:44px;font-size:10px}
+  .managementGrid .growthLinks{grid-template-columns:1fr}
+  .managementGrid .growthLinks a{min-height:44px}
+  .managementGrid .attentionRow{min-height:48px}
+  .shell[data-view=big-button] .stageTeam{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:600px){
+  .workspace{padding:22px 12px 150px;background-size:auto 470px;background-position:center top}
+  .topbar{min-height:64px;gap:10px;margin-bottom:10px}
+  .topbar h1{font-size:23px}
+  .topbar .subtitle{font-size:10px}
+  .topbar .eyebrow{font-size:8px;letter-spacing:.08em}
+  .appearance{padding:6px 7px;gap:3px;border-radius:8px;margin-bottom:10px}
+  .appearance>div>span{width:41px;font-size:9px;margin-right:4px}
+  .appearance button{font-size:10px;padding:5px 7px;min-height:36px}
+  .commandCore{padding:12px}
+  .commandPrompt>span{display:none}
+  .commandBar .composerInput textarea{font-size:12px}
+  .commandBar .composerFooter>.voice{min-height:36px}
+  .commandBar .finePrint{font-size:10px;margin-top:7px!important}
+  .performanceTile{align-items:flex-start;flex-direction:column;padding:10px;gap:5px}
+  .performanceTile>div{width:100%}
+  .performanceTile h2{font-size:10px}
+  .performanceTile strong{font-size:22px}
+  .performanceTile small{font-size:8px}
+  .metricIcon{width:30px;height:30px}
+  .metricIcon>svg{width:20px;height:20px}
+  .stageTeam{gap:7px}
+  .stageIdentity h3{font-size:13px}
+  .stageIdentity p{font-size:9px}
+  .stageExecutive{padding:5px}
+  .workspaceEntry{font-size:9px;gap:4px;padding:4px 2px}
+  .stageHeader p{font-size:9px}
+  .stageHeader>a{font-size:10px}
+  .managementGrid>div>.panel{padding:15px}
+  .managementGrid h2{font-size:18px}
+  .managementGrid .attentionRow{font-size:12px;min-height:51px}
+  .governance{font-size:11px;padding:12px}
+  .skip{left:12px}
+}

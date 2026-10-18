@@ -2,6 +2,10 @@
 
 Tracking: [#4](https://github.com/myhonosai/honos/issues/4). Branch: `codex/hq-modern-implementation`.
 
+## Current visual revision
+
+The owner requested a closer match to supplied `9075.jpg` after the first runtime review. [Reference refinement notes](visuals/codex/hq-reference-refinement/README.md) track the revised command-room composition and new runtime evidence. The previous screenshot gallery remains preserved; its results do not establish verification of this newer layout. Original executive portraits and HON orb sources remain unchanged. This revision awaits owner visual review.
+
 ## Ownership and scope
 
 Owner assignment of 2026-10-18 authorizes the approved HQ frontend, including the dashboard, responsive navigation, persistent assistant presentation, executive workspace entry points and planned management interfaces. Merge/deployment are not authorized.
@@ -51,4 +55,4 @@ Review-tool access: the artifact downloader returns a File Service ZIP reference
 
 ## Backend coordination
 
-Claude's [Champions Club backend tracking issue #6](https://github.com/myhonosai/honos/issues/6) defines the future closed `champions-club.ts` contracts and separates HQ from school endpoints. Its current milestone is still in progress, with leaderboard and contest contracts planned for later milestones. This frontend does not call unpublished endpoints. Financial figures and actions stay unavailable until the approved services, policy and billing boundaries exist. Claude's backend work and Classic Dashboard files are outside this change.
+Claude's [Champions Club backend tracking issue #6](https://github.com/myhonosai/honos/issues/6) defines closed `champions-club.ts` contracts and separates HQ from school endpoints. M1 referral recordkeeping is now merged in main `75f3a81`, incorporated here unchanged; leaderboard and contest capabilities remain later milestones. This visual revision does not integrate the new endpoints. Financial figures and actions stay unavailable until the approved services, policy and billing boundaries exist. Claude's backend work and Classic Dashboard files are outside this design change.

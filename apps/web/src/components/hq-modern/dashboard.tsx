@@ -61,24 +61,50 @@ export function GrowthLinks(): React.ReactElement {
   return <section className={`${styles.panel} ${styles.growthPanel}`} aria-labelledby="hq-growth-title"><div className={styles.sectionHeader}><h2 id="hq-growth-title">Growth &amp; Referrals</h2><span className={styles.badge}>Planned</span></div><p>Champions Club &amp; founder campaigns</p><div className={styles.growthLinks}>{HQ_GROWTH.map((item) => <Link key={item.path} href={item.path}><HqIcon name={item.icon} size={18}/><span>{item.title}</span><HqIcon name="chevron" size={14}/></Link>)}</div><Link className={styles.growthOpen} href="/hq/growth">Open Growth &amp; Referrals <HqIcon name="chevron" size={16}/></Link><p className={styles.finePrint}>Owner-controlled contests &amp; rewards. No activation from this interface.</p></section>;
 }
 
-export function HqModernDashboard(): React.ReactElement {
+function CommandStage(): React.ReactElement {
   const { openAssistant } = useHqModern();
+  return <section className={styles.commandStage} aria-labelledby="hq-team-title">
+    <div className={styles.stageHeader}><div><h2 id="hq-team-title">Your executive team</h2><p>Six specialists. One company command center.</p></div><Link href="/hq/executives">View team <HqIcon name="chevron" size={15}/></Link></div>
+    <div className={styles.commandLineup}>
+      <div className={styles.commandCore}>
+        <div className={styles.orbFrame}><HonCore/><strong aria-hidden="true">HON</strong></div>
+        <div className={styles.coreCaption}><h2>HON</h2><p>Executive AI Coordinator</p></div>
+        <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label="Expand HON conversation"><HqIcon name="mic" size={19}/><span>Ask HON anything</span><HqIcon name="expand" size={15}/></button>
+        <small>Conversation unavailable · Microphone off</small>
+      </div>
+      <div className={styles.stageTeam}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.stageExecutive} style={{ '--stage-column': index < 3 ? index + 1 : index + 2 } as CSSProperties} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={`View ${executive.displayName}'s ${executive.domain.toLowerCase().replaceAll('_', ' ')} workspace`}>
+        <ExecutivePortrait index={index} name={executive.displayName}/>
+        <div className={styles.stageIdentity}><h3>{executive.displayName}</h3><p>{executive.domain.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())}</p><small>{HQ_RESPONSIBILITIES[executive.executiveKey]}</small></div>
+        <span className={styles.workspaceEntry}>Workspace <HqIcon name="arrow" size={14}/></span>
+      </Link>)}</div>
+    </div>
+    <div className={styles.commandBar}><div className={styles.commandPrompt}><HqIcon name="mic" size={22}/><h2>How can HON help today?</h2><span>No recorded work · Executive task services are not active</span></div><HonComposer context="Overview"/><div className={styles.commandShortcuts}><Link href="/hq/schools">Review schools <HqIcon name="chevron" size={13}/></Link><Link href="/hq/revenue">Revenue overview <HqIcon name="chevron" size={13}/></Link><Link href="/hq/ai-costs">Review AI costs <HqIcon name="chevron" size={13}/></Link><Link href="/hq/growth">Growth &amp; Referrals <HqIcon name="chevron" size={13}/></Link></div></div>
+  </section>;
+}
+
+function PerformanceStrip(): React.ReactElement {
+  const { overview } = useHqModern();
+  return <section className={styles.performanceStrip} aria-label="Company performance overview">
+    {([
+      ['Schools', '/hq/schools', 'school', overview.schoolCount, 'Verified directory'],
+      ['Organizations', '/hq/schools', 'team', overview.organizationCount, 'Verified overview'],
+      ['Revenue', '/hq/revenue', 'chart', null, 'Unavailable'],
+      ['AI costs', '/hq/ai-costs', 'database', null, 'Unavailable'],
+      ['Approvals', '/hq/approvals', 'check', null, 'Unavailable'],
+      ['Support', '/hq/support', 'support', null, 'Unavailable'],
+    ] as const).map(([label, href, icon, value, state]) => <Link className={styles.performanceTile} href={href} key={label}><span className={styles.metricIcon}><HqIcon name={icon} size={23}/></span><div><h2>{label}</h2><strong>{value === null ? '—' : value.toLocaleString('en-US')}</strong><small>{state}</small></div></Link>)}
+  </section>;
+}
+
+export function HqModernDashboard(): React.ReactElement {
   return <>
     <div className={styles.dashboard}>
-      <div className={styles.dashboardPrimary}>
-      <section className={`${styles.panel} ${styles.hero}`} aria-labelledby="hon-command-title">
-        <div className={styles.heroHeading}><div><h2>HON</h2><p>Executive AI Coordinator</p></div><button type="button" onClick={openAssistant} aria-label="Expand HON conversation"><HqIcon name="expand"/>Expand</button></div>
-        <HonCore/><h2 id="hon-command-title" className={styles.heroQuestion}>What would you like to move forward?</h2>
-        <div className={styles.conversationEmpty}><HonCore small/><p>HQ conversation is not connected yet. Review your company information using the tools below.</p></div>
-        <div className={styles.promptLinks}><Link href="/hq/schools"><HqIcon name="school"/>Review school directory</Link><Link href="/hq/executives"><HqIcon name="team"/>Meet the executive team</Link></div>
-        <HonComposer context="Overview"/>
-      </section>
-      <div className={styles.teamSlot}><ExecutiveCards/></div>
-      </div>
-      <div className={styles.dashboardRail}>
-      <div className={styles.attentionSlot}><NeedsAttention/></div>
-      <div className={styles.snapshotSlot}><CompanySnapshot/></div>
-      <div className={styles.growthSlot}><GrowthLinks/></div>
+      <CommandStage/>
+      <PerformanceStrip/>
+      <div className={styles.managementGrid}>
+        <div className={styles.attentionSlot}><NeedsAttention/></div>
+        <div className={styles.snapshotSlot}><CompanySnapshot/></div>
+        <div className={styles.growthSlot}><GrowthLinks/></div>
       </div>
     </div>
     <div className={styles.governance}><HqIcon name="shield" size={28}/><div><strong>You retain final approval.</strong><p>Owner → HON → Executives → Shared Action Engine</p></div><span>Permissions · Policy · Approval · Audit</span></div>
