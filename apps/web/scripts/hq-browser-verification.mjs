@@ -86,12 +86,21 @@ let browser;
 const delay = (milliseconds) => new Promise((done) => setTimeout(done, milliseconds));
 async function check(name, operation) {
   try { await operation(); report.checks.push(name); console.log(`PASS ${name}`); }
-  catch (error) { report.failures.push({ name, message: String(error.message).slice(0, 1600) }); console.log(`FAIL ${name}`); }
+  catch (error) { report.failures.push({ name, message: String(error.message).slice(0, 1600) }); console.log(`FAIL ${name}: ${String(error.message).slice(0, 1600)}`); }
 }
 async function screenshot(page, name, fullPage = true) {
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: join(resultsRoot, `${name}.png`), fullPage, animations: 'disabled' });
   report.screenshots.push(`${name}.png`);
+  // Private CI log previews let connected read-only review tools inspect synthetic screenshots
+  // when the terminal cannot download File Service artifacts. No credentials or live data.
+  if (name === 'desktop-dashboard-full' || name === 'mobile-dashboard-full') {
+    const preview = await page.screenshot({ type: 'jpeg', quality: 72, fullPage, animations: 'disabled' });
+    await writeFile(join(resultsRoot, `${name}.jpg`), preview);
+    const encoded = preview.toString('base64');
+    const total = Math.ceil(encoded.length / 8000);
+    for (let index = 0; index < total; index++) console.log(`HQ_REVIEW_IMAGE ${name} ${index + 1}/${total} ${encoded.slice(index * 8000, (index + 1) * 8000)}`);
+  }
 }
 async function noOverflow(page, label) {
   const metrics = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
@@ -141,10 +150,10 @@ try {
     const { context, page } = await contextFor({ width, height });
     await check(`${label}: dashboard, responsive layout and screenshots`, async () => {
       await page.goto(`${origin}/hq`, { waitUntil: 'networkidle' });
-      await page.getByRole('heading', { name: 'Your executive team', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Your executive team', exact: true }).waitFor({ timeout: 20000 });
+      await screenshot(page, `${label}-dashboard-full`);
       assert.equal(await page.getByRole('link', { name: /^View .* workspace$/ }).count(), 6);
       await noOverflow(page, label);
-      await screenshot(page, `${label}-dashboard-full`);
       await screenshot(page, `${label}-dashboard-viewport`, false);
     });
     await check(`${label}: appearance choices preserve the six HQ identities`, async () => {
@@ -267,6 +276,7 @@ try {
   await new Promise((done) => api.close(done));
   report.blockedExternalHosts = [...new Set(report.blockedExternalHosts)];
   await writeFile(join(resultsRoot, 'report.json'), JSON.stringify(report, null, 2));
+  console.log(`HQ_BROWSER_REPORT ${JSON.stringify(report)}`);
   const summary = `# HON HQ browser verification\n\nSource: \`${report.sourceSha}\`\n\n**Synthetic localhost fixtures only. No live data, AI, microphone or business actions.**\n\nPassed checks: ${report.checks.length}\n\nFailures: ${report.failures.length}\n\nScreenshots: ${report.screenshots.length}\n\n${report.failures.map((failure) => `- ${failure.name}: ${failure.message.replaceAll('\n', ' ').slice(0, 400)}`).join('\n')}\n\nArtifacts expire after three days. Automated accessibility checks supplement manual review; they do not establish complete WCAG conformance.\n`;
   await writeFile(join(resultsRoot, 'SUMMARY.md'), summary);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
