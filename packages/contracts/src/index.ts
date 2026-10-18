@@ -944,3 +944,4 @@ export * from './curriculum-resource-library.js';
 export * from './class-sessions-read.js';
 export * from './champions-club.js';
 export * from './champions-club-rewards.js';
+export * from './champions-club-leaderboard.js';

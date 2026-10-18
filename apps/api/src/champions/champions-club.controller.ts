@@ -37,6 +37,17 @@ export class ChampionsSchoolController {
   @Get('rewards') @UseGuards(ChampionsReadGuard)
   async rewards(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
     return { data: await this.champions.readSchoolRewards(subject(req), schoolId) };
+  }  @Get('leaderboard') @UseGuards(ChampionsReadGuard) @ChampionsReadQuery(['period','month'])
+  async leaderboard(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Query() query: unknown) {
+    return { data: await this.champions.readSchoolLeaderboard(subject(req), schoolId, query) };
+  }
+  @Get('statistics') @UseGuards(ChampionsReadGuard)
+  async statistics(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.champions.readSchoolStatistics(subject(req), schoolId) };
+  }
+  @Post('leaderboard-preference') @HttpCode(200) @UseGuards(ChampionsCommandGuard) @ChampionsCommandName(CHAMPIONS_COMMANDS.setLeaderboardPreference)
+  async preference(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.champions.setLeaderboardPreference(subject(req), schoolId, body, key) };
   }
 }
 
@@ -97,5 +108,18 @@ export class ChampionsHqController {
   @Post('rewards/entries/:entryId/decisions') @HttpCode(200) @UseGuards(ChampionsCommandGuard) @ChampionsCommandName(CHAMPIONS_COMMANDS.decideReward)
   async rewardDecide(@Req() req: HonRequest, @Param('entryId') entryId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.champions.decideReward(subject(req), entryId, body, key) };
+  }
+  // Leaderboards: QUALIFIED referrals only; holds never change attributions or rewards.
+  @Get('leaderboard') @UseGuards(ChampionsReadGuard) @ChampionsReadQuery(['period','month'])
+  async leaderboard(@Req() req: HonRequest, @Query() query: unknown) {
+    return { data: await this.champions.readHqLeaderboard(subject(req), query) };
+  }
+  @Get('schools/:schoolId/statistics') @UseGuards(ChampionsReadGuard)
+  async schoolStatistics(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.champions.readHqSchoolStatistics(subject(req), schoolId) };
+  }
+  @Post('leaderboard/holds') @HttpCode(200) @UseGuards(ChampionsCommandGuard) @ChampionsCommandName(CHAMPIONS_COMMANDS.setLeaderboardHold)
+  async hold(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.champions.setLeaderboardHold(subject(req), body, key) };
   }
 }

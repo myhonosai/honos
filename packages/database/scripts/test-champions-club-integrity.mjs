@@ -10,7 +10,7 @@ const {ChampionsClubService}=await import('../../../apps/api/dist/champions/cham
 const runtimeDatabase=new RuntimeDatabaseService(),service=new ChampionsClubService(runtimeDatabase);
 const httpStatus=(n,code)=>e=>{assert.equal(e.getStatus?.(),n,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;};
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
-const championsTables=['champions_outbox','champions_audit','champions_reward_history','champions_reward_entries','champions_reward_policies','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
+const championsTables=['champions_outbox','champions_audit','champions_leaderboard_holds','champions_leaderboard_preferences','champions_reward_history','champions_reward_entries','champions_reward_policies','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
 const ids=Object.fromEntries(['orgA','orgB','orgC','orgD','orgR','orgE','orgS','orgOld','orgSuspended','orgUnentitled','schoolA','schoolA2','schoolB','schoolD','schoolU','staffRole','plainRole','parentRole','dualRoleA','dualRoleD','dualRoleS','unentitledRole','schoolS'].map(k=>[k,randomUUID()]));
 const humans=Object.fromEntries(['owner','operator','operatorNoPerm','support','staff','staffNoPerm','parent','hqStaff','inactive','dual','unentitled'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`champions-${k}-${randomUUID()}`}]));
 const orgs=()=>[ids.orgA,ids.orgB,ids.orgC,ids.orgD,ids.orgR,ids.orgE,ids.orgS,ids.orgOld,ids.orgSuspended,ids.orgUnentitled];
