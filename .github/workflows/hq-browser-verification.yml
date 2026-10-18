@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/workflows/hq-browser-verification.yml'
       - 'apps/web/scripts/hq-browser-verification.mjs'
+      - 'apps/web/scripts/fixtures/hq-champions-leaderboard.mjs'
+      - 'apps/web/test/hq-champions-leaderboard.test.tsx'
       - 'apps/web/src/components/hq-modern/**'
       - 'apps/web/src/app/hq/**'
       - 'apps/web/public/hq-assets/**'
@@ -22,7 +24,7 @@ concurrency:
 
 jobs:
   browser:
-    if: github.head_ref == 'codex/hq-modern-implementation' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.head_ref == 'codex/hq-champions-integration' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
