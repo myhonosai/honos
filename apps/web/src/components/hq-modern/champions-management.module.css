@@ -25,5 +25,7 @@
 .review summary{cursor:pointer;min-height:44px;align-content:center;font-size:14px;color:#e1f5ff}
 .review summary::marker{color:#84e8f0}
 .link{display:inline-flex;align-items:center;min-height:44px;margin-top:12px;color:#a1eff7!important;text-decoration:underline!important}
+/* Leave the approved compact assistant its own gutter on subpages as content scrolls. */
+@media(min-width:601px){.management{padding-right:64px}}
 @media(max-width:1100px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.states{grid-template-columns:repeat(3,minmax(0,1fr))}.columns{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.intro{padding:16px}.intro h2{font-size:21px}.intro p{font-size:12px;line-height:1.6}.introHeading>button{width:100%;font-size:12px}.metrics{gap:8px}.metrics>section{padding:14px}.metrics h3{font-size:11px}.states{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.facts>div{grid-template-columns:minmax(0,1fr)}.facts dd{text-align:left}.management>nav a{font-size:11px}.review summary{line-height:1.6}}

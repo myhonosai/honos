@@ -371,6 +371,11 @@ try {
       }
       await page.getByRole('heading', { name: 'Program configuration', exact: true }).waitFor();
       await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).waitFor();
+      if (width > 600) {
+        const launcher = await page.getByRole('button', { name: 'Ask HON anywhere', exact: true }).boundingBox();
+        const header = await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).locator('..').boundingBox();
+        assert(launcher && header && header.x + header.width < launcher.x, 'The persistent assistant must not cover the financial status or management controls');
+      }
       await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).waitFor();
       assert.equal(await page.getByRole('button', { name: /issue|approve|pay|publish|reconcile/i }).count(), 0);
       assert(!(await page.getByText('Active leaderboard holds', { exact: true }).isVisible()));
