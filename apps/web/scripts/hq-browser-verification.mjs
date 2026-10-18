@@ -367,7 +367,7 @@ try {
       assert.equal(await page.locator('[data-champions-total]').textContent(), '22');
       await page.getByRole('heading', { name: 'Program configuration', exact: true }).waitFor();
       await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).waitFor();
-      await page.getByText('USD 2,000.00', { exact: true }).waitFor();
+      await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).waitFor();
       assert.equal(await page.getByRole('button', { name: /issue|approve|pay|publish|reconcile/i }).count(), 0);
       assert(!(await page.getByText('Active leaderboard holds', { exact: true }).isVisible()));
       const review = page.getByText('Confidential HQ review and contest liabilities', { exact: true });
@@ -407,7 +407,7 @@ try {
       await refresh.focus(); await page.keyboard.press('Enter');
       await page.getByRole('heading', { name: 'Loading authorized Champions Club…', exact: true }).waitFor();
       assert.equal(await page.locator('[data-champions-total]').count(), 0);
-      assert.equal(await page.getByText('USD 2,000.00', { exact: true }).count(), 0);
+      assert.equal(await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).count(), 0);
       await page.waitForFunction(() => document.querySelector('[data-champions-total]')?.textContent === '23');
       assert(await refresh.isEnabled()); managementDelay = 0;
     });
@@ -418,7 +418,7 @@ try {
         await page.getByRole('heading', { name: heading, exact: true }).waitFor();
         if (mode !== 'empty') assert.equal(await page.locator('[data-champions-total]').count(), 0);
         else { assert.equal(await page.locator('[data-champions-total]').textContent(), '0'); await page.getByText('No published qualification policy was returned.', { exact: false }).waitFor(); }
-        assert.equal(await page.getByText('USD 2,000.00', { exact: true }).count(), 0);
+        assert.equal(await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).count(), 0);
         assert.equal(await page.getByText('private-overview-note', { exact: false }).count(), 0);
         await noOverflow(page, `Champions ${mode}`);
         if (['empty', 'program-denied', '503'].includes(mode)) await screenshot(page, `mobile-champions-${mode}`);
