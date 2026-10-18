@@ -20,7 +20,7 @@ Make the existing canonical path from a new or selected CRM lead through a trial
 
 This slice must not infer or create a student, family, curriculum enrollment, membership, invoice, payment, payment authorization, agreement, consent, attendance, booking, seat, ClassPass record, staff availability, communication, reminder, provider call, AI request, Action Engine request, automation run, conversion, or revenue fact.
 
-A trial outcome is not a lead state transition. A lead `WON` state is not enrollment or payment. Membership activation remains a separate direct-human lifecycle command. The missing lead-to-student/enrollment conversion contract is intentionally recorded as a future governed boundary; it must not be improvised in browser code.
+A trial outcome is not a lead state transition. A lead `WON` state is not enrollment or payment. Membership activation remains a separate direct-human lifecycle command. The later direct-human registration foundation is documented separately in [Human CRM lead registration](HUMAN_CRM_LEAD_REGISTRATION.md): it may create only the narrowly authorized person/family/student foundation and returns `NEEDS_STAFF_REVIEW` for ambiguity. Curriculum enrollment, membership/billing, agreement/payment authorization, consent and broader conversion remain separate governed boundaries; none may be improvised in browser code.
 
 ## Security contract
 
@@ -36,4 +36,4 @@ Focused API/service/transport/UI coverage passed for current-school selection, m
 
 ## Follow-up decision boundary
 
-A later **lead conversion** slice must define and implement durable rules for duplicate review, student/family creation or linkage, curriculum program selection, enrollment term, payer/billing account, membership draft, agreement status, payment authorization, and consent. It must not be inferred from trial completion, a lead close action, or a browser receipt.
+A later **lead-to-enrollment continuation** slice must define durable rules for any verified existing-record linking, multi-child convenience, contact correction, curriculum program selection, enrollment term, payer/billing account, membership draft, agreement status, payment authorization, and consent. It must not be inferred from trial completion, a lead close action, a registration receipt, or browser state.

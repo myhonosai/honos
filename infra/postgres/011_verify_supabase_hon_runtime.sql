@@ -2358,3 +2358,62 @@ DO $$ DECLARE f record; p record; t text; runtime_oid oid := (SELECT oid FROM pg
     OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.hq_entitlement_outbox'::regclass AND convalidated AND NOT condeferrable AND contype='u' AND pg_get_constraintdef(oid)='UNIQUE (audit_id)') THEN RAISE EXCEPTION 'HQ entitlement version/receipt/outbox invariants required'; END IF;
 END $$;
 -- End HQ entitlement transition exact verification.
+
+-- CRM lead registration exact verification:
+DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  IF runtime_oid IS NULL
+    OR EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication))
+    OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid)
+    OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Restricted CRM registration runtime required'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.guard_crm_lead_registration_history()','8673d8b711519a75d2d727276ebdd5a7',false,false,'trigger',false),
+    ('hon.crm_lead_registration_has_permission(uuid,uuid,uuid,text)','e3b71364e299c4be376b83b3e4daa41a',false,true,'boolean',false),
+    ('hon.resolve_crm_lead_registration_scope(text,uuid)','97012048ddae1177aadeba233454afcf',true,true,'record',true),
+    ('hon.require_crm_lead_registration_actor(text,text)','b1473f5d95b499f8c1d9c10907b34e08',false,true,'uuid',false),
+    ('hon.register_crm_lead_person(text,uuid,jsonb,uuid,uuid,uuid)','577abbf84cbe4e1b64f2d6ecf09a7904',true,true,'jsonb',false)
+  ) expected(signature,source_md5,runtime_allowed,definer,return_type,return_set) LOOP
+    SELECT proc.*,owner.rolsuper,owner.rolbypassrls,owner.rolname owner_name INTO p
+      FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
+    IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.provolatile<>'v' OR p.prokind<>'f'
+      OR p.prorettype<>f.return_type::regtype OR p.proretset IS DISTINCT FROM f.return_set
+      OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      OR NOT(p.rolsuper OR p.rolbypassrls) OR p.owner_name IN ('hon_runtime','anon','authenticated','service_role')
+      OR md5(p.prosrc)<>f.source_md5
+      OR (SELECT count(*) FROM pg_proc other WHERE other.pronamespace=p.pronamespace AND other.proname=p.proname)<>1 THEN
+      RAISE EXCEPTION 'Canonical CRM registration function required: %',f.signature;
+    END IF;
+    IF EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+      WHERE acl.grantor<>p.proowner OR acl.privilege_type<>'EXECUTE' OR acl.is_grantable
+        OR (acl.grantee<>p.proowner AND (acl.grantee<>runtime_oid OR NOT f.runtime_allowed)))
+      OR has_function_privilege('hon_runtime',p.oid,'EXECUTE') IS DISTINCT FROM f.runtime_allowed
+      OR (SELECT count(*) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))))<>(CASE WHEN f.runtime_allowed THEN 2 ELSE 1 END) THEN
+      RAISE EXCEPTION 'Exact CRM registration function ACL required: %',f.signature;
+    END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_roles owner ON owner.oid=c.relowner
+      WHERE c.oid='hon.crm_lead_registration_conversions'::regclass AND c.relrowsecurity AND c.relforcerowsecurity
+        AND (owner.rolsuper OR owner.rolbypassrls) AND owner.rolname NOT IN ('hon_runtime','anon','authenticated','service_role'))
+    OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='crm_lead_registration_conversions')
+    OR EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+      WHERE c.oid='hon.crm_lead_registration_conversions'::regclass AND acl.grantee<>c.relowner)
+    OR EXISTS(SELECT 1 FROM pg_attribute col JOIN pg_class c ON c.oid=col.attrelid,LATERAL aclexplode(col.attacl) acl
+      WHERE c.oid='hon.crm_lead_registration_conversions'::regclass AND acl.grantee<>c.relowner)
+    OR has_table_privilege('hon_runtime','hon.crm_lead_registration_conversions','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.crm_lead_registration_conversions','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Private CRM registration FORCE-RLS evidence required';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_lead_registration_conversions'::regclass AND tgname='crm_lead_registration_immutable'
+      AND tgfoid='hon.guard_crm_lead_registration_history()'::regprocedure AND tgenabled='O' AND tgtype=27)
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_lead_registration_conversions'::regclass AND tgname='crm_lead_registration_no_truncate'
+      AND tgfoid='hon.guard_crm_lead_registration_history()'::regprocedure AND tgenabled='O' AND tgtype=34) THEN
+    RAISE EXCEPTION 'Canonical CRM registration immutable triggers required';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_lead_registration_conversions'::regclass AND convalidated AND NOT condeferrable AND contype='u'
+      AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_key)')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_lead_registration_conversions'::regclass AND convalidated AND NOT condeferrable AND contype='u'
+      AND pg_get_constraintdef(oid)='UNIQUE (source_lead_id)')
+    OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='crm.lead.register' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'Canonical CRM registration idempotency/source and permission invariants required';
+  END IF;
+END $$;
+-- End CRM lead registration exact verification.

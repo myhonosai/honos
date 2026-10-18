@@ -32,6 +32,8 @@
     "db:test-crm-appointments": "pnpm --filter @hon/database db:test-crm-appointments",
     "db:setup-crm-lead-close": "pnpm --filter @hon/database db:setup-crm-lead-close",
     "db:test-crm-lead-close": "pnpm --filter @hon/database db:test-crm-lead-close",
+    "db:setup-crm-lead-registration": "pnpm --filter @hon/database db:setup-crm-lead-registration",
+    "db:test-crm-lead-registration": "pnpm --filter @hon/database db:test-crm-lead-registration",
     "db:setup-champions-club": "pnpm --filter @hon/database db:setup-champions-club",
     "db:test-champions-club": "pnpm --filter @hon/database db:test-champions-club",
     "db:test-champions-club-rewards": "pnpm --filter @hon/database db:test-champions-club-rewards",

@@ -129,6 +129,10 @@
       "title": "Human CRM leads"
     },
     {
+      "path": "/staff/crm/register",
+      "title": "HON | Direct-human CRM registration review"
+    },
+    {
       "path": "/staff/crm/trials",
       "title": "Human CRM trial appointments"
     },

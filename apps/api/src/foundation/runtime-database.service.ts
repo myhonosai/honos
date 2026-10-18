@@ -365,6 +365,13 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       [externalSubject, schoolId],
     )).rows[0];
   }
+  async resolveCrmLeadRegistrationScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_crm_lead_registration_scope($1,$2::uuid)',
+      [externalSubject, schoolId],
+    )).rows[0];
+  }
   async resolveChadFollowUpAssistantScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(

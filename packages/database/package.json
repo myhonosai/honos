@@ -29,6 +29,8 @@
     "db:test-crm-appointments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-trial-appointment-integrity.mjs",
     "db:setup-crm-lead-close": "node scripts/setup-crm-lead-close-validation.mjs",
     "db:test-crm-lead-close": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-lead-close-integrity.mjs",
+    "db:setup-crm-lead-registration": "node scripts/setup-crm-lead-registration-validation.mjs",
+    "db:test-crm-lead-registration": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-lead-registration-integrity.mjs",
     "db:setup-champions-club": "node scripts/setup-champions-club-validation.mjs",
     "db:test-champions-club": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-champions-club-integrity.mjs",
     "db:test-champions-club-rewards": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-champions-club-rewards-integrity.mjs",

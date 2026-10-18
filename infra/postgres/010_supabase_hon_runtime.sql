@@ -1213,3 +1213,42 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End Champions Club leaderboard exact reconciliation.
+
+-- CRM lead registration: preserve no direct conversion-record, directory, or
+-- helper capability when this canonical reconciliation is run after migration
+-- 0153. The restricted runtime receives exactly one verified-scope resolver
+-- and one direct-human fixed command; neither enables enrollment, membership,
+-- billing, payment, provider, AI, Action Engine, communication, or automation.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['crm_lead_registration_conversions'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid = ('hon.' || t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC', col, t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I', col, t, r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY[
+    'guard_crm_lead_registration_history()',
+    'crm_lead_registration_has_permission(uuid,uuid,uuid,text)',
+    'resolve_crm_lead_registration_scope(text,uuid)',
+    'require_crm_lead_registration_actor(text,text)',
+    'register_crm_lead_person(text,uuid,jsonb,uuid,uuid,uuid)'
+  ] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM PUBLIC', f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION hon.%s FROM %I', f, r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.resolve_crm_lead_registration_scope(text,uuid),
+      hon.register_crm_lead_person(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End CRM lead registration exact reconciliation.

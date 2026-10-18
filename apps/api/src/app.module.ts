@@ -58,6 +58,9 @@ import { CrmIntakeStagesHumanUiGuard } from './crm/crm-intake-stages-human-ui.gu
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
+import { LeadRegistrationController } from './crm/lead-registration.controller.js';
+import { LeadRegistrationService } from './crm/lead-registration.service.js';
+import { LeadRegistrationHumanUiGuard } from './crm/lead-registration.dto.js';
 import { TrialAppointmentController } from './crm/trial-appointment.controller.js';
 import { TrialAppointmentService } from './crm/trial-appointment.service.js';
 import { TrialAppointmentOutcomeController } from './crm/trial-appointment-outcome.controller.js';
@@ -263,6 +266,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadController,
     CrmIntakeStagesController,
     LeadCloseController,
+    LeadRegistrationController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
     PipelineController,
@@ -364,6 +368,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CrmIntakeStagesHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
+    LeadRegistrationService,
+    LeadRegistrationHumanUiGuard,
     TrialAppointmentService,
     TrialAppointmentOutcomeService,
     CrmLeadActionTool,
