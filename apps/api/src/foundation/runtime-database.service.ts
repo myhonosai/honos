@@ -67,6 +67,13 @@ const CHAMPIONS_CLUB_CALLS = {
   captureAttribution: { sql: 'SELECT hon.capture_champions_attribution($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   decideAttribution: { sql: 'SELECT hon.decide_champions_attribution($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readAttributions: { sql: 'SELECT hon.read_champions_attributions_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readRewardProgram: { sql: 'SELECT hon.read_champions_reward_program_from_hq($1) AS data', arity: 1, readOnly: true },
+  createRewardPolicyDraft: { sql: 'SELECT hon.create_champions_reward_policy_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishRewardPolicy: { sql: 'SELECT hon.publish_champions_reward_policy($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  reconcileRewards: { sql: 'SELECT hon.reconcile_champions_rewards($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  decideReward: { sql: 'SELECT hon.decide_champions_reward($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readRewardLedger: { sql: 'SELECT hon.read_champions_reward_ledger_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readSchoolRewards: { sql: 'SELECT hon.read_champions_school_rewards($1,$2::uuid) AS data', arity: 2, readOnly: true },
 } as const;
 export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 

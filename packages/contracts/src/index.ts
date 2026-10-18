@@ -943,3 +943,4 @@ export * from './hq-school-directory.js';
 export * from './curriculum-resource-library.js';
 export * from './class-sessions-read.js';
 export * from './champions-club.js';
+export * from './champions-club-rewards.js';

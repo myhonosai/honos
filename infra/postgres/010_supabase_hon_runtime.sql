@@ -1148,3 +1148,36 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End Champions Club foundation exact reconciliation.
+
+-- Champions Club reward accounting exact reconciliation:
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['champions_reward_policies','champions_reward_entries','champions_reward_history'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC CASCADE',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I CASCADE',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid = ('hon.'||t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC CASCADE',col,t);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_champions_rewards()','hon.champions_reward_policy_json(hon.champions_reward_policies)',
+      'hon.champions_reward_json(hon.champions_reward_entries)','hon.read_champions_reward_program_from_hq(text)',
+      'hon.create_champions_reward_policy_draft(text,jsonb,uuid,uuid,uuid)','hon.publish_champions_reward_policy(text,uuid,uuid,uuid,uuid)',
+      'hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid)','hon.decide_champions_reward(text,uuid,jsonb,uuid,uuid,uuid)',
+      'hon.read_champions_reward_ledger_from_hq(text,text)','hon.read_champions_school_rewards(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_champions_reward_program_from_hq(text), hon.create_champions_reward_policy_draft(text,jsonb,uuid,uuid,uuid),
+      hon.publish_champions_reward_policy(text,uuid,uuid,uuid,uuid), hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid),
+      hon.decide_champions_reward(text,uuid,jsonb,uuid,uuid,uuid), hon.read_champions_reward_ledger_from_hq(text,text),
+      hon.read_champions_school_rewards(text,uuid)
+      TO hon_runtime;
+  END IF;
+END $$;
+-- End Champions Club reward accounting exact reconciliation.

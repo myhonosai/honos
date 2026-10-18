@@ -68,6 +68,7 @@ proof crm-lead-close test-crm-lead-close-integrity.mjs "CRM lead close authority
 
 setup champions-club HON_CHAMPIONS_VALIDATION_TARGET hon_champions_validation HON_CHAMPIONS_ENV_FILE
 proof champions-club test-champions-club-integrity.mjs "Champions Club authority, attribution, qualification gates and evidence"
+proof champions-club test-champions-club-rewards-integrity.mjs "Champions Club reward accounting: liabilities, approvals, reversals, no billing effect"
 
 echo "All $passed disposable-database proofs passed (3 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
