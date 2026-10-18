@@ -126,7 +126,11 @@ async function screenshot(page, name, fullPage = true) {
     await Promise.all([...sources].map(async (source) => {
       const image = new Image(); image.src = source; await image.decode();
     }));
+    // Captures start at the top after interactions, keeping fixed navigation/fixture labels in place.
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    await new Promise((done) => requestAnimationFrame(done));
   });
+  await page.waitForFunction(() => scrollX === 0 && scrollY === 0);
   await page.screenshot({ path: join(resultsRoot, `${name}.png`), fullPage, animations: 'disabled' });
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots

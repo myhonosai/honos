@@ -26,13 +26,12 @@ export function LeaderboardResults({ board }: { board: ChampionsHqLeaderboard })
     <div className={styles.leaderboardSummary}>
       <div><span>Ranked schools</span><strong>{board.totalRanked.toLocaleString()}</strong><small>Showing {board.standings.length} of {board.totalRanked} · maximum {board.limit}</small></div>
       <div><span>Qualification basis</span><strong>Qualified only</strong><small>{board.period === 'MONTH' ? `${board.month} · UTC qualification month` : 'All-time qualified referrals'}</small></div>
-      <div><span>Ranking authority</span><strong>Champions Club</strong><small>Ties share rank. Position preserves the official order.</small></div>
     </div>
     <section className={`${styles.panel} ${styles.leaderboardPanel}`} aria-labelledby="hq-standings-heading">
       <div className={styles.sectionHeader}><h2 id="hq-standings-heading">{board.period === 'MONTH' ? `Monthly standings · ${board.month}` : 'All-time standings'}</h2><span className={styles.badge}>Official · UTC</span></div>
       {board.standings.length === 0 ? <p className={styles.leaderboardEmpty} role="status">No ranked schools for this period. Only eligible schools with qualified referrals appear.</p>
         : <table className={styles.leaderboardTable}>
-          <caption>Official referral standings. Pending counts are all-time and do not contribute to rank.</caption>
+          <caption>Official referral standings. Ties share rank; position preserves the service order. Pending counts are all-time and do not contribute to rank.</caption>
           <thead><tr><th scope="col">Rank</th><th scope="col">School / organization</th><th scope="col">Qualified</th><th scope="col">Pending · all time</th><th scope="col">Position</th></tr></thead>
           <tbody>{board.standings.map((row) => <tr key={row.schoolId}>
             <th scope="row"><span className={styles.rowLabel}>Rank </span>{row.rank}</th>

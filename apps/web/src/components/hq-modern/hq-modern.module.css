@@ -535,7 +535,8 @@
 .leaderboardFilters select{max-width:100%;min-height:44px;border:1px solid #6096aa;border-radius:9px;background:#071c29;color:#e1f5ff;padding:8px 30px 8px 12px;font:inherit}
 .leaderboardFilters select:disabled{color:#b6c4d0;border-color:#3b5e70}
 .leaderboardFilters select:focus-visible{outline:3px solid var(--hq-cyan);outline-offset:4px}
-.leaderboardSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 16px}
+.leaderboardSummary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0 16px}
+.leaderboard>.moduleLinks{margin:0;gap:6px}
 .leaderboardSummary>div{display:grid;gap:5px;border:1px solid #46768d66;border-radius:14px;padding:16px;background:#08202ee8;overflow-wrap:anywhere}
 .leaderboardSummary span{font-size:12px;color:#c2dbe8}
 .leaderboardSummary strong{font-size:22px;font-weight:650;color:#dbfbff}
@@ -573,13 +574,19 @@
 .shell[data-view=classic] .leaderboardTable td,.shell[data-view=classic] .leaderboardTable tbody th{padding-block:9px}
 @media(max-width:800px){
   .appearance{display:flex;gap:10px}
-  .appearance>.appearanceGroup{flex:1 1 100%;grid-template-columns:44px repeat(3,minmax(0,1fr));gap:3px}
-  .appearance>.appearanceGroup>span{font-size:10px;white-space:normal;margin:0 4px}
+  .appearance>.appearanceGroup{flex:1 1 100%;grid-template-columns:54px repeat(3,minmax(0,1fr));gap:3px}
+  .appearance>.appearanceGroup>span{font-size:10px;white-space:nowrap;margin:0 3px}
   .appearance>.appearanceGroup>button{padding-inline:4px;font-size:10px;min-height:40px}
   .appearance .motionControl{flex-direction:row;min-height:34px;padding:5px 10px;margin-left:auto;gap:5px}
-  .leaderboardSummary{grid-template-columns:minmax(0,1fr);gap:8px}
-  .leaderboardSummary>div{padding:12px 14px;gap:3px}
-  .leaderboardSummary strong{font-size:19px}
+  .leaderboard{gap:12px}
+  .leaderboard .moduleIntro{padding:14px}
+  .leaderboard .moduleIntro h2{font-size:20px}
+  .leaderboard .moduleIntro p{font-size:12px;line-height:1.5}
+  .leaderboard .moduleLinks a{font-size:11px;padding:9px 10px;min-height:44px}
+  .leaderboardSummary{gap:8px;margin-top:8px}
+  .leaderboardSummary>div{padding:12px;gap:3px}
+  .leaderboardSummary strong{font-size:17px}
+  .leaderboardSummary small{font-size:10px}
   .leaderboardFilters{gap:12px;padding:14px}
   .leaderboardFilters>div{flex:1 1 100%}
   .leaderboardFilters>div>button{flex:1}
