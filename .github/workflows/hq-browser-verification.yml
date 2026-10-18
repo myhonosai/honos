@@ -4,7 +4,7 @@ name: HQ Browser Verification (temporary)
 
 on:
   pull_request:
-    branches: [main, codex/hq-modern-implementation]
+    branches: [main]
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/hq-browser-verification.yml'
@@ -24,10 +24,7 @@ concurrency:
 
 jobs:
   browser:
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      ((github.head_ref == 'codex/hq-modern-implementation' && github.base_ref == 'main') ||
-       (github.head_ref == 'codex/hq-champions-integration' && github.base_ref == 'codex/hq-modern-implementation'))
+    if: github.head_ref == 'codex/hq-champions-integration' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -74,57 +71,3 @@ jobs:
       - name: Ensure verification did not change tracked source
         if: always()
         run: git diff --exit-code
-
-  integration-ci:
-    name: Integration CI — tests, typecheck, build, migrations
-    if: github.head_ref == 'codex/hq-champions-integration' && github.base_ref == 'codex/hq-modern-implementation' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      CI: 'true'
-      NEXT_TELEMETRY_DISABLED: '1'
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - name: Run the existing repository CI commands on the stacked branch
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm test
-          pnpm check
-          pnpm build
-          pnpm db:check
-          git diff --exit-code
-
-  integration-database:
-    name: Integration CI — disposable PostgreSQL security proofs
-    if: github.head_ref == 'codex/hq-champions-integration' && github.base_ref == 'codex/hq-modern-implementation' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      CI: 'true'
-      NEXT_TELEMETRY_DISABLED: '1'
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - name: Build the existing database proof dependencies
-        run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/api build
-      - name: Start disposable runner-local PostgreSQL and run existing proofs
-        run: |
-          sudo systemctl start postgresql.service
-          for _ in $(seq 1 30); do pg_isready -h /var/run/postgresql -p 5432 && break; sleep 1; done
-          pg_isready -h /var/run/postgresql -p 5432
-          .github/scripts/run-db-proofs.sh
