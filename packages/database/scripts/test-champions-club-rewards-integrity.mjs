@@ -11,7 +11,7 @@ const {ChampionsClubService}=await import('../../../apps/api/dist/champions/cham
 const runtimeDatabase=new RuntimeDatabaseService(),service=new ChampionsClubService(runtimeDatabase);
 const httpStatus=(n,code)=>e=>{assert.equal(e.getStatus?.(),n,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;};
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
-const championsTables=['champions_outbox','champions_audit','champions_leaderboard_holds','champions_leaderboard_preferences','champions_reward_history','champions_reward_entries','champions_reward_policies','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
+const championsTables=['champions_outbox','champions_audit','champions_contest_history','champions_contest_winners','champions_contest_results','champions_contest_pauses','champions_contest_schools','champions_contest_prizes','champions_contests','champions_leaderboard_holds','champions_leaderboard_preferences','champions_reward_history','champions_reward_entries','champions_reward_policies','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
 const ids=Object.fromEntries(['orgA','schoolA','orgR1','schoolR1','staffRole','r1Role','m1Policy','code'].map(k=>[k,randomUUID()]));
 const humans=Object.fromEntries(['owner','operator','support','staff','r1staff'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`rewards-${k}-${randomUUID()}`}]));
 const referred=[];// [{org, attribution}]
