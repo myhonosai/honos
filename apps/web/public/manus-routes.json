@@ -273,6 +273,10 @@
       "title": "HON | Human Curriculum Progress"
     },
     {
+      "path": "/staff/curriculum/enrollments",
+      "title": "HON | Human Curriculum Enrollment"
+    },
+    {
       "path": "/parent/curriculum-library",
       "title": "Family curriculum references"
     },
