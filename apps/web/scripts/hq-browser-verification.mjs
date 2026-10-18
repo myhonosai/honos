@@ -478,7 +478,7 @@ try {
       await page.locator('ol').getByText('Voided reward record', { exact: true }).waitFor();
       assert.equal(await page.getByRole('button', { name: /issue|approve|pay|publish|fulfill|reconcile/i }).count(), 0);
       await noOverflow(page, `${label} rewards`);
-      await screenshot(page, `${label}-reward-management`, false);
+      await screenshot(page, `${label}-reward-management`, label === 'desktop' || label === 'mobile');
       await accessibility(page, `${label}-reward-management`);
       await page.getByLabel('Recent-record status').selectOption('VOIDED');
       await page.getByRole('heading', { name: 'Recent global reward records', exact: true }).waitFor();
