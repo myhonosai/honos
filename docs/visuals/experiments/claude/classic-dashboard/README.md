@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | **Needs owner review** (not approved, not merged) |
+| **Status** | **Revision 2: needs owner final review** (direction approved 2026-10-18; not merged) |
 | **Source branch** | `ccr-c2933356-uza21g` |
 | **Route** | `/reference/classic-dashboard` (no-index, public reference like `/` and `/core`) |
 | **Tracking** | GitHub issue #2 "HON OS — Claude Code Development Status" |
@@ -64,11 +64,21 @@ Protected shared files untouched: `app.config.ts`, `layout.tsx`, `globals.css`, 
 | Pricing / tier price in top bar | Tier label only ("HON Complete · Sample entitlement"), no price | Owner rule: no pricing in the school command bar |
 | Platform View switch in top bar | Compact inline `<details>` directly below School/Location | Manus visual protocol; Big-Button and Modern link to their existing reference views |
 
+## Revision 2 (owner feedback, 2026-10-18)
+
+| Owner request | Change |
+| --- | --- |
+| Less vertical scrolling on mobile; prioritize quick actions, today, urgent alerts, AI access | Phone home order is now: quick actions → compact key figures (3 columns) → Today at a glance → top 3 urgent alerts (+ "View all 5 in Command Center") → AI team row. The eight detailed sections collapse under **More details** as tap-to-expand rows with a one-line summary (e.g. "5 classes · 1 cancelled", "1 overdue"). Phone page height: **6,004px → 1,953px (−67%)** |
+| More compact AI employee cards, all seven, direct workspace access | Desktop: one row of seven compact cards (portrait, name, role). Phone: swipeable avatar row. Each card links to that employee's existing workspace: Chad → `/staff/leads/assistant`, Marcus → `/staff/marketing/assistant`, Claire → `/staff/teaching-assistant`, the others → the shared AI draft inbox `/staff/ai-work`. A single line states "no work recorded in this sample" |
+| Persistent HON assistant entry point, not pretending to be connected | Floating **HON** button bottom-right on desktop/tablet (same placement pattern as the HQ concept frames) and a raised **Ask HON** centre slot in the phone bottom bar. It opens a panel labeled **Preview · not connected** with navigation-only "Jump to" links, a **disabled** message field, voice **off**, and a link to the existing governed `/staff/voice` handoff workspace. No AI backend, no network call, no microphone |
+| Preserve originals / branding | Unchanged: no new image assets; original portraits and the hosted HON mark referenced read-only |
+| Consistent with the developing HQ design, Classic distinct | Shared patterns: dark navy shell, left sidebar with grouped navigation, persistent HON button bottom-right. Classic stays denser and flatter (tables, tinted active state, no hero imagery). No HQ file touched; Codex leads HQ |
+
 ## Responsive behavior
 
 - **Desktop (≥1100px):** fixed 248px sidebar, 12-column panel grid, six KPIs (three per row below 1360px), AI team in one row of seven.
 - **Tablet (700–1099px):** sidebar becomes a drawer opened from the top-bar menu button; paired panels go full-width where a half-width panel would be orphaned.
-- **Phone (<700px):** drawer plus a five-item bottom bar (Home, Leads, Schedule, Attendance, More), 2×2 quick actions, two-column KPIs, horizontally swipeable AI team, tables rendered as compact records.
+- **Phone (<700px):** drawer plus a five-item bottom bar (Home, Leads, **Ask HON**, Schedule, More), 2×2 quick actions, three-column compact KPIs, priority ordering with collapsible detail sections, swipeable AI avatar row, tables rendered as compact records when expanded.
 - No horizontal page overflow at 1440, 834, or 390px. Escape closes the drawer and menus, and focus returns to the menu button. Visible focus rings; `prefers-reduced-motion` respected.
 
 ## Screenshots
@@ -78,9 +88,12 @@ Protected shared files untouched: `app.config.ts`, `layout.tsx`, `globals.css`, 
 | Desktop 1440 (above the fold) | `desktop-1440-fold.jpg` |
 | Desktop 1440 (full page) | `desktop-1440-full.jpg` |
 | Desktop: appearance expanded (Anime) + notifications | `desktop-1440-appearance-notifications.jpg` |
+| Desktop: HON assistant panel | `desktop-1440-hon-assistant.jpg` |
 | Tablet 834 (full page) | `tablet-834-full.jpg` |
 | Phone 390 (above the fold) | `phone-390-fold.jpg` |
 | Phone 390 (full page) | `phone-390-full.jpg` |
+| Phone 390: HON assistant panel | `phone-390-hon-assistant.jpg` |
+| Phone 390: a detail section expanded | `phone-390-section-expanded.jpg` |
 | Phone 390: navigation drawer | `phone-390-navigation-drawer.jpg` |
 
 Screenshots were taken from a local production build (`next build && next start`) in headless Chromium, outside the Manus preview, so Manus-hosted images show their fallbacks.

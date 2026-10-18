@@ -62,11 +62,27 @@ const QUICK_ACTIONS: { label: string; href: string; icon: IconName }[] = [
   { label: 'Create invoice', href: '/staff/billing/invoices', icon: 'invoices' },
 ];
 
-const BOTTOM_NAV: { label: string; href: string; icon: IconName }[] = [
+const BOTTOM_NAV_START: { label: string; href: string; icon: IconName }[] = [
   { label: 'Home', href: SELF, icon: 'dashboard' },
   { label: 'Leads', href: '/staff/crm/leads', icon: 'leads' },
+];
+const BOTTOM_NAV_END: { label: string; href: string; icon: IconName }[] = [
   { label: 'Schedule', href: '/staff/schedule/sessions', icon: 'schedule' },
-  { label: 'Attendance', href: '/staff/attendance', icon: 'attendance' },
+];
+
+// Existing governed workspaces only. Employees without a dedicated workbench open the shared AI draft inbox.
+const AGENT_WORKSPACES: Record<string, { href: string; label: string }> = {
+  chad: { href: '/staff/leads/assistant', label: 'follow-up draft workspace' },
+  marcus: { href: '/staff/marketing/assistant', label: 'marketing draft workspace' },
+  claire: { href: '/staff/teaching-assistant', label: 'curriculum support workspace' },
+};
+const DEFAULT_AGENT_WORKSPACE = { href: '/staff/ai-work', label: 'AI draft inbox' };
+
+const HON_JUMP_LINKS: { label: string; href: string; icon: IconName }[] = [
+  { label: "Today's classes", href: '/staff/schedule/sessions', icon: 'schedule' },
+  { label: 'Open leads', href: '/staff/crm/leads', icon: 'leads' },
+  { label: 'Pending approvals', href: '/staff/action-center/approvals', icon: 'approvals' },
+  { label: 'My AI draft work', href: '/staff/ai-work', icon: 'ai' },
 ];
 
 // ---------- formatting (fixed time zone keeps server and client output identical) ----------
@@ -94,6 +110,10 @@ const attendanceTotal = sum(SAMPLE_SNAPSHOT.attendance.inRangeByStatus);
 const attended = SAMPLE_SNAPSHOT.attendance.inRangeByStatus.PRESENT + SAMPLE_SNAPSHOT.attendance.inRangeByStatus.LATE + SAMPLE_SNAPSHOT.attendance.inRangeByStatus.MAKEUP;
 const followUpsDue = SAMPLE_FOLLOW_UPS.filter(({ item }) => item.dueAt !== null && dayKey.format(new Date(item.dueAt)) <= today);
 const paid = SAMPLE_METRICS.paidInvoicesCreated30d.amountsByCurrency[0];
+const cancelledToday = sessionsToday.filter((session) => session.status === 'CANCELLED').length;
+const overdueFollowUps = SAMPLE_FOLLOW_UPS.filter(({ item }) => item.dueAt !== null && Date.parse(item.dueAt) < Date.parse(SAMPLE_GENERATED_AT)).length;
+const paymentsNeedingReview = ['FAILED', 'REQUIRES_ACTION', 'UNKNOWN'].reduce((total, state) => total + SAMPLE_SNAPSHOT.paymentAttempts.inRangeByState[state as PaymentAttemptState], 0);
+const PHONE_ALERT_LIMIT = 3;
 
 type Tone = 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'slate' | 'teal';
 const LEAD_TONES: Record<CrmLeadStatus, Tone> = { OPEN: 'blue', WON: 'green', LOST: 'slate', ARCHIVED: 'violet' };
@@ -107,15 +127,25 @@ function Chip({ tone, children }: { tone: Tone; children: React.ReactNode }): Re
   return <span className={styles.chip} data-tone={tone}>{children}</span>;
 }
 
-function Panel({ title, action, footnote, className, children }: { title: string; action?: { label: string; href: string }; footnote?: string; className?: string | undefined; children: React.ReactNode }): React.ReactElement {
+// On phones a collapsible panel shows only its title and a one-line summary until expanded.
+// On larger screens the toggle is hidden and the body is always visible.
+function Panel({ title, action, footnote, className, collapsible = false, summary, children }: { title: string; action?: { label: string; href: string }; footnote?: string; className?: string | undefined; collapsible?: boolean; summary?: string; children: React.ReactNode }): React.ReactElement {
   const headingId = `panel-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const [expanded, setExpanded] = useState(false);
   return (
-    <section className={`${styles.panel} ${className ?? ''}`} aria-labelledby={headingId}>
+    <section className={`${styles.panel} ${className ?? ''}`} aria-labelledby={headingId} data-collapsible={collapsible ? 'true' : undefined} data-expanded={collapsible ? String(expanded) : undefined}>
       <header className={styles.panelHeader}>
         <h2 id={headingId}>{title}</h2>
+        {collapsible ? (
+          <button type="button" className={styles.panelToggle} aria-expanded={expanded} aria-controls={`${headingId}-body`} onClick={() => setExpanded((open) => !open)}>
+            <span>{summary}</span>
+            <span className={styles.srOnly}>{expanded ? `Hide ${title}` : `Show ${title}`}</span>
+            <Icon name="chevronDown" size={16} />
+          </button>
+        ) : null}
         {action ? <a className={styles.panelLink} href={action.href}>{action.label}<Icon name="arrowRight" size={14} /></a> : null}
       </header>
-      <div className={styles.panelBody}>{children}</div>
+      <div className={styles.panelBody} id={`${headingId}-body`}>{children}</div>
       {footnote ? <p className={styles.footnote}>{footnote}</p> : null}
     </section>
   );
@@ -189,6 +219,8 @@ export function ClassicDashboard(): React.ReactElement {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [portraitStyle, setPortraitStyle] = useState<PortraitStyle>('realistic');
+  const [honOpen, setHonOpen] = useState(false);
+  const honArea = useRef<HTMLDivElement>(null);
   const schoolMenu = useRef<HTMLDivElement>(null);
   const notifications = useRef<HTMLDivElement>(null);
   const about = useRef<HTMLDivElement>(null);
@@ -199,13 +231,15 @@ export function ClassicDashboard(): React.ReactElement {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       if (navOpen) menuButton.current?.focus();
-      setNavOpen(false); setSchoolMenuOpen(false); setNotificationsOpen(false); setAboutOpen(false);
+      setNavOpen(false); setSchoolMenuOpen(false); setNotificationsOpen(false); setAboutOpen(false); setHonOpen(false);
     };
     const onPointer = (event: PointerEvent): void => {
       const target = event.target as Node;
       if (!schoolMenu.current?.contains(target)) setSchoolMenuOpen(false);
       if (!notifications.current?.contains(target)) setNotificationsOpen(false);
       if (!about.current?.contains(target)) setAboutOpen(false);
+      const honTrigger = target instanceof Element && target.closest('[data-hon-trigger]');
+      if (!honArea.current?.contains(target) && !honTrigger) setHonOpen(false);
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onPointer);
@@ -222,7 +256,7 @@ export function ClassicDashboard(): React.ReactElement {
   ];
 
   const glance: { label: string; value: number; detail: string; icon: IconName; tone: Tone; href: string }[] = [
-    { label: 'Classes today', value: sessionsToday.length, detail: `${sessionsToday.filter((session) => session.status === 'CANCELLED').length} cancelled`, icon: 'schedule', tone: 'blue', href: '/staff/schedule/sessions' },
+    { label: 'Classes today', value: sessionsToday.length, detail: `${cancelledToday} cancelled`, icon: 'schedule', tone: 'blue', href: '/staff/schedule/sessions' },
     { label: 'Trials · next 24h', value: SAMPLE_METRICS.upcomingTrials24h.count, detail: 'Prepare intro lessons', icon: 'trial', tone: 'teal', href: '/staff/crm/trials' },
     { label: 'Follow-ups due', value: followUpsDue.length, detail: `${followUpsDue.filter(({ item }) => item.priority === 'HIGH').length} high priority`, icon: 'followUp', tone: 'violet', href: '/staff/crm/follow-ups' },
     { label: 'Testing events · 30 days', value: SAMPLE_METRICS.upcomingTestingEvents30d.count, detail: 'Draft, open or closed events', icon: 'testing', tone: 'amber', href: '/staff/testing/readiness' },
@@ -378,25 +412,27 @@ export function ClassicDashboard(): React.ReactElement {
             <section className={styles.team} aria-labelledby="team-heading">
               <header className={styles.panelHeader}>
                 <h2 id="team-heading">HON AI team <Chip tone="violet">Complete</Chip></h2>
-                <span className={styles.teamNote}>Governed: every consequential action needs your approval</span>
-                <a className={styles.panelLink} href="/staff/ai-work">Open AI work<Icon name="arrowRight" size={14} /></a>
+                <span className={styles.teamNote}>Governed · approval required · no work recorded in this sample</span>
+                <a className={styles.panelLink} href="/staff/ai-work">AI work<Icon name="arrowRight" size={14} /></a>
               </header>
               <ul className={styles.teamList}>
-                {HON_AI_TEAM.map((member) => (
-                  <li key={member.id} className={styles.agent}>
-                    <Portrait id={member.id} name={member.name} style={portraitStyle} />
-                    <div>
-                      <strong>{member.name}</strong>
-                      <span>{member.title}</span>
-                      <small><span className={styles.dot} data-tone="slate" />No recorded work</small>
-                    </div>
-                  </li>
-                ))}
+                {HON_AI_TEAM.map((member) => {
+                  const workspace = AGENT_WORKSPACES[member.id] ?? DEFAULT_AGENT_WORKSPACE;
+                  return (
+                    <li key={member.id}>
+                      <a className={styles.agent} href={workspace.href} title={`${member.title} · ${workspace.label}`} aria-label={`${member.name}, ${member.title}. Open ${workspace.label}`}>
+                        <Portrait id={member.id} name={member.name} style={portraitStyle} />
+                        <span className={styles.agentText}><strong>{member.name}</strong><span>{member.title}</span></span>
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
 
             <div className={styles.grid}>
-              <Panel title="Today at a glance" className={`${styles.span4} ${styles.tabletFull}`}>
+              <h2 className={styles.moreHeading}>More details</h2>
+              <Panel title="Today at a glance" className={`${styles.span4} ${styles.tabletFull} ${styles.phoneGlance}`}>
                 <ul className={styles.glance}>
                   {glance.map((row) => (
                     <li key={row.label}>
@@ -410,7 +446,7 @@ export function ClassicDashboard(): React.ReactElement {
                 </ul>
               </Panel>
 
-              <Panel title="Today's classes" action={{ label: 'Class sessions', href: '/staff/schedule/sessions' }} footnote="Booked counts and instructors are not part of the current class-session read." className={styles.span8}>
+              <Panel title="Today's classes" action={{ label: 'Class sessions', href: '/staff/schedule/sessions' }} footnote="Booked counts and instructors are not part of the current class-session read." className={styles.span8} collapsible summary={`${sessionsToday.length} classes · ${cancelledToday} cancelled`}>
                 <table className={styles.table}>
                   <thead><tr><th scope="col">Time</th><th scope="col">Class</th><th scope="col">Room</th><th scope="col">Capacity</th><th scope="col">Booking</th><th scope="col">Status</th></tr></thead>
                   <tbody>
@@ -428,11 +464,11 @@ export function ClassicDashboard(): React.ReactElement {
                 </table>
               </Panel>
 
-              <Panel title="Lead pipeline" action={{ label: 'Leads', href: '/staff/crm/leads' }} footnote="Won and lost reflect CRM close state only, not enrollment or payment." className={`${styles.span4} ${styles.tabletFull}`}>
+              <Panel title="Lead pipeline" action={{ label: 'Leads', href: '/staff/crm/leads' }} footnote="Won and lost reflect CRM close state only, not enrollment or payment." className={`${styles.span4} ${styles.tabletFull}`} collapsible summary={`${SAMPLE_SNAPSHOT.leads.byStatus.OPEN} open · ${SAMPLE_SNAPSHOT.leads.byStatus.WON} won`}>
                 <Breakdown label="Leads by status" counts={SAMPLE_SNAPSHOT.leads.byStatus} tones={LEAD_TONES} />
               </Panel>
 
-              <Panel title="Recent leads" action={{ label: 'All leads', href: '/staff/crm/leads' }} className={styles.span8}>
+              <Panel title="Recent leads" action={{ label: 'All leads', href: '/staff/crm/leads' }} className={styles.span8} collapsible summary={`${SAMPLE_LEADS.length} most recent`}>
                 <table className={styles.table}>
                   <thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col">Created</th><th scope="col">Next follow-up</th></tr></thead>
                   <tbody>
@@ -448,11 +484,11 @@ export function ClassicDashboard(): React.ReactElement {
                 </table>
               </Panel>
 
-              <Panel title="Memberships" action={{ label: 'Memberships', href: '/staff/billing/memberships' }} className={styles.span4}>
+              <Panel title="Memberships" action={{ label: 'Memberships', href: '/staff/billing/memberships' }} className={styles.span4} collapsible summary={`${SAMPLE_SNAPSHOT.memberships.byState.ACTIVE} active`}>
                 <Breakdown label="Memberships by state" counts={SAMPLE_SNAPSHOT.memberships.byState} tones={MEMBERSHIP_TONES} />
               </Panel>
 
-              <Panel title="Billing status · 30 days" action={{ label: 'Invoices', href: '/staff/billing/invoices' }} footnote="Unknown payment outcomes are never treated as paid." className={styles.span4}>
+              <Panel title="Billing status · 30 days" action={{ label: 'Invoices', href: '/staff/billing/invoices' }} footnote="Unknown payment outcomes are never treated as paid." className={styles.span4} collapsible summary={`${paymentsNeedingReview} payments to review`}>
                 <Breakdown label="Invoices by status" counts={SAMPLE_SNAPSHOT.invoices.inRangeByStatus} tones={INVOICE_TONES} />
                 <div className={styles.attention}>
                   <p>Payment attempts needing review</p>
@@ -464,19 +500,20 @@ export function ClassicDashboard(): React.ReactElement {
                 </div>
               </Panel>
 
-              <Panel title="Attendance · 30 days" action={{ label: 'Attendance', href: '/staff/attendance' }} className={`${styles.span4} ${styles.tabletFull}`}>
+              <Panel title="Attendance · 30 days" action={{ label: 'Attendance', href: '/staff/attendance' }} className={`${styles.span4} ${styles.tabletFull}`} collapsible summary={`${percent.format(attended / attendanceTotal)} attended`}>
                 <Breakdown label="Attendance by status" counts={SAMPLE_SNAPSHOT.attendance.inRangeByStatus} tones={ATTENDANCE_TONES} />
               </Panel>
 
-              <Panel title="Needs attention" action={{ label: 'Command Center', href: '/staff/command-center' }} footnote="Deterministic suggestions. Each one only opens a workbench; nothing runs automatically." className={`${styles.span5} ${styles.tabletFull}`}>
+              <Panel title="Needs attention" action={{ label: 'Command Center', href: '/staff/command-center' }} footnote="Deterministic suggestions. Each one only opens a workbench; nothing runs automatically." className={`${styles.span5} ${styles.tabletFull} ${styles.phoneAlerts}`}>
                 <ul className={styles.tasks}>
-                  {SAMPLE_RECOMMENDATIONS.map((item) => (
-                    <li key={item.id}><a href={item.route}><span><strong>{item.title}</strong><small>{item.why}</small></span><Icon name="chevronRight" size={16} className={styles.chevron} /></a></li>
+                  {SAMPLE_RECOMMENDATIONS.map((item, index) => (
+                    <li key={item.id} data-beyond-phone-limit={index >= PHONE_ALERT_LIMIT ? 'true' : undefined}><a href={item.route}><span><strong>{item.title}</strong><small>{item.why}</small></span><Icon name="chevronRight" size={16} className={styles.chevron} /></a></li>
                   ))}
                 </ul>
+                {SAMPLE_RECOMMENDATIONS.length > PHONE_ALERT_LIMIT ? <a className={styles.phoneMore} href="/staff/command-center">View all {SAMPLE_RECOMMENDATIONS.length} in Command Center<Icon name="arrowRight" size={14} /></a> : null}
               </Panel>
 
-              <Panel title="Follow-ups" action={{ label: 'Follow-ups', href: '/staff/crm/follow-ups' }} footnote="Due dates are planning metadata, not scheduled reminders. Completing a follow-up sends nothing." className={styles.span7}>
+              <Panel title="Follow-ups" action={{ label: 'Follow-ups', href: '/staff/crm/follow-ups' }} footnote="Due dates are planning metadata, not scheduled reminders. Completing a follow-up sends nothing." className={styles.span7} collapsible summary={`${overdueFollowUps} overdue`}>
                 <table className={styles.table}>
                   <thead><tr><th scope="col">Lead</th><th scope="col">Priority</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead>
                   <tbody>
@@ -495,7 +532,7 @@ export function ClassicDashboard(): React.ReactElement {
                 </table>
               </Panel>
 
-              <Panel title="Business performance" footnote="These measures stay unavailable until an authoritative source exists. HON never estimates them." className={styles.span12}>
+              <Panel title="Business performance" footnote="These measures stay unavailable until an authoritative source exists. HON never estimates them." className={styles.span12} collapsible summary="4 not available yet">
                 <div className={styles.unavailableGrid}>
                   <Unavailable title="Revenue" fact={SAMPLE_METRICS.revenue} />
                   <Unavailable title="Trial conversion" fact={SAMPLE_METRICS.trialConversion} />
@@ -508,9 +545,40 @@ export function ClassicDashboard(): React.ReactElement {
         </div>
       </div>
 
+      <div className={styles.hon} ref={honArea}>
+        {honOpen ? (
+          <section className={styles.honPanel} id="hon-panel" aria-labelledby="hon-title">
+            <header className={styles.honHeader}>
+              <span className={styles.honOrb} aria-hidden="true">HON</span>
+              <div>
+                <h2 id="hon-title">HON assistant</h2>
+                <Chip tone="amber">Preview · not connected</Chip>
+              </div>
+              <button type="button" className={styles.iconButton} aria-label="Close HON assistant" onClick={() => setHonOpen(false)}><Icon name="close" size={16} /></button>
+            </header>
+            <p className={styles.honText}>HON is your school&apos;s conversational front door in HON Complete. In this reference preview, chat and voice are not connected: nothing is sent and HON takes no action.</p>
+            <p className={styles.honLabel}>Jump to</p>
+            <ul className={styles.honLinks}>
+              {HON_JUMP_LINKS.map((link) => <li key={link.label}><a href={link.href}><Icon name={link.icon} size={15} />{link.label}<Icon name="chevronRight" size={14} className={styles.chevron} /></a></li>)}
+            </ul>
+            <div className={styles.honComposer}>
+              <label className={styles.srOnly} htmlFor="hon-message">Message HON (not connected in this preview)</label>
+              <input id="hon-message" type="text" disabled placeholder="Chat is not connected in this preview" />
+              <button type="button" disabled aria-label="Voice is off in this preview"><Icon name="mic" size={16} /></button>
+            </div>
+            <a className={styles.honWorkspace} href="/staff/voice">Open HON workspace<Icon name="arrowRight" size={14} /></a>
+          </section>
+        ) : null}
+        <button type="button" data-hon-trigger className={styles.honButton} aria-label="Open HON assistant" aria-expanded={honOpen} aria-controls={honOpen ? 'hon-panel' : undefined} onClick={() => setHonOpen((open) => !open)}>HON</button>
+      </div>
+
       <nav className={styles.bottomNav} aria-label="Quick navigation">
-        {BOTTOM_NAV.map((item) => (
+        {BOTTOM_NAV_START.map((item) => (
           <a key={item.label} href={item.href} aria-current={item.href === SELF ? 'page' : undefined}><Icon name={item.icon} size={20} /><span>{item.label}</span></a>
+        ))}
+        <button type="button" data-hon-trigger className={styles.bottomHon} aria-label="Open HON assistant" aria-expanded={honOpen} onClick={() => setHonOpen((open) => !open)}><span className={styles.honOrb} aria-hidden="true">HON</span><span>Ask HON</span></button>
+        {BOTTOM_NAV_END.map((item) => (
+          <a key={item.label} href={item.href}><Icon name={item.icon} size={20} /><span>{item.label}</span></a>
         ))}
         <button type="button" aria-label="More navigation" aria-expanded={navOpen} aria-controls="classic-sidebar" onClick={() => setNavOpen(true)}><Icon name="more" size={20} /><span>More</span></button>
       </nav>

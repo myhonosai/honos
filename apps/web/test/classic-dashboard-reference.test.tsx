@@ -52,7 +52,12 @@ describe('Classic school dashboard reference', () => {
 
   it('shows the locked school AI roster with presentation-only portrait styles and no invented activity', () => {
     for (const member of HON_AI_TEAM) expect(markup).toContain(`>${member.name}<`);
-    expect(markup.match(/No recorded work/g)).toHaveLength(HON_AI_TEAM.length);
+    expect(markup).toContain('no work recorded in this sample');
+    expect(markup).not.toMatch(/Running|Engaged|Optimizing|In progress/);
+    for (const member of HON_AI_TEAM) expect(markup).toMatch(new RegExp(`aria-label="${member.name}, [^"]+\\. Open [^"]+"`));
+    expect(markup).toContain('href="/staff/leads/assistant"');
+    expect(markup).toContain('href="/staff/marketing/assistant"');
+    expect(markup).toContain('href="/staff/teaching-assistant"');
     expect(PORTRAIT_STYLES.map((style) => style.label)).toEqual(['Realistic', 'Anime', 'Chibi']);
     for (const member of HON_AI_TEAM) {
       expect(portraitSource(member.id, 'realistic')).toBe(member.portrait);
@@ -73,6 +78,29 @@ describe('Classic school dashboard reference', () => {
     expect(school).toBeLessThan(appearance);
     expect(appearance).toBeLessThan(primaryNav);
     expect(markup).not.toMatch(/role="dialog"|aria-modal/);
+  });
+
+  it('offers a persistent, clearly labeled, navigation-only HON assistant entry point', () => {
+    expect(markup.match(/aria-label="Open HON assistant"/g)).toHaveLength(2);
+    expect(markup).toContain('data-hon-trigger');
+    expect(markup).not.toContain('id="hon-panel"');
+    const component = readFileSync('src/components/classic-dashboard/classic-dashboard.tsx', 'utf8');
+    expect(component).toContain('Preview · not connected');
+    expect(component).toContain('chat and voice are not connected: nothing is sent and HON takes no action');
+    expect(component).toMatch(/<input id="hon-message" type="text" disabled/);
+    expect(component).toMatch(/<button type="button" disabled aria-label="Voice is off in this preview">/);
+    expect(component).toContain('href="/staff/voice"');
+    expect(component).not.toMatch(/onSubmit|getUserMedia|SpeechRecognition|WebSocket|EventSource/);
+  });
+
+  it('collapses detailed sections on phones behind accessible toggles while keeping priorities visible', () => {
+    const toggles = [...markup.matchAll(/aria-expanded="false" aria-controls="(panel-[a-z0-9-]+-body)"/g)].map((match) => match[1]);
+    expect(toggles).toHaveLength(8);
+    for (const id of toggles) expect(markup).toContain(`id="${id}"`);
+    expect(markup).not.toContain('aria-controls="panel-today-at-a-glance-body"');
+    expect(markup).not.toContain('aria-controls="panel-needs-attention-body"');
+    expect(markup).toContain('View all 5 in Command Center');
+    expect(markup.match(/data-beyond-phone-limit="true"/g)).toHaveLength(2);
   });
 
   it('reads no API, storage, or AI path and never touches protected visual files', () => {
