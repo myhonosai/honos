@@ -76,7 +76,7 @@ export function HqSchoolReferrals(): React.ReactElement {
         <p className={styles.note}>Search only the returned authorized directory. Selection is not impersonation, school access or Champions Club authority. URL parameters never select a school.</p>
         {directory.data.schools.length === 0 ? <p role="status">No authorized school identities were returned.</p> : <div className={detail.selection}>
           <label>Search school or organization<input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setSelected(null); }} autoComplete="off"/></label>
-          <label>Choose school<select value={schoolId ?? ''} onChange={(e) => setSelected(e.target.value ? { schoolId: e.target.value, revision: directoryRevision } : null)}><option value="">Select a school…</option>{schools.map((s) => <option key={s.schoolId} value={s.schoolId}>{s.schoolDisplayName} — {s.organizationDisplayName}</option>)}</select></label>
+          <div><label htmlFor="champions-school-selection">Choose school</label><select id="champions-school-selection" value={schoolId ?? ''} onChange={(e) => setSelected(e.target.value ? { schoolId: e.target.value, revision: directoryRevision } : null)}><option value="">Select a school…</option>{schools.map((s) => <option key={s.schoolId} value={s.schoolId}>{s.schoolDisplayName} — {s.organizationDisplayName}</option>)}</select></div>
           {!schools.length && <p role="status">No matching schools in the returned directory.</p>}
         </div>}
       </>}

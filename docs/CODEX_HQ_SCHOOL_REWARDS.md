@@ -10,7 +10,7 @@ Owner-authorized frontend continuation after overview PR #19 merged as `ececf75d
 | `/hq/growth/rewards` | `/v1/hq/champions/rewards/ledger[?status=...]` and `/rewards/program` |
 | Existing overview / leaderboard | Preserved real reads, approved shell/assistant/executives, separate View and AI Style groups |
 
-All browser API paths have the existing `/api` same-origin prefix. No new API, contract, database, permission, preference or original-asset change. Directory identity is an untrusted human-selected UUID, never a scope token or authority; canonical Champions services independently authorize the current HQ owner/operator with `hq.champions.manage`. Directory itself separately requires its existing HQ authority. School/family/support/AI/delegated contexts cannot bridge into either boundary. URL/query values remain inert; selection is not persisted or guessed, even for one school. The existing directory helper/validator is reused unchanged; its non-abortable read is ignored after cleanup. Detail reads forward abort signals and discard obsolete results.
+All browser API paths have the existing `/api` same-origin prefix. No new API, contract, database, permission, preference or original-asset change. The shared route manifest adds only this new HQ route, append-only as allowed by Claude PR #3's ownership registry; coordination is recorded there. No Classic source or entry is edited. Directory identity is an untrusted human-selected UUID, never a scope token or authority; canonical Champions services independently authorize the current HQ owner/operator with `hq.champions.manage`. Directory itself separately requires its existing HQ authority. School/family/support/AI/delegated contexts cannot bridge into either boundary. URL/query values remain inert; selection is not persisted or guessed, even for one school. The existing directory helper/validator is reused unchanged; its non-abortable read is ignored after cleanup. Detail reads forward abort signals and discard obsolete results.
 
 ## Accuracy and completeness
 
@@ -23,7 +23,7 @@ All browser API paths have the existing `/api` same-origin prefix. No new API, c
 
 ## Backend dependency and coordination
 
-Complete HQ per-school reward history is **unavailable**. The global newest-200 list cannot support it, and the staff-only school reward endpoint is not an HQ fallback. A concrete coordination request on [Claude's PR #13](https://github.com/myhonosai/honos/pull/13) asks for a separately reviewed canonical HQ-authorized, school-bound, paginated read with stable cursor/order/snapshot semantics, closed typed validators, exact status/filter/aggregate scope and disabled financial activation. Codex has not implemented or assumed that API. The school UI displays this limitation explicitly.
+Complete HQ per-school reward history is **unavailable**. The global newest-200 list cannot support it, and the staff-only school reward endpoint is not an HQ fallback. [Backend dependency issue #21](https://github.com/myhonosai/honos/issues/21), also coordinated on Claude's PR #13 and tracking issue #6, requests a separately reviewed canonical HQ-authorized, school-bound, paginated read with stable cursor/order/snapshot semantics, beneficiary attribution, closed typed validators, exact status/filter/aggregate scope and disabled financial activation. Codex has not implemented or assumed that API. The school UI displays this limitation explicitly.
 
 ## Next contest milestone — reviewed, not implemented
 
