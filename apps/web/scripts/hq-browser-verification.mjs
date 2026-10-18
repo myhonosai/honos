@@ -271,7 +271,7 @@ try {
       await page.getByRole('heading', { name: 'Chase', exact: true }).waitFor();
       await page.getByRole('button', { name: 'Performance', exact: true }).click();
       await page.getByRole('heading', { name: 'Performance unavailable', exact: true }).waitFor();
-      await page.getByRole('button', { name: 'Ask HON anywhere', exact: true }).click();
+      await page.getByRole('button', { name: width <= 600 ? 'Expand HON assistant' : 'Ask HON anywhere', exact: true }).click();
       const assistant = page.getByRole(width <= 800 ? 'dialog' : 'complementary', { name: 'HON assistant', exact: true });
       await assistant.getByText('Current page: Chase workspace', { exact: true }).waitFor();
       assert.equal(await assistant.getByRole('textbox').inputValue(), '');
@@ -317,6 +317,10 @@ try {
       await heldSchool.waitFor();
       assert.equal(await page.locator('tbody').getByText('Hold Review School · fixture').count(), 0);
       await page.getByText('Confidential HQ reviews', { exact: true }).click();
+      if (width <= 600) {
+        assert(!(await page.getByRole('button', { name: 'Ask HON anywhere', exact: true }).isVisible()), 'A second mobile launcher must not cover filters');
+        assert(await page.getByRole('button', { name: 'Expand HON assistant', exact: true }).isVisible());
+      }
       await noOverflow(page, `${label} leaderboard`);
       await screenshot(page, `${label}-leaderboard-all-time`);
       if (label === 'mobile') await screenshot(page, 'mobile-leaderboard-viewport', false);

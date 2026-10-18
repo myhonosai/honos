@@ -120,7 +120,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
           {assistant && <div className={styles.assistantBackdrop} aria-hidden="true" onClick={closeAssistant}/>}
           {assistant && <HonAssistant context={hqPageLabel(path)} onMinimize={closeAssistant}/>}
         </div>
-        {(!assistant && path !== '/hq') && <button ref={assistantButton} type="button" className={styles.assistantLauncher} onClick={openAssistant} aria-label="Ask HON anywhere" aria-expanded={false}><HonCore small/><strong>Ask HON anywhere</strong><HqIcon name="expand"/></button>}
+        {(!assistant && path !== '/hq') && <button ref={assistantButton} type="button" className={styles.assistantLauncher} onClick={openAssistant} aria-label="Ask HON anywhere" aria-expanded={false} title="Open HON assistant"><HonCore small/><strong>Ask HON anywhere</strong><HqIcon name="expand"/></button>}
       </HqContext.Provider> : <main id="hq-main" tabIndex={-1} className={styles.accessState}>
         <HonCore small/>
         <p className={styles.eyebrow}>{access.kind === 'loading' ? 'Verifying HQ access' : access.kind === 'forbidden' ? 'HQ access denied' : access.kind === 'unauthorized' ? 'Account required' : 'HQ unavailable'}</p>

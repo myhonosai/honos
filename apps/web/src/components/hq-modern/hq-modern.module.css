@@ -606,3 +606,12 @@
   .confidentialHolds summary{font-size:12px}
   .shell[data-view=big-button] .leaderboardTable td,.shell[data-view=classic] .leaderboardTable td,.shell[data-view=big-button] .leaderboardTable tbody th,.shell[data-view=classic] .leaderboardTable tbody th{padding-block:5px}
 }
+
+/* Keep the persistent assistant entry compact so it does not cover table cells. */
+.assistantLauncher{width:52px;min-width:52px;min-height:52px;max-height:52px;left:auto;right:20px;bottom:20px;justify-content:center;gap:0;padding:7px!important}
+.assistantLauncher>strong,.assistantLauncher>svg{display:none}
+.assistantLauncher>.coreSmall{width:34px;height:34px}
+@media(max-width:600px){
+  /* The persistent, labeled HON bottom-navigation control opens the same assistant. */
+  .assistantLauncher{display:none}
+}
