@@ -59,6 +59,10 @@ export class ChampionsSchoolController {
 @UseGuards(HonIdentityGuard)
 export class ChampionsHqController {
   constructor(private readonly champions: ChampionsClubService) {}
+  @Get('overview') @UseGuards(ChampionsReadGuard)
+  async overview(@Req() req: HonRequest) {
+    return { data: await this.champions.readOverview(subject(req)) };
+  }
   @Get('program') @UseGuards(ChampionsReadGuard)
   async program(@Req() req: HonRequest) {
     return { data: await this.champions.readProgram(subject(req)) };

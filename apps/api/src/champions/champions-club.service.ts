@@ -12,7 +12,7 @@ import {
   validateChampionsLeaderboardQuery, validateChampionsPreferenceInput, validateChampionsPreferenceReceipt, validateChampionsSchoolLeaderboard,
   validateChampionsSchoolStatistics,
   validateChampionsContestCommand, validateChampionsContestDetail, validateChampionsContestList, validateChampionsContestReceipt,
-  validateChampionsContestStatusFilter, validateChampionsSchoolContests,
+  validateChampionsContestStatusFilter, validateChampionsSchoolContests, validateChampionsOverview,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ChampionsClubOperation } from '../foundation/runtime-database.service.js';
 
@@ -141,6 +141,11 @@ export class ChampionsClubService {
   async readSchoolContests(subject: string, schoolId: unknown) {
     const school = parse(() => championsUuid(schoolId));
     return this.run('readSchoolContests', [subject, school], validateChampionsSchoolContests);
+  }
+
+  /** Milestone 5: aggregate HQ overview of the whole program. */
+  async readOverview(subject: string) {
+    return this.run('readOverview', [subject], validateChampionsOverview);
   }
 
   private async run<T>(operation: ChampionsClubOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {

@@ -61,6 +61,9 @@ export const championsClubFunctions = [
  ['hon.read_champions_contests_from_hq(text,text)',true,true],
  ['hon.read_champions_contest_from_hq(text,uuid)',true,true],
  ['hon.read_champions_contests_for_school(text,uuid)',true,true],
+ // 0153 integration
+ ['hon.champions_reconcile_core(uuid,uuid,timestamptz)',false,false],
+ ['hon.read_champions_overview_from_hq(text)',true,true],
 ];
 export async function verifyChampionsClubSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe Champions Club runtime role.');

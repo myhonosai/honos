@@ -1244,3 +1244,19 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End Champions Club contests exact reconciliation.
+
+-- Champions Club integration exact reconciliation:
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.champions_reconcile_core(uuid,uuid,timestamptz)','hon.read_champions_overview_from_hq(text)',
+      'hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid)','hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_champions_overview_from_hq(text), hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid),
+      hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End Champions Club integration exact reconciliation.
