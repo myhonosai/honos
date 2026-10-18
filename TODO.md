@@ -1,5 +1,9 @@
 # HON Delivery Backlog
 
+## Codex HQ Champions Club integration — owner-authorized follow-up
+
+- [ ] Deliver the real HQ all-time/UTC-month leaderboard from merged M1–M3 APIs on `codex/hq-champions-integration`, stacked on PR #8: server rankings only, closed contracts, explicit loading/empty/error/access states, refresh, stale-response isolation and confidential HQ-only holds. Separate the View and AI Style control boundaries. Prove privacy, desktop/mobile behavior and CI before expanding read-only overview work. No mutations, financial issuance, hypothetical M4, CRM edits, merge or deployment.
+
 ## Codex HQ Modern frontend — owner-authorized 2026-10-18
 
 - [x] Apply the latest owner clarification: restored the existing command-center background, made executive cards see-through and overlapped the speaking dock with HON's lower front as confirmed. Source `21ab801`: 37 browser checks passed, zero failures; eight axe scans, zero reported violations; both normal CI jobs passed including the application build and disposable-local security proofs. Real [desktop/mobile evidence](docs/visuals/codex/hq-glass-command/README.md) visually inspected. Prior variants/original art/HQ boundaries preserved; owner visual and manual device review remain pending. No merge/deployment.

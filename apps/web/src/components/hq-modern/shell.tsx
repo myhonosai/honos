@@ -108,8 +108,8 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         <span className={styles.ownerAvatar} title="Company control plane" aria-label="HQ workspace">HQ</span>
       </header>
       <section className={styles.appearance} aria-label="HQ appearance">
-        <div role="group" aria-label="Platform view"><span>View</span>{HQ_VIEWS.map((option) => <button type="button" key={option.key} aria-pressed={view === option.key} onClick={() => setView(option.key)}>{option.label}</button>)}</div>
-        <div role="group" aria-label="AI portrait style"><span>AI style</span>{HQ_ART.map((option) => <button type="button" key={option.key} aria-pressed={art === option.key} onClick={() => setArt(option.key)}>{option.label}</button>)}</div>
+        <div className={styles.appearanceGroup} role="group" aria-label="Platform view"><span>View</span>{HQ_VIEWS.map((option) => <button type="button" key={option.key} aria-pressed={view === option.key} onClick={() => setView(option.key)}>{option.label}</button>)}</div>
+        <div className={styles.appearanceGroup} role="group" aria-label="AI portrait style"><span>AI Style</span>{HQ_ART.map((option) => <button type="button" key={option.key} aria-pressed={art === option.key} onClick={() => setArt(option.key)}>{option.label}</button>)}</div>
         <button type="button" className={styles.motionControl} aria-label="Ambient motion" aria-pressed={!reducedMotion && ambientMotion} disabled={reducedMotion} onClick={() => setAmbientMotion((value) => !value)} title={reducedMotion ? 'Motion is off because your device prefers reduced motion' : 'Pause or resume decorative motion'}><HqIcon name={ambientMotion && !reducedMotion ? 'pause' : 'play'} size={14}/><span>Motion</span><small>{!reducedMotion && ambientMotion ? 'On' : 'Off'}</small></button>
         <small>Presentation only</small>
       </section>

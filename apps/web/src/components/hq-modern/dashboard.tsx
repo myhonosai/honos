@@ -58,7 +58,7 @@ export function CompanySnapshot(): React.ReactElement {
 }
 
 export function GrowthLinks(): React.ReactElement {
-  return <section className={`${styles.panel} ${styles.growthPanel}`} aria-labelledby="hq-growth-title"><div className={styles.sectionHeader}><h2 id="hq-growth-title">Growth &amp; Referrals</h2><span className={styles.badge}>Planned</span></div><p>Champions Club &amp; founder campaigns</p><div className={styles.growthLinks}>{HQ_GROWTH.map((item) => <Link key={item.path} href={item.path}><HqIcon name={item.icon} size={18}/><span>{item.title}</span><HqIcon name="chevron" size={14}/></Link>)}</div><Link className={styles.growthOpen} href="/hq/growth">Open Growth &amp; Referrals <HqIcon name="chevron" size={16}/></Link><p className={styles.finePrint}>Owner-controlled contests &amp; rewards. No activation from this interface.</p></section>;
+  return <section className={`${styles.panel} ${styles.growthPanel}`} aria-labelledby="hq-growth-title"><div className={styles.sectionHeader}><h2 id="hq-growth-title">Growth &amp; Referrals</h2><span className={styles.badge}>Read-only standings</span></div><p>Champions Club &amp; founder campaigns</p><div className={styles.growthLinks}>{HQ_GROWTH.map((item) => <Link key={item.path} href={item.path}><HqIcon name={item.icon} size={18}/><span>{item.title}</span><HqIcon name="chevron" size={14}/></Link>)}</div><Link className={styles.growthOpen} href="/hq/growth">Open Growth &amp; Referrals <HqIcon name="chevron" size={16}/></Link><p className={styles.finePrint}>Qualified standings use the authorized HQ service. Contests &amp; reward actions remain planned.</p></section>;
 }
 
 function CommandStage(): React.ReactElement {
