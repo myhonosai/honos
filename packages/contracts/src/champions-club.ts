@@ -24,6 +24,8 @@ export const CHAMPIONS_COMMANDS = {
   publishRewardPolicy: 'champions-reward-policy-publish',
   reconcileRewards: 'champions-rewards-reconcile',
   decideReward: 'champions-reward-decide',
+  setLeaderboardHold: 'champions-leaderboard-hold',
+  setLeaderboardPreference: 'champions-leaderboard-preference',
 } as const;
 export type ChampionsCommand = typeof CHAMPIONS_COMMANDS[keyof typeof CHAMPIONS_COMMANDS];
 

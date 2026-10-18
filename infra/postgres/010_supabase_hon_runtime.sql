@@ -1181,3 +1181,35 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End Champions Club reward accounting exact reconciliation.
+
+-- Champions Club leaderboard exact reconciliation:
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['champions_leaderboard_preferences','champions_leaderboard_holds'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC CASCADE',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I CASCADE',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid = ('hon.'||t)::regclass AND attnum > 0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC CASCADE',col,t);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_champions_leaderboard()','hon.champions_period_month(text,text)','hon.champions_standings(date)',
+      'hon.champions_milestone_progress(integer)','hon.champions_school_statistics_json(uuid,boolean)',
+      'hon.read_champions_leaderboard_from_hq(text,text,text)','hon.read_champions_school_statistics_from_hq(text,uuid)',
+      'hon.set_champions_leaderboard_hold(text,jsonb,uuid,uuid,uuid)','hon.read_champions_leaderboard_for_school(text,uuid,text,text)',
+      'hon.read_champions_school_statistics(text,uuid)','hon.set_champions_leaderboard_preference(text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_champions_leaderboard_from_hq(text,text,text), hon.read_champions_school_statistics_from_hq(text,uuid),
+      hon.set_champions_leaderboard_hold(text,jsonb,uuid,uuid,uuid), hon.read_champions_leaderboard_for_school(text,uuid,text,text),
+      hon.read_champions_school_statistics(text,uuid), hon.set_champions_leaderboard_preference(text,uuid,jsonb,uuid,uuid,uuid)
+      TO hon_runtime;
+  END IF;
+END $$;
+-- End Champions Club leaderboard exact reconciliation.

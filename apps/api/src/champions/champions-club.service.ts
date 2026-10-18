@@ -8,6 +8,9 @@ import {
   validateChampionsRewardDecisionInput, validateChampionsRewardDecisionReceipt, validateChampionsRewardLedger,
   validateChampionsRewardPolicyDraftInput, validateChampionsRewardPolicyDraftReceipt, validateChampionsRewardPolicyPublishReceipt,
   validateChampionsRewardProgram, validateChampionsRewardReconcileReceipt, validateChampionsRewardStatusFilter, validateChampionsSchoolRewards,
+  validateChampionsHoldInput, validateChampionsHoldReceipt, validateChampionsHqLeaderboard, validateChampionsHqSchoolStatistics,
+  validateChampionsLeaderboardQuery, validateChampionsPreferenceInput, validateChampionsPreferenceReceipt, validateChampionsSchoolLeaderboard,
+  validateChampionsSchoolStatistics,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ChampionsClubOperation } from '../foundation/runtime-database.service.js';
 
@@ -84,6 +87,32 @@ export class ChampionsClubService {
   async readSchoolRewards(subject: string, schoolId: unknown) {
     const school = parse(() => championsUuid(schoolId));
     return this.run('readSchoolRewards', [subject, school], validateChampionsSchoolRewards);
+  }
+
+  // ---------- leaderboards and statistics (Milestone 3; QUALIFIED referrals only) ----------
+  async readHqLeaderboard(subject: string, query: unknown) {
+    const { period, month } = parse(() => validateChampionsLeaderboardQuery(query));
+    return this.run('readHqLeaderboard', [subject, period, month], validateChampionsHqLeaderboard);
+  }
+  async readHqSchoolStatistics(subject: string, schoolId: unknown) {
+    const school = parse(() => championsUuid(schoolId));
+    return this.run('readHqSchoolStatistics', [subject, school], validateChampionsHqSchoolStatistics);
+  }
+  async setLeaderboardHold(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateChampionsHoldInput(body), championsUuid(key)] as const);
+    return this.run('setLeaderboardHold', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateChampionsHoldReceipt);
+  }
+  async readSchoolLeaderboard(subject: string, schoolId: unknown, query: unknown) {
+    const [school, { period, month }] = parse(() => [championsUuid(schoolId), validateChampionsLeaderboardQuery(query)] as const);
+    return this.run('readSchoolLeaderboard', [subject, school, period, month], validateChampionsSchoolLeaderboard);
+  }
+  async readSchoolStatistics(subject: string, schoolId: unknown) {
+    const school = parse(() => championsUuid(schoolId));
+    return this.run('readSchoolStatistics', [subject, school], validateChampionsSchoolStatistics);
+  }
+  async setLeaderboardPreference(subject: string, schoolId: unknown, body: unknown, key: unknown) {
+    const [school, input, idempotencyKey] = parse(() => [championsUuid(schoolId), validateChampionsPreferenceInput(body), championsUuid(key)] as const);
+    return this.run('setLeaderboardPreference', [subject, school, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateChampionsPreferenceReceipt);
   }
 
   private async run<T>(operation: ChampionsClubOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {

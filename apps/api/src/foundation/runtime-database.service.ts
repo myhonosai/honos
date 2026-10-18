@@ -74,6 +74,12 @@ const CHAMPIONS_CLUB_CALLS = {
   decideReward: { sql: 'SELECT hon.decide_champions_reward($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readRewardLedger: { sql: 'SELECT hon.read_champions_reward_ledger_from_hq($1,$2) AS data', arity: 2, readOnly: true },
   readSchoolRewards: { sql: 'SELECT hon.read_champions_school_rewards($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readHqLeaderboard: { sql: 'SELECT hon.read_champions_leaderboard_from_hq($1,$2,$3) AS data', arity: 3, readOnly: true },
+  readHqSchoolStatistics: { sql: 'SELECT hon.read_champions_school_statistics_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setLeaderboardHold: { sql: 'SELECT hon.set_champions_leaderboard_hold($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readSchoolLeaderboard: { sql: 'SELECT hon.read_champions_leaderboard_for_school($1,$2::uuid,$3,$4) AS data', arity: 4, readOnly: true },
+  readSchoolStatistics: { sql: 'SELECT hon.read_champions_school_statistics($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setLeaderboardPreference: { sql: 'SELECT hon.set_champions_leaderboard_preference($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 
