@@ -1,0 +1,31 @@
+.management,.results{display:grid;gap:16px}
+.management>nav{margin:0;gap:6px;flex-wrap:wrap}
+.summary:empty{display:none}
+.introHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:10px 0}
+.introHeading>button{background:#0c3446;border-color:#4f8eaa;flex-shrink:0}
+.note{font-size:12px;line-height:1.65;color:#c4dce8!important}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.metrics>section{border:1px solid #376477;border-radius:14px;padding:18px;background:linear-gradient(130deg,#103548eb,#081d2cf2);overflow-wrap:anywhere}
+.metrics h3{font-size:12px;letter-spacing:0;font-weight:500;color:#d7ebf5}
+.metrics strong{display:block;font-size:clamp(24px,2.7vw,36px);color:#a8f6fc;line-height:1.3;margin:8px 0}
+.metrics p{font-size:11px}
+.states{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 14px}
+.states>div{padding:12px;background:#0a2635ba;border:1px solid #34566a;border-radius:10px;overflow-wrap:anywhere}
+.states dt{font-size:13px;color:#d9eaf5}
+.states dd{font-size:24px;color:#d2fbff;margin:6px 0}
+.states p{font-size:11px;line-height:1.6}
+.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.columns h2{font-size:17px}
+.columns>section>div{flex-wrap:wrap;gap:8px}
+.facts{margin:12px 0 0}
+.facts>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid #33566999;font-size:12px}
+.facts dt{color:#c7dfeb}
+.facts dd{margin:0;text-align:right;color:#eefbff;font-weight:600;overflow-wrap:anywhere}
+.facts small{display:block;font-size:10px;font-weight:400;color:#bed4e0;margin-top:5px}
+.review summary{cursor:pointer;min-height:44px;align-content:center;font-size:14px;color:#e1f5ff}
+.review summary::marker{color:#84e8f0}
+.link{display:inline-flex;align-items:center;min-height:44px;margin-top:12px;color:#a1eff7!important;text-decoration:underline!important}
+/* Leave the approved compact assistant its own gutter on subpages as content scrolls. */
+@media(min-width:601px){.management{padding-right:64px}}
+@media(max-width:1100px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.states{grid-template-columns:repeat(3,minmax(0,1fr))}.columns{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.intro{padding:16px}.intro h2{font-size:21px}.intro p{font-size:12px;line-height:1.6}.introHeading>button{width:100%;font-size:12px}.metrics{gap:8px}.metrics>section{padding:14px}.metrics h3{font-size:11px}.states{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.facts>div{grid-template-columns:minmax(0,1fr)}.facts dd{text-align:left}.management>nav a{font-size:11px}.review summary{line-height:1.6}}

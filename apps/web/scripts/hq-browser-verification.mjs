@@ -8,8 +8,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, appendFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
-import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateChampionsLeaderboardQuery, validateChampionsHqLeaderboard } from '@hon/contracts';
+import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateChampionsLeaderboardQuery, validateChampionsHqLeaderboard, validateChampionsOverview, validateChampionsProgram } from '@hon/contracts';
 import { leaderboardFixture } from './fixtures/hq-champions-leaderboard.mjs';
+import { championsManagementFixture } from './fixtures/hq-champions-management.mjs';
 
 if (process.env.GITHUB_ACTIONS !== 'true' && process.env.HON_HQ_BROWSER_LOCAL !== '1') throw new Error('Use the temporary CI workflow or explicitly opt into disposable local browser verification.');
 for (const key of ['DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'STRIPE_SECRET_KEY']) {
@@ -42,6 +43,9 @@ let apiMode = 'ready';
 let leaderboardMode = 'ready';
 let leaderboardUpdated = false;
 let leaderboardDelay = 0;
+let managementMode = 'ready';
+let managementUpdated = false;
+let managementDelay = 0;
 const overview = {
   asOf: '2026-10-17T12:00:00.000Z', callerHqRole: 'OWNER', organizationCount: 2, schoolCount: 3,
   onboarding: { availability: 'AVAILABLE', requestCount: 4, inProgressRequestCount: 1, completedRequestCount: 3 },
@@ -63,8 +67,23 @@ const api = createServer((request, response) => {
     response.writeHead(403); response.end('{}'); return;
   }
   const url = new URL(path, 'http://127.0.0.1');
-  if (request.method !== 'GET' || !['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/leaderboard'].includes(url.pathname)) {
+  if (request.method !== 'GET' || !['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/leaderboard', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname)) {
     response.writeHead(405); response.end('{}'); return;
+  }
+  if (['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname)) {
+    if (url.search || request.headers['content-length'] && request.headers['content-length'] !== '0') { response.writeHead(400); response.end('{}'); return; }
+    const isProgram = url.pathname.endsWith('/program');
+    if (['401', '403', '503'].includes(managementMode) || managementMode === 'program-denied' && isProgram) {
+      response.writeHead(managementMode === 'program-denied' ? 403 : Number(managementMode)); response.end('{"private":"private-overview-note"}'); return;
+    }
+    const fixture = championsManagementFixture({ empty: managementMode === 'empty', updated: managementUpdated });
+    const data = isProgram ? validateChampionsProgram(fixture.program) : validateChampionsOverview(fixture.overview);
+    const body = managementMode === 'invalid-json' ? 'unreadable'
+      : JSON.stringify({ data: managementMode === 'malformed' ? { ...data, privateSchool: 'private-overview-note' }
+        : managementMode === 'mismatch' && isProgram ? { ...data, published: { ...data.published, policyVersion: 2 } } : data });
+    const finish = () => { if (!response.destroyed) response.end(body); };
+    if (managementDelay) setTimeout(finish, managementDelay); else finish();
+    return;
   }
   if (url.pathname === '/v1/hq/champions/leaderboard') {
     if (['401', '403', '503'].includes(leaderboardMode)) { response.writeHead(Number(leaderboardMode)); response.end('{}'); return; }
@@ -135,7 +154,7 @@ async function screenshot(page, name, fullPage = true) {
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots
   // when the terminal cannot download File Service artifacts. No credentials or live data.
-  if (['desktop-dashboard-full', 'mobile-dashboard-full', 'mobile-dashboard-viewport', 'desktop-leaderboard-all-time', 'desktop-leaderboard-monthly', 'mobile-leaderboard-all-time', 'mobile-leaderboard-monthly', 'mobile-leaderboard-viewport'].includes(name)) {
+  if (['desktop-champions-overview', 'mobile-champions-overview', 'mobile-champions-viewport', 'desktop-dashboard-full', 'mobile-dashboard-full', 'mobile-dashboard-viewport', 'desktop-leaderboard-all-time', 'desktop-leaderboard-monthly', 'mobile-leaderboard-all-time', 'mobile-leaderboard-monthly', 'mobile-leaderboard-viewport'].includes(name)) {
     const preview = await page.screenshot({ type: 'jpeg', quality: 72, fullPage, animations: 'disabled' });
     await writeFile(join(resultsRoot, `${name}.jpg`), preview);
     const encoded = preview.toString('base64');
@@ -341,8 +360,118 @@ try {
       await filters.getByRole('button', { name: 'All time', exact: true }).click();
       await page.getByRole('heading', { name: 'All-time standings', exact: true }).waitFor();
     });
+    await check(`${label}: Champions overview aggregates, configuration, liabilities, views and assistant`, async () => {
+      managementMode = 'ready'; managementUpdated = false;
+      await page.goto(`${origin}/hq/growth?schoolId=untrusted&role=OWNER`, { waitUntil: 'domcontentloaded' });
+      await page.locator('[data-champions-total]').waitFor();
+      assert.equal(await page.locator('[data-champions-total]').textContent(), '22');
+      if (width <= 600) {
+        const total = await page.locator('[data-champions-total]').boundingBox();
+        assert(total && total.y + total.height < height - 64, 'Mobile referral total must be visible above the fixed bottom navigation on initial load');
+      }
+      await page.getByRole('heading', { name: 'Program configuration', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).waitFor();
+      if (width > 600) {
+        const launcher = await page.getByRole('button', { name: 'Ask HON anywhere', exact: true }).boundingBox();
+        const header = await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).locator('..').boundingBox();
+        assert(launcher && header && header.x + header.width < launcher.x, 'The persistent assistant must not cover the financial status or management controls');
+      }
+      await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).waitFor();
+      assert.equal(await page.getByRole('button', { name: /issue|approve|pay|publish|reconcile/i }).count(), 0);
+      assert(!(await page.getByText('Active leaderboard holds', { exact: true }).isVisible()));
+      const review = page.getByText('Confidential HQ review and contest liabilities', { exact: true });
+      await review.focus(); await page.keyboard.press('Enter');
+      await page.getByText('Active leaderboard holds', { exact: true }).waitFor();
+      await page.getByText('USD 250.00', { exact: true }).waitFor();
+      await page.keyboard.press('Enter');
+      for (const name of ['Big Button', 'Classic', 'Modern']) {
+        await page.getByRole('group', { name: 'Platform view' }).getByRole('button', { name, exact: true }).click();
+        await noOverflow(page, `${label} Champions ${name}`);
+      }
+      await screenshot(page, `${label}-champions-overview`);
+      if (label === 'mobile') await screenshot(page, 'mobile-champions-viewport', false);
+      await accessibility(page, `${label}-champions-overview`);
+      await page.getByRole('button', { name: width <= 600 ? 'Expand HON assistant' : 'Ask HON anywhere', exact: true }).click();
+      const assistant = page.getByRole(width <= 800 ? 'dialog' : 'complementary', { name: 'HON assistant', exact: true });
+      await assistant.getByText('Current page: Growth & Referrals', { exact: true }).waitFor();
+      assert(await assistant.getByRole('button', { name: /^Send unavailable/ }).isDisabled());
+      await noOverflow(page, `${label} Champions assistant`);
+      await page.keyboard.press('Escape');
+      await assistant.waitFor({ state: 'detached' });
+    });
     await context.close();
   }
+
+  const management = await contextFor({ width: 390, height: 844 });
+  try {
+    const page = management.page;
+    const open = async () => {
+      await page.goto(`${origin}/hq/growth/champions-club`, { waitUntil: 'domcontentloaded' });
+      await page.locator('[data-champions-total]').waitFor();
+    };
+    await check('Champions refresh clears old facts, retrieves updated aggregates and restores keyboard control', async () => {
+      managementMode = 'ready'; managementUpdated = false; await open();
+      managementDelay = 500; managementUpdated = true;
+      const refresh = page.getByRole('button', { name: 'Refresh Champions Club', exact: true });
+      await refresh.focus(); await page.keyboard.press('Enter');
+      await page.getByRole('heading', { name: 'Loading authorized Champions Club…', exact: true }).waitFor();
+      assert.equal(await page.locator('[data-champions-total]').count(), 0);
+      assert.equal(await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).count(), 0);
+      await page.waitForFunction(() => document.querySelector('[data-champions-total]')?.textContent === '23');
+      assert(await refresh.isEnabled()); managementDelay = 0;
+    });
+    await check('Champions empty, unpublished, denied and malformed responses never retain old referral or liability facts', async () => {
+      for (const [mode, heading] of [['empty', 'No referrals recorded'], ['401', 'Sign in to view Champions Club'], ['403', 'Champions Club access denied'], ['program-denied', 'Champions Club access denied'], ['503', 'Champions Club overview unavailable'], ['malformed', 'Champions Club overview could not be verified'], ['invalid-json', 'Champions Club overview could not be verified'], ['mismatch', 'Champions Club overview could not be verified']]) {
+        managementMode = 'ready'; await open(); managementMode = mode;
+        await page.getByRole('button', { name: 'Refresh Champions Club', exact: true }).click();
+        await page.getByRole('heading', { name: heading, exact: true }).waitFor();
+        if (mode !== 'empty') assert.equal(await page.locator('[data-champions-total]').count(), 0);
+        else { assert.equal(await page.locator('[data-champions-total]').textContent(), '0'); await page.getByText('No published qualification policy was returned.', { exact: false }).waitFor(); }
+        assert.equal(await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).count(), 0);
+        assert.equal(await page.getByText('private-overview-note', { exact: false }).count(), 0);
+        await noOverflow(page, `Champions ${mode}`);
+        if (['empty', 'program-denied', '503'].includes(mode)) await screenshot(page, `mobile-champions-${mode}`);
+      }
+    });
+    await check('Champions obsolete delayed refresh cannot restore facts after overview navigation', async () => {
+      managementMode = 'ready'; managementUpdated = false; await open();
+      managementDelay = 600;
+      const start = report.apiRequests.length;
+      await page.getByRole('button', { name: 'Refresh Champions Club', exact: true }).click();
+      await page.getByRole('heading', { name: 'Loading authorized Champions Club…', exact: true }).waitFor();
+      for (let attempt = 0; attempt < 30 && report.apiRequests.slice(start).filter((r) => ['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(r.path)).length < 2; attempt++) await delay(20);
+      assert.equal(report.apiRequests.slice(start).filter((r) => ['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(r.path)).length, 2);
+      managementDelay = 0; managementUpdated = true;
+      await page.getByRole('navigation', { name: 'Growth modules', exact: true }).getByRole('link', { name: 'Growth overview', exact: true }).click();
+      await page.waitForURL('**/hq/growth');
+      await page.waitForFunction(() => document.querySelector('[data-champions-total]')?.textContent === '23');
+      await delay(700);
+      assert.equal(await page.locator('[data-champions-total]').textContent(), '23');
+    });
+    await check('Champions overview and program independently deny non-HQ identities and reject selectors', async () => {
+      managementMode = 'ready';
+      for (const subject of ['hon-school-fixture', 'hon-family-fixture', 'hon-hq-support-fixture', null]) {
+        const denied = await contextFor({ width: 390, height: 844 }, subject !== null, 'reduce', subject ?? '');
+        try {
+          for (const resource of ['overview', 'program']) {
+            const response = await denied.context.request.get(`${origin}/api/v1/hq/champions/${resource}`);
+            assert.equal(response.status(), subject === null ? 401 : 403);
+            assert.equal(await response.text(), '{}');
+          }
+          await denied.page.goto(`${origin}/hq/growth`, { waitUntil: 'domcontentloaded' });
+          if (subject === null) assert.equal(new URL(denied.page.url()).pathname, '/auth/login');
+          else await denied.page.getByRole('heading', { name: 'This account has no current HQ authority.', exact: true }).waitFor();
+          assert.equal(await denied.page.locator('[data-champions-total]').count(), 0);
+        } finally { await denied.context.close(); }
+      }
+      const operator = await contextFor({ width: 390, height: 844 }, true, 'reduce', 'hon-hq-operator-fixture');
+      try {
+        await operator.page.goto(`${origin}/hq/growth/champions-club`, { waitUntil: 'domcontentloaded' });
+        await operator.page.locator('[data-champions-total]').waitFor();
+        for (const resource of ['overview', 'program']) assert.equal((await operator.context.request.get(`${origin}/api/v1/hq/champions/${resource}?schoolId=untrusted`)).status(), 400);
+      } finally { await operator.context.close(); }
+    });
+  } finally { managementMode = 'ready'; managementDelay = 0; managementUpdated = false; await management.context.close(); }
 
   const integration = await contextFor({ width: 1440, height: 1000 });
   try {
@@ -466,7 +595,8 @@ try {
   await check('No mutation, provider or arbitrary API request', async () => {
     assert(report.apiRequests.every((request) => {
       const url = new URL(request.path, 'http://127.0.0.1');
-      return request.method === 'GET' && (['/v1/hq/overview', '/v1/hq/schools'].includes(request.path)
+      return request.method === 'GET' && (['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(request.path)
+        || (['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname) && url.search === '?schoolId=untrusted')
         || (url.pathname === '/v1/hq/champions/leaderboard' && [...url.searchParams.keys()].every((key) => ['period', 'month'].includes(key))));
     }));
   });
