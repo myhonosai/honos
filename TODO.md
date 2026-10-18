@@ -2,7 +2,7 @@
 
 ## Codex HQ Modern frontend — owner-authorized 2026-10-18
 
-- [ ] Apply the latest owner clarification: restore the command-center background, make executive cards see-through and overlap the speaking dock with the lower front of HON as confirmed. Preserve prior variants and all security/data boundaries; publish real desktop/mobile evidence before review.
+- [x] Apply the latest owner clarification: restored the existing command-center background, made executive cards see-through and overlapped the speaking dock with HON's lower front as confirmed. Source `21ab801`: 37 browser checks passed, zero failures; eight axe scans, zero reported violations; both normal CI jobs passed including the application build and disposable-local security proofs. Real [desktop/mobile evidence](docs/visuals/codex/hq-glass-command/README.md) visually inspected. Prior variants/original art/HQ boundaries preserved; owner visual and manual device review remain pending. No merge/deployment.
 
 - [x] Implement and verify the Jarvis-inspired abstract variant, then preserve it after the owner's latest restored-background clarification. Source `bad9f7a`: 37 browser checks passed, zero failures; eight axe scans, zero violations; [archived desktop/mobile evidence](docs/visuals/codex/hq-holographic/README.md). Original assets, six executive workspaces and all HQ/security boundaries retained.
 
