@@ -23,7 +23,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 
 ## Safety controls
 
-- **Triggers:** pull requests targeting `main` (opened, updated, reopened, marked ready) and manual **Run workflow**. Draft PRs are skipped. Docs-only changes (`docs/**`, `*.md`) are skipped. **No schedule. No push-to-main trigger** until the owner approves the minutes (see below).
+- **Triggers:** pull requests targeting `main` (opened, updated, reopened, marked ready) and manual **Run workflow**. Draft PRs are skipped. A PR whose **entire** diff is docs (`docs/**`, `*.md`) is skipped. GitHub evaluates the filter against the whole PR, so a docs-only push to a PR that also changes code still runs CI. **No schedule. No push-to-main trigger** until the owner approves the minutes (see below).
 - **Permissions:** `contents: read` only; checkout does not persist the token.
 - **Concurrency:** a newer push to the same PR cancels the older run.
 - **Database isolation:** the runner refuses to run unless it is on an ephemeral GitHub-hosted runner (or `HON_DB_PROOFS_LOCAL=1` locally), refuses any inherited `DATABASE_URL`, and runs every fixture and proof under `env -i` with only `PATH`, `HOME`, `LANG`. The fixture scripts also refuse provider, payment, messaging or credential variables and accept only exact `localhost:5432` targets.
