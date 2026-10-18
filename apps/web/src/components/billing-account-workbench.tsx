@@ -12,15 +12,18 @@ import styles from './staff-availability-workbench.module.css';
 
 type ScopeState = 'RESOLVING' | 'SELECTION_REQUIRED' | 'READY' | 'UNAVAILABLE';
 const reasonValid = (value: string): boolean => value.length >= 1 && value.length <= 500 && value.trim() === value && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** This page starts with no payer, account, request key, or command and stores nothing in the browser. */
-export function BillingAccountWorkbench(): React.ReactElement {
+export function BillingAccountWorkbench({ initialSourceContactPersonId }: { initialSourceContactPersonId?: string } = {}): React.ReactElement {
+  const initialCandidate = typeof initialSourceContactPersonId === 'string' && UUID.test(initialSourceContactPersonId) ? initialSourceContactPersonId.toLowerCase() : '';
   const [scope, setScope] = useState<BillingAccountScope | null>(null);
   const [scopeState, setScopeState] = useState<ScopeState>('RESOLVING');
   const [scopeMessage, setScopeMessage] = useState('Resolving current staff billing scope…');
   const [schoolChoices, setSchoolChoices] = useState<StaffReportingSchoolChoice[]>([]);
   const [schoolChoiceId, setSchoolChoiceId] = useState('');
   const [query, setQuery] = useState('');
+  const [sourceContactCandidate, setSourceContactCandidate] = useState(initialCandidate);
   const [payers, setPayers] = useState<BillingAccountPayerChoice[] | null>(null);
   const [payer, setPayer] = useState<BillingAccountPayerChoice | null>(null);
   const [currency, setCurrency] = useState('');
@@ -43,11 +46,11 @@ export function BillingAccountWorkbench(): React.ReactElement {
     if (clearOffer) { setAdditionalAvailable(false); setAdditionalReason(''); }
   }
   function clearPayers(): void { setPayers(null); setPayer(null); }
-  function resetDraft(): void { commandEpoch.current++; clearPayers(); setQuery(''); setCurrency(''); clearCommandFacts(); setError(''); }
+  function resetDraft(clearSourceContactCandidate = false): void { commandEpoch.current++; clearPayers(); setQuery(''); setCurrency(''); clearCommandFacts(); if (clearSourceContactCandidate) setSourceContactCandidate(''); setError(''); }
   function accessLost(): void {
     scopeEpoch.current++; commandEpoch.current++; resolverRead.current = null; selectorRead.current = null; active.current = false;
     setScope(null); setScopeState('UNAVAILABLE'); setScopeMessage('Current human billing-account authority is unavailable. No school, payer or account is selected.');
-    setSchoolChoices([]); setSchoolChoiceId(''); resetDraft(); setBusy(false);
+    setSchoolChoices([]); setSchoolChoiceId(''); resetDraft(true); setBusy(false);
   }
   function editCommand(change: () => void): void {
     if (active.current) return;
@@ -143,6 +146,7 @@ export function BillingAccountWorkbench(): React.ReactElement {
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
     <header><p>HON / DIRECT-HUMAN BILLING</p><h1>Billing account create or reuse</h1><p>Find one current-school responsible payer through an explicit bounded lookup, then confirm a canonical account request. The server decides whether a matching canonical account is reused. No entered value establishes authority.</p></header>
     <aside><strong>Account record only — no collection or responsibility transfer.</strong><p>This workbench cannot create a membership, invoice, payment method, payment schedule, charge, provider action, communication, automation, AI or Action Engine request. It does not collect financial credentials, merge accounts, transfer payer responsibility, or imply payment, enrollment, agreement or collection status.</p></aside>
+    {sourceContactCandidate && <section aria-label="CRM source-contact candidate"><p><strong>CRM source-contact candidate:</strong> <code>{sourceContactCandidate}</code>. This untrusted reference is not a payer selection, responsible-person finding, family relationship, billing account, scope, currency, membership, payment authorization or command input. Use the separate explicit lookup below to obtain a server-authorized current-school payer choice.</p></section>}
     <section aria-labelledby="billing-account-scope"><h2 id="billing-account-scope">Current billing school</h2>
       {scopeState === 'SELECTION_REQUIRED' && <form onSubmit={(event) => void selectSchool(event)}><fieldset disabled={busy}><label>Authorized reporting school<select required autoComplete="off" value={schoolChoiceId} onChange={event => { resetDraft(); setSchoolChoiceId(event.target.value); }}><option value="">Choose a school…</option>{schoolChoices.map(choice => <option key={choice.schoolId} value={choice.schoolId}>{choice.schoolName} — {choice.organizationName}</option>)}</select></label><button disabled={!schoolChoiceId}>Use selected school</button></fieldset></form>}
       <p role="status">{scopeMessage}</p>
@@ -153,7 +157,7 @@ export function BillingAccountWorkbench(): React.ReactElement {
       {payer && <p role="status">Selected payer: <strong>{selectedName}</strong>. This is a server-returned choice, not an account or financial fact.</p>}
     </section>
     <section aria-labelledby="billing-account-command"><h2 id="billing-account-command">Confirm canonical account request</h2><p>A normal request reuses an exact-currency canonical account when one exists; otherwise it creates the first canonical account. A conflicting currency is never changed silently.</p>
-      <form onSubmit={event => create(event, false)}><fieldset disabled={busy || !payer || scopeState !== 'READY'}><label>Optional uppercase currency<input autoComplete="off" spellCheck={false} maxLength={3} placeholder="USD" value={currency} onChange={event => editCommand(() => setCurrency(event.target.value.toUpperCase()))} /></label><label className={styles.check}><input type="checkbox" checked={normalConfirmed} disabled={!payer || !currencyValid} onChange={event => setNormalConfirmed(event.target.checked)} />I explicitly confirm this payer/currency account create-or-reuse request only.</label><div className={styles.actions}><button disabled={!payer || !currencyValid || !normalConfirmed}>Confirm create or reuse billing account</button><button type="button" onClick={resetDraft}>Discard billing-account draft</button></div></fieldset></form>
+      <form onSubmit={event => create(event, false)}><fieldset disabled={busy || !payer || scopeState !== 'READY'}><label>Optional uppercase currency<input autoComplete="off" spellCheck={false} maxLength={3} placeholder="USD" value={currency} onChange={event => editCommand(() => setCurrency(event.target.value.toUpperCase()))} /></label><label className={styles.check}><input type="checkbox" checked={normalConfirmed} disabled={!payer || !currencyValid} onChange={event => setNormalConfirmed(event.target.checked)} />I explicitly confirm this payer/currency account create-or-reuse request only.</label><div className={styles.actions}><button disabled={!payer || !currencyValid || !normalConfirmed}>Confirm create or reuse billing account</button><button type="button" onClick={() => resetDraft(true)}>Discard billing-account draft</button></div></fieldset></form>
       {busy && <p role="status">Verifying the exact direct-human billing-account request…</p>}
       {error && <p role="alert" className={styles.error}>{error}</p>}
       {retry && <section className={styles.warning}><strong>Outcome uncertain — no account receipt is assumed.</strong><p>Only the exact in-memory request body and idempotency key are retained. Nothing retries automatically. Editing a payer, currency or reason, discarding, access loss or leaving the page clears this retry.</p><button type="button" disabled={busy} onClick={() => void send(retry)}>Retry exact unchanged billing-account request</button></section>}

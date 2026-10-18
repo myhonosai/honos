@@ -11,7 +11,7 @@
 | Account command | `POST /api/v1/organizations/:organizationId/schools/:schoolId/billing/accounts` |
 | Browser marker | `X-HON-Human-Command: billing.account.create` |
 
-The page uses the existing server-authoritative current reporting-school resolver and, only when necessary, its bounded authorized school choices. These are UI aids, not scope authority. Every lookup and create route independently resolves the current human against the exact route school and `billing.account.create` permission.
+The page uses the existing server-authoritative current reporting-school resolver and, only when necessary, its bounded authorized school choices. These are UI aids, not scope authority. A verified CRM registration receipt may navigate here with one scalar `sourceContactPersonId` UUID as a visible, memory-only candidate reference. It is not a responsible-payer selection, exact-ID lookup, family relation, scope, account/currency fact, command input or authorization grant; it does not cause an additional request or change the normal blank payer query/selection flow. Invalid/repeated/absent selectors are ignored, while access loss and explicit discard clear the candidate. Every lookup and create route independently resolves the current human against the exact route school and `billing.account.create` permission.
 
 ## Policy implemented
 
@@ -42,4 +42,4 @@ This slice does **not** create or change memberships, invoices, payment methods,
 - Browser transport/UI/route: `apps/web/test/billing-account-workbench-http.test.ts`, `apps/web/test/billing-account-workbench-ui.test.tsx`, `apps/web/test/billing-account-workbench-route.test.tsx`
 - Disposable local database/RLS/integrity: `packages/database/scripts/test-flexible-billing-account-integrity.mjs` via `pnpm db:test-flexible-billing-accounts`. The script refuses non-localhost database URLs.
 
-`TODO.md` records this delivered policy slice only after the focused browser/API checks, the guarded disposable-local database proof, `pnpm db:check`, and root workspace regression/build evidence are complete.
+`TODO.md` records this delivered policy slice only after the focused browser/API checks, the guarded disposable-local database proof, `pnpm db:check`, and root workspace regression/build evidence are complete. The later CRM candidate-only navigation passed focused CRM-registration/billing route/UI/transport coverage (17 tests), web type-check, root `pnpm test` (403 tests), root `pnpm check`, root `pnpm build`, and `git diff --check`. It added no API/database/permission change and no provider, payment, deployment, shared visual component or asset effect.

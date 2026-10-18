@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { CrmLeadRegistrationWorkbench, registrationCurriculumEnrollmentHref } from '../src/components/crm-lead-registration-workbench';
+import { CrmLeadRegistrationWorkbench, registrationBillingAccountHref, registrationCurriculumEnrollmentHref } from '../src/components/crm-lead-registration-workbench';
 
 const leadId = '33333333-3333-4333-8333-333333333333';
 
@@ -53,9 +53,23 @@ describe('direct-human CRM lead registration route', () => {
     expect(query.get('studentProfileId')).toBe(leadId);
     for (const invalid of ['', 'not-a-uuid', leadId.replace('-4', '-0')]) expect(registrationCurriculumEnrollmentHref(invalid)).toBeUndefined();
     const source = readFileSync('src/components/crm-lead-registration-workbench.tsx', 'utf8');
+    const curriculumHelper = source.slice(source.indexOf('export function registrationCurriculumEnrollmentHref'), source.indexOf('export function registrationBillingAccountHref'));
     expect(source).toContain("result?.result.outcome==='REGISTERED'");
     expect(source).toContain('Prepare separate human curriculum enrollment');
-    expect(source).toContain("new URLSearchParams({studentProfileId:normalized})");
-    expect(source).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|sourceContactPersonId|familyId|registrationPath|recordedAt|organizationId|schoolId)/);
+    expect(curriculumHelper).toContain("new URLSearchParams({studentProfileId:normalized})");
+    expect(curriculumHelper).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|sourceContactPersonId|familyId|registrationPath|recordedAt|organizationId|schoolId)/);
+  });
+
+  it('offers only a source-contact candidate reference for separate billing review', () => {
+    const href = registrationBillingAccountHref(leadId);
+    expect(href).toBe(`/staff/billing/accounts?sourceContactPersonId=${leadId}`);
+    const query = new URL(`https://hon.test${href}`).searchParams;
+    expect([...query.keys()]).toEqual(['sourceContactPersonId']); expect(query.get('sourceContactPersonId')).toBe(leadId);
+    for (const invalid of ['', 'not-a-uuid', leadId.replace('-4', '-0')]) expect(registrationBillingAccountHref(invalid)).toBeUndefined();
+    const source = readFileSync('src/components/crm-lead-registration-workbench.tsx', 'utf8');
+    const billingHelper = source.slice(source.indexOf('export function registrationBillingAccountHref'), source.indexOf('export function CrmLeadRegistrationWorkbench'));
+    expect(source).toContain('Prepare separate human billing account review');
+    expect(billingHelper).toContain("new URLSearchParams({sourceContactPersonId:normalized})");
+    expect(billingHelper).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|studentProfileId|familyId|registrationPath|recordedAt|organizationId|schoolId|responsiblePersonId|currency|createAdditional|additionalReason)/);
   });
 });
