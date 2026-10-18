@@ -116,7 +116,9 @@
     "db:setup-curriculum-library": "node scripts/setup-curriculum-library-validation.mjs",
     "db:test-curriculum-library": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-curriculum-library-integrity.mjs",
     "db:setup-owner-launch": "node scripts/setup-owner-launch-validation.mjs",
-    "db:test-owner-launch": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-owner-launch-integrity.mjs"
+    "db:test-owner-launch": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-owner-launch-integrity.mjs",
+    "db:setup-curriculum-enrollment-preparation": "node scripts/setup-curriculum-enrollment-preparation-validation.mjs",
+    "db:test-curriculum-enrollment-preparation": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-curriculum-enrollment-preparation-integrity.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

@@ -37,6 +37,9 @@ import { DocumentService } from './documents/document.service.js';
 import { CurriculumProgressController } from './curriculum/curriculum-progress.controller.js';
 import { CurriculumProgressService } from './curriculum/curriculum-progress.service.js';
 import { CurriculumHumanUiGuard } from './curriculum/curriculum-human-ui.guard.js';
+import { CurriculumEnrollmentPreparationController } from './curriculum/curriculum-enrollment-preparation.controller.js';
+import { CurriculumEnrollmentPreparationService } from './curriculum/curriculum-enrollment-preparation.service.js';
+import { CurriculumEnrollmentPreparationGuard, CurriculumEnrollmentPreparationNoStoreGuard } from './curriculum/curriculum-enrollment-preparation.guard.js';
 import { DocumentHumanUiGuard } from './documents/document-human-ui.guard.js';
 import { Module } from '@nestjs/common';
 import { LeadImportController } from './migration/lead-import.controller.js';
@@ -244,6 +247,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     RevenuePlanningController,
     StaffSearchController,
     CurriculumProgressController,
+    CurriculumEnrollmentPreparationController,
     LeadImportController,
     DocumentController, ParentDocumentController,
     StaffRoleController,
@@ -344,6 +348,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     RevenuePlanningService, RevenuePlanningHumanUiGuard,
     StaffSearchService,
     CurriculumProgressService, CurriculumHumanUiGuard, TestingHumanUiGuard,
+    CurriculumEnrollmentPreparationService, CurriculumEnrollmentPreparationNoStoreGuard, CurriculumEnrollmentPreparationGuard,
     LeadImportService, LeadImportHumanUiGuard,
     DocumentService, DocumentHumanUiGuard,
     StaffRoleService,

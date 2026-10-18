@@ -4,6 +4,7 @@ import { requirePromotionReadinessLocalUrls } from './promotion-readiness-local-
 import { requireOwnerLaunchLocalUrls } from './owner-launch-local-guard.mjs';
 import { requireRetentionAcknowledgementLocalUrls } from './retention-review-acknowledgement-local-guard.mjs';
 import { requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
+import { requireCurriculumEnrollmentPreparationLocalUrls } from './curriculum-enrollment-preparation-local-guard.mjs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -13,6 +14,8 @@ const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error('DATABASE_URL must be configured before HON migrations can run.');
 }
+const parsedDatabaseUrl = new URL(databaseUrl);
+const isLoopbackDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(parsedDatabaseUrl.hostname);
 
 if (new URL(databaseUrl).username === 'hon_classpass_owner') requireClassPassLocalUrls();
 if (new URL(databaseUrl).username === 'hon_curriculum_library_owner') requireCurriculumLibraryLocalUrls();
@@ -49,7 +52,7 @@ const files = (await readdir(migrationsDirectory))
   .filter((file) => !stopAfter || file <= stopAfter)
   .sort();
 
-const client = new Client({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } });
+const client = new Client({ connectionString: databaseUrl, ssl: isLoopbackDatabase ? false : { rejectUnauthorized: false } });
 await client.connect();
 try {
   if (new URL(databaseUrl).username === 'hon_owner_launch_owner') {
@@ -101,6 +104,10 @@ try {
     if (new URL(databaseUrl).username === 'hon_flexible_billing_accounts_owner') {
       await requireFlexibleBillingAccountsLocalUrls();
       sql = sql.replaceAll('hon_runtime', 'hon_flexible_billing_accounts_runtime');
+    }
+    if (new URL(databaseUrl).username === 'hon_curriculum_enrollment_preparation_owner') {
+      requireCurriculumEnrollmentPreparationLocalUrls();
+      sql = sql.replaceAll('hon_runtime', 'hon_curriculum_enrollment_preparation_runtime');
     }
     if (new URL(databaseUrl).username === 'hon_attendance_owner') {
       const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');

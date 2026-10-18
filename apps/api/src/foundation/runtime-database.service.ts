@@ -104,12 +104,14 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       });
     }
 
+    const databaseHost = new URL(connectionString).hostname;
+    const isLoopbackDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(databaseHost);
     this.pool ??= new Pool({
       connectionString,
       max: 8,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+      ssl: isLoopbackDatabase ? false : { rejectUnauthorized: false },
     });
     return this.pool;
   }

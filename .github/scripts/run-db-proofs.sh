@@ -33,7 +33,16 @@ fi
 chmod 700 "$job_dir"
 rm -f "$job_dir"/*.env
 # Remove generated disposable credentials on every exit path, including failures.
-trap 'rm -f "$job_dir"/*.env' EXIT
+# The enrollment preparation fixture owns a nested private cluster, so clean its
+# mode-0600 environment file and stop its process even when its proof fails.
+preparation_dir=''
+cleanup() {
+  rm -f "$job_dir"/*.env "$job_dir"/*/*.env
+  if [[ -n "$preparation_dir" && -d "$preparation_dir/pgdata" ]]; then
+    /usr/lib/postgresql/16/bin/pg_ctl -D "$preparation_dir/pgdata" -m fast -w stop >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
 
 clean_env=(env -i "PATH=$PATH" "HOME=$HOME" "LANG=C.UTF-8")
 passed=0
@@ -71,7 +80,30 @@ proof champions-club test-champions-club-integrity.mjs "Champions Club authority
 proof champions-club test-champions-club-rewards-integrity.mjs "Champions Club reward accounting: liabilities, approvals, reversals, no billing effect"
 proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Club leaderboards: qualified-only standings, privacy, holds, statistics"
 
-echo "All $passed disposable-database proofs passed (3 fixtures, all migrations applied)."
+# This proof needs an isolated PostgreSQL cluster because the application-wide
+# local PostgreSQL service can already contain developer-created roles. It still
+# refuses every non-local target and uses a private 0700 runner job directory.
+preparation_fixture="curriculum-enrollment-preparation"
+preparation_dir="$job_dir/$preparation_fixture"
+rm -rf "$preparation_dir"
+mkdir -p "$preparation_dir"
+chmod 700 "$preparation_dir"
+echo "::group::Provision disposable fixture: $preparation_fixture"
+"${clean_env[@]}" \
+  HON_CURRICULUM_ENROLLMENT_PREPARATION_VALIDATION_TARGET=postgresql://127.0.0.1:55434/hon_curriculum_enrollment_preparation_validation \
+  HON_CURRICULUM_ENROLLMENT_PREPARATION_ENV_FILE="$preparation_dir/$preparation_fixture.env" \
+  HON_CURRICULUM_ENROLLMENT_PREPARATION_PGDATA="$preparation_dir/pgdata" \
+  node "$scripts/setup-curriculum-enrollment-preparation-validation.mjs"
+echo "::endgroup::"
+echo "::group::Curriculum enrollment preparation direct-human read boundary"
+"${clean_env[@]}" bash -c 'set -a; . "$1"; set +a; cd "$2" && node scripts/test-curriculum-enrollment-preparation-integrity.mjs' _ "$preparation_dir/$preparation_fixture.env" "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Curriculum enrollment preparation direct-human read boundary | \`test-curriculum-enrollment-preparation-integrity.mjs\` | pass |")
+/usr/lib/postgresql/16/bin/pg_ctl -D "$preparation_dir/pgdata" -m fast -w stop >/dev/null
+rm -f "$preparation_dir/$preparation_fixture.env"
+
+echo "All $passed disposable-database proofs passed (4 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

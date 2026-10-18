@@ -9,6 +9,7 @@ export * from './command-center.js';
 export * from './health-score.js';
 export * from './ai-invocation-plan.js';
 export * from './curriculum-progress.js';
+export * from './curriculum-enrollment-preparation.js';
 export * from './lead-import.js';
 export * from './ai-provider.js';
 export * from './ai-model-evaluation.js';
