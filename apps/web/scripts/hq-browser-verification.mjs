@@ -365,6 +365,10 @@ try {
       await page.goto(`${origin}/hq/growth?schoolId=untrusted&role=OWNER`, { waitUntil: 'domcontentloaded' });
       await page.locator('[data-champions-total]').waitFor();
       assert.equal(await page.locator('[data-champions-total]').textContent(), '22');
+      if (width <= 600) {
+        const total = await page.locator('[data-champions-total]').boundingBox();
+        assert(total && total.y + total.height < height - 64, 'Mobile referral total must be visible above the fixed bottom navigation on initial load');
+      }
       await page.getByRole('heading', { name: 'Program configuration', exact: true }).waitFor();
       await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).waitFor();
       await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).waitFor();

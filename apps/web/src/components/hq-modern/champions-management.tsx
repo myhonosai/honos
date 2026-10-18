@@ -18,7 +18,7 @@ const failures: Record<ChampionsManagementFailure, { title: string; detail: stri
   UNAUTHORIZED: { title: 'Sign in to view Champions Club', detail: 'A current authenticated HQ session is required. No previous referral or reward information is displayed.' },
   FORBIDDEN: { title: 'Champions Club access denied', detail: 'This account does not have independent Champions Club HQ authority. School, family and support access cannot grant it.' },
   UNAVAILABLE: { title: 'Champions Club overview unavailable', detail: 'The authorized overview or program service is unavailable. Refresh to check again; unavailable information is never treated as zero.' },
-  INVALID_RESPONSE: { title: 'Champions Club overview could not be verified', detail: 'The response did not match the approved contracts, or program configuration changed between reads. Refresh to verify current records.' },
+  INVALID_RESPONSE: { title: 'Champions Club overview could not be verified', detail: 'Program data could not be verified, or configuration changed during retrieval. Refresh to check current records.' },
 };
 
 /** USD is fixed by the closed backend contract. Integer formatting preserves every minor unit. */
@@ -27,13 +27,24 @@ export function formatChampionsLiability(minor: number): string {
   return `USD ${(value / 100n).toLocaleString('en-US')}.${(value % 100n).toString().padStart(2, '0')}`;
 }
 const number = (value: number) => value.toLocaleString('en-US');
+const entries = (value: number) => `${number(value)} ${value === 1 ? 'entry' : 'entries'}`;
+const referralTotal = (data: ChampionsManagementSnapshot) => Object.values(data.overview.attributions).reduce((sum, value) => sum + BigInt(value), 0n);
 const paymentSources = { UNDECIDED: 'Undecided', HON_BILLING: 'HON billing evidence', HQ_OWNER_ATTESTATION: 'HQ owner attestation' };
 const clawbackRules = { UNDECIDED: 'Undecided', VOID_UNFULFILLED: 'Void unfulfilled rewards', RETAIN_EARNED: 'Retain earned rewards' };
 
-export function ChampionsManagementResults({ data }: { data: ChampionsManagementSnapshot }): React.ReactElement {
+export function ChampionsManagementSummary({ data }: { data: ChampionsManagementSnapshot }): React.ReactElement {
+  const o = data.overview;
+  // Exhaustive server aggregate states, never the length/sum of a limited record list.
+  return <div className={styles.metrics}>
+      <section><h3>Total referrals</h3><strong data-champions-total>{referralTotal(data).toLocaleString('en-US')}</strong><p>All five referral states</p></section>
+      <section><h3>Qualified referrals</h3><strong>{number(o.attributions.qualified)}</strong><p>Verified by Champions Club</p></section>
+      <section><h3>Ranked schools</h3><strong>{number(o.rankedSchools)}</strong><p>Official eligible standings</p></section>
+      <section><h3>Recorded reward entries</h3><strong>{number(o.rewardLiabilities.entries)}</strong><p>Non-voided liabilities · not paid</p></section>
+    </div>;
+}
+
+export function ChampionsManagementResults({ data, includeSummary = true }: { data: ChampionsManagementSnapshot; includeSummary?: boolean }): React.ReactElement {
   const { overview: o, program } = data;
-  // Exhaustive aggregate states from the backend, never the length/sum of a limited record list.
-  const total = Object.values(o.attributions).reduce((sum, value) => sum + BigInt(value), 0n);
   const policy = program.published;
   const states = [
     ['Qualified', o.attributions.qualified, 'Meets verified program qualification rules'],
@@ -43,15 +54,10 @@ export function ChampionsManagementResults({ data }: { data: ChampionsManagement
     ['Reversed', o.attributions.reversed, 'Referrals whose qualification was reversed'],
   ] as const;
   return <>
-    <div className={styles.metrics}>
-      <section><h3>Total referrals</h3><strong data-champions-total>{total.toLocaleString('en-US')}</strong><p>All five backend aggregate states</p></section>
-      <section><h3>Qualified referrals</h3><strong>{number(o.attributions.qualified)}</strong><p>Verified by Champions Club</p></section>
-      <section><h3>Ranked schools</h3><strong>{number(o.rankedSchools)}</strong><p>Official eligible standings</p></section>
-      <section><h3>Recorded reward entries</h3><strong>{number(o.rewardLiabilities.entries)}</strong><p>Non-voided liabilities · not paid</p></section>
-    </div>
-    {total === 0n && <section className={base.panel}><h2>No referrals recorded</h2><p>The authorized service returned zero across every referral state. Program configuration and any recorded liabilities are shown independently below.</p></section>}
+    {includeSummary && <ChampionsManagementSummary data={data}/>}
+    {referralTotal(data) === 0n && <section className={base.panel}><h2>No referrals recorded</h2><p>The authorized service returned zero across every referral state. Program configuration and any recorded liabilities are shown independently below.</p></section>}
     <section className={base.panel} aria-labelledby="champions-state-heading">
-      <div className={base.sectionHeader}><h2 id="champions-state-heading">Referral status</h2><span className={base.badge}>All time · server aggregates</span></div>
+      <div className={base.sectionHeader}><h2 id="champions-state-heading">Referral status</h2><span className={base.badge}>All time · verified totals</span></div>
       <dl className={styles.states}>{states.map(([label, count, detail]) => <div key={label}><dt>{label}</dt><dd>{number(count)}<p>{detail}</p></dd></div>)}</dl>
       <p className={styles.note}>Qualification, ranking and reward accounting are separate. Rejected, pending, refunded and reversed referrals do not establish a qualified award.</p>
     </section>
@@ -80,11 +86,11 @@ export function ChampionsManagementResults({ data }: { data: ChampionsManagement
         <p className={styles.note}>Recorded non-voided liabilities include accrued, approved and reversal-review entries. They are not issued credits, paid rewards or fulfilled benefits.</p>
         <dl className={styles.facts}>
           <div><dt>Subscription account credits</dt><dd>{formatChampionsLiability(o.rewardLiabilities.creditMinor)}<small>HON account-credit liabilities · not AI credits</small></dd></div>
-          <div><dt>Free-month rewards</dt><dd>{number(o.rewardLiabilities.freeMonths)} months</dd></div>
-          <div><dt>Physical / experience prizes</dt><dd>{number(o.rewardLiabilities.prizes)} entries<small>Prize liabilities · no purchase or delivery</small></dd></div>
-          <div><dt>Lifetime membership milestones</dt><dd>{number(o.rewardLiabilities.lifetimeMemberships)} entries<small>Recorded liabilities · no membership activation</small></dd></div>
-          <div><dt>Approved for future fulfillment</dt><dd>{number(o.rewardLiabilities.approved)} entries<small>Approval does not mean payment or fulfillment</small></dd></div>
-          <div><dt>Reversal review required</dt><dd>{number(o.rewardLiabilities.inReview)} entries</dd></div>
+          <div><dt>Free-month rewards</dt><dd>{number(o.rewardLiabilities.freeMonths)} {o.rewardLiabilities.freeMonths === 1 ? 'month' : 'months'}</dd></div>
+          <div><dt>Physical / experience prizes</dt><dd>{entries(o.rewardLiabilities.prizes)}<small>Prize liabilities · no purchase or delivery</small></dd></div>
+          <div><dt>Lifetime membership milestones</dt><dd>{entries(o.rewardLiabilities.lifetimeMemberships)}<small>Recorded liabilities · no membership activation</small></dd></div>
+          <div><dt>Approved for future fulfillment</dt><dd>{entries(o.rewardLiabilities.approved)}<small>Approval does not mean payment or fulfillment</small></dd></div>
+          <div><dt>Reversal review required</dt><dd>{entries(o.rewardLiabilities.inReview)}</dd></div>
           <div><dt>Reward policy</dt><dd>{o.rewardProgram.status === 'PUBLISHED' ? `Published · v${o.rewardProgram.policyVersion}` : 'Policy undecided'}</dd></div>
           <div><dt>Clawback rule</dt><dd>{o.rewardProgram.clawbackRule === null ? 'Unavailable until policy publication' : clawbackRules[o.rewardProgram.clawbackRule]}</dd></div>
         </dl>
@@ -119,14 +125,14 @@ export function HqChampionsManagement({ pagePath }: { pagePath: '/hq/growth' | '
     return () => { current = false; controller.abort(); };
   }, [key]);
   return <div className={styles.management}>
-    <section className={`${base.panel} ${base.moduleIntro}`}><span className={base.badge}>Champions Club · authorized HQ read</span><h2>Champions Club overview</h2><p>Verified referral statistics, program configuration and recorded reward liabilities. Financial activation and fulfillment remain disabled.</p></section>
+    <section className={`${base.panel} ${base.moduleIntro} ${styles.intro}`}><span className={base.badge}>Champions Club · HQ</span><div className={styles.introHeading}><h2>Champions Club overview</h2><button type="button" disabled={visible.kind === 'loading'} onClick={() => setRevision((value) => value + 1)}>Refresh Champions Club</button></div><p>Verified referrals, program terms and recorded liabilities. Financial activation and fulfillment remain disabled.</p></section>
+    <div className={styles.summary} aria-live="polite" aria-busy={visible.kind === 'loading'}>{visible.kind === 'ready' && <ChampionsManagementSummary data={visible.data}/>}</div>
     <nav className={base.moduleLinks} aria-label="Growth modules"><Link href="/hq/growth" aria-current={pagePath === '/hq/growth' ? 'page' : undefined}>Growth overview</Link>{HQ_GROWTH.map((item) => <Link key={item.path} href={item.path} aria-current={pagePath === item.path ? 'page' : undefined}>{item.title}</Link>)}</nav>
-    <div className={styles.toolbar}><p>All-time backend aggregates · no totals from limited record lists</p><button type="button" disabled={visible.kind === 'loading'} onClick={() => setRevision((value) => value + 1)}>Refresh Champions Club</button></div>
     <div className={styles.results} aria-busy={visible.kind === 'loading'} aria-live="polite">
       {visible.kind === 'loading' && <section className={base.panel}><h2>Loading authorized Champions Club…</h2><p role="status">Verifying overview and program configuration. Previous facts are cleared.</p></section>}
       {visible.kind === 'failed' && <section className={base.panel}><h2>{failures[visible.failure].title}</h2><p role="status">{failures[visible.failure].detail}</p>{visible.failure === 'UNAUTHORIZED' && <Link className={base.primary} href="/auth/login">Sign in to HON</Link>}</section>}
-      {visible.kind === 'ready' && <><p className={styles.note} role="status">Retrieved {new Date(visible.retrievedAt).toLocaleTimeString('en-US', { timeZone: 'UTC' })} UTC · separate authorized reads, refresh to recheck current records.</p><ChampionsManagementResults data={visible.data}/></>}
+      {visible.kind === 'ready' && <><p className={styles.note} role="status">Retrieved {new Date(visible.retrievedAt).toLocaleTimeString('en-US', { timeZone: 'UTC' })} UTC · refresh to recheck current records.</p><ChampionsManagementResults data={visible.data} includeSummary={false}/></>}
     </div>
-    <section className={base.panel}><h2>Management integration status</h2><p className={styles.note}>The overview and referral leaderboard use real authorized APIs. School search, individual referral history, 5 / 10 / 20 / 30 milestone details and reward-entry status filters await their next frontend slice. Their merged backend services exist; no awards or successful operations are inferred here.</p><Link href="/hq/growth/leaderboard" className={styles.link}>Open official referral leaderboard →</Link></section>
+    <section className={base.panel}><h2>More Champions Club tools</h2><p className={styles.note}>Individual school referral history, milestone progress and reward records are not available in this HQ interface yet. Use the referral leaderboard to review official standings. Reward and contest actions remain disabled.</p><Link href="/hq/growth/leaderboard" className={styles.link}>Open official referral leaderboard →</Link></section>
   </div>;
 }
