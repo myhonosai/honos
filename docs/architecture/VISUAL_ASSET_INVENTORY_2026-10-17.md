@@ -14,6 +14,12 @@
 | HQ concept visual frames | Protected concept assets | Keep as concept-only review material. Do not treat as production screens or standalone executive identities. |
 | Claude experiments | Isolated | Keep on Claude’s branch and in a clearly experimental folder; never overwrite an original asset. |
 
+## Recovery export branch
+
+The asset-only branch `manus/asset-recovery-2026-10-17` exports 27 currently traceable hosted originals byte-for-byte under [`apps/web/public/hon-assets/original/`](../../apps/web/public/hon-assets/original/), including a manifest with source paths, dimensions, SHA-256 hashes and repository-local static web paths. It deliberately does not change any active application image mapping.
+
+Four Modern Anime sources (Marcus, Jordan, Claire and Lena) currently resolve to a 498-byte SVG **image-generation-failed** placeholder rather than original artwork, so they are recorded as unavailable rather than copied or regenerated. No standalone original HQ executive portraits for Chase, Mia, Ethan, Olivia, Ryan or Sophia were located in the current GitHub or active Manus reference map; the exported HQ concept frames are not substitute portraits. See the recovery library `README.md` and `MANIFEST.json` for the full handoff once the branch is reviewed.
+
 ## A. HON marks and logos
 
 | Asset | Hosting / path | Active usage | Preservation note |
@@ -30,7 +36,7 @@ These WebP files are tracked in the repository under `apps/web/public/ai/`. They
 | Alex | `apps/web/public/ai/alex.webp` | 208 × 262 | `be309a1a578f8a3d3b8a706cfb05f9bcb0fa5c53e096945a5cfdf00122a9b2ac` |
 | Chad | `apps/web/public/ai/chad.webp` | 208 × 262 | `384db6992ec152f6b88535fd4c7fb48f18bd92ee98e4bea26a47078bb489331a` |
 | Claire | `apps/web/public/ai/claire.webp` | 208 × 262 | `e0dc95442fe15d67a957549f039cff3169b7b6faed4c0406f19e5b53cb8f9d1a` |
-| Eian | `apps/web/public/ai/eian.webp` | 205 × 305 | `fb3c265f9c7a806a57fdd1bfebbcaa9aec043e57521a789d175d231d51eb382c` |
+| Eian | `apps/web/public/ai/eian.webp` | 205 × 305 | `fb3f265f9c7a806a57fdd1bfebbcaa9aec043e57521a789d175d231d51eb382c` |
 | Jordan | `apps/web/public/ai/jordan.webp` | 208 × 262 | `c067f8ae7158768dcb501093fa3003359f19239424ee08b1ff35a79df2b162d6` |
 | Lena | `apps/web/public/ai/lena.webp` | 180 × 262 | `bf7c6ab63f728c363efea099851dd80575b065e4768489273e63174b1dafcdf3` |
 | Marcus | `apps/web/public/ai/marcus.webp` | 208 × 262 | `b7a355d57b47e91212de41385704b0ed431f76f83f2d64f5bc0cefc66ae19822` |
