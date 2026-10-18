@@ -100,6 +100,13 @@ const SAAS_BILLING_CALLS = {
   readOrganizationSubscription: { sql: 'SELECT hon.read_saas_organization_subscription_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   recordSubscription: { sql: 'SELECT hon.record_saas_subscription($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   commandSubscription: { sql: 'SELECT hon.command_saas_subscription($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // B2: HON invoices and payment evidence (recordkeeping; nothing is collected or sent).
+  readInvoices: { sql: 'SELECT hon.read_saas_invoices_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readInvoice: { sql: 'SELECT hon.read_saas_invoice_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readPaymentStanding: { sql: 'SELECT hon.read_saas_payment_standing_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createInvoiceDraft: { sql: 'SELECT hon.create_saas_invoice_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  commandInvoice: { sql: 'SELECT hon.command_saas_invoice($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  recordPaymentEvidence: { sql: 'SELECT hon.record_saas_payment_evidence($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 

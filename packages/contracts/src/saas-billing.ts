@@ -13,14 +13,17 @@ export type SaasUndecidedOfferKind = 'REGULAR_ANNUAL' | 'FOUNDER_ANNUAL';
 export type SaasCatalogStatus = 'DRAFT' | 'PUBLISHED' | 'RETIRED';
 export type SaasFounderEligibility = 'UNDECIDED' | 'NO_PRIOR_CATALOG_SUBSCRIPTION' | 'ANY_ACTIVE_ORGANIZATION';
 export type SaasPolicyCode = 'ANNUAL_BILLING' | 'TAXES' | 'PRORATION' | 'PLAN_CHANGE_TIMING' | 'CANCELLATION_TIMING' | 'REFUND_EXECUTION'
-  | 'PAYMENT_PROVIDER' | 'FOUNDER_SLOT_RETURN' | 'CREDIT_ROLLOVER' | 'TOP_UP_PRICING';
+  | 'PAYMENT_PROVIDER' | 'FOUNDER_SLOT_RETURN' | 'CREDIT_ROLLOVER' | 'TOP_UP_PRICING'
+  | 'REFUND_GUARANTEE' | 'FOUNDER_PROGRAM' | 'FOUNDER_RESERVATION_HOLD' | 'FOUNDER_ALLOWANCE';
+/** PROPOSED and DECIDED record owner direction only; actionsEnabled stays false until a reviewed migration enables an action. */
+export type SaasPolicyStatus = 'UNDECIDED' | 'PROPOSED' | 'DECIDED';
 export type SaasReservationStatus = 'RESERVED' | 'ALLOCATED' | 'RELEASED' | 'EXPIRED';
 export type SaasReservationReason = 'RESERVED' | 'SUBSCRIPTION_RECORDED' | 'OWNER_RELEASED' | 'SCHOOL_DECLINED' | 'NOT_ELIGIBLE' | 'HOLD_EXPIRED' | 'SUBSCRIPTION_VOIDED';
 export type SaasSubscriptionStatus = 'PENDING_ACTIVATION' | 'IN_SERVICE' | 'SUSPENDED' | 'VOIDED';
 export type SaasSubscriptionReason = 'RECORDED' | 'SERVICE_STARTED' | 'OWNER_HOLD' | 'ACCOUNT_REVIEW' | 'SCHOOL_REQUEST' | 'REVIEW_RESOLVED' | 'PERIOD_ELAPSED' | 'RECORDED_IN_ERROR';
 
-export const SAAS_POLICY_CODES: readonly SaasPolicyCode[] = ['ANNUAL_BILLING','CANCELLATION_TIMING','CREDIT_ROLLOVER','FOUNDER_SLOT_RETURN','PAYMENT_PROVIDER',
-  'PLAN_CHANGE_TIMING','PRORATION','REFUND_EXECUTION','TAXES','TOP_UP_PRICING'];
+export const SAAS_POLICY_CODES: readonly SaasPolicyCode[] = ['ANNUAL_BILLING','CANCELLATION_TIMING','CREDIT_ROLLOVER','FOUNDER_ALLOWANCE','FOUNDER_PROGRAM',
+  'FOUNDER_RESERVATION_HOLD','FOUNDER_SLOT_RETURN','PAYMENT_PROVIDER','PLAN_CHANGE_TIMING','PRORATION','REFUND_EXECUTION','REFUND_GUARANTEE','TAXES','TOP_UP_PRICING'];
 export const SAAS_RESERVATION_STATUSES: readonly SaasReservationStatus[] = ['RESERVED','ALLOCATED','RELEASED','EXPIRED'];
 export const SAAS_SUBSCRIPTION_STATUSES: readonly SaasSubscriptionStatus[] = ['PENDING_ACTIVATION','IN_SERVICE','SUSPENDED','VOIDED'];
 const RESERVATION_REASONS: readonly SaasReservationReason[] = ['RESERVED','SUBSCRIPTION_RECORDED','OWNER_RELEASED','SCHOOL_DECLINED','NOT_ELIGIBLE','HOLD_EXPIRED','SUBSCRIPTION_VOIDED'];
@@ -45,6 +48,9 @@ export const SAAS_COMMANDS = {
   releaseFounder: 'saas-founder-release',
   recordSubscription: 'saas-subscription-record',
   subscriptionCommand: 'saas-subscription-command',
+  createInvoiceDraft: 'saas-invoice-draft',
+  invoiceCommand: 'saas-invoice-command',
+  recordPaymentEvidence: 'saas-payment-evidence',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
@@ -58,8 +64,9 @@ export interface SaasFounderProgram {
 export interface SaasCatalogDraftInput { termsReference: string | null; plans: SaasPlanDraft[]; offers: SaasOfferDraft[]; founderProgram: SaasFounderProgram }
 
 /**
- * Owner-approved plan intent as a starting draft for HQ. Founder eligibility, hold length, window and
- * terms stay undecided (null / UNDECIDED), so founder offers cannot be published until HQ sets them.
+ * Owner-approved plan intent as a starting draft for HQ. The 1-day hold is the owner's recommendation
+ * (FOUNDER_RESERVATION_HOLD, PROPOSED). Eligibility, window and terms stay undecided (null / UNDECIDED),
+ * so founder offers cannot be published until the owner sets them.
  * The monthly founder limit is explicit: unused lifetime slots are not silently treated as monthly.
  */
 export const SAAS_OWNER_APPROVED_DRAFT: SaasCatalogDraftInput = {
@@ -76,7 +83,7 @@ export const SAAS_OWNER_APPROVED_DRAFT: SaasCatalogDraftInput = {
     { planCode: 'COMPLETE', offerKind: 'FOUNDER_MONTHLY', priceMinor: 14900 },
     { planCode: 'COMPLETE', offerKind: 'FOUNDER_LIFETIME', priceMinor: 357600 },
   ],
-  founderProgram: { totalLimit: 50, lifetimeLimit: 20, monthlyLimit: 30, eligibility: 'UNDECIDED', reservationHoldDays: null, opensAt: null, closesAt: null },
+  founderProgram: { totalLimit: 50, lifetimeLimit: 20, monthlyLimit: 30, eligibility: 'UNDECIDED', reservationHoldDays: 1, opensAt: null, closesAt: null },
 };
 
 export interface SaasFounderReserveInput { organizationId: string; offerId: string }
@@ -109,7 +116,10 @@ export interface SaasCatalog {
   plans: SaasPlan[]; offers: SaasOffer[]; founderProgram: SaasFounderProgram;
   chargesEnabled: false; creditGrantsEnabled: false; createdAt: string; publishedAt: string | null; retiredAt: string | null;
 }
-export interface SaasPolicy { policyCode: SaasPolicyCode; status: 'UNDECIDED'; blocks: string }
+export interface SaasPolicy {
+  policyCode: SaasPolicyCode; status: SaasPolicyStatus; decision: string | null; summary: string | null; blocks: string;
+  actionsEnabled: false; version: number;
+}
 export interface SaasFounderInventory {
   status: 'NOT_PUBLISHED' | 'UNDECIDED' | 'CONFIGURED';
   totalLimit: number | null; lifetimeLimit: number | null; monthlyLimit: number | null;
@@ -332,8 +342,10 @@ export function validateSaasCatalogView(value: unknown): SaasCatalogView {
   for (const d of r.drafts as unknown[]) { validateCatalog(d); if ((d as SaasCatalog).status !== 'DRAFT') drift(); }
   if (!Array.isArray(r.policies) || r.policies.length !== SAAS_POLICY_CODES.length) drift();
   (r.policies as unknown[]).forEach((p, i) => {
-    const q = record(p, drift); exactKeys(q, ['policyCode','status','blocks'], drift);
-    if (q.policyCode !== SAAS_POLICY_CODES[i] || q.status !== 'UNDECIDED' || !text(q.blocks, 300)) drift();
+    const q = record(p, drift); exactKeys(q, ['policyCode','status','decision','summary','blocks','actionsEnabled','version'], drift);
+    if (q.policyCode !== SAAS_POLICY_CODES[i] || !has(['UNDECIDED','PROPOSED','DECIDED'], q.status)
+      || (q.status === 'UNDECIDED' ? q.decision !== null : typeof q.decision !== 'string' || !/^[A-Z0-9_]{1,80}$/.test(q.decision))
+      || !nullable(q.summary, (v): v is string => text(v, 500)) || !text(q.blocks, 300) || q.actionsEnabled !== false || !isInt(q.version, 1, 2147483647)) drift();
   });
   validateInventory(r.founderInventory);
   if (r.chargesEnabled !== false || r.creditGrantsEnabled !== false || r.paymentProvider !== 'NOT_CONFIGURED') drift();

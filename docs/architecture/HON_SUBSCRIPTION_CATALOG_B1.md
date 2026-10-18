@@ -1,6 +1,6 @@
 # HON Subscription Billing — Milestone B1: Plan Catalog, Founder Inventory and Subscription Records
 
-**Status:** implemented and tested on disposable databases. Not merged, not deployed, not commercially active. Migration `0154_hon_subscription_catalog.sql`.
+**Status:** implemented, tested and merged (`7afa0b5`). Not deployed, not commercially active. Migration `0154_hon_subscription_catalog.sql`.
 
 **Scope boundary.** This is **HON billing schools**. It shares no table, function or route with **school-to-family billing**:
 - Separate from: `billing_accounts`, `memberships`, `invoices`, `membership_payment_schedules`, `apps/api/src/billing`.
@@ -29,6 +29,8 @@ There is no provider call, checkout, charge, invoice, refund, credit grant or ba
 | **Isolation** | 10 tables with forced deny-all RLS and no grants. 26 functions with a fixed `search_path`, 10 of them runtime-callable `SECURITY DEFINER`. Tenant, family, delegated and Action Engine context is refused, and support and school staff are refused. | `verify-rls` and `saas-billing-security.mjs` |
 
 ## 2. Undecided owner policies (explicit and enforced)
+
+> **Updated in B2:** the owner's 2026-10-18 direction is now recorded as append-only policy records, and none of them enables an action. See [B2 §1](HON_SUBSCRIPTION_INVOICING_B2.md#1-owner-direction-recorded-2026-10-18). The table below is the B1 baseline.
 
 `saas_policy_decisions` holds one row per decision. `status` is pinned to `UNDECIDED` by constraint, so changing it needs a reviewed migration.
 

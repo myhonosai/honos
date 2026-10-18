@@ -1,6 +1,6 @@
 # Recommended Technical Handoff: HON Subscription Billing, Plans, Founder Pricing and AI Credit Allowance
 
-**Status:** B1 authorized by the owner and implemented in its own PR (not merged): see [HON_SUBSCRIPTION_CATALOG_B1.md](../architecture/HON_SUBSCRIPTION_CATALOG_B1.md). B2–B5 remain recommendations. Nothing here activates billing, charges, credits or a payment provider.
+**Status:** B1 merged (`7afa0b5`): [HON_SUBSCRIPTION_CATALOG_B1.md](../architecture/HON_SUBSCRIPTION_CATALOG_B1.md). B2 is implemented in its own PR (not merged): [HON_SUBSCRIPTION_INVOICING_B2.md](../architecture/HON_SUBSCRIPTION_INVOICING_B2.md). B3–B5 remain recommendations. Nothing here activates billing, charges, credits or a payment provider.
 
 **Why this is next.** Champions Club fulfillment, the `HON_BILLING` payment-verification source, the 30-day refund guarantee, founder offers and premium AI credit allowances all depend on HON knowing, authoritatively, what each school bought, when it paid, and what allowance it holds.
 

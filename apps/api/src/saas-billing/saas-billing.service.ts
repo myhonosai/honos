@@ -5,6 +5,8 @@ import {
   validateSaasFounderReleaseInput, validateSaasFounderReservationList, validateSaasFounderReservationReceipt, validateSaasFounderReserveInput,
   validateSaasOrganizationSubscription, validateSaasReservationStatusFilter, validateSaasSubscriptionCommand, validateSaasSubscriptionCommandReceipt,
   validateSaasSubscriptionList, validateSaasSubscriptionRecordInput, validateSaasSubscriptionReceipt, validateSaasSubscriptionStatusFilter,
+  validateSaasInvoiceCommand, validateSaasInvoiceCommandReceipt, validateSaasInvoiceDetail, validateSaasInvoiceDraftInput, validateSaasInvoiceList,
+  validateSaasInvoiceReceipt, validateSaasInvoiceStatusFilter, validateSaasPaymentEvidenceInput, validateSaasPaymentEvidenceReceipt, validateSaasPaymentStanding,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
 
@@ -12,7 +14,11 @@ import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation
 const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED','SAAS_FOUNDER_LIMIT_BELOW_USAGE','SAAS_OFFER_NOT_AVAILABLE',
   'SAAS_OFFER_NOT_FOUNDER','SAAS_FOUNDER_WINDOW_CLOSED','SAAS_FOUNDER_NOT_ELIGIBLE','SAAS_FOUNDER_ALREADY_RESERVED','SAAS_FOUNDER_SOLD_OUT',
   'SAAS_ENTITLEMENT_NOT_ACTIVE','SAAS_ENTITLEMENT_MISMATCH','SAAS_SUBSCRIPTION_EXISTS','SAAS_FOUNDER_RESERVATION_REQUIRED',
-  'SAAS_FOUNDER_RESERVATION_MISMATCH','SAAS_FOUNDER_RESERVATION_EXPIRED','SAAS_NO_BILLING_PERIODS','SAAS_PERIOD_NOT_ENDED']);
+  'SAAS_FOUNDER_RESERVATION_MISMATCH','SAAS_FOUNDER_RESERVATION_EXPIRED','SAAS_NO_BILLING_PERIODS','SAAS_PERIOD_NOT_ENDED',
+  'SAAS_INVOICE_NOT_BILLABLE','SAAS_INVOICE_PERIOD_NOT_STARTED','SAAS_INVOICE_EXISTS','SAAS_INVOICE_TOO_MANY_LINES','SAAS_INVOICE_NEGATIVE_TOTAL',
+  'SAAS_INVOICE_TAX_UNRESOLVED','SAAS_INVOICE_ZERO_TOTAL','SAAS_INVOICE_HAS_EVIDENCE','SAAS_INVOICE_NOT_ISSUED','SAAS_EVIDENCE_IN_FUTURE',
+  'SAAS_EVIDENCE_DUPLICATE_REFERENCE','SAAS_PAYMENT_EXCEEDS_BALANCE','SAAS_EVIDENCE_RELATED_MISMATCH','SAAS_REVERSAL_EXCEEDS_PAYMENT',
+  'SAAS_EVIDENCE_BEFORE_PAYMENT']);
 const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
@@ -62,6 +68,32 @@ export class SaasBillingService {
   async commandSubscription(subject: string, subscriptionId: unknown, body: unknown, key: unknown) {
     const [subscription, command, idempotencyKey] = parse(() => [saasUuid(subscriptionId), validateSaasSubscriptionCommand(body), saasUuid(key)] as const);
     return this.run('commandSubscription', [subject, subscription, JSON.stringify(command), idempotencyKey, randomUUID(), randomUUID()], validateSaasSubscriptionCommandReceipt);
+  }
+
+  // ---------- B2: invoices and payment evidence (recordkeeping only) ----------
+  async readInvoices(subject: string, status: unknown) {
+    const filter = parse(() => validateSaasInvoiceStatusFilter(status));
+    return this.run('readInvoices', [subject, filter], validateSaasInvoiceList);
+  }
+  async readInvoice(subject: string, invoiceId: unknown) {
+    const invoice = parse(() => saasUuid(invoiceId));
+    return this.run('readInvoice', [subject, invoice], validateSaasInvoiceDetail);
+  }
+  async readPaymentStanding(subject: string, organizationId: unknown) {
+    const organization = parse(() => saasUuid(organizationId));
+    return this.run('readPaymentStanding', [subject, organization], validateSaasPaymentStanding);
+  }
+  async createInvoiceDraft(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasInvoiceDraftInput(body), saasUuid(key)] as const);
+    return this.run('createInvoiceDraft', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasInvoiceReceipt);
+  }
+  async commandInvoice(subject: string, invoiceId: unknown, body: unknown, key: unknown) {
+    const [invoice, command, idempotencyKey] = parse(() => [saasUuid(invoiceId), validateSaasInvoiceCommand(body), saasUuid(key)] as const);
+    return this.run('commandInvoice', [subject, invoice, JSON.stringify(command), idempotencyKey, randomUUID(), randomUUID()], validateSaasInvoiceCommandReceipt);
+  }
+  async recordPaymentEvidence(subject: string, invoiceId: unknown, body: unknown, key: unknown) {
+    const [invoice, input, idempotencyKey] = parse(() => [saasUuid(invoiceId), validateSaasPaymentEvidenceInput(body), saasUuid(key)] as const);
+    return this.run('recordPaymentEvidence', [subject, invoice, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasPaymentEvidenceReceipt);
   }
 
   private async run<T>(operation: SaasBillingOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {

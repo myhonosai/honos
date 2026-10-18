@@ -1,9 +1,12 @@
-// HON subscription catalog (0154): HON-bills-schools records, separate from school-to-family billing.
+// HON subscription catalog (0154) and invoices/payment evidence (0155): HON-bills-schools records,
+// separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
 export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
- 'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox'];
-const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox'];
+ 'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
+ 'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence'];
+const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence'];
 const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
+const invoicingTables = ['saas_invoice_sequences','saas_invoices'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const saasBillingFunctions = [
  ['hon.saas_plan_capabilities(text)',false,false],
@@ -32,6 +35,20 @@ export const saasBillingFunctions = [
  ['hon.read_saas_organization_subscription_from_hq(text,uuid)',true,true],
  ['hon.record_saas_subscription(text,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.command_saas_subscription(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0155 invoices and payment evidence
+ ['hon.guard_saas_invoicing()',false,false],
+ ['hon.guard_saas_invoice_lines()',false,false],
+ ['hon.saas_invoice_facts(uuid,uuid)',false,false],
+ ['hon.saas_evidence_json(hon.saas_payment_evidence)',false,false],
+ ['hon.saas_invoice_json(uuid,boolean)',false,false],
+ ['hon.saas_payment_standing_strength(uuid,boolean)',false,false],
+ ['hon.saas_payment_standing(uuid)',false,false],
+ ['hon.read_saas_invoices_from_hq(text,text)',true,true],
+ ['hon.read_saas_invoice_from_hq(text,uuid)',true,true],
+ ['hon.read_saas_payment_standing_from_hq(text,uuid)',true,true],
+ ['hon.create_saas_invoice_draft(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.command_saas_invoice(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.record_saas_payment_evidence(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');
@@ -43,7 +60,9 @@ export async function verifySaasBillingSecurity(client, runtime) {
    FROM pg_class c JOIN pg_roles o ON o.oid=c.relowner WHERE c.oid=$1::regclass`,[`hon.${table}`,runtime])).rows[0];
   if (r?.safe!==true) throw new Error(`Unsafe HON subscription table ${table}`);
   const [guard,rowTrigger,rowType] = evidenceTables.includes(table) ? ['guard_saas_evidence','saas_immutable',27]
-   : catalogRowTables.includes(table) ? ['guard_saas_catalog_rows','saas_catalog_rows',31] : ['guard_saas_records','saas_guarded',27];
+   : catalogRowTables.includes(table) ? ['guard_saas_catalog_rows','saas_catalog_rows',31]
+   : table === 'saas_invoice_lines' ? ['guard_saas_invoice_lines','saas_invoice_lines_rows',31]
+   : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];
   for (const [name,type] of [[rowTrigger,rowType],['saas_no_truncate',34]]) {
    const t=(await client.query(`SELECT count(*)=1 safe FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=$2 AND tgtype=$3
     AND tgfoid=$4::regprocedure AND tgenabled='O' AND NOT tgisinternal`,[`hon.${table}`,name,type,`hon.${guard}()`])).rows[0];

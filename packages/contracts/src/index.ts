@@ -948,3 +948,4 @@ export * from './champions-club-leaderboard.js';
 export * from './champions-club-contests.js';
 export * from './champions-club-overview.js';
 export * from './saas-billing.js';
+export * from './saas-invoicing.js';
