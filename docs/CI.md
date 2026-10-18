@@ -35,12 +35,12 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 
 | | Estimate |
 | --- | --- |
-| Measured locally (4 vCPU) | test 58s · check 31s · build 72s · db:check 1s · DB proofs 9s |
-| Per CI run on GitHub-hosted Linux runners | about **8–12 billed minutes** in total across both parallel jobs (dependency install and repeated workspace builds included; private-repo standard runners are slower than the local machine) |
-| 100 PR runs / month | ~800–1,200 minutes |
+| **Measured on GitHub, run #1** ([39090185996](https://github.com/myhonosai/honos/actions/runs/39090185996), 2026-10-18) | Verify job **4m36s** (install 9s · test 2m09s · check 39s · build 1m27s · db:check 1s); database job **54s** (proofs 8s). Wall clock 4m43s; jobs run in parallel |
+| Per CI run | about **6 billed minutes** (GitHub rounds each job up to the whole minute: 5 + 1). The run's usage API reported 0 billable ms, which may mean these minutes are not charged on this account; confirm in Billing |
+| 100 PR runs / month | ~600 minutes |
 | GitHub Free private-repo allowance | 2,000 Linux minutes / month (Pro and Team plans include more) |
 
-**Why push-to-main is off:** `main` currently receives many direct commits per day (for example, 29 on 2026-10-17). At ~10 minutes each, running CI on every push could use roughly 6,000–9,000 minutes per month, beyond the Free allowance. Options for the owner:
+**Why push-to-main is off:** `main` currently receives many direct commits per day (for example, 29 on 2026-10-17). At ~6 minutes each, running CI on every push could use roughly 4,000–5,500 minutes per month, beyond the Free allowance. Options for the owner:
 
 1. Keep CI on PRs only (current) and move agent work to PRs.
 2. Add `push: branches: [main]` once the plan's minutes are confirmed; superseded runs are already cancelled.

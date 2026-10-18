@@ -23,11 +23,11 @@
 
 | Check | Result | Where it runs |
 | --- | --- | --- |
-| `pnpm test` | **1,220 passed, 0 failed** (web 565, API 376, domain 188, auth 91) | Locally; CI on PRs once [`ci.yml`](../.github/workflows/ci.yml) is merged |
+| `pnpm test` | **1,220 passed, 0 failed** (web 565, API 376, domain 188, auth 91) | Locally, and on GitHub Actions ([run #1](https://github.com/myhonosai/honos/actions/runs/39090185996), green) via [`ci.yml`](../.github/workflows/ci.yml) |
 | `pnpm check` (TypeScript) | Pass | Locally; CI |
 | `pnpm build` | Pass | Locally; CI |
 | `pnpm db:check` | Pass: 147 migration files | Locally; CI |
-| Disposable PostgreSQL 16 proofs | **5 of 70** proof scripts pass, all migrations applied: tenant security boundaries, outbox leases, Class Sessions read, **forced RLS on all 185 tracked tables**, CRM lead close | Locally on a throwaway database; CI on PRs |
+| Disposable PostgreSQL 16 proofs | **5 of 70** proof scripts pass, all migrations applied: tenant security boundaries, outbox leases, Class Sessions read, **forced RLS on all 185 tracked tables**, CRM lead close | Locally on a throwaway database, and on GitHub Actions ([run #1](https://github.com/myhonosai/honos/actions/runs/39090185996), green) |
 | Remaining 65 database proofs | Recorded as passing in `TODO.md` by Manus; **not independently re-run** by this report | Manus's sandbox |
 | Browser end-to-end tests | None in CI | — |
 
