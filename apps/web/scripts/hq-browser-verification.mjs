@@ -7,8 +7,9 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, appendFile, readFile } from 'node:fs/promises';
-import { issueSession, HON_SESSION_COOKIE } from '@hon/auth';
-import { HQ_OVERVIEW_UNAVAILABLE_REASONS } from '@hon/contracts';
+import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
+import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateChampionsLeaderboardQuery, validateChampionsHqLeaderboard } from '@hon/contracts';
+import { leaderboardFixture } from './fixtures/hq-champions-leaderboard.mjs';
 
 if (process.env.GITHUB_ACTIONS !== 'true' && process.env.HON_HQ_BROWSER_LOCAL !== '1') throw new Error('Use the temporary CI workflow or explicitly opt into disposable local browser verification.');
 for (const key of ['DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'STRIPE_SECRET_KEY']) {
@@ -38,6 +39,9 @@ const report = {
   apiRequests: [],
 };
 let apiMode = 'ready';
+let leaderboardMode = 'ready';
+let leaderboardUpdated = false;
+let leaderboardDelay = 0;
 const overview = {
   asOf: '2026-10-17T12:00:00.000Z', callerHqRole: 'OWNER', organizationCount: 2, schoolCount: 3,
   onboarding: { availability: 'AVAILABLE', requestCount: 4, inProgressRequestCount: 1, completedRequestCount: 3 },
@@ -51,8 +55,32 @@ const api = createServer((request, response) => {
   report.apiRequests.push({ method: request.method, path });
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
-  if (request.method !== 'GET' || !['/v1/hq/overview', '/v1/hq/schools'].includes(path)) {
+  let identity;
+  try { identity = verifySession(cookieValue(request.headers.cookie, HON_SESSION_COOKIE) ?? '', session); }
+  catch { response.writeHead(401); response.end('{}'); return; }
+  // This local double models the API's independent authority check, never a production bypass.
+  if (!['hon-hq-browser-fixture', 'hon-hq-operator-fixture'].includes(identity.externalSubject)) {
+    response.writeHead(403); response.end('{}'); return;
+  }
+  const url = new URL(path, 'http://127.0.0.1');
+  if (request.method !== 'GET' || !['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/leaderboard'].includes(url.pathname)) {
     response.writeHead(405); response.end('{}'); return;
+  }
+  if (url.pathname === '/v1/hq/champions/leaderboard') {
+    if (['401', '403', '503'].includes(leaderboardMode)) { response.writeHead(Number(leaderboardMode)); response.end('{}'); return; }
+    let selection;
+    try {
+      if (new Set(url.searchParams.keys()).size !== [...url.searchParams.keys()].length) throw Error();
+      selection = validateChampionsLeaderboardQuery(Object.fromEntries(url.searchParams));
+      if (selection.month !== null && (selection.month < '2026-01' || selection.month > new Date().toISOString().slice(0, 7))) throw Error();
+    } catch { response.writeHead(400); response.end('{}'); return; }
+    const data = validateChampionsHqLeaderboard(leaderboardFixture({ ...selection, updated: leaderboardUpdated, empty: leaderboardMode === 'empty' }));
+    const body = leaderboardMode === 'invalid-json' ? 'unreadable'
+      : JSON.stringify({ data: leaderboardMode === 'malformed' ? { ...data, ownerEmail: 'private@example.test' }
+        : leaderboardMode === 'mismatch' ? leaderboardFixture({ period: 'MONTH', month: '2026-01' }) : data });
+    const finish = () => { if (!response.destroyed) response.end(body); };
+    if (leaderboardDelay) setTimeout(finish, leaderboardDelay); else finish();
+    return;
   }
   if (path === '/v1/hq/overview' && ['401', '403', '503'].includes(apiMode)) {
     response.writeHead(Number(apiMode)); response.end('{}'); return;
@@ -98,12 +126,16 @@ async function screenshot(page, name, fullPage = true) {
     await Promise.all([...sources].map(async (source) => {
       const image = new Image(); image.src = source; await image.decode();
     }));
+    // Captures start at the top after interactions, keeping fixed navigation/fixture labels in place.
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    await new Promise((done) => requestAnimationFrame(done));
   });
+  await page.waitForFunction(() => scrollX === 0 && scrollY === 0);
   await page.screenshot({ path: join(resultsRoot, `${name}.png`), fullPage, animations: 'disabled' });
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots
   // when the terminal cannot download File Service artifacts. No credentials or live data.
-  if (name === 'desktop-dashboard-full' || name === 'mobile-dashboard-full' || name === 'mobile-dashboard-viewport') {
+  if (['desktop-dashboard-full', 'mobile-dashboard-full', 'mobile-dashboard-viewport', 'desktop-leaderboard-all-time', 'desktop-leaderboard-monthly', 'mobile-leaderboard-all-time', 'mobile-leaderboard-monthly', 'mobile-leaderboard-viewport'].includes(name)) {
     const preview = await page.screenshot({ type: 'jpeg', quality: 72, fullPage, animations: 'disabled' });
     await writeFile(join(resultsRoot, `${name}.jpg`), preview);
     const encoded = preview.toString('base64');
@@ -123,7 +155,7 @@ async function accessibility(page, label) {
   report.accessibility.push({ label, violations: result.violations, incompleteCount: result.incomplete.length });
   assert.equal(result.violations.length, 0, `${label}: ${result.violations.map((item) => item.id).join(', ')}`);
 }
-async function contextFor(viewport, authenticated = true, reducedMotion = 'reduce') {
+async function contextFor(viewport, authenticated = true, reducedMotion = 'reduce', subject = 'hon-hq-browser-fixture') {
   const context = await browser.newContext({ viewport, reducedMotion, serviceWorkers: 'block' });
   await context.grantPermissions([], { origin });
   await context.route('**/*', (route) => {
@@ -132,7 +164,7 @@ async function contextFor(viewport, authenticated = true, reducedMotion = 'reduc
     report.blockedExternalHosts.push(url.hostname); return route.abort('blockedbyclient');
   });
   await context.routeWebSocket('**/*', (socket) => socket.close());
-  if (authenticated) await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  if (authenticated) await context.addCookies([{ name: HON_SESSION_COOKIE, value: subject === 'hon-hq-browser-fixture' ? cookie : issueSession({ externalSubject: subject }, session), url: origin, httpOnly: true, sameSite: 'Lax' }]);
   await context.addInitScript(() => {
     addEventListener('DOMContentLoaded', () => {
       const badge = document.createElement('div'); badge.textContent = 'LOCAL TEST FIXTURE · NO LIVE DATA';
@@ -182,6 +214,13 @@ try {
       assert.equal(await motion.getAttribute('aria-pressed'), 'false');
       assert.equal(await page.locator('[data-motion]').getAttribute('data-motion'), 'off');
       const views = page.getByRole('group', { name: 'Platform view' });
+      const boundaries = await page.locator('[aria-label="HQ appearance"] [role="group"]').evaluateAll((nodes) => nodes.map((node) => {
+        const box = node.getBoundingClientRect(), style = getComputedStyle(node);
+        return { x: box.x, y: box.y, right: box.right, bottom: box.bottom, border: parseFloat(style.borderTopWidth), radius: parseFloat(style.borderTopLeftRadius) };
+      }));
+      assert.equal(boundaries.length, 2);
+      assert(boundaries.every((box) => box.border >= 1 && box.radius >= 8), 'Each appearance group needs its own visible rounded boundary');
+      assert(boundaries[0].right <= boundaries[1].x || boundaries[0].bottom <= boundaries[1].y, 'View and AI Style groups must not overlap');
       for (const [name, key] of [['Big Button', 'big-button'], ['Classic', 'classic'], ['Modern', 'modern']]) {
         await views.getByRole('button', { name, exact: true }).click();
         assert.equal(await views.getByRole('button', { name, exact: true }).getAttribute('aria-pressed'), 'true');
@@ -232,7 +271,7 @@ try {
       await page.getByRole('heading', { name: 'Chase', exact: true }).waitFor();
       await page.getByRole('button', { name: 'Performance', exact: true }).click();
       await page.getByRole('heading', { name: 'Performance unavailable', exact: true }).waitFor();
-      await page.getByRole('button', { name: 'Ask HON anywhere', exact: true }).click();
+      await page.getByRole('button', { name: width <= 600 ? 'Expand HON assistant' : 'Ask HON anywhere', exact: true }).click();
       const assistant = page.getByRole(width <= 800 ? 'dialog' : 'complementary', { name: 'HON assistant', exact: true });
       await assistant.getByText('Current page: Chase workspace', { exact: true }).waitFor();
       assert.equal(await assistant.getByRole('textbox').inputValue(), '');
@@ -262,8 +301,118 @@ try {
       await noOverflow(page, `${label} growth`);
       if (label === 'desktop' || label === 'mobile') await screenshot(page, `${label}-growth-contests`);
     });
+    await check(`${label}: official leaderboard periods, confidential reviews and responsive bounds`, async () => {
+      leaderboardMode = 'ready'; leaderboardUpdated = false;
+      await page.goto(`${origin}/hq/growth/leaderboard`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'All-time standings', exact: true }).waitFor();
+      const rows = page.locator('tbody tr');
+      assert.equal(await rows.count(), 3);
+      assert((await rows.nth(0).innerText()).includes('Zeta School'));
+      assert((await rows.nth(1).innerText()).includes('Alpha School'));
+      assert.equal(await rows.nth(0).locator('th').textContent(), 'Rank 1');
+      assert.equal(await rows.nth(1).locator('th').textContent(), 'Rank 1');
+      const heldSchool = page.getByText('Hold Review School · fixture', { exact: true });
+      assert(!(await heldSchool.isVisible()), 'Confidential review must be collapsed initially');
+      await page.getByText('Confidential HQ reviews', { exact: true }).click();
+      await heldSchool.waitFor();
+      assert.equal(await page.locator('tbody').getByText('Hold Review School · fixture').count(), 0);
+      await page.getByText('Confidential HQ reviews', { exact: true }).click();
+      if (width <= 600) {
+        assert(!(await page.getByRole('button', { name: 'Ask HON anywhere', exact: true }).isVisible()), 'A second mobile launcher must not cover filters');
+        assert(await page.getByRole('button', { name: 'Expand HON assistant', exact: true }).isVisible());
+      }
+      await noOverflow(page, `${label} leaderboard`);
+      await screenshot(page, `${label}-leaderboard-all-time`);
+      if (label === 'mobile') await screenshot(page, 'mobile-leaderboard-viewport', false);
+      await accessibility(page, `${label}-leaderboard`);
+      const filters = page.getByRole('group', { name: 'Ranking period' });
+      await filters.getByRole('button', { name: 'Monthly', exact: true }).click();
+      const month = new Date().toISOString().slice(0, 7);
+      await page.getByRole('heading', { name: `Monthly standings · ${month}`, exact: true }).waitFor();
+      assert.equal(await rows.count(), 2);
+      assert((await rows.nth(0).innerText()).includes('Cedar School'));
+      await page.getByRole('combobox', { name: 'UTC ranking month' }).selectOption('2026-01');
+      await page.getByRole('heading', { name: 'Monthly standings · 2026-01', exact: true }).waitFor();
+      if (label === 'desktop' || label === 'mobile') await screenshot(page, `${label}-leaderboard-monthly`);
+      for (const name of ['Big Button', 'Classic', 'Modern']) {
+        await page.getByRole('group', { name: 'Platform view' }).getByRole('button', { name, exact: true }).click();
+        await noOverflow(page, `${label} leaderboard ${name}`);
+      }
+      await filters.getByRole('button', { name: 'All time', exact: true }).click();
+      await page.getByRole('heading', { name: 'All-time standings', exact: true }).waitFor();
+    });
     await context.close();
   }
+
+  const integration = await contextFor({ width: 1440, height: 1000 });
+  try {
+    const page = integration.page;
+    const open = async () => {
+      await page.goto(`${origin}/hq/growth/leaderboard?schoolId=untrusted&role=OWNER`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'All-time standings', exact: true }).waitFor();
+    };
+    await check('Leaderboard refresh clears facts, shows loading and retrieves changed official data', async () => {
+      leaderboardMode = 'ready'; leaderboardUpdated = false; await open();
+      leaderboardDelay = 400; leaderboardUpdated = true;
+      await page.getByText('Confidential HQ reviews', { exact: true }).click();
+      await page.getByRole('button', { name: 'Refresh standings', exact: true }).click();
+      await page.getByRole('heading', { name: 'Loading authorized standings…', exact: true }).waitFor();
+      assert.equal(await page.getByText('Hold Review School · fixture', { exact: true }).count(), 0);
+      await page.getByRole('heading', { name: 'All-time standings', exact: true }).waitFor();
+      assert((await page.locator('tbody tr').nth(0).innerText()).includes('9'));
+      assert.equal(await page.locator('tbody tr').nth(1).locator('th').textContent(), 'Rank 2');
+      leaderboardDelay = 0;
+    });
+    await check('Leaderboard discards an obsolete delayed response after a filter change', async () => {
+      leaderboardDelay = 600;
+      const startRequests = report.apiRequests.length;
+      await page.getByRole('button', { name: 'Refresh standings', exact: true }).click();
+      await page.getByRole('heading', { name: 'Loading authorized standings…', exact: true }).waitFor();
+      for (let attempt = 0; attempt < 30 && !report.apiRequests.slice(startRequests).some((item) => item.path === '/v1/hq/champions/leaderboard?period=ALL_TIME'); attempt++) await delay(20);
+      assert(report.apiRequests.slice(startRequests).some((item) => item.path === '/v1/hq/champions/leaderboard?period=ALL_TIME'), 'Delayed request did not reach the fixture');
+      leaderboardDelay = 0;
+      await page.getByRole('group', { name: 'Ranking period' }).getByRole('button', { name: 'Monthly', exact: true }).click();
+      const title = `Monthly standings · ${new Date().toISOString().slice(0, 7)}`;
+      await page.getByRole('heading', { name: title, exact: true }).waitFor();
+      await delay(700);
+      assert.equal(await page.locator('tbody tr').count(), 2);
+      assert.equal(await page.getByRole('heading', { name: 'All-time standings', exact: true }).count(), 0);
+    });
+    await check('Leaderboard empty, denied, unavailable and invalid responses reveal no stale rankings or holds', async () => {
+      for (const [mode, heading] of [['empty', 'All-time standings'], ['401', 'Sign in to view referral standings'], ['403', 'Champions Club access denied'], ['503', 'Referral standings unavailable'], ['malformed', 'Referral standings could not be verified'], ['invalid-json', 'Referral standings could not be verified'], ['mismatch', 'Referral standings could not be verified']]) {
+        leaderboardMode = 'ready'; await open();
+        await page.getByText('Confidential HQ reviews', { exact: true }).click();
+        await page.getByText('Hold Review School · fixture', { exact: true }).waitFor();
+        leaderboardMode = mode;
+        await page.getByRole('button', { name: 'Refresh standings', exact: true }).click();
+        await page.getByRole('heading', { name: heading, exact: true }).waitFor();
+        assert.equal(await page.locator('tbody tr').count(), 0);
+        assert.equal(await page.getByText('Hold Review School · fixture', { exact: true }).count(), 0);
+        if (mode === 'empty') await page.getByText('No ranked schools for this period.', { exact: false }).waitFor();
+      }
+    });
+    await check('HQ leaderboard independently denies school, family, support and unsigned identities', async () => {
+      leaderboardMode = 'ready';
+      for (const subject of ['hon-school-fixture', 'hon-family-fixture', 'hon-hq-support-fixture']) {
+        const denied = await contextFor({ width: 390, height: 844 }, true, 'reduce', subject);
+        try {
+          const response = await denied.context.request.get(`${origin}/api/v1/hq/champions/leaderboard?period=ALL_TIME`);
+          assert.equal(response.status(), 403); assert.equal(await response.text(), '{}');
+          await denied.page.goto(`${origin}/hq/growth/leaderboard`, { waitUntil: 'domcontentloaded' });
+          await denied.page.getByRole('heading', { name: 'This account has no current HQ authority.', exact: true }).waitFor();
+          assert.equal(await denied.page.getByText('Hold Review School · fixture', { exact: true }).count(), 0);
+        } finally { await denied.context.close(); }
+      }
+      const anonymous = await contextFor({ width: 390, height: 844 }, false);
+      try { assert.equal((await anonymous.context.request.get(`${origin}/api/v1/hq/champions/leaderboard?period=ALL_TIME`)).status(), 401); }
+      finally { await anonymous.context.close(); }
+      const operator = await contextFor({ width: 390, height: 844 }, true, 'reduce', 'hon-hq-operator-fixture');
+      try {
+        await operator.page.goto(`${origin}/hq/growth/leaderboard`, { waitUntil: 'domcontentloaded' });
+        await operator.page.getByRole('heading', { name: 'All-time standings', exact: true }).waitFor();
+      } finally { await operator.context.close(); }
+    });
+  } finally { leaderboardMode = 'ready'; leaderboardDelay = 0; await integration.context.close(); }
 
   await check('HQ command backdrop and decorative motion pause, keyboard restore and preference change', async () => {
     const moving = await contextFor({ width: 1440, height: 1000 }, true, 'no-preference');
@@ -315,7 +464,11 @@ try {
   });
   await check('No browser JavaScript errors', async () => assert.deepEqual(report.pageErrors, []));
   await check('No mutation, provider or arbitrary API request', async () => {
-    assert(report.apiRequests.every((request) => request.method === 'GET' && ['/v1/hq/overview', '/v1/hq/schools'].includes(request.path)));
+    assert(report.apiRequests.every((request) => {
+      const url = new URL(request.path, 'http://127.0.0.1');
+      return request.method === 'GET' && (['/v1/hq/overview', '/v1/hq/schools'].includes(request.path)
+        || (url.pathname === '/v1/hq/champions/leaderboard' && [...url.searchParams.keys()].every((key) => ['period', 'month'].includes(key))));
+    }));
   });
 } catch (error) {
   report.failures.push({ name: 'Browser harness', message: String(error.message).slice(0, 1600) });

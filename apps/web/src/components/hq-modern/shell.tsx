@@ -108,8 +108,8 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         <span className={styles.ownerAvatar} title="Company control plane" aria-label="HQ workspace">HQ</span>
       </header>
       <section className={styles.appearance} aria-label="HQ appearance">
-        <div role="group" aria-label="Platform view"><span>View</span>{HQ_VIEWS.map((option) => <button type="button" key={option.key} aria-pressed={view === option.key} onClick={() => setView(option.key)}>{option.label}</button>)}</div>
-        <div role="group" aria-label="AI portrait style"><span>AI style</span>{HQ_ART.map((option) => <button type="button" key={option.key} aria-pressed={art === option.key} onClick={() => setArt(option.key)}>{option.label}</button>)}</div>
+        <div className={styles.appearanceGroup} role="group" aria-label="Platform view"><span>View</span>{HQ_VIEWS.map((option) => <button type="button" key={option.key} aria-pressed={view === option.key} onClick={() => setView(option.key)}>{option.label}</button>)}</div>
+        <div className={styles.appearanceGroup} role="group" aria-label="AI portrait style"><span>AI Style</span>{HQ_ART.map((option) => <button type="button" key={option.key} aria-pressed={art === option.key} onClick={() => setArt(option.key)}>{option.label}</button>)}</div>
         <button type="button" className={styles.motionControl} aria-label="Ambient motion" aria-pressed={!reducedMotion && ambientMotion} disabled={reducedMotion} onClick={() => setAmbientMotion((value) => !value)} title={reducedMotion ? 'Motion is off because your device prefers reduced motion' : 'Pause or resume decorative motion'}><HqIcon name={ambientMotion && !reducedMotion ? 'pause' : 'play'} size={14}/><span>Motion</span><small>{!reducedMotion && ambientMotion ? 'On' : 'Off'}</small></button>
         <small>Presentation only</small>
       </section>
@@ -120,7 +120,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
           {assistant && <div className={styles.assistantBackdrop} aria-hidden="true" onClick={closeAssistant}/>}
           {assistant && <HonAssistant context={hqPageLabel(path)} onMinimize={closeAssistant}/>}
         </div>
-        {(!assistant && path !== '/hq') && <button ref={assistantButton} type="button" className={styles.assistantLauncher} onClick={openAssistant} aria-label="Ask HON anywhere" aria-expanded={false}><HonCore small/><strong>Ask HON anywhere</strong><HqIcon name="expand"/></button>}
+        {(!assistant && path !== '/hq') && <button ref={assistantButton} type="button" className={styles.assistantLauncher} onClick={openAssistant} aria-label="Ask HON anywhere" aria-expanded={false} title="Open HON assistant"><HonCore small/><strong>Ask HON anywhere</strong><HqIcon name="expand"/></button>}
       </HqContext.Provider> : <main id="hq-main" tabIndex={-1} className={styles.accessState}>
         <HonCore small/>
         <p className={styles.eyebrow}>{access.kind === 'loading' ? 'Verifying HQ access' : access.kind === 'forbidden' ? 'HQ access denied' : access.kind === 'unauthorized' ? 'Account required' : 'HQ unavailable'}</p>
