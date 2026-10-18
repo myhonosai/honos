@@ -648,3 +648,21 @@ Details: [Human Testing Scorecard Foundation](docs/architecture/HUMAN_TESTING_SC
 - [x] Exclude testing scorecard/evaluator/evaluation IDs/comments/criteria, identifiers, readiness/eligibility claims, grading/pass/fail changes, promotion/rank/belt, certificate issuance/download, payment/registration mutation, messaging/provider/AI/Action Engine/voice/automation/external calls. Add strict contracts, API/UI tests, canonical Supabase ACL verifier, a guarded disposable-local proof and [architecture documentation](docs/architecture/PARENT_TESTING_STATUS.md).
 - [x] Expose the existing bounded parent testing-interest and staff-review foundation through a separately authenticated/no-index `/parent/testing/interest` route, discoverable only after the status route's own verified read. The request route independently rechecks the fixed family scope and returned child/open-event selectors; `ACCEPTED` remains only a recorded human review, never a place, candidate, eligibility, payment, grade or promotion.
 - [ ] Keep real candidate/roster lifecycle, eligibility/readiness, grades/defer/promotion, rank/belt, certificate issuance/delivery/download, payment, notifications, providers, AI, Action Engine, voice, and automation as separately reviewed capabilities.
+
+## Automated GitHub testing and progress visibility — Claude Code (owner review)
+- [x] Add GitHub Actions CI on pull requests to `main` and manual dispatch (no schedule, no deployment, no secrets, `contents: read`, bounded timeouts, superseded-run cancellation, draft PRs skipped): `pnpm test`, `pnpm check`, `pnpm build`, `pnpm db:check`, plus a tracked-file cleanliness check.
+- [x] Run 5 security/integrity proofs (tenant security boundaries, outbox leases, Class Sessions read, forced RLS on all 185 tracked tables, CRM lead close) against the runner's disposable localhost PostgreSQL, reusing the existing guarded fixture scripts unchanged under a stripped environment. Verified locally on a throwaway PostgreSQL 16, including the failure path.
+- [x] Add the maintained development status report separating implementation progress from commercial launch readiness.
+- [ ] Owner decisions: merge, push-to-main trigger after confirming the plan's Actions minutes, and whether to make CI a required check (affects direct pushes to `main`).
+- [ ] Add the remaining database proofs to CI fixture by fixture, measuring minutes as you go.
+
+Details: [CI](docs/CI.md) · [Development status](docs/DEVELOPMENT_STATUS.md).
+
+## HON Champions Club backend — Claude Code (owner review; tracking issue #6)
+- [x] M1: migration 0148 adds school-owned referral codes, HQ-recorded attribution (one per referred organization) with versioned PENDING/QUALIFIED/REJECTED/REFUNDED/REVERSED states and closed reasons, a versioned program policy, immutable history, idempotency, audit and inert outbox. Forced deny-all RLS, function-only runtime access, direct-human subject resolution only.
+- [x] M1: self-referral (same org or shared user), duplicate, retroactive, revoked-code and inactive-org denial; qualification gated on a published complete policy, attribution window, refund window/minimum paid period/invoices, active referred entitlement, and an available payment-verification source (`HON_BILLING` fails closed). Financial rewards pinned `DISABLED` by constraint.
+- [x] M1: typed contracts (`packages/contracts/src/champions-club.ts`), school and HQ API under `/v1/schools/:schoolId/champions/*` and `/v1/hq/champions/*`, API tests, guarded disposable-localhost integrity proof (also in CI), `verify-rls` now 192 tables.
+- [ ] Owner decisions before any financial activation: program term values, payment-verification source, clawbacks and caps, founder/annual/paid-lifetime substitute rewards, rewards between milestones, prize taxes, contest terms, Essential participation.
+- [ ] M2 welcome credit and milestone entitlement accounting (liabilities only, nothing applied) · M3 leaderboard and HQ admin reads · M4 contest engine · M5 integration and security review.
+
+Details: [Champions Club backend](docs/architecture/CHAMPIONS_CLUB_BACKEND.md).
