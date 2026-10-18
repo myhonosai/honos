@@ -149,6 +149,10 @@
       "title": "HON | Human Invoice Workbench"
     },
     {
+      "path": "/staff/billing/accounts",
+      "title": "HON | Human Billing Account Workbench"
+    },
+    {
       "path": "/community",
       "title": "Private human HON owner community"
     },

@@ -18,6 +18,8 @@
     "db:test-class-sessions-read": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-sessions-read-integrity.mjs",
     "db:setup-crm-intake-stages": "node scripts/setup-crm-intake-stages-validation.mjs",
     "db:test-crm-intake-stages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-intake-stages-integrity.mjs",
+    "db:setup-flexible-billing-accounts": "node scripts/setup-flexible-billing-accounts-validation.mjs",
+    "db:test-flexible-billing-accounts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-flexible-billing-account-integrity.mjs",
     "db:test-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-knowledge-integrity.mjs",
     "db:test-parent-schedule": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-schedule-security.mjs",
     "db:test-parent-knowledge": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-parent-family-knowledge-security.mjs",

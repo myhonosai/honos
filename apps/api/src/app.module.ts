@@ -70,6 +70,7 @@ import { MembershipService } from './billing/membership.service.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
+import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
 import { InvoiceController } from './billing/invoice.controller.js';
 import { InvoiceService } from './billing/invoice.service.js';
 import { InvoiceHumanUiGuard } from './billing/invoice-human-ui.guard.js';
@@ -411,6 +412,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipService,
     MembershipActivationHumanUiGuard,
     BillingAccountService,
+    BillingAccountHumanUiGuard,
     InvoiceService,
     InvoiceHumanUiGuard,
     HqOnboardingService,
