@@ -172,6 +172,9 @@ import { HqOverviewService } from './hq/hq-overview.service.js';
 import { HqEntitlementController } from './hq/hq-entitlement.controller.js';
 import { HqEntitlementService } from './hq/hq-entitlement.service.js';
 import { HqEntitlementHumanUiGuard } from './hq/hq-entitlement.dto.js';
+import { ChampionsHqController, ChampionsSchoolController } from './champions/champions-club.controller.js';
+import { ChampionsClubService } from './champions/champions-club.service.js';
+import { ChampionsCommandGuard, ChampionsReadGuard } from './champions/champions-club.guards.js';
 import { HqSchoolDirectoryService } from './hq/hq-school-directory.service.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
@@ -298,6 +301,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqOnboardingController,
     HqAiProviderController,
     HqEntitlementController,
+    ChampionsSchoolController, ChampionsHqController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
@@ -407,6 +411,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderService,
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
+    ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
     HqOverviewService,
     HqSchoolDirectoryService,
   ],
