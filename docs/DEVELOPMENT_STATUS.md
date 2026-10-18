@@ -51,7 +51,7 @@
 | HQ control plane | **Partial** | Overview, school directory, AI provider catalog/routing policy, non-commercial Core↔Complete transition | Subscriptions, credits ledger, support access, contests; **HQ visual implementation is assigned to Codex** |
 | Staff roles, availability, qualifications, documents, work items, automation rules, community, marketplace | **Partial** | Human-governed foundations with tests | Broader workflows and execution engines |
 | Presentation modes (Big-Button, Modern, Classic) | **Partial** | Persisted per user/school on selected staff screens; reference screens | Not applied platform-wide; HQ and family preferences deferred |
-| HON Champions Club | **Partial** (PR pending, not merged) | Referral codes, HQ-recorded attribution, qualification states and gates, versioned policy, API and DB proofs ([design](architecture/CHAMPIONS_CLUB_BACKEND.md)) | Rewards ledger, leaderboard, contests; financial rewards disabled pending owner terms and billing |
+| HON Champions Club | **Partial** (M1 merged; M2 PR pending) | Referral codes, attribution, qualification gates ([M1](architecture/CHAMPIONS_CLUB_BACKEND.md)); reward liabilities ledger ([M2](architecture/CHAMPIONS_CLUB_REWARD_ACCOUNTING.md)) | Leaderboard, contests, fulfillment; financial activation disabled pending owner terms and billing |
 | CI / engineering operations | **Partial** (this PR) | CI for test/check/build/migrations + 5 database proofs on PRs | No push-to-main CI yet (cost decision), no deployment pipeline, monitoring, backups or runbooks in the repo |
 
 ## 3. Visual-only prototypes
