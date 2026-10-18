@@ -28,3 +28,9 @@ Approved concept exports are copied unchanged into a new HQ-only asset folder. C
 - [ ] Functional/responsive/accessibility/regression evidence and review PR.
 
 Validation results and screenshots will be added after execution; no successful checks are assumed.
+
+## Environment recovery and publication
+
+The terminal cannot reach its configured proxy (`curl (7)` at `proxy:8080`). React/Next/TypeScript/Vitest are absent and uncached. No lockfile or network controls were changed. All original source files were exported through the connected GitHub application and verified by Git blob SHA. The baseline tree exactly matches upstream `c0331df`; the working source tree is also checked against the published GitHub tree. Local snapshot commit IDs differ from upstream; published commits use the actual latest-main parent.
+
+The branch includes main `22ef492` (owner-approved CI/docs). Implementation is reviewable in PR #8. Existing GitHub CI installs locked dependencies successfully; local browser previews still require terminal-network permission or environment repair. Earlier generated images are design references, not runtime screenshots.
