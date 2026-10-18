@@ -58,6 +58,18 @@ export interface HqSchoolProvisioningResult {
   replayed: boolean;
 }
 
+const CHAMPIONS_CLUB_CALLS = {
+  issueReferralCode: { sql: 'SELECT hon.issue_champions_referral_code($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readSchoolView: { sql: 'SELECT hon.read_champions_school_view($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readProgram: { sql: 'SELECT hon.read_champions_program_from_hq($1) AS data', arity: 1, readOnly: true },
+  createPolicyDraft: { sql: 'SELECT hon.create_champions_policy_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishPolicy: { sql: 'SELECT hon.publish_champions_policy($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  captureAttribution: { sql: 'SELECT hon.capture_champions_attribution($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  decideAttribution: { sql: 'SELECT hon.decide_champions_attribution($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readAttributions: { sql: 'SELECT hon.read_champions_attributions_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+} as const;
+export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
+
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
@@ -972,6 +984,27 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Champions Club: one fixed, subject-only SECURITY DEFINER call per operation. The SQL text
+   * comes only from the closed CHAMPIONS_CLUB_CALLS table; no tenant GUC is ever set (the
+   * database refuses one), and reads run in a READ ONLY snapshot.
+   */
+  async callChampionsClub(operation: ChampionsClubOperation, params: readonly (string | null)[]): Promise<unknown> {
+    const call = CHAMPIONS_CLUB_CALLS[operation];
+    if (!call || params.length !== call.arity) throw new Error('CHAMPIONS_UNAVAILABLE');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query(call.readOnly ? 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN');
+      await client.query("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '3s'; SET LOCAL log_parameter_max_length_on_error = 0");
+      const result = await client.query<{ data: unknown }>(call.sql, [...params]);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('CHAMPIONS_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 
   async onModuleDestroy(): Promise<void> {

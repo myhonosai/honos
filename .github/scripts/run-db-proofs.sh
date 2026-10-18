@@ -66,7 +66,10 @@ setup crm-lead-close HON_CRM_LEAD_CLOSE_VALIDATION_TARGET hon_crm_close_validati
 proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational table"
 proof crm-lead-close test-crm-lead-close-integrity.mjs "CRM lead close authority, atomicity and replay"
 
-echo "All $passed disposable-database proofs passed (2 fixtures, all migrations applied)."
+setup champions-club HON_CHAMPIONS_VALIDATION_TARGET hon_champions_validation HON_CHAMPIONS_ENV_FILE
+proof champions-club test-champions-club-integrity.mjs "Champions Club authority, attribution, qualification gates and evidence"
+
+echo "All $passed disposable-database proofs passed (3 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"
