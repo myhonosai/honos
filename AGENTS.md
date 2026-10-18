@@ -8,6 +8,7 @@ This repository is the active, security-sensitive HON OS codebase. **Read [`docs
 2. [`docs/HON_MASTER_DIRECTIVE.md`](docs/HON_MASTER_DIRECTIVE.md)
 3. [`TODO.md`](TODO.md)
 4. The exact relevant operating contract under `docs/architecture/` or `docs/`
+5. [`docs/hon/README.md`](docs/hon/README.md) when work touches commercial policy, public plans, HQ autonomy, AI credit economics, referrals, contests, growth, or owner business vision. Those documents are future business intent, not permission to activate money, providers, messaging, or live entitlements.
 
 ## Non-negotiables
 
@@ -18,6 +19,7 @@ This repository is the active, security-sensitive HON OS codebase. **Read [`docs
 - Treat URL/form/UI values as untrusted selectors. They cannot auto-fetch, auto-command, confer authority, or establish a record fact.
 - Read the current state before modifying it; use focused tests plus appropriate broader checks; update `TODO.md` only with actual evidence.
 - GitHub `main` is canonical. Prefer a focused branch/PR, never force-push or rewrite history. A push is not a deployment; auto-publish is disabled.
+- **Active visual collaboration hold:** Claude Code is exploring alternative visuals on a separate branch. Do not modify, replace, regenerate, delete, or remap original logos, portraits, hosted visual sources, or shared visual components without coordination and explicit owner approval. Read [`docs/architecture/VISUAL_COLLABORATION_PROTOCOL.md`](docs/architecture/VISUAL_COLLABORATION_PROTOCOL.md) and [`docs/architecture/VISUAL_ASSET_INVENTORY_2026-10-17.md`](docs/architecture/VISUAL_ASSET_INVENTORY_2026-10-17.md) first.
 
 ## Core validation
 
