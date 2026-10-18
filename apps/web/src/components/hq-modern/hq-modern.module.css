@@ -460,6 +460,8 @@
 @media(max-width:1250px){
   .commandLineup,.withAssistant .commandLineup{padding-top:10px;padding-bottom:12px;gap:10px;perspective:none}
   .stageTeam>.stageExecutive{transform:none;--card-lift:0px;--card-turn:0deg}
+  .withAssistant .commandLineup{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .withAssistant .stageExecutive{grid-column:auto;grid-row:auto}
   .orbFrame>.core,.withAssistant .orbFrame>.core{width:94px}
   .orbFrame>strong{font-size:22px}
   .coreCaption{padding-top:0}

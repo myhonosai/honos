@@ -114,6 +114,8 @@ async function screenshot(page, name, fullPage = true) {
 async function noOverflow(page, label) {
   const metrics = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
   assert(metrics.document <= metrics.viewport + 1 && metrics.body <= metrics.viewport + 1, `${label}: ${JSON.stringify(metrics)}`);
+  const workspaces = await page.getByRole('link', { name: /^View .* workspace$/ }).evaluateAll((nodes) => nodes.map((node) => ({ label: node.getAttribute('aria-label'), width: node.clientWidth, content: node.scrollWidth })));
+  assert(workspaces.every((node) => node.content <= node.width + 1), `${label}: executive controls must fit their cards: ${JSON.stringify(workspaces)}`);
 }
 async function accessibility(page, label) {
   await page.addScriptTag({ content: axeSource });
