@@ -1,5 +1,17 @@
 # HON Delivery Backlog
 
+## Codex HQ Modern frontend — owner-authorized 2026-10-18
+
+- [x] Apply the latest owner clarification: restored the existing command-center background, made executive cards see-through and overlapped the speaking dock with HON's lower front as confirmed. Source `21ab801`: 37 browser checks passed, zero failures; eight axe scans, zero reported violations; both normal CI jobs passed including the application build and disposable-local security proofs. Real [desktop/mobile evidence](docs/visuals/codex/hq-glass-command/README.md) visually inspected. Prior variants/original art/HQ boundaries preserved; owner visual and manual device review remain pending. No merge/deployment.
+
+- [x] Implement and verify the Jarvis-inspired abstract variant, then preserve it after the owner's latest restored-background clarification. Source `bad9f7a`: 37 browser checks passed, zero failures; eight axe scans, zero violations; [archived desktop/mobile evidence](docs/visuals/codex/hq-holographic/README.md). Original assets, six executive workspaces and all HQ/security boundaries retained.
+
+- [x] Refine the HQ frontend toward the owner's supplied `9075.jpg` reference: immersive command-room setting, six portrait-led executives around HON, glass/cyan panels and denser verified operational cards. Preserve previous assets/review evidence and HQ/security boundaries. Revised source `c9fe94f`: 36 browser checks passed, zero failures; eight axe scans, zero violations; real [desktop/mobile gallery](docs/visuals/codex/hq-reference-refinement/README.md). Owner visual, physical-device keyboard and screen-reader review remain pending; no merge/deployment.
+
+- [x] Implement approved responsive HQ dashboard and navigation on `codex/hq-modern-implementation`, tracking issue #4 / PR #8; preserve PR #3 and existing HQ authorization/data contracts. Owner visual acceptance remains pending.
+- [x] Add persistent non-executing HON interface, catalog-based executive workspace entries, appearance controls, and honest planned/unavailable management interfaces. No operational AI, voice, financial or referral action is claimed.
+- [x] Record real browser interaction/responsive/accessibility evidence: source `c71b6fb`, 36 checks passed, 0 failed; eight axe scans with zero violations at four viewport sizes. [Desktop/mobile review gallery](docs/visuals/codex/hq-modern/README.md). [Normal CI 39103263609](https://github.com/myhonosai/honos/actions/runs/39103263609) on that same source passed both jobs: tests/check/build/migration contract and disposable-local security proofs. Physical-device keyboard, screen-reader and owner review remain pending. No merge/deployment or backend/provider activation. Details: `docs/CODEX_HQ_IMPLEMENTATION.md`.
+
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
 
 ## Claire AI Teaching Assistant — scoped validation TODO

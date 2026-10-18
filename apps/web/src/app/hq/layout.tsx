@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { HqModernShell } from '../../components/hq-modern/shell';
 import { requireVerifiedWebSession } from '../../server/require-web-session';
 
 export const dynamic = 'force-dynamic';
@@ -9,5 +10,5 @@ export const dynamic = 'force-dynamic';
  */
 export default async function HqLayout({ children }: { children: ReactNode }): Promise<ReactNode> {
   await requireVerifiedWebSession();
-  return children;
+  return <HqModernShell>{children}</HqModernShell>;
 }
