@@ -34,6 +34,7 @@
     "db:test-champions-club-leaderboard": "pnpm --filter @hon/database db:test-champions-club-leaderboard",
     "db:test-champions-club-contests": "pnpm --filter @hon/database db:test-champions-club-contests",
     "db:test-champions-club-journey": "pnpm --filter @hon/database db:test-champions-club-journey",
+    "db:test-saas-subscription": "pnpm --filter @hon/database db:test-saas-subscription",
     "db:test-communication-consents": "pnpm --filter @hon/database db:test-communication-consents",
     "db:test-communication-messages": "pnpm --filter @hon/database db:test-communication-messages",
     "db:test-billing-invoices": "pnpm --filter @hon/database db:test-billing-invoices",

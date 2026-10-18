@@ -63,9 +63,9 @@
 | Reward accounting ledger and decisions | ✅ `13d98c9` | — | |
 | Leaderboard, holds, school statistics and privacy | ✅ `ba1866a` | **Partial** | HQ leaderboard on Codex's unmerged `codex/hq-champions-integration` branch |
 | Contest management, standings, winners and liabilities | ✅ `77fd2bd` | — | |
-| Auto-reconciliation on decisions (M5) | PR pending | n/a | |
-| HQ overview (M5) | PR pending | — | |
-| End-to-end journey proof (M5) | PR pending | n/a | |
+| Auto-reconciliation on decisions (M5) | ✅ `50d44d9` | n/a | |
+| HQ overview (M5) | ✅ `50d44d9` | — | |
+| End-to-end journey proof (M5) | ✅ `50d44d9` | n/a | |
 
 ## 4. Owner decisions that block real commercial activation
 

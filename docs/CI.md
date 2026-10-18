@@ -18,13 +18,14 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `class-sessions-read` | `test-security-boundaries.mjs` | Restricted runtime privileges, permission revocation, parent-family resolution, transaction-bound RLS isolation, composite tenant references |
 | `class-sessions-read` | `test-outbox-leases.mjs` | Expired/late outbox leases become UNKNOWN/DEAD_LETTER, never PUBLISHED or auto-retried |
 | `class-sessions-read` | `test-class-sessions-read-integrity.mjs` | Current-school Class Sessions read boundary |
-| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on **all 204** tracked operational tables, append-only audit/outbox, AI ledger tenant isolation |
+| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on **all 214** tracked operational tables, append-only audit/outbox, AI ledger tenant isolation |
 | `crm-lead-close` | `test-crm-lead-close-integrity.mjs` | CRM close authority, denial matrix, atomicity, replay |
 | `champions-club` | `test-champions-club-integrity.mjs` | Champions Club authority, attribution fraud rules, qualification gates, transitions, immutable evidence, API service on real output |
 | `champions-club` | `test-champions-club-rewards-integrity.mjs` | Champions Club reward accounting: ladder accrual, reversal review, owner approvals, liabilities, no billing or entitlement effect |
 | `champions-club` | `test-champions-club-leaderboard-integrity.mjs` | Champions Club leaderboards: QUALIFIED-only standings, ties, holds, privacy opt-in, school statistics |
 | `champions-club` | `test-champions-club-contests-integrity.mjs` | Champions Club contests: HQ lifecycle and gates, pause-exact standings, frozen results, winner review, liabilities |
 | `champions-club` | `test-champions-club-journey-integrity.mjs` | Champions Club end-to-end journey through the API service with automatic reward reconciliation and audit consistency |
+| `champions-club` | `test-saas-subscription-integrity.mjs` | HON subscription catalog (B1): owner-only publication, atomic founder inventory under concurrency, entitlement-linked records, undecided policies refused, no billing effect |
 
 ## Safety controls
 
@@ -61,7 +62,7 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 
 ## Known limitations
 
-- **10 of 75** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
+- **11 of 76** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.

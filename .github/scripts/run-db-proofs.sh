@@ -72,6 +72,7 @@ proof champions-club test-champions-club-rewards-integrity.mjs "Champions Club r
 proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Club leaderboards: qualified-only standings, privacy, holds, statistics"
 proof champions-club test-champions-club-contests-integrity.mjs "Champions Club contests: HQ lifecycle, frozen standings, winner review, liabilities"
 proof champions-club test-champions-club-journey-integrity.mjs "Champions Club end-to-end journey: code to winner, automatic reward reconciliation, audit"
+proof champions-club test-saas-subscription-integrity.mjs "HON subscription catalog (B1): owner-only offers, atomic founder inventory, entitlement-linked records, no billing effect"
 
 echo "All $passed disposable-database proofs passed (3 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

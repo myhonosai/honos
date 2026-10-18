@@ -88,6 +88,21 @@ const CHAMPIONS_CLUB_CALLS = {
 } as const;
 export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 
+// HON subscription catalog (B1): HON billing schools. Separate from school-to-family billing.
+const SAAS_BILLING_CALLS = {
+  readCatalog: { sql: 'SELECT hon.read_saas_catalog_from_hq($1) AS data', arity: 1, readOnly: true },
+  createCatalogDraft: { sql: 'SELECT hon.create_saas_catalog_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishCatalog: { sql: 'SELECT hon.publish_saas_catalog($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readFounderReservations: { sql: 'SELECT hon.read_saas_founder_reservations_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  reserveFounder: { sql: 'SELECT hon.reserve_saas_founder_offer($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  releaseFounder: { sql: 'SELECT hon.release_saas_founder_reservation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSubscriptions: { sql: 'SELECT hon.read_saas_subscriptions_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readOrganizationSubscription: { sql: 'SELECT hon.read_saas_organization_subscription_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  recordSubscription: { sql: 'SELECT hon.record_saas_subscription($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  commandSubscription: { sql: 'SELECT hon.command_saas_subscription($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+} as const;
+export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
+
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
@@ -1012,6 +1027,17 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   async callChampionsClub(operation: ChampionsClubOperation, params: readonly (string | null)[]): Promise<unknown> {
     const call = CHAMPIONS_CLUB_CALLS[operation];
     if (!call || params.length !== call.arity) throw new Error('CHAMPIONS_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call, params, 'CHAMPIONS_UNAVAILABLE');
+  }
+
+  /** HON subscription catalog (B1): same fixed, subject-only, context-free call discipline as Champions Club. */
+  async callSaasBilling(operation: SaasBillingOperation, params: readonly (string | null)[]): Promise<unknown> {
+    const call = SAAS_BILLING_CALLS[operation];
+    if (!call || params.length !== call.arity) throw new Error('SAAS_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call, params, 'SAAS_UNAVAILABLE');
+  }
+
+  private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
     try {
@@ -1019,7 +1045,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       await client.query("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '3s'; SET LOCAL log_parameter_max_length_on_error = 0");
       const result = await client.query<{ data: unknown }>(call.sql, [...params]);
       await client.query('COMMIT');
-      if (!result.rows[0]) throw new Error('CHAMPIONS_UNAVAILABLE');
+      if (!result.rows[0]) throw new Error(unavailable);
       return result.rows[0].data;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
