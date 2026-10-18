@@ -320,7 +320,7 @@
   .skip{left:15px}
 }
 @media(max-width:800px){
-  .shell[data-view] .dashboard{display:flex;flex-direction:column;gap:12px}
+  .shell[data-view] .dashboard{display:flex;flex-direction:column;align-items:stretch;gap:12px}
   .commandStage,.commandLineup,.managementGrid{display:contents}
   .commandCore{order:0;justify-content:flex-start;flex-direction:row;gap:12px;align-items:center;padding:14px;border:1px solid #2e89b0;border-radius:9px;background:linear-gradient(120deg,#083752e8,#041628ed)}
   .orbFrame>.core,.withAssistant .orbFrame>.core{width:66px}
@@ -336,11 +336,11 @@
   .commandPrompt>span{font-size:9px}
   .commandShortcuts{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .commandShortcuts>a{min-height:40px;font-size:10px;justify-content:space-between}
-  .performanceStrip{order:2;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .performanceStrip{order:3;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
   .performanceTile{padding:9px;gap:7px}
   .performanceTile strong{font-size:21px}
   .performanceTile small{font-size:8px}
-  .attentionSlot{order:3}.snapshotSlot{order:4}.growthSlot{order:5;grid-column:auto}
+  .attentionSlot{order:2}.snapshotSlot{order:4}.growthSlot{order:5;grid-column:auto}
   .stageHeader{order:6;margin-top:4px;padding:0 2px}
   .stageHeader h2{font-size:18px}
   .stageTeam{order:7;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -357,7 +357,7 @@
 @media(max-width:600px){
   .workspace{padding:22px 12px 150px;background-size:auto 470px;background-position:center top}
   .topbar{min-height:64px;gap:10px;margin-bottom:10px}
-  .topbar h1{font-size:23px}
+  .topbar h1{font-size:clamp(18px,5.1vw,22px)}
   .topbar .subtitle{font-size:10px}
   .topbar .eyebrow{font-size:8px;letter-spacing:.08em}
   .appearance{padding:6px 7px;gap:3px;border-radius:8px;margin-bottom:10px}
@@ -375,11 +375,11 @@
   .performanceTile small{font-size:8px}
   .metricIcon{width:30px;height:30px}
   .metricIcon>svg{width:20px;height:20px}
-  .stageTeam{gap:7px}
-  .stageIdentity h3{font-size:13px}
-  .stageIdentity p{font-size:9px}
+  .stageTeam{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .stageIdentity h3{font-size:16px}
+  .stageIdentity p{font-size:11px}
   .stageExecutive{padding:5px}
-  .workspaceEntry{font-size:9px;gap:4px;padding:4px 2px}
+  .workspaceEntry{font-size:11px;gap:7px;padding:4px 6px}
   .stageHeader p{font-size:9px}
   .stageHeader>a{font-size:10px}
   .managementGrid>div>.panel{padding:15px}
