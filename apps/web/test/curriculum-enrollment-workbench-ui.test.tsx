@@ -18,7 +18,7 @@ const ids = { organizationId: id('1'), schoolId: id('2'), curriculumId: id('3'),
 type Element = ReactElement<Record<string, any>>;
 function elements(node: unknown): Element[] { if (Array.isArray(node)) return node.flatMap(elements); if (!React.isValidElement(node)) return []; const element = node as Element; return [element, ...elements(element.props.children)]; }
 function text(node: unknown): string { if (Array.isArray(node)) return node.map(text).join(' '); if (React.isValidElement(node)) return text((node as Element).props.children); return typeof node === 'string' || typeof node === 'number' ? String(node) : ''; }
-function render(): Element { hooks.cursor = 0; const tree = CurriculumEnrollmentWorkbench() as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
+function render(initialStudentProfileId?: string): Element { hooks.cursor = 0; const tree = CurriculumEnrollmentWorkbench(initialStudentProfileId === undefined ? {} : { initialStudentProfileId }) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
 function unmount(): void { for (const cell of hooks.cells) if (cell && typeof cell === 'object' && 'cleanup' in cell) (cell as { cleanup?: () => void }).cleanup?.(); }
 const field = (name: string) => elements(render()).find(element => element.props.name === name);
 const button = (label: string) => elements(render()).find(element => element.type === 'button' && text(element) === label);
@@ -47,5 +47,15 @@ describe('human curriculum enrollment workbench', () => {
     const ui = readFileSync('src/components/curriculum-enrollment-workbench.tsx', 'utf8'); const http = readFileSync('src/components/curriculum-enrollment-workbench-http.ts', 'utf8');
     expect(ui + http).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|\/people|\/roster|\/search|\/families|\/testing|\/booking|\/billing|\/payment|invokeLLM|executeAction|sendMessage|providerClient/);
     expect(ui).not.toMatch(/fetch\(/); expect(http.match(/fetch\(/g)).toHaveLength(1); expect(http).toContain("method: 'POST'"); expect(http).not.toContain("method: 'GET'"); expect(ui.match(/crypto\.randomUUID\(\)/g)).toHaveLength(1);
+  });
+  it('treats a valid registration handoff as inert student-profile form text and clears it on access loss', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'ignored' }), { status: 403 })); const key = vi.spyOn(crypto, 'randomUUID').mockReturnValue(id('9'));
+    render(ids.studentProfileId);
+    expect(field('studentProfileId')!.props.value).toBe(ids.studentProfileId); expect(field('organizationId')!.props.value).toBe(''); expect(field('schoolId')!.props.value).toBe(''); expect(field('curriculumId')!.props.value).toBe(''); expect(field('currentRankId')!.props.value).toBe('');
+    expect(button('Submit human curriculum enrollment')!.props.disabled).toBe(true); expect(fetcher).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
+    edit('organizationId', ids.organizationId); edit('schoolId', ids.schoolId); edit('curriculumId', ids.curriculumId); confirm(); submit(); await settle();
+    expect(fetcher).toHaveBeenCalledTimes(1); expect(key).toHaveBeenCalledTimes(1);
+    expect(field('studentProfileId')!.props.value).toBe(''); expect(field('organizationId')!.props.value).toBe(''); expect(field('schoolId')!.props.value).toBe(''); expect(field('curriculumId')!.props.value).toBe(''); expect(field('currentRankId')!.props.value).toBe('');
+    expect(button('Submit human curriculum enrollment')!.props.disabled).toBe(true);
   });
 });

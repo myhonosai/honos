@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { CrmLeadRegistrationWorkbench } from '../src/components/crm-lead-registration-workbench';
+import { CrmLeadRegistrationWorkbench, registrationCurriculumEnrollmentHref } from '../src/components/crm-lead-registration-workbench';
 
 const leadId = '33333333-3333-4333-8333-333333333333';
 
@@ -43,5 +43,19 @@ describe('direct-human CRM lead registration route', () => {
     expect(list).toContain('registrationHref(registrationSelected.id)');
     expect(list).toContain('carries only its untrusted lead UUID');
     expect(manifest.routes.filter(entry => entry.path === '/staff/crm/register')).toEqual([{ path: '/staff/crm/register', title: 'HON | Direct-human CRM registration review' }]);
+  });
+
+  it('offers only a selector-only separate curriculum preparation path after a registered receipt', () => {
+    const href = registrationCurriculumEnrollmentHref(leadId);
+    expect(href).toBe(`/staff/curriculum/enrollments?studentProfileId=${leadId}`);
+    const query = new URL(`https://hon.test${href}`).searchParams;
+    expect([...query.keys()]).toEqual(['studentProfileId']);
+    expect(query.get('studentProfileId')).toBe(leadId);
+    for (const invalid of ['', 'not-a-uuid', leadId.replace('-4', '-0')]) expect(registrationCurriculumEnrollmentHref(invalid)).toBeUndefined();
+    const source = readFileSync('src/components/crm-lead-registration-workbench.tsx', 'utf8');
+    expect(source).toContain("result?.result.outcome==='REGISTERED'");
+    expect(source).toContain('Prepare separate human curriculum enrollment');
+    expect(source).toContain("new URLSearchParams({studentProfileId:normalized})");
+    expect(source).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|sourceContactPersonId|familyId|registrationPath|recordedAt|organizationId|schoolId)/);
   });
 });

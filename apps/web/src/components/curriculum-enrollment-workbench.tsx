@@ -9,13 +9,15 @@ import {
 import styles from './attendance-workbench.module.css';
 
 const EMPTY_IDS: CurriculumEnrollmentKnownIds = { organizationId: '', schoolId: '', curriculumId: '', studentProfileId: '', currentRankId: '' };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LABELS: Record<keyof CurriculumEnrollmentKnownIds, string> = {
   organizationId: 'Organization UUID', schoolId: 'School UUID', curriculumId: 'Curriculum UUID', studentProfileId: 'Student profile UUID', currentRankId: 'Current rank UUID (optional)',
 };
 
 /** One explicit human enrollment command through the existing canonical curriculum service. */
-export function CurriculumEnrollmentWorkbench(): React.ReactElement {
-  const [ids, setIds] = useState<CurriculumEnrollmentKnownIds>(EMPTY_IDS);
+export function CurriculumEnrollmentWorkbench({ initialStudentProfileId }: { initialStudentProfileId?: string } = {}): React.ReactElement {
+  const prefilledStudentProfileId = typeof initialStudentProfileId === 'string' && UUID.test(initialStudentProfileId) ? initialStudentProfileId.toLowerCase() : '';
+  const [ids, setIds] = useState<CurriculumEnrollmentKnownIds>({ ...EMPTY_IDS, studentProfileId: prefilledStudentProfileId });
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempted, setAttempted] = useState(false);

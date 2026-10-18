@@ -11,12 +11,21 @@ import { CurriculumEnrollmentWorkbench } from '../src/components/curriculum-enro
 
 afterEach(() => vi.restoreAllMocks());
 describe('protected curriculum enrollment route', () => {
-  it('inherits staff protection and is dynamic/noindex with no prefill, I/O, or key allocation', async () => {
+  it('inherits staff protection and accepts only one inert student-profile selector', async () => {
     const child = React.createElement('p', null, 'protected'); session.require.mockRejectedValueOnce(new Error('redirect:/auth/login'));
     await expect(StaffLayout({ children: child })).rejects.toThrow('redirect:/auth/login'); session.require.mockResolvedValueOnce(); expect(await StaffLayout({ children: child })).toBe(child);
-    const fetcher = vi.spyOn(globalThis, 'fetch'); const key = vi.spyOn(crypto, 'randomUUID'); const page = StaffCurriculumEnrollmentsPage();
-    expect(page.type).toBe(CurriculumEnrollmentWorkbench); expect(page.props).toEqual({}); expect(dynamic).toBe('force-dynamic'); expect(metadata.robots).toEqual({ index: false, follow: false }); expect(fetcher).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
-    expect(readFileSync('src/app/staff/curriculum/enrollments/page.tsx', 'utf8')).not.toMatch(/searchParams|fetch\(|organizationId|schoolId|curriculumId|studentProfileId|prepareCurriculumEnrollment/);
+    const studentProfileId = '44444444-4444-4444-8444-444444444444'; const fetcher = vi.spyOn(globalThis, 'fetch'); const key = vi.spyOn(crypto, 'randomUUID');
+    const page = await StaffCurriculumEnrollmentsPage({ searchParams: Promise.resolve({ studentProfileId }) });
+    expect(page.type).toBe(CurriculumEnrollmentWorkbench); expect(page.props).toEqual({ initialStudentProfileId: studentProfileId }); expect(dynamic).toBe('force-dynamic'); expect(metadata.robots).toEqual({ index: false, follow: false }); expect(fetcher).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
+    for (const value of [undefined, '', 'not-a-uuid', '44444444-4444-0444-8444-444444444444', [studentProfileId], [studentProfileId, '55555555-5555-4555-8555-555555555555']]) {
+      const params = value === undefined ? {} : { studentProfileId: value as string | string[] };
+      const empty = await StaffCurriculumEnrollmentsPage({ searchParams: Promise.resolve(params) });
+      expect(empty.props).toEqual({});
+    }
+    const different = await StaffCurriculumEnrollmentsPage({ searchParams: Promise.resolve({ studentProfileId: '55555555-5555-4555-8555-555555555555' }) });
+    expect(different.props).toEqual({ initialStudentProfileId: '55555555-5555-4555-8555-555555555555' });
+    const route = readFileSync('src/app/staff/curriculum/enrollments/page.tsx', 'utf8');
+    expect(route).toContain('normalizeInitialStudentProfileId'); expect(route).toContain("key={initialStudentProfileId ?? 'empty'}"); expect(route).not.toMatch(/fetch\(|loadCurrent|prepareCurriculumEnrollment|organizationId|schoolId|curriculumId|currentRankId/);
   });
   it('declares the route once and keeps source page routes synchronized in the manifest', () => {
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')); expect(manifest.routes.filter((route: { path: string }) => route.path === '/staff/curriculum/enrollments')).toEqual([{ path: '/staff/curriculum/enrollments', title: 'HON | Human Curriculum Enrollment' }]);
