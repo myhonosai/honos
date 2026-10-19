@@ -53,7 +53,10 @@ async function context(viewport, subject = 'school-owner-synthetic', tokenOverri
 }
 try {
   let ready = false;
-  for (let i = 0; i < 60; i++) { try { if ((await fetch(`${origin}/auth/login`, { redirect: 'manual' })).status < 500) { ready = true; break; } } catch {} await delay(500); }
+  // Login deliberately returns 503 without an external identity-provider configuration.
+  // Probe the actual protected page with the same correctly signed disposable session used below.
+  const probeCookie = `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: 'school-owner-synthetic' }, config)}`;
+  for (let i = 0; i < 60; i++) { try { if ((await fetch(`${origin}/staff/subscription`, { redirect: 'manual', headers: { Cookie: probeCookie } })).status === 200) { ready = true; break; } } catch {} await delay(500); }
   assert(ready, 'Production Next server did not start');
   browser = await chromium.launch({ executablePath: chrome, headless: true });
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['tablet', { width: 834, height: 1112 }], ['mobile', { width: 390, height: 844 }], ['narrow', { width: 320, height: 800 }]]) {
