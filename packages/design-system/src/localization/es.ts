@@ -494,7 +494,7 @@ export const es = {
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "El nivel informado y el plan de suscripción difieren. Contacta con soporte de HON; esta página no puede cambiar los registros.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "No disponible aquí. HON debe confirmar el acceso efectivo por separado; el pago no activa funciones ni levanta una suspensión.",
   "Unavailable here. This page uses only the current server-resolved school; reporting selections and URL identifiers do not authorize purchasing.": "No disponible aquí. Se usa solo la escuela actual resuelta por el servidor; las selecciones de informes y los identificadores URL no autorizan compras.",
-  "Not connected on this screen yet. A recorded invoice reference is not a receipt.": "Aún no está conectado en esta pantalla. Una referencia de factura registrada no es un recibo."
+  "Not connected on this screen yet. A recorded invoice reference is not a receipt.": "Aún no está conectado en esta pantalla. Una referencia de factura registrada no es un recibo.",
   "Organizations": "Organizaciones",
   "Disabled": "Deshabilitado",
   "Configured": "Configurado",

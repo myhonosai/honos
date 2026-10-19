@@ -493,7 +493,7 @@ export const en = {
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.",
   "Unavailable here. This page uses only the current server-resolved school; reporting selections and URL identifiers do not authorize purchasing.": "Unavailable here. This page uses only the current server-resolved school; reporting selections and URL identifiers do not authorize purchasing.",
-  "Not connected on this screen yet. A recorded invoice reference is not a receipt.": "Not connected on this screen yet. A recorded invoice reference is not a receipt."
+  "Not connected on this screen yet. A recorded invoice reference is not a receipt.": "Not connected on this screen yet. A recorded invoice reference is not a receipt.",
   "Organizations": "Organizations",
   "Disabled": "Disabled",
   "Configured": "Configured",

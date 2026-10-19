@@ -494,7 +494,7 @@ export const ko = {
   "The reported tier and subscription plan differ. Contact HON support; this page cannot change either record.": "보고된 요금제와 구독 요금제가 다릅니다. HON 지원팀에 문의하세요. 이 페이지에서는 두 기록을 변경할 수 없습니다.",
   "Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.": "여기서는 사용할 수 없습니다. 실제 이용 권한은 HON이 별도로 확인해야 하며 결제로 기능이 활성화되거나 일시 중지가 해제되지 않습니다.",
   "Unavailable here. This page uses only the current server-resolved school; reporting selections and URL identifiers do not authorize purchasing.": "여기서는 사용할 수 없습니다. 서버가 확인한 현재 학교만 사용하며 보고서 선택이나 URL 번호는 구매 권한을 부여하지 않습니다.",
-  "Not connected on this screen yet. A recorded invoice reference is not a receipt.": "이 화면에는 아직 연결되지 않았습니다. 기록된 청구서 번호는 영수증이 아닙니다."
+  "Not connected on this screen yet. A recorded invoice reference is not a receipt.": "이 화면에는 아직 연결되지 않았습니다. 기록된 청구서 번호는 영수증이 아닙니다.",
   "Organizations": "기관",
   "Disabled": "비활성화됨",
   "Configured": "설정됨",
