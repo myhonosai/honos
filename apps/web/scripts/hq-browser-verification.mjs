@@ -13,6 +13,7 @@ import { leaderboardFixture } from './fixtures/hq-champions-leaderboard.mjs';
 import { championsManagementFixture } from './fixtures/hq-champions-management.mjs';
 import { fixtureId, schoolDirectoryFixture, schoolReferralFixture, rewardLedgerFixture, rewardProgramFixture } from './fixtures/hq-school-rewards.mjs';
 import { isSaasFixturePath, respondSaasFixture, verifySaasViewport, verifySaasStates } from './hq-saas-browser-checks.mjs';
+import { isInvoiceFixturePath, respondInvoiceFixture, verifyInvoiceViewport, verifyInvoiceStates } from './hq-invoice-browser-checks.mjs';
 
 if (process.env.GITHUB_ACTIONS !== 'true' && process.env.HON_HQ_BROWSER_LOCAL !== '1') throw new Error('Use the temporary CI workflow or explicitly opt into disposable local browser verification.');
 for (const key of ['DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'STRIPE_SECRET_KEY']) {
@@ -77,9 +78,11 @@ const api = createServer((request, response) => {
   const schoolPath = [1, 2].map((id) => `/v1/hq/champions/schools/${fixtureId(id)}/statistics`).includes(url.pathname);
   const rewardPath = ['/v1/hq/champions/rewards/program', '/v1/hq/champions/rewards/ledger'].includes(url.pathname);
   const saasPath = isSaasFixturePath(url.pathname);
-  if (request.method !== 'GET' || !schoolPath && !rewardPath && !saasPath && !['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/leaderboard', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname)) {
+  const invoicePath = isInvoiceFixturePath(url.pathname);
+  if (request.method !== 'GET' || !schoolPath && !rewardPath && !saasPath && !invoicePath && !['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/leaderboard', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(url.pathname)) {
     response.writeHead(405); response.end('{}'); return;
   }
+  if (invoicePath) { respondInvoiceFixture(request, response, url); return; }
   if (saasPath) { respondSaasFixture(request, response, url); return; }
   if (schoolPath || rewardPath) {
     const isProgram = url.pathname.endsWith('/program');
@@ -196,7 +199,7 @@ async function screenshot(page, name, fullPage = true, preserveScroll = false) {
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots
   // when the terminal cannot download File Service artifacts. No credentials or live data.
-  if (['desktop-subscription-overview', 'mobile-subscription-overview', 'desktop-subscription-account', 'mobile-subscription-account', 'mobile-subscription-viewport', 'desktop-school-referrals', 'mobile-school-referrals', 'mobile-school-viewport', 'desktop-reward-management', 'mobile-reward-management', 'desktop-champions-overview', 'mobile-champions-overview', 'mobile-champions-viewport', 'desktop-dashboard-full', 'mobile-dashboard-full', 'mobile-dashboard-viewport', 'desktop-leaderboard-all-time', 'desktop-leaderboard-monthly', 'mobile-leaderboard-all-time', 'mobile-leaderboard-monthly', 'mobile-leaderboard-viewport'].includes(name)) {
+  if (['desktop-invoice-list', 'mobile-invoice-list', 'desktop-invoice-detail', 'mobile-invoice-detail', 'mobile-invoice-viewport', 'desktop-subscription-overview', 'mobile-subscription-overview', 'desktop-subscription-account', 'mobile-subscription-account', 'mobile-subscription-viewport', 'desktop-school-referrals', 'mobile-school-referrals', 'mobile-school-viewport', 'desktop-reward-management', 'mobile-reward-management', 'desktop-champions-overview', 'mobile-champions-overview', 'mobile-champions-viewport', 'desktop-dashboard-full', 'mobile-dashboard-full', 'mobile-dashboard-viewport', 'desktop-leaderboard-all-time', 'desktop-leaderboard-monthly', 'mobile-leaderboard-all-time', 'mobile-leaderboard-monthly', 'mobile-leaderboard-viewport'].includes(name)) {
     const preview = await page.screenshot({ type: 'jpeg', quality: 72, fullPage, animations: 'disabled' });
     await writeFile(join(resultsRoot, `${name}.jpg`), preview);
     const encoded = preview.toString('base64');
@@ -494,9 +497,11 @@ try {
       await noOverflow(page, `${label} rewards filtered`);
     });
     await verifySaasViewport({ page, origin, label, check, screenshot, noOverflow, accessibility });
+    await verifyInvoiceViewport({ page, origin, label, check, screenshot, noOverflow, accessibility });
     await context.close();
   }
   await verifySaasStates({ contextFor, origin, check, delay });
+  await verifyInvoiceStates({ contextFor, origin, check, delay });
   directoryMode = 'empty';
 
   const details = await contextFor({ width: 390, height: 844 });
@@ -770,6 +775,7 @@ try {
       const url = new URL(request.path, 'http://127.0.0.1');
       return request.method === 'GET' && (['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(request.path)
         || (isSaasFixturePath(url.pathname) && (url.pathname.endsWith('/subscriptions') ? [...url.searchParams.keys()].every((key) => key === 'status') : !url.search))
+        || (isInvoiceFixturePath(url.pathname) && (url.pathname.endsWith('/invoices') ? [...url.searchParams.keys()].every((key) => key === 'status') : !url.search))
         || [1, 2].some((id) => request.path === `/v1/hq/champions/schools/${fixtureId(id)}/statistics`)
         || request.path === '/v1/hq/champions/rewards/program'
         || (url.pathname === '/v1/hq/champions/rewards/ledger' && [...url.searchParams.keys()].every((key) => key === 'status'))

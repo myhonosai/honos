@@ -1,5 +1,14 @@
 # HON Delivery Backlog
 
+## Codex HQ — invoice detail and payment history (2026-10-19)
+
+- [x] Synchronize owner-approved #22 with merged B4, preserving backend blobs/modes; merge as `890daf2a39116894d987457edc75ced0d17279ac` after CI 39184141728 (613 web / 412 API / 188 domain / 91 auth, check/build, 156 migrations, 14 database proofs / 234 forced-RLS tables) and browser 39184141725 (81 checks / 51 captures / 32 axe scans, zero failures/JS errors/reported violations). No deployment or activation.
+- [x] In [PR #25](https://github.com/myhonosai/honos/pull/25) on `codex/hq-invoice-payment-history`, deliver real fixed-GET invoice status/list review and explicitly loaded detail/payment evidence, authoritative amounts/adjustments/settlement, organization subscription-status history and read-only B4 eligibility/refund-request records. No commands, independent invoice calculations, invented school identities or financial claims.
+- [x] Coordinate backend dependency [#24](https://github.com/myhonosai/honos/issues/24): verified school-to-billing-organization identity and complete paginated invoice/refund history. Current directory omits organization IDs; never match names or reuse staff/Champions authority. Global newest-200 invoice/refund windows are not full school histories. Existing reward-history #21 stays unchanged.
+- [x] Preserve backend/contracts/migrations/permissions/CRM/Classic/artwork; reuse approved HQ shell/HON/executives/appearance/mobile behavior. Shared route manifest receives only two appended HQ entries, coordinated on #3. Language & Region stays future documentation only.
+- [x] Verify capture source `8018997`: CI 39185861362 passed both jobs (625 web / 412 API / 188 domain / 91 auth, typecheck/build, 156 migrations, 14 disposable proofs / 234 forced-RLS tables); browser 39185861384 passed 95 checks / 60 captures / 40 axe scans, zero failures/JS errors/reported violations. Actual [desktop/mobile gallery](docs/visuals/codex/hq-invoice-history/README.md) inspected; manifest convention, unnumbered void states and mobile amount/expandable IDs refined. Final evidence-head checks tracked in #25 / #4. Manual device/screen-reader/contrast review remains. No #25 merge, financial activation, provider calls, production mutations or deployment without owner approval.
+- [ ] Complete school-to-organization selection and paginated invoice/refund history await Claude's verified #24 contract; global bounded windows are not complete school history. No speculative endpoints, name matching or staff/Champions permission bridge.
+
 ## Codex HQ — read-only subscription account review (2026-10-19)
 
 - [x] Merge owner-approved PR #20 after exact-head green CI/browser, clean-current-main and source/security boundary checks: `40a896806dce778dd301ab68abd348bb3c586f74`. Issue #21 remains open and unchanged. No deployment or financial/provider activation.
