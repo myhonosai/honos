@@ -36,11 +36,11 @@ const api=createServer(async(req,res)=>{
   if(req.method==='GET'&&url.pathname===planPath){
     if(['401','403','503'].includes(readMode)){send(res,Number(readMode),{private:'never-echo-private'});return;}
     const plan=schoolPlanFixture(fixture);
-    if(readMode==='scope')plan.schoolId=checkoutId(999);if(readMode==='malformed')plan.privateEmail='never-echo-private';if(readMode==='disabled-open')plan.payments={status:'DISABLED',mode:null};
+    if(readMode==='tier-mismatch'){plan.entitlementTier='COMPLETE';plan.offers=[];}if(readMode==='scope')plan.schoolId=checkoutId(999);if(readMode==='malformed')plan.privateEmail='never-echo-private';if(readMode==='disabled-open')plan.payments={status:'DISABLED',mode:null};
     send(res,200,{data:plan});return;
   }
   if(req.method==='GET'&&url.pathname===creditPath){
-    if(creditMode==='denied'){send(res,403,{});return;}const c=schoolCreditsFixture(schoolPlanFixture(fixture));if(creditMode==='scope'&&c.currentAllowance)c.currentAllowance.subscriptionId=checkoutId(999);send(res,200,{data:c},creditDelay);return;
+    if(creditMode==='denied'){send(res,403,{});return;}const c=schoolCreditsFixture(schoolPlanFixture(fixture),['inactive','absent','expired','empty'].includes(creditMode)?creditMode:'ready');if(creditMode==='plan-drift'){c.planCode='COMPLETE';c.currentAllowance=null;}if(creditMode==='scope'&&c.currentAllowance)c.currentAllowance.subscriptionId=checkoutId(999);send(res,200,{data:c},creditDelay);return;
   }
   if(req.method==='POST'&&url.pathname===`${planPath}/checkout`){
     report.commandCount++;
@@ -109,6 +109,36 @@ try{
   for(const subject of ['family-synthetic','hq-synthetic','support-synthetic','foreign-school-synthetic'])await scenario(`${subject}: no authorized billing facts or checkout`,{},async ctx=>{const p=await open(ctx);await p.getByRole('main').getByRole('alert').waitFor();assert.equal(commands.length,0);assert.equal(await p.getByRole('heading',{name:'Your HON subscription',exact:true}).count(),0);},subject);
   for(const result of ['success','cancelled'])await scenario(`Forged ${result} return is not payment/cancel confirmation`,{state:'open'},async ctx=>{const p=await open(ctx,`/schools/${checkoutId(999)}/hon-plan?result=${result}&checkout=forged`);await p.getByText('Checkout open — payment pending',{exact:true}).waitFor();assert.equal(await p.getByRole('heading',{name:'Pending Account Activation'}).count(),0);assert.equal(commands.length,0);});
   for(const [label,subject,token]of [['unsigned',null,undefined],['tampered','school-owner-synthetic','invalid'],['expired','school-owner-synthetic',issueSession({externalSubject:'school-owner-synthetic'},session,1)]])await check(`${label}: both subscription and provider-return routes preserve the real session gate`,async()=>{const ctx=await context(undefined,subject,token);try{for(const path of ['/staff/subscription',`/schools/${schoolContext.schoolId}/hon-plan`]){const p=await ctx.newPage();await p.goto(origin+path);await p.waitForURL(`${origin}/auth/login`);await p.close();}}finally{await ctx.close();}});
+  for (const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]) {
+    await check(`${size}: paid suspended record stays suspended; refresh never implies reactivation`,async()=>{
+      reset({state:'paid',service:'SUSPENDED'}); const ctx=await context(viewport);
+      try { const p=await open(ctx,`/schools/${checkoutId(999)}/hon-plan?result=success&reactivate=true`); await ready(p);
+        const access=p.getByRole('status',{name:'Account activation'}),credit=p.getByRole('status',{name:'AI allowance readiness'});
+        await access.getByRole('heading',{name:'Subscription suspended',exact:true}).waitFor();
+        await credit.getByText('Subscription suspended',{exact:true}).waitFor(); await p.getByText('4,000',{exact:true}).waitFor();
+        assert.equal(await p.getByRole('heading',{name:'Pending Account Activation'}).count(),0);
+        assert(await access.getByText(/Effective feature access: unavailable/).isVisible());
+        await scan(p,`${size}-suspended`); await overflow(p); await capture(p,`${size}-suspended`,false);
+        await p.getByText('Account readiness and next steps',{exact:true}).click();
+        assert(await p.getByText(/payment does not activate features or clear a suspension/).isVisible());
+        assert.equal(await p.getByRole('button',{name:/reactivate|activate|invoice|switch school/i}).count(),0);
+        fixture.service='IN_SERVICE'; await p.getByRole('button',{name:'Refresh payment status'}).click();
+        await access.getByRole('heading',{name:'Pending Account Activation'}).waitFor();
+        await credit.getByText('Allowance recorded',{exact:true}).waitFor();
+        assert.equal(await access.getByRole('heading',{name:'Subscription suspended'}).count(),0);
+        assert.equal(commands.length,0); await overflow(p);
+      } finally {await ctx.close();}
+    });
+  }
+  for (const [mode,label] of [['inactive','Premium credit program inactive'],['absent','Allowance not issued'],['expired','Allowance expired'],['empty','No remaining ledger credits']]) {
+    await scenario(`${mode}: exact allowance record without a spending or activation promise`,{state:'paid'},async ctx=>{
+      creditMode=mode; const p=await open(ctx);await ready(p);
+      await p.getByRole('status',{name:'AI allowance readiness'}).getByText(label,{exact:true}).waitFor();
+      assert(await p.getByRole('heading',{name:'Pending Account Activation'}).isVisible());assert.equal(commands.length,0); await overflow(p);
+    });
+  }
+  await scenario('Cross-plan credit response without allowance is rejected',{state:'paid'},async ctx=>{creditMode='plan-drift';const p=await open(ctx);await ready(p);await p.getByRole('status',{name:'AI allowance readiness'}).getByText('AI allowance status unavailable',{exact:true}).waitFor();assert.equal(await p.getByText('4,000',{exact:true}).count(),0);assert.equal(commands.length,0);});
+  await scenario('Reported tier and purchased plan stay distinct on mismatch',{state:'paid'},async ctx=>{readMode='tier-mismatch';const p=await open(ctx);await ready(p);await p.getByText(/reported tier and subscription plan differ/).waitFor();assert.equal(await p.getByRole('button',{name:'Review selection'}).isEnabled(),false);assert.equal(commands.length,0);});
   await check('No unexpected API path, direct HQ/database/provider request or JavaScript error',async()=>{assert.deepEqual(report.unexpectedRequests,[]);assert.deepEqual(report.pageErrors,[]);assert(!report.apiRequests.some(r=>/hq|webhook|entitlement|refund/.test(r.path)));});
 }catch(e){report.failures.push({name:'harness',message:String(e.message).slice(0,1600)});}
 finally{if(browser)await browser.close();app.kill('SIGTERM');await Promise.race([new Promise(done=>app.once('exit',done)),delay(2000)]);if(app.exitCode===null)app.kill('SIGKILL');await new Promise(done=>api.close(done));report.externalHostsBlocked=[...new Set(report.externalHostsBlocked)];await writeFile(join(results,'report.json'),JSON.stringify(report,null,2));console.log(`SCHOOL_BROWSER_REPORT ${JSON.stringify(report)}`);}

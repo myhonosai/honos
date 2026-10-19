@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { hostedCheckoutUrl } from './http';
+import { SchoolAccessStatus, SchoolCreditStatus, SchoolReadinessNextSteps } from './readiness';
 import { displayUsd, OFFER_CHOICES } from './catalog';
 import type { useSchoolCheckout } from './use-checkout';
 import styles from './subscription.module.css';
@@ -24,8 +25,7 @@ export function SchoolAccountStatus({ billing }: { billing: ReturnType<typeof us
     {!billing.loading && !account && <p>Account facts were cleared. No subscription, payment, access or balance is assumed.</p>}
     {account && <>
       <p><span className={styles.unavailable}>{account.plan.payments.status === 'TEST_MODE' ? 'TEST MODE • No live payments' : 'Checkout disabled'}</span></p>
-      <p className={styles.small}>Currently authorized tier: <strong>{account.plan.entitlementTier ?? 'Unavailable'}</strong> · Provisioned separately from payment.</p>
-      {verified && <div className={styles.activation} role="status"><strong>{simulated ? 'Simulator-verified test payment' : 'Provider-verified test payment'}</strong><h3>Pending Account Activation</h3><p>Payment verification does not activate or change your school’s features. Purchase-based account activation is awaiting confirmation. Your existing authorized tier remains separate.</p></div>}
+      <SchoolAccessStatus account={account}/>
       {status && <div className={styles.checkoutStatus} role="status"><strong>{labels[status]}</strong><p>{checkout!.statusReason.replaceAll('_', ' ')} · Test mode{simulated ? ' · Deterministic simulator, not Stripe sandbox' : ' · Stripe provider'}</p>
         {status === 'OPEN' && <>
           <p>Returning here or opening a hosted session does not confirm payment. Refresh after checkout.</p>
@@ -45,8 +45,10 @@ export function SchoolAccountStatus({ billing }: { billing: ReturnType<typeof us
         <div><dt>Paid through</dt><dd>{sub.paidThroughAt ? billingDate(sub.paidThroughAt) : sub.billingInterval === 'LIFETIME' && verified ? 'Verified one-time test payment; no monthly paid-through date' : 'Unavailable'}</dd></div>
       </dl> : <p>No current subscription was returned by the authorized billing service.</p>}
       <section className={styles.creditPanel} aria-labelledby="credit-title"><h3 id="credit-title">Monthly AI allowance</h3>
+        <SchoolCreditStatus account={account} credits={credits} error={creditError}/>
         {balance ? <><p>{balance.status} · {credits!.programStatus} credit program · {billingDate(balance.periodStart)} → {billingDate(balance.periodEnd)}</p><dl className={styles.facts}><div><dt>Allowance</dt><dd>{balance.balance.allowanceCredits.toLocaleString('en-US')}</dd></div><div><dt>Consumed</dt><dd>{balance.balance.consumedCredits.toLocaleString('en-US')}</dd></div><div><dt>Reserved</dt><dd>{balance.balance.heldCredits.toLocaleString('en-US')}</dd></div><div><dt>Remaining per ledger</dt><dd>{balance.balance.availableCredits.toLocaleString('en-US')}</dd></div></dl><p className={styles.small}>Credit records do not prove account activation. Top-ups remain unavailable.</p></> : <p>{creditError ?? (credits ? `No current allowance returned · ${credits.programStatus} program. Planned plan credits are not a granted balance.` : 'Checking independently authorized allowance…')}</p>}
       </section>
+      <SchoolReadinessNextSteps account={account}/>
       <details className={styles.invoice}><summary>Invoice access and school identity</summary>{checkout?.invoiceId && <p>Recorded HON invoice reference: <code>{checkout.invoiceId}</code></p>}<p>School invoice details and download are unavailable here. A recorded invoice ID is not a receipt or a proof of payment. School-to-family billing is separate.</p><p>Verified school reference: <code>{account.context.schoolId}</code></p></details>
       {checkedAt && <p className={styles.small}>Last checked in this browser: {billingDate(checkedAt)}</p>}
     </>}

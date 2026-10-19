@@ -62,7 +62,8 @@ export async function loadSchoolAllowance(account: SchoolAccount, signal?: Abort
   const credits = canonical(validateSaasSchoolCredits, await read(`/api/v1/schools/${account.context.schoolId}/ai-credits`, signal));
   const a = credits.currentAllowance;
   if (credits.schoolId !== account.context.schoolId || (a && (!account.plan.subscription || a.subscriptionId !== account.plan.subscription.subscriptionId || a.planCode !== account.plan.subscription.planCode))) invalid();
-  if (credits.subscriptionStatus !== (account.plan.subscription?.status === 'VOIDED' ? null : account.plan.subscription?.status ?? null)) invalid();
+  const subscription = account.plan.subscription?.status === 'VOIDED' ? null : account.plan.subscription;
+  if (credits.subscriptionStatus !== (subscription?.status ?? null) || credits.planCode !== (subscription?.planCode ?? null)) invalid();
   return credits;
 }
 export function offerFingerprint(account: SchoolAccount, offer: SaasPlanOffer): string {
