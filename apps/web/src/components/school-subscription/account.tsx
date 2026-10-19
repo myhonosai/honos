@@ -13,7 +13,7 @@ export function SchoolAccountStatus({ billing }: { billing: ReturnType<typeof us
   const sub = account?.plan.subscription, checkout = account?.plan.checkout;
   const verified = sub?.paymentStatus === 'PAID' && account?.plan.paymentVerification === 'PROVIDER_VERIFIED';
   const simulated = checkout?.provider === 'STRIPE_SIMULATED';
-  const hosted = checkout ? hostedCheckoutUrl(checkout) : null;
+  const hosted = checkout && account?.plan.payments.status === 'TEST_MODE' && account.plan.payments.mode === 'TEST' ? hostedCheckoutUrl(checkout) : null;
   const status = checkout?.status;
   const labels = { CREATED: 'Checkout pending provider connection', OPEN: 'Checkout open — payment pending', COMPLETED: 'Checkout completed', EXPIRED: 'Checkout expired', CANCELLED: 'Checkout canceled', FAILED: 'Checkout failed', PAID_NEEDS_REVIEW: 'Payment requires HON review' };
   const balance = credits?.currentAllowance;
@@ -28,7 +28,7 @@ export function SchoolAccountStatus({ billing }: { billing: ReturnType<typeof us
       {status && <div className={styles.checkoutStatus} role="status"><strong>{labels[status]}</strong><p>{checkout!.statusReason.replaceAll('_', ' ')} · Test mode{simulated ? ' · Deterministic simulator, not Stripe sandbox' : ' · Stripe provider'}</p>
         {status === 'OPEN' && <>
           <p>Returning here or opening a hosted session does not confirm payment. Refresh after checkout.</p>
-          {hosted ? <a className={styles.primary} href={hosted} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">Continue on Stripe test checkout ↗</a> : <p>Simulator session recorded. No real Stripe checkout is connected for this session.</p>}
+          {hosted ? <a className={styles.primary} href={hosted} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">Continue on Stripe test checkout ↗</a> : <p>{simulated ? 'Simulator session recorded. No real Stripe checkout is connected for this session.' : 'Test checkout is unavailable while payments are disabled. Refresh to verify the current payment program.'}</p>}
           <p className={styles.small}>Recorded expiry: {billingDate(checkout!.expiresAt)}. Only HON’s backend can confirm an expired or paid result.</p>
         </>}
         {status === 'CREATED' && <p>The provider session is not confirmed. Refresh and use an explicit same-request retry if available. If this page was reloaded and the retry key is unavailable, contact HON support.</p>}
