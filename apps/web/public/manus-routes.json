@@ -310,6 +310,8 @@
     {"path": "/hq/growth/champions-club/schools", "title": "HON HQ | School referrals"},
     {"path": "/hq/revenue/invoices", "title": "HON HQ | Invoices"},
     {"path": "/hq/revenue/invoices/:invoiceId", "title": "HON HQ | Invoice detail"},
-    {"path": "/staff/subscription", "title": "HON OS | School subscription"}
+    {"path": "/staff/subscription", "title": "HON OS | School subscription"},
+    {"path": "/staff/billing/crm-guardian-child-payer-designations", "title": "HON | Guardian-child source-guardian payer designation"},
+    {"path": "/staff/billing/crm-guardian-child-membership-drafts", "title": "HON | Source-bound guardian-child membership DRAFT"}
   ]
 }

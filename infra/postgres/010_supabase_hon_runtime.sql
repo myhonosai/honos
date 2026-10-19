@@ -1457,3 +1457,29 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 -- End HON payment provider integration exact reconciliation.
+
+-- Guardian-child CRM exact reconciliation: private sources and helpers, public entries only.
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['crm_guardian_child_registration_source_facts','crm_guardian_child_payer_designations','crm_guardian_child_membership_draft_sources'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC CASCADE',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I CASCADE',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC CASCADE',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I CASCADE',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_crm_guardian_child_registration_source_facts()','hon.capture_crm_guardian_child_registration_source_facts()','hon.guard_crm_guardian_child_payer_designation()','hon.require_crm_guardian_child_membership_actor(text)','hon.crm_guardian_child_membership_relation(uuid)','hon.crm_guardian_child_designated_relation(uuid)','hon.read_crm_guardian_child_payer_designation_preparation(text,uuid)','hon.designate_crm_guardian_child_payer(text,jsonb,uuid,uuid,uuid)','hon.guard_crm_guardian_child_membership_draft_source()','hon.guard_crm_guardian_child_membership_insert()','hon.read_crm_guardian_child_membership_preparation(text,uuid)','hon.draft_crm_guardian_child_membership(text,jsonb,uuid,uuid,uuid)','hon.read_crm_guardian_child_membership_draft_confirmation(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC CASCADE',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I CASCADE',f,r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_crm_guardian_child_payer_designation_preparation(text,uuid),hon.designate_crm_guardian_child_payer(text,jsonb,uuid,uuid,uuid),hon.read_crm_guardian_child_membership_preparation(text,uuid),hon.draft_crm_guardian_child_membership(text,jsonb,uuid,uuid,uuid),hon.read_crm_guardian_child_membership_draft_confirmation(text,uuid) TO hon_runtime;
+END $$;
+-- End guardian-child CRM exact reconciliation.

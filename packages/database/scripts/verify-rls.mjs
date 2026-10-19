@@ -31,6 +31,7 @@ import { communityTables, verifyCommunitySecurity } from './community-security.m
 import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
 import { saasBillingTables, verifySaasBillingSecurity } from './saas-billing-security.mjs';
 import { readFile } from 'node:fs/promises';
+import { verifyCrmGuardianChildMembershipDraftSecurity } from './crm-guardian-child-membership-draft-security.mjs';
 
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for RLS verification.');
@@ -112,6 +113,9 @@ const expectedRlsTables = [
   'crm_appointments',
   'crm_lead_registration_conversions',
   'crm_adult_membership_draft_sources',
+  'crm_guardian_child_payer_designations',
+  'crm_guardian_child_membership_draft_sources',
+  'crm_guardian_child_registration_source_facts',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',
@@ -227,6 +231,7 @@ const client = new Client({
 await client.connect();
 try {
   await verifyOwnerLaunchSecurity(client,runtimeRoleName);
+  await verifyCrmGuardianChildMembershipDraftSecurity(client,runtimeRoleName);
   await verifyCurrentStaffReportingScopeSecurity(client, runtimeRoleName);
   await verifyParentPlannedAbsenceRequestSecurity(client, runtimeRoleName);
   await verifyPlannedAbsenceReviewSecurity(client, runtimeRoleName);

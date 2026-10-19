@@ -1,6 +1,9 @@
 import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
 import { CrmAdultMembershipDraftService } from './billing/crm-adult-membership-draft.service.js';
 import { CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
+import { CrmGuardianChildMembershipDraftController, CrmGuardianChildPayerDesignationController } from './billing/crm-guardian-child-membership-draft.controller.js';
+import { CrmGuardianChildMembershipDraftService } from './billing/crm-guardian-child-membership-draft.service.js';
+import { CrmGuardianChildMembershipConfirmationHumanUiGuard, CrmGuardianChildMembershipHumanUiGuard, CrmGuardianChildMembershipNoStoreGuard, CrmGuardianChildMembershipPreparationHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildPayerDesignationPreparationHumanUiGuard } from './billing/crm-guardian-child-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
 import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
@@ -319,6 +322,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InterfaceThemeController,
     MembershipController,
     CrmAdultMembershipDraftController,
+    CrmGuardianChildPayerDesignationController,
+    CrmGuardianChildMembershipDraftController,
     BillingAccountController,
     InvoiceController,
     HqController,
@@ -434,6 +439,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InterfaceThemeService,
     MembershipService,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
+    CrmGuardianChildMembershipDraftService, CrmGuardianChildMembershipHumanUiGuard, CrmGuardianChildMembershipPreparationHumanUiGuard, CrmGuardianChildMembershipConfirmationHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildPayerDesignationPreparationHumanUiGuard, CrmGuardianChildMembershipNoStoreGuard,
     MembershipActivationHumanUiGuard,
     BillingAccountService,
     BillingAccountHumanUiGuard,

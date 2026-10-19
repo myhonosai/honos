@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { CrmLeadRegistrationWorkbench, registrationAdultMembershipDraftHref, registrationBillingAccountHref, registrationCurriculumEnrollmentHref } from '../src/components/crm-lead-registration-workbench';
+import { CrmLeadRegistrationWorkbench, registrationAdultMembershipDraftHref, registrationBillingAccountHref, registrationCurriculumEnrollmentHref, registrationGuardianChildPayerDesignationHref } from '../src/components/crm-lead-registration-workbench';
 
 const leadId = '33333333-3333-4333-8333-333333333333';
 
@@ -71,6 +71,21 @@ describe('direct-human CRM lead registration route', () => {
     expect(source).toContain('Prepare separate human billing account review');
     expect(billingHelper).toContain("new URLSearchParams({sourceContactPersonId:normalized})");
     expect(billingHelper).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|studentProfileId|familyId|registrationPath|recordedAt|organizationId|schoolId|responsiblePersonId|currency|createAdditional|additionalReason)/);
+  });
+
+  it('offers only a verified REGISTERED GUARDIAN_CHILD receipt with a family one inert child selector for payer designation', () => {
+    const guardianChild = { outcome: 'REGISTERED' as const, leadId, sourceContactPersonId: '44444444-4444-4444-8444-444444444444', registrationPath: 'GUARDIAN_CHILD' as const, studentProfileId: leadId, familyId: '55555555-5555-4555-8555-555555555555', recordedAt: '2026-10-18T20:00:00.000Z' };
+    const href = registrationGuardianChildPayerDesignationHref(guardianChild);
+    expect(href).toBe(`/staff/billing/crm-guardian-child-payer-designations?studentProfileId=${leadId}`);
+    const query = new URL(`https://hon.test${href}`).searchParams;
+    expect([...query.keys()]).toEqual(['studentProfileId']); expect(query.get('studentProfileId')).toBe(leadId);
+    expect(registrationGuardianChildPayerDesignationHref({ ...guardianChild, registrationPath: 'ADULT', familyId: null })).toBeUndefined();
+    expect(registrationGuardianChildPayerDesignationHref({ ...guardianChild, familyId: null })).toBeUndefined();
+    expect(registrationGuardianChildPayerDesignationHref({ outcome: 'NEEDS_STAFF_REVIEW' })).toBeUndefined();
+    const source = readFileSync('src/components/crm-lead-registration-workbench.tsx', 'utf8');
+    const helper = source.slice(source.indexOf('export function registrationGuardianChildPayerDesignationHref'), source.indexOf('export function CrmLeadRegistrationWorkbench'));
+    expect(source).toContain('Prepare separate source-guardian payer designation'); expect(helper).toContain("result.registrationPath!=='GUARDIAN_CHILD'"); expect(helper).toContain('result.familyId===null'); expect(helper).toContain('new URLSearchParams({studentProfileId:normalized})');
+    expect(helper).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|sourceContactPersonId|familyId|registrationPath|recordedAt|organizationId|schoolId|guardian|scope|authority|account|currency|plan|receipt)/);
   });
 
   it('offers only a verified REGISTERED ADULT receipt one inert student selector for the separate membership DRAFT route', () => {

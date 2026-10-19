@@ -37,6 +37,7 @@ rm -f "$job_dir"/*.env
 # mode-0600 environment file and stop its process even when its proof fails.
 preparation_dir=''
 adult_draft_dir=''
+guardian_child_draft_dir=''
 cleanup() {
   rm -f "$job_dir"/*.env "$job_dir"/*/*.env
   if [[ -n "$preparation_dir" && -d "$preparation_dir/pgdata" ]]; then
@@ -44,6 +45,9 @@ cleanup() {
   fi
   if [[ -n "$adult_draft_dir" && -d "$adult_draft_dir/pgdata" ]]; then
     /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$guardian_child_draft_dir" && -d "$guardian_child_draft_dir/pgdata" ]]; then
+    /usr/lib/postgresql/16/bin/pg_ctl -D "$guardian_child_draft_dir/pgdata" -m fast -w stop >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -132,7 +136,25 @@ summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-m
 /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
 rm -f "$adult_draft_dir/$adult_draft_fixture.env"
 
-echo "All $passed disposable-database proofs passed (5 fixtures, all migrations applied)."
+guardian_child_draft_fixture='crm-guardian-child-membership-draft'
+guardian_child_draft_dir="$(mktemp -d "$job_dir/$guardian_child_draft_fixture.XXXXXX")"
+chmod 700 "$guardian_child_draft_dir"
+echo "::group::Provision disposable fixture: $guardian_child_draft_fixture"
+"${clean_env[@]}" \
+  HON_CRM_GUARDIAN_CHILD_MEMBERSHIP_DRAFT_VALIDATION_TARGET=postgresql://127.0.0.1:55436/hon_crm_guardian_child_membership_draft_validation \
+  HON_CRM_GUARDIAN_CHILD_MEMBERSHIP_DRAFT_ENV_FILE="$guardian_child_draft_dir/$guardian_child_draft_fixture.env" \
+  HON_CRM_GUARDIAN_CHILD_MEMBERSHIP_DRAFT_PGDATA="$guardian_child_draft_dir/pgdata" \
+  node "$scripts/setup-crm-guardian-child-membership-draft-validation.mjs"
+echo "::endgroup::"
+echo "::group::Guardian-child CRM payer designation and source-bound membership DRAFT"
+"${clean_env[@]}" bash -c 'set -a; . "$1"; set +a; cd "$2" && node scripts/test-crm-guardian-child-membership-draft-integrity.mjs' _ "$guardian_child_draft_dir/$guardian_child_draft_fixture.env" "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Guardian-child CRM payer designation and source-bound membership DRAFT | \`test-crm-guardian-child-membership-draft-integrity.mjs\` | pass |")
+/usr/lib/postgresql/16/bin/pg_ctl -D "$guardian_child_draft_dir/pgdata" -m fast -w stop >/dev/null
+rm -f "$guardian_child_draft_dir/$guardian_child_draft_fixture.env"
+
+echo "All $passed disposable-database proofs passed (6 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

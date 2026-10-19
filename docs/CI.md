@@ -34,6 +34,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `champions-club` | `test-saas-credits-integrity.mjs` | HON premium credits (B3): owner-gated activation, verified-cost-linked pricing, one allowance per period, idempotent reserve, finalize/release/unknown/resolve, exact balance under 8-way contention, thresholds and hard stop, plan capabilities, suspension, expiry without rollover |
 | `curriculum-enrollment-preparation` | `test-curriculum-enrollment-preparation-integrity.mjs` | Direct-human current-school enrollment preparation: deterministic fixed-function projection, forced RLS, no new source-table grant, no writes and denial matrix |
 | `crm-adult-membership-draft` | `test-crm-adult-membership-draft-integrity.mjs` | Adult registered CRM conversion: canonical payer relation proof, one DRAFT, replay/race/authority/no-effect coverage |
+| `crm-guardian-child-membership-draft` | `test-crm-guardian-child-membership-draft-integrity.mjs` | Fresh guardian-child conversion-fact capture, direct-human source-guardian payer designation, canonical guardian-account reuse, source-bound child DRAFT/current confirmation, generic-insert refusal, drift/replay/race/ACL/RLS/no-effect coverage |
 
 ## Safety controls
 
