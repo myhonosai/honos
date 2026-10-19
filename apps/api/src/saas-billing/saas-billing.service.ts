@@ -12,6 +12,12 @@ import {
   validateSaasCreditProgramView, validateSaasCreditReservationReceipt, validateSaasCreditReserveInput, validateSaasCreditResolveInput,
   validateSaasCreditResolveReceipt, validateSaasCreditSettleInput, validateSaasOrganizationCredits, validateSaasPricingDraftInput,
   validateSaasPricingPublishReceipt, validateSaasPricingReceipt, validateSaasSchoolCredits,
+  validateSaasAccountCreditApplyInput, validateSaasAccountCreditApplyReceipt, validateSaasAlertStatusFilter, validateSaasCreditApplicationPreview,
+  validateSaasReferralAlertList, validateSaasReferralAlertReceipt, validateSaasReferralAlertResolveInput, validateSaasRefundDecisionInput,
+  validateSaasRefundDecisionReceipt, validateSaasRefundEligibility, validateSaasRefundEligibilityQuery, validateSaasRefundRequestInput,
+  validateSaasRefundRequestList, validateSaasRefundRequestReceipt, validateSaasRefundReserve, validateSaasRefundStatusFilter,
+  validateSaasRewardApplyInput, validateSaasRewardApplyReceipt, validateSaasRewardFulfillmentInput, validateSaasRewardFulfillmentReceipt,
+  validateSaasRewardPreview,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
 
@@ -26,7 +32,12 @@ const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED',
   'SAAS_EVIDENCE_BEFORE_PAYMENT',
   'SAAS_PRICING_NOT_PUBLISHED','SAAS_PROVIDER_UNKNOWN','SAAS_COST_BELOW_BILLED','SAAS_COST_PERIOD_INVALID','SAAS_PRICING_COST_EVIDENCE_MISMATCH',
   'SAAS_PRICING_UNDECIDED','SAAS_ALLOWANCE_PERIOD_UNAVAILABLE','SAAS_SUBSCRIPTION_NOT_ACTIVE','SAAS_CREDITS_NOT_ACTIVE','SAAS_NO_PREMIUM_ALLOWANCE',
-  'SAAS_OPERATION_NOT_PRICED','SAAS_OPERATION_NOT_IN_PLAN','SAAS_OPERATION_UNITS_EXCEEDED','SAAS_CREDITS_EXHAUSTED','SAAS_FINAL_EXCEEDS_RESERVATION']);
+  'SAAS_OPERATION_NOT_PRICED','SAAS_OPERATION_NOT_IN_PLAN','SAAS_OPERATION_UNITS_EXCEEDED','SAAS_CREDITS_EXHAUSTED','SAAS_FINAL_EXCEEDS_RESERVATION',
+  'SAAS_REFUND_NO_PAID_PURCHASE','SAAS_REFUND_ALREADY_GRANTED','SAAS_REFUND_REQUEST_OPEN','SAAS_REFUND_BEFORE_PAYMENT','SAAS_REFUND_WINDOW_EXPIRED',
+  'SAAS_REFUND_NOTHING_TO_REFUND','SAAS_REFUND_EVIDENCE_INCOMPLETE','SAAS_PERIOD_FREE','SAAS_REWARD_ALREADY_APPLIED','SAAS_REWARD_VOIDED',
+  'SAAS_REWARD_UNDER_REVIEW','SAAS_REWARD_NOT_APPROVED','SAAS_REWARD_PRIZE_MANUAL','SAAS_REWARD_SUBSTITUTE_MANUAL','SAAS_REWARD_PAYMENT_ALERT_OPEN',
+  'SAAS_REWARD_NO_SUBSCRIPTION','SAAS_REWARD_NOT_APPLICABLE','SAAS_REWARD_NOTHING_TO_APPLY','SAAS_REWARDS_NOT_ACTIVE','SAAS_REWARD_PERIOD_IN_PAST',
+  'SAAS_REWARD_PERIOD_TAKEN','SAAS_NO_ACCOUNT_CREDIT','SAAS_ALERT_ATTRIBUTION_UNDECIDED']);
 const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
@@ -156,6 +167,56 @@ export class SaasBillingService {
   async settlePremiumCredits(subject: string, reservationId: unknown, body: unknown, key: unknown) {
     const [reservation, input, idempotencyKey] = parse(() => [saasUuid(reservationId), validateSaasCreditSettleInput(body), saasUuid(key)] as const);
     return this.run('settlePremiumCredits', [subject, reservation, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreditReservationReceipt);
+  }
+
+  // ---------- B4: refund guarantee records and Champions reward application ----------
+  async readRefundEligibility(subject: string, organizationId: unknown, query: unknown) {
+    const [organization, { receivedAt }] = parse(() => [saasUuid(organizationId), validateSaasRefundEligibilityQuery(query)] as const);
+    return this.run('readRefundEligibility', [subject, organization, receivedAt ?? new Date().toISOString()], validateSaasRefundEligibility);
+  }
+  async readRefundRequests(subject: string, status: unknown) {
+    const filter = parse(() => validateSaasRefundStatusFilter(status));
+    return this.run('readRefundRequests', [subject, filter], validateSaasRefundRequestList);
+  }
+  async readRefundReserve(subject: string) {
+    return this.run('readRefundReserve', [subject], validateSaasRefundReserve);
+  }
+  /** Records a customer's refund request (intake). Never executes or schedules a refund. */
+  async createRefundRequest(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasRefundRequestInput(body), saasUuid(key)] as const);
+    return this.run('createRefundRequest', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasRefundRequestReceipt);
+  }
+  async decideRefundRequest(subject: string, refundRequestId: unknown, body: unknown, key: unknown) {
+    const [refund, input, idempotencyKey] = parse(() => [saasUuid(refundRequestId), validateSaasRefundDecisionInput(body), saasUuid(key)] as const);
+    return this.run('decideRefundRequest', [subject, refund, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasRefundDecisionReceipt);
+  }
+  async readRewardPreview(subject: string, organizationId: unknown) {
+    const organization = parse(() => saasUuid(organizationId));
+    return this.run('readRewardPreview', [subject, organization], validateSaasRewardPreview);
+  }
+  async readReferralAlerts(subject: string, status: unknown) {
+    const filter = parse(() => validateSaasAlertStatusFilter(status));
+    return this.run('readReferralAlerts', [subject, filter], validateSaasReferralAlertList);
+  }
+  async setRewardFulfillment(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasRewardFulfillmentInput(body), saasUuid(key)] as const);
+    return this.run('setRewardFulfillment', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasRewardFulfillmentReceipt);
+  }
+  async applyChampionsReward(subject: string, rewardEntryId: unknown, body: unknown, key: unknown) {
+    const [entry, input, idempotencyKey] = parse(() => [saasUuid(rewardEntryId), validateSaasRewardApplyInput(body), saasUuid(key)] as const);
+    return this.run('applyChampionsReward', [subject, entry, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasRewardApplyReceipt);
+  }
+  async readCreditApplicationPreview(subject: string, invoiceId: unknown) {
+    const invoice = parse(() => saasUuid(invoiceId));
+    return this.run('readCreditApplicationPreview', [subject, invoice], validateSaasCreditApplicationPreview);
+  }
+  async applyAccountCredit(subject: string, invoiceId: unknown, body: unknown, key: unknown) {
+    const [invoice, input, idempotencyKey] = parse(() => [saasUuid(invoiceId), validateSaasAccountCreditApplyInput(body), saasUuid(key)] as const);
+    return this.run('applyAccountCredit', [subject, invoice, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasAccountCreditApplyReceipt);
+  }
+  async resolveReferralAlert(subject: string, alertId: unknown, body: unknown, key: unknown) {
+    const [alert, input, idempotencyKey] = parse(() => [saasUuid(alertId), validateSaasReferralAlertResolveInput(body), saasUuid(key)] as const);
+    return this.run('resolveReferralAlert', [subject, alert, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasReferralAlertReceipt);
   }
 
   private async run<T>(operation: SaasBillingOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {

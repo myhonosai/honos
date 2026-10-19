@@ -120,6 +120,19 @@ const SAAS_BILLING_CALLS = {
   estimatePremiumOperation: { sql: 'SELECT hon.estimate_saas_premium_operation($1,$2::uuid,$3,$4::integer) AS data', arity: 4, readOnly: true },
   reservePremiumCredits: { sql: 'SELECT hon.reserve_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   settlePremiumCredits: { sql: 'SELECT hon.settle_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
+  readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
+  readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readRefundReserve: { sql: 'SELECT hon.read_saas_refund_reserve_from_hq($1) AS data', arity: 1, readOnly: true },
+  createRefundRequest: { sql: 'SELECT hon.create_saas_refund_request($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  decideRefundRequest: { sql: 'SELECT hon.decide_saas_refund_request($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readRewardPreview: { sql: 'SELECT hon.read_saas_reward_preview_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readReferralAlerts: { sql: 'SELECT hon.read_saas_referral_alerts_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  setRewardFulfillment: { sql: 'SELECT hon.set_saas_reward_fulfillment($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  applyChampionsReward: { sql: 'SELECT hon.apply_saas_champions_reward($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readCreditApplicationPreview: { sql: 'SELECT hon.read_saas_credit_application_preview($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  applyAccountCredit: { sql: 'SELECT hon.apply_saas_account_credit($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  resolveReferralAlert: { sql: 'SELECT hon.resolve_saas_referral_alert($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 

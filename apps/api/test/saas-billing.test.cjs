@@ -94,7 +94,7 @@ test('HTTP routes: subject-only reads, exact human commands, no payment routes',
     assert.equal((await send(`${base}/subscriptions?status=IN_SERVICE`)).status, 200); assert.deepEqual(calls.at(-1), ['readSubscriptions', ['verified-human', 'IN_SERVICE']]);
     assert.equal((await send(`${base}/subscriptions?status=PAID`)).status, 400);
     const before = calls.length;
-    for (const path of ['checkout', 'charges', 'refunds', 'credits/grants', 'subscriptions/x/activate-payment'])
+    for (const path of ['checkout', 'charges', 'refunds/execute', 'credits/grants', 'subscriptions/x/activate-payment'])
       assert.equal((await send(`${base}/${path}`, { method:'POST', headers:human('saas-subscription-command'), body:'{}' })).status, 404, path);
     assert.equal(calls.length, before);
     const id = randomUUID(), body = JSON.stringify({ action:'SUSPEND', expectedVersion:2, reasonCode:'OWNER_HOLD' });

@@ -19,7 +19,7 @@ function subject(req: HonRequest): string {
 /**
  * HON subscription catalog and records (B1), invoices and payment evidence (B2), HQ only. HQ owner or
  * operator authority is resolved in the database. There is no checkout, charge, collection, invoice
- * delivery, refund execution or credit route.
+ * delivery, refund execution, payout or prize route; B4 refund and reward routes record and preview only.
  */
 /**
  * School view of the HON premium credit allowance. Staff with ai.premium.request at the exact school;
@@ -139,6 +139,55 @@ export class SaasBillingHqController {
   @Get('organizations/:organizationId/credits') @UseGuards(SaasReadGuard)
   async organizationCredits(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
     return { data: await this.billing.readOrganizationCredits(subject(req), organizationId) };
+  }
+  // ---------- B4: refund guarantee records and Champions reward application (HQ) ----------
+  @Get('refunds') @UseGuards(SaasReadGuard) @SaasReadQuery(['status'])
+  async refunds(@Req() req: HonRequest, @Query('status') status: unknown) {
+    return { data: await this.billing.readRefundRequests(subject(req), status) };
+  }
+  @Get('refunds/reserve') @UseGuards(SaasReadGuard)
+  async refundReserve(@Req() req: HonRequest) {
+    return { data: await this.billing.readRefundReserve(subject(req)) };
+  }
+  @Post('refunds') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.createRefundRequest)
+  async refundRequest(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.createRefundRequest(subject(req), body, key) };
+  }
+  @Post('refunds/:refundRequestId/decision') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.decideRefundRequest)
+  async refundDecision(@Req() req: HonRequest, @Param('refundRequestId') refundRequestId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.decideRefundRequest(subject(req), refundRequestId, body, key) };
+  }
+  @Get('organizations/:organizationId/refund-eligibility') @UseGuards(SaasReadGuard) @SaasReadQuery(['receivedAt'])
+  async refundEligibility(@Req() req: HonRequest, @Param('organizationId') organizationId: string, @Query() query: unknown) {
+    return { data: await this.billing.readRefundEligibility(subject(req), organizationId, query) };
+  }
+  @Get('organizations/:organizationId/rewards') @UseGuards(SaasReadGuard)
+  async rewardPreview(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
+    return { data: await this.billing.readRewardPreview(subject(req), organizationId) };
+  }
+  @Post('rewards/fulfillment') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.setRewardFulfillment)
+  async rewardFulfillment(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.setRewardFulfillment(subject(req), body, key) };
+  }
+  @Post('rewards/:rewardEntryId/apply') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.applyChampionsReward)
+  async applyReward(@Req() req: HonRequest, @Param('rewardEntryId') rewardEntryId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.applyChampionsReward(subject(req), rewardEntryId, body, key) };
+  }
+  @Get('invoices/:invoiceId/account-credit') @UseGuards(SaasReadGuard)
+  async creditPreview(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string) {
+    return { data: await this.billing.readCreditApplicationPreview(subject(req), invoiceId) };
+  }
+  @Post('invoices/:invoiceId/account-credit') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.applyAccountCredit)
+  async applyCredit(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.applyAccountCredit(subject(req), invoiceId, body, key) };
+  }
+  @Get('referral-alerts') @UseGuards(SaasReadGuard) @SaasReadQuery(['status'])
+  async referralAlerts(@Req() req: HonRequest, @Query('status') status: unknown) {
+    return { data: await this.billing.readReferralAlerts(subject(req), status) };
+  }
+  @Post('referral-alerts/:alertId/resolve') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.resolveReferralAlert)
+  async resolveAlert(@Req() req: HonRequest, @Param('alertId') alertId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.billing.resolveReferralAlert(subject(req), alertId, body, key) };
   }
   @Post('invoices/:invoiceId/payment-evidence') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.recordPaymentEvidence)
   async evidence(@Req() req: HonRequest, @Param('invoiceId') invoiceId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
