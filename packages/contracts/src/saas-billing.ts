@@ -73,6 +73,8 @@ export const SAAS_COMMANDS = {
   cancelCheckout: 'saas-checkout-cancel',
   sweepCheckouts: 'saas-checkout-sweep',
   recoverPaymentEvents: 'saas-payment-recover',
+  awaitFirstPayment: 'saas-access-await',
+  retryFirstPaymentActivation: 'saas-access-retry',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

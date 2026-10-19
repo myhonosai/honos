@@ -11,11 +11,11 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_refund_requests','saas_refund_history','saas_reward_fulfillment','saas_reward_applications','saas_account_credit_ledger',
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms'];
+ 'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms'];
+ 'saas_access_program','saas_access_policy_terms','saas_access_transitions'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
@@ -151,6 +151,18 @@ export const saasBillingFunctions = [
  ['hon.read_saas_school_invoice(text,uuid,uuid)',true,true],
  ['hon.read_saas_school_billing_account(text,uuid)',true,true],
  ['hon.read_saas_access_readiness_from_hq(text,uuid)',true,true],
+ // 0172 B6A first-payment activation (inactive program)
+ ['hon.guard_saas_access()',false,false],
+ ['hon.saas_access_program_active()',false,false],
+ ['hon.saas_organization_access(uuid)',false,false],
+ ['hon.saas_capability_allowed(uuid,text)',false,false],
+ ['hon.saas_awaiting_first_payment(uuid)',false,false],
+ ['hon.saas_apply_first_payment_access(uuid,uuid,uuid,jsonb,timestamp with time zone)',false,false],
+ ['hon.saas_try_first_payment_access(uuid,uuid,uuid,jsonb,timestamp with time zone)',false,false],
+ ['hon.saas_activate_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',false,false],
+ ['hon.read_saas_organization_access_from_hq(text,uuid)',true,true],
+ ['hon.place_saas_organization_awaiting_payment(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.retry_saas_first_payment_activation(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
@@ -172,6 +184,7 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : table === 'saas_invoice_lines' ? ['guard_saas_invoice_lines','saas_invoice_lines_rows',31]
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
    : paymentTables.includes(table) ? ['guard_saas_payments','saas_guarded',27]
+   : table === 'saas_access_states' ? ['guard_saas_access','saas_guarded',27]
    : refundRewardTables.includes(table) ? ['guard_saas_refunds_rewards','saas_guarded',27]
    : creditTables.includes(table) ? ['guard_saas_credits','saas_guarded',27]
    : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];

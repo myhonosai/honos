@@ -63,6 +63,14 @@
 
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
 
+## Claude — B6A first-payment activation, INACTIVE (2026-10-19)
+
+- [x] Migration `0172`: central access authority (provisioned vs awaiting vs payment-activated), HQ-owner awaiting-first-payment placement, activation on a verified payment inside B5's transaction (server-decided tier, capabilities and full allowance), recoverable HQ review and HQ-owner retry. Program stays INACTIVE by CHECK; every command refused. [Contract](docs/architecture/HON_PAID_ACCESS_B6A.md).
+- [x] Behavioural entitlement coverage proof (ACTIVE vs SUSPENDED for every runtime-callable function) and regenerated inventory.
+- [ ] Gate the 6 scope resolvers that ignore entitlement status (achievements, staff reporting, follow-ups, human work, teaching studio, testing registration review) before activation.
+- [ ] Owner: approve D1, D2, D12; then self-serve registration (with Manus), real Stripe sandbox run, and a reviewed migration that flips the program. B6B not started.
+- [ ] Codex: HQ access view and retry (`/v1/hq/saas/organizations/:organizationId/access`, `.../access-retry`); school billing `access.state`.
+
 ## Claude — interface language persistence (2026-10-19)
 
 - [x] Migration `0171`: personal language preference (en/ko/es) bound to the verified user; school default with `settings.language.manage` at the exact school, audited; precedence personal > named school default > English; idempotent, version-checked updates. [Contract and Codex integration](docs/architecture/HON_LANGUAGE_PREFERENCES.md).

@@ -13,10 +13,10 @@ can still see its billing).
 
 | Classification | Meaning | Count |
 |---|---|---|
-| STATUS_GATED | Checks `status = 'ACTIVE'`: a SUSPENDED entitlement is refused | 136 |
-| TIER_ONLY | Reads the tier but not the status: a SUSPENDED entitlement would still pass | 3 |
-| UNGATED | No entitlement reference (directly or through helpers) | 53 |
-| HQ_SCOPE | HQ platform functions, governed by HQ grants | 66 |
+| STATUS_GATED | Checks `status = 'ACTIVE'`: a SUSPENDED entitlement is refused | 132 |
+| TIER_ONLY | Reads the tier but not the status: a SUSPENDED entitlement would still pass | 2 |
+| UNGATED | No entitlement reference (directly or through helpers) | 57 |
+| HQ_SCOPE | HQ platform functions, governed by HQ grants | 74 |
 | PROVIDER_SCOPE | Provider entry points with no human subject | 1 |
 
 | Function | Classification | Through helper |
@@ -26,8 +26,10 @@ can still see its billing).
 | `hon.attach_saas_checkout_session(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.cancel_saas_checkout(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.capture_champions_attribution(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
+| `hon.command_champions_contest(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.command_saas_invoice(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
+| `hon.command_saas_subscription(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.create_champions_policy_draft(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.create_champions_reward_policy_draft(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.create_saas_catalog_draft(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
@@ -35,12 +37,14 @@ can still see its billing).
 | `hon.create_saas_invoice_draft(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.create_saas_pricing_draft(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.create_saas_refund_request(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
+| `hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.decide_champions_reward(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.decide_saas_refund_request(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.hq_ai_control_plane_read(text)` | HQ_SCOPE |  |
 | `hon.hq_ai_control_plane_write(text,text,jsonb,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.hq_ai_routing_registry(text,uuid)` | HQ_SCOPE |  |
 | `hon.hq_ai_task_profile_registry(text,uuid)` | HQ_SCOPE |  |
+| `hon.place_saas_organization_awaiting_payment(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.provision_school_from_hq(text,text,text,text,text,text,hon.plan_tier,text,text,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.publish_champions_policy(text,uuid,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.publish_champions_reward_policy(text,uuid,uuid,uuid,uuid)` | HQ_SCOPE |  |
@@ -64,6 +68,7 @@ can still see its billing).
 | `hon.read_saas_founder_reservations_from_hq(text,text)` | HQ_SCOPE |  |
 | `hon.read_saas_invoice_from_hq(text,uuid)` | HQ_SCOPE |  |
 | `hon.read_saas_invoices_from_hq(text,text)` | HQ_SCOPE |  |
+| `hon.read_saas_organization_access_from_hq(text,uuid)` | HQ_SCOPE |  |
 | `hon.read_saas_organization_credits_from_hq(text,uuid)` | HQ_SCOPE |  |
 | `hon.read_saas_organization_subscription_from_hq(text,uuid)` | HQ_SCOPE |  |
 | `hon.read_saas_payment_standing_from_hq(text,uuid)` | HQ_SCOPE |  |
@@ -74,13 +79,16 @@ can still see its billing).
 | `hon.read_saas_refund_reserve_from_hq(text)` | HQ_SCOPE |  |
 | `hon.read_saas_reward_preview_from_hq(text,uuid)` | HQ_SCOPE |  |
 | `hon.read_saas_subscriptions_from_hq(text,text)` | HQ_SCOPE |  |
+| `hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.record_saas_payment_evidence(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.record_saas_provider_cost_evidence(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
+| `hon.record_saas_subscription(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.release_saas_founder_reservation(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.reserve_saas_founder_offer(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.resolve_hq_operator_scope(text,text)` | HQ_SCOPE |  |
 | `hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.resolve_saas_referral_alert(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
+| `hon.retry_saas_first_payment_activation(text,uuid,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.set_champions_leaderboard_hold(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.set_saas_credit_program(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.set_saas_payment_program(text,jsonb,uuid,uuid,uuid)` | HQ_SCOPE |  |
@@ -88,8 +96,8 @@ can still see its billing).
 | `hon.sweep_saas_checkouts(text,uuid,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)` | HQ_SCOPE |  |
 | `hon.ingest_saas_provider_event(jsonb,text)` | PROVIDER_SCOPE |  |
-| `hon.acknowledge_retention_review_evidence(text,uuid,text,text,timestamp with time zone,uuid,uuid,uuid)` | STATUS_GATED | `read_retention_review_signals` |
-| `hon.authorize_campaign_lead(text,boolean)` | STATUS_GATED | `require_campaign_actor` |
+| `hon.acknowledge_retention_review_evidence(text,uuid,text,text,timestamp with time zone,uuid,uuid,uuid)` | STATUS_GATED | `require_retention_acknowledgement_actor` |
+| `hon.authorize_campaign_lead(text,boolean)` | STATUS_GATED | `lock_campaign_actor` |
 | `hon.begin_chad_follow_up_request(text,jsonb,uuid)` | STATUS_GATED | `require_chad_follow_up_actor` |
 | `hon.begin_marketing_request(text,jsonb,uuid)` | STATUS_GATED | `marketing_owner` |
 | `hon.begin_teaching_request(text,jsonb,uuid)` | STATUS_GATED | `require_teaching_assistant_actor` |
@@ -99,14 +107,11 @@ can still see its billing).
 | `hon.book_owner_launch_first_class(text,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_class_booking_session` |
 | `hon.chad_follow_up_planning_reference(text,uuid)` | STATUS_GATED | `require_chad_follow_up_actor` |
 | `hon.close_crm_lead(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `require_crm_lead_close_actor` |
-| `hon.command_champions_contest(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `champions_contest_counts` |
 | `hon.command_classpass(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_classpass_actor` |
-| `hon.command_saas_subscription(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED |  |
 | `hon.configure_attendance_policy(text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_attendance_actor` |
 | `hon.create_saas_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `saas_open_checkout` |
-| `hon.decide_champions_attribution(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED |  |
-| `hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_owner_launch_actor` |
-| `hon.dry_run_automation_rule(text,uuid,jsonb)` | STATUS_GATED | `require_automation_actor` |
+| `hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_owner_launch_actor` |
+| `hon.dry_run_automation_rule(text,uuid,jsonb)` | STATUS_GATED | `lock_automation_actor` |
 | `hon.estimate_saas_premium_operation(text,uuid,text,integer)` | STATUS_GATED | `require_saas_school_actor` |
 | `hon.fail_chad_follow_up_invocation(text,uuid,text,text)` | STATUS_GATED | `require_chad_follow_up_actor` |
 | `hon.fail_marketing_invocation(text,uuid,text,text)` | STATUS_GATED | `marketing_owner` |
@@ -122,18 +127,18 @@ can still see its billing).
 | `hon.lock_planned_absence_review_actor(text)` | STATUS_GATED | `require_planned_absence_review_actor` |
 | `hon.manage_kiosk_terminal(text,text,uuid,uuid,text)` | STATUS_GATED | `lock_kiosk_actor` |
 | `hon.marketing_planning_reference(text,uuid)` | STATUS_GATED | `marketing_owner` |
-| `hon.mutate_campaign(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_campaign_actor` |
-| `hon.mutate_community(text,text,uuid,jsonb,text,uuid)` | STATUS_GATED | `community_visible` |
+| `hon.mutate_campaign(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_campaign_actor` |
+| `hon.mutate_community(text,text,uuid,jsonb,text,uuid)` | STATUS_GATED | `community_permission` |
 | `hon.mutate_curriculum_progress(text,text,uuid,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED |  |
-| `hon.mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_curriculum_actor` |
-| `hon.mutate_follow_up(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_follow_up_actor` |
-| `hon.mutate_human_work(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_human_work_actor` |
+| `hon.mutate_curriculum_resource(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_curriculum_resource_actor` |
+| `hon.mutate_follow_up(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_follow_up_actor` |
+| `hon.mutate_human_work(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_human_work_actor` |
 | `hon.mutate_instructor_qualification(text,text,uuid,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_instructor_qualification_actor` |
 | `hon.mutate_lead_import(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED |  |
-| `hon.mutate_marketplace(text,text,uuid,jsonb,text,uuid)` | STATUS_GATED | `require_marketplace_actor` |
-| `hon.mutate_public_form(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_public_form_actor` |
-| `hon.mutate_renewal(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_renewal_actor` |
-| `hon.mutate_teaching_studio(text,text,uuid,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_teaching_studio_actor` |
+| `hon.mutate_marketplace(text,text,uuid,jsonb,text,uuid)` | STATUS_GATED | `marketplace_selection_projection` |
+| `hon.mutate_public_form(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_public_form_actor` |
+| `hon.mutate_renewal(text,text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_renewal_actor` |
+| `hon.mutate_teaching_studio(text,text,uuid,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_teaching_studio_actor` |
 | `hon.mutate_voice_session(text,text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `require_voice_actor` |
 | `hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `require_ai_invocation_plan_access` |
 | `hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)` | STATUS_GATED | `require_chad_follow_up_actor` |
@@ -141,8 +146,8 @@ can still see its billing).
 | `hon.prepare_teaching_invocation(text,uuid,uuid,boolean)` | STATUS_GATED | `require_teaching_assistant_actor` |
 | `hon.provision_kiosk_claim(text,uuid,uuid,uuid,text)` | STATUS_GATED | `lock_kiosk_actor` |
 | `hon.read_attendance_policy(text,uuid)` | STATUS_GATED | `lock_attendance_actor` |
-| `hon.read_automation_rules(text,uuid,integer)` | STATUS_GATED | `require_automation_actor` |
-| `hon.read_campaigns(text,text,uuid,text,text,integer)` | STATUS_GATED | `require_campaign_actor` |
+| `hon.read_automation_rules(text,uuid,integer)` | STATUS_GATED | `lock_automation_actor` |
+| `hon.read_campaigns(text,text,uuid,text,text,integer)` | STATUS_GATED | `lock_campaign_actor` |
 | `hon.read_chad_follow_up_invocation(text,uuid)` | STATUS_GATED | `require_chad_follow_up_actor` |
 | `hon.read_champions_contests_for_school(text,uuid)` | STATUS_GATED |  |
 | `hon.read_champions_leaderboard_for_school(text,uuid,text,text)` | STATUS_GATED | `require_champions_school_actor` |
@@ -154,48 +159,47 @@ can still see its billing).
 | `hon.read_community_profile(text)` | STATUS_GATED | `community_permission` |
 | `hon.read_community(text,text,uuid,uuid,uuid)` | STATUS_GATED | `community_visible` |
 | `hon.read_current_organization_entitlement()` | STATUS_GATED |  |
-| `hon.read_follow_ups(text,uuid,text,text,uuid)` | STATUS_GATED | `require_follow_up_actor` |
-| `hon.read_human_work(text,uuid,text,text,uuid,integer)` | STATUS_GATED | `require_human_work_actor` |
-| `hon.read_instructor_qualification(text,text,uuid,uuid)` | STATUS_GATED | `require_instructor_qualification_actor` |
+| `hon.read_follow_ups(text,uuid,text,text,uuid)` | STATUS_GATED | `lock_follow_up_actor` |
+| `hon.read_human_work(text,uuid,text,text,uuid,integer)` | STATUS_GATED | `lock_human_work_actor` |
+| `hon.read_instructor_qualification(text,text,uuid,uuid)` | STATUS_GATED | `instructor_qualification_permission` |
 | `hon.read_kiosk_handoff(text,uuid)` | STATUS_GATED | `lock_kiosk_actor` |
 | `hon.read_marketing_campaign_content(text,uuid)` | STATUS_GATED | `lock_campaign_actor` |
 | `hon.read_marketing_invocation(text,uuid)` | STATUS_GATED | `marketing_owner` |
-| `hon.read_marketplace(text,text,uuid,uuid,integer)` | STATUS_GATED | `require_community_actor` |
+| `hon.read_marketplace(text,text,uuid,uuid,integer)` | STATUS_GATED | `marketplace_permission` |
 | `hon.read_organization_operations_summary(text,uuid,timestamp with time zone,timestamp with time zone)` | STATUS_GATED |  |
-| `hon.read_owner_launch_first_class_booking_context(text)` | STATUS_GATED | `require_owner_launch_actor` |
+| `hon.read_owner_launch_first_class_booking_context(text)` | STATUS_GATED | `read_owner_launch` |
 | `hon.read_owner_launch_membership_draft(text)` | STATUS_GATED | `lock_owner_launch_actor` |
-| `hon.read_owner_launch_saved_students(text)` | STATUS_GATED | `require_owner_launch_actor` |
+| `hon.read_owner_launch_saved_students(text)` | STATUS_GATED | `lock_owner_launch_actor` |
 | `hon.read_owner_launch(text)` | STATUS_GATED |  |
 | `hon.read_parent_curriculum_library(text,uuid)` | STATUS_GATED |  |
 | `hon.read_promotion_readiness(text,uuid,uuid)` | STATUS_GATED |  |
-| `hon.read_public_forms(text)` | STATUS_GATED | `require_public_form_actor` |
+| `hon.read_public_forms(text)` | STATUS_GATED | `lock_public_form_actor` |
 | `hon.read_published_form(text)` | STATUS_GATED |  |
-| `hon.read_renewal_history(text,uuid,integer)` | STATUS_GATED | `require_renewal_actor` |
-| `hon.read_renewal_membership(text,uuid)` | STATUS_GATED | `require_renewal_actor` |
-| `hon.read_renewals(text,uuid,text,uuid,integer)` | STATUS_GATED | `require_renewal_actor` |
-| `hon.read_retention_attention_alerts(text,uuid)` | STATUS_GATED | `read_retention_review_signals` |
-| `hon.read_retention_attention_evidence(text,uuid)` | STATUS_GATED | `read_retention_review_signals` |
-| `hon.read_retention_review_acknowledgement_evidence(text,uuid)` | STATUS_GATED | `read_retention_review_signals` |
+| `hon.read_renewal_history(text,uuid,integer)` | STATUS_GATED | `lock_renewal_actor` |
+| `hon.read_renewal_membership(text,uuid)` | STATUS_GATED | `lock_renewal_actor` |
+| `hon.read_renewals(text,uuid,text,uuid,integer)` | STATUS_GATED | `lock_renewal_actor` |
+| `hon.read_retention_attention_alerts(text,uuid)` | STATUS_GATED | `require_retention_attention_actor` |
+| `hon.read_retention_attention_evidence(text,uuid)` | STATUS_GATED | `require_retention_attention_actor` |
+| `hon.read_retention_review_acknowledgement_evidence(text,uuid)` | STATUS_GATED | `require_retention_acknowledgement_actor` |
 | `hon.read_retention_review_signals(text,uuid)` | STATUS_GATED | `lock_retention_review_actor` |
-| `hon.read_revenue_plan(text,text,uuid,integer)` | STATUS_GATED | `require_revenue_planning_actor` |
+| `hon.read_revenue_plan(text,text,uuid,integer)` | STATUS_GATED | `lock_revenue_planning_actor` |
 | `hon.read_saas_school_billing_account(text,uuid)` | STATUS_GATED | `saas_access_condition` |
 | `hon.read_saas_school_credits(text,uuid)` | STATUS_GATED | `require_saas_school_actor` |
 | `hon.read_school_command_center(text,uuid,uuid)` | STATUS_GATED |  |
 | `hon.read_school_health_score(text,uuid,uuid)` | STATUS_GATED |  |
-| `hon.read_staff_availability(text,uuid,text,integer)` | STATUS_GATED | `require_staff_planning_actor` |
-| `hon.read_staff_curriculum_library(text)` | STATUS_GATED | `require_curriculum_actor` |
+| `hon.read_staff_availability(text,uuid,text,integer)` | STATUS_GATED | `lock_staff_planning_actor` |
+| `hon.read_staff_curriculum_library(text)` | STATUS_GATED | `lock_curriculum_resource_actor` |
 | `hon.read_staff_curriculum_progress(text,text,uuid,uuid)` | STATUS_GATED | `require_curriculum_actor` |
 | `hon.read_staff_planned_absence_review_queue(text)` | STATUS_GATED | `require_planned_absence_review_actor` |
 | `hon.read_teaching_invocation(text,uuid)` | STATUS_GATED | `require_teaching_assistant_actor` |
-| `hon.read_teaching_studio(text,text,uuid,uuid,integer)` | STATUS_GATED | `require_teaching_studio_actor` |
+| `hon.read_teaching_studio(text,text,uuid,uuid,integer)` | STATUS_GATED | `lock_teaching_studio_actor` |
 | `hon.read_testing_certificate(text,uuid)` | STATUS_GATED | `lock_testing_certificate_actor` |
-| `hon.read_testing_scorecard(text,uuid,uuid)` | STATUS_GATED | `require_testing_scorecard_actor` |
+| `hon.read_testing_scorecard(text,uuid,uuid)` | STATUS_GATED | `lock_testing_scorecard_actor` |
 | `hon.read_voice_session(text,uuid)` | STATUS_GATED | `require_voice_actor` |
 | `hon.record_attendance(text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_attendance_actor` |
 | `hon.record_chad_follow_up_result(text,uuid,jsonb)` | STATUS_GATED | `require_chad_follow_up_actor` |
 | `hon.record_marketing_result(text,uuid,jsonb)` | STATUS_GATED | `marketing_owner` |
 | `hon.record_retention_attention_alert(text,uuid,text,text,timestamp with time zone,text,uuid,uuid,uuid)` | STATUS_GATED | `read_retention_review_signals` |
-| `hon.record_saas_subscription(text,jsonb,uuid,uuid,uuid)` | STATUS_GATED |  |
 | `hon.record_teaching_result(text,uuid,jsonb)` | STATUS_GATED | `require_teaching_assistant_actor` |
 | `hon.record_testing_scorecard_evaluation(text,uuid,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_testing_scorecard_actor` |
 | `hon.register_owner_launch_guardian_child(text,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_owner_launch_actor` |
@@ -206,7 +210,7 @@ can still see its billing).
 | `hon.resolve_community_scope(text,uuid)` | STATUS_GATED | `community_permission` |
 | `hon.resolve_crm_lead_close_scope(text,uuid)` | STATUS_GATED |  |
 | `hon.resolve_instructor_qualification_scope(text)` | STATUS_GATED | `instructor_qualification_permission` |
-| `hon.resolve_marketplace_scope(text,uuid)` | STATUS_GATED | `resolve_community_scope` |
+| `hon.resolve_marketplace_scope(text,uuid)` | STATUS_GATED | `marketplace_permission` |
 | `hon.resolve_owner_launch_scope(text)` | STATUS_GATED |  |
 | `hon.resolve_planned_absence_review_scope(text)` | STATUS_GATED |  |
 | `hon.resolve_renewal_scope(text)` | STATUS_GATED |  |
@@ -216,16 +220,15 @@ can still see its billing).
 | `hon.resolve_testing_certificate_scope(text,uuid)` | STATUS_GATED | `testing_certificate_permission` |
 | `hon.resolve_testing_scorecard_scope(text,uuid)` | STATUS_GATED | `testing_scorecard_permission` |
 | `hon.save_approved_marketing_draft(text,uuid)` | STATUS_GATED | `marketing_owner` |
-| `hon.save_approved_teaching_draft(text,uuid)` | STATUS_GATED | `require_teaching_assistant_actor` |
-| `hon.save_automation_rule(text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_automation_actor` |
-| `hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_revenue_planning_actor` |
-| `hon.save_staff_planning_revision(text,uuid,text,jsonb,text,uuid,uuid)` | STATUS_GATED | `require_staff_planning_actor` |
+| `hon.save_approved_teaching_draft(text,uuid)` | STATUS_GATED | `read_teaching_invocation` |
+| `hon.save_automation_rule(text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_automation_actor` |
+| `hon.save_revenue_plan(text,uuid,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_revenue_planning_actor` |
+| `hon.save_staff_planning_revision(text,uuid,text,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_staff_planning_actor` |
 | `hon.set_champions_leaderboard_preference(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `require_champions_school_actor` |
 | `hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `require_saas_school_actor` |
 | `hon.submit_public_form(text,jsonb,text)` | STATUS_GATED |  |
 | `hon.teaching_planning_reference(text,uuid)` | STATUS_GATED | `require_teaching_assistant_actor` |
 | `hon.read_saas_school_plan_options(text,uuid)` | TIER_ONLY |  |
-| `hon.reconcile_champions_rewards(text,uuid,uuid,uuid,uuid)` | TIER_ONLY | `champions_reconcile_core` |
 | `hon.require_human_action_review(text,uuid)` | TIER_ONLY |  |
 | `hon.chad_follow_up_draft_is_current(uuid,jsonb)` | UNGATED |  |
 | `hon.crm_lead_target_is_current(uuid,uuid)` | UNGATED |  |
@@ -245,6 +248,7 @@ can still see its billing).
 | `hon.read_achievements(text,text,uuid,uuid,uuid,integer)` | UNGATED |  |
 | `hon.read_documents(text,text,text,uuid,integer)` | UNGATED |  |
 | `hon.read_lead_import(text,text,uuid,uuid)` | UNGATED |  |
+| `hon.read_my_language_preference(text,uuid)` | UNGATED |  |
 | `hon.read_parent_achievements(text,uuid,uuid,uuid)` | UNGATED |  |
 | `hon.read_parent_billing_view(text)` | UNGATED |  |
 | `hon.read_parent_classpass_view(text)` | UNGATED |  |
@@ -256,6 +260,7 @@ can still see its billing).
 | `hon.read_parent_testing_status(text)` | UNGATED |  |
 | `hon.read_saas_school_invoice(text,uuid,uuid)` | UNGATED |  |
 | `hon.read_saas_school_invoices(text,uuid,text,text,timestamp with time zone,uuid,integer)` | UNGATED |  |
+| `hon.read_school_language_default(text,uuid)` | UNGATED |  |
 | `hon.read_staff_reporting_schools(text)` | UNGATED |  |
 | `hon.read_staff_role(text,text,uuid)` | UNGATED |  |
 | `hon.read_staff_testing_registrations(text)` | UNGATED |  |
@@ -277,6 +282,8 @@ can still see its billing).
 | `hon.resolve_teaching_studio_scope(text,uuid)` | UNGATED |  |
 | `hon.resolve_testing_registration_review_scopes(text)` | UNGATED |  |
 | `hon.search_school(text,uuid,uuid,text,text[],uuid)` | UNGATED |  |
+| `hon.set_my_language_preference(text,jsonb,uuid,uuid,uuid)` | UNGATED |  |
+| `hon.set_school_language_default(text,uuid,jsonb,uuid,uuid,uuid)` | UNGATED |  |
 | `hon.submit_kiosk_handoff(text,text)` | UNGATED |  |
 | `hon.teaching_action_is_current(uuid,jsonb)` | UNGATED |  |
 | `hon.transition_chad_follow_up_draft(uuid,text)` | UNGATED |  |

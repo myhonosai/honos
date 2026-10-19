@@ -18,7 +18,7 @@ const client = new pg.Client({ connectionString: url.toString(), ssl: false });
 await client.connect();
 try {
   const all = (await client.query(`SELECT p.oid, p.proname, p.oid::regprocedure::text sig, p.prosrc src, has_function_privilege($1, p.oid, 'EXECUTE') callable
-    FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace AND p.prokind = 'f'`, [runtime])).rows;
+    FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace AND p.prokind = 'f' ORDER BY p.oid::regprocedure::text`, [runtime])).rows;
   const byName = new Map();
   for (const f of all) { if (!byName.has(f.proname)) byName.set(f.proname, []); byName.get(f.proname).push(f); }
   const names = [...byName.keys()].filter(n => n.length > 6);
@@ -50,7 +50,8 @@ try {
   const entry = all.filter(f => f.callable && !/^guard_/.test(f.proname));
   const rows = entry.map(f => {
     const m = memo.get(f.oid);
-    const cls = /(^|_)hq(_|$)|_from_hq$/.test(f.proname) || (hq.get(f.oid) && !m.cls) ? 'HQ_SCOPE'
+    // An HQ command that resolves its HQ actor directly is HQ scope even when it also touches an entitlement.
+    const cls = /(^|_)hq(_|$)|_from_hq$/.test(f.proname) || (hq.get(f.oid) && (!m.cls || [...calls.get(f.oid)].some(hqHelper))) ? 'HQ_SCOPE'
       : /^ingest_|_provider_event|^saas_payment_actor/.test(f.proname) ? 'PROVIDER_SCOPE' : (m.cls ?? 'UNGATED');
     return { function: f.sig, classification: cls, via: cls === m.cls ? m.via : null };
   }).sort((a, b) => a.classification.localeCompare(b.classification) || a.function.localeCompare(b.function));

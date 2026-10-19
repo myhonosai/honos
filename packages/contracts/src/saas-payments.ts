@@ -1,8 +1,9 @@
 // HON Subscription Billing Milestone B5 closed contracts: hosted checkout and provider-verified payment
 // accounting, TEST MODE ONLY. HON never receives or stores card data, never initiates a charge or a
 // refund, and live mode is unavailable. A checkout is only offered for the plan matching the school's
-// active entitlement; a verified payment records the subscription, invoice and evidence but never
-// changes access by itself.
+// active entitlement (or, for an organization awaiting its first payment, any Core or Complete offer); a
+// verified payment records the subscription, invoice and evidence and changes access only through the B6A
+// transition while the paid-access program is ACTIVE (it is INACTIVE until the owner approves).
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { saasUuid, validateSaasSubscriptionForSchool, type SaasSubscription } from './saas-billing.js';
@@ -11,13 +12,13 @@ export type SaasProviderCode = 'STRIPE' | 'STRIPE_SIMULATED';
 export type SaasCheckoutStatus = 'CREATED' | 'OPEN' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED' | 'FAILED' | 'PAID_NEEDS_REVIEW';
 export type SaasCheckoutReason = 'CREATED' | 'PROVIDER_SESSION_OPENED' | 'PROVIDER_CREATE_FAILED' | 'PAYMENT_VERIFIED' | 'PROVIDER_EXPIRED'
   | 'LOCAL_EXPIRED' | 'CANCELLED_BY_REQUESTER' | 'CANCELLED_BY_HQ' | 'ASYNC_PAYMENT_FAILED' | 'PAID_AFTER_CLOSE' | 'AMOUNT_MISMATCH'
-  | 'FOUNDER_UNAVAILABLE' | 'ENTITLEMENT_CHANGED' | 'SUBSCRIPTION_EXISTS';
+  | 'FOUNDER_UNAVAILABLE' | 'ENTITLEMENT_CHANGED' | 'SUBSCRIPTION_EXISTS' | 'ACCESS_PROGRAM_INACTIVE';
 export type SaasProviderEventOutcome = 'APPLIED' | 'ALREADY_APPLIED' | 'IGNORED' | 'NEEDS_REVIEW' | 'AWAITING_ASYNC_PAYMENT';
 const PROVIDERS: readonly SaasProviderCode[] = ['STRIPE','STRIPE_SIMULATED'];
 const STATUSES: readonly SaasCheckoutStatus[] = ['CREATED','OPEN','COMPLETED','EXPIRED','CANCELLED','FAILED','PAID_NEEDS_REVIEW'];
 const REASONS: readonly SaasCheckoutReason[] = ['CREATED','PROVIDER_SESSION_OPENED','PROVIDER_CREATE_FAILED','PAYMENT_VERIFIED','PROVIDER_EXPIRED',
   'LOCAL_EXPIRED','CANCELLED_BY_REQUESTER','CANCELLED_BY_HQ','ASYNC_PAYMENT_FAILED','PAID_AFTER_CLOSE','AMOUNT_MISMATCH','FOUNDER_UNAVAILABLE',
-  'ENTITLEMENT_CHANGED','SUBSCRIPTION_EXISTS'];
+  'ENTITLEMENT_CHANGED','SUBSCRIPTION_EXISTS','ACCESS_PROGRAM_INACTIVE'];
 const OUTCOMES: readonly SaasProviderEventOutcome[] = ['APPLIED','ALREADY_APPLIED','IGNORED','NEEDS_REVIEW','AWAITING_ASYNC_PAYMENT'];
 const OFFER_KINDS = ['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME'] as const;
 
@@ -173,7 +174,8 @@ export function validateSaasSchoolPlanOptions(value: unknown): SaasSchoolPlanOpt
   (r.offers as unknown[]).forEach(v => {
     const o = record(v, drift);
     exactKeys(o, ['offerId','planCode','offerKind','billingInterval','priceMinor','currency','monthlyPremiumCredits','founderSlotsRemaining'], drift);
-    if (!isUuid(o.offerId) || o.planCode !== r.entitlementTier || !has(OFFER_KINDS, o.offerKind)
+    // A null tier means no entitlement in effect for checkout, or awaiting a first payment: only Core or Complete offers.
+    if (!isUuid(o.offerId) || (r.entitlementTier === null ? !has(['CORE','COMPLETE'], o.planCode) : o.planCode !== r.entitlementTier) || !has(OFFER_KINDS, o.offerKind)
       || o.billingInterval !== (o.offerKind === 'FOUNDER_LIFETIME' ? 'LIFETIME' : 'MONTHLY') || !isInt(o.priceMinor, 100, 10_000_000) || o.currency !== 'USD'
       || !nullable(o.monthlyPremiumCredits, (x): x is number => isInt(x, 1, 1_000_000))
       || (o.offerKind === 'REGULAR_MONTHLY' ? o.founderSlotsRemaining !== null : !nullable(o.founderSlotsRemaining, count))) drift();
