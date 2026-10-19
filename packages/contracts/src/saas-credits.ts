@@ -87,7 +87,7 @@ export interface SaasAllowanceBalance {
 }
 export interface SaasAllowance {
   allowanceId: string; subscriptionId: string; organizationId: string; periodIndex: number; periodStart: string; periodEnd: string;
-  planCode: 'CORE' | 'COMPLETE'; allowanceBasis: 'REGULAR' | 'FOUNDER' | 'LIFETIME' | 'LEGACY'; status: 'OPEN' | 'EXPIRED'; version: number;
+  planCode: 'CORE' | 'COMPLETE'; allowanceBasis: 'REGULAR' | 'FOUNDER' | 'LIFETIME' | 'LEGACY' | 'CHAMPIONS_FREE_MONTH'; status: 'OPEN' | 'EXPIRED'; version: number;
   balance: SaasAllowanceBalance; thresholds: { thresholdPercent: 75 | 90 | 100; reachedAt: string; notification: 'NOT_SENT' }[];
   rollover: 'NONE'; topUps: 'UNAVAILABLE'; openedAt: string; expiredAt: string | null;
 }
@@ -244,7 +244,7 @@ function validateAllowance(value: unknown, school: boolean): void {
     'thresholds','rollover','topUps','openedAt','expiredAt'];
   exactKeys(a, school ? keys : [...keys, 'organizationId'], drift);
   if (!isUuid(a.allowanceId) || !isUuid(a.subscriptionId) || (!school && !isUuid(a.organizationId)) || !count(a.periodIndex) || !isTimestamp(a.periodStart)
-    || !isTimestamp(a.periodEnd) || !has(['CORE','COMPLETE'], a.planCode) || !has(['REGULAR','FOUNDER','LIFETIME','LEGACY'], a.allowanceBasis)
+    || !isTimestamp(a.periodEnd) || !has(['CORE','COMPLETE'], a.planCode) || !has(['REGULAR','FOUNDER','LIFETIME','LEGACY','CHAMPIONS_FREE_MONTH'], a.allowanceBasis)
     || !has(['OPEN','EXPIRED'], a.status) || !isInt(a.version, 1, 2147483647) || a.rollover !== 'NONE' || a.topUps !== 'UNAVAILABLE'
     || !isTimestamp(a.openedAt) || !nts(a.expiredAt) || (a.status === 'EXPIRED') !== (a.expiredAt !== null)) drift();
   const b = record(a.balance, drift);

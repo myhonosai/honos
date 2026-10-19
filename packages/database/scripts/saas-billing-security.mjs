@@ -1,13 +1,18 @@
-// HON subscription catalog (0154) and invoices/payment evidence (0155): HON-bills-schools records,
+// HON subscription catalog (0154), invoices/payment evidence (0155), premium credits (0156) and
+// refunds/Champions reward application (0157): HON-bills-schools records,
 // separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
 export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
  'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
  'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence',
  'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
- 'saas_credit_reservations','saas_credit_ledger','saas_credit_threshold_events'];
+ 'saas_credit_reservations','saas_credit_ledger','saas_credit_threshold_events',
+ 'saas_refund_requests','saas_refund_history','saas_reward_fulfillment','saas_reward_applications','saas_account_credit_ledger',
+ 'saas_free_periods','saas_referral_payment_alerts'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
- 'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events'];
+ 'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
+ 'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods'];
+const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
 const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
 const invoicingTables = ['saas_invoice_sequences','saas_invoices'];
@@ -81,6 +86,37 @@ export const saasBillingFunctions = [
  ['hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0157 refund guarantee records and Champions reward application
+ ['hon.guard_saas_refunds_rewards()',false,false],
+ ['hon.saas_evidence_referral_alert()',false,false],
+ ['hon.saas_invoice_free_period_check()',false,false],
+ ['hon.saas_allowance_free_month_basis()',false,false],
+ ['hon.saas_refund_eligibility(uuid,timestamptz)',false,false],
+ ['hon.saas_refund_json(hon.saas_refund_requests)',false,false],
+ ['hon.saas_reward_fulfillment_json()',false,false],
+ ['hon.saas_reward_entry_blocked(uuid)',false,false],
+ ['hon.saas_account_credit_grants(uuid)',false,false],
+ ['hon.saas_reward_application_json(hon.saas_reward_applications)',false,false],
+ ['hon.saas_alert_json(hon.saas_referral_payment_alerts)',false,false],
+ ['hon.saas_reward_entry_state(hon.champions_reward_entries)',false,false],
+ ['hon.read_saas_refund_eligibility_from_hq(text,uuid,timestamp with time zone)',true,true],
+ ['hon.read_saas_refund_requests_from_hq(text,text)',true,true],
+ ['hon.read_saas_refund_reserve_from_hq(text)',true,true],
+ ['hon.create_saas_refund_request(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.decide_saas_refund_request(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_reward_preview_from_hq(text,uuid)',true,true],
+ ['hon.read_saas_referral_alerts_from_hq(text,text)',true,true],
+ ['hon.set_saas_reward_fulfillment(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.apply_saas_referral_reward(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_credit_application_preview(text,uuid)',true,true],
+ ['hon.apply_saas_account_credit(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.resolve_saas_referral_alert(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+];
+// Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
+const crossTriggers = [
+ ['saas_payment_evidence','saas_referral_alert',5,'saas_evidence_referral_alert'],
+ ['saas_invoices','saas_free_period_check',7,'saas_invoice_free_period_check'],
+ ['saas_credit_allowances','saas_champions_basis',7,'saas_allowance_free_month_basis'],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');
@@ -95,6 +131,7 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : catalogRowTables.includes(table) ? ['guard_saas_catalog_rows','saas_catalog_rows',31]
    : table === 'saas_invoice_lines' ? ['guard_saas_invoice_lines','saas_invoice_lines_rows',31]
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
+   : refundRewardTables.includes(table) ? ['guard_saas_refunds_rewards','saas_guarded',27]
    : creditTables.includes(table) ? ['guard_saas_credits','saas_guarded',27]
    : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];
   for (const [name,type] of [[rowTrigger,rowType],['saas_no_truncate',34]]) {
@@ -102,6 +139,11 @@ export async function verifySaasBillingSecurity(client, runtime) {
     AND tgfoid=$4::regprocedure AND tgenabled='O' AND NOT tgisinternal`,[`hon.${table}`,name,type,`hon.${guard}()`])).rows[0];
    if (t.safe!==true) throw new Error(`Unsafe HON subscription trigger ${table}.${name}`);
   }
+ }
+ for (const [table,name,type,fn] of crossTriggers) {
+  const t=(await client.query(`SELECT count(*)=1 safe FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=$2 AND tgtype=$3
+   AND tgfoid=$4::regprocedure AND tgenabled='O' AND NOT tgisinternal`,[`hon.${table}`,name,type,`hon.${fn}()`])).rows[0];
+  if (t.safe!==true) throw new Error(`Unsafe HON subscription trigger ${table}.${name}`);
  }
  const total=(await client.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname ~ 'saas'")).rows[0].n;
  if (total!==saasBillingFunctions.length) throw new Error(`Untracked HON subscription functions: ${total}`);
