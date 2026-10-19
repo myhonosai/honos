@@ -19,6 +19,7 @@ on:
       - 'apps/web/src/app/settings/**'
       - 'apps/web/src/app/layout.tsx'
       - 'packages/design-system/src/**'
+      - 'apps/web/src/components/hq-modern/hq-modern.module.css'
       - 'apps/web/src/components/hq-modern/shell.tsx'
       - 'apps/web/src/components/hq-modern/dashboard.tsx'
       - 'apps/web/src/components/hq-modern/assistant.tsx'

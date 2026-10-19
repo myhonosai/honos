@@ -37,6 +37,9 @@ export async function verifyLocalization(e) {
     const p=await open(ctx);await ready(p);await p.getByRole('button',{name:'Classic',exact:true}).click();await choose(p,lang);
     assert.equal(await p.locator('main[data-view]').getAttribute('data-view'),'classic');
     await p.getByRole('heading',{name:tx(lang,'Built for the way you run your school.'),exact:true}).waitFor();
+    assert(await p.getByText(tx(lang,'Scheduling, memberships & curriculum'),{exact:true}).isVisible());
+    const notice=p.getByRole('note');if(size==='desktop'){const strong=await notice.locator('strong').boundingBox(),body=await notice.locator('span').first().boundingBox();assert(strong.x+strong.width<=body.x,'Translated notice label must not overlap its body');}
+    if(size==='mobile')assert((await p.getByRole('button',{name:tx(lang,'HON plan guide'),exact:true}).boundingBox()).width<120,'Mobile HON guide must stay compact');
     for(const tier of ['Core','Complete'])assert(await p.getByRole('heading',{name:'HON '+tier,exact:true}).isVisible());
     const plan=p.getByRole('group',{name:tx(lang,'Compare and select a HON plan')});assert(await plan.getByText(formatLocaleMoney({...DEFAULT_LOCALE,language:lang},14900,'USD'),{exact:true}).count()>0);
     await p.getByRole('button',{name:tx(lang,'Review selection →'),exact:true}).click();
@@ -61,6 +64,7 @@ export async function verifyLocalization(e) {
     await choose(p,lang==='es'?'ko':'es');await choose(p,lang);assert.equal(await p.locator('[data-art]').getAttribute('data-art'),'chibi');assert.equal(await p.locator('[data-art]').getAttribute('data-view'),'big-button');
     await p.getByRole('button',{name:tx(lang,'Expand HON conversation'),exact:true}).click();await p.getByRole('heading',{name:tx(lang,'How can HON help here?'),exact:true}).waitFor();assert(await p.getByText(tx(lang,'HQ conversation is not connected yet. Your company tools remain available.'),{exact:true}).isVisible());
     await p.keyboard.press('Escape');await p.getByRole('group',{name:tx(lang,'Platform view')}).getByRole('button',{name:tx(lang,'Modern'),exact:true}).click();await p.getByRole('group',{name:tx(lang,'AI portrait style')}).getByRole('button',{name:tx(lang,'Realistic'),exact:true}).click();
+    if(size==='mobile'){for(const width of [320,390]){await p.setViewportSize({width,height:844});for(const label of ['Platform view','AI portrait style']){const group=p.getByRole('group',{name:tx(lang,label)}),caption=group.locator(':scope > span'),box=await caption.boundingBox(),first=await group.getByRole('button').first().boundingBox();assert(box.x+box.width<=first.x,'Appearance label must not overlap its choices');assert(await caption.evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Appearance label must wrap inside its column');}await overflow(p);}}
     await overflow(p);await scan(p,`${lang}-${size}-hq`);await capture(p,`${lang}-${size}-hq`,false);
    }finally{await ctx.close();}
   });

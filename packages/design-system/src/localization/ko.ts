@@ -500,4 +500,5 @@ export const ko = {
   "Configured": "설정됨",
   "Healthy": "정상",
   "Degraded": "성능 저하",
+  "Scheduling, memberships & curriculum": "일정, 회원권 및 교육과정"
 } satisfies TranslationCatalog;

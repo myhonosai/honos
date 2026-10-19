@@ -500,4 +500,5 @@ export const es = {
   "Configured": "Configurado",
   "Healthy": "Correcto",
   "Degraded": "Degradado",
+  "Scheduling, memberships & curriculum": "Horarios, membresías y currículo"
 } satisfies TranslationCatalog;

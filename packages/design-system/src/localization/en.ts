@@ -499,4 +499,5 @@ export const en = {
   "Configured": "Configured",
   "Healthy": "Healthy",
   "Degraded": "Degraded",
+  "Scheduling, memberships & curriculum": "Scheduling, memberships & curriculum"
 } as const;
