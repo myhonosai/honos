@@ -1,7 +1,7 @@
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-// HON Subscription Billing B5.1 (0164) integrity proof: school-owner billing reads and the INACTIVE B6 paid-access
+// HON Subscription Billing B5.1 (0170) integrity proof: school-owner billing reads and the INACTIVE B6 paid-access
 // foundation, against a disposable database through the real API services. Provider-verified rows come from the
 // deterministic Stripe simulator (STRIPE_SIMULATED); HQ-recorded rows from B2 attestation. Proves: billing.hon.view
 // at the exact school (HQ, support, other organizations and staff without the permission refused); organization-level

@@ -1,6 +1,6 @@
 # HON Subscription Billing B5.1: school billing reads and the inactive paid-access foundation
 
-**Status:** implemented on `claude/hon-billing-b5-1` (migration `0164`). The work is **read-only**: no route here writes anything, and no entitlement is ever changed. Payment data in the proofs comes from the deterministic Stripe simulator (`STRIPE_SIMULATED`) and from B2 HQ attestation. **No real Stripe sandbox** has been used.
+**Status:** implemented on `claude/hon-billing-b5-1` (migration `0170`). The work is **read-only**: no route here writes anything, and no entitlement is ever changed. Payment data in the proofs comes from the deterministic Stripe simulator (`STRIPE_SIMULATED`) and from B2 HQ attestation. **No real Stripe sandbox** has been used.
 
 ## 1. What a school can read
 

@@ -139,7 +139,7 @@ export const saasBillingFunctions = [
  ['hon.cancel_saas_checkout(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.sweep_saas_checkouts(text,uuid,uuid,uuid)',true,true],
  ['hon.ingest_saas_provider_event(jsonb,text)',true,true],
- // 0164 school billing reads and the inactive paid-access foundation
+ // 0170 school billing reads and the inactive paid-access foundation
  ['hon.require_saas_school_billing_viewer(text,uuid)',false,true],
  ['hon.saas_school_evidence_json(hon.saas_payment_evidence)',false,false],
  ['hon.saas_school_refund_json(hon.saas_refund_requests)',false,false],
