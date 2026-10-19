@@ -7,6 +7,14 @@ const API = 'https://api.stripe.com/v1';
 /** Webhook endpoints must be created with this API version so payload shapes match the normalizer. */
 export const STRIPE_API_VERSION = '2024-06-20';
 const SIGNATURE_TOLERANCE_SECONDS = 300;
+/**
+ * Event payload versions the normalizer reads correctly: the pinned version, and basil (2025-03-31) or later, where
+ * invoice.subscription moved under invoice.parent and invoice/charge payment links were removed (those refs read as
+ * null, so an unlinked refund or dispute is held for review instead of applied). Any other version is refused.
+ */
+export function supportedEventApiVersion(version: unknown): boolean {
+  return version === STRIPE_API_VERSION || (typeof version === 'string' && /^\d{4}-\d{2}-\d{2}(\.[a-z]+)?$/.test(version) && version.slice(0, 10) >= '2025-03-31');
+}
 
 export interface StripeTestModeConfig {
   secretKey: string; webhookSecret: string;
@@ -35,6 +43,7 @@ export function normalizeStripeEvent(raw: unknown, provider: SaasProviderCode): 
   const e = obj(raw), data = obj(obj(e.data).object), type = str(e.type), id = str(e.id);
   if (e.object !== 'event' || !type || !id || typeof e.livemode !== 'boolean') throw new WebhookVerificationError('MALFORMED_EVENT');
   if (e.livemode) throw new WebhookVerificationError('LIVE_MODE_REFUSED');
+  if (!supportedEventApiVersion(e.api_version)) throw new WebhookVerificationError('UNSUPPORTED_API_VERSION');
   const base = { provider, eventId: id, type, livemode: false as const, createdAt: iso(e.created) };
   switch (type) {
     case 'checkout.session.completed': case 'checkout.session.async_payment_succeeded':
