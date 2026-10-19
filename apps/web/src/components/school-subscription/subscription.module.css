@@ -839,3 +839,7 @@
 .invoice code { overflow-wrap:anywhere; }
 .returnNotice { padding:16px; border:1px solid #397f93; border-radius:12px; color:#c6f9ff; font-size:13px; }
 @media(max-width:600px) { .accountHeader { flex-direction:column; gap:8px; } .secondary { width:100%; } .facts { grid-template-columns:1fr; } .checkoutStatus,.activation,.creditPanel { padding:14px; } }
+
+.readinessStatus { margin:12px 0; padding:13px; border:1px solid #548194; border-radius:10px; background:#112d3e; }
+.readinessStatus strong { color:#c6f9ff; }
+.readinessStatus p { margin:8px 0 0; }
