@@ -8,7 +8,9 @@ on:
       - '.github/workflows/school-subscription-verification.yml'
       - 'apps/web/src/components/school-subscription/**'
       - 'apps/web/src/app/staff/subscription/**'
+      - 'apps/web/src/app/schools/**/hon-plan/**'
       - 'apps/web/scripts/school-subscription-browser.mjs'
+      - 'apps/web/scripts/fixtures/school-checkout.*'
       - 'apps/web/test/school-subscription.test.tsx'
 permissions:
   contents: read
@@ -17,12 +19,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   browser:
-    if: github.head_ref == 'codex/school-subscription-foundation' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.head_ref == 'codex/school-checkout-test-mode' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
+      HON_API_BASE_URL: 'http://127.0.0.1:3001'
       HON_SUBSCRIPTION_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -47,7 +50,7 @@ jobs:
           echo "HON_SUBSCRIPTION_TOOLS=$RUNNER_TEMP/hon-subscription-tools" >> "$GITHUB_ENV"
           echo "HON_SUBSCRIPTION_RESULTS=$RUNNER_TEMP/hon-subscription-results" >> "$GITHUB_ENV"
           npm install --prefix "$RUNNER_TEMP/hon-subscription-tools" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1 axe-core@4.10.3
-      - name: Actual school page, synthetic signed sessions, no billing services
+      - name: Actual school purchasing UI with signed synthetic B5/B3 fixtures
         id: browser
         run: pnpm --filter @hon/web exec node scripts/school-subscription-browser.mjs
       - name: Upload screenshots and sanitized report
