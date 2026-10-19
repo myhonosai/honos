@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { validateSaasSchoolPlanOptions, validateSaasSchoolCredits } from '@hon/contracts';
 import { loadSchoolAccount, loadSchoolAllowance, startSchoolCheckout, hostedCheckoutUrl, canPurchase, offerFingerprint, reviewFingerprint } from '../src/components/school-subscription/http';
 import { SchoolSubscription } from '../src/components/school-subscription/subscription';
+import { SchoolAccessStatus, SchoolCreditStatus, SchoolReadinessNextSteps } from '../src/components/school-subscription/readiness';
 import { SchoolAccountStatus } from '../src/components/school-subscription/account';
 import { INITIAL_SELECTION, OFFER_CHOICES, PLAN_COMPARISON, displayUsd, planDisplay, selectPlan } from '../src/components/school-subscription/catalog';
 import { checkoutId, schoolContext, schoolPlanFixture, schoolCreditsFixture, schoolCheckoutReceipt } from '../scripts/fixtures/school-checkout.mjs';
@@ -100,5 +101,72 @@ describe('school subscription — merged B5/B3 integration boundaries', () => {
     const route=readFileSync('src/app/schools/[schoolId]/hon-plan/page.tsx','utf8');expect(route).toContain('await requireVerifiedWebSession()');expect(route).not.toMatch(/params|searchParams|result=|checkoutId|fetch\(/);
     const source=readFileSync('src/components/school-subscription/subscription.tsx','utf8');expect(source).toContain('HON_INTERFACE_THEMES.map');expect(source).toContain('AI conversation and voice are unavailable');expect(source).not.toMatch(/localStorage|sessionStorage|searchParams|window\.location/);
     const html=renderToStaticMarkup(<SchoolSubscription/>);expect(html).toContain('Test-mode purchasing');expect(html).toContain('Informational comparison price');expect(html).toContain('Big Button');expect(html).not.toContain('SYNTHETIC');
+  });
+});
+
+
+describe('school account readiness — merged B5/B3 facts only', () => {
+  it('keeps verified payment separate from suspension and does not promise reactivation', () => {
+    const a = account('paid'); a.plan = schoolPlanFixture({ state:'paid',service:'SUSPENDED' });
+    const html = renderToStaticMarkup(<SchoolAccessStatus account={a}/>);
+    expect(html).toContain('Simulator-verified test payment'); expect(html).toContain('Subscription suspended');
+    expect(html).not.toContain('Pending Account Activation'); expect(html).toContain('does not prove reactivation');
+    expect(html).toContain('Effective feature access: unavailable');
+    expect(validateSaasSchoolPlanOptions(a.plan)).toEqual(a.plan);
+  });
+  it('never treats recorded IN_SERVICE and matching Core/Complete tiers as a paid access grant', () => {
+    for (const tier of ['CORE','COMPLETE'] as const) {
+      const a = account('paid'); a.plan = schoolPlanFixture({tier,state:'paid'});
+      const html = renderToStaticMarkup(<SchoolAccessStatus account={a}/>);
+      expect(html).toContain('Pending Account Activation'); expect(html).toContain('Reported provisioned tier:');
+      expect(html).toContain(tier); expect(html).not.toContain('Currently authorized tier');
+      expect(html).toContain('Existing permissions remain enforced independently');
+    }
+  });
+  it('shows recorded pending, voided, and manually attested service without stronger payment evidence', () => {
+    const a = account('attested'); let html = renderToStaticMarkup(<SchoolAccessStatus account={a}/>);
+    expect(html).toContain('Service recorded; access unconfirmed'); expect(html).not.toContain('verified test payment');
+    a.plan = schoolPlanFixture({state:'attested',service:'PENDING_ACTIVATION'});
+    html = renderToStaticMarkup(<SchoolAccessStatus account={a}/>); expect(html).toContain('Pending Account Activation'); expect(html).not.toContain('verified test payment');
+    a.plan = schoolPlanFixture({state:'paid',service:'VOIDED'});
+    expect(renderToStaticMarkup(<SchoolAccessStatus account={a}/>)).toContain('Subscription voided');
+  });
+  it('reports mismatched recorded tier and subscription plan without choosing effective features', () => {
+    const a = account('paid'); a.plan.entitlementTier = 'COMPLETE'; a.plan.offers = [];
+    expect(validateSaasSchoolPlanOptions(a.plan)).toEqual(a.plan);
+    const html = renderToStaticMarkup(<SchoolAccessStatus account={a}/>);
+    expect(html).toContain('COMPLETE'); expect(html).toContain('CORE'); expect(html).toContain('reported tier and subscription plan differ');
+    expect(html).toContain('cannot change either record'); expect(html).not.toContain('<button');
+  });
+  it('distinguishes inactive, missing, expired, zero and recorded allowances using exact B3 records', () => {
+    const a = account('paid');
+    for (const [mode,label] of [['inactive','Premium credit program inactive'],['absent','Allowance not issued'],['expired','Allowance expired'],['empty','No remaining ledger credits'],['ready','Allowance recorded']] as const) {
+      const credits = schoolCreditsFixture(a.plan,mode); expect(validateSaasSchoolCredits(credits)).toEqual(credits);
+      const html = renderToStaticMarkup(<SchoolCreditStatus account={a} credits={credits} error={null}/>);
+      expect(html).toContain(label); expect(html).not.toContain('Account ready');
+    }
+    a.plan = schoolPlanFixture({state:'paid',service:'SUSPENDED'});
+    const html = renderToStaticMarkup(<SchoolCreditStatus account={a} credits={schoolCreditsFixture(a.plan)} error={null}/>);
+    expect(html).toContain('Subscription suspended'); expect(html).toContain('not permission to spend credits');
+  });
+  it('keeps missing or denied credits distinct from confirmed suspension or granted balance', () => {
+    const a = account('paid');
+    expect(renderToStaticMarkup(<SchoolCreditStatus account={a} credits={null} error={null}/>)).toContain('Checking AI allowance status');
+    const html = renderToStaticMarkup(<SchoolCreditStatus account={a} credits={null} error="not displayed provider/private details"/>);
+    expect(html).toContain('AI allowance status unavailable'); expect(html).not.toContain('not displayed provider/private details');
+    expect(html).not.toContain('Subscription suspended'); expect(html).toContain('No balance or suspension state is assumed');
+  });
+  it('rejects cross-plan credit facts even without an allowance, and allows matching suspended records', async () => {
+    const a = account('paid'), credits = schoolCreditsFixture(a.plan,'absent'); credits.planCode = 'COMPLETE';
+    const fetch = vi.spyOn(globalThis,'fetch').mockResolvedValue(ok(credits));
+    await expect(loadSchoolAllowance(a)).rejects.toMatchObject({kind:'INVALID'});
+    a.plan = schoolPlanFixture({state:'paid',service:'SUSPENDED'}); fetch.mockResolvedValue(ok(schoolCreditsFixture(a.plan)));
+    await expect(loadSchoolAllowance(a)).resolves.toMatchObject({subscriptionStatus:'SUSPENDED'});
+  });
+  it('keeps invoice, multi-school purchasing and reactivation gaps unavailable, without links or commands', () => {
+    const html = renderToStaticMarkup(<SchoolReadinessNextSteps account={account('paid')}/>);
+    expect(html).toContain('School invoice history and detail'); expect(html).toContain('Unavailable until');
+    expect(html).toContain('Purchasing for another school'); expect(html).toContain('payment does not activate features or clear a suspension');
+    expect(html).not.toMatch(/<button|<a |<form/);
   });
 });
