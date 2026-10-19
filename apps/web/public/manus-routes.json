@@ -129,6 +129,10 @@
       "title": "Human CRM leads"
     },
     {
+      "path": "/staff/crm/register",
+      "title": "HON | Direct-human CRM registration review"
+    },
+    {
       "path": "/staff/crm/trials",
       "title": "Human CRM trial appointments"
     },
@@ -145,8 +149,16 @@
       "title": "Human membership activation only"
     },
     {
+      "path": "/staff/billing/crm-adult-membership-drafts",
+      "title": "HON | Adult CRM membership DRAFT"
+    },
+    {
       "path": "/staff/billing/invoices",
       "title": "HON | Human Invoice Workbench"
+    },
+    {
+      "path": "/staff/billing/accounts",
+      "title": "HON | Human Billing Account Workbench"
     },
     {
       "path": "/community",
@@ -271,6 +283,10 @@
     {
       "path": "/staff/curriculum/progress",
       "title": "HON | Human Curriculum Progress"
+    },
+    {
+      "path": "/staff/curriculum/enrollments",
+      "title": "HON | Human Curriculum Enrollment"
     },
     {
       "path": "/parent/curriculum-library",

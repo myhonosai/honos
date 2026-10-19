@@ -1,3 +1,4 @@
+export * from './crm-adult-membership-draft.js';
 export * from './hq-entitlement.js';
 export * from './owner-launch.js';
 export * from './human-work-items.js';
@@ -9,6 +10,7 @@ export * from './command-center.js';
 export * from './health-score.js';
 export * from './ai-invocation-plan.js';
 export * from './curriculum-progress.js';
+export * from './curriculum-enrollment-preparation.js';
 export * from './lead-import.js';
 export * from './ai-provider.js';
 export * from './ai-model-evaluation.js';
@@ -21,6 +23,8 @@ export * from './parent-message-history.js';
 export * from './attendance-policy.js';
 export * from './crm-lead-close.js';
 export * from './crm-lead-create.js';
+export * from './crm-intake-stages.js';
+export * from './crm-lead-registration.js';
 export * from './kiosk.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;
@@ -318,14 +322,55 @@ export interface CancelledMembershipSummary {
 export interface CreateBillingAccountInput {
   responsiblePersonId: string;
   currency?: string;
+  /** Default false: reuse a matching current canonical account where possible. */
+  createAdditional?: boolean;
+  /** Required only for an explicit additional account; stored as immutable audit evidence. */
+  additionalReason?: string;
 }
+
+export const BILLING_ACCOUNT_CLASSIFICATIONS = ['CANONICAL', 'ADDITIONAL'] as const;
+export type BillingAccountClassification = (typeof BILLING_ACCOUNT_CLASSIFICATIONS)[number];
 
 export interface BillingAccountSummary {
   id: string;
   responsiblePersonId: string;
   currency: string;
+  classification: BillingAccountClassification;
   version: number;
   createdAt: string;
+}
+
+/** Closed direct-human billing-account command syntax; authority remains server-derived. */
+export function validateCreateBillingAccountInput(value: unknown): asserts value is CreateBillingAccountInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid billing-account input.');
+  const input = value as Record<string, unknown>;
+  const keys = Object.keys(input);
+  const allowed = ['responsiblePersonId', 'currency', 'createAdditional', 'additionalReason'];
+  if (!keys.includes('responsiblePersonId') || keys.some(key => !allowed.includes(key))) throw new Error('Invalid billing-account input.');
+  if (typeof input.responsiblePersonId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.responsiblePersonId)) {
+    throw new Error('Invalid billing-account responsible person.');
+  }
+  if (input.currency !== undefined && (typeof input.currency !== 'string' || !/^[A-Z]{3}$/.test(input.currency))) {
+    throw new Error('Invalid billing-account currency.');
+  }
+  if (input.createAdditional !== undefined && typeof input.createAdditional !== 'boolean') {
+    throw new Error('Invalid billing-account additional-account flag.');
+  }
+  const additional = input.createAdditional === true;
+  // Nest's transformed DTO may retain optional decorated fields as own
+  // properties with `undefined`; JSON still did not supply a reason in that
+  // case. Treat only a concrete value as a submitted reason.
+  const hasAdditionalReason = input.additionalReason !== undefined;
+  if (additional !== hasAdditionalReason) {
+    throw new Error('An additional billing account requires exactly one documented reason.');
+  }
+  if (additional) {
+    const reason = input.additionalReason;
+    if (typeof reason !== 'string' || reason.length < 1 || reason.length > 500 || reason.trim() !== reason
+      || /[\u0000-\u001f\u007f-\u009f]/u.test(reason)) {
+      throw new Error('Invalid additional billing-account reason.');
+    }
+  }
 }
 
 /** Active ISO 4217 alphabetic codes accepted by conventional billing commands. */

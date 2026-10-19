@@ -1,3 +1,6 @@
+import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
+import { CrmAdultMembershipDraftService } from './billing/crm-adult-membership-draft.service.js';
+import { CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
 import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
@@ -37,6 +40,9 @@ import { DocumentService } from './documents/document.service.js';
 import { CurriculumProgressController } from './curriculum/curriculum-progress.controller.js';
 import { CurriculumProgressService } from './curriculum/curriculum-progress.service.js';
 import { CurriculumHumanUiGuard } from './curriculum/curriculum-human-ui.guard.js';
+import { CurriculumEnrollmentPreparationController } from './curriculum/curriculum-enrollment-preparation.controller.js';
+import { CurriculumEnrollmentPreparationService } from './curriculum/curriculum-enrollment-preparation.service.js';
+import { CurriculumEnrollmentPreparationGuard, CurriculumEnrollmentPreparationNoStoreGuard } from './curriculum/curriculum-enrollment-preparation.guard.js';
 import { DocumentHumanUiGuard } from './documents/document-human-ui.guard.js';
 import { Module } from '@nestjs/common';
 import { LeadImportController } from './migration/lead-import.controller.js';
@@ -52,9 +58,15 @@ import { ReadinessController } from './health/readiness.controller.js';
 import { LeadController } from './crm/lead.controller.js';
 import { LeadService } from './crm/lead.service.js';
 import { LeadCreateHumanUiGuard } from './crm/lead-create-human-ui.guard.js';
+import { CrmIntakeStagesController } from './crm/crm-intake-stages.controller.js';
+import { CrmIntakeStagesService } from './crm/crm-intake-stages.service.js';
+import { CrmIntakeStagesHumanUiGuard } from './crm/crm-intake-stages-human-ui.guard.js';
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
+import { LeadRegistrationController } from './crm/lead-registration.controller.js';
+import { LeadRegistrationService } from './crm/lead-registration.service.js';
+import { LeadRegistrationHumanUiGuard } from './crm/lead-registration.dto.js';
 import { TrialAppointmentController } from './crm/trial-appointment.controller.js';
 import { TrialAppointmentService } from './crm/trial-appointment.service.js';
 import { TrialAppointmentOutcomeController } from './crm/trial-appointment-outcome.controller.js';
@@ -67,6 +79,7 @@ import { MembershipService } from './billing/membership.service.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
+import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
 import { InvoiceController } from './billing/invoice.controller.js';
 import { InvoiceService } from './billing/invoice.service.js';
 import { InvoiceHumanUiGuard } from './billing/invoice-human-ui.guard.js';
@@ -244,6 +257,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     RevenuePlanningController,
     StaffSearchController,
     CurriculumProgressController,
+    CurriculumEnrollmentPreparationController,
     LeadImportController,
     DocumentController, ParentDocumentController,
     StaffRoleController,
@@ -264,7 +278,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentPlannedAbsenceRequestController,
     ParentMessageHistoryController,
     LeadController,
+    CrmIntakeStagesController,
     LeadCloseController,
+    LeadRegistrationController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
     PipelineController,
@@ -302,6 +318,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
+    CrmAdultMembershipDraftController,
     BillingAccountController,
     InvoiceController,
     HqController,
@@ -343,6 +360,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     RevenuePlanningService, RevenuePlanningHumanUiGuard,
     StaffSearchService,
     CurriculumProgressService, CurriculumHumanUiGuard, TestingHumanUiGuard,
+    CurriculumEnrollmentPreparationService, CurriculumEnrollmentPreparationNoStoreGuard, CurriculumEnrollmentPreparationGuard,
     LeadImportService, LeadImportHumanUiGuard,
     DocumentService, DocumentHumanUiGuard,
     StaffRoleService,
@@ -363,8 +381,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentMessageHistoryReadGuard,
     LeadService,
     LeadCreateHumanUiGuard,
+    CrmIntakeStagesService,
+    CrmIntakeStagesHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
+    LeadRegistrationService,
+    LeadRegistrationHumanUiGuard,
     TrialAppointmentService,
     TrialAppointmentOutcomeService,
     CrmLeadActionTool,
@@ -411,8 +433,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipActivationHumanUiGuard,
     BillingAccountService,
+    BillingAccountHumanUiGuard,
     InvoiceService,
     InvoiceHumanUiGuard,
     HqOnboardingService,

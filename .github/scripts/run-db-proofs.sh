@@ -33,7 +33,20 @@ fi
 chmod 700 "$job_dir"
 rm -f "$job_dir"/*.env
 # Remove generated disposable credentials on every exit path, including failures.
-trap 'rm -f "$job_dir"/*.env' EXIT
+# The enrollment preparation fixture owns a nested private cluster, so clean its
+# mode-0600 environment file and stop its process even when its proof fails.
+preparation_dir=''
+adult_draft_dir=''
+cleanup() {
+  rm -f "$job_dir"/*.env "$job_dir"/*/*.env
+  if [[ -n "$preparation_dir" && -d "$preparation_dir/pgdata" ]]; then
+    /usr/lib/postgresql/16/bin/pg_ctl -D "$preparation_dir/pgdata" -m fast -w stop >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$adult_draft_dir" && -d "$adult_draft_dir/pgdata" ]]; then
+    /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
 
 clean_env=(env -i "PATH=$PATH" "HOME=$HOME" "LANG=C.UTF-8")
 passed=0
@@ -78,7 +91,48 @@ proof champions-club test-saas-credits-integrity.mjs "HON premium credits (B3): 
 proof champions-club test-saas-refunds-rewards-integrity.mjs "HON refunds and Champions rewards (B4): 30-day first-purchase guarantee records, owner-gated reward application, alerts block fulfillment, no execution or payout"
 proof champions-club test-saas-payments-integrity.mjs "HON payments (B5, test mode, simulated Stripe): hosted checkout, signature-verified idempotent webhooks, provider-verified accounting, renewals, refunds, recovery"
 
-echo "All $passed disposable-database proofs passed (3 fixtures, all migrations applied)."
+# This proof needs an isolated PostgreSQL cluster because the application-wide
+# local PostgreSQL service can already contain developer-created roles. It still
+# refuses every non-local target and uses a private 0700 runner job directory.
+preparation_fixture="curriculum-enrollment-preparation"
+preparation_dir="$job_dir/$preparation_fixture"
+rm -rf "$preparation_dir"
+mkdir -p "$preparation_dir"
+chmod 700 "$preparation_dir"
+echo "::group::Provision disposable fixture: $preparation_fixture"
+"${clean_env[@]}" \
+  HON_CURRICULUM_ENROLLMENT_PREPARATION_VALIDATION_TARGET=postgresql://127.0.0.1:55434/hon_curriculum_enrollment_preparation_validation \
+  HON_CURRICULUM_ENROLLMENT_PREPARATION_ENV_FILE="$preparation_dir/$preparation_fixture.env" \
+  HON_CURRICULUM_ENROLLMENT_PREPARATION_PGDATA="$preparation_dir/pgdata" \
+  node "$scripts/setup-curriculum-enrollment-preparation-validation.mjs"
+echo "::endgroup::"
+echo "::group::Curriculum enrollment preparation direct-human read boundary"
+"${clean_env[@]}" bash -c 'set -a; . "$1"; set +a; cd "$2" && node scripts/test-curriculum-enrollment-preparation-integrity.mjs' _ "$preparation_dir/$preparation_fixture.env" "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Curriculum enrollment preparation direct-human read boundary | \`test-curriculum-enrollment-preparation-integrity.mjs\` | pass |")
+/usr/lib/postgresql/16/bin/pg_ctl -D "$preparation_dir/pgdata" -m fast -w stop >/dev/null
+rm -f "$preparation_dir/$preparation_fixture.env"
+
+adult_draft_fixture='crm-adult-membership-draft'
+adult_draft_dir="$(mktemp -d "$job_dir/$adult_draft_fixture.XXXXXX")"
+chmod 700 "$adult_draft_dir"
+echo "::group::Provision disposable fixture: $adult_draft_fixture"
+"${clean_env[@]}" \
+  HON_CRM_ADULT_MEMBERSHIP_DRAFT_VALIDATION_TARGET=postgresql://127.0.0.1:55435/hon_crm_adult_membership_draft_validation \
+  HON_CRM_ADULT_MEMBERSHIP_DRAFT_ENV_FILE="$adult_draft_dir/$adult_draft_fixture.env" \
+  HON_CRM_ADULT_MEMBERSHIP_DRAFT_PGDATA="$adult_draft_dir/pgdata" \
+  node "$scripts/setup-crm-adult-membership-draft-validation.mjs"
+echo "::endgroup::"
+echo "::group::Adult CRM registration to one membership DRAFT"
+"${clean_env[@]}" bash -c 'set -a; . "$1"; set +a; cd "$2" && node scripts/test-crm-adult-membership-draft-integrity.mjs' _ "$adult_draft_dir/$adult_draft_fixture.env" "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-membership-draft-integrity.mjs\` | pass |")
+/usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
+rm -f "$adult_draft_dir/$adult_draft_fixture.env"
+
+echo "All $passed disposable-database proofs passed (5 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

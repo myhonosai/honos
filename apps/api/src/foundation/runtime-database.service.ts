@@ -168,12 +168,14 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       });
     }
 
+    const databaseHost = new URL(connectionString).hostname;
+    const isLoopbackDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(databaseHost);
     this.pool ??= new Pool({
       connectionString,
       max: 8,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+      ssl: isLoopbackDatabase ? false : { rejectUnauthorized: false },
     });
     return this.pool;
   }
@@ -426,6 +428,13 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.assertRuntimePosture();
     return (await this.getPool().query<ResolvedPrincipalScope>(
       'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_crm_lead_close_scope($1,$2::uuid)',
+      [externalSubject, schoolId],
+    )).rows[0];
+  }
+  async resolveCrmLeadRegistrationScope(externalSubject: string, schoolId: string): Promise<ResolvedPrincipalScope | undefined> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<ResolvedPrincipalScope>(
+      'SELECT principal_id AS "principalId", organization_id AS "organizationId", school_id AS "schoolId" FROM hon.resolve_crm_lead_registration_scope($1,$2::uuid)',
       [externalSubject, schoolId],
     )).rows[0];
   }

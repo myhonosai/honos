@@ -1,6 +1,6 @@
 # HON Subscription Billing — Milestone B5: Checkout and Payment-Provider Integration (TEST MODE)
 
-**Status:** PR open for owner review; **not merged**. Migration `0158_hon_payment_provider_test_mode.sql`, contracts `@hon/contracts` `saas-payments.ts`, API `apps/api/src/payments/`.
+**Status:** Merged into `main`; **test mode only**. Migration `0158_hon_payment_provider_test_mode.sql`, contracts `@hon/contracts` `saas-payments.ts`, API `apps/api/src/payments/`.
 
 **What is proven, and how:** everything below is proven against a **deterministic Stripe simulator**, labelled `STRIPE_SIMULATED` in every record. The simulator is injected as the real adapter's transport and signs webhooks with Stripe's own scheme, so the production request-building, signature-verification and normalization code is exercised.
 

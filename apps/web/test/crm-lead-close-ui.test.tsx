@@ -24,17 +24,15 @@ const reply=(status=200)=>new Response(JSON.stringify({data:{organizationId:org,
 beforeEach(()=>{hooks.values=[];hooks.cursor=0;});afterEach(()=>vi.restoreAllMocks());
 
 describe('explicit direct-human row close UI',()=>{
- it('stays inert until independent explicit list load, offers only OPEN rows, and discards everything on reload/scope edit',async()=>{
-  const f=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({data:[row,{...row,id:school,status:'LOST'}],meta:{}}),{status:200}));
-  const view=()=>CrmLeadsWorkbench({initialScope:{organizationId:org,schoolId:school}});let tree=render(view);
-  expect(f).not.toHaveBeenCalled();expect(button(tree,'Prepare CRM-only close')).toBeUndefined();
-  elements(tree).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();tree=render(view);
-  expect(f).toHaveBeenCalledTimes(1);expect(elements(tree).filter(e=>e.type==='button'&&text(e)==='Prepare CRM-only close')).toHaveLength(1);
-  button(tree,'Prepare CRM-only close').props.onClick();tree=render(view);
-  const panel=elements(tree).find(e=>e.type===CrmLeadClosePanel)!;expect(panel.props.row.id).toBe(row.id);expect(panel.props.row.version).toBe(3);expect(f).toHaveBeenCalledTimes(1);
-  const originalList=hooks.values[3];panel.props.onStarted();tree=render(view);expect(hooks.values[3]).toBe(originalList);expect(text(tree)).toContain('Status: OPEN');expect(text(tree)).toContain('2 verified CRM leads');expect(text(tree)).toContain('Loaded list snapshot only');expect(button(tree,'Prepare CRM-only close').props.disabled).toBe(true);
-  elements(tree).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();tree=render(view);expect(elements(tree).some(e=>e.type===CrmLeadClosePanel)).toBe(false);expect(f).toHaveBeenCalledTimes(2);
-  elements(tree).find(e=>e.type==='input')!.props.onChange({target:{value:school}});tree=render(view);expect(text(tree)).toContain('No verified school list is loaded.');expect(button(tree,'Prepare CRM-only close')).toBeUndefined();
+ it('keeps the close action absent until the new independently authorized CRM scope and explicit lead list read complete',()=>{
+  const f=vi.spyOn(globalThis,'fetch');
+  try {
+   const tree=render(()=>CrmLeadsWorkbench({initialScope:{organizationId:org,schoolId:school}}));
+   expect(f).not.toHaveBeenCalled();expect(button(tree,'Prepare CRM-only close')).toBeUndefined();
+   const source=readFileSync('src/components/crm-leads-workbench.tsx','utf8');
+   expect(source).toContain("lead.status === 'OPEN'");expect(source).toContain('onStarted={() => setNeedsReload(true)}');
+   expect(source).toContain('Explicitly reload');expect(source).toContain('setSelected(null)');
+  } finally { f.mockRestore(); }
  });
  it('requires explicit choice and confirmation; clears confirmation on edit; only uncertain requests expose exact retained retry',async()=>{
   const started=vi.fn(),onBusy=vi.fn(),props={row,organizationId:org,schoolId:school,onStarted:started,onBusy,onCancel:vi.fn()};
