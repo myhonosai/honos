@@ -290,6 +290,7 @@
     {"path": "/hq/growth", "title": "HON HQ | Growth"},
     {"path": "/hq/growth/rewards", "title": "HON HQ | Rewards"},
     {"path": "/hq/revenue", "title": "HON HQ | Revenue"},
-    {"path": "/hq/support", "title": "HON HQ | Support"}
+    {"path": "/hq/support", "title": "HON HQ | Support"},
+    {"path": "/hq/growth/champions-club/schools", "title": "HON HQ | School referrals"}
   ]
 }
