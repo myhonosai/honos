@@ -13,6 +13,8 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 
 `run-db-proofs.sh` reuses the repository's own guarded fixture scripts **unchanged**. Each one creates a dedicated, marked database and least-privilege `*_owner` / `*_runtime` roles on localhost, applies **all** migrations, and writes generated credentials to a private mode-0600 file that is deleted on exit.
 
+**Latest combined CRM/B5 evidence:** CRM PR [#27](https://github.com/myhonosai/honos/pull/27) run [39204752220](https://github.com/myhonosai/honos/actions/runs/39204752220) was a real non-draft `pull_request` execution and passed both jobs: test/typecheck/build/migrations in 3m09s and disposable PostgreSQL security proofs in 4m08s. It validates the combined 163-migration chain, B5 `0158`, and CRM `0159`–`0163`; it did not use a remote/shared database or provider credential.
+
 | Fixture | Proof | What it demonstrates |
 | --- | --- | --- |
 | `class-sessions-read` | `test-security-boundaries.mjs` | Restricted runtime privileges, permission revocation, parent-family resolution, transaction-bound RLS isolation, composite tenant references |

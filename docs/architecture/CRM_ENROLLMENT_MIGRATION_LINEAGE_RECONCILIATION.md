@@ -1,6 +1,6 @@
 # CRM enrollment migration lineage reconciliation
 
-**Status:** Reconciled on the isolated `manus/crm-enrollment-workflow` branch. Full disposable-local validation and read-only review passed; pull-request CI remains required before merge. This note is a repository-integration safeguard; it neither authorizes a remote migration nor changes customer data.
+**Status:** Reconciled on the isolated `manus/crm-enrollment-workflow` branch. Full disposable-local validation, read-only review, and non-draft pull-request CI passed. This note is a repository-integration safeguard; it neither authorizes a remote migration nor changes customer data.
 
 ## Why reconciliation was required
 
@@ -59,3 +59,9 @@ This reconciliation retains both sides of the merge:
 - Current `main` Champions Club, HON SaaS subscription/invoicing/premium-credit/refund/reward accounting, B5 test-mode payment-provider migration and implementation, runtime grants, contracts, routes, tests, proof wiring, and approved Codex/visual artifacts.
 
 Runtime-grant reconciliation is an additive union. It does not introduce broad table access, and it retains each fixed-function boundary. Fresh complete-chain migration, RLS/security proof, focused API/web, workspace, and pull-request CI validation remain required before this branch is reviewable.
+
+## Validation evidence
+
+The fresh combined history applied all 163 migrations, including B5 `0158` followed by CRM `0159`–`0163`, to disposable PostgreSQL fixtures. The guarded dispatcher passed all 17 selected proofs across five fixtures with RLS enforced on 240 tracked operational tables. Focused CRM/B5 API tests passed 14/14; focused CRM web tests passed 25/25; and root `pnpm test` passed 440 tests, followed by `pnpm check`, `pnpm build`, and clean staged/unstaged whitespace checks. B5's migration blob remained identical to `main` (`21518b854d8e653acce5e349207345a29fb7f10a`).
+
+CRM PR [#27](https://github.com/myhonosai/honos/pull/27) is open, non-draft, clean and mergeable. Its real `pull_request` CI run [39204752220](https://github.com/myhonosai/honos/actions/runs/39204752220) succeeded: **Test, typecheck, build, migrations** completed in 3m09s and **Disposable PostgreSQL security proofs** completed in 4m08s. No remote database, payment provider, customer communication, production deployment, payment collection, or merge occurred.
