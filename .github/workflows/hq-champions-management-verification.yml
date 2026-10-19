@@ -1,7 +1,7 @@
-# Temporary browser evidence for the owner-authorized school/reward management follow-up.
+# Temporary browser evidence for the owner-authorized read-only subscription review slice.
 # Separate from the retired PR #8/#11 workflow. Remove through a reviewed cleanup after sign-off.
 # No deployment, secrets, production data, pull_request_target or write permissions.
-name: HQ Champions Management Browser (temporary)
+name: HQ Read-only Management Browser (temporary)
 
 on:
   pull_request:
@@ -13,9 +13,12 @@ on:
       - 'apps/web/scripts/fixtures/hq-champions-leaderboard.mjs'
       - 'apps/web/scripts/fixtures/hq-champions-management.mjs'
       - 'apps/web/scripts/fixtures/hq-school-rewards.*'
+      - 'apps/web/scripts/fixtures/hq-saas-review.*'
+      - 'apps/web/scripts/hq-saas-browser-checks.mjs'
       - 'apps/web/test/hq-champions-leaderboard.test.tsx'
       - 'apps/web/test/hq-champions-management.test.tsx'
       - 'apps/web/test/hq-school-rewards.test.tsx'
+      - 'apps/web/test/hq-saas-review.test.tsx'
       - 'apps/web/src/components/hq-modern/**'
       - 'apps/web/src/app/hq/**'
       - 'apps/web/public/hq-assets/**'
@@ -29,7 +32,7 @@ concurrency:
 
 jobs:
   browser:
-    if: github.head_ref == 'codex/hq-school-reward-management' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.head_ref == 'codex/hq-subscription-review' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -52,7 +55,7 @@ jobs:
       - name: Build existing workspace packages and web application
         run: pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Focused management and leaderboard regression tests
-        run: pnpm --filter @hon/web exec vitest run test/hq-champions-management.test.tsx test/hq-champions-leaderboard.test.tsx test/hq-school-rewards.test.tsx
+        run: pnpm --filter @hon/web exec vitest run test/hq-champions-management.test.tsx test/hq-champions-leaderboard.test.tsx test/hq-school-rewards.test.tsx test/hq-saas-review.test.tsx
       - name: Prepare pinned temporary browser tools (no repository changes)
         shell: bash
         run: |

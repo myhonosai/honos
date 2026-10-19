@@ -1,0 +1,10 @@
+.filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.filters>div{display:grid;gap:8px;min-width:0}.filters label{font-size:13px;color:#d7edf7}
+.filters input,.filters select{min-width:0;width:100%;min-height:44px;background:#0a2635;color:#effaff;border:1px solid #5b879a;border-radius:9px;padding:10px;font:inherit}
+.inventory{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}.inventory>section{padding:16px;border:1px solid #3c6477;border-radius:12px;background:#0a2635bb;min-width:0}
+.inventory h3{font-size:15px;color:#d3f8ff;line-height:1.6}.inventory p,.inventory li{font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+.records{list-style:none;display:grid;gap:12px;padding:0;margin:14px 0 0}.records>li{border:1px solid #3c6174;border-radius:12px;padding:16px;background:#081f2bba;overflow-wrap:anywhere;min-width:0}.records h3{font-size:15px;color:#dff7ff;line-height:1.6}.records p{font-size:12px;line-height:1.8}.records>li>div{flex-wrap:wrap;gap:10px}.records button{margin-top:10px;min-height:44px}
+.disclosure summary{cursor:pointer;min-height:44px;align-content:center;font-size:14px;color:#d9f7fc}.disclosure p,.disclosure li{font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+.accountHeading{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.accountHeading h2{font-size:19px;margin-right:auto}.accountHeading button{min-height:44px;background:#0c3446;border-color:#4f8eaa}
+@media(max-width:1100px){.inventory{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.filters{grid-template-columns:minmax(0,1fr)}.filters input,.filters select{font-size:16px}.records>li{padding:14px}.records button,.accountHeading button{width:100%}.inventory>section{padding:14px}}
