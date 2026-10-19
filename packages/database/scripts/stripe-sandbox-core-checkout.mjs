@@ -122,7 +122,7 @@ try{
   const completed=ours.find(e=>e.type==='checkout.session.completed');
   assert.ok(completed,'checkout.session.completed not recovered yet; re-run verify shortly.');
   assert.ok(['APPLIED','ALREADY_APPLIED'].includes(completed.outcome),`completed event outcome ${completed.outcome}/${completed.detail}`);
-  const rows=(await admin.query('SELECT provider,provider_event_id,type,outcome,detail FROM hon.saas_provider_events WHERE organization_id=$1 ORDER BY received_at',[s.organizationId])).rows;
+  const rows=(await admin.query('SELECT provider,provider_event_id,event_type AS type,outcome,outcome_detail AS detail FROM hon.saas_provider_events WHERE organization_id=$1 ORDER BY received_at',[s.organizationId])).rows;
   assert.ok(rows.every(e=>e.provider==='STRIPE'),'every recorded event is provider STRIPE (not simulated)');
   assert.ok(rows.some(e=>e.type==='checkout.session.completed'&&e.outcome==='APPLIED'&&e.detail==='SUBSCRIPTION_ACTIVATED'));
   const evStripe=await stripeGet(`/events/${completed.providerEventId}`);assertTestMode(evStripe,'event');
@@ -141,12 +141,15 @@ try{
   assert.equal(ev[0].provider_event_id,completed.providerEventId,'evidence cites the authentic Stripe event');
   log('HON records',{subscription:sub.subscriptionId,invoice:inv.invoiceNumber,evidenceEvent:ev[0].provider_event_id,stripeSubscription:co.provider_subscription_ref});
   // ---------- Core allowance (B3 rules; credit program and pricing are disposable fixtures) ----------
+  if((await admin.query('SELECT status FROM hon.saas_credit_program')).rows[0].status==='INACTIVE'){
+   await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state) VALUES('HIGGSFIELD','Fixture provider','DISABLED') ON CONFLICT DO NOTHING");
   const costEvidence=(await billing.recordCostEvidence(H('owner'),{providerId:'HIGGSFIELD',modelCode:'fixture-image-1',costUnit:'IMAGE',measuredUnits:1000,billedCostMicrounits:40_000_000,
    fullyLoadedCostMicrounits:50_000_000,evidenceReference:'SANDBOX-FIXTURE-COST-1',periodStart:iso(Date.now()-40*86400_000),periodEnd:iso(Date.now()-10*86400_000),note:null},K()).catch(e=>{throw new Error(`cost evidence fixture: ${e.message}`);})).costEvidence;
   const pd=(await billing.createPricingDraft(H('operator'),{termsReference:'Fixture premium pricing (not customer terms)',operations:[{operationCode:'image.generate',
    category:'IMAGE_GENERATION',displayName:'AI image',billingUnit:'IMAGE',creditsPerUnit:10,maxUnitsPerRequest:8,requiredCapability:'ai.premium_metered',costEvidenceId:costEvidence.costEvidenceId}]},K())).pricing;
   await billing.publishPricing(H('owner'),pd.pricingId,K());
   await billing.setCreditProgram(H('owner'),{action:'ACTIVATE',expectedVersion:1,authorizationReference:'Sandbox fixture credit program (disposable database)'},K());
+  }
   const openKey=K();
   const allow=(await billing.commandAllowance(H('operator'),{action:'OPEN_CURRENT',subscriptionId:sub.subscriptionId},openKey)).allowance;
   assert.deepEqual([allow.planCode,allow.allowanceBasis,allow.balance.allowanceCredits,allow.periodIndex,allow.periodStart],['CORE','REGULAR',5000,0,sub.currentPeriod.startsAt]);
@@ -154,7 +157,7 @@ try{
   // ---------- duplicates: recovery again, allowance command again ----------
   const counts=async()=>(await admin.query(`SELECT (SELECT count(*) FROM hon.saas_subscriptions WHERE organization_id=$1)::int subs,(SELECT count(*) FROM hon.saas_invoices WHERE organization_id=$1)::int invoices,
    (SELECT count(*) FROM hon.saas_payment_evidence WHERE organization_id=$1)::int evidence,(SELECT count(*) FROM hon.saas_credit_allowances WHERE organization_id=$1)::int allowances,
-   (SELECT count(*) FROM hon.saas_credit_ledger WHERE organization_id=$1)::int ledger,(SELECT count(*) FROM hon.saas_provider_events WHERE organization_id=$1)::int events`,[s.organizationId])).rows[0];
+   (SELECT count(*) FROM hon.saas_credit_ledger l JOIN hon.saas_credit_allowances a ON a.id=l.allowance_id WHERE a.organization_id=$1)::int ledger,(SELECT count(*) FROM hon.saas_provider_events WHERE organization_id=$1)::int events`,[s.organizationId])).rows[0];
   const c1=await counts();
   const r2=await payments.recoverEvents(H('operator'),{sinceHours});
   const ours2=r2.results.filter(e=>e.organizationId===s.organizationId);
