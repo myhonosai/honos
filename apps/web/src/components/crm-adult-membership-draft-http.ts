@@ -2,10 +2,13 @@
 
 import {
   CRM_ADULT_MEMBERSHIP_DRAFT_UUID,
+  validateCrmAdultMembershipDraftConfirmationInput,
   validateCrmAdultMembershipDraftInput,
   validateCrmAdultMembershipPreparationInput,
+  verifyCrmAdultMembershipDraftConfirmation,
   verifyCrmAdultMembershipDraftReceipt,
   verifyCrmAdultMembershipPreparation,
+  type CrmAdultMembershipDraftConfirmation,
   type CrmAdultMembershipDraftInput,
   type CrmAdultMembershipDraftReceipt,
   type CrmAdultMembershipPreparation,
@@ -23,12 +26,12 @@ export type PreparedCrmAdultMembershipDraft = Readonly<{
 }>;
 
 export class CrmAdultMembershipDraftRejectedError extends Error {
-  constructor(message = 'Adult CRM membership draft readiness or command is unavailable. No membership draft was recorded.') { super(message); }
+  constructor(message = 'Adult CRM membership draft readiness, current confirmation, or command is unavailable. No membership draft, activation, payment, invoice, schedule, or provider result is assumed.') { super(message); }
 }
 
 export class CrmAdultMembershipDraftAccessError extends CrmAdultMembershipDraftRejectedError {
   constructor(readonly status: 401 | 403) {
-    super('Current verified human session, exact school billing permission, or active entitlement is unavailable. Adult CRM membership readiness was cleared.');
+    super('Current verified human session, exact school billing permission, or active entitlement is unavailable. Adult CRM membership preparation and confirmation were cleared.');
   }
 }
 
@@ -62,11 +65,16 @@ function basePath(value: CrmAdultMembershipDraftScope): string {
 function contentType(response: Response): boolean { return /^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? ''); }
 
 export function crmAdultMembershipDraftPreparationPath(value: CrmAdultMembershipDraftScope): string { return `${basePath(value)}/preparation`; }
+export function crmAdultMembershipDraftConfirmationPath(value: CrmAdultMembershipDraftScope): string { return `${basePath(value)}/confirmation`; }
 export function crmAdultMembershipDraftPath(value: CrmAdultMembershipDraftScope): string { return basePath(value); }
 
 export function parseCrmAdultMembershipDraftPreparation(value: unknown): CrmAdultMembershipPreparation {
   responseMeta(value, false);
   return verifyCrmAdultMembershipPreparation((value as { data: unknown }).data);
+}
+export function parseCrmAdultMembershipDraftConfirmation(value: unknown): CrmAdultMembershipDraftConfirmation {
+  responseMeta(value, false);
+  return verifyCrmAdultMembershipDraftConfirmation((value as { data: unknown }).data);
 }
 
 export function prepareCrmAdultMembershipDraftCommand(
@@ -97,19 +105,13 @@ export function parseCrmAdultMembershipDraftResult(value: unknown, command: Prep
   return { receipt: verifyCrmAdultMembershipDraftReceipt(envelope.data, input), replayed: meta.replayed };
 }
 
-/** One deliberate, read-only readiness request. It never allocates an idempotency key. */
-export async function loadCrmAdultMembershipDraftPreparation(
-  value: CrmAdultMembershipDraftScope,
-  studentProfileId: string,
-): Promise<CrmAdultMembershipPreparation> {
-  const selected = scope(value);
-  const input = validateCrmAdultMembershipPreparationInput({ studentProfileId });
+async function explicitRead<T>(path: string, studentProfileId: string, command: string, parse: (value: unknown) => T): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(crmAdultMembershipDraftPreparationPath(selected), {
+    response = await fetch(path, {
       method: 'POST', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': 'crm-adult-membership-prepare' },
-      body: JSON.stringify(input),
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': command },
+      body: JSON.stringify({ studentProfileId }),
     });
   } catch { throw new CrmAdultMembershipDraftRejectedError(); }
   if (response.status === 401 || response.status === 403) throw new CrmAdultMembershipDraftAccessError(response.status);
@@ -118,8 +120,28 @@ export async function loadCrmAdultMembershipDraftPreparation(
     if (!response.ok || response.status !== 200 || response.redirected || !contentType(response)) invalid();
     const raw = await response.text();
     if (raw.length > RESPONSE_MAX) invalid();
-    return parseCrmAdultMembershipDraftPreparation(JSON.parse(raw));
+    return parse(JSON.parse(raw));
   } catch { throw new CrmAdultMembershipDraftRejectedError(); }
+}
+
+/** One deliberate readiness request. It never allocates an idempotency key. */
+export async function loadCrmAdultMembershipDraftPreparation(
+  value: CrmAdultMembershipDraftScope,
+  studentProfileId: string,
+): Promise<CrmAdultMembershipPreparation> {
+  const selected = scope(value);
+  const input = validateCrmAdultMembershipPreparationInput({ studentProfileId });
+  return explicitRead(crmAdultMembershipDraftPreparationPath(selected), input.studentProfileId, 'crm-adult-membership-prepare', parseCrmAdultMembershipDraftPreparation);
+}
+
+/** One deliberate current-state observation. It is not a historical creation receipt or retry. */
+export async function loadCrmAdultMembershipDraftConfirmation(
+  value: CrmAdultMembershipDraftScope,
+  studentProfileId: string,
+): Promise<CrmAdultMembershipDraftConfirmation> {
+  const selected = scope(value);
+  const input = validateCrmAdultMembershipDraftConfirmationInput({ studentProfileId });
+  return explicitRead(crmAdultMembershipDraftConfirmationPath(selected), input.studentProfileId, 'crm-adult-membership-draft-confirmation', parseCrmAdultMembershipDraftConfirmation);
 }
 
 /** The caller retains this frozen command only after an uncertain transport outcome. */

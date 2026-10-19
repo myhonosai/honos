@@ -1,11 +1,13 @@
 import { Allow } from 'class-validator';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, type ExecutionContext } from '@nestjs/common';
-import { CRM_ADULT_MEMBERSHIP_DRAFT_UUID, validateCrmAdultMembershipDraftInput, validateCrmAdultMembershipPreparationInput } from '@hon/contracts';
+import { CRM_ADULT_MEMBERSHIP_DRAFT_UUID, validateCrmAdultMembershipDraftConfirmationInput, validateCrmAdultMembershipDraftInput, validateCrmAdultMembershipPreparationInput } from '@hon/contracts';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { CurriculumHumanUiGuard } from '../curriculum/curriculum-human-ui.guard.js';
 import { assertDirectHumanBillingAccountRequest } from './billing-account-human-ui.guard.js';
 
 export class CrmAdultMembershipPreparationDto { @Allow() declare studentProfileId: string; }
+/** Kept distinct even though its closed input is currently one scalar selector. */
+export class CrmAdultMembershipDraftConfirmationDto { @Allow() declare studentProfileId: string; }
 export class CrmAdultMembershipDraftDto extends CrmAdultMembershipPreparationDto {
   @Allow() declare planCode: string;
   @Allow() declare termStartedAt?: string;
@@ -25,8 +27,9 @@ export class CrmAdultMembershipNoStoreGuard {
 /** Separate closed marker and Fetch Metadata boundary; never the generic membership route. */
 @Injectable()
 export class CrmAdultMembershipDraftHumanUiGuard extends CurriculumHumanUiGuard {
-  protected override readonly command: string = 'crm-adult-membership-draft';
+  protected readonly command: string = 'crm-adult-membership-draft';
   protected readonly preparation: boolean = false;
+  protected validate(value: unknown): void { validateCrmAdultMembershipDraftInput(value); }
   override canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<HonRequest>();
     if (Object.keys(req.query ?? {}).length || req.originalUrl?.includes('?')) throw new BadRequestException({ code: 'MEMBERSHIP_SELECTORS_NOT_ACCEPTED' });
@@ -38,7 +41,7 @@ export class CrmAdultMembershipDraftHumanUiGuard extends CurriculumHumanUiGuard 
     super.canActivate(context);
     const key = req.headers['idempotency-key'];
     if (this.preparation ? key !== undefined : typeof key !== 'string' || !CRM_ADULT_MEMBERSHIP_DRAFT_UUID.test(key)) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
-    try { this.preparation ? validateCrmAdultMembershipPreparationInput(req.body) : validateCrmAdultMembershipDraftInput(req.body); }
+    try { this.validate(req.body); }
     catch { throw new BadRequestException({ code: 'INVALID_CRM_ADULT_MEMBERSHIP_INPUT' }); }
     return true;
   }
@@ -47,4 +50,11 @@ export class CrmAdultMembershipDraftHumanUiGuard extends CurriculumHumanUiGuard 
 export class CrmAdultMembershipPreparationHumanUiGuard extends CrmAdultMembershipDraftHumanUiGuard {
   protected override readonly command = 'crm-adult-membership-prepare';
   protected override readonly preparation = true;
+  protected override validate(value: unknown): void { validateCrmAdultMembershipPreparationInput(value); }
+}
+@Injectable()
+export class CrmAdultMembershipConfirmationHumanUiGuard extends CrmAdultMembershipDraftHumanUiGuard {
+  protected override readonly command = 'crm-adult-membership-draft-confirmation';
+  protected override readonly preparation = true;
+  protected override validate(value: unknown): void { validateCrmAdultMembershipDraftConfirmationInput(value); }
 }

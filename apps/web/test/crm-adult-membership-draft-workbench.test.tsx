@@ -12,8 +12,8 @@ describe('adult CRM membership DRAFT workbench and route', () => {
   it('keeps a valid registration selector inert on first render', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch'); const key = vi.spyOn(crypto, 'randomUUID');
     const html = renderToStaticMarkup(<CrmAdultMembershipDraftWorkbench initialStudentProfileId={studentProfileId} />);
-    expect(html).toContain('Create an adult CRM membership draft'); expect(html).toContain(`value="${studentProfileId}"`);
-    expect(html).toContain('Load adult CRM membership readiness'); expect(html).toContain('No verified adult CRM membership readiness is shown.');
+    expect(html).toContain('Create or confirm an adult CRM membership draft'); expect(html).toContain(`value="${studentProfileId}"`);
+    expect(html).toContain('Load adult CRM membership readiness'); expect(html).toContain('No verified adult CRM membership readiness or current DRAFT confirmation is shown.');
     expect(html).not.toContain('Verified adult:'); expect(html).not.toContain('Create membership DRAFT only');
     expect(fetcher).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
   });
@@ -21,25 +21,26 @@ describe('adult CRM membership DRAFT workbench and route', () => {
   it('keeps the workbench isolated from directories, persistence, generic membership creation, and downstream effects', () => {
     const source = readFileSync('src/components/crm-adult-membership-draft-workbench.tsx', 'utf8');
     const http = readFileSync('src/components/crm-adult-membership-draft-http.ts', 'utf8');
-    expect(source).toContain('Load adult CRM membership readiness'); expect(source).toContain('Create membership DRAFT only');
+    expect(source).toContain('Load adult CRM membership readiness'); expect(source).toContain('Confirm current source-bound DRAFT'); expect(source).toContain('Create membership DRAFT only');
     expect(source + http).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|providerClient|invokeLLM|executeAction|sendMessage|MembershipService|PaymentService|OwnerLaunch/);
-    expect(source).not.toMatch(/fetch\(/); expect(http.match(/fetch\(/g)).toHaveLength(2);
-    expect(http).toContain("'X-HON-Human-Command': 'crm-adult-membership-prepare'"); expect(http).toContain("'X-HON-Human-Command': 'crm-adult-membership-draft'");
+    expect(source).not.toMatch(/fetch\(/); expect(http.match(/fetch\(/g)).toHaveLength(2); expect(http).toContain('loadCrmAdultMembershipDraftPreparation'); expect(http).toContain('loadCrmAdultMembershipDraftConfirmation');
+    expect(http).toContain("'crm-adult-membership-prepare'"); expect(http).toContain("'crm-adult-membership-draft-confirmation'"); expect(http).toContain("'X-HON-Human-Command': 'crm-adult-membership-draft'");
     expect(http).not.toContain('/billing/memberships'); expect(http).not.toContain('MembershipService');
     expect(source).toContain('retained.current === command'); expect(source).toContain('crypto.randomUUID()');
   });
 
-  it('offers only a verified DRAFT receipt one scalar untrusted activation selector', () => {
+  it('offers only a verified current DRAFT confirmation one scalar untrusted activation selector', () => {
     const receipt = { membershipId: studentProfileId, state: 'DRAFT' as const, planCode: 'ADULT-OPAQUE', termStartedAt: null, termEndsAt: null, recordedAt: '2026-10-18T20:00:00.000Z' };
-    const href = crmAdultMembershipDraftActivationHref(receipt);
+    const confirmation = { state: 'RECORDED_DRAFT' as const, receipt };
+    const href = crmAdultMembershipDraftActivationHref(confirmation);
     expect(href).toBe(`/staff/billing/memberships?membershipId=${studentProfileId}`);
     const query = new URL(`https://hon.test${href}`).searchParams;
     expect([...query.keys()]).toEqual(['membershipId']); expect(query.get('membershipId')).toBe(studentProfileId);
-    expect(crmAdultMembershipDraftActivationHref({ ...receipt, state: 'ACTIVE' })).toBeUndefined();
-    expect(crmAdultMembershipDraftActivationHref({ ...receipt, membershipId: 'not-a-uuid' })).toBeUndefined();
+    expect(crmAdultMembershipDraftActivationHref({ state: 'UNAVAILABLE', receipt } as never)).toBeUndefined();
+    expect(crmAdultMembershipDraftActivationHref({ state: 'RECORDED_DRAFT', receipt: { ...receipt, membershipId: 'not-a-uuid' } } as never)).toBeUndefined();
     const source = readFileSync('src/components/crm-adult-membership-draft-workbench.tsx', 'utf8');
     const helper = source.slice(source.indexOf('export function crmAdultMembershipDraftActivationHref'), source.indexOf('/** A separate direct-human DRAFT boundary'));
-    expect(source).toContain('Review separate direct-human membership activation'); expect(helper).toContain("receipt.state !== 'DRAFT'"); expect(helper).toContain('new URLSearchParams({ membershipId: receipt.membershipId.toLowerCase() })');
+    expect(source).toContain('Review separate direct-human membership activation'); expect(source).toContain('Historical membership DRAFT creation receipt'); expect(helper).toContain("confirmation?.state === 'RECORDED_DRAFT'"); expect(helper).toContain('new URLSearchParams({ membershipId: membershipId.toLowerCase() })');
     expect(helper).not.toMatch(/URLSearchParams\(\{[^}]*?(?:organizationId|schoolId|studentProfileId|accountId|personId|conversionId|planCode|termStartedAt|termEndsAt|recordedAt)/);
   });
 

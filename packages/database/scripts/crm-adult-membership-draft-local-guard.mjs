@@ -6,7 +6,7 @@ const executionPrefix = /^(?:HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER)|
 export function refuseCrmAdultMembershipDraftExternalEnvironment() {
   const risky = Object.keys(process.env).filter((key) => !setupSelectors.has(key)
     && (externalPrefix.test(key) || credentialName.test(key) || executionPrefix.test(key)));
-  if (risky.length) throw new Error(`Curriculum enrollment preparation validation refuses provider/payment/messaging credentials or execution switches (${risky.join(', ')}).`);
+  if (risky.length) throw new Error(`Adult CRM membership DRAFT validation refuses provider/payment/messaging credentials or execution switches (${risky.join(', ')})`);
 }
 
 export function requireCrmAdultMembershipDraftLocalUrls() {
@@ -16,7 +16,7 @@ export function requireCrmAdultMembershipDraftLocalUrls() {
     if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' || url.port !== '55435'
       || url.pathname !== '/hon_crm_adult_membership_draft_validation' || url.search || url.hash || !url.password
       || url.username !== (key === 'DATABASE_URL' ? 'hon_crm_adult_membership_draft_owner' : 'hon_crm_adult_membership_draft_runtime')) {
-      throw new Error('Curriculum enrollment preparation validation requires exact guarded disposable localhost aliases.');
+      throw new Error('Adult CRM membership DRAFT validation requires exact guarded disposable localhost aliases.');
     }
   }
 }

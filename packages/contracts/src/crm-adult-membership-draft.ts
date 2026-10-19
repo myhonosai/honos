@@ -3,6 +3,8 @@ import type { CommandContext } from './index.js';
 export const CRM_ADULT_MEMBERSHIP_DRAFT_CONFIRMATION = 'I_CONFIRM_DIRECT_HUMAN_ADULT_CRM_MEMBERSHIP_DRAFT' as const;
 export const CRM_ADULT_MEMBERSHIP_DRAFT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export interface CrmAdultMembershipPreparationInput { studentProfileId: string }
+/** A distinct read input keeps current source-bound confirmation separately auditable. */
+export interface CrmAdultMembershipDraftConfirmationInput { studentProfileId: string }
 /** No record identifiers, directory, account details, or historical facts. */
 export interface CrmAdultMembershipPreparation { studentDisplayName: string; currency: string; readiness: 'READY_FOR_DRAFT' }
 export interface CrmAdultMembershipDraftInput extends CrmAdultMembershipPreparationInput {
@@ -19,8 +21,11 @@ export interface CrmAdultMembershipDraftReceipt {
   termEndsAt: string | null;
   recordedAt: string;
 }
+/** Current observation only; it is deliberately distinct from historical command replay. */
+export interface CrmAdultMembershipDraftConfirmation { state: 'RECORDED_DRAFT'; receipt: CrmAdultMembershipDraftReceipt }
 export interface CrmAdultMembershipDraftContext extends CommandContext { externalSubject: string }
 export interface CrmAdultMembershipPreparationApiResponse { data: CrmAdultMembershipPreparation; meta: { requestId: string; correlationId: string; replayed: false } }
+export interface CrmAdultMembershipDraftConfirmationApiResponse { data: CrmAdultMembershipDraftConfirmation; meta: { requestId: string; correlationId: string; replayed: false } }
 export interface CrmAdultMembershipDraftApiResponse { data: CrmAdultMembershipDraftReceipt; meta: { requestId: string; correlationId: string; replayed: boolean } }
 
 function invalid(): never { throw new Error('Unverified adult CRM membership draft data.'); }
@@ -46,6 +51,12 @@ function instant(value: unknown): string {
 }
 export function validateCrmAdultMembershipPreparationInput(value: unknown): CrmAdultMembershipPreparationInput {
   const row = record(value, ['studentProfileId']);
+  if (Object.keys(row).length !== 1) invalid();
+  return { studentProfileId: uuid(row.studentProfileId) };
+}
+export function validateCrmAdultMembershipDraftConfirmationInput(value: unknown): CrmAdultMembershipDraftConfirmationInput {
+  const row = record(value, ['studentProfileId']);
+  if (Object.keys(row).length !== 1) invalid();
   return { studentProfileId: uuid(row.studentProfileId) };
 }
 export function validateCrmAdultMembershipDraftInput(value: unknown): CrmAdultMembershipDraftInput {
@@ -69,4 +80,9 @@ export function verifyCrmAdultMembershipDraftReceipt(value: unknown, input?: Crm
   if (receipt.termStartedAt && receipt.termEndsAt && Date.parse(receipt.termEndsAt) <= Date.parse(receipt.termStartedAt)) invalid();
   if (input && (receipt.planCode !== input.planCode || receipt.termStartedAt !== (input.termStartedAt ?? null) || receipt.termEndsAt !== (input.termEndsAt ?? null))) invalid();
   return receipt;
+}
+export function verifyCrmAdultMembershipDraftConfirmation(value: unknown): CrmAdultMembershipDraftConfirmation {
+  const row = record(value, ['state','receipt']);
+  if (Object.keys(row).length !== 2 || row.state !== 'RECORDED_DRAFT') invalid();
+  return { state: 'RECORDED_DRAFT', receipt: verifyCrmAdultMembershipDraftReceipt(row.receipt) };
 }

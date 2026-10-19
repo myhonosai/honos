@@ -1,6 +1,6 @@
 # Adult CRM registration to membership DRAFT
 
-**Status:** Implemented and validated on the isolated `manus/crm-enrollment-workflow` branch. This is an adult-only conventional staff workflow following a verified CRM lead-registration receipt. It does not authorize guardian-child payer inference, payment collection, schedules, invoices, charges, provider calls, messages, AI execution, activation, or deployment.
+**Status:** Implemented and validated on the isolated `manus/crm-enrollment-workflow` branch. This is an adult-only conventional staff workflow following a verified CRM lead-registration receipt. Its historical creation receipt is distinct from the later explicit source-bound current-DRAFT confirmation. It does not authorize guardian-child payer inference, payment collection, schedules, invoices, charges, provider calls, messages, AI execution, activation, or deployment.
 
 ## Intent
 
@@ -10,7 +10,8 @@ A staff member who has completed the bounded `ADULT` CRM lead-registration comma
 verified REGISTERED ADULT conversion
   → explicit current-school preparation
   → human chooses bounded membership term/plan and confirms
-  → one receipt-backed DRAFT membership
+  → one historical receipt-backed DRAFT membership
+  → separate explicit current-DRAFT confirmation before activation review
 ```
 
 The flow improves continuity after a human registration without declaring enrollment, payment, agreement, eligibility, or revenue success.
@@ -21,7 +22,7 @@ The only browser selector is an untrusted `studentProfileId` UUID, optionally ca
 
 A fixed database preparation routine must independently derive and require all of the following under transaction-local tenant context and forced RLS:
 
-1. exactly one current-school immutable `crm_lead_registration_conversions` record for the selected student with `registration_path = ADULT` and `status = REGISTERED`;
+1. exactly one current-school immutable `crm_lead_registration_conversions` record for the selected student with `registration_path = ADULT` and response `outcome = REGISTERED`;
 2. an active selected student profile that still points to the conversion’s original lead-contact person; and
 3. exactly one current-school `CANONICAL` billing account with that same person as responsible payer.
 
@@ -45,12 +46,12 @@ The new code should remain localized: shared closed contract, fixed PostgreSQL p
 
 ## Separate activation handoff
 
-Only a receipt already verified by the adult DRAFT command parser may display a normal same-origin link to the existing membership-activation workbench. It carries exactly one untrusted `membershipId` UUID. The activation route accepts that scalar as initial form text only; it does not receive organization/school, student, source conversion, payer/account, plan/term, receipt metadata, authority, scope, or command state. It remains inert until a staff member supplies the organization and school, explicitly loads the current membership, and completes the unchanged current-human, permission, entitlement, state/version, and direct-human activation confirmation boundary.
+Only a successful current source-bound adult DRAFT confirmation may display a normal same-origin link to the existing membership-activation workbench. A historical creation receipt never proves current state and cannot display the link. The link carries exactly one untrusted `membershipId` UUID. The activation route accepts that scalar as initial form text only; it does not receive organization/school, student, source conversion, payer/account, plan/term, receipt metadata, authority, scope, or command state. It remains inert until a staff member supplies the organization and school, explicitly loads the current membership, and completes the unchanged current-human, permission, entitlement, state/version, and direct-human activation confirmation boundary.
 
 The link is not an activation wrapper and is absent for missing, invalid, uncertain, non-DRAFT, or unverified states. It creates no enrollment, membership/term alteration, account, agreement, schedule, invoice, payment method, charge, provider, communication, curriculum/attendance, AI, Action Engine, or automation effect. The activation workbench retains its memory-only clearing and exact uncertain-command retry behavior.
 
 ## Validation evidence
 
-Migration `0161` was applied through fresh disposable PostgreSQL fixtures. The dedicated adult CRM membership proof passed 116 assertion groups and 216 all-organization-table no-effect snapshots, including canonical verifier, source immutability, relation/account ambiguity, same-key replay, different-key concurrency, authority revocation, rollback, generic-membership non-regression, and zero provider/financial/family/automation effects. Focused API (11 tests) and browser transport/workbench/route/handoff (16 tests) suites passed. The current-main integration refresh then passed `pnpm db:check` at 161 migrations, the guarded 16-proof local dispatcher across 5 fixtures with forced RLS verified across 236 tracked operational tables, root `pnpm test` (433 tests), `pnpm check`, `pnpm build`, and clean staged/unstaged whitespace checks. No remote database, provider, payment, communication, deployment, shared visual component, portrait, or Claude experiment was changed.
+Migrations `0161` and `0162` were applied through fresh disposable PostgreSQL fixtures. The dedicated adult CRM membership proof passed 153 assertion groups and 284 organization/all-table no-effect snapshots, including canonical verifier/body hash/signature/ACL/no-overload checks; source immutability; creator-only current confirmation; relation/account ambiguity; same-key historical replay; different-key concurrency; active/plan/schedule/invoice drift refusal; authority revocation; rollback; generic-membership non-regression; and zero provider/financial/family/automation effects. Focused API (4 tests) and browser transport/workbench/route/handoff (5 files / 20 tests) suites passed. The branch then passed `pnpm db:check` at 162 migrations, the guarded 16-proof local dispatcher across 5 fixtures with forced RLS verified across 236 tracked operational tables, root `pnpm test` (433 tests), `pnpm check`, `pnpm build`, and clean staged/unstaged whitespace checks. An independent read-only review found no confirmed issue. No remote database, provider, payment, communication, deployment, shared visual component, portrait, or Claude experiment was changed.
 
-See [Flexible CRM enrollment and family billing policy](FLEXIBLE_CRM_ENROLLMENT_FAMILY_BILLING_POLICY.md), [Human CRM lead registration](HUMAN_CRM_LEAD_REGISTRATION.md), [Human flexible billing accounts](HUMAN_FLEXIBLE_BILLING_ACCOUNTS.md), and the [Master Directive](../HON_MASTER_DIRECTIVE.md).
+See [Adult CRM membership DRAFT current confirmation](CRM_ADULT_MEMBERSHIP_DRAFT_CONFIRMATION.md), [Flexible CRM enrollment and family billing policy](FLEXIBLE_CRM_ENROLLMENT_FAMILY_BILLING_POLICY.md), [Human CRM lead registration](HUMAN_CRM_LEAD_REGISTRATION.md), [Human flexible billing accounts](HUMAN_FLEXIBLE_BILLING_ACCOUNTS.md), and the [Master Directive](../HON_MASTER_DIRECTIVE.md).

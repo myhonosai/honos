@@ -5,7 +5,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { CrmAdultMembershipDraftService } from './crm-adult-membership-draft.service.js';
-import { CrmAdultMembershipDraftDto, CrmAdultMembershipPreparationDto, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './crm-adult-membership-draft.dto.js';
+import { CrmAdultMembershipDraftConfirmationDto, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftDto, CrmAdultMembershipPreparationDto, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './crm-adult-membership-draft.dto.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/billing/crm-adult-membership-drafts')
 @UseGuards(CrmAdultMembershipNoStoreGuard, HonIdentityGuard)
@@ -23,6 +23,11 @@ export class CrmAdultMembershipDraftController {
   async prepare(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Body() input: CrmAdultMembershipPreparationDto, @Req() req: HonRequest) {
     const context = await this.context(organizationId, schoolId, '', req);
     return { data: await this.memberships.prepare(context, input), meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: false } };
+  }
+  @Post('confirmation') @HttpCode(200) @UseGuards(CrmAdultMembershipConfirmationHumanUiGuard)
+  async confirmCurrentDraft(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Body() input: CrmAdultMembershipDraftConfirmationDto, @Req() req: HonRequest) {
+    const context = await this.context(organizationId, schoolId, '', req);
+    return { data: await this.memberships.confirmCurrentDraft(context, input), meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: false } };
   }
   @Post() @HttpCode(200) @UseGuards(CrmAdultMembershipDraftHumanUiGuard)
   async draft(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Headers('idempotency-key') key: string, @Body() input: CrmAdultMembershipDraftDto, @Req() req: HonRequest) {

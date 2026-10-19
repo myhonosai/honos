@@ -8,7 +8,7 @@ const harness = vi.hoisted(() => {
   class Uncertain extends Error {}
   return {
     cells: [] as unknown[], cursor: 0, effects: [] as (() => void)[],
-    direct: vi.fn(), preparation: vi.fn(), prepare: vi.fn(), submit: vi.fn(),
+    direct: vi.fn(), preparation: vi.fn(), confirmation: vi.fn(), prepare: vi.fn(), submit: vi.fn(),
     Rejected, Access, Uncertain,
   };
 });
@@ -26,6 +26,7 @@ vi.mock('../src/components/crm-adult-membership-draft-http', () => ({
   CrmAdultMembershipDraftRejectedError: harness.Rejected,
   CrmAdultMembershipDraftAccessError: harness.Access,
   CrmAdultMembershipDraftUncertainError: harness.Uncertain,
+  loadCrmAdultMembershipDraftConfirmation: harness.confirmation,
   loadCrmAdultMembershipDraftPreparation: harness.preparation,
   prepareCrmAdultMembershipDraftCommand: harness.prepare,
   submitCrmAdultMembershipDraft: harness.submit,
@@ -53,6 +54,7 @@ beforeEach(() => {
   harness.cells = []; harness.cursor = 0; harness.effects = [];
   harness.direct.mockReset().mockResolvedValue({ state: 'RESOLVED', ...scope });
   harness.preparation.mockReset().mockResolvedValue(readiness);
+  harness.confirmation.mockReset().mockResolvedValue({ state: 'RECORDED_DRAFT', receipt });
   harness.prepare.mockReset().mockImplementation((selectedScope, input, key) => Object.freeze({ path: '/exact-path', organizationId: selectedScope.organizationId, schoolId: selectedScope.schoolId, key, body: JSON.stringify(input) }));
   harness.submit.mockReset();
 });
@@ -73,7 +75,7 @@ describe('adult CRM membership DRAFT workbench lifecycle', () => {
     expect(harness.submit).toHaveBeenCalledWith(command); expect(button('Retry exact unchanged membership draft')).toBeDefined();
     button('Retry exact unchanged membership draft')!.props.onClick(); await settle();
     expect(key).toHaveBeenCalledTimes(1); expect(harness.submit.mock.calls[0]).toEqual(harness.submit.mock.calls[1]);
-    expect(html()).toContain('Replayed historical DRAFT receipt.'); expect(html()).toContain(`href="/staff/billing/memberships?membershipId=${receipt.membershipId}"`);
+    expect(html()).toContain('Replayed historical DRAFT receipt.'); expect(html()).not.toContain(`href="/staff/billing/memberships?membershipId=${receipt.membershipId}"`);
   });
 
   it('clears readiness and any retained command on selector edits and ignores a late readiness response', async () => {
@@ -90,5 +92,14 @@ describe('adult CRM membership DRAFT workbench lifecycle', () => {
     await loadReadiness();
     expect(field('studentProfileId')!.props.value).toBe(''); expect(html()).not.toContain('Verified adult:'); expect(button('Create membership DRAFT only')).toBeUndefined();
     expect(html()).toContain('access unavailable'); expect(html()).not.toContain('Returned membership receipt: DRAFT');
+  });
+
+  it('issues current confirmation only after its explicit action and alone may expose the scalar activation handoff', async () => {
+    const key = vi.spyOn(crypto, 'randomUUID');
+    render(); expect(harness.direct).not.toHaveBeenCalled(); expect(harness.confirmation).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
+    button('Confirm current source-bound DRAFT')!.props.onClick(); await settle();
+    expect(harness.direct).toHaveBeenCalledTimes(1); expect(harness.confirmation).toHaveBeenCalledWith(scope, studentProfileId); expect(harness.preparation).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
+    expect(html()).toContain('Current source-bound DRAFT confirmation'); expect(html()).toContain(`href="/staff/billing/memberships?membershipId=${receipt.membershipId}"`);
+    expect(button('Create membership DRAFT only')).toBeUndefined(); expect(html()).not.toContain('Payment complete');
   });
 });

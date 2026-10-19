@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { CRM_ADULT_MEMBERSHIP_DRAFT_UUID, validateCrmAdultMembershipDraftInput, validateCrmAdultMembershipPreparationInput, verifyCrmAdultMembershipDraftReceipt, verifyCrmAdultMembershipPreparation, type CrmAdultMembershipDraftContext, type CrmAdultMembershipDraftInput, type CrmAdultMembershipDraftReceipt, type CrmAdultMembershipPreparation, type CrmAdultMembershipPreparationInput } from '@hon/contracts';
+import { CRM_ADULT_MEMBERSHIP_DRAFT_UUID, validateCrmAdultMembershipDraftConfirmationInput, validateCrmAdultMembershipDraftInput, validateCrmAdultMembershipPreparationInput, verifyCrmAdultMembershipDraftConfirmation, verifyCrmAdultMembershipDraftReceipt, verifyCrmAdultMembershipPreparation, type CrmAdultMembershipDraftConfirmation, type CrmAdultMembershipDraftConfirmationInput, type CrmAdultMembershipDraftContext, type CrmAdultMembershipDraftInput, type CrmAdultMembershipDraftReceipt, type CrmAdultMembershipPreparation, type CrmAdultMembershipPreparationInput } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 function human(context: CrmAdultMembershipDraftContext, command: boolean): void {
@@ -34,6 +34,21 @@ export class CrmAdultMembershipDraftService {
         const result = await client.query<{ data: unknown }>('SELECT hon.read_crm_adult_membership_preparation($1,$2::uuid) AS data', [context.externalSubject,input.studentProfileId]);
         if (result.rows.length !== 1) throw new Error('Unverified preparation.');
         return verifyCrmAdultMembershipPreparation(result.rows[0]!.data);
+      });
+    } catch (error) { return translate(error); }
+  }
+  /** Lock-backed reader: no DML, audit, outbox, idempotency, or provider effect. */
+  async confirmCurrentDraft(context: CrmAdultMembershipDraftContext, value: CrmAdultMembershipDraftConfirmationInput): Promise<CrmAdultMembershipDraftConfirmation> {
+    human(context, false);
+    let input: CrmAdultMembershipDraftConfirmationInput;
+    try { input = validateCrmAdultMembershipDraftConfirmationInput(value); } catch { throw new BadRequestException({ code: 'INVALID_CRM_ADULT_MEMBERSHIP_INPUT' }); }
+    try {
+      return await this.database.withTenantTransaction(context, async client => {
+        await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+        await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [context.externalSubject]);
+        const result = await client.query<{ data: unknown }>('SELECT hon.read_crm_adult_membership_draft_confirmation($1,$2::uuid) AS data', [context.externalSubject,input.studentProfileId]);
+        if (result.rows.length !== 1) throw new Error('Unverified current confirmation.');
+        return verifyCrmAdultMembershipDraftConfirmation(result.rows[0]!.data);
       });
     } catch (error) { return translate(error); }
   }
