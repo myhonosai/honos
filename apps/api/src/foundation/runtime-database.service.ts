@@ -144,6 +144,10 @@ const SAAS_BILLING_CALLS = {
   sweepCheckouts: { sql: 'SELECT hon.sweep_saas_checkouts($1,$2::uuid,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
   // Called only after the API has verified the provider signature; there is no human subject.
   ingestProviderEvent: { sql: 'SELECT hon.ingest_saas_provider_event($1::jsonb,$2) AS data', arity: 2, readOnly: false },
+  readSchoolBillingAccount: { sql: 'SELECT hon.read_saas_school_billing_account($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readSchoolInvoices: { sql: 'SELECT hon.read_saas_school_invoices($1,$2::uuid,$3,$4,$5::timestamptz,$6::uuid,$7::integer) AS data', arity: 7, readOnly: true },
+  readSchoolInvoice: { sql: 'SELECT hon.read_saas_school_invoice($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  readAccessReadiness: { sql: 'SELECT hon.read_saas_access_readiness_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 

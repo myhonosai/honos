@@ -90,18 +90,31 @@ This document also answers the backend contract requested in issue #29, Gate 2.
 
 ## 5. Proposed sequencing
 
-- **B5.1 (no policy needed):**
-  - real-sandbox harness and preflight (readiness doc §6);
-  - `api_version` refusal in the normalizer;
-  - school invoice reads (§4.7);
-  - the `access`/`allowance` read fields, reporting today's provisioned state;
-  - the `PAYMENT_PROVIDER` policy recorded as DECIDED (Stripe, test mode only).
-- **B6a (after D1, D2, D12):** self-serve new-school initialization (with Manus), `AWAITING_FIRST_PAYMENT`, first-payment activation, exceptions, central gate and coverage proof. The access program stays INACTIVE until the owner switches it on.
+- **B5.1 (delivered in migration 0170; [details](HON_SCHOOL_BILLING_READS_B5_1.md)):**
+  - `api_version` refusal in the normalizer (merged in #30);
+  - school billing reads: invoices, detail, evidence, refunds, entitlement, activation, allowance (§4.6, §4.7);
+  - `PAYMENT_PROVIDER` recorded as DECIDED (Stripe, test mode only).
+  - Inert B6 foundation:
+    - `saas_access_program` (INACTIVE by CHECK);
+    - versioned `saas_access_policy_terms` v1 (PROPOSED by CHECK, carrying the D3, D4, D6–D10 and D12 recommendations);
+    - `PAID_ACCESS` policy PROPOSED;
+    - the HQ dry run `GET /v1/hq/saas/access/:organizationId` (enforcement NONE);
+    - the generated [entitlement enforcement inventory](HON_ENTITLEMENT_ENFORCEMENT_INVENTORY.md).
+  - Still to come: the real-sandbox harness (readiness doc §6), which waits on credentials.
+- **B6a (after D1, D2, D12):**
+  - self-serve new-school initialization (with Manus);
+  - `AWAITING_FIRST_PAYMENT`;
+  - first-payment activation through a private transition function that updates the existing `organization_entitlements` row (0146 pattern: version check, evidence, outbox);
+  - exceptions;
+  - the central gate and the behavioural coverage proof.
+
+  The access program flips from INACTIVE only in a reviewed migration after the owner approves.
 - **B6b (after D3–D11):** grace, restriction, suspension, reactivation, cancellation, refund and dispute transitions, founder and lifetime protection, allowance suspension.
 - **Live mode:** a separate milestone after D15 and a real-sandbox evidence review.
 
 ## 6. Migration numbering
 
-- #26 (B5) keeps **0158**.
-- Manus's #27 (`0158_flexible_billing_accounts.sql`) must be renumbered to the next free number when it is synchronized with main after B5 merges, and its own proofs rerun.
-- Claude's next migrations take the number after whichever lands first. Claude will not edit Manus's files.
+- #26 (B5) keeps **0158**, now on main.
+- Manus's CRM branch (#27) uses **0159–0167**.
+- B5.1 takes **0170**, leaving 0168–0169 free for Manus. Gaps are allowed, because migrations apply in sorted order and only need to be unique.
+- Whichever lands second re-runs the full proofs after syncing. Claude does not edit Manus's files.
