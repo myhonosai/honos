@@ -1,0 +1,4153 @@
+{
+  "sourceSha": "8018997b42d7107fdf83e9eb1dfdbae60f4bf3f0",
+  "fixtureOnly": true,
+  "productionDataUsed": false,
+  "checks": [
+    "desktop: dashboard, responsive layout and screenshots",
+    "desktop: appearance choices preserve the six HQ identities",
+    "desktop: dashboard accessibility",
+    "desktop: expanded assistant accessibility",
+    "desktop: assistant expand, draft continuity, disabled services and keyboard restore",
+    "desktop: executive workspace, unavailable tabs and persistent subpage assistant",
+    "desktop: navigation, menu focus and non-executing contest lifecycle",
+    "desktop: official leaderboard periods, confidential reviews and responsive bounds",
+    "desktop: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "desktop: explicit authorized school selection, official milestones and responsive history",
+    "desktop: global reward records, liability scope, filters and responsive accessibility",
+    "desktop: real subscription overview, founder inventory, status/search and private evidence",
+    "desktop: selected organization entitlements, payment strength, AI balances and keyboard controls",
+    "desktop: real invoice navigation, closed status and bounded organization/search filters",
+    "desktop: explicit invoice detail, signed adjustments, evidence/refund strength and HON controls",
+    "tablet: dashboard, responsive layout and screenshots",
+    "tablet: appearance choices preserve the six HQ identities",
+    "tablet: dashboard accessibility",
+    "tablet: expanded assistant accessibility",
+    "tablet: assistant expand, draft continuity, disabled services and keyboard restore",
+    "tablet: executive workspace, unavailable tabs and persistent subpage assistant",
+    "tablet: navigation, menu focus and non-executing contest lifecycle",
+    "tablet: official leaderboard periods, confidential reviews and responsive bounds",
+    "tablet: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "tablet: explicit authorized school selection, official milestones and responsive history",
+    "tablet: global reward records, liability scope, filters and responsive accessibility",
+    "tablet: real subscription overview, founder inventory, status/search and private evidence",
+    "tablet: selected organization entitlements, payment strength, AI balances and keyboard controls",
+    "tablet: real invoice navigation, closed status and bounded organization/search filters",
+    "tablet: explicit invoice detail, signed adjustments, evidence/refund strength and HON controls",
+    "mobile: dashboard, responsive layout and screenshots",
+    "mobile: appearance choices preserve the six HQ identities",
+    "mobile: dashboard accessibility",
+    "mobile: expanded assistant accessibility",
+    "mobile: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile: navigation, menu focus and non-executing contest lifecycle",
+    "mobile: official leaderboard periods, confidential reviews and responsive bounds",
+    "mobile: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "mobile: explicit authorized school selection, official milestones and responsive history",
+    "mobile: global reward records, liability scope, filters and responsive accessibility",
+    "mobile: real subscription overview, founder inventory, status/search and private evidence",
+    "mobile: selected organization entitlements, payment strength, AI balances and keyboard controls",
+    "mobile: real invoice navigation, closed status and bounded organization/search filters",
+    "mobile: explicit invoice detail, signed adjustments, evidence/refund strength and HON controls",
+    "mobile-narrow: dashboard, responsive layout and screenshots",
+    "mobile-narrow: appearance choices preserve the six HQ identities",
+    "mobile-narrow: dashboard accessibility",
+    "mobile-narrow: expanded assistant accessibility",
+    "mobile-narrow: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile-narrow: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile-narrow: navigation, menu focus and non-executing contest lifecycle",
+    "mobile-narrow: official leaderboard periods, confidential reviews and responsive bounds",
+    "mobile-narrow: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "mobile-narrow: explicit authorized school selection, official milestones and responsive history",
+    "mobile-narrow: global reward records, liability scope, filters and responsive accessibility",
+    "mobile-narrow: real subscription overview, founder inventory, status/search and private evidence",
+    "mobile-narrow: selected organization entitlements, payment strength, AI balances and keyboard controls",
+    "mobile-narrow: real invoice navigation, closed status and bounded organization/search filters",
+    "mobile-narrow: explicit invoice detail, signed adjustments, evidence/refund strength and HON controls",
+    "Billing overview refresh/filter clears facts and selection, ignoring delayed organization reads",
+    "Billing independent overview failures remove inventory, records and cost evidence without private error bodies",
+    "Billing account failures, wrong organizations and changing current subscriptions clear scoped facts",
+    "Billing empty and mismatched entitlement records stay explicit; no allowances or costs are invented",
+    "Every billing read independently denies school, family, support, non-billing HQ and unsigned sessions",
+    "Invoice list refresh and every denied/invalid/empty response clear old records",
+    "Invoice/core reads independently fail closed on denial, evidence/scope drift and subscription races",
+    "Refund reads deny independently and never masquerade a bounded matching window as full history",
+    "Invoice refresh retrieves changed official evidence and navigation discards delayed facts",
+    "Draft tax, empty evidence, lifetime reversals and historical subscription facts remain distinct",
+    "Every invoice/refund read independently rejects staff, family, support, non-billing HQ and unsigned sessions",
+    "School refresh, selection and directory changes clear facts and ignore obsolete responses",
+    "School denied, malformed, wrong-school and policy-race responses expose no prior records",
+    "Authorized zero school counts, no history and undecided milestone policy are distinct from failures",
+    "Directory denial removes identities and school details without granting another context",
+    "Reward refresh/filter clears facts, retains official aggregate scope and ignores delayed windows",
+    "Reward empty, denied and invalid states never retain old liabilities or imply payment",
+    "School and reward APIs independently deny school, family, support and unsigned identities",
+    "Champions refresh clears old facts, retrieves updated aggregates and restores keyboard control",
+    "Champions empty, unpublished, denied and malformed responses never retain old referral or liability facts",
+    "Champions obsolete delayed refresh cannot restore facts after overview navigation",
+    "Champions overview and program independently deny non-HQ identities and reject selectors",
+    "Leaderboard refresh clears facts, shows loading and retrieves changed official data",
+    "Leaderboard discards an obsolete delayed response after a filter change",
+    "Leaderboard empty, denied, unavailable and invalid responses reveal no stale rankings or holds",
+    "HQ leaderboard independently denies school, family, support and unsigned identities",
+    "HQ command backdrop and decorative motion pause, keyboard restore and preference change",
+    "Existing independent school directory transport",
+    "Fail-closed HQ overview 403",
+    "Fail-closed HQ overview 401",
+    "Fail-closed HQ overview 503",
+    "Fail-closed HQ overview malformed",
+    "Unsigned browser session cannot render HQ content",
+    "No browser JavaScript errors",
+    "No mutation, provider or arbitrary API request"
+  ],
+  "failures": [],
+  "screenshots": [
+    "desktop-dashboard-full.png",
+    "desktop-dashboard-viewport.png",
+    "desktop-chibi.png",
+    "desktop-assistant-expanded.png",
+    "desktop-workspace-assistant.png",
+    "desktop-growth-contests.png",
+    "desktop-leaderboard-all-time.png",
+    "desktop-leaderboard-monthly.png",
+    "desktop-champions-overview.png",
+    "desktop-school-referrals.png",
+    "desktop-reward-management.png",
+    "desktop-subscription-overview.png",
+    "desktop-subscription-account.png",
+    "desktop-invoice-list.png",
+    "desktop-invoice-detail.png",
+    "tablet-dashboard-full.png",
+    "tablet-dashboard-viewport.png",
+    "tablet-assistant-expanded.png",
+    "tablet-leaderboard-all-time.png",
+    "tablet-champions-overview.png",
+    "tablet-school-referrals.png",
+    "tablet-reward-management.png",
+    "tablet-subscription-overview.png",
+    "tablet-subscription-account.png",
+    "tablet-invoice-list.png",
+    "tablet-invoice-detail.png",
+    "mobile-dashboard-full.png",
+    "mobile-dashboard-viewport.png",
+    "mobile-assistant-expanded.png",
+    "mobile-workspace-assistant.png",
+    "mobile-growth-contests.png",
+    "mobile-leaderboard-all-time.png",
+    "mobile-leaderboard-viewport.png",
+    "mobile-leaderboard-monthly.png",
+    "mobile-champions-overview.png",
+    "mobile-champions-viewport.png",
+    "mobile-school-referrals.png",
+    "mobile-school-viewport.png",
+    "mobile-reward-management.png",
+    "mobile-subscription-overview.png",
+    "mobile-subscription-viewport.png",
+    "mobile-subscription-account.png",
+    "mobile-invoice-list.png",
+    "mobile-invoice-viewport.png",
+    "mobile-invoice-detail.png",
+    "mobile-narrow-dashboard-full.png",
+    "mobile-narrow-dashboard-viewport.png",
+    "mobile-narrow-assistant-expanded.png",
+    "mobile-narrow-leaderboard-all-time.png",
+    "mobile-narrow-champions-overview.png",
+    "mobile-narrow-school-referrals.png",
+    "mobile-narrow-reward-management.png",
+    "mobile-narrow-subscription-overview.png",
+    "mobile-narrow-subscription-account.png",
+    "mobile-narrow-invoice-list.png",
+    "mobile-narrow-invoice-detail.png",
+    "mobile-champions-empty.png",
+    "mobile-champions-program-denied.png",
+    "mobile-champions-503.png",
+    "desktop-hq-access-denied.png"
+  ],
+  "accessibility": [
+    {
+      "label": "desktop-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-subscription-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-subscription-account",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-invoice-list",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-invoice-detail",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-subscription-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-subscription-account",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-invoice-list",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-invoice-detail",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-subscription-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-subscription-account",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-invoice-list",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-invoice-detail",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-narrow-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-subscription-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-subscription-account",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-invoice-list",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-invoice-detail",
+      "violations": [],
+      "incompleteCount": 2
+    }
+  ],
+  "blockedExternalHosts": [
+    "fonts.googleapis.com"
+  ],
+  "pageErrors": [],
+  "apiRequests": [
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions?status=SUSPENDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices?status=DRAFT"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions?status=SUSPENDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices?status=DRAFT"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions?status=SUSPENDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices?status=DRAFT"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions?status=SUSPENDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices?status=DRAFT"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions?status=SUSPENDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/catalog"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002004"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002003"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000003/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000003/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000003/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/invoices/10000000-0000-4000-8000-000000002001"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/subscription"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/payment-standing"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/organizations/10000000-0000-4000-8000-000000000001/refund-eligibility"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/saas/refunds"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview?schoolId=untrusted"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program?schoolId=untrusted"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    }
+  ]
+}
