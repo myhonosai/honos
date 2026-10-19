@@ -177,8 +177,8 @@ async function check(name, operation) {
   try { await operation(); report.checks.push(name); console.log(`PASS ${name}`); }
   catch (error) { report.failures.push({ name, message: String(error.message).slice(0, 1600) }); console.log(`FAIL ${name}: ${String(error.message).slice(0, 1600)}`); }
 }
-async function screenshot(page, name, fullPage = true) {
-  await page.evaluate(async () => {
+async function screenshot(page, name, fullPage = true, preserveScroll = false) {
+  await page.evaluate(async (preserve) => {
     await document.fonts.ready;
     const sources = new Set();
     for (const element of document.querySelectorAll('[role="img"], [data-hq-background]')) {
@@ -188,10 +188,10 @@ async function screenshot(page, name, fullPage = true) {
       const image = new Image(); image.src = source; await image.decode();
     }));
     // Captures start at the top after interactions, keeping fixed navigation/fixture labels in place.
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (!preserve) window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     await new Promise((done) => requestAnimationFrame(done));
-  });
-  await page.waitForFunction(() => scrollX === 0 && scrollY === 0);
+  }, preserveScroll);
+  await page.waitForFunction((preserve) => scrollX === 0 && (preserve || scrollY === 0), preserveScroll);
   await page.screenshot({ path: join(resultsRoot, `${name}.png`), fullPage, animations: 'disabled' });
   report.screenshots.push(`${name}.png`);
   // Private CI log previews let connected read-only review tools inspect synthetic screenshots

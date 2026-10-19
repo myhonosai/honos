@@ -63,6 +63,7 @@ export async function verifySaasViewport({ page, origin, label, check, screensho
       await page.getByText('No subscription records in the returned window match this selection.', { exact: true }).waitFor();
       await page.getByLabel('Find organization in returned records', { exact: true }).fill('');
       for (const name of ['Big Button', 'Classic', 'Modern']) { await page.getByRole('group', { name: 'Platform view' }).getByRole('button', { name, exact: true }).click(); await noOverflow(page, `${label} subscriptions ${name}`); }
+      await costs.focus(); await page.keyboard.press('Enter'); await page.getByText('USD 50.000000', { exact: true }).waitFor();
       await screenshot(page, `${label}-subscription-overview`);
       await accessibility(page, `${label}-subscription-overview`);
     } finally { page.off('request', listener); }
@@ -75,12 +76,15 @@ export async function verifySaasViewport({ page, origin, label, check, screensho
     await page.getByRole('heading', { name: 'Provider-verified standing', exact: true }).waitFor();
     await page.getByText(/Provider usage cost not recorded/, { exact: false }).waitFor();
     assert.equal(await page.getByRole('button', { name: /charge|collect|grant|activate|reserve|publish|resolve|purchase|refund/i }).count(), 0);
-    await noOverflow(page, `${label} subscription account`); await screenshot(page, `${label}-subscription-account`);
-    if (label === 'mobile') await screenshot(page, 'mobile-subscription-viewport', false);
+    await noOverflow(page, `${label} subscription account`);
+    const heading = await page.getByRole('heading', { name: 'Selected organization', exact: true }).boundingBox();
+    assert(heading && heading.y >= 18 && heading.y + heading.height < (page.viewportSize().height - 64), 'Selected account heading must be visible above mobile navigation after keyboard entry');
+    if (label === 'mobile') await screenshot(page, 'mobile-subscription-viewport', false, true);
+    await screenshot(page, `${label}-subscription-account`);
     await accessibility(page, `${label}-subscription-account`);
     await page.getByRole('button', { name: 'Close account review', exact: true }).click();
     assert.equal(await page.locator('[data-saas-account]').count(), 0);
-    assert(await page.getByRole('button', { name: 'Review HON Cedar Organization · fixture account', exact: true }).evaluate((node) => node === document.activeElement));
+    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Review HON Cedar Organization · fixture account');
   });
 }
 
@@ -123,7 +127,7 @@ export async function verifySaasStates({ contextFor, origin, check, delay }) {
       assert.equal(await page.locator('[data-founder-available="monthly"]').textContent(), 'Unavailable / undecided');
       saasState.overview = 'ready'; saasState.account = 'empty'; await open(); await select();
       await page.getByText('No current subscription', { exact: true }).waitFor(); await page.getByText('No allowance records were returned. A planned catalog allowance is not a granted balance.', { exact: true }).waitFor();
-      saasState.account = 'alignment'; await page.getByRole('button', { name: 'Refresh account records', exact: true }).click(); await page.getByText('MISMATCH', { exact: true }).waitFor();
+      saasState.account = 'alignment'; await page.getByRole('button', { name: 'Refresh account records', exact: true }).click(); await page.locator('dd').filter({ hasText: /^MISMATCH/ }).waitFor();
     });
     await check('Every billing read independently denies school, family, support, non-billing HQ and unsigned sessions', async () => {
       saasState.overview = 'ready'; saasState.account = 'ready';
