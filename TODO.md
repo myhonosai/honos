@@ -63,6 +63,11 @@
 
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
 
+## Claude — interface language persistence (2026-10-19)
+
+- [x] Migration `0171`: personal language preference (en/ko/es) bound to the verified user; school default with `settings.language.manage` at the exact school, audited; precedence personal > named school default > English; idempotent, version-checked updates. [Contract and Codex integration](docs/architecture/HON_LANGUAGE_PREFERENCES.md).
+- [ ] Codex: connect `GET/POST /v1/me/language-preference` and `GET/POST /v1/schools/:schoolId/language-default` (contracts in `@hon/contracts` `language-preferences`).
+
 ## Claude — B5.1 school billing reads and inactive B6 foundation (2026-10-19)
 
 - [x] Migration `0170`: `billing.hon.view` (exact school, never HQ permissions); school reads of organization-level invoices (stable keyset pagination), invoice detail (lines, settlement, provider-verified vs HQ-recorded evidence, refunds), and account readiness (entitlement, activation never from payment, payment standing, B3 allowance). [Design](docs/architecture/HON_SCHOOL_BILLING_READS_B5_1.md).
