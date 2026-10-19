@@ -80,8 +80,61 @@ const CHAMPIONS_CLUB_CALLS = {
   readSchoolLeaderboard: { sql: 'SELECT hon.read_champions_leaderboard_for_school($1,$2::uuid,$3,$4) AS data', arity: 4, readOnly: true },
   readSchoolStatistics: { sql: 'SELECT hon.read_champions_school_statistics($1,$2::uuid) AS data', arity: 2, readOnly: true },
   setLeaderboardPreference: { sql: 'SELECT hon.set_champions_leaderboard_preference($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  commandContest: { sql: 'SELECT hon.command_champions_contest($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readContests: { sql: 'SELECT hon.read_champions_contests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readContest: { sql: 'SELECT hon.read_champions_contest_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readSchoolContests: { sql: 'SELECT hon.read_champions_contests_for_school($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readOverview: { sql: 'SELECT hon.read_champions_overview_from_hq($1) AS data', arity: 1, readOnly: true },
 } as const;
 export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
+
+// HON subscription catalog (B1): HON billing schools. Separate from school-to-family billing.
+const SAAS_BILLING_CALLS = {
+  readCatalog: { sql: 'SELECT hon.read_saas_catalog_from_hq($1) AS data', arity: 1, readOnly: true },
+  createCatalogDraft: { sql: 'SELECT hon.create_saas_catalog_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishCatalog: { sql: 'SELECT hon.publish_saas_catalog($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readFounderReservations: { sql: 'SELECT hon.read_saas_founder_reservations_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  reserveFounder: { sql: 'SELECT hon.reserve_saas_founder_offer($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  releaseFounder: { sql: 'SELECT hon.release_saas_founder_reservation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSubscriptions: { sql: 'SELECT hon.read_saas_subscriptions_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readOrganizationSubscription: { sql: 'SELECT hon.read_saas_organization_subscription_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  recordSubscription: { sql: 'SELECT hon.record_saas_subscription($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  commandSubscription: { sql: 'SELECT hon.command_saas_subscription($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // B2: HON invoices and payment evidence (recordkeeping; nothing is collected or sent).
+  readInvoices: { sql: 'SELECT hon.read_saas_invoices_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readInvoice: { sql: 'SELECT hon.read_saas_invoice_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readPaymentStanding: { sql: 'SELECT hon.read_saas_payment_standing_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createInvoiceDraft: { sql: 'SELECT hon.create_saas_invoice_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  commandInvoice: { sql: 'SELECT hon.command_saas_invoice($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  recordPaymentEvidence: { sql: 'SELECT hon.record_saas_payment_evidence($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // B3: premium AI credit accounting (no purchase, top-up, overage or provider call).
+  readCreditProgram: { sql: 'SELECT hon.read_saas_credit_program_from_hq($1) AS data', arity: 1, readOnly: true },
+  readOrganizationCredits: { sql: 'SELECT hon.read_saas_organization_credits_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setCreditProgram: { sql: 'SELECT hon.set_saas_credit_program($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  recordCostEvidence: { sql: 'SELECT hon.record_saas_provider_cost_evidence($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  createPricingDraft: { sql: 'SELECT hon.create_saas_pricing_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishPricing: { sql: 'SELECT hon.publish_saas_pricing($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  commandAllowance: { sql: 'SELECT hon.command_saas_credit_allowance($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  resolveCreditReservation: { sql: 'SELECT hon.resolve_saas_credit_reservation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSchoolCredits: { sql: 'SELECT hon.read_saas_school_credits($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  estimatePremiumOperation: { sql: 'SELECT hon.estimate_saas_premium_operation($1,$2::uuid,$3,$4::integer) AS data', arity: 4, readOnly: true },
+  reservePremiumCredits: { sql: 'SELECT hon.reserve_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  settlePremiumCredits: { sql: 'SELECT hon.settle_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
+  readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
+  readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  readRefundReserve: { sql: 'SELECT hon.read_saas_refund_reserve_from_hq($1) AS data', arity: 1, readOnly: true },
+  createRefundRequest: { sql: 'SELECT hon.create_saas_refund_request($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  decideRefundRequest: { sql: 'SELECT hon.decide_saas_refund_request($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readRewardPreview: { sql: 'SELECT hon.read_saas_reward_preview_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readReferralAlerts: { sql: 'SELECT hon.read_saas_referral_alerts_from_hq($1,$2) AS data', arity: 2, readOnly: true },
+  setRewardFulfillment: { sql: 'SELECT hon.set_saas_reward_fulfillment($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  applyChampionsReward: { sql: 'SELECT hon.apply_saas_referral_reward($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readCreditApplicationPreview: { sql: 'SELECT hon.read_saas_credit_application_preview($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  applyAccountCredit: { sql: 'SELECT hon.apply_saas_account_credit($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  resolveReferralAlert: { sql: 'SELECT hon.resolve_saas_referral_alert($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+} as const;
+export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1016,6 +1069,17 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   async callChampionsClub(operation: ChampionsClubOperation, params: readonly (string | null)[]): Promise<unknown> {
     const call = CHAMPIONS_CLUB_CALLS[operation];
     if (!call || params.length !== call.arity) throw new Error('CHAMPIONS_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call, params, 'CHAMPIONS_UNAVAILABLE');
+  }
+
+  /** HON subscription catalog (B1): same fixed, subject-only, context-free call discipline as Champions Club. */
+  async callSaasBilling(operation: SaasBillingOperation, params: readonly (string | null)[]): Promise<unknown> {
+    const call = SAAS_BILLING_CALLS[operation];
+    if (!call || params.length !== call.arity) throw new Error('SAAS_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call, params, 'SAAS_UNAVAILABLE');
+  }
+
+  private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
     try {
@@ -1023,7 +1087,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       await client.query("SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '3s'; SET LOCAL log_parameter_max_length_on_error = 0");
       const result = await client.query<{ data: unknown }>(call.sql, [...params]);
       await client.query('COMMIT');
-      if (!result.rows[0]) throw new Error('CHAMPIONS_UNAVAILABLE');
+      if (!result.rows[0]) throw new Error(unavailable);
       return result.rows[0].data;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }

@@ -1,6 +1,6 @@
 # Flexible CRM enrollment and family billing policy
 
-**Status:** Owner-approved policy direction on 2026-10-18. The first billing-account implementation slice is delivered through migration `0152_flexible_billing_accounts.sql` and the protected direct-human workbench; adult/guardian-child CRM conversion remains future work. This document does **not** authorize payments, provider calls, real customer data changes, communication delivery, deployment, or automatic identity/family/account changes.
+**Status:** Owner-approved policy direction on 2026-10-18. The billing-account and bounded adult/guardian-child CRM registration foundations are delivered through protected direct-human workbenches; existing-record linking, guardian payer designation, and payment/provider work remain future boundaries. This document does **not** authorize payments, provider calls, real customer data changes, communication delivery, deployment, or automatic identity/family/account changes.
 
 ## Product intent
 

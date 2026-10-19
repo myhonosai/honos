@@ -9,7 +9,7 @@ export const crmAdultMembershipDraftFunctions = [
   ['hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)', true, true],
 ];
 export async function verifyCrmAdultMembershipDraftSecurity(admin, runtimeRole) {
-  const migration = await readFile(new URL('../migrations/0155_crm_adult_membership_draft.sql', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../migrations/0161_crm_adult_membership_draft.sql', import.meta.url), 'utf8');
   const role = (await admin.query(`SELECT rolcanlogin AND NOT (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication)
     AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=pg_roles.oid) AS safe FROM pg_roles WHERE rolname=$1`, [runtimeRole])).rows[0];
   assert.equal(role?.safe, true, 'restricted runtime');

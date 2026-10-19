@@ -75,7 +75,7 @@ BEGIN
 END $$;
 
 -- Private exact relation proof. REGISTERED is the immutable conversion response
--- outcome (0153 has no status column). No match/count/reason escapes this helper.
+-- outcome (0159 has no status column). No match/count/reason escapes this helper.
 CREATE FUNCTION hon.crm_adult_membership_relation(selected_student uuid)
 RETURNS TABLE(conversion_id uuid,person_id uuid,account_id uuid,student_display_name text,currency text)
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$

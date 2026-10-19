@@ -18,19 +18,26 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `class-sessions-read` | `test-security-boundaries.mjs` | Restricted runtime privileges, permission revocation, parent-family resolution, transaction-bound RLS isolation, composite tenant references |
 | `class-sessions-read` | `test-outbox-leases.mjs` | Expired/late outbox leases become UNKNOWN/DEAD_LETTER, never PUBLISHED or auto-retried |
 | `class-sessions-read` | `test-class-sessions-read-integrity.mjs` | Current-school Class Sessions read boundary |
-| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on **all 198** tracked operational tables, append-only audit/outbox, AI ledger tenant isolation |
+| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on every tracked operational table, append-only audit/outbox, AI ledger tenant isolation |
 | `crm-lead-close` | `test-crm-lead-close-integrity.mjs` | CRM close authority, denial matrix, atomicity, replay |
 | `champions-club` | `test-champions-club-integrity.mjs` | Champions Club authority, attribution fraud rules, qualification gates, transitions, immutable evidence, API service on real output |
 | `champions-club` | `test-champions-club-rewards-integrity.mjs` | Champions Club reward accounting: ladder accrual, reversal review, owner approvals, liabilities, no billing or entitlement effect |
 | `champions-club` | `test-champions-club-leaderboard-integrity.mjs` | Champions Club leaderboards: QUALIFIED-only standings, ties, holds, privacy opt-in, school statistics |
+| `champions-club` | `test-champions-club-contests-integrity.mjs` | Champions Club contests: HQ lifecycle and gates, pause-exact standings, frozen results, winner review, liabilities |
+| `champions-club` | `test-champions-club-journey-integrity.mjs` | Champions Club end-to-end journey through the API service with automatic reward reconciliation and audit consistency |
+| `champions-club` | `test-saas-subscription-integrity.mjs` | HON subscription catalog (B1): owner-only publication, atomic founder inventory under concurrency, entitlement-linked records, undecided policies refused, no billing effect |
+| `champions-club` | `test-saas-invoicing-integrity.mjs` | HON invoices and payment evidence (B2): gapless numbering, owner-verified tax before issue, HQ attestation never provider-verified, refunds and chargebacks reduce standing, no collection or reward effect |
+| `champions-club` | `test-saas-refunds-rewards-integrity.mjs` | HON refunds and Champions rewards (B4): first-purchase 30-day eligibility (regular, founder, lifetime), approve/deny/evidence, refund reserve, duplicate refusal under contention, ladder application once per entry, credit capped and restored on void, free months never invoiced with full allowance, alerts block fulfillment without reversal |
+| `champions-club` | `test-saas-credits-integrity.mjs` | HON premium credits (B3): owner-gated activation, verified-cost-linked pricing, one allowance per period, idempotent reserve, finalize/release/unknown/resolve, exact balance under 8-way contention, thresholds and hard stop, plan capabilities, suspension, expiry without rollover |
 | `curriculum-enrollment-preparation` | `test-curriculum-enrollment-preparation-integrity.mjs` | Direct-human current-school enrollment preparation: deterministic fixed-function projection, forced RLS, no new source-table grant, no writes and denial matrix |
+| `crm-adult-membership-draft` | `test-crm-adult-membership-draft-integrity.mjs` | Adult registered CRM conversion: canonical payer relation proof, one DRAFT, replay/race/authority/no-effect coverage |
 
 ## Safety controls
 
 - **Triggers:** pull requests targeting `main` (opened, updated, reopened, marked ready) and manual **Run workflow**. Draft PRs are skipped. A PR whose **entire** diff is docs (`docs/**`, `*.md`) is skipped. GitHub evaluates the filter against the whole PR, so a docs-only push to a PR that also changes code still runs CI. **No schedule. No push-to-main trigger** until the owner approves the minutes (see below).
 - **Permissions:** `contents: read` only; checkout does not persist the token.
 - **Concurrency:** a newer push to the same PR cancels the older run.
-- **Database isolation:** the runner refuses to run unless it is on an ephemeral GitHub-hosted runner (or `HON_DB_PROOFS_LOCAL=1` locally), refuses any inherited `DATABASE_URL`, and runs every fixture and proof under `env -i` with only `PATH`, `HOME`, `LANG`. The normal fixtures accept only their exact `localhost:5432` targets. The curriculum-enrollment-preparation fixture owns a separate mode-0700 local cluster and accepts only its exact `127.0.0.1:55434` target; no fixture can reach a shared or remote database.
+- **Database isolation:** the runner refuses to run unless it is on an ephemeral GitHub-hosted runner (or `HON_DB_PROOFS_LOCAL=1` locally), refuses any inherited `DATABASE_URL`, and runs every fixture and proof under `env -i` with only `PATH`, `HOME`, `LANG`. The normal fixtures accept only their exact `localhost:5432` targets. The curriculum-enrollment-preparation and adult-CRM-draft fixtures own separate mode-0700 local clusters on their exact loopback targets; no fixture can reach a shared or remote database.
 - **No secrets** are configured or read.
 
 ## Cost estimate (verify against your plan)
@@ -60,7 +67,7 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 
 ## Known limitations
 
-- **9 of 77** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
+- **16 of 84** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.

@@ -51,7 +51,7 @@ describe('HQ Executive Team presentation', () => {
     const route = readFileSync('src/app/hq/executives/page.tsx', 'utf8');
     const component = readFileSync('src/components/hq-executive-team.tsx', 'utf8');
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')) as { routes: { path: string; title?: string }[] };
-    expect(route).toContain('HqExecutiveTeam'); expect(route).toContain('force-dynamic'); expect(route).toContain('index: false');
+    expect(route).toContain('HqModernExecutives'); expect(route).toContain('force-dynamic'); expect(route).toContain('index: false');
     expect(component).toContain("from './hq-overview-http'"); expect(component).toContain('loadHqOverview'); expect(component).toContain("'big-button' | 'modern' | 'classic'");
     expect(component).not.toMatch(/fetch\(|method:\s*'POST'|invokeLLM|executeAction|sendMessage|provider-runtime|Idempotency-Key/i);
     expect(manifest.routes).toContainEqual({ path: '/hq/executives', title: 'HON HQ | Executive Team' });

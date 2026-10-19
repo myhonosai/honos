@@ -22,7 +22,7 @@ The command requires a current ordinary `HUMAN_USER` in `HUMAN_UI` source, with 
 
 The browser command requires the configured same origin, JSON, `X-HON-Human-Command: crm-lead-register`, `Sec-Fetch-Site: same-origin`, `Sec-Fetch-Mode: same-origin`, `Sec-Fetch-Dest: empty`, no user-navigation marker, no unexpected `X-HON-*` header, and a UUID idempotency key. The database command rechecks live authorization after locks and immediately before return.
 
-Migration `0153_crm_lead_registration.sql` adds forced-RLS immutable `crm_lead_registration_conversions` evidence. Runtime has no table access; it receives only the narrowly granted fixed resolver and command functions. Registered results atomically persist the person/family/student change, immutable conversion record, audit event, and inert `crm.lead.registration_recorded` outbox event.
+Migration `0159_crm_lead_registration.sql` adds forced-RLS immutable `crm_lead_registration_conversions` evidence. Runtime has no table access; it receives only the narrowly granted fixed resolver and command functions. Registered results atomically persist the person/family/student change, immutable conversion record, audit event, and inert `crm.lead.registration_recorded` outbox event.
 
 ## Path semantics
 

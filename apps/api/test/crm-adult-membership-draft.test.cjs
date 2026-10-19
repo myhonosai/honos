@@ -71,7 +71,7 @@ test('service verifies stored receipts inside the transaction and never calls ge
   data={ receipt: receipt({ billingAccountId: randomUUID() }), replayed: false };
   await assert.rejects(service.draft(context(),input()), e=>e.getStatus()===503);
   for(const file of ['crm-adult-membership-draft.service.ts','crm-adult-membership-draft.controller.ts']) assert.doesNotMatch(readFileSync(`src/billing/${file}`,'utf8'), /OwnerLaunch|MembershipService|ActionEngine|fetch\(|PaymentService|createDraft\(/);
-  const migration=readFileSync('../../packages/database/migrations/0155_crm_adult_membership_draft.sql','utf8');
+  const migration=readFileSync('../../packages/database/migrations/0161_crm_adult_membership_draft.sql','utf8');
   assert.doesNotMatch(migration, /(?:INSERT INTO|UPDATE|DELETE FROM) hon\.(?:billing_accounts|membership_payment_schedules|invoices|payment_attempts|family_members|student_curriculum_enrollments|communication_messages|action_requests|ai_usage_ledger)/);
   assert.match(migration, /'executionAllowed',false,'humanOnly',true/);
 });
