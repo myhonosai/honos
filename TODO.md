@@ -63,6 +63,13 @@
 
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
 
+## Claude — B5.1 school billing reads and inactive B6 foundation (2026-10-19)
+
+- [x] Migration `0164`: `billing.hon.view` (exact school, never HQ permissions); school reads of organization-level invoices (stable keyset pagination), invoice detail (lines, settlement, provider-verified vs HQ-recorded evidence, refunds), and account readiness (entitlement, activation never from payment, payment standing, B3 allowance). [Design](docs/architecture/HON_SCHOOL_BILLING_READS_B5_1.md).
+- [x] Inert B6 foundation: access program INACTIVE by CHECK, versioned PROPOSED terms, `PAID_ACCESS` policy PROPOSED, HQ dry run with enforcement NONE, generated entitlement enforcement inventory. `PAYMENT_PROVIDER` recorded DECIDED (Stripe, test mode only).
+- [ ] Codex: connect `/v1/schools/:schoolId/hon-billing` reads (contracts in `@hon/contracts` `saas-school-billing`).
+- [ ] Owner decisions D1–D15 before any payment-driven access change; then B6a.
+
 ## Claude — Stripe sandbox readiness and paid-access proposal (2026-10-19)
 
 - [x] Stripe approved by the owner for TEST MODE ONLY. Setup checklist, minimal restricted-key permissions, API/webhook version findings (current `2026-09-30.endive`; HON pins `2024-06-20`), the 8 events, webhook URL options, egress and the real-sandbox validation plan: [HON_STRIPE_SANDBOX_READINESS.md](docs/architecture/HON_STRIPE_SANDBOX_READINESS.md).

@@ -90,13 +90,25 @@ This document also answers the backend contract requested in issue #29, Gate 2.
 
 ## 5. Proposed sequencing
 
-- **B5.1 (no policy needed):**
-  - real-sandbox harness and preflight (readiness doc §6);
-  - `api_version` refusal in the normalizer;
-  - school invoice reads (§4.7);
-  - the `access`/`allowance` read fields, reporting today's provisioned state;
-  - the `PAYMENT_PROVIDER` policy recorded as DECIDED (Stripe, test mode only).
-- **B6a (after D1, D2, D12):** self-serve new-school initialization (with Manus), `AWAITING_FIRST_PAYMENT`, first-payment activation, exceptions, central gate and coverage proof. The access program stays INACTIVE until the owner switches it on.
+- **B5.1 (delivered in migration 0164; [details](HON_SCHOOL_BILLING_READS_B5_1.md)):**
+  - `api_version` refusal in the normalizer (merged in #30);
+  - school billing reads: invoices, detail, evidence, refunds, entitlement, activation, allowance (§4.6, §4.7);
+  - `PAYMENT_PROVIDER` recorded as DECIDED (Stripe, test mode only).
+  - Inert B6 foundation:
+    - `saas_access_program` (INACTIVE by CHECK);
+    - versioned `saas_access_policy_terms` v1 (PROPOSED by CHECK, carrying the D3, D4, D6–D10 and D12 recommendations);
+    - `PAID_ACCESS` policy PROPOSED;
+    - the HQ dry run `GET /v1/hq/saas/access/:organizationId` (enforcement NONE);
+    - the generated [entitlement enforcement inventory](HON_ENTITLEMENT_ENFORCEMENT_INVENTORY.md).
+  - Still to come: the real-sandbox harness (readiness doc §6), which waits on credentials.
+- **B6a (after D1, D2, D12):**
+  - self-serve new-school initialization (with Manus);
+  - `AWAITING_FIRST_PAYMENT`;
+  - first-payment activation through a private transition function that updates the existing `organization_entitlements` row (0146 pattern: version check, evidence, outbox);
+  - exceptions;
+  - the central gate and the behavioural coverage proof.
+
+  The access program flips from INACTIVE only in a reviewed migration after the owner approves.
 - **B6b (after D3–D11):** grace, restriction, suspension, reactivation, cancellation, refund and dispute transitions, founder and lifetime protection, allowance suspension.
 - **Live mode:** a separate milestone after D15 and a real-sandbox evidence review.
 
