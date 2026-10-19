@@ -1,5 +1,12 @@
 # HON Delivery Backlog
 
+## Codex school subscription — plan-selection foundation (2026-10-19)
+
+- [x] Inspect canonical main `ce93685`, merged B1/public catalog and active #26/#27/#3 ownership. Create isolated `codex/school-subscription-foundation`; coordinate only one appended route registry entry and new TODO section.
+- [x] Deliver interactive Core/Complete comparison, regular/founder monthly/lifetime selection and local review/confirmation using merged display metadata in [PR #28](https://github.com/myhonosai/honos/pull/28), with no simulated current-school facts or checkout. Big Button/Modern/Classic and deterministic expandable HON guidance; reset acknowledgement after changed terms. No school/HQ/provider API calls, private account facts or financial commands.
+- [x] Verify capture source `5f12f26`: [CI 39193167223](https://github.com/myhonosai/honos/actions/runs/39193167223) both jobs passed (635 web / 412 API / 188 domain / 91 auth tests, check/build, 156 migrations, all 14 disposable proofs / 234 forced-RLS tables); [browser 39193167219](https://github.com/myhonosai/honos/actions/runs/39193167219) 37 checks / 10 captures / 16 axe scans, zero failures/JS errors/reported violations/billing requests/mutations. [Actual desktop/mobile gallery](docs/visuals/codex/school-subscription/README.md) inspected. Focus restoration and compact mobile layout corrected. Final-head results in #28/#4; manual physical-device/screen-reader/zoom/contrast review remains. No merge/deployment.
+- [ ] After owner-approved B5 #26 merges, independently verify school-purchaser identity/permission, merged contracts and real test-mode provider configuration before integrating checkout. Current subscription, founder availability, eligibility, invoices and credit balance remain unavailable in this foundation. No merge/deployment/financial activation.
+
 ## Codex HQ — invoice detail and payment history (2026-10-19)
 
 - [x] Synchronize owner-approved #22 with merged B4, preserving backend blobs/modes; merge as `890daf2a39116894d987457edc75ced0d17279ac` after CI 39184141728 (613 web / 412 API / 188 domain / 91 auth, check/build, 156 migrations, 14 database proofs / 234 forced-RLS tables) and browser 39184141725 (81 checks / 51 captures / 32 axe scans, zero failures/JS errors/reported violations). No deployment or activation.

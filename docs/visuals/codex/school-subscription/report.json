@@ -1,0 +1,147 @@
+{
+  "sourceSha": "5f12f26a97dfcb12e49cc512cbaaf16e4982bede",
+  "syntheticSessionsOnly": true,
+  "backendConnected": false,
+  "checkoutOperational": false,
+  "customerDataUsed": false,
+  "checks": [
+    "desktop: initial layout, honest account state and accessible comparison",
+    "desktop: all price combinations and view compatibility",
+    "desktop: explicit review and acknowledgement never enables checkout",
+    "desktop: changing selection clears confirmation and edit restores keyboard focus",
+    "desktop: full canonical comparison expands with keyboard and fits viewport",
+    "desktop: HON expand, answer, Escape and restore keyboard behavior",
+    "desktop: reload and forged return URL cannot create payment or authority",
+    "tablet: initial layout, honest account state and accessible comparison",
+    "tablet: all price combinations and view compatibility",
+    "tablet: explicit review and acknowledgement never enables checkout",
+    "tablet: changing selection clears confirmation and edit restores keyboard focus",
+    "tablet: full canonical comparison expands with keyboard and fits viewport",
+    "tablet: HON expand, answer, Escape and restore keyboard behavior",
+    "tablet: reload and forged return URL cannot create payment or authority",
+    "mobile: initial layout, honest account state and accessible comparison",
+    "mobile: all price combinations and view compatibility",
+    "mobile: explicit review and acknowledgement never enables checkout",
+    "mobile: changing selection clears confirmation and edit restores keyboard focus",
+    "mobile: full canonical comparison expands with keyboard and fits viewport",
+    "mobile: HON expand, answer, Escape and restore keyboard behavior",
+    "mobile: reload and forged return URL cannot create payment or authority",
+    "narrow: initial layout, honest account state and accessible comparison",
+    "narrow: all price combinations and view compatibility",
+    "narrow: explicit review and acknowledgement never enables checkout",
+    "narrow: changing selection clears confirmation and edit restores keyboard focus",
+    "narrow: full canonical comparison expands with keyboard and fits viewport",
+    "narrow: HON expand, answer, Escape and restore keyboard behavior",
+    "narrow: reload and forged return URL cannot create payment or authority",
+    "unsigned: existing signed staff gate refuses route",
+    "tampered: existing signed staff gate refuses route",
+    "expired: existing signed staff gate refuses route",
+    "school-staff-without-purchase-synthetic: sign-in alone exposes no private data or billing action",
+    "other-school-synthetic: sign-in alone exposes no private data or billing action",
+    "family-synthetic: sign-in alone exposes no private data or billing action",
+    "hq-synthetic: sign-in alone exposes no private data or billing action",
+    "support-synthetic: sign-in alone exposes no private data or billing action",
+    "No billing API request, mutation, provider operation or JavaScript error"
+  ],
+  "failures": [],
+  "screenshots": [
+    "desktop-plans.png",
+    "desktop-viewport.png",
+    "desktop-review.png",
+    "desktop-comparison.png",
+    "desktop-guide.png",
+    "mobile-plans.png",
+    "mobile-viewport.png",
+    "mobile-review.png",
+    "mobile-comparison.png",
+    "mobile-guide.png"
+  ],
+  "accessibility": [
+    {
+      "label": "desktop-selection",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "desktop-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "desktop-comparison",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "desktop-guide",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-selection",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-comparison",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-guide",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-selection",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-comparison",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-guide",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-selection",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-comparison",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-guide",
+      "violations": [],
+      "incompleteCount": 1
+    }
+  ],
+  "apiRequests": [],
+  "mutations": [],
+  "externalHostsBlocked": [
+    "fonts.googleapis.com"
+  ],
+  "pageErrors": []
+}

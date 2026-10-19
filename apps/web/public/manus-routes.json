@@ -293,6 +293,7 @@
     {"path": "/hq/support", "title": "HON HQ | Support"},
     {"path": "/hq/growth/champions-club/schools", "title": "HON HQ | School referrals"},
     {"path": "/hq/revenue/invoices", "title": "HON HQ | Invoices"},
-    {"path": "/hq/revenue/invoices/:invoiceId", "title": "HON HQ | Invoice detail"}
+    {"path": "/hq/revenue/invoices/:invoiceId", "title": "HON HQ | Invoice detail"},
+    {"path": "/staff/subscription", "title": "HON OS | School subscription"}
   ]
 }
