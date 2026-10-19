@@ -37,7 +37,8 @@ const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED',
   'SAAS_REFUND_NOTHING_TO_REFUND','SAAS_REFUND_EVIDENCE_INCOMPLETE','SAAS_PERIOD_FREE','SAAS_REWARD_ALREADY_APPLIED','SAAS_REWARD_VOIDED',
   'SAAS_REWARD_UNDER_REVIEW','SAAS_REWARD_NOT_APPROVED','SAAS_REWARD_PRIZE_MANUAL','SAAS_REWARD_SUBSTITUTE_MANUAL','SAAS_REWARD_PAYMENT_ALERT_OPEN',
   'SAAS_REWARD_NO_SUBSCRIPTION','SAAS_REWARD_NOT_APPLICABLE','SAAS_REWARD_NOTHING_TO_APPLY','SAAS_REWARDS_NOT_ACTIVE','SAAS_REWARD_PERIOD_IN_PAST',
-  'SAAS_REWARD_PERIOD_TAKEN','SAAS_NO_ACCOUNT_CREDIT','SAAS_ALERT_ATTRIBUTION_UNDECIDED']);
+  'SAAS_REWARD_PERIOD_TAKEN','SAAS_NO_ACCOUNT_CREDIT','SAAS_ALERT_ATTRIBUTION_UNDECIDED',
+  'SAAS_PAYMENTS_NOT_ACTIVE','SAAS_CHECKOUT_OPEN']);
 const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
@@ -217,6 +218,11 @@ export class SaasBillingService {
   async resolveReferralAlert(subject: string, alertId: unknown, body: unknown, key: unknown) {
     const [alert, input, idempotencyKey] = parse(() => [saasUuid(alertId), validateSaasReferralAlertResolveInput(body), saasUuid(key)] as const);
     return this.run('resolveReferralAlert', [subject, alert, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasReferralAlertReceipt);
+  }
+
+  /** Shared fixed-function call with the SaaS error mapping (used by the B5 payments service). */
+  async call<T>(operation: SaasBillingOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {
+    return this.run(operation, params, validate);
   }
 
   private async run<T>(operation: SaasBillingOperation, params: (string | null)[], validate: (value: unknown) => T): Promise<T> {

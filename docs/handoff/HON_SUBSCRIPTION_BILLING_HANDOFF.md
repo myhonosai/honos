@@ -1,6 +1,6 @@
 # Recommended Technical Handoff: HON Subscription Billing, Plans, Founder Pricing and AI Credit Allowance
 
-**Status:** B1 merged (`7afa0b5`): [HON_SUBSCRIPTION_CATALOG_B1.md](../architecture/HON_SUBSCRIPTION_CATALOG_B1.md). B2 merged (`3d6e818`): [HON_SUBSCRIPTION_INVOICING_B2.md](../architecture/HON_SUBSCRIPTION_INVOICING_B2.md). B3 merged (`512eddb`): [HON_PREMIUM_CREDITS_B3.md](../architecture/HON_PREMIUM_CREDITS_B3.md). B4 is implemented in its own PR (not merged): [HON_REFUNDS_CHAMPIONS_REWARDS_B4.md](../architecture/HON_REFUNDS_CHAMPIONS_REWARDS_B4.md). B5 is not started. Nothing here activates billing, charges, credits or a payment provider.
+**Status:** B1 merged (`7afa0b5`): [HON_SUBSCRIPTION_CATALOG_B1.md](../architecture/HON_SUBSCRIPTION_CATALOG_B1.md). B2 merged (`3d6e818`): [HON_SUBSCRIPTION_INVOICING_B2.md](../architecture/HON_SUBSCRIPTION_INVOICING_B2.md). B3 merged (`512eddb`): [HON_PREMIUM_CREDITS_B3.md](../architecture/HON_PREMIUM_CREDITS_B3.md). B4 merged (`9c85871`): [HON_REFUNDS_CHAMPIONS_REWARDS_B4.md](../architecture/HON_REFUNDS_CHAMPIONS_REWARDS_B4.md). B5 (test-mode provider integration) is implemented in its own PR (not merged): [HON_PAYMENTS_TEST_MODE_B5.md](../architecture/HON_PAYMENTS_TEST_MODE_B5.md). Nothing here activates billing, charges, credits or a payment provider.
 
 **Why this is next.** Champions Club fulfillment, the `HON_BILLING` payment-verification source, the 30-day refund guarantee, founder offers and premium AI credit allowances all depend on HON knowing, authoritatively, what each school bought, when it paid, and what allowance it holds.
 
@@ -28,10 +28,10 @@
    - Reservation, then finalize, then release on provider failure, with no double charge on idempotent retry.
    - 75% / 90% / 100% thresholds and premium top-up accounting at 2× the verified provider cost.
    - No automatic overage.
-4. **B4: refund guarantee and Champions fulfillment** (implemented, PR pending).
+4. **B4: refund guarantee and Champions fulfillment** (merged).
    - 30-day refund workflow (records and approvals).
    - Apply approved Champions liabilities as invoice credits or free periods. Still no provider until the owner approves activation.
-5. **B5: provider integration (separately approved).**
+5. **B5: provider integration** (test mode, implemented, PR pending).
    - Stripe or a similar provider in test mode only.
    - Webhooks to the evidence ledger, then reconciliation. Live charges only with explicit owner approval.
 
