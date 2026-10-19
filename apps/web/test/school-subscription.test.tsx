@@ -55,7 +55,7 @@ describe('school HON subscription foundation — merged display contracts only',
   });
   it('keeps all account, subscription, credit and checkout facts unavailable rather than inventing a fixture', () => {
     const html = markup(); expect(html).toContain('Current subscription unavailable'); expect(html).toContain('Checkout not connected');
-    expect(html).toContain('Not a granted allowance or live balance'); expect(html).toContain('Backend payment verification');
+    expect(html).toContain('Not a granted allowance or live balance'); expect(html).toContain('A success URL never proves payment or access.');
     expect(source).toContain('disabled aria-describedby="checkout-reason"');
     expect(html).not.toMatch(/data-fixture|SYNTHETIC|\bPAID\b|Your balance|Subscription active|Checkout successful/);
   });
