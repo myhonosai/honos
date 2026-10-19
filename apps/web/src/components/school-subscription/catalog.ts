@@ -43,7 +43,7 @@ export const PLAN_COMPARISON = [...new Set([...SAAS_PLAN_CAPABILITIES.CORE, ...S
 });
 
 export function displayUsd(minor: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(minor / 100);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: minor % 100 === 0 ? 0 : 2, maximumFractionDigits: 2 }).format(minor / 100);
 }
 
 export type PlanSelection = { tier: PublicPlanTier; offer: SaasOfferKind; reviewing: boolean; acknowledged: boolean };

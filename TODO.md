@@ -1,5 +1,11 @@
 # HON Delivery Backlog
 
+## Codex school checkout — merged B5 TEST_MODE integration (2026-10-19)
+
+- [x] Synchronize exact merged main `d823edc` (tree `35f5126`), preserve #28 foundation and Claude's B5 backend verbatim; isolate `codex/school-checkout-test-mode`. Coordinate #30/#27 and preserve #29 B6/invoice/multi-school dependencies. No Manus migration reconciliation by Codex.
+- [ ] Connect verified current-school context, independently authorized B5 plan/checkout and B3 credit reads; backend-returned offer prices/inventory, explicit human confirmation, idempotent duplicate-protected test checkout and authoritative refresh. No URL payment proof or browser entitlement activation.
+- [ ] Verify actual desktop/mobile with signed synthetic fixtures, HTTP/authorization/stale/error/unknown-outcome tests, full CI/security proofs and durable screenshots; open separate owner-review PR. Real Stripe sandbox and B6 paid-access proof remain separate blockers. No merge/deploy/live payments or provider activation.
+
 ## Codex school subscription — plan-selection foundation (2026-10-19)
 
 - [x] Inspect canonical main `ce93685`, merged B1/public catalog and active #26/#27/#3 ownership. Create isolated `codex/school-subscription-foundation`; coordinate only one appended route registry entry and new TODO section.
