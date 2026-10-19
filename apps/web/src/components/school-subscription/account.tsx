@@ -24,7 +24,8 @@ export function SchoolAccountStatus({ billing }: { billing: ReturnType<typeof us
     {!billing.loading && !account && <p>Account facts were cleared. No subscription, payment, access or balance is assumed.</p>}
     {account && <>
       <p><span className={styles.unavailable}>{account.plan.payments.status === 'TEST_MODE' ? 'TEST MODE • No live payments' : 'Checkout disabled'}</span></p>
-      <p className={styles.small}>Currently authorized tier: <strong>{account.plan.entitlementTier ?? 'Unavailable'}</strong>. Purchasing another tier is unavailable. This does not confirm purchase-based activation.</p>
+      <p className={styles.small}>Currently authorized tier: <strong>{account.plan.entitlementTier ?? 'Unavailable'}</strong> · Provisioned separately from payment.</p>
+      {verified && <div className={styles.activation} role="status"><strong>{simulated ? 'Simulator-verified test payment' : 'Provider-verified test payment'}</strong><h3>Pending Account Activation</h3><p>Payment verification does not activate or change your school’s features. Purchase-based account activation is awaiting confirmation. Your existing authorized tier remains separate.</p></div>}
       {status && <div className={styles.checkoutStatus} role="status"><strong>{labels[status]}</strong><p>{checkout!.statusReason.replaceAll('_', ' ')} · Test mode{simulated ? ' · Deterministic simulator, not Stripe sandbox' : ' · Stripe provider'}</p>
         {status === 'OPEN' && <>
           <p>Returning here or opening a hosted session does not confirm payment. Refresh after checkout.</p>
@@ -35,7 +36,6 @@ export function SchoolAccountStatus({ billing }: { billing: ReturnType<typeof us
         {status === 'PAID_NEEDS_REVIEW' && <p>Do not purchase again. HON must review this payment before any outcome is assumed.</p>}
         {['CANCELLED', 'EXPIRED', 'FAILED'].includes(status) && <p>This checkout did not establish a verified purchase. Review refreshed offers before starting another test checkout.</p>}
       </div>}
-      {verified && <div className={styles.activation} role="status"><strong>{simulated ? 'Simulator-verified test payment' : 'Provider-verified test payment'}</strong><h3>Pending Account Activation</h3><p>Payment verification does not activate or change your school’s features. Purchase-based account activation is awaiting confirmation. Your existing authorized tier remains separate.</p></div>}
       {sub ? <dl className={styles.facts}>
         <div><dt>Recorded subscription</dt><dd>HON {sub.planCode} · {sub.status.replaceAll('_', ' ')}</dd></div>
         <div><dt>Payment status</dt><dd>{sub.paymentStatus.replaceAll('_', ' ')} · {account.plan.paymentVerification === 'HQ_ATTESTED' ? 'Manual HON attestation; not provider verified' : account.plan.paymentVerification === 'PROVIDER_VERIFIED' ? 'Provider verified · test mode' : 'No current paid verification'}</dd></div>
