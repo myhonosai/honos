@@ -20,7 +20,7 @@ Owner policy `REFUND_GUARANTEE` v3 is `DECIDED` as `FIRST_PURCHASE_30_DAY_FULL_R
 
 **First eligible purchase:** the organization's issued HON invoice with the earliest recorded `PAYMENT_RECEIVED`. A later purchase never restarts the window.
 
-**Window:** `[firstPaidAt, firstPaidAt + 30 days)`. Day 30 itself is excluded.
+**Window:** `[firstPaidAt, firstPaidAt + 720 hours)`, exactly 30 × 24 hours in any session time zone (a calendar "30 days" would shift by an hour across DST). The end instant itself is excluded.
 - Eligibility uses `requestReceivedAt`, the moment the customer asked.
 - A request received inside the window but recorded later is still covered.
 - A future receipt time is refused.

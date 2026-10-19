@@ -191,6 +191,11 @@ try{
  // A request received inside the window but recorded later is still covered (exactly 30 days is not).
  assert.equal((await eligibility(O.RX.id,iso(NOW-35*DAY+30*DAY))).refusal,'SAAS_REFUND_WINDOW_EXPIRED');
  const rxLate=(await eligibility(O.RX.id,iso(NOW-35*DAY+30*DAY-1000)));assert.equal(rxLate.eligible,true);
+ // The window is exactly 720 hours whatever the session time zone (RA's window spans the US DST change on 2026-11-01).
+ await admin.query("SET TimeZone='America/New_York'");
+ const dst=(await admin.query("SELECT (r->>'windowEndsAt')::timestamptz-(r->>'firstPaidAt')::timestamptz w FROM (SELECT hon.saas_refund_eligibility($1,clock_timestamp()) r) x",[O.RA.id])).rows[0].w;
+ await admin.query("SET TimeZone='UTC'");
+ assert.deepEqual([dst.days??0,dst.hours??0],[30,0],JSON.stringify(dst));
  const fm0=await issued(subs.FM.subscriptionId,0);await evidence(fm0,'PAYMENT_RECEIVED',fm0.totalMinor,iso(NOW-3*DAY),'RCPT-FM');
  const fl0=await issued(subs.FL.subscriptionId,null);await evidence(fl0,'PAYMENT_RECEIVED',fl0.totalMinor,iso(NOW-4*DAY),'RCPT-FL');
  assert.deepEqual([(await eligibility(O.FM.id)).offerKind,(await eligibility(O.FM.id)).refundableMinor],['FOUNDER_MONTHLY',7900]);

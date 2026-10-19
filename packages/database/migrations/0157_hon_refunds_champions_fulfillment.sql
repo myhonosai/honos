@@ -70,7 +70,8 @@ CREATE TABLE hon.saas_refund_requests (
   created_at timestamptz NOT NULL,
   decided_by_principal_id uuid REFERENCES hon.principals(id) ON DELETE RESTRICT,
   decided_at timestamptz,
-  CHECK (window_ends_at = first_paid_at + interval '30 days'),
+  -- Exactly 30 x 24 hours: a calendar '30 days' would shift by an hour across DST in a non-UTC session.
+  CHECK (window_ends_at = first_paid_at + interval '720 hours'),
   CHECK (request_received_at >= first_paid_at AND request_received_at < window_ends_at AND request_received_at <= created_at),
   CHECK ((status IN ('APPROVED','REFUND_EVIDENCED')) = (approved_amount_minor IS NOT NULL)),
   CHECK ((status = 'REQUESTED') = (decided_at IS NULL) AND (decided_at IS NULL) = (decided_by_principal_id IS NULL))
@@ -301,11 +302,11 @@ BEGIN
     WHEN EXISTS (SELECT 1 FROM hon.saas_refund_requests r WHERE r.organization_id = p_organization AND r.status IN ('APPROVED','REFUND_EVIDENCED')) THEN 'SAAS_REFUND_ALREADY_GRANTED'
     WHEN EXISTS (SELECT 1 FROM hon.saas_refund_requests r WHERE r.organization_id = p_organization AND r.status = 'REQUESTED') THEN 'SAAS_REFUND_REQUEST_OPEN'
     WHEN p_received_at < first_paid THEN 'SAAS_REFUND_BEFORE_PAYMENT'
-    WHEN p_received_at >= first_paid + interval '30 days' THEN 'SAAS_REFUND_WINDOW_EXPIRED'
+    WHEN p_received_at >= first_paid + interval '720 hours' THEN 'SAAS_REFUND_WINDOW_EXPIRED'
     WHEN coalesce(net, 0) <= 0 THEN 'SAAS_REFUND_NOTHING_TO_REFUND' END;
   RETURN jsonb_build_object('organizationId', p_organization, 'eligible', reason IS NULL, 'refusal', reason,
     'invoiceId', inv.id, 'invoiceNumber', inv.invoice_number, 'subscriptionId', inv.subscription_id, 'offerKind', inv.offer_kind,
-    'firstPaidAt', hon.saas_ts(first_paid), 'windowEndsAt', hon.saas_ts(first_paid + interval '30 days'),
+    'firstPaidAt', hon.saas_ts(first_paid), 'windowEndsAt', hon.saas_ts(first_paid + interval '720 hours'),
     'requestReceivedAt', hon.saas_ts(p_received_at), 'refundableMinor', CASE WHEN inv.id IS NULL THEN 0 ELSE greatest(coalesce(net, 0), 0) END,
     'evidenceStrength', CASE WHEN inv.id IS NULL THEN NULL WHEN coalesce(verified, 0) >= coalesce(net, 0) AND coalesce(net, 0) > 0 THEN 'PROVIDER_VERIFIED' ELSE 'HQ_ATTESTED' END,
     'execution', 'UNAVAILABLE');
@@ -443,12 +444,12 @@ BEGIN
     WHERE i.status = 'ISSUED' ORDER BY i.organization_id, min(e.occurred_at) OVER (PARTITION BY i.id), i.id),
   open_window AS (
     SELECT fp.*, f.net_minor FROM first_purchase fp CROSS JOIN LATERAL hon.saas_invoice_facts(NULL, fp.invoice_id) f
-    WHERE at < fp.first_paid + interval '30 days' AND f.net_minor > 0
+    WHERE at < fp.first_paid + interval '720 hours' AND f.net_minor > 0
       AND NOT EXISTS (SELECT 1 FROM hon.saas_refund_requests r WHERE r.organization_id = fp.organization_id AND r.status <> 'DENIED'))
   SELECT jsonb_build_object('organizations', count(*), 'totalMinor', coalesce(sum(net_minor), 0),
       'paidLifetimeMinor', coalesce(sum(net_minor) FILTER (WHERE offer_kind = 'FOUNDER_LIFETIME'), 0),
       'monthlyMinor', coalesce(sum(net_minor) FILTER (WHERE offer_kind <> 'FOUNDER_LIFETIME'), 0),
-      'earliestWindowEndsAt', hon.saas_ts(min(first_paid) + interval '30 days'))
+      'earliestWindowEndsAt', hon.saas_ts(min(first_paid) + interval '720 hours'))
     INTO exposure FROM open_window;
   SELECT jsonb_build_object('requests', count(*), 'totalMinor', coalesce(sum(approved_amount_minor), 0)) INTO approved
     FROM hon.saas_refund_requests WHERE status = 'APPROVED';
@@ -487,7 +488,7 @@ BEGIN
   INSERT INTO hon.saas_refund_requests(organization_id, subscription_id, invoice_id, offer_kind, first_paid_at, window_ends_at, request_received_at,
       customer_reference, requested_amount_minor, evidence_strength, status, status_reason, version, note, requested_by_principal_id, created_at)
     VALUES (v_org, (elig->>'subscriptionId')::uuid, (elig->>'invoiceId')::uuid, elig->>'offerKind', (elig->>'firstPaidAt')::timestamptz,
-      (elig->>'firstPaidAt')::timestamptz + interval '30 days', v_received, p->>'customerReference', (elig->>'refundableMinor')::integer,
+      (elig->>'firstPaidAt')::timestamptz + interval '720 hours', v_received, p->>'customerReference', (elig->>'refundableMinor')::integer,
       elig->>'evidenceStrength', 'REQUESTED', 'REQUESTED', 1, p->>'note', actor, at)
     RETURNING * INTO created;
   INSERT INTO hon.saas_refund_history(refund_request_id, version, status, status_reason, amount_minor, actor_principal_id, occurred_at)
