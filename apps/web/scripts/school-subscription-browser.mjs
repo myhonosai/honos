@@ -84,7 +84,16 @@ try {
     await check(`${name}: changing selection clears confirmation and edit restores keyboard focus`, async () => {
       await page.getByRole('radio', { name: /^Founder monthly/ }).check(); assert.equal(await page.getByRole('checkbox').count(), 0);
       await page.getByRole('button', { name: 'Review selection' }).click(); assert(!(await page.getByRole('checkbox').isChecked()));
-      await page.getByRole('button', { name: 'Edit selection' }).click(); assert(await page.getByRole('button', { name: 'Review selection' }).evaluate((e) => e === document.activeElement));
+      await page.getByRole('button', { name: 'Edit selection' }).click();
+      await page.waitForFunction(() => document.activeElement?.textContent === 'Review selection →');
+      assert(await page.getByRole('button', { name: 'Review selection' }).evaluate((e) => e === document.activeElement));
+    });
+    await check(`${name}: full canonical comparison expands with keyboard and fits viewport`, async () => {
+      const summary = page.locator('summary').filter({ hasText: 'View full feature comparison' }); await summary.focus(); await page.keyboard.press('Enter');
+      assert(await page.getByRole('table', { name: 'HON Core and Complete approved plan capabilities' }).isVisible());
+      await overflow(page); await scan(page, `${name}-comparison`);
+      if (['desktop', 'mobile'].includes(name)) await capture(page, `${name}-comparison`);
+      await summary.focus(); await page.keyboard.press('Enter'); assert(!(await page.getByRole('table').isVisible()));
     });
     await check(`${name}: HON expand, answer, Escape and restore keyboard behavior`, async () => {
       const toggle = page.getByRole('button', { name: 'HON plan guide', exact: true }); await toggle.focus(); await page.keyboard.press('Enter');

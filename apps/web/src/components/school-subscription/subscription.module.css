@@ -115,16 +115,16 @@
 }
 .intro {
   display:grid;
-  grid-template-columns:1.5fr 1fr;
-  gap:85px;
+  grid-template-columns:1fr;
+  gap:20px;
   align-items:center;
-  margin:40px 0 30px;
+  margin:20px 0;
 }
 .intro h1 {
-  font-size:clamp(35px,4vw,54px);
+  font-size:clamp(30px,3vw,42px);
   line-height:1.13;
   letter-spacing:-.04em;
-  margin:0 0 20px;
+  margin:0 0 12px;
 }
 .intro em {
   font-style:normal;
@@ -136,6 +136,7 @@
   max-width:530px;
 }
 .account {
+  margin:0 0 35px;
   padding:24px;
   border:1px solid var(--line);
   border-radius:18px;
@@ -442,6 +443,16 @@
 .comparison h2 {
   margin:8px 0 14px;
 }
+.comparison summary {
+  min-height:48px;
+  padding:12px 16px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#12263b;
+  color:var(--cyan);
+  cursor:pointer;
+  font-size:13px;
+}
 .tableWrap {
   margin-top:22px;
   border:1px solid var(--line);
@@ -698,10 +709,10 @@
     margin-top:20px;
   }
   .toolbar>.kicker {
-    padding:0;
+    display:none;
   }
   .views {
-    margin-top:16px;
+    margin-top:0;
     width:100%;
     justify-content:space-between;
   }
@@ -712,11 +723,11 @@
   .intro {
     grid-template-columns:1fr;
     gap:18px;
-    margin-top:26px;
+    margin:20px 0 16px;
   }
   .intro h1 {
-    font-size:36px;
-    margin-bottom:14px;
+    font-size:28px;
+    margin-bottom:10px;
   }
   .intro p {
     font-size:13px;
@@ -746,14 +757,19 @@
     padding-top:28px;
   }
   .offers {
-    grid-template-columns:1fr;
+    grid-template-columns:repeat(3,minmax(0,1fr));
     gap:8px;
   }
   .offers label {
-    padding:13px 15px;
+    flex-direction:column;
+    gap:7px;
+    padding:10px;
   }
   .offers small {
-    margin-top:0;
+    display:none;
+  }
+  .page[data-view=big-button] .offers label {
+    padding:12px 9px;
   }
   .plans {
     grid-template-columns:1fr;

@@ -21,16 +21,20 @@ export function SchoolSubscription(): React.ReactElement {
   const [answer, setAnswer] = useState<number | null>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   const reviewButton = useRef<HTMLButtonElement>(null);
+  const restoreReviewFocus = useRef(false);
   const guideButton = useRef<HTMLButtonElement>(null);
   const guideHeading = useRef<HTMLHeadingElement>(null);
   const guideId = useId();
   const selected = planDisplay(selection.tier, selection.offer);
   const limits = SAAS_OWNER_APPROVED_DRAFT.founderProgram;
 
-  useEffect(() => { if (selection.reviewing) reviewHeading.current?.focus(); }, [selection.reviewing]);
+  useEffect(() => {
+    if (selection.reviewing) reviewHeading.current?.focus();
+    else if (restoreReviewFocus.current) { restoreReviewFocus.current = false; reviewButton.current?.focus(); }
+  }, [selection.reviewing]);
   useEffect(() => { if (guideOpen) guideHeading.current?.focus(); }, [guideOpen]);
   function closeGuide() { setGuideOpen(false); guideButton.current?.focus(); }
-  function edit() { dispatch({ type: 'EDIT' }); requestAnimationFrame(() => reviewButton.current?.focus()); }
+  function edit() { restoreReviewFocus.current = true; dispatch({ type: 'EDIT' }); }
 
   return <main className={styles.page} data-view={view}>
     <a href="#plan-content" className={styles.skip}>Skip to plan selection</a>
@@ -44,8 +48,7 @@ export function SchoolSubscription(): React.ReactElement {
         <fieldset className={styles.views}><legend>View</legend>{HON_INTERFACE_THEMES.map((theme) => <button type="button" key={theme.id} aria-pressed={view === theme.id} onClick={() => setView(theme.id)}>{theme.id === 'big-button' ? 'Big Button' : theme.id === 'modern' ? 'Modern' : 'Classic'}</button>)}</fieldset>
       </div>
       <section className={styles.intro} aria-labelledby="subscription-title">
-        <div><h1 id="subscription-title">More time to teach.<br/><em>Room to grow.</em></h1><p>One operating system for your martial arts school. Compare HON Core and Complete, then review the offer that fits your next step.</p></div>
-        <aside className={styles.account} aria-label="Current HON subscription"><span className={styles.tag}>ACCOUNT STATUS</span><h2>Current subscription unavailable</h2><p>School billing access, subscription, entitlements, invoices and live AI balance cannot be verified here yet.</p><span className={styles.unavailable}>Checkout not connected</span></aside>
+        <div><h1 id="subscription-title">More time to teach.<br/><em>Room to grow.</em></h1><p>Compare Core and Complete for your school. Review an offer before checkout.</p></div>
       </section>
       <div className={styles.notice} role="note"><strong>Plan-selection foundation</strong><span>Compare and review approved display terms. Purchases, founder reservations and payments are unavailable. No card details are collected.</span></div>
       <section id="plan-content" className={styles.selection} aria-labelledby="choose-title">
@@ -74,7 +77,8 @@ export function SchoolSubscription(): React.ReactElement {
           <button type="button" className={styles.primary} disabled aria-describedby="checkout-reason">Secure checkout unavailable</button><p id="checkout-reason" className={styles.small}>The school checkout integration is pending. Even after confirmation, no payment can start here.</p><button type="button" className={styles.textButton} onClick={edit}>Edit selection</button>
         </>}</div>
       </section>
-      <section id="compare" className={styles.comparison} aria-labelledby="compare-title"><p className={styles.kicker}>THE FUNCTIONAL DIFFERENCE</p><h2 id="compare-title">Your foundation. Your AI advantage.</h2><p>Approved capability catalog. Server permissions, current entitlements, connected services and approvals still govern every operation.</p><div className={styles.tableWrap}><table><caption className={styles.srOnly}>HON Core and Complete approved plan capabilities</caption><thead><tr><th scope="col">Capability</th><th scope="col">Core</th><th scope="col">Complete</th></tr></thead><tbody>{PLAN_COMPARISON.map((row) => <tr key={row.capability}><th scope="row">{row.label}{row.note && <small>{row.note}</small>}</th><td>{row.core ? 'Included' : '—'}</td><td>{row.complete ? 'Included' : '—'}</td></tr>)}</tbody></table></div></section>
+      <aside className={styles.account} aria-label="Current HON subscription"><span className={styles.tag}>ACCOUNT STATUS</span><h2>Current subscription unavailable</h2><p>School billing access, subscription, entitlements, invoices and live AI balance cannot be verified here yet.</p><span className={styles.unavailable}>Checkout not connected</span></aside>
+      <section id="compare" className={styles.comparison} aria-labelledby="compare-title"><p className={styles.kicker}>THE FUNCTIONAL DIFFERENCE</p><h2 id="compare-title">Your foundation. Your AI advantage.</h2><p>Approved capability catalog. Server permissions, current entitlements, connected services and approvals still govern every operation.</p><details><summary>View full feature comparison</summary><div className={styles.tableWrap}><table><caption className={styles.srOnly}>HON Core and Complete approved plan capabilities</caption><thead><tr><th scope="col">Capability</th><th scope="col">Core</th><th scope="col">Complete</th></tr></thead><tbody>{PLAN_COMPARISON.map((row) => <tr key={row.capability}><th scope="row">{row.label}{row.note && <small>{row.note}</small>}</th><td>{row.core ? 'Included' : '—'}</td><td>{row.complete ? 'Included' : '—'}</td></tr>)}</tbody></table></div></details></section>
       <section className={styles.next} aria-labelledby="next-title"><div><p className={styles.kicker}>03 / WHAT HAPPENS NEXT</p><h2 id="next-title">A verified start for your school.</h2></div><ol><li><strong>Confirm school billing access</strong><p>The authorized backend must verify the exact school purchaser and available offers.</p></li><li><strong>Use secure hosted checkout</strong><p>Pending integration. Test mode only when available; no live payments.</p></li><li><strong>Verify payment, then access</strong><p>A success URL never proves payment or access. Invoices and actual credit balances require authorized records.</p></li><li><strong>Continue school setup</strong><p>Prepare your programs and classes through the existing <a href="/staff/launch">school setup workspace</a>.</p></li></ol></section>
       <footer className={styles.footer}>HON SaaS subscription · Separate from your school’s family billing · All prices USD</footer>
     </div>
