@@ -150,6 +150,14 @@ const SAAS_BILLING_CALLS = {
   readAccessReadiness: { sql: 'SELECT hon.read_saas_access_readiness_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
+// Interface language persistence (0171): fixed subject-bound functions; the subject is the verified identity.
+const LANGUAGE_CALLS = {
+  readMine: { sql: 'SELECT hon.read_my_language_preference($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  updateMine: { sql: 'SELECT hon.set_my_language_preference($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readSchool: { sql: 'SELECT hon.read_school_language_default($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  updateSchool: { sql: 'SELECT hon.set_school_language_default($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+} as const;
+export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1083,6 +1091,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call = SAAS_BILLING_CALLS[operation];
     if (!call || params.length !== call.arity) throw new Error('SAAS_UNAVAILABLE');
     return this.callFixedSubjectFunction(call, params, 'SAAS_UNAVAILABLE');
+  }
+
+  async callLanguage(operation: LanguageOperation, params: readonly (string | null)[]): Promise<unknown> {
+    const call = LANGUAGE_CALLS[operation];
+    if (!call || params.length !== call.arity) throw new Error('LANGUAGE_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call, params, 'LANGUAGE_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

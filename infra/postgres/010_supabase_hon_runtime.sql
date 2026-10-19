@@ -1435,3 +1435,18 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 -- End HON school billing reads exact reconciliation.
+
+-- Interface language persistence (0171) exact reconciliation.
+DO $$ DECLARE r text; f text; BEGIN
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace AND p.proname ~ 'language' LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_my_language_preference(text,uuid), hon.set_my_language_preference(text,jsonb,uuid,uuid,uuid),
+      hon.read_school_language_default(text,uuid), hon.set_school_language_default(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End interface language persistence exact reconciliation.
