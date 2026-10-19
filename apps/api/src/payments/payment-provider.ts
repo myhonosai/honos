@@ -32,7 +32,7 @@ export class PaymentProviderError extends Error {
     readonly reason: 'NOT_CONFIGURED' | 'LIVE_MODE_REFUSED' | 'INVALID_REQUEST' | 'PROVIDER_REJECTED' | 'PROVIDER_UNKNOWN') { super(reason); }
 }
 export class WebhookVerificationError extends Error {
-  constructor(readonly reason: 'MISSING_SIGNATURE' | 'BAD_SIGNATURE' | 'STALE_TIMESTAMP' | 'LIVE_MODE_REFUSED' | 'MALFORMED_EVENT' | 'NOT_CONFIGURED') { super(reason); }
+  constructor(readonly reason: 'MISSING_SIGNATURE' | 'BAD_SIGNATURE' | 'STALE_TIMESTAMP' | 'LIVE_MODE_REFUSED' | 'MALFORMED_EVENT' | 'UNSUPPORTED_API_VERSION' | 'NOT_CONFIGURED') { super(reason); }
 }
 
 /** Selected when no test-mode credentials are configured: every call is refused before sending. */

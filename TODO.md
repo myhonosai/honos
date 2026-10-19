@@ -1,5 +1,14 @@
 # HON Delivery Backlog
 
+## Claude — Stripe sandbox readiness and paid-access proposal (2026-10-19)
+
+- [x] Stripe approved by the owner for TEST MODE ONLY. Setup checklist, minimal restricted-key permissions, API/webhook version findings (current `2026-09-30.endive`; HON pins `2024-06-20`), the 8 events, webhook URL options, egress and the real-sandbox validation plan: [HON_STRIPE_SANDBOX_READINESS.md](docs/architecture/HON_STRIPE_SANDBOX_READINESS.md).
+- [x] Normalizer refuses Stripe event payload versions it cannot read (`UNSUPPORTED_API_VERSION`); pinned and basil-or-later shapes only.
+- [ ] Owner: create the sandbox, store `STRIPE_TEST_SECRET_KEY` / `STRIPE_TEST_WEBHOOK_SECRET` in the secret manager, allow `api.stripe.com`, choose the webhook path (CLI forwarding or an approved staging host).
+- [ ] Real sandbox harness and run of scenarios 1–14; evidence recorded separately from simulator results. Nothing real has been tested yet.
+- [ ] Owner decisions D1–D15 for paid access (B6): [HON_PAID_ACCESS_B6_PROPOSAL.md](docs/architecture/HON_PAID_ACCESS_B6_PROPOSAL.md). No entitlement change from payment until approved. Answers #29 Gate 2.
+- [ ] Migration sequencing with Manus #27 (both used 0158): B5 keeps 0158; #27 renumbers on sync. Record `PAYMENT_PROVIDER` DECIDED (Stripe, test mode only) in the next billing migration.
+
 ## Codex school subscription — plan-selection foundation (2026-10-19)
 
 - [x] Inspect canonical main `ce93685`, merged B1/public catalog and active #26/#27/#3 ownership. Create isolated `codex/school-subscription-foundation`; coordinate only one appended route registry entry and new TODO section.
