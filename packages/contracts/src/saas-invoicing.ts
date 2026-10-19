@@ -237,5 +237,8 @@ export function validateSaasPaymentStanding(value: unknown): SaasPaymentStanding
   if (v.paidInvoiceCount > rec.paidInvoiceCount || (v.lifetimePaid && !rec.lifetimePaid)) drift();
   const e = record(r.evidence, drift); exactKeys(e, ['hqAttested','providerVerified'], drift);
   if (!count(e.hqAttested) || !count(e.providerVerified) || (e.providerVerified === 0 && v.paidInvoiceCount !== 0)) drift();
+  // Without provider verification nothing can be provider-verified (B2's original rule).
+  if (r.providerVerification === 'NOT_CONFIGURED' && (e.providerVerified !== 0 || v.paidInvoiceCount !== 0 || v.lifetimePaid || v.paidThroughAt !== null
+    || v.refundedInvoiceCount !== 0 || v.chargebackInvoiceCount !== 0)) drift();
   return r as unknown as SaasPaymentStanding;
 }

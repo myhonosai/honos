@@ -65,7 +65,8 @@ export interface SaasPlanOffer {
 export interface SaasSchoolPlanOptions {
   schoolId: string; entitlementTier: 'ESSENTIAL' | 'CORE' | 'COMPLETE' | null;
   payments: { status: 'DISABLED' | 'TEST_MODE'; mode: 'TEST' | null }; offers: SaasPlanOffer[];
-  subscription: Omit<SaasSubscription, 'organizationName'> | null; checkout: SaasCheckout | null;
+  subscription: Omit<SaasSubscription, 'organizationName'> | null;
+  paymentVerification: 'PROVIDER_VERIFIED' | 'HQ_ATTESTED' | 'NONE'; checkout: SaasCheckout | null;
   annualBilling: 'UNAVAILABLE'; planChanges: 'UNAVAILABLE'; cardDataStored: false;
 }
 export interface SaasPaymentProgramReceipt { program: SaasPaymentProgram; replayed: boolean }
@@ -164,7 +165,7 @@ export function validateSaasPaymentsView(value: unknown): SaasPaymentsView {
 }
 export function validateSaasSchoolPlanOptions(value: unknown): SaasSchoolPlanOptions {
   const r = record(value, drift);
-  exactKeys(r, ['schoolId','entitlementTier','payments','offers','subscription','checkout','annualBilling','planChanges','cardDataStored'], drift);
+  exactKeys(r, ['schoolId','entitlementTier','payments','offers','subscription','paymentVerification','checkout','annualBilling','planChanges','cardDataStored'], drift);
   if (!isUuid(r.schoolId) || !nullable(r.entitlementTier, (v): v is string => has(['ESSENTIAL','CORE','COMPLETE'], v)) || !Array.isArray(r.offers)
     || r.annualBilling !== 'UNAVAILABLE' || r.planChanges !== 'UNAVAILABLE' || r.cardDataStored !== false) drift();
   const p = record(r.payments, drift); exactKeys(p, ['status','mode'], drift);
@@ -178,6 +179,8 @@ export function validateSaasSchoolPlanOptions(value: unknown): SaasSchoolPlanOpt
       || (o.offerKind === 'REGULAR_MONTHLY' ? o.founderSlotsRemaining !== null : !nullable(o.founderSlotsRemaining, count))) drift();
   });
   if (r.subscription !== null) validateSaasSubscriptionForSchool(r.subscription);
+  const sub = r.subscription as { paymentStatus?: string } | null;
+  if (!has(['PROVIDER_VERIFIED','HQ_ATTESTED','NONE'], r.paymentVerification) || (sub?.paymentStatus === 'PAID') === (r.paymentVerification === 'NONE')) drift();
   if (r.checkout !== null) validateCheckout(r.checkout);
   return r as unknown as SaasSchoolPlanOptions;
 }

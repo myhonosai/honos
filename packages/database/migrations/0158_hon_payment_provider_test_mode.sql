@@ -270,7 +270,7 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
     'status',s.status,'statusReason',s.status_reason,'version',s.version,'serviceStartedAt',hon.saas_ts(s.service_started_at),
     'currentPeriod',CASE WHEN s.current_period_start IS NULL THEN NULL ELSE jsonb_build_object('index',s.period_index,
       'startsAt',hon.saas_ts(s.current_period_start),'endsAt',hon.saas_ts(s.current_period_end)) END,
-    'paymentStatus',pay->>'paymentStatus','paidThroughAt',pay->>'paidThroughAt','paymentVerification',pay->>'paymentVerification',
+    'paymentStatus',pay->>'paymentStatus','paidThroughAt',pay->>'paidThroughAt',
     'chargesEnabled',false,
     'premiumCredits',jsonb_build_object('plannedMonthlyAllowance',
       (SELECT p.planned_monthly_premium_credits FROM hon.saas_catalog_plans p WHERE p.catalog_id = s.catalog_id AND p.plan_code = s.plan_code),
@@ -295,7 +295,10 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
     'evidence', (SELECT jsonb_build_object('hqAttested', count(*) FILTER (WHERE e.source = 'HQ_ATTESTATION'),
       'providerVerified', count(*) FILTER (WHERE e.source = 'PROVIDER_VERIFIED')) FROM hon.saas_payment_evidence e WHERE e.organization_id = p_organization),
     'championsPaymentSource', 'NOT_CONNECTED',
-    'providerVerification', CASE WHEN (SELECT status FROM hon.saas_payment_program WHERE program_id = 1) = 'TEST_MODE' THEN 'TEST_MODE' ELSE 'NOT_CONFIGURED' END)
+    -- All provider-verified evidence is test-mode by constraint, so evidence alone also reports TEST_MODE.
+    'providerVerification', CASE WHEN (SELECT status FROM hon.saas_payment_program WHERE program_id = 1) = 'TEST_MODE'
+      OR EXISTS (SELECT 1 FROM hon.saas_payment_evidence e WHERE e.organization_id = p_organization AND e.source = 'PROVIDER_VERIFIED')
+      THEN 'TEST_MODE' ELSE 'NOT_CONFIGURED' END)
 $$;
 
 -- Staff with billing.hon.purchase at the exact school (same identity rules as B3's school actor).
@@ -663,6 +666,7 @@ BEGIN
       WHERE c.status = 'PUBLISHED' AND o.plan_code = ent.tier::text
         AND (o.offer_kind NOT LIKE 'FOUNDER_%' OR (at >= c.founder_opens_at AND (c.founder_closes_at IS NULL OR at < c.founder_closes_at)))),
     'subscription', CASE WHEN sub.id IS NULL THEN NULL ELSE hon.saas_subscription_json(sub) - 'organizationName' END,
+    'paymentVerification', CASE WHEN sub.id IS NULL THEN 'NONE' ELSE hon.saas_subscription_payment(sub)->>'paymentVerification' END,
     'checkout', CASE WHEN chk.id IS NULL THEN NULL ELSE hon.saas_checkout_json(chk) END,
     'annualBilling', 'UNAVAILABLE', 'planChanges', 'UNAVAILABLE', 'cardDataStored', false);
 END $$;

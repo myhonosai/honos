@@ -189,7 +189,7 @@ try{
  await deny(deliver(sim.sign(altered)),409,'SAAS_PROVIDER_EVENT_CONFLICT'); // same event id, different content
  assert.deepEqual(await outcome(paidA.firstInvoice),['ALREADY_APPLIED','FIRST_INVOICE_COVERED_BY_CHECKOUT']);
  let subA=await subOf(A.id);
- assert.deepEqual([subA.status,subA.planCode,subA.offerKind,subA.paymentStatus,subA.paymentVerification,subA.currentPeriod.index],['IN_SERVICE','CORE','REGULAR_MONTHLY','PAID','PROVIDER_VERIFIED',0]);
+ assert.deepEqual([subA.status,subA.planCode,subA.offerKind,subA.paymentStatus,(await options('ownerA',A.school)).paymentVerification,subA.currentPeriod.index],['IN_SERVICE','CORE','REGULAR_MONTHLY','PAID','PROVIDER_VERIFIED',0]);
  assert.equal(subA.paidThroughAt,subA.currentPeriod.endsAt);
  const invA=(await billing.readInvoices(H('operator'),'ISSUED')).invoices.find(i=>i.organizationId===A.id);
  const invDetail=await billing.readInvoice(H('operator'),invA.invoiceId);
@@ -270,7 +270,7 @@ try{
  const paidB=sim.completeCheckout(sessionOf(coB));
  assert.deepEqual(await outcome(paidB.completed),['APPLIED','SUBSCRIPTION_ACTIVATED']);
  const subB=await subOf(O.B.id);
- assert.deepEqual([subB.billingInterval,subB.paymentStatus,subB.paymentVerification,subB.paidThroughAt],['LIFETIME','PAID','PROVIDER_VERIFIED',null]);
+ assert.deepEqual([subB.billingInterval,subB.paymentStatus,(await options('ownerB',O.B.school)).paymentVerification,subB.paidThroughAt],['LIFETIME','PAID','PROVIDER_VERIFIED',null]);
  const allowB=(await billing.commandAllowance(H('operator'),{action:'OPEN_CURRENT',subscriptionId:subB.subscriptionId},K())).allowance;
  assert.deepEqual([allowB.allowanceBasis,allowB.balance.allowanceCredits],['LIFETIME',12000]);
  assert.equal((await options('ownerB',O.B.school)).offers.find(o=>o.offerKind==='FOUNDER_LIFETIME').founderSlotsRemaining,0);
@@ -316,7 +316,7 @@ try{
  const renewal=sim.renewal(paidA.subscription,Date.parse(subA.currentPeriod.endsAt)/1000,14900);
  assert.deepEqual(await outcome(renewal.delivery),['APPLIED','RENEWAL_RECORDED']);
  subA=await subOf(A.id);
- assert.deepEqual([subA.currentPeriod.index,subA.paymentStatus,subA.paymentVerification],[1,'PAID','PROVIDER_VERIFIED']);
+ assert.deepEqual([subA.currentPeriod.index,subA.paymentStatus,(await options('ownerA',A.school)).paymentVerification],[1,'PAID','PROVIDER_VERIFIED']);
  const periodOne=(await billing.readInvoices(H('operator'),'ISSUED')).invoices.filter(i=>i.organizationId===A.id).map(i=>i.periodIndex).sort();
  assert.deepEqual(periodOne,[0,1]);
  const dupRenewal=JSON.parse(renewal.delivery.raw.toString());dupRenewal.id='evt_renewalcopy01';

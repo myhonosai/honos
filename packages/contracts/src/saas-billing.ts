@@ -1,8 +1,8 @@
 // HON Subscription Billing Milestone B1 closed contracts: HON billing schools (never school-to-family
 // billing). Recordkeeping only: no contract here carries a charge, invoice, payment, refund,
 // credit grant or balance. chargesEnabled/creditGrantsEnabled are always false (HON never initiates a
-// charge). Since B5, paymentStatus/paidThroughAt/paymentVerification are derived from B2 invoices and
-// evidence (provider-verified in test mode, or HQ-attested).
+// charge). Since B5, paymentStatus/paidThroughAt are derived from B2 invoices and evidence; whether that
+// evidence is provider-verified is reported by B2 payment standing (verified vs recorded).
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 
@@ -167,8 +167,7 @@ export interface SaasSubscription {
   billingInterval: 'MONTHLY' | 'LIFETIME' | 'NONE'; priceMinor: number | null; currency: 'USD'; founderReservationId: string | null;
   status: SaasSubscriptionStatus; statusReason: SaasSubscriptionReason; version: number; serviceStartedAt: string | null;
   currentPeriod: { index: number | null; startsAt: string; endsAt: string | null } | null;
-  paymentStatus: SaasSubscriptionPaymentStatus; paidThroughAt: string | null;
-  paymentVerification: 'PROVIDER_VERIFIED' | 'HQ_ATTESTED' | 'NONE'; chargesEnabled: false;
+  paymentStatus: SaasSubscriptionPaymentStatus; paidThroughAt: string | null; chargesEnabled: false;
   premiumCredits: { plannedMonthlyAllowance: number | null; status: 'NOT_GRANTED' };
   createdAt: string; updatedAt: string;
 }
@@ -336,7 +335,7 @@ function validateSubscription(value: unknown, withName = true): void {
   const s = record(value, drift);
   exactKeys(s, ['subscriptionId','organizationId',...(withName ? ['organizationName'] : []),'source','catalogVersion','offerId','planCode','entitlementTier','offerKind',
     'billingInterval','priceMinor','currency','founderReservationId','status','statusReason','version','serviceStartedAt','currentPeriod',
-    'paymentStatus','paidThroughAt','paymentVerification','chargesEnabled','premiumCredits','createdAt','updatedAt'], drift);
+    'paymentStatus','paidThroughAt','chargesEnabled','premiumCredits','createdAt','updatedAt'], drift);
   const catalog = s.source === 'CATALOG_OFFER';
   if (!isUuid(s.subscriptionId) || !isUuid(s.organizationId) || (withName && !text(s.organizationName, 300)) || !has(['CATALOG_OFFER','LEGACY_ENTITLEMENT'], s.source)
     || !has(PLAN_CODES, s.planCode) || s.entitlementTier !== s.planCode || s.currency !== 'USD'
@@ -348,8 +347,7 @@ function validateSubscription(value: unknown, withName = true): void {
     || !has(SAAS_SUBSCRIPTION_STATUSES, s.status) || !has(SUBSCRIPTION_REASONS, s.statusReason) || !isInt(s.version, 1, 2147483647)
     || !nts(s.serviceStartedAt) || (s.serviceStartedAt !== null) !== (s.status === 'IN_SERVICE' || s.status === 'SUSPENDED')
     || !has(SAAS_SUBSCRIPTION_PAYMENT_STATUSES, s.paymentStatus) || !nts(s.paidThroughAt) || (s.billingInterval !== 'MONTHLY' && s.paidThroughAt !== null)
-    || (!catalog && s.paymentStatus !== 'NOT_BILLED') || !has(['PROVIDER_VERIFIED','HQ_ATTESTED','NONE'], s.paymentVerification)
-    || (s.paymentStatus === 'PAID') === (s.paymentVerification === 'NONE')
+    || (!catalog && s.paymentStatus !== 'NOT_BILLED')
     || s.chargesEnabled !== false || !ts(s.createdAt) || !ts(s.updatedAt)) drift();
   if (s.currentPeriod === null) {
     if (s.serviceStartedAt !== null && s.billingInterval !== 'NONE') drift();
