@@ -48,7 +48,7 @@ export function SchoolReadinessNextSteps({ account }: { account: SchoolAccount }
     <dl className={styles.facts}>
       <div><dt>{t("Payment and service")}</dt><dd>{sub ? t("Payment: {payment} · Subscription: {subscription}. Refresh to verify changes.",{payment:statusText(sub.paymentStatus),subscription:statusText(sub.status)}) : t("No current subscription returned")}</dd></div>
       <div><dt>{t("Feature activation and reactivation")}</dt><dd>{t("Unavailable here. HON must confirm effective access separately; payment does not activate features or clear a suspension.")}</dd></div>
-      <div><dt>{t("School invoice history and detail")}</dt><dd>{t("Unavailable until the independently school-authorized invoice service is available. An invoice reference is not a receipt.")}</dd></div>
+      <div><dt>{t("School invoice history and detail")}</dt><dd>{t("Not connected on this screen yet. A recorded invoice reference is not a receipt.")}</dd></div>
       <div><dt>{t("Purchasing for another school")}</dt><dd>{t("Unavailable here. This page uses only the current server-resolved school; reporting selections and URL identifiers do not authorize purchasing.")}</dd></div>
     </dl>
     <p className={styles.small}>{t("Contact HON support about activation or mismatched records. Do not make another purchase to resolve access, a disputed payment or an unresolved checkout.")}</p>

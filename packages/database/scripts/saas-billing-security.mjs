@@ -10,10 +10,12 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_credit_reservations','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_requests','saas_refund_history','saas_reward_fulfillment','saas_reward_applications','saas_account_credit_ledger',
  'saas_free_periods','saas_referral_payment_alerts',
- 'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs'];
+ 'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
+ 'saas_access_program','saas_access_policy_terms'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
- 'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs'];
+ 'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
+ 'saas_access_program','saas_access_policy_terms'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
@@ -137,6 +139,18 @@ export const saasBillingFunctions = [
  ['hon.cancel_saas_checkout(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.sweep_saas_checkouts(text,uuid,uuid,uuid)',true,true],
  ['hon.ingest_saas_provider_event(jsonb,text)',true,true],
+ // 0170 school billing reads and the inactive paid-access foundation
+ ['hon.require_saas_school_billing_viewer(text,uuid)',false,true],
+ ['hon.saas_school_evidence_json(hon.saas_payment_evidence)',false,false],
+ ['hon.saas_school_refund_json(hon.saas_refund_requests)',false,false],
+ ['hon.saas_school_invoice_json(uuid,boolean)',false,false],
+ ['hon.saas_entitlement_json(uuid)',false,false],
+ ['hon.saas_access_condition(uuid)',false,false],
+ ['hon.saas_access_shadow(uuid)',false,false],
+ ['hon.read_saas_school_invoices(text,uuid,text,text,timestamp with time zone,uuid,integer)',true,true],
+ ['hon.read_saas_school_invoice(text,uuid,uuid)',true,true],
+ ['hon.read_saas_school_billing_account(text,uuid)',true,true],
+ ['hon.read_saas_access_readiness_from_hq(text,uuid)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [

@@ -48,7 +48,7 @@ test('B4 inputs: refund intake, decisions, reward application and alert resoluti
   assert.deepEqual(contracts.validateSaasRefundEligibilityQuery({}), { receivedAt:null });
   assert.throws(() => contracts.validateSaasRefundEligibilityQuery({ receivedAt:'now' }));
   assert.equal(contracts.SAAS_CHAMPIONS_LADDER.secondFreeMonthsTotal, 12);
-  assert.equal(contracts.SAAS_POLICY_CODES.length, 21);
+  assert.equal(contracts.SAAS_POLICY_CODES.length, 22); // B5.1 adds PAID_ACCESS
   assert.deepEqual([...contracts.SAAS_POLICY_CODES], [...contracts.SAAS_POLICY_CODES].sort());
 });
 

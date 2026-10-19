@@ -19,7 +19,9 @@ on:
       - 'apps/web/src/app/settings/**'
       - 'apps/web/src/app/layout.tsx'
       - 'packages/design-system/src/**'
-      - 'apps/web/src/components/hq-modern/{shell,dashboard,assistant}.tsx'
+      - 'apps/web/src/components/hq-modern/shell.tsx'
+      - 'apps/web/src/components/hq-modern/dashboard.tsx'
+      - 'apps/web/src/components/hq-modern/assistant.tsx'
 permissions:
   contents: read
 concurrency:

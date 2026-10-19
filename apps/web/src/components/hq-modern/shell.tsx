@@ -30,6 +30,7 @@ export function HonCore({ small = false }: { small?: boolean }): React.ReactElem
 export function HqModernShell({ children }: { children: ReactNode }): React.ReactElement {
   const { t,text,number,money,date,formattingLocale } = useLocale();
   const path = usePathname();
+  useEffect(()=>{document.title=(path==='/hq'?t('Overview'):text(hqPageLabel(path)))+' | HON HQ';},[path,t,text]);
   const [access, setAccess] = useState<AccessState>({ kind: 'loading' });
   const [revision, setRevision] = useState(0);
   const [view, setView] = useState<HqView>('modern');

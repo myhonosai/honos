@@ -1,10 +1,11 @@
 'use client';
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import { HON_INTERFACE_THEMES,LANGUAGES,TIME_ZONES,isLanguage,type HonInterfaceTheme } from '@hon/design-system';
 import { useLocale } from './provider';
 import styles from './locale.module.css';
 export function LanguageRegionSettings():React.ReactElement {
  const {preferences,save,saveState,t,number,money,date}=useLocale();const [view,setView]=useState<HonInterfaceTheme>('modern');
+ useEffect(()=>{document.title=t('Language & Region')+' | HON OS';},[t]);
  return <main className={styles.settings} data-view={view}>
   <header><p>HON OS / {t('Settings')}</p><h1>{t('Language & Region')}</h1><p>{t('Make HON feel familiar. Your language and formatting are personal preferences.')}</p></header>
   <fieldset className={styles.views}><legend>{t('View')}</legend>{HON_INTERFACE_THEMES.map(v=><button key={v.id} type="button" aria-pressed={view===v.id} onClick={()=>setView(v.id)}>{t(v.id==='big-button'?'Big Button':v.id==='modern'?'Modern':'Classic')}</button>)}</fieldset>

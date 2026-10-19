@@ -19,14 +19,14 @@ export async function verifyLocalization(e) {
     await main.getByLabel(tx(lang,'Number and date region'),{exact:true}).selectOption('ko-KR');
     await main.getByLabel(tx(lang,'Currency formatting'),{exact:true}).selectOption('code');
     await main.getByLabel(tx(lang,'Display timezone'),{exact:true}).selectOption('Asia/Seoul');
-    await main.getByLabel(tx(lang,'Display language'),{exact:true}).selectOption(lang==='en'?'es':'en');
+    await main.getByRole('combobox',{name:tx(lang,'Display language'),exact:true}).selectOption(lang==='en'?'es':'en');
     const next=lang==='en'?'es':'en';await p.waitForFunction(l=>document.documentElement.lang===l,next);
     assert.equal(await main.getByRole('button',{name:tx(next,'Classic'),exact:true}).getAttribute('aria-pressed'),'true');
     assert.equal(await p.locator('#settings-region').inputValue(),'ko-KR');assert.equal(await p.locator('#settings-currency').inputValue(),'code');assert.equal(await p.locator('#settings-timezone').inputValue(),'Asia/Seoul');
     await choose(p,lang);await p.reload();await main.getByRole('heading',{name:tx(lang,'Language & Region'),exact:true}).waitFor();
     assert.equal(await p.locator('#settings-timezone').inputValue(),'Asia/Seoul');
     await main.getByLabel(tx(lang,'Number and date region'),{exact:true}).selectOption('auto');await main.getByLabel(tx(lang,'Currency formatting'),{exact:true}).selectOption('symbol');await main.getByLabel(tx(lang,'Display timezone'),{exact:true}).selectOption('UTC');
-    const select=main.getByLabel(tx(lang,'Display language'),{exact:true});await select.focus();assert(await select.evaluate(el=>el===document.activeElement));await p.keyboard.press('Tab');
+    const select=main.getByRole('combobox',{name:tx(lang,'Display language'),exact:true});await select.focus();assert(await select.evaluate(el=>el===document.activeElement));await p.keyboard.press('Tab');
     await main.getByText(tx(lang,'Saved for this account in this browser.'),{exact:true}).waitFor();
     await overflow(p);await scan(p,`${lang}-${size}-settings`);await capture(p,`${lang}-${size}-settings`);
     const preference=(await ctx.cookies()).filter(c=>c.name.startsWith('hon_locale_v1_'));assert.equal(preference.length,1);assert(!preference[0].name.includes('school-owner'));assert.equal(preference[0].sameSite,'Lax');assert(preference[0].expires>Date.now()/1000+86400);assert(!decodeURIComponent(preference[0].value).includes('interfaceTheme'));
@@ -55,7 +55,7 @@ export async function verifyLocalization(e) {
   });
   await check(`${lang}/${size}: authorized HQ navigation and appearance independence`,async()=>{
    reset();const ctx=await context(viewport,'hq-localization-synthetic');try{
-    const p=await open(ctx,'/hq');await p.getByRole('heading',{name:'Your company. In command.',exact:true}).waitFor();await choose(p,lang);
+    const p=await open(ctx,'/hq');await p.getByRole('heading',{name:'Your company. In command.',exact:true}).waitFor();await p.locator('[data-hq-conversation-dock]').waitFor({state:'attached'});await choose(p,lang);
     await p.getByRole('heading',{name:tx(lang,'Your company. In command.'),exact:true}).waitFor();
     await p.getByRole('group',{name:tx(lang,'Platform view')}).getByRole('button',{name:tx(lang,'Big Button'),exact:true}).click();await p.getByRole('group',{name:tx(lang,'AI portrait style')}).getByRole('button',{name:tx(lang,'Chibi'),exact:true}).click();
     await choose(p,lang==='es'?'ko':'es');await choose(p,lang);assert.equal(await p.locator('[data-art]').getAttribute('data-art'),'chibi');assert.equal(await p.locator('[data-art]').getAttribute('data-view'),'big-button');
@@ -65,6 +65,7 @@ export async function verifyLocalization(e) {
    }finally{await ctx.close();}
   });
  }
+ await check('Changing language never grants a school purchaser HQ authority',async()=>{reset();const ctx=await context();try{const p=await open(ctx,'/settings/language-region');await choose(p,'ko');await p.goto(origin+'/hq');await p.getByText(tx('ko','HQ access denied'),{exact:true}).waitFor();assert.equal(await p.getByRole('heading',{name:tx('ko','Your executive team')}).count(),0);assert.equal(commandCount(),0);}finally{await ctx.close();}});
  await check('Per-user browser preferences are isolated; another device has English default',async()=>{
   reset();const ctx=await context();try{const p=await open(ctx,'/settings/language-region');await choose(p,'ko');
    await ctx.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'second-preference-user-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}]);await p.goto(origin+'/settings/language-region');assert.equal(await p.locator('html').getAttribute('lang'),'en');await choose(p,'es');
@@ -76,6 +77,7 @@ export async function verifyLocalization(e) {
   reset();const ctx=await context();try{const p=await open(ctx,'/settings/language-region');await choose(p,'ko');const cookie=(await ctx.cookies()).find(c=>c.name.startsWith('hon_locale_v1_'));await ctx.addCookies([{...cookie,value:encodeURIComponent(JSON.stringify({...DEFAULT_LOCALE,language:'ko',role:'OWNER',schoolId:'foreign'}))}]);await p.reload();assert.equal(await p.locator('html').getAttribute('lang'),'en');setReadMode('403');await p.goto(origin+'/staff/subscription');await p.getByRole('main').getByRole('alert').waitFor();assert(await p.getByRole('button',{name:'Review selection →',exact:true}).isDisabled());}finally{await ctx.close();}
  });
  for(const lang of ['ko','es'])await check(`${lang}: translated independent permission denial and no purchase`,async()=>{reset();const ctx=await context();try{const p=await open(ctx,'/settings/language-region');await choose(p,lang);setReadMode('403');await p.goto(origin+'/staff/subscription');await p.getByRole('main').getByRole('alert').filter({hasText:tx(lang,'School billing permission was denied. No purchase or account access is assumed.')}).waitFor();assert(await p.getByRole('button',{name:tx(lang,'Review selection →'),exact:true}).isDisabled());assert.equal(commandCount(),0);}finally{await ctx.close();}});
+ await check('Blocked browser preference writes apply immediately without claiming persistence',async()=>{reset();const ctx=await context();try{await ctx.addInitScript(()=>{const descriptor=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');Object.defineProperty(document,'cookie',{get(){return descriptor.get.call(document)},set(value){if(!String(value).startsWith('hon_locale_v1_'))descriptor.set.call(document,value)}})});const p=await open(ctx,'/settings/language-region');await choose(p,'ko');await p.getByRole('main').getByText(tx('ko','Applied now, but this browser could not save your preference.'),{exact:true}).waitFor();await p.reload();assert.equal(await p.locator('html').getAttribute('lang'),'en');assert.equal(commandCount(),0);}finally{await ctx.close();}});
  await check('Narrow Korean/Spanish settings and 200% zoom have no horizontal overflow',async()=>{for(const lang of ['ko','es']){reset();const ctx=await context({width:320,height:844});try{const p=await open(ctx,'/settings/language-region');await choose(p,lang);await overflow(p);await p.setViewportSize({width:1280,height:1000});await p.locator('body').evaluate(el=>{el.style.zoom='2'});await overflow(p);}finally{await ctx.close();}}});
  await check('Family identity can change only its own local display setting without school billing access',async()=>{reset();const ctx=await context(undefined,'family-synthetic');try{const p=await open(ctx,'/settings/language-region');await choose(p,'ko');await p.goto(origin+'/staff/subscription');await p.getByRole('main').getByRole('alert').waitFor();assert.equal(commandCount(),0);}finally{await ctx.close();}});
  for(const [label,subject,token]of [['unsigned',null,undefined],['tampered','school-owner-synthetic','invalid'],['expired','school-owner-synthetic',issueSession({externalSubject:'school-owner-synthetic'},session,1)]])await check(`${label}: shared settings retains signed-session gate`,async()=>{const ctx=await context(undefined,subject,token);try{const p=await ctx.newPage();await p.goto(origin+'/settings/language-region');await p.waitForURL(origin+'/auth/login');}finally{await ctx.close();}});

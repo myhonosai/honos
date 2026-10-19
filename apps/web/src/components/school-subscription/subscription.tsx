@@ -20,6 +20,7 @@ const GUIDANCE = [
 
 export function SchoolSubscription({ returnedFromCheckout = false }: { returnedFromCheckout?: boolean }): React.ReactElement {
   const { t,text,number,money,date,formattingLocale } = useLocale();
+  useEffect(()=>{document.title=t(returnedFromCheckout?'Checkout status.':'School subscription')+' | HON OS';},[t,returnedFromCheckout]);
   const billing = useSchoolCheckout();
   const [selection, dispatch] = useReducer(selectPlan, INITIAL_SELECTION);
   const [reviewed, setReviewed] = useState<string | null>(null);

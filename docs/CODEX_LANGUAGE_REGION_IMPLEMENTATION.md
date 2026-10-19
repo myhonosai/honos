@@ -17,7 +17,7 @@ This is not complete HON OS language coverage. All presentation modes share cata
 
 ## Shared architecture
 
-`packages/design-system/src/localization/` contains complete English/Korean/Spanish catalogs, a type-safe key union, English fallback, named parameter interpolation, plural selection and locale-aware number/canonical-money/timestamp/date-only helpers. Keys use stable English source messages, with semantic keys for protocol status labels. A thin React adapter is shared by all web surfaces. No added package dependency or lockfile change.
+`packages/design-system/src/localization/` contains complete English/Korean/Spanish catalogs, a type-safe key union, English fallback, named parameter interpolation, plural selection and locale-aware number/canonical-money/timestamp/date-only helpers. Keys use stable English source messages, with semantic keys for protocol status labels. Adopted settings/subscription/HQ page titles follow the locale. A thin React adapter is shared by all web surfaces. No added package dependency or lockfile change.
 
 Translations are plain text rendered by React, never HTML, executable templates or an external translation provider. Only controlled UI copy, metadata and safe local error messages use the catalog. Unknown/customer-authored content remains original; IDs, evidence and business calculations remain canonical. Missing translations fall back to English; catalog key and placeholder parity is tested. Future languages extend the central registry/catalogs instead of duplicating routes.
 
@@ -45,7 +45,9 @@ The owner permits a working local frontend while persistent contracts are absent
 4. Keep personal formatting versus school currency/timezone policies separate, and preserve appearance endpoints. Coordinate schema/migration ownership and ordering rather than editing Claude's #33 or Manus's CRM migrations.
 5. Approve any future assistant-language request field as non-authoritative response context through existing governed contracts. No provider, tool, message, credit or entitlement authority derives from language.
 
-The owner-approved requirements in docs-only #17 remain intact. That PR is not merged or overwritten here. B5.1 #33 is unmerged and not consumed; billing, paid-access B6 and Stripe remain Claude-owned.
+The owner-approved requirements in docs-only #17 remain intact. That PR is not merged or overwritten here. B5.1 #33 merged during verification as `387c8002d16bfad8166879cb788c1cfc1775ac5c` and is preserved unchanged. This localization slice does not yet connect the new billing reads; invoice UI says not connected on this screen. billing, paid-access B6 and Stripe remain Claude-owned.
+
+Persistent preference dependency: [issue #35](https://github.com/myhonosai/honos/issues/35).
 
 ## Verification
 
