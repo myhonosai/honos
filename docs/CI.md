@@ -18,7 +18,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `class-sessions-read` | `test-security-boundaries.mjs` | Restricted runtime privileges, permission revocation, parent-family resolution, transaction-bound RLS isolation, composite tenant references |
 | `class-sessions-read` | `test-outbox-leases.mjs` | Expired/late outbox leases become UNKNOWN/DEAD_LETTER, never PUBLISHED or auto-retried |
 | `class-sessions-read` | `test-class-sessions-read-integrity.mjs` | Current-school Class Sessions read boundary |
-| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on **all 227** tracked operational tables, append-only audit/outbox, AI ledger tenant isolation |
+| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on **all 234** tracked operational tables, append-only audit/outbox, AI ledger tenant isolation |
 | `crm-lead-close` | `test-crm-lead-close-integrity.mjs` | CRM close authority, denial matrix, atomicity, replay |
 | `champions-club` | `test-champions-club-integrity.mjs` | Champions Club authority, attribution fraud rules, qualification gates, transitions, immutable evidence, API service on real output |
 | `champions-club` | `test-champions-club-rewards-integrity.mjs` | Champions Club reward accounting: ladder accrual, reversal review, owner approvals, liabilities, no billing or entitlement effect |
