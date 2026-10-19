@@ -445,7 +445,7 @@ try{
   await deny(api.readCreditApplicationPreview(H(who),r0.invoiceId),403,'SAAS_FORBIDDEN');
  }
  await deny(api.readRewardPreview(H('operator'),randomUUID()),404,'SAAS_UNAVAILABLE');
- await sqlDeny(restricted.query('SELECT hon.apply_saas_champions_reward($1,$2,$3::jsonb,$4,$5,$6)',[H('operator'),credit1.id,JSON.stringify({expectedEntryVersion:1,firstPeriodIndex:null}),K(),K(),K()]));
+ await sqlDeny(restricted.query('SELECT hon.apply_saas_referral_reward($1,$2,$3::jsonb,$4,$5,$6)',[H('operator'),credit1.id,JSON.stringify({expectedEntryVersion:1,firstPeriodIndex:null}),K(),K(),K()]));
 
  // ---------- 16. constraints hold with guards disabled; records are append-only ----------
  await rejectedWithoutGuards('saas_refund_requests',"UPDATE hon.saas_refund_requests SET execution_status='EXECUTED'");

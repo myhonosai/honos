@@ -90,7 +90,7 @@ export const saasBillingFunctions = [
  ['hon.guard_saas_refunds_rewards()',false,false],
  ['hon.saas_evidence_referral_alert()',false,false],
  ['hon.saas_invoice_free_period_check()',false,false],
- ['hon.saas_allowance_champions_basis()',false,false],
+ ['hon.saas_allowance_free_month_basis()',false,false],
  ['hon.saas_refund_eligibility(uuid,timestamptz)',false,false],
  ['hon.saas_refund_json(hon.saas_refund_requests)',false,false],
  ['hon.saas_reward_fulfillment_json()',false,false],
@@ -107,7 +107,7 @@ export const saasBillingFunctions = [
  ['hon.read_saas_reward_preview_from_hq(text,uuid)',true,true],
  ['hon.read_saas_referral_alerts_from_hq(text,text)',true,true],
  ['hon.set_saas_reward_fulfillment(text,jsonb,uuid,uuid,uuid)',true,true],
- ['hon.apply_saas_champions_reward(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.apply_saas_referral_reward(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.read_saas_credit_application_preview(text,uuid)',true,true],
  ['hon.apply_saas_account_credit(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.resolve_saas_referral_alert(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
@@ -116,7 +116,7 @@ export const saasBillingFunctions = [
 const crossTriggers = [
  ['saas_payment_evidence','saas_referral_alert',5,'saas_evidence_referral_alert'],
  ['saas_invoices','saas_free_period_check',7,'saas_invoice_free_period_check'],
- ['saas_credit_allowances','saas_champions_basis',7,'saas_allowance_champions_basis'],
+ ['saas_credit_allowances','saas_champions_basis',7,'saas_allowance_free_month_basis'],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');

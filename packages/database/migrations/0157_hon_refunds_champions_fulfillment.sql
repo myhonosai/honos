@@ -261,7 +261,7 @@ BEGIN
 END $$;
 
 -- The B3 allowance of a free period is labelled; its credits stay the full plan allowance.
-CREATE FUNCTION hon.saas_allowance_champions_basis() RETURNS trigger
+CREATE FUNCTION hon.saas_allowance_free_month_basis() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, hon AS $$
 BEGIN
   IF EXISTS (SELECT 1 FROM hon.saas_free_periods f WHERE f.subscription_id = NEW.subscription_id AND f.period_index = NEW.period_index)
@@ -282,7 +282,7 @@ DO $$ DECLARE t text; BEGIN
   END LOOP;
   CREATE TRIGGER saas_referral_alert AFTER INSERT ON hon.saas_payment_evidence FOR EACH ROW EXECUTE FUNCTION hon.saas_evidence_referral_alert();
   CREATE TRIGGER saas_free_period_check BEFORE INSERT ON hon.saas_invoices FOR EACH ROW EXECUTE FUNCTION hon.saas_invoice_free_period_check();
-  CREATE TRIGGER saas_champions_basis BEFORE INSERT ON hon.saas_credit_allowances FOR EACH ROW EXECUTE FUNCTION hon.saas_allowance_champions_basis();
+  CREATE TRIGGER saas_champions_basis BEFORE INSERT ON hon.saas_credit_allowances FOR EACH ROW EXECUTE FUNCTION hon.saas_allowance_free_month_basis();
 END $$;
 
 -- ---------- private helpers ----------
@@ -618,7 +618,7 @@ END $$;
 
 -- HQ owner only, while fulfillment is ACTIVE. Applies one APPROVED, unblocked Champions entry to the
 -- beneficiary's HON subscription: account credit, free billing periods, or a blocked lifetime conversion.
-CREATE FUNCTION hon.apply_saas_champions_reward(p_subject text, p_entry uuid, p jsonb, p_key uuid, p_request uuid, p_correlation uuid) RETURNS jsonb
+CREATE FUNCTION hon.apply_saas_referral_reward(p_subject text, p_entry uuid, p jsonb, p_key uuid, p_request uuid, p_correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE actor uuid; replay jsonb; e hon.champions_reward_entries%ROWTYPE; s hon.saas_subscriptions%ROWTYPE; st jsonb; app hon.saas_reward_applications%ROWTYPE;
   v_start integer; i integer; at timestamptz; snapshot jsonb;
@@ -813,7 +813,7 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
       hon.read_saas_refund_reserve_from_hq(text), hon.create_saas_refund_request(text,jsonb,uuid,uuid,uuid),
       hon.decide_saas_refund_request(text,uuid,jsonb,uuid,uuid,uuid), hon.read_saas_reward_preview_from_hq(text,uuid),
       hon.read_saas_referral_alerts_from_hq(text,text), hon.set_saas_reward_fulfillment(text,jsonb,uuid,uuid,uuid),
-      hon.apply_saas_champions_reward(text,uuid,jsonb,uuid,uuid,uuid), hon.read_saas_credit_application_preview(text,uuid),
+      hon.apply_saas_referral_reward(text,uuid,jsonb,uuid,uuid,uuid), hon.read_saas_credit_application_preview(text,uuid),
       hon.apply_saas_account_credit(text,uuid,jsonb,uuid,uuid,uuid), hon.resolve_saas_referral_alert(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;

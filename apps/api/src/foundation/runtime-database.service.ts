@@ -129,7 +129,7 @@ const SAAS_BILLING_CALLS = {
   readRewardPreview: { sql: 'SELECT hon.read_saas_reward_preview_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readReferralAlerts: { sql: 'SELECT hon.read_saas_referral_alerts_from_hq($1,$2) AS data', arity: 2, readOnly: true },
   setRewardFulfillment: { sql: 'SELECT hon.set_saas_reward_fulfillment($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
-  applyChampionsReward: { sql: 'SELECT hon.apply_saas_champions_reward($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  applyChampionsReward: { sql: 'SELECT hon.apply_saas_referral_reward($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readCreditApplicationPreview: { sql: 'SELECT hon.read_saas_credit_application_preview($1,$2::uuid) AS data', arity: 2, readOnly: true },
   applyAccountCredit: { sql: 'SELECT hon.apply_saas_account_credit($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   resolveReferralAlert: { sql: 'SELECT hon.resolve_saas_referral_alert($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
