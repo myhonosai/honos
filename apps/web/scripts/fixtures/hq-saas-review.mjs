@@ -2,7 +2,7 @@
 import { SAAS_PLAN_CAPABILITIES, SAAS_POLICY_CODES } from '@hon/contracts';
 export const saasId = (id) => `10000000-0000-4000-8000-${String(id).padStart(12, '0')}`;
 const at = '2026-10-01T00:00:00.000Z';
-const program = { status: 'INACTIVE', version: 3, authorizationReference: 'Synthetic prior deactivation', changedAt: at, topUps: 'UNAVAILABLE', overage: 'DISABLED', purchases: 'DISABLED' };
+const program = { status: 'INACTIVE', version: 3, authorizationReference: 'Synthetic prior deactivation', changedAt: '2026-10-15T00:00:00.000Z', topUps: 'UNAVAILABLE', overage: 'DISABLED', purchases: 'DISABLED' };
 export function subscriptionFixture(id = 1) {
   const planCode = id === 2 ? 'COMPLETE' : id === 4 ? 'ESSENTIAL' : 'CORE';
   const offerKind = id === 4 ? null : id === 3 ? 'FOUNDER_LIFETIME' : id === 2 ? 'FOUNDER_MONTHLY' : 'REGULAR_MONTHLY';
@@ -37,7 +37,13 @@ export function saasOverviewFixture({ status = null, empty = false, updated = fa
         remaining: { total: empty ? null : updated ? 42 : 43, lifetime: empty ? null : 17, monthly: empty ? null : updated ? 25 : 26 } },
       chargesEnabled: false, creditGrantsEnabled: false, paymentProvider: 'NOT_CONFIGURED' },
     subscriptions: { subscriptions: empty ? [] : [1, 2, 3, 4].map(subscriptionFixture).filter((s) => !status || s.status === status), limit: 200, chargesEnabled: false },
-    credits: { program: { ...program }, publishedPricing: null, pricingDrafts: [], premiumCreditsFromOrdinaryUse: false,
+    credits: { program: { ...program }, publishedPricing: empty ? null : {
+      pricingId: saasId(501), pricingVersion: 1, status: 'PUBLISHED', termsReference: 'Synthetic premium terms only',
+      createdAt: '2026-09-01T00:00:00.000Z', publishedAt: '2026-09-02T00:00:00.000Z', retiredAt: null,
+      operations: [{ operationCode: 'image.generate', category: 'IMAGE_GENERATION', displayName: 'Synthetic image operation', billingUnit: 'IMAGE', creditsPerUnit: 100,
+        maxUnitsPerRequest: 10, requiredCapability: 'ai.premium_metered', costEvidenceId: saasId(500), providerId: 'HIGGSFIELD', modelCode: 'fixture-image',
+        fullyLoadedCostMicrounitsPerUnit: 50000, fullyLoadedCostMicrounitsPerCredit: 500 }],
+    }, pricingDrafts: [], premiumCreditsFromOrdinaryUse: false,
       costEvidence: empty ? [] : [{ costEvidenceId: saasId(500), providerId: 'HIGGSFIELD', modelCode: 'fixture-image', costUnit: 'IMAGE', measuredUnits: 1000,
         billedCostMicrounits: 40000000, fullyLoadedCostMicrounits: 50000000, fullyLoadedCostMicrounitsPerUnit: 50000,
         source: 'HQ_OWNER_VERIFIED_PROVIDER_BILLING', evidenceReference: 'SYNTHETIC-COST-ONLY', periodStart: '2026-09-01T00:00:00.000Z', periodEnd: at, note: null, verifiedAt: at }] },
@@ -60,12 +66,17 @@ export function saasAccountFixture({ organizationId = saasId(1), empty = false, 
     credits: { organizationId, subscriptionId: empty ? null : s.subscriptionId, program: { ...program },
       allowances: noUsage ? [] : [{ allowanceId: saasId(600 + id), subscriptionId: s.subscriptionId, organizationId, periodIndex: 0,
         periodStart: at, periodEnd: '2026-11-01T00:00:00.000Z', planCode: s.planCode, allowanceBasis: id === 3 ? 'LIFETIME' : id === 2 ? 'FOUNDER' : 'REGULAR', status: 'OPEN', version: 1,
-        balance: { allowanceCredits, consumedCredits: updated ? 1100 : 1000, heldCredits: 200, expiredCredits: 0, availableCredits: allowanceCredits - (updated ? 1300 : 1200), usedPercent: 24 },
+        balance: { allowanceCredits, consumedCredits: updated ? 1100 : 1000, heldCredits: 200, expiredCredits: 0, availableCredits: allowanceCredits - (updated ? 1300 : 1200), usedPercent: Math.floor((updated ? 1300 : 1200) * 100 / allowanceCredits) },
         thresholds: [], rollover: 'NONE', topUps: 'UNAVAILABLE', openedAt: at, expiredAt: null }],
       reservations: noUsage ? [] : [{ reservationId: saasId(700 + id), allowanceId: saasId(600 + id), organizationId, schoolId: saasId(800 + id), subscriptionId: s.subscriptionId,
         operationCode: 'image.generate', category: 'IMAGE_GENERATION', creditsPerUnit: 100, estimatedUnits: 2, reservedCredits: 200,
         status: 'OUTCOME_UNKNOWN', statusReason: 'PROVIDER_OUTCOME_UNKNOWN', version: 1, employeeKey: null, actionRequestId: null, workItemId: null,
-        finalUnits: null, finalCredits: null, reservedAt: at, settledAt: null, providerId: 'HIGGSFIELD', modelCode: 'fixture-image', providerCostMicrounits: null, usageId: null, resolutionReference: null }],
+        finalUnits: null, finalCredits: null, reservedAt: '2026-10-03T00:00:00.000Z', settledAt: null, providerId: 'HIGGSFIELD', modelCode: 'fixture-image', providerCostMicrounits: null, usageId: null, resolutionReference: null },
+        ...[...(updated ? [1] : []), 10].map((units) => ({ reservationId: saasId(900 + id + units), allowanceId: saasId(600 + id), organizationId, schoolId: saasId(800 + id), subscriptionId: s.subscriptionId,
+          operationCode: 'image.generate', category: 'IMAGE_GENERATION', creditsPerUnit: 100, estimatedUnits: units, reservedCredits: units * 100,
+          status: 'FINALIZED', statusReason: 'PROVIDER_SUCCEEDED', version: 2, employeeKey: null, actionRequestId: null, workItemId: null,
+          finalUnits: units, finalCredits: units * 100, reservedAt: at, settledAt: units === 10 ? '2026-10-02T00:00:00.000Z' : '2026-10-04T00:00:00.000Z',
+          providerId: 'HIGGSFIELD', modelCode: 'fixture-image', providerCostMicrounits: units * 200000, usageId: saasId(1000 + id + units), resolutionReference: null }))],
       ordinaryUsageThisMonth: { events: noUsage ? 0 : 12, providerCostMicrounits: noUsage ? 0 : 1234567, premiumDeduction: 'NONE' } },
   };
 }

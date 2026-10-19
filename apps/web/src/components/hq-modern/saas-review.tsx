@@ -19,7 +19,7 @@ export function formatSaasMoney(value: number, precision: 2 | 6 = 2): string {
   const amount = BigInt(value), scale = 10n ** BigInt(precision);
   return `USD ${(amount / scale).toLocaleString('en-US')}.${(amount % scale).toString().padStart(precision, '0')}`;
 }
-type ReadState<T> = { key: string; kind: 'idle' | 'loading' } | { key: string; kind: 'ready'; data: T; at: string }
+type ReadState<T> = { key: string; kind: 'idle' } | { key: string; kind: 'loading' } | { key: string; kind: 'ready'; data: T; at: string }
   | { key: string; kind: 'failed'; failure: SaasReviewFailure };
 function useReview<T>(key: string, load: ((signal: AbortSignal) => Promise<T>) | null): ReadState<T> {
   const [state, setState] = useState<ReadState<T>>({ key: '', kind: 'idle' });
