@@ -7,6 +7,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "db:setup-crm-adult-membership-draft": "node scripts/setup-crm-adult-membership-draft-validation.mjs",
+    "db:test-crm-adult-membership-draft": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-adult-membership-draft-integrity.mjs",
     "check": "tsc --noEmit -p tsconfig.json",
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify-rls": "node scripts/verify-rls.mjs",

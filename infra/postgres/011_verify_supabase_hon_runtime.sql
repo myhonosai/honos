@@ -2417,3 +2417,38 @@ DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles W
   END IF;
 END $$;
 -- End CRM lead registration exact verification.
+
+-- Adult CRM membership draft exact verification, including immutable source and function drift.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['people','student_profiles','crm_lead_registration_conversions','crm_leads','family_members','billing_accounts','memberships','crm_adult_membership_draft_sources'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity) THEN RAISE EXCEPTION 'Adult CRM draft FORCE RLS required: %',t; END IF;
+  END LOOP;
+  SELECT NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+    AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+  INTO safe FROM pg_class c WHERE c.oid='hon.crm_adult_membership_draft_sources'::regclass;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Adult CRM membership source must be private'; END IF;
+  FOR f IN SELECT * FROM (VALUES ('hon.guard_crm_adult_membership_draft_source()',false,false,'a525769ae5e582d7958994cb52b7b522929c43663ace7290e9ce9654d5e2c64d'),
+('hon.require_crm_adult_membership_actor(text)',true,false,'f5d9345e3a9fb7abf4c2686d8566cd4f21f60afdc8bd089164dcf9dabd6e30b0'),
+('hon.crm_adult_membership_relation(uuid)',true,false,'71d39ddcd35a15c7baf094045aaf1979c5d61516dab7818d3cee0bb009c81457'),
+('hon.read_crm_adult_membership_preparation(text,uuid)',true,true,'909adac7587840fbcd7e464e7b2b2c6b920d44b2d6264822fbcbffe1cc43243f'),
+('hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)',true,true,'e6cdefc053003e0b28e36297e8c02538ab1b0574ae4c571d0b9295afd07acfca')) e(signature,definer,runtime_allowed,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe adult CRM membership draft function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('crm_adult_membership_source_immutable',27),('crm_adult_membership_source_no_truncate',34)) e(name,kind) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_adult_membership_draft_sources'::regclass AND tgname=expected.name AND tgtype=expected.kind AND tgfoid='hon.guard_crm_adult_membership_draft_source()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe adult CRM membership source trigger'; END IF;
+  END LOOP;
+  FOR t IN SELECT unnest(ARRAY['PRIMARY KEY (conversion_id)','UNIQUE (membership_id)','UNIQUE (organization_id, school_id, actor_principal_id, idempotency_key)']) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_adult_membership_draft_sources'::regclass AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)=t) THEN RAISE EXCEPTION 'Missing adult CRM draft source uniqueness'; END IF;
+  END LOOP;
+  FOR t IN SELECT unnest(ARRAY['schools','crm_lead_registration_conversions','memberships']) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_adult_membership_draft_sources'::regclass AND confrelid=('hon.'||t)::regclass AND contype='f' AND convalidated AND NOT condeferrable AND array_length(conkey,1)>=2 AND confdeltype='r') THEN RAISE EXCEPTION 'Missing adult CRM draft source scoped FK'; END IF;
+  END LOOP;
+END $$;
+-- End adult CRM membership draft exact verification.

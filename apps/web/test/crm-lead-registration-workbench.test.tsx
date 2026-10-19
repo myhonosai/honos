@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { CrmLeadRegistrationWorkbench, registrationBillingAccountHref, registrationCurriculumEnrollmentHref } from '../src/components/crm-lead-registration-workbench';
+import { CrmLeadRegistrationWorkbench, registrationAdultMembershipDraftHref, registrationBillingAccountHref, registrationCurriculumEnrollmentHref } from '../src/components/crm-lead-registration-workbench';
 
 const leadId = '33333333-3333-4333-8333-333333333333';
 
@@ -67,9 +67,24 @@ describe('direct-human CRM lead registration route', () => {
     expect([...query.keys()]).toEqual(['sourceContactPersonId']); expect(query.get('sourceContactPersonId')).toBe(leadId);
     for (const invalid of ['', 'not-a-uuid', leadId.replace('-4', '-0')]) expect(registrationBillingAccountHref(invalid)).toBeUndefined();
     const source = readFileSync('src/components/crm-lead-registration-workbench.tsx', 'utf8');
-    const billingHelper = source.slice(source.indexOf('export function registrationBillingAccountHref'), source.indexOf('export function CrmLeadRegistrationWorkbench'));
+    const billingHelper = source.slice(source.indexOf('export function registrationBillingAccountHref'), source.indexOf('export function registrationAdultMembershipDraftHref'));
     expect(source).toContain('Prepare separate human billing account review');
     expect(billingHelper).toContain("new URLSearchParams({sourceContactPersonId:normalized})");
     expect(billingHelper).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|studentProfileId|familyId|registrationPath|recordedAt|organizationId|schoolId|responsiblePersonId|currency|createAdditional|additionalReason)/);
+  });
+
+  it('offers only a verified REGISTERED ADULT receipt one inert student selector for the separate membership DRAFT route', () => {
+    const adult = { outcome: 'REGISTERED' as const, leadId, sourceContactPersonId: '44444444-4444-4444-8444-444444444444', registrationPath: 'ADULT' as const, studentProfileId: leadId, familyId: null, recordedAt: '2026-10-18T20:00:00.000Z' };
+    const href = registrationAdultMembershipDraftHref(adult);
+    expect(href).toBe(`/staff/billing/crm-adult-membership-drafts?studentProfileId=${leadId}`);
+    const query = new URL(`https://hon.test${href}`).searchParams;
+    expect([...query.keys()]).toEqual(['studentProfileId']); expect(query.get('studentProfileId')).toBe(leadId);
+    expect(registrationAdultMembershipDraftHref({ ...adult, registrationPath: 'GUARDIAN_CHILD', familyId: '55555555-5555-4555-8555-555555555555' })).toBeUndefined();
+    expect(registrationAdultMembershipDraftHref({ outcome: 'NEEDS_STAFF_REVIEW' })).toBeUndefined();
+    const source = readFileSync('src/components/crm-lead-registration-workbench.tsx', 'utf8');
+    const helper = source.slice(source.indexOf('export function registrationAdultMembershipDraftHref'), source.indexOf('export function CrmLeadRegistrationWorkbench'));
+    expect(source).toContain('Prepare separate adult CRM membership DRAFT'); expect(helper).toContain("new URLSearchParams({studentProfileId:normalized})");
+    expect(helper).toContain("result.registrationPath!=='ADULT'"); expect(helper).toContain('result.familyId!==null');
+    expect(helper).not.toMatch(/URLSearchParams\(\{[^}]*?(?:leadId|sourceContactPersonId|familyId|registrationPath|recordedAt|organizationId|schoolId|accountId|personId|conversionId)/);
   });
 });

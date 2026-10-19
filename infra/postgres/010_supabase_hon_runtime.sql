@@ -1252,3 +1252,25 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End CRM lead registration exact reconciliation.
+
+-- Adult CRM membership draft exact reconciliation: no new source-table capability.
+DO $$ DECLARE r text; col text; f text; BEGIN
+  REVOKE ALL ON TABLE hon.crm_adult_membership_draft_sources FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.crm_adult_membership_draft_sources FROM %I',r);
+  END LOOP;
+  FOR col IN SELECT attname FROM pg_attribute WHERE attrelid='hon.crm_adult_membership_draft_sources'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.crm_adult_membership_draft_sources FROM PUBLIC',col);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.crm_adult_membership_draft_sources FROM %I',col,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_crm_adult_membership_draft_source()','hon.require_crm_adult_membership_actor(text)','hon.crm_adult_membership_relation(uuid)','hon.read_crm_adult_membership_preparation(text,uuid)','hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_crm_adult_membership_preparation(text,uuid),hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+END $$;
+-- End adult CRM membership draft exact reconciliation.

@@ -1,3 +1,6 @@
+import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
+import { CrmAdultMembershipDraftService } from './billing/crm-adult-membership-draft.service.js';
+import { CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
 import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
@@ -308,6 +311,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
+    CrmAdultMembershipDraftController,
     BillingAccountController,
     InvoiceController,
     HqController,
@@ -421,6 +425,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipActivationHumanUiGuard,
     BillingAccountService,
     BillingAccountHumanUiGuard,
