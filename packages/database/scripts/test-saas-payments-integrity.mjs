@@ -223,6 +223,7 @@ try{
 
  // ---------- 7. founder inventory under contention, expiry and cancellation return slots ----------
  const founderMonthly=offerOf(await options('ownerF1',O.F1.school),'FOUNDER_MONTHLY');
+ await Promise.all(Array.from({length:8},()=>payments.readPayments(H('operator')))); // open pool connections so the race really overlaps
  const race=await Promise.allSettled(['F1','F2','F3'].map(k=>start(`owner${k}`,O[k].school,founderMonthly)));
  const raceWon=race.filter(r=>r.status==='fulfilled');
  assert.equal(raceWon.length,2,JSON.stringify(race.map(r=>r.reason?.getResponse?.()??r.value?.checkout?.status)));

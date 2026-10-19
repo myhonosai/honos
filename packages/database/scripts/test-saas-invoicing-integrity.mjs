@@ -14,7 +14,7 @@ const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saa
 const contracts=await import('@hon/contracts');
 const api=new SaasBillingService(new RuntimeDatabaseService());
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
-const saasTables=['saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
+const saasTables=['saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions','saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions','saas_provider_cost_evidence','saas_payment_evidence','saas_invoice_lines','saas_invoices','saas_invoice_sequences','saas_outbox','saas_audit','saas_requests',
  'saas_subscription_history','saas_subscriptions','saas_founder_reservations','saas_catalog_offers','saas_catalog_plans','saas_catalog_versions'];
 const b2Tables=['saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence'];
@@ -117,7 +117,7 @@ try{
   ['FOUNDER_SLOT_RETURN','DECIDED','EXPIRED_UNPAID_RETURN_ACTIVATED_RETAINED'],['REFUND_GUARANTEE','DECIDED','FIRST_PURCHASE_30_DAY_FULL_REFUND_ALL_OFFERS'],
   ['FOUNDER_PROGRAM','DECIDED','FIFTY_TOTAL_THIRTY_MONTHLY_TWENTY_LIFETIME_ONE_PER_ORGANIZATION'],['FOUNDER_ALLOWANCE','DECIDED','FULL_MONTHLY_PLAN_ALLOWANCE'],
   ['CANCELLATION_TIMING','PROPOSED','END_OF_PAID_PERIOD'],['PLAN_CHANGE_TIMING','PROPOSED','BILLING_PERIOD_BOUNDARY'],['PRORATION','PROPOSED','NO_AUTOMATIC_PRORATION'],
-  ['FOUNDER_RESERVATION_HOLD','PROPOSED','ONE_DAY'],['TAXES','UNDECIDED',null],['ANNUAL_BILLING','UNDECIDED',null],['REFUND_EXECUTION','UNDECIDED',null],['PAYMENT_PROVIDER','UNDECIDED',null]])
+  ['FOUNDER_RESERVATION_HOLD','PROPOSED','ONE_DAY'],['TAXES','UNDECIDED',null],['ANNUAL_BILLING','UNDECIDED',null],['REFUND_EXECUTION','UNDECIDED',null],['PAYMENT_PROVIDER','PROPOSED','STRIPE_TEST_MODE_ADAPTER']])
   assert.deepEqual([policies[code].status,policies[code].decision],[status,decision],code);
  await deny(api.commandSubscription(H('owner'),sA.subscriptionId,{action:'CANCEL',expectedVersion:sA.version,reasonCode:'SCHOOL_REQUEST'},K()),422,'SAAS_POLICY_UNDECIDED');
  await deny(api.commandSubscription(H('owner'),sA.subscriptionId,{action:'CHANGE_OFFER',expectedVersion:sA.version,reasonCode:'SCHOOL_REQUEST',offerId:offer('COMPLETE','REGULAR_MONTHLY')},K()),422,'SAAS_POLICY_UNDECIDED');
