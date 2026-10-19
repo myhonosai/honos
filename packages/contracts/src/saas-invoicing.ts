@@ -11,7 +11,8 @@ export type SaasInvoiceStatus = 'DRAFT' | 'ISSUED' | 'VOID';
 export type SaasTaxStatus = 'UNRESOLVED' | 'NO_TAX_APPLICABLE' | 'TAX_LINES';
 export type SaasSettlementState = 'NOT_ISSUED' | 'VOID' | 'UNPAID' | 'PARTIALLY_PAID' | 'PAID_ATTESTED' | 'PAID_VERIFIED' | 'REVERSED';
 export type SaasEvidenceKind = 'PAYMENT_RECEIVED' | 'REFUND' | 'CHARGEBACK';
-export type SaasInvoiceLineKind = 'PLAN_FEE' | 'DISCOUNT' | 'CORRECTION' | 'TAX';
+/** ACCOUNT_CREDIT (B4) is a negative Champions account-credit line applied by the HQ owner. */
+export type SaasInvoiceLineKind = 'PLAN_FEE' | 'DISCOUNT' | 'CORRECTION' | 'TAX' | 'ACCOUNT_CREDIT';
 export const SAAS_INVOICE_STATUSES: readonly SaasInvoiceStatus[] = ['DRAFT','ISSUED','VOID'];
 
 // ---------- inputs ----------
@@ -177,7 +178,8 @@ function validateInvoice(value: unknown, detail: boolean): void {
     if (!Array.isArray(i.lines) || i.lines.length < 1 || i.lines.length > 30 || !Array.isArray(i.evidence)) drift();
     (i.lines as unknown[]).forEach((l, n) => {
       const r = record(l, drift); exactKeys(r, ['lineNumber','lineKind','description','amountMinor','reference'], drift);
-      if (r.lineNumber !== n + 1 || !has(['PLAN_FEE','DISCOUNT','CORRECTION','TAX'], r.lineKind) || (n === 0) !== (r.lineKind === 'PLAN_FEE')
+      if (r.lineNumber !== n + 1 || !has(['PLAN_FEE','DISCOUNT','CORRECTION','TAX','ACCOUNT_CREDIT'], r.lineKind) || (n === 0) !== (r.lineKind === 'PLAN_FEE')
+        || (r.lineKind === 'ACCOUNT_CREDIT' && (r.amountMinor as number) >= 0)
         || !text(r.description, 300) || !isInt(r.amountMinor, -100_000_000, 100_000_000) || r.amountMinor === 0
         || !nullable(r.reference, (v): v is string => text(v, 200))) drift();
     });

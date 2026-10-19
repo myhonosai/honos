@@ -15,7 +15,8 @@ export type SaasFounderEligibility = 'UNDECIDED' | 'NO_PRIOR_CATALOG_SUBSCRIPTIO
 export type SaasPolicyCode = 'ANNUAL_BILLING' | 'TAXES' | 'PRORATION' | 'PLAN_CHANGE_TIMING' | 'CANCELLATION_TIMING' | 'REFUND_EXECUTION'
   | 'PAYMENT_PROVIDER' | 'FOUNDER_SLOT_RETURN' | 'CREDIT_ROLLOVER' | 'TOP_UP_PRICING'
   | 'REFUND_GUARANTEE' | 'FOUNDER_PROGRAM' | 'FOUNDER_RESERVATION_HOLD' | 'FOUNDER_ALLOWANCE'
-  | 'PLAN_ALLOWANCES' | 'PREMIUM_OPERATIONS' | 'SUSPENDED_ALLOWANCE' | 'PAYMENT_ATTESTATION';
+  | 'PLAN_ALLOWANCES' | 'PREMIUM_OPERATIONS' | 'SUSPENDED_ALLOWANCE' | 'PAYMENT_ATTESTATION'
+  | 'ZERO_DOLLAR_INVOICE' | 'REWARD_CLAWBACK' | 'CHAMPIONS_REWARD_LADDER';
 /** PROPOSED and DECIDED record owner direction only; actionsEnabled stays false until a reviewed migration enables an action. */
 export type SaasPolicyStatus = 'UNDECIDED' | 'PROPOSED' | 'DECIDED';
 export type SaasReservationStatus = 'RESERVED' | 'ALLOCATED' | 'RELEASED' | 'EXPIRED';
@@ -23,9 +24,10 @@ export type SaasReservationReason = 'RESERVED' | 'SUBSCRIPTION_RECORDED' | 'OWNE
 export type SaasSubscriptionStatus = 'PENDING_ACTIVATION' | 'IN_SERVICE' | 'SUSPENDED' | 'VOIDED';
 export type SaasSubscriptionReason = 'RECORDED' | 'SERVICE_STARTED' | 'OWNER_HOLD' | 'ACCOUNT_REVIEW' | 'SCHOOL_REQUEST' | 'REVIEW_RESOLVED' | 'PERIOD_ELAPSED' | 'RECORDED_IN_ERROR';
 
-export const SAAS_POLICY_CODES: readonly SaasPolicyCode[] = ['ANNUAL_BILLING','CANCELLATION_TIMING','CREDIT_ROLLOVER','FOUNDER_ALLOWANCE','FOUNDER_PROGRAM',
-  'FOUNDER_RESERVATION_HOLD','FOUNDER_SLOT_RETURN','PAYMENT_ATTESTATION','PAYMENT_PROVIDER','PLAN_ALLOWANCES','PLAN_CHANGE_TIMING','PREMIUM_OPERATIONS',
-  'PRORATION','REFUND_EXECUTION','REFUND_GUARANTEE','SUSPENDED_ALLOWANCE','TAXES','TOP_UP_PRICING'];
+export const SAAS_POLICY_CODES: readonly SaasPolicyCode[] = ['ANNUAL_BILLING','CANCELLATION_TIMING','CHAMPIONS_REWARD_LADDER','CREDIT_ROLLOVER',
+  'FOUNDER_ALLOWANCE','FOUNDER_PROGRAM','FOUNDER_RESERVATION_HOLD','FOUNDER_SLOT_RETURN','PAYMENT_ATTESTATION','PAYMENT_PROVIDER','PLAN_ALLOWANCES',
+  'PLAN_CHANGE_TIMING','PREMIUM_OPERATIONS','PRORATION','REFUND_EXECUTION','REFUND_GUARANTEE','REWARD_CLAWBACK','SUSPENDED_ALLOWANCE','TAXES',
+  'TOP_UP_PRICING','ZERO_DOLLAR_INVOICE'];
 export const SAAS_RESERVATION_STATUSES: readonly SaasReservationStatus[] = ['RESERVED','ALLOCATED','RELEASED','EXPIRED'];
 export const SAAS_SUBSCRIPTION_STATUSES: readonly SaasSubscriptionStatus[] = ['PENDING_ACTIVATION','IN_SERVICE','SUSPENDED','VOIDED'];
 const RESERVATION_REASONS: readonly SaasReservationReason[] = ['RESERVED','SUBSCRIPTION_RECORDED','OWNER_RELEASED','SCHOOL_DECLINED','NOT_ELIGIBLE','HOLD_EXPIRED','SUBSCRIPTION_VOIDED'];
@@ -59,6 +61,12 @@ export const SAAS_COMMANDS = {
   publishPricing: 'saas-pricing-publish',
   allowanceCommand: 'saas-credit-allowance',
   resolveCreditReservation: 'saas-credit-resolve',
+  createRefundRequest: 'saas-refund-request',
+  decideRefundRequest: 'saas-refund-decide',
+  setRewardFulfillment: 'saas-reward-fulfillment',
+  applyChampionsReward: 'saas-reward-apply',
+  applyAccountCredit: 'saas-account-credit-apply',
+  resolveReferralAlert: 'saas-referral-alert-resolve',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

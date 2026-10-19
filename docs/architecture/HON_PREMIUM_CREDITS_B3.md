@@ -145,7 +145,9 @@ Cancellation, proration, refund execution, annual billing and live payment proce
 - the existing Marcus, Claire and Chad assistant flows still use their existing fair-use accounting; they are ordinary use and correctly stay outside premium credits
 - wiring real premium operations (image, video, voice, AI employee jobs) into reserve and settle through the Action Engine
 
-## 8. Proposed B4 — 30-day refund guarantee and Champions Club fulfillment (not started)
+## 8. Proposed B4 — 30-day refund guarantee and Champions Club fulfillment (superseded)
+
+Implemented in a narrower, safer form in [B4](HON_REFUNDS_CHAMPIONS_REWARDS_B4.md): no subscription consequences, no lifetime subscription records and no Champions billing connection until terms and B5 exist. The original proposal follows for reference.
 
 Recordkeeping and approvals only. Executing a real refund requires a provider (B5) and explicit owner approval.
 

@@ -37,6 +37,7 @@
     "db:test-saas-subscription": "pnpm --filter @hon/database db:test-saas-subscription",
     "db:test-saas-invoicing": "pnpm --filter @hon/database db:test-saas-invoicing",
     "db:test-saas-credits": "pnpm --filter @hon/database db:test-saas-credits",
+    "db:test-saas-refunds-rewards": "pnpm --filter @hon/database db:test-saas-refunds-rewards",
     "db:test-communication-consents": "pnpm --filter @hon/database db:test-communication-consents",
     "db:test-communication-messages": "pnpm --filter @hon/database db:test-communication-messages",
     "db:test-billing-invoices": "pnpm --filter @hon/database db:test-billing-invoices",
