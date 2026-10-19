@@ -12,6 +12,13 @@ on:
       - 'apps/web/scripts/school-subscription-browser.mjs'
       - 'apps/web/scripts/fixtures/school-checkout.*'
       - 'apps/web/test/school-subscription.test.tsx'
+      - 'apps/web/test/localization.test.tsx'
+      - 'apps/web/src/components/localization/**'
+      - 'apps/web/src/server/locale-context.ts'
+      - 'apps/web/src/app/settings/**'
+      - 'apps/web/src/app/layout.tsx'
+      - 'packages/design-system/src/**'
+      - 'apps/web/src/components/hq-modern/{shell,dashboard,assistant}.tsx'
 permissions:
   contents: read
 concurrency:
@@ -19,7 +26,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   browser:
-    if: github.head_ref == 'codex/school-account-readiness' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.head_ref == 'codex/language-region-implementation' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -40,7 +47,7 @@ jobs:
       - name: Install unchanged lockfile and build actual application
         run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Focused frontend and session-boundary tests
-        run: pnpm --filter @hon/web exec vitest run test/school-subscription.test.tsx test/staff-route-auth-layout.test.ts test/public-plan-catalog.test.ts
+        run: pnpm --filter @hon/web exec vitest run test/school-subscription.test.tsx test/staff-route-auth-layout.test.ts test/public-plan-catalog.test.ts test/localization.test.tsx
       - name: Prepare pinned browser tools outside the repository
         run: |
           set -euo pipefail
@@ -50,6 +57,13 @@ jobs:
           echo "HON_SUBSCRIPTION_TOOLS=$RUNNER_TEMP/hon-subscription-tools" >> "$GITHUB_ENV"
           echo "HON_SUBSCRIPTION_RESULTS=$RUNNER_TEMP/hon-subscription-results" >> "$GITHUB_ENV"
           npm install --prefix "$RUNNER_TEMP/hon-subscription-tools" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1 axe-core@4.10.3
+      - name: Ensure Korean fallback fonts are available on the disposable runner
+        run: |
+          if test -z "$(fc-list :lang=ko 2>/dev/null)"; then
+            sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=30 update
+            sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=30 install -y --no-install-recommends fonts-noto-cjk
+          fi
+          test -n "$(fc-list :lang=ko)"
       - name: Actual school purchasing UI with signed synthetic B5/B3 fixtures
         id: browser
         run: pnpm --filter @hon/web exec node scripts/school-subscription-browser.mjs
