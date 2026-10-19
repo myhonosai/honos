@@ -37,7 +37,7 @@ export async function verifyLocalization(e) {
     const p=await open(ctx);await ready(p);await p.getByRole('button',{name:'Classic',exact:true}).click();await choose(p,lang);
     assert.equal(await p.locator('main[data-view]').getAttribute('data-view'),'classic');
     await p.getByRole('heading',{name:tx(lang,'Built for the way you run your school.'),exact:true}).waitFor();
-    assert(await p.getByText(tx(lang,'Scheduling, memberships & curriculum'),{exact:true}).isVisible());
+    assert.equal(await p.getByText(tx(lang,'Scheduling, memberships & curriculum'),{exact:true}).count(),1);
     const notice=p.getByRole('note');if(size==='desktop'){const strong=await notice.locator('strong').boundingBox(),body=await notice.locator('span').first().boundingBox();assert(strong.x+strong.width<=body.x,'Translated notice label must not overlap its body');}
     if(size==='mobile')assert((await p.getByRole('button',{name:tx(lang,'HON plan guide'),exact:true}).boundingBox()).width<120,'Mobile HON guide must stay compact');
     for(const tier of ['Core','Complete'])assert(await p.getByRole('heading',{name:'HON '+tier,exact:true}).isVisible());
@@ -47,7 +47,7 @@ export async function verifyLocalization(e) {
     await p.getByRole('checkbox').check();const before=report.commandCount;await choose(p,lang==='ko'?'es':'ko');await choose(p,lang);assert(await p.getByRole('checkbox').isChecked());assert.equal(report.commandCount,before);assert.equal(await p.locator('main[data-view]').getAttribute('data-view'),'classic');
     for(const mode of ['Big Button','Modern','Classic']){await p.getByRole('button',{name:tx(lang,mode),exact:true}).click();await overflow(p);}
     const guide=p.getByRole('button',{name:tx(lang,'HON plan guide'),exact:true});await guide.click();await p.getByRole('button',{name:tx(lang,'Does payment activate access?'),exact:true}).click();assert(await p.getByText(tx(lang,'A return from checkout is not proof of payment. HON reloads backend payment evidence, and account activation is confirmed separately. Verified test payment can still show Pending Account Activation. This page never grants or changes features.'),{exact:true}).isVisible());await p.keyboard.press('Escape');
-    await p.getByRole('button',{name:tx(lang,'Modern'),exact:true}).click();await scan(p,`${lang}-${size}-review`);await capture(p,`${lang}-${size}-subscription`);
+    await p.getByRole('button',{name:tx(lang,'Modern'),exact:true}).click();await p.getByText(tx(lang,'Scheduling, memberships & curriculum'),{exact:true}).waitFor({state:'visible'});await scan(p,`${lang}-${size}-review`);await capture(p,`${lang}-${size}-subscription`);
     await start.click();await p.getByText(tx(lang,'Checkout open — payment pending'),{exact:true}).waitFor();assert.equal(report.commandCount-before,1);
     setFixture({state:'paid'});await p.goto(`${origin}/schools/not-authority/hon-plan?result=success&language=fr`);
     await p.getByRole('heading',{name:tx(lang,'Pending Account Activation'),exact:true}).waitFor();assert.equal(await p.locator('html').getAttribute('lang'),lang);
