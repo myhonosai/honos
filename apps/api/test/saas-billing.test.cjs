@@ -27,7 +27,7 @@ const view = (patch = {}) => ({ published:catalog(), drafts:[], policies, founde
 const subscription = (patch = {}) => ({ subscriptionId:U(), organizationId:U(), organizationName:'Fixture Dojo', source:'CATALOG_OFFER', catalogVersion:1, offerId:U(),
   planCode:'CORE', entitlementTier:'CORE', offerKind:'REGULAR_MONTHLY', billingInterval:'MONTHLY', priceMinor:14900, currency:'USD', founderReservationId:null,
   status:'IN_SERVICE', statusReason:'SERVICE_STARTED', version:2, serviceStartedAt:T, currentPeriod:{ index:0, startsAt:T, endsAt:'2026-11-18T12:00:00.000Z' },
-  paymentStatus:'NOT_BILLED', paidThroughAt:null, chargesEnabled:false, premiumCredits:{ plannedMonthlyAllowance:5000, status:'NOT_GRANTED' }, createdAt:T, updatedAt:T, ...patch });
+  paymentStatus:'NOT_BILLED', paidThroughAt:null, paymentVerification:'NONE', chargesEnabled:false, premiumCredits:{ plannedMonthlyAllowance:5000, status:'NOT_GRANTED' }, createdAt:T, updatedAt:T, ...patch });
 
 test('contracts: owner-approved draft, canonical Core/Complete entitlements, Essential legacy only', () => {
   const draft = contracts.SAAS_OWNER_APPROVED_DRAFT;
@@ -59,7 +59,8 @@ test('response contracts fail closed on any financial activation, payment claim 
     view({ published:catalog({ offers:[{ offerId:U(), planCode:'CORE', offerKind:'REGULAR_ANNUAL', billingInterval:'ANNUAL', priceMinor:149000, founder:false, allowance:'FULL_MONTHLY_PLAN_ALLOWANCE' }] }) }),
     view({ published:catalog({ offers:[{ offerId:U(), planCode:'ESSENTIAL', offerKind:'REGULAR_MONTHLY', billingInterval:'MONTHLY', priceMinor:9900, founder:false, allowance:'FULL_MONTHLY_PLAN_ALLOWANCE' }] }) })])
     assert.throws(() => contracts.validateSaasCatalogView(bad));
-  for (const bad of [subscription({ paymentStatus:'PAID' }), subscription({ paidThroughAt:T }), subscription({ chargesEnabled:true }),
+  for (const bad of [subscription({ paymentStatus:'PAID' }), subscription({ paymentStatus:'SETTLED' }), subscription({ paymentVerification:'PROVIDER_VERIFIED' }),
+    subscription({ paymentStatus:'PAID', paymentVerification:'PROVIDER_VERIFIED', billingInterval:'LIFETIME', paidThroughAt:T }), subscription({ chargesEnabled:true }),
     subscription({ premiumCredits:{ plannedMonthlyAllowance:5000, status:'GRANTED' } }), subscription({ planCode:'COMPLETE' }),
     subscription({ offerKind:'FOUNDER_MONTHLY' }), subscription({ source:'LEGACY_ENTITLEMENT' }), subscription({ status:'PENDING_ACTIVATION' }),
     { ...subscription(), balance:5000 }])

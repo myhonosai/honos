@@ -133,6 +133,17 @@ const SAAS_BILLING_CALLS = {
   readCreditApplicationPreview: { sql: 'SELECT hon.read_saas_credit_application_preview($1,$2::uuid) AS data', arity: 2, readOnly: true },
   applyAccountCredit: { sql: 'SELECT hon.apply_saas_account_credit($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   resolveReferralAlert: { sql: 'SELECT hon.resolve_saas_referral_alert($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // B5: hosted checkout and provider-verified payments, test mode only (no charge, refund or card data).
+  readPayments: { sql: 'SELECT hon.read_saas_payments_from_hq($1) AS data', arity: 1, readOnly: true },
+  readSchoolPlanOptions: { sql: 'SELECT hon.read_saas_school_plan_options($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  setPaymentProgram: { sql: 'SELECT hon.set_saas_payment_program($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  createSchoolCheckout: { sql: 'SELECT hon.create_saas_checkout_from_school($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  createHqCheckout: { sql: 'SELECT hon.create_saas_checkout_from_hq($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  attachCheckoutSession: { sql: 'SELECT hon.attach_saas_checkout_session($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  cancelCheckout: { sql: 'SELECT hon.cancel_saas_checkout($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  sweepCheckouts: { sql: 'SELECT hon.sweep_saas_checkouts($1,$2::uuid,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
+  // Called only after the API has verified the provider signature; there is no human subject.
+  ingestProviderEvent: { sql: 'SELECT hon.ingest_saas_provider_event($1::jsonb,$2) AS data', arity: 2, readOnly: false },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 

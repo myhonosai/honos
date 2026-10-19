@@ -177,6 +177,10 @@ import { ChampionsClubService } from './champions/champions-club.service.js';
 import { ChampionsCommandGuard, ChampionsReadGuard } from './champions/champions-club.guards.js';
 import { SaasBillingHqController, SaasCreditsSchoolController } from './saas-billing/saas-billing.controller.js';
 import { SaasBillingService } from './saas-billing/saas-billing.service.js';
+import { PaymentWebhookController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
+import { SaasPaymentsService } from './payments/saas-payments.service.js';
+import { PAYMENT_PROVIDER_ADAPTER, UnconfiguredPaymentProvider } from './payments/payment-provider.js';
+import { paymentProviderFromEnvironment } from './payments/stripe-test-mode-adapter.js';
 import { SaasCommandGuard, SaasReadGuard } from './saas-billing/saas-billing.guards.js';
 import { HqSchoolDirectoryService } from './hq/hq-school-directory.service.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
@@ -305,7 +309,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasBillingHqController, SaasCreditsSchoolController,
+    SaasBillingHqController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasPaymentsHqController, PaymentWebhookController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
@@ -416,7 +420,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
-    SaasBillingService, SaasCommandGuard, SaasReadGuard,
+    SaasBillingService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService,
+    // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
+    { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },
     HqOverviewService,
     HqSchoolDirectoryService,
   ],
