@@ -757,8 +757,8 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - [ ] Connect a real Stripe test account (credentials in the secret manager, webhook endpoint at API version 2024-06-20, egress to api.stripe.com) and repeat the journey provider-verified.
 
 
-## Codex — School account readiness follow-up (in progress)
+## Codex — School account readiness follow-up (owner review; PR #32)
 
 - Owner approved #31 merged as `ceee55b76f6b37c63d5481e9a78a8db041cc65e8`; new isolated `codex/school-account-readiness` follows its exact tree.
 - Outcome: clearly distinguish backend-reported payment, provisioned tier, recorded service status and B3 allowance/suspension; no inferred paid access or reactivation. School invoices/history, dedicated multi-school purchaser context and B6 effective-access policy remain unavailable pending Claude-owned merged contracts (#29 / #30). No speculative endpoints, backend/migration/CRM edits or provider activation.
-- Planned verification: focused state/privacy tests; full CI, existing signed-fixture desktop/mobile browser checks plus suspension/reactivation/non-activation cases. Evidence/results will be recorded after execution. No merge/deployment of this follow-up authorized.
+- [x] Implemented/tested against latest main `c08091a` (#30 preserved): [CI 39208364938](https://github.com/myhonosai/honos/actions/runs/39208364938) tests/typecheck/build, 157 migrations and all 15 database security proofs / 238 forced-RLS tables pass; [browser 39208364925](https://github.com/myhonosai/honos/actions/runs/39208364925) 66 checks, 14 captures, 22 axe scans, zero failures/reported violations/JS errors/unexpected API paths. [Actual desktop/mobile screenshots](docs/visuals/codex/school-account-readiness/README.md) and [handoff/remaining B5.1/B6 dependencies](docs/CODEX_SCHOOL_ACCOUNT_READINESS.md). Deterministic fixtures only, real Stripe sandbox unverified. Final exact-head checks tracked #32/#4. No merge/deployment of this follow-up authorized.
