@@ -391,6 +391,7 @@ try{
  await rejectedWithoutGuards('saas_provider_events',"UPDATE hon.saas_provider_events SET livemode=true");
  await rejectedWithoutGuards('saas_payment_evidence',"UPDATE hon.saas_payment_evidence SET provider_mode='LIVE' WHERE source='PROVIDER_VERIFIED'");
  await rejectedWithoutGuards('saas_payment_evidence',"UPDATE hon.saas_payment_evidence SET provider_event_id=NULL WHERE source='PROVIDER_VERIFIED'");
+ await rejectedWithoutGuards('saas_payment_evidence',"UPDATE hon.saas_payment_evidence SET source='HQ_ATTESTATION' WHERE source='PROVIDER_VERIFIED'");
  await rejectedWithoutGuards('saas_checkout_sessions',`INSERT INTO hon.saas_checkout_sessions(organization_id,school_id,catalog_id,offer_id,plan_code,offer_kind,billing_interval,amount_minor,
   requester_kind,requested_by_principal_id,provider,status,status_reason,expires_at,version,created_at,updated_at)
   SELECT organization_id,school_id,catalog_id,offer_id,plan_code,offer_kind,billing_interval,amount_minor,requester_kind,requested_by_principal_id,provider,'OPEN','PROVIDER_SESSION_OPENED',

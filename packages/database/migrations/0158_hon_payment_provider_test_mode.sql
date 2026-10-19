@@ -131,9 +131,10 @@ ALTER TABLE hon.saas_payment_evidence ADD CONSTRAINT saas_payment_evidence_sourc
 ALTER TABLE hon.saas_payment_evidence DROP CONSTRAINT saas_payment_evidence_provider_event_id_check;
 ALTER TABLE hon.saas_payment_evidence ADD COLUMN provider_code text CHECK (provider_code IN ('STRIPE','STRIPE_SIMULATED'));
 ALTER TABLE hon.saas_payment_evidence ADD COLUMN provider_mode text CHECK (provider_mode = 'TEST');
-ALTER TABLE hon.saas_payment_evidence ADD CONSTRAINT saas_payment_evidence_provider_event_id_check CHECK (
-  (source = 'PROVIDER_VERIFIED') = (provider_event_id IS NOT NULL AND provider_code IS NOT NULL AND provider_mode IS NOT NULL)
-  AND (provider_event_id IS NULL OR provider_event_id ~ '^evt_[A-Za-z0-9_]{1,200}$'));
+-- Each source carries exactly its own fields: an HQ attestation can never present a provider event.
+ALTER TABLE hon.saas_payment_evidence ADD CONSTRAINT saas_payment_evidence_provider_event_id_check CHECK (CASE source
+  WHEN 'PROVIDER_VERIFIED' THEN provider_event_id IS NOT NULL AND provider_event_id ~ '^evt_[A-Za-z0-9_]{1,200}$' AND provider_code IS NOT NULL AND provider_mode IS NOT NULL
+  ELSE provider_event_id IS NULL AND provider_code IS NULL AND provider_mode IS NULL END);
 
 -- ---------- vocabularies ----------
 ALTER TABLE hon.saas_audit DROP CONSTRAINT saas_audit_action_code_check;

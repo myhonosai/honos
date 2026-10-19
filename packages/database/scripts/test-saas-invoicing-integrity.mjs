@@ -225,7 +225,10 @@ try{
 
  // ---------- 5. no effect on subscriptions, founder inventory, entitlements, school billing or Champions ----------
  const org=await api.readOrganizationSubscription(H('owner'),O.B.id);
- assert.deepEqual([org.current.status,org.current.paymentStatus,org.current.paidThroughAt,org.founderReservations[0].status],['IN_SERVICE','NOT_BILLED',null,'ALLOCATED']);
+ // Payment status is derived from evidence (B5): B's lifetime purchase was charged back, so it reads DISPUTED, unverified;
+ // the subscription lifecycle and founder slot are untouched.
+ assert.deepEqual([org.current.status,org.current.paymentStatus,org.current.paymentVerification,org.current.paidThroughAt,org.founderReservations[0].status],
+  ['IN_SERVICE','DISPUTED','NONE',null,'ALLOCATED']);
  const inventory=(await api.readCatalog(H('owner'))).founderInventory;assert.deepEqual([inventory.lifetime.allocated,inventory.remaining.lifetime],[1,19]);
  assert.equal((await admin.query('SELECT count(*)::int n FROM hon.saas_subscriptions')).rows[0].n,5);
  assert.deepEqual(await untouched(),before,'No entitlement, school billing, AI usage, Champions or shared audit row changed.');
