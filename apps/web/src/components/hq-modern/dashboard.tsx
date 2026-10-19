@@ -57,7 +57,7 @@ export function CompanySnapshot(): React.ReactElement {
     <Link href="/hq/revenue" className={styles.metricRow}><HqIcon name="chart" size={28}/><div><h3>{t("Revenue")}</h3><p>{t("MRR / ARR")}</p></div><span className={styles.badge}>{t("Unavailable")}</span><HqIcon name="chevron" size={16}/></Link>
     <Link href="/hq/schools" className={styles.metricRow}><HqIcon name="school" size={28}/><div><h3>{t("Schools")}</h3><p>{t("{count} organizations",{count:number(overview.organizationCount)})}</p></div><strong className={styles.metricValue}>{overview.schoolCount.toLocaleString(formattingLocale)}</strong><HqIcon name="chevron" size={16}/></Link>
     <Link href="/hq/ai-costs" className={styles.metricRow}><HqIcon name="database" size={28}/><div><h3>{t("AI costs")}</h3><p>{t("Usage & spend")}</p></div><span className={styles.badge}>{t("Unavailable")}</span><HqIcon name="chevron" size={16}/></Link>
-    <details className={styles.factDetails}><summary>{t("Verified platform facts")}</summary><dl><div><dt>{t("Onboarding requests")}</dt><dd>{overview.onboarding.requestCount}</dd></div><div><dt>{t("In progress")}</dt><dd>{overview.onboarding.inProgressRequestCount}</dd></div><div><dt>{t("Completed")}</dt><dd>{overview.onboarding.completedRequestCount}</dd></div><div><dt>{t("Configured task profiles")}</dt><dd>{overview.taskProfileCount}</dd></div></dl><p className={styles.finePrint}>{t("Recorded provider states, not a live health check:")}</p><dl>{Object.entries(overview.configuredProviderStates).map(([state, count]) => <div key={state}><dt>{state}</dt><dd>{count}</dd></div>)}</dl></details>
+    <details className={styles.factDetails}><summary>{t("Verified platform facts")}</summary><dl><div><dt>{t("Onboarding requests")}</dt><dd>{number(overview.onboarding.requestCount)}</dd></div><div><dt>{t("In progress")}</dt><dd>{number(overview.onboarding.inProgressRequestCount)}</dd></div><div><dt>{t("Completed")}</dt><dd>{number(overview.onboarding.completedRequestCount)}</dd></div><div><dt>{t("Configured task profiles")}</dt><dd>{number(overview.taskProfileCount)}</dd></div></dl><p className={styles.finePrint}>{t("Recorded provider states, not a live health check:")}</p><dl>{Object.entries(overview.configuredProviderStates).map(([state, count]) => <div key={state}><dt>{text(state[0]!.toUpperCase()+state.slice(1))}</dt><dd>{number(count)}</dd></div>)}</dl></details>
     <p className={styles.finePrint}>{t("As of {date}",{date:date(overview.asOf)})}</p>
   </section>;
 }
@@ -97,7 +97,7 @@ function PerformanceStrip(): React.ReactElement {
   return <section className={styles.performanceStrip} aria-label={t("Company performance overview")}>
     {([
       [t("Schools"), '/hq/schools', 'school', overview.schoolCount, t("Verified directory")],
-      ['Organizations', '/hq/schools', 'team', overview.organizationCount, t("Verified overview")],
+      [t("Organizations"), '/hq/schools', 'team', overview.organizationCount, t("Verified overview")],
       [t("Revenue"), '/hq/revenue', 'chart', null, t("Unavailable")],
       [t("AI costs"), '/hq/ai-costs', 'database', null, t("Unavailable")],
       [t("Approvals"), '/hq/approvals', 'check', null, t("Unavailable")],

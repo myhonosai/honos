@@ -56,7 +56,7 @@ export async function verifyLocalization(e) {
   await check(`${lang}/${size}: authorized HQ navigation and appearance independence`,async()=>{
    reset();const ctx=await context(viewport,'hq-localization-synthetic');try{
     const p=await open(ctx,'/hq');await p.getByRole('heading',{name:'Your company. In command.',exact:true}).waitFor();await p.locator('[data-hq-conversation-dock]').waitFor({state:'attached'});await choose(p,lang);
-    await p.getByRole('heading',{name:tx(lang,'Your company. In command.'),exact:true}).waitFor();
+    await p.getByRole('heading',{name:tx(lang,'Your company. In command.'),exact:true}).waitFor();assert(await p.getByRole('heading',{name:tx(lang,'Organizations'),exact:true}).isVisible());
     await p.getByRole('group',{name:tx(lang,'Platform view')}).getByRole('button',{name:tx(lang,'Big Button'),exact:true}).click();await p.getByRole('group',{name:tx(lang,'AI portrait style')}).getByRole('button',{name:tx(lang,'Chibi'),exact:true}).click();
     await choose(p,lang==='es'?'ko':'es');await choose(p,lang);assert.equal(await p.locator('[data-art]').getAttribute('data-art'),'chibi');assert.equal(await p.locator('[data-art]').getAttribute('data-view'),'big-button');
     await p.getByRole('button',{name:tx(lang,'Expand HON conversation'),exact:true}).click();await p.getByRole('heading',{name:tx(lang,'How can HON help here?'),exact:true}).waitFor();assert(await p.getByText(tx(lang,'HQ conversation is not connected yet. Your company tools remain available.'),{exact:true}).isVisible());
