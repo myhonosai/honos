@@ -73,7 +73,7 @@ describe('adult CRM membership DRAFT workbench lifecycle', () => {
     expect(harness.submit).toHaveBeenCalledWith(command); expect(button('Retry exact unchanged membership draft')).toBeDefined();
     button('Retry exact unchanged membership draft')!.props.onClick(); await settle();
     expect(key).toHaveBeenCalledTimes(1); expect(harness.submit.mock.calls[0]).toEqual(harness.submit.mock.calls[1]);
-    expect(html()).toContain('Replayed historical DRAFT receipt.'); expect(html()).not.toContain(receipt.membershipId);
+    expect(html()).toContain('Replayed historical DRAFT receipt.'); expect(html()).toContain(`href="/staff/billing/memberships?membershipId=${receipt.membershipId}"`);
   });
 
   it('clears readiness and any retained command on selector edits and ignores a late readiness response', async () => {

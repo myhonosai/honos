@@ -5,8 +5,10 @@ import { activateKnownMembership, loadMembershipActivationContext, MembershipAct
 import styles from './billing-renewals-workbench.module.css';
 
 type RetainedActivation = { scope: KnownMembership; expectedVersion: number; key: string };
-export function MembershipActivationWorkbench(): React.ReactElement {
-  const [scope, setScope] = useState<KnownMembership>({ organizationId: '', schoolId: '', membershipId: '' });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function MembershipActivationWorkbench({ initialMembershipId }: { initialMembershipId?: string } = {}): React.ReactElement {
+  const initialMembership = typeof initialMembershipId === 'string' && UUID.test(initialMembershipId) ? initialMembershipId.toLowerCase() : '';
+  const [scope, setScope] = useState<KnownMembership>({ organizationId: '', schoolId: '', membershipId: initialMembership });
   const [current, setCurrent] = useState<MembershipActivationContext | null>(null);
   const [retained, setRetained] = useState<RetainedActivation | null>(null);
   const [confirmed, setConfirmed] = useState(false), [busy, setBusy] = useState(false);
@@ -42,7 +44,7 @@ export function MembershipActivationWorkbench(): React.ReactElement {
       <p>No billing schedule is created or activated. No invoice, payment method, charge, recurring-billing authorization, agreement sending or reminder occurs. Card collection never authorizes recurring billing.</p>
       <p>Agreement status, billing status and payer authorization are not read here. ACTIVE does not mean signed, paid or authorized for collection. Current billing.membership.activate permission and the existing billing entitlement are checked by the server.</p>
     </aside>
-    <section><h2>One already-known membership</h2><p>Enter the known organization, school and membership IDs. The server authorizes the exact school and derives the current membership version; there is no search or list.</p>
+    <section><h2>One already-known membership</h2><p>Enter the known organization and school IDs. A verified DRAFT receipt may provide only untrusted initial membership text; the server still authorizes the exact school and derives the current membership version. There is no search, list, automatic load, or automatic activation.</p>
       <form onSubmit={event => void load(event)}><fieldset disabled={busy || retained !== null}>
         {(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{key === 'organizationId' ? 'Organization ID' : key === 'schoolId' ? 'School ID' : 'Already-known membership ID'}<input required maxLength={36} value={scope[key]} onChange={event => edit(key, event.target.value)} /></label>)}
         <button type="submit">Load / refresh current membership</button>
