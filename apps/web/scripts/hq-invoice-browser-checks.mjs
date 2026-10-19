@@ -85,6 +85,8 @@ export async function verifyInvoiceViewport({ page, origin, label, check, screen
         assert.equal(await page.getByRole('button', { name: /charge|collect|activate|reserve|publish|fulfill|approve|issue refund/i }).count(), 0);
         await noOverflow(page, `${label} invoice detail`);
         if (label === 'mobile') await screenshot(page, 'mobile-invoice-viewport', false, true);
+        const identifiers = page.getByText('Record identifiers', { exact: true }); await identifiers.focus(); await page.keyboard.press('Enter');
+        await page.getByText(invoiceId(1), { exact: true }).waitFor(); await page.keyboard.press('Enter');
         await screenshot(page, `${label}-invoice-detail`); await accessibility(page, `${label}-invoice-detail`);
         await page.getByRole('button', { name: page.viewportSize().width <= 600 ? 'Expand HON assistant' : 'Ask HON anywhere', exact: true }).click();
         const assistant = page.getByRole(page.viewportSize().width <= 800 ? 'dialog' : 'complementary', { name: 'HON assistant', exact: true });
