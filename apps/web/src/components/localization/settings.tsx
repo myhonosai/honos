@@ -6,7 +6,7 @@ import styles from './locale.module.css';
 export function LanguageRegionSettings():React.ReactElement {
  const {preferences,save,saveState,t,number,money,date}=useLocale();const [view,setView]=useState<HonInterfaceTheme>('modern');
  useEffect(()=>{document.title=t('Language & Region')+' | HON OS';},[t]);
- return <main className={styles.settings} data-view={view}>
+ return <div className={styles.surface}><main className={styles.settings} data-view={view}>
   <header><p>HON OS / {t('Settings')}</p><h1>{t('Language & Region')}</h1><p>{t('Make HON feel familiar. Your language and formatting are personal preferences.')}</p></header>
   <fieldset className={styles.views}><legend>{t('View')}</legend>{HON_INTERFACE_THEMES.map(v=><button key={v.id} type="button" aria-pressed={view===v.id} onClick={()=>setView(v.id)}>{t(v.id==='big-button'?'Big Button':v.id==='modern'?'Modern':'Classic')}</button>)}</fieldset>
   <section aria-labelledby="language-title"><h2 id="language-title">{t('Interface language')}</h2><label htmlFor="settings-language">{t('Display language')}</label><select id="settings-language" value={preferences.language} onChange={e=>{if(isLanguage(e.target.value))save({...preferences,language:e.target.value});}}>{LANGUAGES.map(l=><option key={l.code} value={l.code} lang={l.code}>{l.name}</option>)}</select><p>{t('Changes apply immediately. Appearance and AI portrait choices stay unchanged.')}</p>
@@ -19,5 +19,5 @@ export function LanguageRegionSettings():React.ReactElement {
   <section aria-labelledby="sync-title"><h2 id="sync-title">{t('Preference availability')}</h2><dl><div><dt>{t('Across sessions')}</dt><dd>{t('This account, this browser. Clearing cookies or changing devices does not carry the preference.')}</dd></div><div><dt>{t('Across devices')}</dt><dd>{t('Unavailable until shared authenticated preference storage is implemented.')}</dd></div><div><dt>{t('School default language')}</dt><dd>{t('Unavailable. A future school default will initialize new users only and will not override personal choices.')}</dd></div></dl></section>
   <section><h2>{t('HON guidance & translation coverage')}</h2><p>{t('HON plan guidance follows your language. AI conversation and voice remain unavailable where their services are not connected.')}</p><p>{t('Settings and school subscription are translated. Shared navigation and selected HQ dashboard controls are translated; other screens may remain English.')}</p><p>{t('Customer content, external communications and legal documents are not automatically translated or sent.')}</p></section>
   <footer><a href="/staff/subscription">{t('School subscription')}</a><a href="/hq">HON HQ</a><a href="/parent">{t('Family home')}</a></footer>
- </main>;
+ </main></div>;
 }

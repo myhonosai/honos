@@ -1,3 +1,4 @@
+.surface { background:#0c1728; }
 .utility { display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 16px;padding:8px max(16px,3vw);background:#0c2030;color:#ccf4fb;font:13px/1.5 system-ui;border-bottom:1px solid #36586d; }
 .utility a {color:#b5f4f0;text-decoration:underline;text-underline-offset:4px;}
 .utility select {padding:8px 12px;min-height:40px;max-width:100%;border:1px solid #53839a;border-radius:9px;background:#123047;color:#fff;font:inherit;}
