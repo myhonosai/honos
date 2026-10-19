@@ -22,7 +22,7 @@ const refundStatus = { REQUESTED: 'Requested', APPROVED: 'Approved record · not
 export function InvoiceDetailResults({ data }: { data: InvoiceAccountReview }): React.ReactElement {
   const { invoice, account, standing } = data;
   return <div className={shared.results} data-invoice-detail={invoice.invoiceId}>
-    <section className={base.panel}><div className={base.sectionHeader}><h2>{invoice.invoiceNumber ?? 'Unnumbered draft record'}</h2><span className={base.badge}>{invoiceStatus[invoice.status]}</span></div>
+    <section className={base.panel}><div className={base.sectionHeader}><h2>{invoice.invoiceNumber ?? (invoice.status === 'VOID' ? 'Unnumbered void record' : 'Unnumbered draft record')}</h2><span className={base.badge}>{invoiceStatus[invoice.status]}</span></div>
       <p dir="auto"><strong>{invoice.organizationName}</strong></p><p>{invoice.description}</p>
       <dl className={`${shared.facts} ${styles.identity}`}>
         <div><dt>Invoice ID</dt><dd>{invoice.invoiceId}</dd></div><div><dt>Billing organization ID</dt><dd>{invoice.organizationId}</dd></div><div><dt>Invoice subscription ID</dt><dd>{invoice.subscriptionId}</dd></div>
@@ -41,7 +41,7 @@ export function InvoiceDetailResults({ data }: { data: InvoiceAccountReview }): 
         ['Payments in recorded evidence', invoice.settlement.receivedMinor], ['Refunds in recorded evidence', invoice.settlement.refundedMinor],
         ['Chargebacks in recorded evidence', invoice.settlement.chargedBackMinor], ['Recorded net', invoice.settlement.netMinor],
         ['Provider-verified net', invoice.settlement.verifiedNetMinor], ['Recorded balance', invoice.settlement.balanceMinor],
-      ] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{invoiceAmount(value)}</dd></div>)}</dl>
+      ] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value === null ? 'Not applicable to an unissued or void invoice' : invoiceAmount(value)}</dd></div>)}</dl>
     </section>
     <section className={base.panel} data-payment-evidence><h2>Payment-evidence history</h2><p className={shared.note}>Evidence returned for this invoice. Every entry is an HQ attestation, not processor-verified. These records do not collect money, execute refunds or qualify Champions referrals.</p>
       {!invoice.evidence.length && <p>No payment-evidence entries were returned for this invoice. Its settlement state is reported above.</p>}

@@ -17,12 +17,12 @@ export function InvoiceListResults({ data, organizationId, query }: { data: Saas
     <p className={shared.note}>Newest 200 matching invoices at most, in server order. Organization and text filters search only this returned window. This is not complete school history or a revenue total.</p>
     {!records.length && <p role="status">No invoice records in the returned window match this selection.</p>}
     <ul className={styles.records}>{records.map((invoice) => <li key={invoice.invoiceId}>
-      <div className={base.sectionHeader}><h3>{invoice.invoiceNumber ?? 'Unnumbered draft record'}</h3><span className={base.badge}>{invoiceStatus[invoice.status]}</span></div>
+      <div className={base.sectionHeader}><h3>{invoice.invoiceNumber ?? (invoice.status === 'VOID' ? 'Unnumbered void record' : 'Unnumbered draft record')}</h3><span className={base.badge}>{invoiceStatus[invoice.status]}</span></div>
       <p dir="auto"><strong>{invoice.organizationName}</strong></p><p>{invoice.planCode} · {invoiceOffer[invoice.offerKind]}</p>
       <p className={styles.amount}>Recorded total: {invoiceAmount(invoice.totalMinor)}</p>
       <p>{settlementLabel[invoice.settlement.state]}</p>
       <p className={shared.note}>{invoice.kind === 'LIFETIME_PURCHASE' ? 'One-time lifetime purchase; no recurring service end.' : `Service period ${invoiceTime(invoice.servicePeriod.startsAt)} – ${invoiceTime(invoice.servicePeriod.endsAt)}`}</p>
-      <Link className={shared.link} href={`/hq/revenue/invoices/${invoice.invoiceId}`} prefetch={false} aria-label={`Review ${invoice.invoiceNumber ?? 'draft invoice'} for ${invoice.organizationName}`}>Review invoice &amp; payment history →</Link>
+      <Link className={shared.link} href={`/hq/revenue/invoices/${invoice.invoiceId}`} prefetch={false} aria-label={`Review ${invoice.invoiceNumber ?? (invoice.status === 'VOID' ? 'void invoice' : 'draft invoice')} for ${invoice.organizationName}`}>Review invoice &amp; payment history →</Link>
     </li>)}</ul>
   </section>;
 }
