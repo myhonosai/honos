@@ -12,7 +12,7 @@ import { checkoutId, schoolContext, schoolPlanFixture, schoolCreditsFixture, sch
 const ok = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
 const account = (state = 'ready') => ({ context: { organizationId: schoolContext.organizationId, schoolId: schoolContext.schoolId }, plan: schoolPlanFixture({ state }) });
 function mockReads(state = 'ready') { return vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => ok(String(path).includes('current-reporting') ? schoolContext : String(path).endsWith('ai-credits') ? schoolCreditsFixture(schoolPlanFixture({ state })) : schoolPlanFixture({ state }))); }
-function renderAccount(state: string) { const a = account(state); return renderToStaticMarkup(<SchoolAccountStatus billing={{ account:a,credits:schoolCreditsFixture(a.plan),error:null,creditError:null,commandError:null,loading:false,posting:false,pendingAttempt:false,retryOfferId:null,checkedAt:null,refresh:async()=>{},start:async()=>{} }}/>); }
+function renderAccount(state: string, override?: ReturnType<typeof schoolPlanFixture>) { const a = account(state); if (override) a.plan = override; return renderToStaticMarkup(<SchoolAccountStatus billing={{ account:a,credits:schoolCreditsFixture(a.plan),error:null,creditError:null,commandError:null,loading:false,posting:false,pendingAttempt:false,retryOfferId:null,checkedAt:null,refresh:async()=>{},start:async()=>{} }}/>); }
 afterEach(() => vi.restoreAllMocks());
 
 describe('school subscription — merged B5/B3 integration boundaries', () => {
@@ -56,7 +56,7 @@ describe('school subscription — merged B5/B3 integration boundaries', () => {
     fetch.mockResolvedValue(new Response('{}',{status:403}));await expect(loadSchoolAllowance(a)).rejects.toMatchObject({kind:'DENIED'});
   });
   it('sends only the merged offer ID with exact human-command and idempotency headers', async () => {
-    const a=account(),offer=a.plan.offers[0]!, key=checkoutId(90), fetch=vi.spyOn(globalThis,'fetch').mockResolvedValue(ok(schoolCheckoutReceipt()));
+    const a=account(),offer=a.plan.offers[0]!, key=checkoutId(90), fetch=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>ok(schoolCheckoutReceipt()));
     await expect(startSchoolCheckout(a,offer,key)).resolves.toMatchObject({providerCall:'OPENED'});
     expect(fetch).toHaveBeenCalledWith(`/api/v1/schools/${schoolContext.schoolId}/hon-plan/checkout`,expect.objectContaining({method:'POST',mode:'same-origin',credentials:'same-origin',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',headers:{Accept:'application/json','Content-Type':'application/json','Idempotency-Key':key,'X-HON-Human-Command':'saas-checkout-start'},body:JSON.stringify({offerId:offer.offerId})}));
     await startSchoolCheckout(a,offer,key);expect(fetch.mock.calls[0]![1]!.body).toBe(fetch.mock.calls[1]![1]!.body);
@@ -81,6 +81,8 @@ describe('school subscription — merged B5/B3 integration boundaries', () => {
     const a=account();expect(canPurchase(a,a.plan.offers[0])).toBe(true);
     for (const state of ['disabled','empty','paid','open','created','review']) {const b=account(state);expect(canPurchase(b,b.plan.offers[0])).toBe(false);}
     const sold=schoolPlanFixture({stock:0});expect(canPurchase({...a,plan:sold},sold.offers[1])).toBe(false);expect(canPurchase(a,{...a.plan.offers[0]!,planCode:'COMPLETE'})).toBe(false);
+    const oldOpen=schoolPlanFixture({state:'open',provider:'STRIPE'});oldOpen.payments={status:'DISABLED',mode:null};
+    const html=renderAccount('open',oldOpen);expect(html).not.toContain('href="https://checkout.stripe.com');expect(html).toContain('unavailable while payments are disabled');
   });
   it('fingerprints immutable offer terms and resets confirmation on changed selection', () => {
     const a=account(),o=a.plan.offers[1]!;expect(offerFingerprint(a,o)).toBe(offerFingerprint(a,{...o,founderSlotsRemaining:1}));expect(offerFingerprint(a,o)).not.toBe(offerFingerprint(a,{...o,priceMinor:o.priceMinor+1}));expect(reviewFingerprint(a,o)).not.toBe(reviewFingerprint({...a,plan:schoolPlanFixture({state:'created'})},o));
