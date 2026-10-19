@@ -62,7 +62,7 @@ createExclusiveValidationEnv({ directory: envDirectory, filename: basename(resol
 const migrationEnvironment = { ...safeProcessEnv, ...urls, [descriptorKey]: resolvedEnvFile };
 migrate({ ...migrationEnvironment, HON_MIGRATION_STOP_AFTER: '0151_current_school_crm_intake_stages_read.sql' });
 
-// These rows deliberately predate 0152. Two records tie on timestamp so the
+// These rows deliberately predate 0159. Two records tie on timestamp so the
 // migration's `(created_at, id)` ordering—not insertion order—also has evidence.
 psql(`INSERT INTO hon.organizations(id,legal_name,display_name) VALUES
  ('00000000-0000-4000-8000-000000000101','PRIVATE_BACKFILL_ORG','PRIVATE_BACKFILL_ORG');
@@ -80,11 +80,11 @@ const canonical = (await readFile(new URL('../../../infra/postgres/010_supabase_
   .replaceAll('hon_runtime', runtime).replaceAll('FOR ROLE postgres', `FOR ROLE ${owner}`).replaceAll('DATABASE postgres', `DATABASE ${database}`);
 psql(canonical, database);
 // The canonical baseline deliberately revokes every function grant; restore
-// only 0152's fixed direct-human authority check, never IAM table access.
+// only 0159's fixed direct-human authority check, never IAM table access.
 psql(`REVOKE ALL ON FUNCTION hon.require_current_direct_human_billing_account_actor(uuid),
   hon.lock_current_direct_human_billing_accounts(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION hon.require_current_direct_human_billing_account_actor(uuid),
   hon.lock_current_direct_human_billing_accounts(uuid) FROM ${runtime};
 GRANT EXECUTE ON FUNCTION hon.require_current_direct_human_billing_account_actor(uuid),
   hon.lock_current_direct_human_billing_accounts(uuid) TO ${runtime};`, database);
-console.log('Disposable localhost flexible billing-account database created; migrations through 0152, deterministic legacy backfill, forced-RLS runtime reconciliation, and private mode-0600 credentials are ready.');
+console.log('Disposable localhost flexible billing-account database created; migrations through 0159, deterministic legacy backfill, forced-RLS runtime reconciliation, and private mode-0600 credentials are ready.');

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 const serviceUrl = new URL('../../../apps/api/src/billing/billing-account.service.ts', import.meta.url);
 const controllerUrl = new URL('../../../apps/api/src/billing/billing-account.controller.ts', import.meta.url);
 const guardUrl = new URL('../../../apps/api/src/billing/billing-account-human-ui.guard.ts', import.meta.url);
-const migrationUrl = new URL('../migrations/0158_flexible_billing_accounts.sql', import.meta.url);
+const migrationUrl = new URL('../migrations/0159_flexible_billing_accounts.sql', import.meta.url);
 
 function mustInclude(source, text, label) {
   if (!source.includes(text)) throw new Error(`Flexible billing-account direct-human source contract missing ${label}.`);

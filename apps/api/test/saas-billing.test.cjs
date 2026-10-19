@@ -59,7 +59,8 @@ test('response contracts fail closed on any financial activation, payment claim 
     view({ published:catalog({ offers:[{ offerId:U(), planCode:'CORE', offerKind:'REGULAR_ANNUAL', billingInterval:'ANNUAL', priceMinor:149000, founder:false, allowance:'FULL_MONTHLY_PLAN_ALLOWANCE' }] }) }),
     view({ published:catalog({ offers:[{ offerId:U(), planCode:'ESSENTIAL', offerKind:'REGULAR_MONTHLY', billingInterval:'MONTHLY', priceMinor:9900, founder:false, allowance:'FULL_MONTHLY_PLAN_ALLOWANCE' }] }) })])
     assert.throws(() => contracts.validateSaasCatalogView(bad));
-  for (const bad of [subscription({ paymentStatus:'PAID' }), subscription({ paidThroughAt:T }), subscription({ chargesEnabled:true }),
+  for (const bad of [subscription({ paymentStatus:'SETTLED' }), subscription({ paymentVerification:'PROVIDER_VERIFIED' }),
+    subscription({ source:'LEGACY_ENTITLEMENT', paymentStatus:'PAID' }), subscription({ billingInterval:'LIFETIME', paidThroughAt:T }), subscription({ chargesEnabled:true }),
     subscription({ premiumCredits:{ plannedMonthlyAllowance:5000, status:'GRANTED' } }), subscription({ planCode:'COMPLETE' }),
     subscription({ offerKind:'FOUNDER_MONTHLY' }), subscription({ source:'LEGACY_ENTITLEMENT' }), subscription({ status:'PENDING_ACTIVATION' }),
     { ...subscription(), balance:5000 }])

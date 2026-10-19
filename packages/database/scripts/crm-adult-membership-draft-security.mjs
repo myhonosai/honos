@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 export const crmAdultMembershipDraftFunctions = [
-  ['hon.guard_crm_adult_membership_draft_source()', false, false, '0161_crm_adult_membership_draft.sql'],
-  ['hon.require_crm_adult_membership_actor(text)', true, false, '0161_crm_adult_membership_draft.sql'],
-  ['hon.crm_adult_membership_relation(uuid)', true, false, '0161_crm_adult_membership_draft.sql'],
-  ['hon.read_crm_adult_membership_preparation(text,uuid)', true, true, '0161_crm_adult_membership_draft.sql'],
-  ['hon.read_crm_adult_membership_draft_confirmation(text,uuid)', true, true, '0162_crm_adult_membership_draft_confirmation.sql'],
-  ['hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)', true, true, '0161_crm_adult_membership_draft.sql'],
+  ['hon.guard_crm_adult_membership_draft_source()', false, false, '0162_crm_adult_membership_draft.sql'],
+  ['hon.require_crm_adult_membership_actor(text)', true, false, '0162_crm_adult_membership_draft.sql'],
+  ['hon.crm_adult_membership_relation(uuid)', true, false, '0162_crm_adult_membership_draft.sql'],
+  ['hon.read_crm_adult_membership_preparation(text,uuid)', true, true, '0162_crm_adult_membership_draft.sql'],
+  ['hon.read_crm_adult_membership_draft_confirmation(text,uuid)', true, true, '0163_crm_adult_membership_draft_confirmation.sql'],
+  ['hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)', true, true, '0162_crm_adult_membership_draft.sql'],
 ];
 export async function verifyCrmAdultMembershipDraftSecurity(admin, runtimeRole) {
   const migrations = Object.fromEntries(await Promise.all([...new Set(crmAdultMembershipDraftFunctions.map(([, , , migration]) => migration))].map(async migration => [migration, await readFile(new URL(`../migrations/${migration}`, import.meta.url), 'utf8')])));

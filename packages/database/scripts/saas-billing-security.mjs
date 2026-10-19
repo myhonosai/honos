@@ -1,5 +1,6 @@
 // HON subscription catalog (0154), invoices/payment evidence (0155), premium credits (0156) and
-// refunds/Champions reward application (0157): HON-bills-schools records,
+// refunds/Champions reward application (0157) and test-mode payment provider integration (0158):
+// HON-bills-schools records,
 // separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
 export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
@@ -8,10 +9,12 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
  'saas_credit_reservations','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_requests','saas_refund_history','saas_reward_fulfillment','saas_reward_applications','saas_account_credit_ledger',
- 'saas_free_periods','saas_referral_payment_alerts'];
+ 'saas_free_periods','saas_referral_payment_alerts',
+ 'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
- 'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods'];
+ 'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs'];
+const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
 const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
@@ -111,6 +114,29 @@ export const saasBillingFunctions = [
  ['hon.read_saas_credit_application_preview(text,uuid)',true,true],
  ['hon.apply_saas_account_credit(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.resolve_saas_referral_alert(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0158 payment provider integration (test mode only)
+ ['hon.guard_saas_payments()',false,false],
+ ['hon.saas_payment_actor()',false,false],
+ ['hon.saas_payment_program_json()',false,false],
+ ['hon.saas_checkout_json(hon.saas_checkout_sessions)',false,false],
+ ['hon.saas_subscription_payment(hon.saas_subscriptions)',false,false],
+ ['hon.require_saas_school_purchaser(text,uuid)',false,true],
+ ['hon.saas_close_checkout(uuid,text,text,uuid,timestamp with time zone)',false,false],
+ ['hon.saas_open_checkout(uuid,uuid,uuid,uuid,text,timestamp with time zone)',false,false],
+ ['hon.saas_provider_invoice(hon.saas_subscriptions,integer,integer,timestamp with time zone,text,jsonb,timestamp with time zone)',false,false],
+ ['hon.saas_link_payment_refs(text,text[],uuid,timestamp with time zone)',false,false],
+ ['hon.saas_activate_checkout(uuid,jsonb,timestamp with time zone)',false,false],
+ ['hon.saas_apply_renewal(jsonb,timestamp with time zone)',false,false],
+ ['hon.saas_apply_reversal(jsonb,timestamp with time zone)',false,false],
+ ['hon.read_saas_payments_from_hq(text)',true,true],
+ ['hon.read_saas_school_plan_options(text,uuid)',true,true],
+ ['hon.set_saas_payment_program(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.create_saas_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.create_saas_checkout_from_hq(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.attach_saas_checkout_session(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.cancel_saas_checkout(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.sweep_saas_checkouts(text,uuid,uuid,uuid)',true,true],
+ ['hon.ingest_saas_provider_event(jsonb,text)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
@@ -131,6 +157,7 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : catalogRowTables.includes(table) ? ['guard_saas_catalog_rows','saas_catalog_rows',31]
    : table === 'saas_invoice_lines' ? ['guard_saas_invoice_lines','saas_invoice_lines_rows',31]
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
+   : paymentTables.includes(table) ? ['guard_saas_payments','saas_guarded',27]
    : refundRewardTables.includes(table) ? ['guard_saas_refunds_rewards','saas_guarded',27]
    : creditTables.includes(table) ? ['guard_saas_credits','saas_guarded',27]
    : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];

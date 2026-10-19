@@ -102,7 +102,7 @@ test('CRM registration is not registered as an Action Engine or automation execu
   for (const file of ['lead-registration.service.ts', 'lead-registration.controller.ts']) {
     assert.doesNotMatch(readFileSync(`src/crm/${file}`, 'utf8'), /ActionEngineService|Ai\w*Service|Payment\w*Service|Communication\w*Service|WorkItemService|fetch\(|invokeProvider/);
   }
-  const migration = readFileSync('../../packages/database/migrations/0159_crm_lead_registration.sql', 'utf8');
+  const migration = readFileSync('../../packages/database/migrations/0160_crm_lead_registration.sql', 'utf8');
   assert.doesNotMatch(migration, /(?:INSERT INTO|UPDATE|DELETE FROM) hon\.(?:memberships|billing_accounts|invoices|payment_attempts|communication_messages|communication_consents|work_items|action_requests|action_approvals|automation_rules|class_bookings|attendance_records|ai_usage_ledger|ai_invocation_plans)/);
   assert.match(migration, /'crm\.lead\.registration_recorded'/);
   assert.match(migration, /'executionAllowed',false,'humanOnly',true/);

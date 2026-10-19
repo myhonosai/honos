@@ -1,7 +1,7 @@
 // HON Subscription Billing Milestone B2 closed contracts: HON-to-school invoices and payment evidence
-// (never school-to-family billing). Recordkeeping only: invoices are never delivered or collected,
-// and every evidence entry is an HQ attestation; providerVerified is always false until a provider
-// milestone is approved. Unverified evidence must never be presented as processor-confirmed payment.
+// (never school-to-family billing). Invoices are never delivered or collected by HON. Evidence is an HQ
+// attestation, or (B5, test mode only) PROVIDER_VERIFIED from a signature-verified provider event.
+// Unverified evidence must never be presented as processor-confirmed payment.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { saasUuid } from './saas-billing.js';
@@ -48,7 +48,7 @@ export interface SaasInvoiceSummary {
 }
 export interface SaasInvoiceLine { lineNumber: number; lineKind: SaasInvoiceLineKind; description: string; amountMinor: number; reference: string | null }
 export interface SaasPaymentEvidence {
-  evidenceId: string; invoiceId: string; kind: SaasEvidenceKind; source: 'HQ_ATTESTATION'; providerVerified: false;
+  evidenceId: string; invoiceId: string; kind: SaasEvidenceKind; source: 'HQ_ATTESTATION' | 'PROVIDER_VERIFIED'; providerVerified: boolean;
   amountMinor: number; currency: 'USD'; occurredAt: string; reference: string; relatedEvidenceId: string | null; note: string | null; recordedAt: string;
 }
 export interface SaasInvoiceDetail extends SaasInvoiceSummary { lines: SaasInvoiceLine[]; evidence: SaasPaymentEvidence[] }
@@ -67,7 +67,7 @@ export interface SaasPaymentStandingFacts {
 export interface SaasPaymentStanding {
   organizationId: string; subscriptionId: string | null; verified: SaasPaymentStandingFacts; recorded: SaasPaymentStandingFacts;
   evidence: { hqAttested: number; providerVerified: number };
-  championsPaymentSource: 'NOT_CONNECTED'; providerVerification: 'NOT_CONFIGURED';
+  championsPaymentSource: 'NOT_CONNECTED'; providerVerification: 'NOT_CONFIGURED' | 'TEST_MODE';
 }
 
 // ---------- input validators ----------
@@ -138,16 +138,18 @@ function validateSettlement(value: unknown, status: unknown, total: unknown): vo
   const s = record(value, drift);
   exactKeys(s, ['receivedMinor','refundedMinor','chargedBackMinor','netMinor','verifiedNetMinor','balanceMinor','state'], drift);
   if (!count(s.receivedMinor) || !count(s.refundedMinor) || !count(s.chargedBackMinor) || !isInt(s.netMinor, 0, Number.MAX_SAFE_INTEGER)
-    || s.verifiedNetMinor !== 0 || s.state === 'PAID_VERIFIED'
-    || !has(['NOT_ISSUED','VOID','UNPAID','PARTIALLY_PAID','PAID_ATTESTED','REVERSED'], s.state)
+    // Provider-verified (B5, test mode) evidence is a subset of what is recorded.
+    || !isInt(s.verifiedNetMinor, 0, Number.MAX_SAFE_INTEGER) || (s.verifiedNetMinor as number) > (s.netMinor as number)
+    || !has(['NOT_ISSUED','VOID','UNPAID','PARTIALLY_PAID','PAID_VERIFIED','PAID_ATTESTED','REVERSED'], s.state)
+    || (s.state === 'PAID_VERIFIED') !== (status === 'ISSUED' && (s.verifiedNetMinor as number) >= (total as number))
     || (status === 'ISSUED' ? !count(s.balanceMinor) || (s.balanceMinor as number) > (total as number) : s.balanceMinor !== null)
     || (status === 'DRAFT') !== (s.state === 'NOT_ISSUED') || (status === 'VOID') !== (s.state === 'VOID')) drift();
 }
 function validateEvidence(value: unknown): void {
   const e = record(value, drift);
   exactKeys(e, ['evidenceId','invoiceId','kind','source','providerVerified','amountMinor','currency','occurredAt','reference','relatedEvidenceId','note','recordedAt'], drift);
-  if (!isUuid(e.evidenceId) || !isUuid(e.invoiceId) || !has(['PAYMENT_RECEIVED','REFUND','CHARGEBACK'], e.kind) || e.source !== 'HQ_ATTESTATION'
-    || e.providerVerified !== false || !isInt(e.amountMinor, 1, 200_000_000) || e.currency !== 'USD' || !isTimestamp(e.occurredAt)
+  if (!isUuid(e.evidenceId) || !isUuid(e.invoiceId) || !has(['PAYMENT_RECEIVED','REFUND','CHARGEBACK'], e.kind)
+    || !has(['HQ_ATTESTATION','PROVIDER_VERIFIED'], e.source) || e.providerVerified !== (e.source === 'PROVIDER_VERIFIED') || !isInt(e.amountMinor, 1, 200_000_000) || e.currency !== 'USD' || !isTimestamp(e.occurredAt)
     || !text(e.reference, 200) || !nullable(e.relatedEvidenceId, isUuid) || (e.kind === 'PAYMENT_RECEIVED') !== (e.relatedEvidenceId === null)
     || !nullable(e.note, (v): v is string => text(v, 500)) || !isTimestamp(e.recordedAt)) drift();
 }
@@ -228,12 +230,15 @@ export function validateSaasPaymentStanding(value: unknown): SaasPaymentStanding
   const r = record(value, drift);
   exactKeys(r, ['organizationId','subscriptionId','verified','recorded','evidence','championsPaymentSource','providerVerification'], drift);
   if (!isUuid(r.organizationId) || !nullable(r.subscriptionId, isUuid) || r.championsPaymentSource !== 'NOT_CONNECTED'
-    || r.providerVerification !== 'NOT_CONFIGURED') drift();
+    || !has(['NOT_CONFIGURED','TEST_MODE'], r.providerVerification)) drift();
   validateFacts(r.verified); validateFacts(r.recorded);
-  const v = r.verified as SaasPaymentStandingFacts;
-  // Nothing can be provider-verified yet.
-  if (v.paidInvoiceCount !== 0 || v.lifetimePaid || v.paidThroughAt !== null || v.refundedInvoiceCount !== 0 || v.chargebackInvoiceCount !== 0) drift();
+  const v = r.verified as SaasPaymentStandingFacts, rec = r.recorded as SaasPaymentStandingFacts;
+  // Verified is a subset of recorded.
+  if (v.paidInvoiceCount > rec.paidInvoiceCount || (v.lifetimePaid && !rec.lifetimePaid)) drift();
   const e = record(r.evidence, drift); exactKeys(e, ['hqAttested','providerVerified'], drift);
-  if (!count(e.hqAttested) || e.providerVerified !== 0) drift();
+  if (!count(e.hqAttested) || !count(e.providerVerified) || (e.providerVerified === 0 && v.paidInvoiceCount !== 0)) drift();
+  // Without provider verification nothing can be provider-verified (B2's original rule).
+  if (r.providerVerification === 'NOT_CONFIGURED' && (e.providerVerified !== 0 || v.paidInvoiceCount !== 0 || v.lifetimePaid || v.paidThroughAt !== null
+    || v.refundedInvoiceCount !== 0 || v.chargebackInvoiceCount !== 0)) drift();
   return r as unknown as SaasPaymentStanding;
 }

@@ -1,7 +1,8 @@
 // HON Subscription Billing Milestone B1 closed contracts: HON billing schools (never school-to-family
 // billing). Recordkeeping only: no contract here carries a charge, invoice, payment, refund,
-// credit grant or balance. chargesEnabled/creditGrantsEnabled are always false, paymentStatus is
-// always NOT_BILLED and paidThroughAt is always null until a later approved milestone.
+// credit grant or balance. chargesEnabled/creditGrantsEnabled are always false (HON never initiates a
+// charge). Since B5, paymentStatus/paidThroughAt are derived from B2 invoices and evidence; whether that
+// evidence is provider-verified is reported by B2 payment standing (verified vs recorded).
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 
@@ -67,6 +68,11 @@ export const SAAS_COMMANDS = {
   applyChampionsReward: 'saas-reward-apply',
   applyAccountCredit: 'saas-account-credit-apply',
   resolveReferralAlert: 'saas-referral-alert-resolve',
+  setPaymentProgram: 'saas-payment-program',
+  startCheckout: 'saas-checkout-start',
+  cancelCheckout: 'saas-checkout-cancel',
+  sweepCheckouts: 'saas-checkout-sweep',
+  recoverPaymentEvents: 'saas-payment-recover',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
@@ -161,10 +167,12 @@ export interface SaasSubscription {
   billingInterval: 'MONTHLY' | 'LIFETIME' | 'NONE'; priceMinor: number | null; currency: 'USD'; founderReservationId: string | null;
   status: SaasSubscriptionStatus; statusReason: SaasSubscriptionReason; version: number; serviceStartedAt: string | null;
   currentPeriod: { index: number | null; startsAt: string; endsAt: string | null } | null;
-  paymentStatus: 'NOT_BILLED'; paidThroughAt: null; chargesEnabled: false;
+  paymentStatus: SaasSubscriptionPaymentStatus; paidThroughAt: string | null; chargesEnabled: false;
   premiumCredits: { plannedMonthlyAllowance: number | null; status: 'NOT_GRANTED' };
   createdAt: string; updatedAt: string;
 }
+export type SaasSubscriptionPaymentStatus = 'NOT_BILLED' | 'PAID' | 'DUE' | 'PAST_DUE' | 'REFUNDED' | 'DISPUTED';
+export const SAAS_SUBSCRIPTION_PAYMENT_STATUSES: readonly SaasSubscriptionPaymentStatus[] = ['NOT_BILLED','PAID','DUE','PAST_DUE','REFUNDED','DISPUTED'];
 export interface SaasSubscriptionList { subscriptions: SaasSubscription[]; limit: 200; chargesEnabled: false }
 export interface SaasSubscriptionHistoryEntry {
   subscriptionId: string; version: number; status: SaasSubscriptionStatus; statusReason: SaasSubscriptionReason;
@@ -323,13 +331,13 @@ function validateReservation(value: unknown): void {
     || !nullable(r.subscriptionId, isUuid) || (r.status === 'ALLOCATED' && r.subscriptionId === null)
     || !ts(r.reservedAt) || !nts(r.decidedAt) || (r.status === 'RESERVED') !== (r.decidedAt === null)) drift();
 }
-function validateSubscription(value: unknown): void {
+function validateSubscription(value: unknown, withName = true): void {
   const s = record(value, drift);
-  exactKeys(s, ['subscriptionId','organizationId','organizationName','source','catalogVersion','offerId','planCode','entitlementTier','offerKind',
+  exactKeys(s, ['subscriptionId','organizationId',...(withName ? ['organizationName'] : []),'source','catalogVersion','offerId','planCode','entitlementTier','offerKind',
     'billingInterval','priceMinor','currency','founderReservationId','status','statusReason','version','serviceStartedAt','currentPeriod',
     'paymentStatus','paidThroughAt','chargesEnabled','premiumCredits','createdAt','updatedAt'], drift);
   const catalog = s.source === 'CATALOG_OFFER';
-  if (!isUuid(s.subscriptionId) || !isUuid(s.organizationId) || !text(s.organizationName, 300) || !has(['CATALOG_OFFER','LEGACY_ENTITLEMENT'], s.source)
+  if (!isUuid(s.subscriptionId) || !isUuid(s.organizationId) || (withName && !text(s.organizationName, 300)) || !has(['CATALOG_OFFER','LEGACY_ENTITLEMENT'], s.source)
     || !has(PLAN_CODES, s.planCode) || s.entitlementTier !== s.planCode || s.currency !== 'USD'
     || (catalog ? !isInt(s.catalogVersion, 1, 2147483647) || !isUuid(s.offerId) || !has(OFFER_KINDS, s.offerKind) || !isInt(s.priceMinor, 100, 10_000_000)
         || s.billingInterval !== (s.offerKind === 'FOUNDER_LIFETIME' ? 'LIFETIME' : 'MONTHLY') || s.planCode === 'ESSENTIAL'
@@ -338,7 +346,9 @@ function validateSubscription(value: unknown): void {
     || !nullable(s.founderReservationId, isUuid)
     || !has(SAAS_SUBSCRIPTION_STATUSES, s.status) || !has(SUBSCRIPTION_REASONS, s.statusReason) || !isInt(s.version, 1, 2147483647)
     || !nts(s.serviceStartedAt) || (s.serviceStartedAt !== null) !== (s.status === 'IN_SERVICE' || s.status === 'SUSPENDED')
-    || s.paymentStatus !== 'NOT_BILLED' || s.paidThroughAt !== null || s.chargesEnabled !== false || !ts(s.createdAt) || !ts(s.updatedAt)) drift();
+    || !has(SAAS_SUBSCRIPTION_PAYMENT_STATUSES, s.paymentStatus) || !nts(s.paidThroughAt) || (s.billingInterval !== 'MONTHLY' && s.paidThroughAt !== null)
+    || (!catalog && s.paymentStatus !== 'NOT_BILLED')
+    || s.chargesEnabled !== false || !ts(s.createdAt) || !ts(s.updatedAt)) drift();
   if (s.currentPeriod === null) {
     if (s.serviceStartedAt !== null && s.billingInterval !== 'NONE') drift();
   } else {
@@ -394,7 +404,7 @@ export function validateSaasFounderReservationReceipt(value: unknown): SaasFound
 export function validateSaasSubscriptionList(value: unknown): SaasSubscriptionList {
   const r = record(value, drift); exactKeys(r, ['subscriptions','limit','chargesEnabled'], drift);
   if (!Array.isArray(r.subscriptions) || r.subscriptions.length > 200 || r.limit !== 200 || r.chargesEnabled !== false) drift();
-  (r.subscriptions as unknown[]).forEach(validateSubscription);
+  (r.subscriptions as unknown[]).forEach(v => validateSubscription(v));
   return r as unknown as SaasSubscriptionList;
 }
 export function validateSaasOrganizationSubscription(value: unknown): SaasOrganizationSubscription {
@@ -429,3 +439,5 @@ export function validateSaasSubscriptionCommandReceipt(value: unknown): SaasSubs
   if (!has(['START_SERVICE','SUSPEND','RESUME','ADVANCE_PERIOD','VOID'], r.action) || typeof r.replayed !== 'boolean') drift();
   return r as unknown as SaasSubscriptionCommandReceipt;
 }
+/** The school's own view of its HON subscription (B5 plan options): the same record without the organization name. */
+export function validateSaasSubscriptionForSchool(value: unknown): void { validateSubscription(value, false); }

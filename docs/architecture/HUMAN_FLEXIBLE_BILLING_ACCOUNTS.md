@@ -16,7 +16,7 @@ The page uses the existing server-authoritative current reporting-school resolve
 ## Policy implemented
 
 1. `billing_accounts.account_classification` is additive: `CANONICAL` or `ADDITIONAL`.
-2. Migration `0158_flexible_billing_accounts.sql` deterministically classifies existing rows by `(created_at, id)` within `(organization, school, responsible_person)`: earliest is canonical, all later rows are additional. It never deletes, merges, reassigns, or changes currency.
+2. Migration `0159_flexible_billing_accounts.sql` deterministically classifies existing rows by `(created_at, id)` within `(organization, school, responsible_person)`: earliest is canonical, all later rows are additional. It never deletes, merges, reassigns, or changes currency.
 3. A partial unique index allows **at most one** `CANONICAL` account per organization, school, and responsible person. Existing forced RLS is reasserted; no payment schema, grant, or policy widening is added.
 4. A normal command (`createAdditional` omitted/false) reuses the canonical account only if currency matches. The response is persisted with `reused: true`, classification, and the account summary; the initial reuse returns HTTP 200. A normal command with a canonical currency mismatch returns `CANONICAL_ACCOUNT_CURRENCY_CONFLICT`; it never mutates currency.
 5. With no canonical account, a normal command creates the canonical account. An explicit additional command requires a current canonical account and `additionalReason` of 1–500 non-control, untrimmed characters; it creates a distinct `ADDITIONAL` account. It cannot implicitly create a canonical account first.

@@ -13,7 +13,7 @@ END $$;
 
 -- This is an explicit current-state confirmation, not idempotency replay and not
 -- a directory. It follows only the immutable adult conversion-to-membership
--- source link recorded by 0161 and returns nothing if that exact DRAFT drifted.
+-- source link recorded by 0162 and returns nothing if that exact DRAFT drifted.
 CREATE FUNCTION hon.read_crm_adult_membership_draft_confirmation(subject text,selected_student uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE

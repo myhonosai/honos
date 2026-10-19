@@ -52,7 +52,7 @@ test('response contracts fail closed on delivery, collection, provider verificat
     detail({ evidence:[evidence({ providerVerified:true })] }), detail({ invoiceNumber:'INV-1' }), { ...detail(), paymentUrl:'https://pay.example' }])
     assert.throws(() => contracts.validateSaasInvoiceDetail(bad));
   for (const bad of [standing({ verified:facts({ firstPaidAt:T, paidInvoiceCount:1 }) }), standing({ verified:facts({ lifetimePaid:true }) }),
-    standing({ evidence:{ hqAttested:1, providerVerified:1 } }), standing({ championsPaymentSource:'HON_BILLING' }), standing({ providerVerification:'STRIPE' }),
+    standing({ verified:facts({ firstPaidAt:T, paidInvoiceCount:1 }) }), standing({ verified:facts({ firstPaidAt:T, paidInvoiceCount:2 }), evidence:{ hqAttested:1, providerVerified:2 } }), standing({ championsPaymentSource:'HON_BILLING' }), standing({ providerVerification:'STRIPE' }),
     standing({ recorded:facts({ paidInvoiceCount:1 }) })])
     assert.throws(() => contracts.validateSaasPaymentStanding(bad));
 });
