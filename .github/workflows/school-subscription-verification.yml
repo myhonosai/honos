@@ -10,6 +10,7 @@ on:
       - 'apps/web/src/app/staff/subscription/**'
       - 'apps/web/src/app/schools/**/hon-plan/**'
       - 'apps/web/scripts/school-subscription-browser.mjs'
+      - 'apps/web/scripts/localization-browser.mjs'
       - 'apps/web/scripts/fixtures/school-checkout.*'
       - 'apps/web/test/school-subscription.test.tsx'
       - 'apps/web/test/localization.test.tsx'

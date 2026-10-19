@@ -8,7 +8,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
-import { SAAS_COMMANDS } from '@hon/contracts';
+import { verifyLocalization } from './localization-browser.mjs';
+import { SAAS_COMMANDS, HQ_OVERVIEW_UNAVAILABLE_REASONS } from '@hon/contracts';
 import { checkoutId, schoolContext, schoolPlanFixture, schoolCreditsFixture, schoolCheckoutReceipt } from './fixtures/school-checkout.mjs';
 
 assert(process.env.GITHUB_ACTIONS === 'true' || process.env.HON_SUBSCRIPTION_LOCAL === '1');
@@ -27,6 +28,10 @@ function send(response,status,data,delay=0){const body=JSON.stringify(data);cons
 const api=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://127.0.0.1:3001');report.apiRequests.push({method:req.method,path:url.pathname});
   let actor;try{actor=verifySession(cookieValue(req.headers.cookie,HON_SESSION_COOKIE)??'',session).externalSubject;}catch{send(res,401,{private:'never-echo-private'});return;}
+  if(actor==='hq-localization-synthetic'){
+    if(req.method==='GET'&&url.pathname==='/v1/hq/overview'&&!url.search){send(res,200,{data:{asOf:'2026-10-18T18:00:00.000Z',callerHqRole:'OWNER',organizationCount:2,schoolCount:3,onboarding:{availability:'AVAILABLE',requestCount:4,inProgressRequestCount:1,completedRequestCount:3},configuredProviderStates:{disabled:1,configured:2,healthy:0,degraded:0,unavailable:1},taskProfileCount:5,financialMetrics:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics},aiUsage:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage},durableHqWork:{availability:'UNAVAILABLE',state:'NO_RECORDED_WORK',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork}}});return;}
+    send(res,403,{});return;
+  }
   if(!['school-owner-synthetic','staff-without-purchase-synthetic'].includes(actor)){send(res,403,{private:'never-echo-private'});return;}
   if(url.search){send(res,400,{});return;}
   if(req.method==='GET'&&url.pathname==='/v1/staff/current-reporting-school'){
@@ -73,7 +78,7 @@ async function ready(page){await page.getByRole('heading',{name:'Your HON subscr
 async function review(page,retry=false){await page.getByRole('button',{name:'Review selection'}).click();await page.getByRole('checkbox').check();return page.getByRole('button',{name:retry?'Retry same test checkout':'Start secure test checkout',exact:true});}
 async function overflow(p){assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.body.scrollWidth<=innerWidth+1),'No horizontal overflow');}
 async function scan(p,label){await p.addScriptTag({content:axe});const a=await p.evaluate(async()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa']}}));report.accessibility.push({label,violations:a.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),incompleteCount:a.incomplete.length});assert.equal(a.violations.length,0,`${label}: ${a.violations.map(v=>v.id).join(',')}`);}
-async function capture(p,name,fullPage=true){await p.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);let label=document.getElementById('fixture-label');if(!label){label=document.createElement('div');label.id='fixture-label';label.textContent='SYNTHETIC AUTHORIZED FIXTURE · TEST MODE · NO REAL STRIPE VERIFICATION';label.style.cssText='position:relative;z-index:100;padding:7px;background:#19374b;color:#d4faff;font:10px system-ui;text-align:center';document.body.prepend(label);}});await p.screenshot({path:join(results,`${name}.png`),fullPage,animations:'disabled'});const jpg=await p.screenshot({type:'jpeg',quality:76,fullPage,animations:'disabled'});await writeFile(join(results,`${name}.jpg`),jpg);report.screenshots.push(`${name}.png`);const b=jpg.toString('base64'),n=Math.ceil(b.length/8000);for(let i=0;i<n;i++)console.log(`SCHOOL_REVIEW_IMAGE ${name} ${i+1}/${n} ${b.slice(i*8000,(i+1)*8000)}`);}
+async function capture(p,name,fullPage=true){await p.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);let label=document.getElementById('fixture-label');if(!label){label=document.createElement('div');label.id='fixture-label';label.textContent='SYNTHETIC AUTHORIZED FIXTURE · TEST MODE · NO REAL STRIPE VERIFICATION';label.style.cssText='position:relative;z-index:100;padding:7px;background:#19374b;color:#d4faff;font:10px system-ui;text-align:center';document.body.prepend(label);}});await p.screenshot({path:join(results,`${name}.png`),fullPage,animations:'disabled'});const jpg=await p.screenshot({type:'jpeg',quality:76,fullPage,animations:'disabled'});await writeFile(join(results,`${name}.jpg`),jpg);report.screenshots.push(`${name}.png`);if(!/^(en|ko|es)-/.test(name))return;const b=jpg.toString('base64'),n=Math.ceil(b.length/8000);for(let i=0;i<n;i++)console.log(`SCHOOL_REVIEW_IMAGE ${name} ${i+1}/${n} ${b.slice(i*8000,(i+1)*8000)}`);}
 try{
   const probeCookie=`${HON_SESSION_COOKIE}=${issueSession({externalSubject:'school-owner-synthetic'},session)}`;let started=false;
   for(let i=0;i<60;i++){try{if((await fetch(`${origin}/staff/subscription`,{redirect:'manual',headers:{Cookie:probeCookie}})).status===200){started=true;break;}}catch{}await delay(500);}assert(started,'Actual Next server did not start');
@@ -139,7 +144,8 @@ try{
   }
   await scenario('Cross-plan credit response without allowance is rejected',{state:'paid'},async ctx=>{creditMode='plan-drift';const p=await open(ctx);await ready(p);await p.getByRole('status',{name:'AI allowance readiness'}).getByText('AI allowance status unavailable',{exact:true}).waitFor();assert.equal(await p.getByText('4,000',{exact:true}).count(),0);assert.equal(commands.length,0);});
   await scenario('Reported tier and purchased plan stay distinct on mismatch',{state:'paid'},async ctx=>{readMode='tier-mismatch';const p=await open(ctx);await ready(p);await p.getByText(/reported tier and subscription plan differ/).waitFor();assert.equal(await p.getByRole('button',{name:'Review selection'}).isEnabled(),false);assert.equal(commands.length,0);});
-  await check('No unexpected API path, direct HQ/database/provider request or JavaScript error',async()=>{assert.deepEqual(report.unexpectedRequests,[]);assert.deepEqual(report.pageErrors,[]);assert(!report.apiRequests.some(r=>/hq|webhook|entitlement|refund/.test(r.path)));});
+  await verifyLocalization({check,context,open,ready,scan,capture,overflow,reset,setFixture:options=>Object.assign(fixture,options),setReadMode:mode=>{readMode=mode},report,origin,session,commandCount:()=>commands.length});
+  await check('No unexpected API path, direct HQ/database/provider request or JavaScript error',async()=>{assert.deepEqual(report.unexpectedRequests,[]);assert.deepEqual(report.pageErrors,[]);assert(!report.apiRequests.some(r=>/webhook|entitlement|refund/.test(r.path)||r.path.includes('/hq/')&&r.path!=='/v1/hq/overview'));});
 }catch(e){report.failures.push({name:'harness',message:String(e.message).slice(0,1600)});}
 finally{if(browser)await browser.close();app.kill('SIGTERM');await Promise.race([new Promise(done=>app.once('exit',done)),delay(2000)]);if(app.exitCode===null)app.kill('SIGKILL');await new Promise(done=>api.close(done));report.externalHostsBlocked=[...new Set(report.externalHostsBlocked)];await writeFile(join(results,'report.json'),JSON.stringify(report,null,2));console.log(`SCHOOL_BROWSER_REPORT ${JSON.stringify(report)}`);}
 if(report.failures.length)process.exitCode=1;

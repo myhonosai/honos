@@ -10,6 +10,7 @@ import { SchoolAccountStatus } from '../src/components/school-subscription/accou
 import { schoolContext,schoolPlanFixture,schoolCreditsFixture } from '../scripts/fixtures/school-checkout.mjs';
 const p=(language:Language):LocalePreferences=>({...DEFAULT_LOCALE,language});
 const render=(language:Language,ui:React.ReactNode)=>renderToStaticMarkup(<LocaleProvider scope={'a'.repeat(64)} initial={p(language)}>{ui}</LocaleProvider>);
+const markupText=(s:string)=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll("'",'&#x27;');
 const parameters=(s:string)=>[...s.matchAll(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g)].map(m=>m[1]).sort();
 
 describe('shared HON localization and independent presentation preferences',()=>{
@@ -63,10 +64,10 @@ describe('shared HON localization and independent presentation preferences',()=>
   expect(()=>formatLocaleCalendarDate(p('en'),'2026-02-30')).toThrow();
  });
  it('renders actual translated settings and native language names with local-only disclosures',()=>{
-  for(const language of ['en','ko','es'] as const){const html=render(language,<LanguageRegionSettings/>);expect(html).toContain(translate(language,'Language & Region'));expect(html).toContain('한국어');expect(html).toContain('Español');expect(html).toContain(translate(language,'School default language'));expect(html).toContain(translate(language,'Unavailable until shared authenticated preference storage is implemented.'));expect(html).toContain('settings-timezone');expect(html).toContain('settings-currency');}
+  for(const language of ['en','ko','es'] as const){const html=render(language,<LanguageRegionSettings/>);expect(html).toContain(markupText(translate(language,'Language & Region')));expect(html).toContain('한국어');expect(html).toContain('Español');expect(html).toContain(translate(language,'School default language'));expect(html).toContain(translate(language,'Unavailable until shared authenticated preference storage is implemented.'));expect(html).toContain('settings-timezone');expect(html).toContain('settings-currency');}
  });
  it('translates subscription comparison, review labels and feature catalog without changing prices or plan identity',()=>{
-  for(const language of ['en','ko','es'] as const){const html=render(language,<SchoolSubscription/>);expect(html).toContain(translate(language,'More time to teach.'));expect(html).toContain(translate(language,'Offer type'));expect(html).toContain(translate(language,'Regular monthly'));expect(html).toContain(translate(language,'Conventional CRM & school operations'));expect(html).toContain('HON Core');expect(html).toContain('HON Complete');expect(html).toContain(formatLocaleMoney(p(language),14900,'USD'));}
+  for(const language of ['en','ko','es'] as const){const html=render(language,<SchoolSubscription/>);expect(html).toContain(translate(language,'More time to teach.'));expect(html).toContain(translate(language,'Offer type'));expect(html).toContain(translate(language,'Regular monthly'));expect(html).toContain(markupText(translate(language,'Conventional CRM & school operations')));expect(html).toContain('HON Core');expect(html).toContain('HON Complete');expect(html).toContain(formatLocaleMoney(p(language),14900,'USD'));}
  });
  it('translates verified/suspended payment and allowance states while preserving canonical records',()=>{
   for(const language of ['en','ko','es'] as const){const plan=schoolPlanFixture({state:'paid',service:'SUSPENDED'});const credits=schoolCreditsFixture(plan);const html=render(language,<SchoolAccountStatus billing={{account:{context:schoolContext,plan},credits,error:null,creditError:null,commandError:null,loading:false,posting:false,pendingAttempt:false,retryOfferId:null,checkedAt:null,refresh:async()=>{},start:async()=>{}}}/>);
