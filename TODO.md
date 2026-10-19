@@ -1,5 +1,12 @@
 # HON Delivery Backlog
 
+## Codex school subscription — plan-selection foundation (2026-10-19)
+
+- [x] Inspect canonical main `ce93685`, merged B1/public catalog and active #26/#27/#3 ownership. Create isolated `codex/school-subscription-foundation`; coordinate only one appended route registry entry and new TODO section.
+- [ ] Deliver interactive Core/Complete comparison, regular/founder monthly/lifetime selection and local review/confirmation using merged display metadata, with no simulated current-school facts or checkout.
+- [ ] Verify actual desktop/mobile application, keyboard/accessibility, no billing/API/provider side effects, full CI and durable screenshots; open separate review PR.
+- [ ] After owner-approved B5 #26 merges, independently verify school-purchaser identity/permission, merged contracts and real test-mode provider configuration before integrating checkout. Current subscription, founder availability, eligibility, invoices and credit balance remain unavailable in this foundation. No merge/deployment/financial activation.
+
 ## Codex HQ — invoice detail and payment history (2026-10-19)
 
 - [x] Synchronize owner-approved #22 with merged B4, preserving backend blobs/modes; merge as `890daf2a39116894d987457edc75ced0d17279ac` after CI 39184141728 (613 web / 412 API / 188 domain / 91 auth, check/build, 156 migrations, 14 database proofs / 234 forced-RLS tables) and browser 39184141725 (81 checks / 51 captures / 32 axe scans, zero failures/JS errors/reported violations). No deployment or activation.
