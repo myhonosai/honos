@@ -63,8 +63,8 @@ describe('shared HON localization and independent presentation preferences',()=>
   expect(formatLocaleCalendarDate({...p('en'),timeZone:'Asia/Seoul'},'2026-10-18')).toBe(formatLocaleCalendarDate({...p('en'),timeZone:'America/Los_Angeles'},'2026-10-18'));
   expect(()=>formatLocaleCalendarDate(p('en'),'2026-02-30')).toThrow();
  });
- it('renders actual translated settings and native language names with local-only disclosures',()=>{
-  for(const language of ['en','ko','es'] as const){const html=render(language,<LanguageRegionSettings/>);expect(html).toContain(markupText(translate(language,'Language & Region')));expect(html).toContain('한국어');expect(html).toContain('Español');expect(html).toContain(translate(language,'School default language'));expect(html).toContain(translate(language,'Unavailable until shared authenticated preference storage is implemented.'));expect(html).toContain('settings-timezone');expect(html).toContain('settings-currency');}
+ it('renders translated settings with truthful separate language and formatting storage',()=>{
+  for(const language of ['en','ko','es'] as const){const html=render(language,<LanguageRegionSettings/>);expect(html).toContain(markupText(translate(language,'Language & Region')));expect(html).toContain('한국어');expect(html).toContain('Español');expect(html).toContain(translate(language,'School default language'));expect(html).toContain(translate(language,'Language synchronizes after a confirmed server save. Region, currency formatting and timezone remain browser-only.'));expect(html).toContain('settings-timezone');expect(html).toContain('settings-currency');}
  });
  it('translates subscription comparison, review labels and feature catalog without changing prices or plan identity',()=>{
   for(const language of ['en','ko','es'] as const){const html=render(language,<SchoolSubscription/>);expect(html).toContain(translate(language,'More time to teach.'));expect(html).toContain(translate(language,'Offer type'));expect(html).toContain(translate(language,'Regular monthly'));expect(html).toContain(markupText(translate(language,'Conventional CRM & school operations')));expect(html).toContain(markupText(translate(language,'Scheduling, memberships & curriculum')));expect(html).toContain('HON Core');expect(html).toContain('HON Complete');expect(html).toContain(formatLocaleMoney(p(language),14900,'USD'));}
@@ -75,6 +75,6 @@ describe('shared HON localization and independent presentation preferences',()=>
   }
  });
  it('has no translation provider, business command or preference-as-permission path',()=>{
-  const source=readFileSync('src/components/localization/provider.tsx','utf8');expect(source).not.toMatch(/fetch\(|localStorage|schoolId|principalId|entitlement|invokeLLM|Stripe|Idempotency/);expect(source).toContain('document.cookie');expect(source).toContain("'failed'");
+  const source=readFileSync('src/components/localization/provider.tsx','utf8');expect(source).not.toMatch(/localStorage|principalId|entitlement|invokeLLM|Stripe/);expect(source).toContain('document.cookie');expect(source).toContain("'failed'");
  });
 });

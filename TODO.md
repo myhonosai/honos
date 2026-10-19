@@ -63,6 +63,11 @@
 
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
 
+## Claude — interface language persistence (2026-10-19)
+
+- [x] Migration `0171`: personal language preference (en/ko/es) bound to the verified user; school default with `settings.language.manage` at the exact school, audited; precedence personal > named school default > English; idempotent, version-checked updates. [Contract and Codex integration](docs/architecture/HON_LANGUAGE_PREFERENCES.md).
+- [ ] Codex: connect `GET/POST /v1/me/language-preference` and `GET/POST /v1/schools/:schoolId/language-default` (contracts in `@hon/contracts` `language-preferences`).
+
 ## Claude — B5.1 school billing reads and inactive B6 foundation (2026-10-19)
 
 - [x] Migration `0170`: `billing.hon.view` (exact school, never HQ permissions); school reads of organization-level invoices (stable keyset pagination), invoice detail (lines, settlement, provider-verified vs HQ-recorded evidence, refunds), and account readiness (entitlement, activation never from payment, payment standing, B3 allowance). [Design](docs/architecture/HON_SCHOOL_BILLING_READS_B5_1.md).
@@ -771,8 +776,9 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - [x] Implemented/tested against latest main `c08091a` (#30 preserved): [CI 39208364938](https://github.com/myhonosai/honos/actions/runs/39208364938) tests/typecheck/build, 157 migrations and all 15 database security proofs / 238 forced-RLS tables pass; [browser 39208364925](https://github.com/myhonosai/honos/actions/runs/39208364925) 66 checks, 14 captures, 22 axe scans, zero failures/reported violations/JS errors/unexpected API paths. [Actual desktop/mobile screenshots](docs/visuals/codex/school-account-readiness/README.md) and [handoff/remaining B5.1/B6 dependencies](docs/CODEX_SCHOOL_ACCOUNT_READINESS.md). Deterministic fixtures only, real Stripe sandbox unverified. Final exact-head checks tracked #32/#4. No merge/deployment of this follow-up authorized.
 
 
-## Codex — Language & Region implementation (in progress)
+## Codex — Language & Region implementation (PR #34; verification in progress)
 
-- Owner-approved #32 merged as `67bc6a8da6184164ae57e6d092aba6cb6dd8dbf1`; isolated `codex/language-region-implementation`.
-- Build shared en/ko/es catalogs/formatters, authenticated Language & Region settings, immediate account-separated browser-only language persistence, full school subscription UI translation, then shared/HQ navigation. No cross-device save or school-default initialization until reviewed backend contracts exist; existing theme/portrait preferences, all modes and billing/entitlement/security behavior preserved.
-- Coordinate shared layout/design-system and future persistent preference boundaries on #33/#27/#17; no backend, migration or active CRM/Classic files. Verify catalog parity/fallback/interpolation/formatting, account isolation, language/appearance independence and actual desktop/mobile Korean/Spanish layouts, plus CI/security/browser checks.
+- Approved #32 merged as `67bc6a8da6184164ae57e6d092aba6cb6dd8dbf1`; isolated `codex/language-region-implementation` preserves its work.
+- Shared 534-key en/ko/es catalogs/formatters; Settings and school subscription translation, common/HQ navigation and all modes. Original art, appearance/portrait state and billing/entitlement behavior preserved; other CRM/Classic/family and dedicated HQ modules remain English or partial.
+- Main now includes Claude #36 language persistence and docs-only #37 B6 proposal (`d168224`), preserved unchanged. Connect exact self-language and independently authorized current-school default GET/POSTs, canonical effective precedence, expected versions/idempotency, truthful conflict/unknown/denied states and server-after-save reads. Formatting remains account-separated browser-only; no shared theme/database repurposing.
+- [Handoff/coverage](docs/CODEX_LANGUAGE_REGION_IMPLEMENTATION.md), dependency/coordination [#35](https://github.com/myhonosai/honos/issues/35). Final post-integration CI, database proof, browser and screenshot evidence pending. No merge/deployment/provider activation or financial/entitlement change.

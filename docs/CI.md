@@ -18,7 +18,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `class-sessions-read` | `test-security-boundaries.mjs` | Restricted runtime privileges, permission revocation, parent-family resolution, transaction-bound RLS isolation, composite tenant references |
 | `class-sessions-read` | `test-outbox-leases.mjs` | Expired/late outbox leases become UNKNOWN/DEAD_LETTER, never PUBLISHED or auto-retried |
 | `class-sessions-read` | `test-class-sessions-read-integrity.mjs` | Current-school Class Sessions read boundary |
-| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on **all 240** tracked operational tables, append-only audit/outbox, AI ledger tenant isolation |
+| `crm-lead-close` | `verify-rls.mjs` | Forced RLS on **all 244** tracked operational tables, append-only audit/outbox, AI ledger tenant isolation |
 | `crm-lead-close` | `test-crm-lead-close-integrity.mjs` | CRM close authority, denial matrix, atomicity, replay |
 | `champions-club` | `test-champions-club-integrity.mjs` | Champions Club authority, attribution fraud rules, qualification gates, transitions, immutable evidence, API service on real output |
 | `champions-club` | `test-champions-club-rewards-integrity.mjs` | Champions Club reward accounting: ladder accrual, reversal review, owner approvals, liabilities, no billing or entitlement effect |
@@ -29,6 +29,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `champions-club` | `test-saas-invoicing-integrity.mjs` | HON invoices and payment evidence (B2): gapless numbering under concurrency, owner-verified tax before issue, HQ attestation never provider-verified, refunds and chargebacks reduce standing, no collection or reward effect |
 | `champions-club` | `test-saas-payments-integrity.mjs` | HON payments (B5, **test mode, simulated Stripe**): HQ-registered school to hosted checkout, signature-verified idempotent webhooks (tampered/unsigned/live/conflicting refused), subscription + invoice + PROVIDER_VERIFIED evidence in one transaction, founder contention, expiry/cancel/async failure/late payment, unknown-outcome retry, renewals and PAST_DUE, provider refunds/disputes, missed-webhook recovery |
 | `champions-club` | `test-saas-school-billing-integrity.mjs` | HON school billing reads (B5.1): `billing.hon.view` at the exact school only (HQ, support, other organizations, staff without the permission, family-named roles and revoked grants refused); organization-level billing across a two-school organization; complete keyset pagination stable under a concurrent invoice and a shared issue millisecond; drafts, HQ notes and internal references hidden; provider-verified versus HQ-recorded payments; refunds and chargebacks; entitlement, activation and B3 allowance from canonical records; HQ dry run of the PROPOSED paid-access terms with enforcement NONE; the access program cannot be activated; reads write nothing |
+| `champions-club` | `test-language-preferences-integrity.mjs` | Interface language persistence: personal preference bound to the verified user (no browser-supplied id) and portable across schools; school default only with `settings.language.manage` at the exact school, audited and never overwriting personal preferences; precedence personal > named school default > English; idempotent, version-checked, race-safe updates; append-only evidence; tenant/action context refused |
 | `champions-club` | `test-saas-refunds-rewards-integrity.mjs` | HON refunds and Champions rewards (B4): first-purchase 30-day eligibility (regular, founder, lifetime), approve/deny/evidence, refund reserve, duplicate refusal under contention, ladder application once per entry, credit capped and restored on void, free months never invoiced with full allowance, alerts block fulfillment without reversal |
 | `champions-club` | `test-saas-credits-integrity.mjs` | HON premium credits (B3): owner-gated activation, verified-cost-linked pricing, one allowance per period, idempotent reserve, finalize/release/unknown/resolve, exact balance under 8-way contention, thresholds and hard stop, plan capabilities, suspension, expiry without rollover |
 
@@ -67,7 +68,7 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 
 ## Known limitations
 
-- **16 of 81** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
+- **17 of 82** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.

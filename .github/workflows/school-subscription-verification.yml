@@ -14,6 +14,7 @@ on:
       - 'apps/web/scripts/fixtures/school-checkout.*'
       - 'apps/web/test/school-subscription.test.tsx'
       - 'apps/web/test/localization.test.tsx'
+      - 'apps/web/test/language-preference-http.test.ts'
       - 'apps/web/src/components/localization/**'
       - 'apps/web/src/server/locale-context.ts'
       - 'apps/web/src/app/settings/**'
@@ -51,7 +52,7 @@ jobs:
       - name: Install unchanged lockfile and build actual application
         run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Focused frontend and session-boundary tests
-        run: pnpm --filter @hon/web exec vitest run test/school-subscription.test.tsx test/staff-route-auth-layout.test.ts test/public-plan-catalog.test.ts test/localization.test.tsx
+        run: pnpm --filter @hon/web exec vitest run test/school-subscription.test.tsx test/staff-route-auth-layout.test.ts test/public-plan-catalog.test.ts test/localization.test.tsx test/language-preference-http.test.ts
       - name: Prepare pinned browser tools outside the repository
         run: |
           set -euo pipefail

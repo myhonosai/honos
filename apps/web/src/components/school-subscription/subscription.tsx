@@ -19,9 +19,11 @@ const GUIDANCE = [
 ] as const;
 
 export function SchoolSubscription({ returnedFromCheckout = false }: { returnedFromCheckout?: boolean }): React.ReactElement {
-  const { t,text,number,money,date,formattingLocale } = useLocale();
+  const { t,text,number,money,date,formattingLocale,setSchoolContext } = useLocale();
   useEffect(()=>{document.title=t(returnedFromCheckout?'Checkout status.':'School subscription')+' | HON OS';},[t,returnedFromCheckout]);
   const billing = useSchoolCheckout();
+  const currentSchool=billing.account?.context.schoolId;
+  useEffect(()=>{if(currentSchool)setSchoolContext(currentSchool);return()=>{if(currentSchool)setSchoolContext(null);};},[currentSchool,setSchoolContext]);
   const [selection, dispatch] = useReducer(selectPlan, INITIAL_SELECTION);
   const [reviewed, setReviewed] = useState<string | null>(null);
   const initialized = useRef(false);

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
 import { verifyLocalization } from './localization-browser.mjs';
-import { SAAS_COMMANDS, HQ_OVERVIEW_UNAVAILABLE_REASONS } from '@hon/contracts';
+import { SAAS_COMMANDS, HQ_OVERVIEW_UNAVAILABLE_REASONS, LANGUAGE_COMMANDS, validateLanguageUpdateInput } from '@hon/contracts';
 import { checkoutId, schoolContext, schoolPlanFixture, schoolCreditsFixture, schoolCheckoutReceipt } from './fixtures/school-checkout.mjs';
 
 assert(process.env.GITHUB_ACTIONS === 'true' || process.env.HON_SUBSCRIPTION_LOCAL === '1');
@@ -20,14 +20,37 @@ const {chromium}=requireTools('playwright-core'),axe=await readFile(requireTools
 const probe=createServer();await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));const origin=`http://127.0.0.1:${port}`;
 const session={mode:'OIDC',audience:'hon-school-checkout-local',secret:randomBytes(32).toString('hex')};
 const report={sourceSha:process.env.HON_SUBSCRIPTION_SOURCE_SHA??'local',syntheticFixturesOnly:true,realStripeSandboxVerified:false,productionDataUsed:false,checks:[],failures:[],screenshots:[],accessibility:[],apiRequests:[],commandCount:0,externalHostsBlocked:[],pageErrors:[],unexpectedRequests:[]};
+let languageMode='ready';const languagePreferences=new Map(),languageKeys=new Map();let schoolLanguage={schoolId:schoolContext.schoolId,organizationId:schoolContext.organizationId,defaultLanguage:'en',source:'SYSTEM_DEFAULT',version:0,updatedAt:null};
 let fixture,readMode,contextMode,commandMode,creditMode,creditDelay,keys,commands;
-function reset(options={}){fixture={tier:'CORE',state:'ready',provider:'STRIPE_SIMULATED',kind:'REGULAR_MONTHLY',stock:4,...options};readMode='ready';contextMode='ready';commandMode='ready';creditMode='ready';creditDelay=0;keys=[];commands=[];}
+function reset(options={}){languageMode='ready';languagePreferences.clear();languageKeys.clear();schoolLanguage={schoolId:schoolContext.schoolId,organizationId:schoolContext.organizationId,defaultLanguage:'en',source:'SYSTEM_DEFAULT',version:0,updatedAt:null};fixture={tier:'CORE',state:'ready',provider:'STRIPE_SIMULATED',kind:'REGULAR_MONTHLY',stock:4,...options};readMode='ready';contextMode='ready';commandMode='ready';creditMode='ready';creditDelay=0;keys=[];commands=[];}
 reset();
 const planPath=`/v1/schools/${schoolContext.schoolId}/hon-plan`,creditPath=`/v1/schools/${schoolContext.schoolId}/ai-credits`;
 function send(response,status,data,delay=0){const body=JSON.stringify(data);const finish=()=>{if(!response.destroyed){response.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store'});response.end(body);}};if(delay)setTimeout(finish,delay);else finish();}
 const api=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://127.0.0.1:3001');report.apiRequests.push({method:req.method,path:url.pathname});
   let actor;try{actor=verifySession(cookieValue(req.headers.cookie,HON_SESSION_COOKIE)??'',session).externalSubject;}catch{send(res,401,{private:'never-echo-private'});return;}
+  const mine=url.pathname==='/v1/me/language-preference',schoolLanguagePath=url.pathname===`/v1/schools/${schoolContext.schoolId}/language-default`;
+  if(mine||schoolLanguagePath){
+    if(!['school-owner-synthetic','staff-without-purchase-synthetic','second-preference-user-synthetic','hq-localization-synthetic','family-synthetic'].includes(actor)||languageMode==='denied'){send(res,403,{code:'LANGUAGE_FORBIDDEN',private:'never-echo-private'});return;}
+    const schoolId=url.searchParams.get('schoolId');
+    if([...url.searchParams.keys()].some(k=>k!=='schoolId')||(schoolId&&(!mine||schoolId!==schoolContext.schoolId||!['school-owner-synthetic','staff-without-purchase-synthetic'].includes(actor)))){send(res,403,{});return;}
+    if(schoolLanguagePath&&!['school-owner-synthetic','staff-without-purchase-synthetic'].includes(actor)){send(res,403,{});return;}
+    if(req.method==='GET'){
+      if(languageMode==='unavailable'){send(res,503,{});return;}
+      if(mine){const preference=languagePreferences.get(actor)??null,schoolDefault=schoolId?schoolLanguage:null,effective=preference?{language:preference.language,source:'PERSONAL'}:schoolDefault?.source==='SCHOOL'?{language:schoolDefault.defaultLanguage,source:'SCHOOL_DEFAULT'}:{language:'en',source:'SYSTEM_DEFAULT'};send(res,200,{data:{preference,schoolDefault,effective,supportedLanguages:['en','ko','es']}});}
+      else send(res,200,{data:{...schoolLanguage,canManage:actor==='school-owner-synthetic'&&languageMode!=='school-readonly',supportedLanguages:['en','ko','es']}});return;
+    }
+    if(req.method!=='POST'||url.search||req.headers.origin!==origin||req.headers['sec-fetch-mode']!=='same-origin'||req.headers['sec-fetch-site']!=='same-origin'||req.headers['sec-fetch-dest']!=='empty'||req.headers['x-hon-human-command']!==(mine?LANGUAGE_COMMANDS.updateMyLanguage:LANGUAGE_COMMANDS.updateSchoolDefault)||!/^application\/json/.test(req.headers['content-type']??'')){send(res,403,{});return;}
+    if(!mine&&(actor!=='school-owner-synthetic'||['school-readonly','school-revoked'].includes(languageMode))){send(res,403,{code:'LANGUAGE_FORBIDDEN'});return;}
+    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>512){send(res,400,{});return;}}
+    let input;try{input=validateLanguageUpdateInput(JSON.parse(raw));}catch{send(res,400,{code:'INVALID_LANGUAGE_INPUT'});return;}
+    const key=req.headers['idempotency-key'];if(typeof key!=='string'||!/^[0-9a-f-]{36}$/.test(key)){send(res,400,{});return;}
+    const compound=actor+':'+url.pathname+':'+key,prior=languageKeys.get(compound);if(prior){if(prior.raw!==raw){send(res,409,{code:'IDEMPOTENCY_KEY_REUSED'});return;}send(res,200,{data:{...prior.receipt,replayed:true}});return;}
+    if(languageMode==='conflict'&&mine){const p=languagePreferences.get(actor);languagePreferences.set(actor,{language:'es',version:(p?.version??0)+1,updatedAt:'2026-10-19T07:00:00Z'});languageMode='ready';send(res,409,{code:'LANGUAGE_VERSION_CONFLICT'});return;}
+    const version=mine?(languagePreferences.get(actor)?.version??0):schoolLanguage.version;if(input.expectedVersion!==version){send(res,409,{code:'LANGUAGE_VERSION_CONFLICT'});return;}
+    let receipt;if(mine){const preference={language:input.language,version:version+1,updatedAt:'2026-10-19T07:00:00Z'};languagePreferences.set(actor,preference);receipt={preference,replayed:false};}else{schoolLanguage={...schoolLanguage,defaultLanguage:input.language,source:'SCHOOL',version:version+1,updatedAt:'2026-10-19T07:00:00Z'};receipt={schoolDefault:schoolLanguage,replayed:false};}languageKeys.set(compound,{raw,receipt});report.languageCommands=(report.languageCommands??0)+1;
+    if(languageMode==='unknown'){languageMode='ready';send(res,503,{code:'LANGUAGE_OUTCOME_UNKNOWN'});return;}send(res,200,{data:receipt});return;
+  }
   if(actor==='hq-localization-synthetic'){
     if(req.method==='GET'&&url.pathname==='/v1/hq/overview'&&!url.search){send(res,200,{data:{overview:{asOf:'2026-10-18T18:00:00.000Z',callerHqRole:'OWNER',organizationCount:2,schoolCount:3,onboarding:{availability:'AVAILABLE',requestCount:4,inProgressRequestCount:1,completedRequestCount:3},configuredProviderStates:{disabled:1,configured:2,healthy:0,degraded:0,unavailable:1},taskProfileCount:5,financialMetrics:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics},aiUsage:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage},durableHqWork:{availability:'UNAVAILABLE',state:'NO_RECORDED_WORK',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork}}}});return;}
     send(res,403,{});return;
@@ -145,7 +168,7 @@ try{
   }
   await scenario('Cross-plan credit response without allowance is rejected',{state:'paid'},async ctx=>{creditMode='plan-drift';const p=await open(ctx);await ready(p);await p.getByRole('status',{name:'AI allowance readiness'}).getByText('AI allowance status unavailable',{exact:true}).waitFor();assert.equal(await p.getByText('4,000',{exact:true}).count(),0);assert.equal(commands.length,0);});
   await scenario('Reported tier and purchased plan stay distinct on mismatch',{state:'paid'},async ctx=>{readMode='tier-mismatch';const p=await open(ctx);await ready(p);await p.getByText(/reported tier and subscription plan differ/).waitFor();assert.equal(await p.getByRole('button',{name:'Review selection'}).isEnabled(),false);assert.equal(commands.length,0);});
-  await verifyLocalization({check,context,open,ready,scan,capture,overflow,reset,setFixture:options=>Object.assign(fixture,options),setReadMode:mode=>{readMode=mode},report,origin,session,commandCount:()=>commands.length});
+  await verifyLocalization({check,context,open,ready,scan,capture,overflow,reset,setFixture:options=>Object.assign(fixture,options),setReadMode:mode=>{readMode=mode},report,origin,session,commandCount:()=>commands.length,setLanguageMode:mode=>{languageMode=mode},languagePreferences,languageKeys,setSchoolLanguage:lang=>{schoolLanguage={...schoolLanguage,defaultLanguage:lang,source:'SCHOOL',version:schoolLanguage.version+1,updatedAt:'2026-10-19T07:00:00Z'}}});
   await check('Only authorized fixed school/HQ fixture paths; no database/provider request or JavaScript error',async()=>{assert.deepEqual(report.unexpectedRequests,[]);assert.deepEqual(report.pageErrors,[]);assert(!report.apiRequests.some(r=>/webhook|entitlement|refund/.test(r.path)||r.path.includes('/hq/')&&r.path!=='/v1/hq/overview'));});
 }catch(e){report.failures.push({name:'harness',message:String(e.message).slice(0,1600)});}
 finally{if(browser)await browser.close();app.kill('SIGTERM');await Promise.race([new Promise(done=>app.once('exit',done)),delay(2000)]);if(app.exitCode===null)app.kill('SIGKILL');await new Promise(done=>api.close(done));report.externalHostsBlocked=[...new Set(report.externalHostsBlocked)];await writeFile(join(results,'report.json'),JSON.stringify(report,null,2));console.log(`SCHOOL_BROWSER_REPORT ${JSON.stringify(report)}`);}

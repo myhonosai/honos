@@ -30,6 +30,7 @@ import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
 import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
 import { saasBillingTables, verifySaasBillingSecurity } from './saas-billing-security.mjs';
+import { languagePreferenceTables, verifyLanguagePreferenceSecurity } from './language-preferences-security.mjs';
 import { readFile } from 'node:fs/promises';
 
 const { Client } = pg;
@@ -80,6 +81,7 @@ const expectedRlsTables = [
   ...communityTables,
   ...championsClubTables,
   ...saasBillingTables,
+  ...languagePreferenceTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
   'crm_follow_ups', 'crm_follow_up_versions', 'crm_follow_up_requests',
   'crm_lead_close_requests',
@@ -274,6 +276,7 @@ try {
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyChampionsClubSecurity(client, runtimeRoleName);
   await verifySaasBillingSecurity(client, runtimeRoleName);
+  await verifyLanguagePreferenceSecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
   await verifyHumanWorkSecurity(client,runtimeRoleName);
   await verifyActionApprovalSecurity(client,runtimeRoleName);
