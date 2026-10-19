@@ -179,7 +179,8 @@
 }
 .notice strong {
   color:#e7f9ff;
-  white-space:nowrap;
+  flex-shrink:0;
+  white-space:normal;
 }
 .selection {
   padding-top:40px;
@@ -549,10 +550,11 @@
   box-shadow:0 0 32px #00c8ff16;
   font-size:13px;
 }
-.guideToggle span {
+.guideToggle>span:first-child {
   font-size:22px;
   color:var(--cyan);
 }
+.guideCompact { display:none; }
 .guide {
   position:fixed;
   right:24px;
@@ -843,3 +845,11 @@
 .readinessStatus { margin:12px 0; padding:13px; border:1px solid #548194; border-radius:10px; background:#112d3e; }
 .readinessStatus strong { color:#c6f9ff; }
 .readinessStatus p { margin:8px 0 0; }
+
+/* Compact native-language guide entry keeps the mobile reading area open. */
+@media(max-width:600px) {
+  .guideToggle { min-width:64px; padding:10px 16px; }
+  .guideToggle>span:first-child { display:none; }
+  .guideToggle .guideCompact { display:inline; font-size:13px; font-weight:700; }
+  .guideToggle .guideLabel { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+}

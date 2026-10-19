@@ -574,8 +574,8 @@
 .shell[data-view=classic] .leaderboardTable td,.shell[data-view=classic] .leaderboardTable tbody th{padding-block:9px}
 @media(max-width:800px){
   .appearance{display:flex;gap:10px}
-  .appearance>.appearanceGroup{flex:1 1 100%;grid-template-columns:54px repeat(3,minmax(0,1fr));gap:3px}
-  .appearance>.appearanceGroup>span{font-size:10px;white-space:nowrap;margin:0 3px}
+  .appearance>.appearanceGroup{flex:1 1 100%;grid-template-columns:70px repeat(3,minmax(0,1fr));gap:3px}
+  .appearance>.appearanceGroup>span{font-size:10px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;margin:0 3px}
   .appearance>.appearanceGroup>button{padding-inline:4px;font-size:10px;min-height:40px}
   .appearance .motionControl{flex-direction:row;min-height:34px;padding:5px 10px;margin-left:auto;gap:5px}
   .leaderboard{gap:12px}
