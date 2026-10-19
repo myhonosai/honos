@@ -1,0 +1,16 @@
+.filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.filters > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.filters label { font-weight: 650; color: var(--hq-text); }
+.filters input, .filters select { width: 100%; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 10px; border: 1px solid #416273; border-radius: 10px; background: #0b2432; color: #e9f7ff; font: inherit; }
+.records { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 14px; }
+.records > li { min-width: 0; border: 1px solid #355264; border-radius: 14px; padding: 16px; background: #0a202b80; overflow-wrap: anywhere; }
+.records h3, .records h4 { margin: 0 0 10px; }
+.records p { margin: 8px 0; }
+.links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.amount { font-size: 1.25rem; font-weight: 700; color: #e5fbff; }
+.identity { overflow-wrap: anywhere; }
+.focusHeading { scroll-margin-top: 28px; }
+.identifiers summary { min-height: 44px; align-content: center; cursor: pointer; color: #a1eff7; font-size: 13px; }
+.columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.columns > section { min-width: 0; }
+@media (max-width: 740px) { .filters, .columns { grid-template-columns: minmax(0, 1fr); } .records > li { padding: 14px; } }

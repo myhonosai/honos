@@ -291,6 +291,8 @@
     {"path": "/hq/growth/rewards", "title": "HON HQ | Rewards"},
     {"path": "/hq/revenue", "title": "HON HQ | Revenue"},
     {"path": "/hq/support", "title": "HON HQ | Support"},
-    {"path": "/hq/growth/champions-club/schools", "title": "HON HQ | School referrals"}
+    {"path": "/hq/growth/champions-club/schools", "title": "HON HQ | School referrals"},
+    {"path": "/hq/revenue/invoices", "title": "HON HQ | Invoices"},
+    {"path": "/hq/revenue/invoices/:invoiceId", "title": "HON HQ | Invoice detail"}
   ]
 }
