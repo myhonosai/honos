@@ -169,6 +169,8 @@ The B1 subscription view reports `paymentStatus`, `paidThroughAt` and `paymentVe
 
 ## 9. To run against a real Stripe test account
 
+> Superseded by the detailed checklist, readiness report and real-sandbox validation plan in [HON_STRIPE_SANDBOX_READINESS.md](HON_STRIPE_SANDBOX_READINESS.md). Stripe is owner-approved for test mode only (2026-10-19).
+
 1. **Owner approval** of Stripe as the provider. Policy `PAYMENT_PROVIDER` is recorded as `PROPOSED`.
 2. **A Stripe account in test mode.** Create a webhook endpoint pointing at `https://<api-host>/v1/payments/webhooks/stripe` with **API version 2024-06-20**, subscribed to these events:
    - `checkout.session.completed`

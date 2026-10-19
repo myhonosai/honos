@@ -41,7 +41,7 @@ test('adapter: live credentials and live events are refused; simulation needs an
 
 test('webhook signature: exact raw body, tolerance window, rotation, constant-time comparison', () => {
   const sim = new StripeSimulator(SECRET), now = Math.floor(Date.now() / 1000);
-  const d = sim.sign({ id: 'evt_x', object: 'event', type: 'customer.created', livemode: false, created: now, data: { object: {} } }, now);
+  const d = sim.sign({ id: 'evt_x', object: 'event', api_version: '2024-06-20', type: 'customer.created', livemode: false, created: now, data: { object: {} } }, now);
   assert.doesNotThrow(() => verifyStripeSignature(d.raw, d.signature, SECRET, now));
   assert.throws(() => verifyStripeSignature(Buffer.concat([d.raw, Buffer.from(' ')]), d.signature, SECRET, now), e => e.reason === 'BAD_SIGNATURE');
   assert.throws(() => verifyStripeSignature(d.raw, d.signature, 'whsec_otherSecret0123456789', now), e => e.reason === 'BAD_SIGNATURE');
@@ -54,18 +54,25 @@ test('webhook signature: exact raw body, tolerance window, rotation, constant-ti
 
 test('normalizer keeps only applied fields, in a closed shape, with a stable digest', () => {
   const created = 1792368000;
-  const session = normalizeStripeEvent({ id: 'evt_1', object: 'event', type: 'checkout.session.completed', livemode: false, created,
+  const session = normalizeStripeEvent({ id: 'evt_1', object: 'event', api_version: '2024-06-20', type: 'checkout.session.completed', livemode: false, created,
     data: { object: { id: 'cs_test_a1', client_reference_id: '0b6f0c8e-6f5c-4b8e-9d7a-1c2d3e4f5a6b', amount_total: 14900, currency: 'usd', customer: 'cus_1',
       subscription: 'sub_1', invoice: 'in_1', payment_intent: null, payment_status: 'paid', customer_details: { email: 'owner@example.test' } } } }, 'STRIPE');
   assert.deepEqual(Object.keys(session.object).sort(), ['amountTotal','checkoutId','currency','customerRef','invoiceRef','paymentIntentRef','paymentStatus','sessionId','subscriptionRef']);
   assert.equal(JSON.stringify(session).includes('owner@example.test'), false, 'no customer contact details are kept');
   assert.equal(session.createdAt, new Date(created * 1000).toISOString());
-  const inv = normalizeStripeEvent({ id: 'evt_2', object: 'event', type: 'invoice.paid', livemode: false, created, data: { object: { id: 'in_2', billing_reason: 'subscription_cycle',
+  const inv = normalizeStripeEvent({ id: 'evt_2', object: 'event', api_version: '2024-06-20', type: 'invoice.paid', livemode: false, created, data: { object: { id: 'in_2', billing_reason: 'subscription_cycle',
     amount_paid: 14900, currency: 'usd', parent: { subscription_details: { subscription: 'sub_9' } }, lines: { data: [{ period: { start: created, end: created + 2592000 } }] } } } }, 'STRIPE');
   assert.equal(inv.object.subscriptionRef, 'sub_9');
   assert.equal(eventDigest(inv), eventDigest(JSON.parse(JSON.stringify(inv))));
-  assert.throws(() => normalizeStripeEvent({ id: 'evt_3', object: 'event', type: 'invoice.paid', livemode: false, created, data: { object: { id: 'in_3', amount_paid: -1 } } }, 'STRIPE'));
-  assert.deepEqual(normalizeStripeEvent({ id: 'evt_4', object: 'event', type: 'customer.updated', livemode: false, created, data: { object: { email: 'x' } } }, 'STRIPE').object, {});
+  assert.throws(() => normalizeStripeEvent({ id: 'evt_3', object: 'event', api_version: '2024-06-20', type: 'invoice.paid', livemode: false, created, data: { object: { id: 'in_3', amount_paid: -1 } } }, 'STRIPE'));
+  assert.deepEqual(normalizeStripeEvent({ id: 'evt_4', object: 'event', api_version: '2024-06-20', type: 'customer.updated', livemode: false, created, data: { object: { email: 'x' } } }, 'STRIPE').object, {});
+  // Payload versions: the pinned one and basil-or-later shapes are read; anything else is refused, never guessed at.
+  const at = (api_version) => () => normalizeStripeEvent({ id: 'evt_5', object: 'event', api_version, type: 'customer.updated', livemode: false, created, data: { object: {} } }, 'STRIPE');
+  for (const v of ['2024-06-20', '2025-03-31.basil', '2026-09-30.endive']) assert.doesNotThrow(at(v), v);
+  for (const v of [undefined, null, '', '2024-04-10', '2024-09-30.acacia', '2023-10-16', 'latest', '2026-09-30.Endive']) assert.throws(at(v), e => e.reason === 'UNSUPPORTED_API_VERSION', String(v));
+  const basil = normalizeStripeEvent({ id: 'evt_6', object: 'event', api_version: '2025-03-31.basil', type: 'invoice.paid', livemode: false, created, data: { object: { id: 'in_6', billing_reason: 'subscription_cycle',
+    amount_paid: 14900, currency: 'usd', parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_6' } }, lines: { data: [{ period: { start: created, end: created + 2592000 } }] } } } }, 'STRIPE');
+  assert.deepEqual([basil.object.subscriptionRef, basil.object.paymentIntentRef], ['sub_6', null], 'basil invoices carry no payment link; refunds of them go to review');
 });
 
 test('hosted checkout request: test key, pinned API version, idempotent on the checkout id, no tax, no card data', async () => {
@@ -135,7 +142,7 @@ test('HTTP: webhook needs a valid signature over the raw body; nothing else reac
     return { event: { eventId: U(), providerEventId: JSON.parse(params[0]).eventId, type: JSON.parse(params[0]).type, outcome: 'IGNORED', detail: 'EVENT_TYPE_NOT_USED',
       organizationId: null, checkoutId: null, subscriptionId: null }, replayed: false }; }, adapterWith(sim));
   try {
-    const d = sim.sign({ id: 'evt_hook1', object: 'event', type: 'customer.created', livemode: false, created: Math.floor(Date.now() / 1000), data: { object: {} } });
+    const d = sim.sign({ id: 'evt_hook1', object: 'event', api_version: '2024-06-20', type: 'customer.created', livemode: false, created: Math.floor(Date.now() / 1000), data: { object: {} } });
     const ok = await send(`${base}/payments/webhooks/stripe`, { method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': d.signature }, body: d.raw });
     assert.equal(ok.status, 200, ok.body); assert.deepEqual(JSON.parse(ok.body), { received: true, outcome: 'IGNORED', replayed: false });
     assert.equal(calls.length, 1); assert.equal(calls[0][0], 'ingestProviderEvent'); assert.match(calls[0][1][1], /^[0-9a-f]{64}$/);

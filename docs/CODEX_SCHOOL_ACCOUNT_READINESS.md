@@ -23,7 +23,7 @@ Claude owns B5.1 invoices, B6 paid access and payment/credit services. Coordinat
 | Multi-school purchaser context | Reporting resolver yields only a candidate, not purchaser authority | Fail closed when ambiguous. Await dedicated school-authorized purchaser choices/resolver; no URL/local-storage authority or permission inference from reporting selection |
 | Reactivation or new-plan access | No approved merged school command | Unavailable. Read refreshed authoritative status only; never directly mutate entitlements |
 
-The UI exposes read-only next steps and the unavailable pieces instead of speculative links/buttons. Real Stripe sandbox setup/verification, paid-access owner policy and B6 remain launch dependencies. PR #30 is a proposal/readiness branch and is not imported. No Manus CRM, migrations, backend, shared contracts/security, HQ, portraits, original assets or lockfile changes. Language & Region remains a future shared English/Korean/Spanish requirement, not implemented here.
+The UI exposes read-only next steps and the unavailable pieces instead of speculative links/buttons. Real Stripe sandbox setup/verification, paid-access owner policy and B6 remain launch dependencies. PR #30 is now merged as `c08091a4c3c7b824bb165d13fa74bc44f3d027a1`: its provider safety changes and B6 proposal are preserved byte-for-byte. The proposal is not an implemented B6 contract and no speculative API is consumed. No Manus CRM, migrations, backend, shared contracts/security, HQ, portraits, original assets or lockfile changes. Language & Region remains a future shared English/Korean/Spanish requirement, not implemented here.
 
 ## Verification
 
