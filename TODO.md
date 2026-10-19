@@ -1,5 +1,13 @@
 # HON Delivery Backlog
 
+## Codex HQ — read-only subscription account review (2026-10-19)
+
+- [x] Merge owner-approved PR #20 after exact-head green CI/browser, clean-current-main and source/security boundary checks: `40a896806dce778dd301ab68abd348bb3c586f74`. Issue #21 remains open and unchanged. No deployment or financial/provider activation.
+- [x] Deliver one coherent B1–B3 account-review slice in [PR #22](https://github.com/myhonosai/honos/pull/22) on `codex/hq-subscription-review`: catalog/founder inventory, status-filtered newest-200 subscription records, explicit organization selection, live entitlement/alignment, B2 recorded-versus-verified payment standing, B3 period balances/reservations/ordinary usage and returned HQ-verified provider-cost evidence. Only merged HQ GETs/shared validators; never infer revenue, payments, official totals, grants, costs or authority from lists/appearance/URLs.
+- [x] Preserve HQ command-center styling, HON/six executives, appearance, Champions pages and issue #21. No backend/contracts/DB/RLS/CRM/family-billing/artwork/lockfile edits, commands, financial activation, purchases, charges, fulfillment or providers. Invoice list/detail/evidence history stays a clearly identified next slice; existing B2 services are available, not missing.
+- [x] Verify source `14f000f`: full CI 39180875031 passed (613 web / 408 API / 188 domain / 91 auth tests, check/build, 155 migrations, 13 disposable proofs / 227 forced-RLS tables). Browser 39180875046 passed 81 checks / 51 captures / 32 axe scans, zero failures/JS errors/reported violations; actual [desktop/mobile gallery](docs/visuals/codex/hq-subscription-review/README.md) inspected. Mobile account focus/scroll/restore and stale/denied/mixed-scope states verified. Handoff and #4 / #22 track final evidence-head checks. Manual device/screen-reader/contrast review remains. No #22 merge or deployment without owner approval; Language & Region remains future documentation-only PR #17 scope.
+- [ ] Next reviewed slice: B2 invoice list/detail and individual payment-evidence history with exact organization/subscription binding and recorded-versus-provider-verified distinctions. `/hq/ai-costs` remains planned; no complete company-spend/revenue aggregates or financial commands are claimed.
+
 ## Codex HQ — school referrals and reward management (2026-10-18)
 
 - [x] Owner-authorized PR #19 merged after final green CI/browser and clean-main checks: `ececf75d8e300f957fb99416babb95c1064688fb`. No deployment or financial activation.
