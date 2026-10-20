@@ -148,6 +148,9 @@ const SAAS_BILLING_CALLS = {
   readSchoolInvoices: { sql: 'SELECT hon.read_saas_school_invoices($1,$2::uuid,$3,$4,$5::timestamptz,$6::uuid,$7::integer) AS data', arity: 7, readOnly: true },
   readSchoolInvoice: { sql: 'SELECT hon.read_saas_school_invoice($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   readAccessReadiness: { sql: 'SELECT hon.read_saas_access_readiness_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readOrganizationAccess: { sql: 'SELECT hon.read_saas_organization_access_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  awaitFirstPayment: { sql: 'SELECT hon.place_saas_organization_awaiting_payment($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  retryFirstPaymentActivation: { sql: 'SELECT hon.retry_saas_first_payment_activation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 // Interface language persistence (0171): fixed subject-bound functions; the subject is the verified identity.

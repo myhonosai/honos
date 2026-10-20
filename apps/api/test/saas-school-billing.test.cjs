@@ -5,10 +5,10 @@ const { request: httpRequest } = require('node:http');
 require('reflect-metadata');
 const { Test } = require('@nestjs/testing');
 const { json } = require('express');
-const { SaasAccessReadinessHqController, SaasSchoolBillingController } = require('../dist/school-billing/saas-school-billing.controller.js');
+const { SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } = require('../dist/school-billing/saas-school-billing.controller.js');
 const { SaasSchoolBillingService } = require('../dist/school-billing/saas-school-billing.service.js');
 const { SaasBillingService } = require('../dist/saas-billing/saas-billing.service.js');
-const { SaasReadGuard } = require('../dist/saas-billing/saas-billing.guards.js');
+const { SaasCommandGuard, SaasReadGuard } = require('../dist/saas-billing/saas-billing.guards.js');
 const { HonIdentityGuard } = require('../dist/foundation/hon-identity.guard.js');
 const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
 const contracts = require('@hon/contracts');
@@ -22,7 +22,7 @@ const invoice = (patch = {}) => ({ invoiceId: U(), invoiceNumber: 'HON-2026-0000
 const facts = (n = 1) => ({ firstPaidAt: n ? T : null, paidThroughAt: n ? T2 : null, lifetimePaid: false, paidInvoiceCount: n, refundedInvoiceCount: 0, chargebackInvoiceCount: 0 });
 const account = (patch = {}) => ({ schoolId: U(), organizationId: U(), organizationName: 'Fixture Dojo', billingScope: 'ORGANIZATION', schoolCount: 2,
   entitlement: { tier: 'CORE', status: 'ACTIVE', effectiveFrom: T, effectiveUntil: null, version: 1, inEffect: true },
-  access: { source: 'PROVISIONED', paymentActivated: false, paidAccessProgram: 'INACTIVE', activation: 'READY', alignment: 'NO_SUBSCRIPTION' },
+  access: { source: 'PROVISIONED', paymentActivated: false, state: 'PROVISIONED', paidAccessProgram: 'INACTIVE', activation: 'READY', alignment: 'NO_SUBSCRIPTION' },
   subscription: null, subscriptionHistory: [], subscriptions: [],
   payment: { status: 'NOT_BILLED', verification: 'NONE', paidThroughAt: null, unpaidSince: null, verified: facts(0), recorded: facts(0),
     evidenceCounts: { hqAttested: 0, providerVerified: 0 }, providerVerification: 'NOT_CONFIGURED' },
@@ -66,8 +66,14 @@ test('contracts: invoice summaries and detail never carry HQ-only fields; verifi
 
 test('contracts: account readiness is read from the entitlement, never from payment', () => {
   assert.equal(contracts.validateSaasSchoolBillingAccount(account()).access.activation, 'READY');
+  // Payment-activated only with the B6A access state; never claimed by a provisioned or awaiting school.
   assert.throws(() => contracts.validateSaasSchoolBillingAccount(account({ access: { ...account().access, paymentActivated: true } })));
-  assert.throws(() => contracts.validateSaasSchoolBillingAccount(account({ access: { ...account().access, paidAccessProgram: 'ACTIVE' } })));
+  assert.throws(() => contracts.validateSaasSchoolBillingAccount(account({ access: { ...account().access, source: 'PAYMENT_ACTIVATED' } })));
+  assert.throws(() => contracts.validateSaasSchoolBillingAccount(account({ access: { ...account().access, state: 'AWAITING_FIRST_PAYMENT', paymentActivated: true } })));
+  assert.equal(contracts.validateSaasSchoolBillingAccount(account({ access: { ...account().access, state: 'PAYMENT_ACTIVE', source: 'PAYMENT_ACTIVATED', paymentActivated: true,
+    paidAccessProgram: 'ACTIVE' } })).access.paymentActivated, true);
+  assert.throws(() => contracts.validateSaasSchoolBillingAccount(account({ access: { ...account().access, state: 'NONE' } })), 'NONE only without an entitlement');
+  assert.throws(() => contracts.validateSaasSchoolBillingAccount(account({ access: { ...account().access, paidAccessProgram: 'LIVE' } })));
   const suspended = { ...account().entitlement, status: 'SUSPENDED', inEffect: false };
   // A suspended entitlement can never read READY, whatever the payment says.
   assert.throws(() => contracts.validateSaasSchoolBillingAccount(account({ entitlement: suspended, allowance: { ...account().allowance, state: 'ACCESS_NOT_ACTIVE' } })));
@@ -82,8 +88,8 @@ const send = (url, { method = 'GET', headers = {}, body } = {}) => new Promise((
   req.on('error', reject); req.end(body);
 });
 async function appWith(callSaasBilling) {
-  const module = await Test.createTestingModule({ controllers: [SaasSchoolBillingController, SaasAccessReadinessHqController],
-    providers: [SaasSchoolBillingService, SaasBillingService, SaasReadGuard, { provide: RuntimeDatabaseService, useValue: { callSaasBilling } }] })
+  const module = await Test.createTestingModule({ controllers: [SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController],
+    providers: [SaasSchoolBillingService, SaasBillingService, SaasReadGuard, SaasCommandGuard, { provide: RuntimeDatabaseService, useValue: { callSaasBilling } }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-human' }; return true; } }).compile();
   const app = module.createNestApplication({ bodyParser: false });
   app.use(json({ strict: true })); app.setGlobalPrefix('v1'); await app.listen(0, '127.0.0.1');
@@ -122,4 +128,80 @@ test('HTTP: school billing reads are fixed GETs bound to the verified subject; r
       ['POST', `hq/saas/access/${U()}/activate`]])
       assert.equal((await send(`${base}/${path}`, { method, headers: { 'content-type': 'application/json' }, body: '{}' })).status, 404, path);
   } finally { await app.close(); }
+});
+
+const orgAccess = (patch = {}) => ({ organizationId: U(), state: 'PROVISIONED', source: 'PROVISIONED',
+  entitlement: { tier: 'CORE', status: 'ACTIVE', effectiveFrom: T, effectiveUntil: null, version: 1, inEffect: true },
+  capabilities: [...contracts.SAAS_CORE_CAPABILITIES], paidAccessProgram: 'INACTIVE', ...patch });
+const awaiting = () => orgAccess({ state: 'AWAITING_FIRST_PAYMENT', source: 'NONE', capabilities: [],
+  entitlement: { tier: 'CORE', status: 'SUSPENDED', effectiveFrom: T, effectiveUntil: null, version: 2, inEffect: false } });
+const activated = (tier = 'COMPLETE') => orgAccess({ state: 'PAYMENT_ACTIVE', source: 'PAYMENT_ACTIVATED', paidAccessProgram: 'ACTIVE',
+  entitlement: { tier, status: 'ACTIVE', effectiveFrom: T, effectiveUntil: null, version: 3, inEffect: true }, capabilities: [...contracts.SAAS_PLAN_CAPABILITIES[tier]] });
+
+test('contracts: B6A access is derived from the entitlement; capabilities follow the tier exactly', () => {
+  assert.equal(contracts.validateSaasOrganizationAccess(orgAccess()).source, 'PROVISIONED');
+  assert.equal(contracts.validateSaasOrganizationAccess(awaiting()).capabilities.length, 0);
+  assert.equal(contracts.validateSaasOrganizationAccess(activated()).capabilities.length, contracts.SAAS_CORE_CAPABILITIES.length + contracts.SAAS_COMPLETE_ONLY_CAPABILITIES.length);
+  // Core and Complete differ functionally, not only in allowance.
+  assert.throws(() => contracts.validateSaasOrganizationAccess({ ...orgAccess(), capabilities: [...contracts.SAAS_PLAN_CAPABILITIES.COMPLETE] }));
+  assert.throws(() => contracts.validateSaasOrganizationAccess({ ...awaiting(), capabilities: [...contracts.SAAS_CORE_CAPABILITIES] }), 'no access before payment');
+  assert.throws(() => contracts.validateSaasOrganizationAccess({ ...awaiting(), source: 'PROVISIONED' }));
+  assert.throws(() => contracts.validateSaasOrganizationAccess({ ...awaiting(), entitlement: orgAccess().entitlement }), 'awaiting never has access in effect');
+  assert.throws(() => contracts.validateSaasOrganizationAccess({ ...orgAccess(), source: 'PAYMENT_ACTIVATED' }));
+  assert.throws(() => contracts.validateSaasOrganizationAccess({ ...activated(), schoolId: U() }));
+  const t = { transitionId: U(), kind: 'FIRST_PAYMENT_ACTIVATION', outcome: 'APPLIED', reason: 'FIRST_PAYMENT_VERIFIED', checkoutId: U(), subscriptionId: U(),
+    allowanceId: U(), providerEventId: 'evt_fixture1', priorEntitlement: awaiting().entitlement, nextEntitlement: activated().entitlement, occurredAt: T };
+  assert.equal(contracts.validateSaasOrganizationAccessView({ ...activated(), transitions: [t], asOf: T }).transitions.length, 1);
+  assert.throws(() => contracts.validateSaasOrganizationAccessView({ ...activated(), transitions: [{ ...t, nextEntitlement: null }], asOf: T }), 'applied carries the next entitlement');
+  assert.throws(() => contracts.validateSaasOrganizationAccessView({ ...activated(), transitions: [{ ...t, checkoutId: null }], asOf: T }), 'activation names its checkout');
+  // A retry reports activation only when the access state really is payment-active.
+  const receipt = { outcome: 'APPLIED', detail: 'ACCESS_ACTIVATED', checkoutId: U(), access: activated(), replayed: false };
+  assert.equal(contracts.validateSaasAccessRetryReceipt(receipt).outcome, 'APPLIED');
+  assert.throws(() => contracts.validateSaasAccessRetryReceipt({ ...receipt, access: awaiting() }));
+  assert.equal(contracts.validateSaasAccessRetryReceipt({ ...receipt, outcome: 'NEEDS_REVIEW', detail: 'SAAS_ACCESS_PAYMENT_UNVERIFIED', access: awaiting() }).outcome, 'NEEDS_REVIEW');
+  for (const bad of [{}, { expectedEntitlementVersion: 0 }, { expectedEntitlementVersion: 1.5 }, { expectedEntitlementVersion: 1, tier: 'COMPLETE' }, { expectedEntitlementVersion: 1, priceMinor: 100 }])
+    assert.throws(() => contracts.validateSaasAccessAwaitInput(bad), JSON.stringify(bad));
+  assert.throws(() => contracts.validateSaasAccessRetryInput({ expectedCheckoutVersion: 1, schoolId: U() }));
+  // Awaiting schools see both plans; otherwise only the entitled tier.
+  const offer = plan => ({ offerId: U(), planCode: plan, offerKind: 'REGULAR_MONTHLY', billingInterval: 'MONTHLY', priceMinor: 14900, currency: 'USD', monthlyPremiumCredits: 5000, founderSlotsRemaining: null });
+  const opts = { schoolId: U(), entitlementTier: null, payments: { status: 'TEST_MODE', mode: 'TEST' }, offers: [offer('CORE'), offer('COMPLETE')], subscription: null,
+    paymentVerification: 'NONE', checkout: null, annualBilling: 'UNAVAILABLE', planChanges: 'UNAVAILABLE', cardDataStored: false };
+  assert.equal(contracts.validateSaasSchoolPlanOptions(opts).offers.length, 2);
+  assert.throws(() => contracts.validateSaasSchoolPlanOptions({ ...opts, offers: [offer('ESSENTIAL')] }));
+  assert.throws(() => contracts.validateSaasSchoolPlanOptions({ ...opts, entitlementTier: 'CORE' }));
+});
+
+test('HTTP: B6A HQ access commands are exact human commands; the browser supplies no tier, price or school', async () => {
+  const previous = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
+  const calls = [], org = U(), checkout = U();
+  const human = command => ({ 'content-type': 'application/json', origin: 'https://hon.example', 'x-hon-human-command': command, 'sec-fetch-site': 'same-origin',
+    'sec-fetch-mode': 'same-origin', 'sec-fetch-dest': 'empty', 'idempotency-key': randomUUID() });
+  const { app, base } = await appWith(async (operation, params) => {
+    calls.push([operation, params]);
+    if (operation === 'readOrganizationAccess') return { ...orgAccess({ organizationId: params[1] }), transitions: [], asOf: T };
+    if (operation === 'awaitFirstPayment') { const e = new Error('SAAS_ACCESS_NOT_ACTIVE'); e.code = '23514'; throw e; }
+    if (operation === 'retryFirstPaymentActivation') return { outcome: 'APPLIED', detail: 'ACCESS_ACTIVATED', checkoutId: params[1], access: activated(), replayed: false };
+    throw new Error('unexpected');
+  });
+  try {
+    const read = await send(`${base}/hq/saas/organizations/${org}/access`);
+    assert.equal(read.status, 200, read.body); assert.deepEqual(calls.at(-1), ['readOrganizationAccess', ['verified-human', org]]);
+    const body = JSON.stringify({ expectedEntitlementVersion: 1 });
+    const placed = await send(`${base}/hq/saas/organizations/${org}/access/await-first-payment`, { method: 'POST', headers: human(contracts.SAAS_COMMANDS.awaitFirstPayment), body });
+    assert.deepEqual([placed.status, JSON.parse(placed.body).code], [422, 'SAAS_ACCESS_NOT_ACTIVE']);
+    assert.deepEqual(calls.at(-1).slice(0, 1), ['awaitFirstPayment']);
+    assert.deepEqual(calls.at(-1)[1].slice(0, 3), ['verified-human', org, body]);
+    const retried = await send(`${base}/hq/saas/payments/checkouts/${checkout}/access-retry`, { method: 'POST', headers: human(contracts.SAAS_COMMANDS.retryFirstPaymentActivation),
+      body: JSON.stringify({ expectedCheckoutVersion: 2 }) });
+    assert.equal(retried.status, 200, retried.body); assert.equal(calls.at(-1)[1][1], checkout);
+    const n = calls.length;
+    for (const [path, command, payload] of [
+      [`hq/saas/organizations/${org}/access/await-first-payment`, contracts.SAAS_COMMANDS.retryFirstPaymentActivation, body], // wrong command header
+      [`hq/saas/organizations/${org}/access/await-first-payment`, contracts.SAAS_COMMANDS.awaitFirstPayment, JSON.stringify({ expectedEntitlementVersion: 1, tier: 'COMPLETE' })],
+      [`hq/saas/payments/checkouts/${checkout}/access-retry`, contracts.SAAS_COMMANDS.retryFirstPaymentActivation, JSON.stringify({ expectedCheckoutVersion: 2, priceMinor: 1 })],
+      [`hq/saas/payments/checkouts/not-a-uuid/access-retry`, contracts.SAAS_COMMANDS.retryFirstPaymentActivation, JSON.stringify({ expectedCheckoutVersion: 2 })]])
+      assert.ok([400, 403].includes((await send(`${base}/${path}`, { method: 'POST', headers: human(command), body: payload })).status), path);
+    assert.equal((await send(`${base}/hq/saas/organizations/${org}/access/await-first-payment`, { method: 'POST', headers: { ...human(contracts.SAAS_COMMANDS.awaitFirstPayment), origin: 'https://evil.example' }, body })).status, 403);
+    assert.equal(calls.length, n, 'refused requests never reach the database');
+  } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
 });

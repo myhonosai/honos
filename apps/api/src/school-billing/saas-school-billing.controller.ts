@@ -1,7 +1,8 @@
-import { Controller, ForbiddenException, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { SAAS_COMMANDS } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
-import { SaasReadGuard, SaasReadQuery } from '../saas-billing/saas-billing.guards.js';
+import { SaasCommandGuard, SaasCommandName, SaasReadGuard, SaasReadQuery } from '../saas-billing/saas-billing.guards.js';
 import { SaasSchoolBillingService } from './saas-school-billing.service.js';
 
 function subject(req: HonRequest): string {
@@ -39,5 +40,36 @@ export class SaasAccessReadinessHqController {
   @Get(':organizationId') @UseGuards(SaasReadGuard)
   async readiness(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
     return { data: await this.reads.readAccessReadiness(subject(req), organizationId) };
+  }
+}
+
+/**
+ * B6A central access authority (HQ) and the inactive first-payment pathway. Placing an organization awaiting
+ * its first payment and retrying a held activation are HQ-owner commands the database refuses while the
+ * paid-access program is INACTIVE. Activation itself happens only inside the verified-payment transaction.
+ */
+@Controller('hq/saas/organizations/:organizationId/access')
+@UseGuards(HonIdentityGuard)
+export class SaasOrganizationAccessHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async access(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
+    return { data: await this.reads.readOrganizationAccess(subject(req), organizationId) };
+  }
+  @Post('await-first-payment') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.awaitFirstPayment)
+  async awaitFirstPayment(@Req() req: HonRequest, @Param('organizationId') organizationId: string, @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.reads.awaitFirstPayment(subject(req), organizationId, body, key) };
+  }
+}
+
+/** HQ-owner recovery of a first-payment activation held for review (refused while the program is INACTIVE). */
+@Controller('hq/saas/payments/checkouts/:checkoutId/access-retry')
+@UseGuards(HonIdentityGuard)
+export class SaasAccessRetryHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.retryFirstPaymentActivation)
+  async retry(@Req() req: HonRequest, @Param('checkoutId') checkoutId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.reads.retryFirstPaymentActivation(subject(req), checkoutId, body, key) };
   }
 }

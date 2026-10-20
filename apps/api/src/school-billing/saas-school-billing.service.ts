@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
-  saasUuid, validateSaasAccessReadiness, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
+  saasUuid, validateSaasAccessAwaitInput, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
+  validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
@@ -11,7 +13,8 @@ function parse<T>(work: () => T): T {
 
 /**
  * B5.1 school-owner reads of the organization's own HON subscription billing (billing.hon.view at the exact
- * school), and the HQ dry run of the proposed paid-access terms. Read-only: nothing here changes access.
+ * school), the HQ dry run of the proposed paid-access terms, and the B6A HQ-owner access commands, which the
+ * database refuses while the paid-access program is INACTIVE.
  */
 @Injectable()
 export class SaasSchoolBillingService {
@@ -33,5 +36,19 @@ export class SaasSchoolBillingService {
   async readAccessReadiness(subject: string, organizationId: unknown) {
     const organization = parse(() => saasUuid(organizationId));
     return this.billing.call('readAccessReadiness', [subject, organization], validateSaasAccessReadiness);
+  }
+  async readOrganizationAccess(subject: string, organizationId: unknown) {
+    const organization = parse(() => saasUuid(organizationId));
+    return this.billing.call('readOrganizationAccess', [subject, organization], validateSaasOrganizationAccessView);
+  }
+  async awaitFirstPayment(subject: string, organizationId: unknown, body: unknown, key: unknown) {
+    const [organization, input, idempotencyKey] = parse(() => [saasUuid(organizationId), validateSaasAccessAwaitInput(body), saasUuid(key)] as const);
+    return this.billing.call('awaitFirstPayment', [subject, organization, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
+      validateSaasAccessAwaitReceipt);
+  }
+  async retryFirstPaymentActivation(subject: string, checkoutId: unknown, body: unknown, key: unknown) {
+    const [checkout, input, idempotencyKey] = parse(() => [saasUuid(checkoutId), validateSaasAccessRetryInput(body), saasUuid(key)] as const);
+    return this.billing.call('retryFirstPaymentActivation', [subject, checkout, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
+      validateSaasAccessRetryReceipt);
   }
 }

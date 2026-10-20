@@ -2,7 +2,8 @@
 // subscription billing (never school-to-family membership billing), and the HQ dry run of the PROPOSED
 // paid-access terms. School staff need billing.hon.view at the exact school; HQ financial permissions never
 // apply. Drafts, HQ notes and internal references are never present. Access is read from the entitlement
-// and is never inferred from a payment: `access.paymentActivated` is always false until B6 is approved.
+// and is never inferred from a payment: `access.paymentActivated` is true only after the B6A transition, which
+// requires the paid-access program to be ACTIVE (it is INACTIVE until the owner approves).
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { SAAS_SUBSCRIPTION_PAYMENT_STATUSES, validateSaasSubscriptionForSchool, type SaasSubscription,
@@ -75,6 +76,10 @@ export interface SaasSchoolInvoicePage {
   schoolId: string; organizationId: string; billingScope: 'ORGANIZATION'; invoices: SaasSchoolInvoiceSummary[]; limit: number;
   nextCursor: SaasSchoolInvoiceCursor | null;
 }
+/** B6A access state: provisioned (existing schools), awaiting a first payment, or activated by a verified payment. */
+export type SaasOrganizationAccessState = 'PROVISIONED' | 'AWAITING_FIRST_PAYMENT' | 'PAYMENT_ACTIVE' | 'NONE';
+export const SAAS_ORGANIZATION_ACCESS_STATES: readonly SaasOrganizationAccessState[] = ['PROVISIONED','AWAITING_FIRST_PAYMENT','PAYMENT_ACTIVE','NONE'];
+const ACCESS_STATES = SAAS_ORGANIZATION_ACCESS_STATES;
 export type SaasAccountActivation = 'READY' | 'PENDING_ACCOUNT_ACTIVATION' | 'UNAVAILABLE';
 export type SaasAccessAlignment = 'ALIGNED' | 'NO_SUBSCRIPTION' | 'PLAN_MISMATCH' | 'SUBSCRIPTION_NOT_IN_SERVICE';
 export type SaasAllowanceState = 'AVAILABLE' | 'EXHAUSTED' | 'NOT_YET_OPENED' | 'PERIOD_CLOSED' | 'PROGRAM_INACTIVE' | 'SUSPENDED'
@@ -86,7 +91,8 @@ export interface SaasEntitlementView {
 export interface SaasSchoolBillingAccount {
   schoolId: string; organizationId: string; organizationName: string; billingScope: 'ORGANIZATION'; schoolCount: number;
   entitlement: SaasEntitlementView | null;
-  access: { source: 'PROVISIONED' | 'NONE'; paymentActivated: false; paidAccessProgram: 'INACTIVE'; activation: SaasAccountActivation; alignment: SaasAccessAlignment };
+  access: { source: 'PROVISIONED' | 'PAYMENT_ACTIVATED' | 'NONE'; paymentActivated: boolean; state: SaasOrganizationAccessState;
+    paidAccessProgram: 'INACTIVE' | 'ACTIVE'; activation: SaasAccountActivation; alignment: SaasAccessAlignment };
   subscription: Omit<SaasSubscription, 'organizationName'> | null;
   subscriptionHistory: { version: number; status: string; statusReason: string; periodIndex: number | null; periodStart: string | null; periodEnd: string | null; occurredAt: string }[];
   subscriptions: { subscriptionId: string; source: 'CATALOG_OFFER' | 'LEGACY_ENTITLEMENT'; catalogVersion: number | null; planCode: 'ESSENTIAL' | 'CORE' | 'COMPLETE';
@@ -186,7 +192,8 @@ function facts(value: unknown): void {
   if (!nts(f.firstPaidAt) || !nts(f.paidThroughAt) || typeof f.lifetimePaid !== 'boolean' || !count(f.paidInvoiceCount)
     || !count(f.refundedInvoiceCount) || !count(f.chargebackInvoiceCount) || (f.paidInvoiceCount === 0) !== (f.firstPaidAt === null)) drift();
 }
-function entitlement(value: unknown): void {
+/** Validates one canonical entitlement view (or null). */
+export function validateSaasEntitlementView(value: unknown): void {
   if (value === null) return;
   const e = record(value, drift); exactKeys(e, ['tier','status','effectiveFrom','effectiveUntil','version','inEffect'], drift);
   if (!has(['ESSENTIAL','CORE','COMPLETE'], e.tier) || !has(['ACTIVE','SUSPENDED','ARCHIVED'], e.status) || !isTimestamp(e.effectiveFrom)
@@ -225,10 +232,13 @@ export function validateSaasSchoolBillingAccount(value: unknown): SaasSchoolBill
   if (!isUuid(r.schoolId) || !isUuid(r.organizationId) || !text(r.organizationName, 300) || r.billingScope !== 'ORGANIZATION' || !isInt(r.schoolCount, 0, 100_000)
     || r.cardDataStored !== false || !isTimestamp(r.asOf) || !Array.isArray(r.subscriptionHistory) || !Array.isArray(r.subscriptions)
     || !Array.isArray(r.refunds) || r.subscriptions.length > 20 || r.refunds.length > 50) drift();
-  entitlement(r.entitlement);
+  validateSaasEntitlementView(r.entitlement);
   const ent = r.entitlement as SaasEntitlementView | null;
-  const a = record(r.access, drift); exactKeys(a, ['source','paymentActivated','paidAccessProgram','activation','alignment'], drift);
-  if (a.source !== (ent === null ? 'NONE' : 'PROVISIONED') || a.paymentActivated !== false || a.paidAccessProgram !== 'INACTIVE'
+  const a = record(r.access, drift); exactKeys(a, ['source','paymentActivated','state','paidAccessProgram','activation','alignment'], drift);
+  // Payment-activated only through the B6A transition (its access state), never from a payment alone.
+  if (a.source !== (ent === null ? 'NONE' : a.state === 'PAYMENT_ACTIVE' ? 'PAYMENT_ACTIVATED' : 'PROVISIONED')
+    || a.paymentActivated !== (a.state === 'PAYMENT_ACTIVE') || !has(ACCESS_STATES, a.state) || (ent === null) !== (a.state === 'NONE')
+    || !has(['INACTIVE','ACTIVE'], a.paidAccessProgram)
     || !has(['READY','PENDING_ACCOUNT_ACTIVATION','UNAVAILABLE'], a.activation)
     || !has(['ALIGNED','NO_SUBSCRIPTION','PLAN_MISMATCH','SUBSCRIPTION_NOT_IN_SERVICE'], a.alignment)
     // Ready only when the entitlement itself is in effect: never from payment alone.
@@ -299,7 +309,7 @@ export function validateSaasAccessReadiness(value: unknown): SaasAccessReadiness
     || typeof d.premiumAiWouldBeSuspended !== 'boolean' || d.enforcement !== 'NONE') drift();
   const c = record(d.condition, drift);
   exactKeys(c, ['entitlement','subscriptionStatus','paymentStatus','paymentVerification','paidThroughAt','unpaidSince','billingInterval','planMatchesEntitlement'], drift);
-  entitlement(c.entitlement);
+  validateSaasEntitlementView(c.entitlement);
   if (!nullable(c.subscriptionStatus, code) || !has(SAAS_SUBSCRIPTION_PAYMENT_STATUSES, c.paymentStatus) || !has(PAYMENT_VERIFICATIONS, c.paymentVerification)
     || !nts(c.paidThroughAt) || !nts(c.unpaidSince) || !nullable(c.billingInterval, (x): x is string => has(['MONTHLY','LIFETIME','NONE'], x))
     || !nullable(c.planMatchesEntitlement, (x): x is boolean => typeof x === 'boolean')) drift();

@@ -1,6 +1,6 @@
 # HON OS B6: payment-controlled access — implementation plan
 
-**Status: PLAN, nothing implemented.** It builds on main `387c800` (B1–B5.1 merged). Paid access stays **off** until the owner approves the policy and a reviewed migration flips `saas_access_program` (today INACTIVE by CHECK).
+**Status: PLAN.** B6a is implemented, INACTIVE, on `claude/hon-b6a-paid-access` ([HON_PAID_ACCESS_B6A.md](HON_PAID_ACCESS_B6A.md)); B6b is not started. It builds on main `387c800` (B1–B5.1 merged). Paid access stays **off** until the owner approves the policy and a reviewed migration flips `saas_access_program` (today INACTIVE by CHECK).
 
 Target journey: new school registration → Core or Complete selection → verified subscription payment → account activation → the plan's features and monthly AI allowance.
 
