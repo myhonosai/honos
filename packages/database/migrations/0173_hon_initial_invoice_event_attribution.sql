@@ -19,7 +19,7 @@ END $$;
 CREATE OR REPLACE FUNCTION hon.ingest_saas_provider_event(p_event jsonb, p_digest text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE actor uuid := hon.saas_payment_actor(); prog hon.saas_payment_program%ROWTYPE; replay jsonb; o jsonb; v_type text; at timestamptz;
-  c hon.saas_checkout_sessions%ROWTYPE; result jsonb; v_key uuid; v_org uuid; ev_id uuid; v_payment uuid; keys text[];
+  c hon.saas_checkout_sessions%ROWTYPE; result jsonb; v_key uuid; v_org uuid; ev_id uuid; v_payment uuid; v_checkout uuid; v_pending boolean; keys text[];
 BEGIN
   PERFORM hon.saas_refuse_context();
   IF p_event IS NULL OR jsonb_typeof(p_event) <> 'object' OR p_digest IS NULL OR p_digest !~ '^[0-9a-f]{64}$'
@@ -102,15 +102,20 @@ BEGIN
     IF o->>'billingReason' = 'subscription_create' THEN
       -- The subscription reference is not bound until checkout completion commits. Never finalize
       -- an unattributed success: the exception rolls back the request claim as well as this event.
-      SELECT * INTO c FROM hon.saas_checkout_sessions WHERE provider = p_event->>'provider' AND provider_subscription_ref = o->>'subscriptionRef';
-      IF c.id IS NULL THEN
+      -- Read the binding and pending-dependency flag in ONE statement snapshot. Two separate
+      -- reads could miss both if checkout completion commits between them under READ COMMITTED.
+      SELECT (SELECT id FROM hon.saas_checkout_sessions WHERE provider = p_event->>'provider' AND provider_subscription_ref = o->>'subscriptionRef'),
+        EXISTS (SELECT 1 FROM hon.saas_checkout_sessions WHERE provider = p_event->>'provider' AND status IN ('CREATED','OPEN'))
+        INTO v_checkout, v_pending;
+      IF v_checkout IS NULL THEN
         -- Same conservative dependency test as saas_apply_renewal. An open checkout is not a tenant
         -- match; it only defers disposition. No organization is guessed from metadata or another row.
-        IF EXISTS (SELECT 1 FROM hon.saas_checkout_sessions WHERE provider = p_event->>'provider' AND status IN ('CREATED','OPEN')) THEN
+        IF v_pending THEN
           RAISE EXCEPTION 'SAAS_PROVIDER_EVENT_NOT_READY' USING ERRCODE = '55006';
         END IF;
         result := jsonb_build_object('outcome','NEEDS_REVIEW','detail','UNKNOWN_PROVIDER_SUBSCRIPTION');
       ELSE
+        SELECT * INTO c FROM hon.saas_checkout_sessions WHERE id = v_checkout;
         v_org := c.organization_id;
         IF c.status IN ('CREATED','OPEN') THEN
           RAISE EXCEPTION 'SAAS_PROVIDER_EVENT_NOT_READY' USING ERRCODE = '55006';
