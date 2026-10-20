@@ -22,8 +22,9 @@ export function CrmAdultFlow({ row, organizationId, schoolId, onCancel, onBusy, 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [review, setReview] = useState(false);
-  const active = useRef(false), generation = useRef(0);
+  const active = useRef(false), generation = useRef(0), heading = useRef<HTMLHeadingElement | null>(null);
   const scope = { organizationId, schoolId };
+  useEffect(() => { heading.current?.focus(); }, []);
   useEffect(() => () => { generation.current++; active.current = false; }, [organizationId, schoolId, row.id]);
 
   async function run(request: AdultRequest): Promise<void> {
@@ -71,7 +72,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, onCancel, onBusy, 
   }
   const locked = busy || pending !== null;
   return <section className={styles.flow} aria-labelledby="adult-flow-title" aria-busy={busy}>
-    <header><p>ADULT CRM SETUP</p><h2 id="adult-flow-title">Set up {row.givenName} {row.familyName}</h2><p>Register adult → billing account → membership DRAFT</p>
+    <header><p>ADULT CRM SETUP</p><h2 id="adult-flow-title" ref={heading} tabIndex={-1}>Set up {row.givenName} {row.familyName}</h2><p>Register adult → billing account → membership DRAFT</p>
       <button type="button" disabled={busy} onClick={onCancel}>Close adult setup</button></header>
     <p>Each step is a separate authorized action. A DRAFT does not activate membership, create a payment schedule or collect payment.</p>
     <ol aria-label="Adult setup progress"><li aria-current={!registered ? 'step' : undefined}>Registration{registered ? ' — recorded' : ''}</li><li aria-current={registered && !account ? 'step' : undefined}>Billing account{account ? ' — recorded' : ''}</li><li aria-current={account ? 'step' : undefined}>Membership DRAFT{receipt ? ' — recorded' : ''}</li></ol>

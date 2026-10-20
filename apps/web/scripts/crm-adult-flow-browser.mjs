@@ -36,7 +36,7 @@ const api = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1:3001');
     let actor; try { actor = verifySession(cookieValue(req.headers.cookie, HON_SESSION_COOKIE) ?? '', session).externalSubject; } catch { send(res, 401, {}); return; }
     report.requests.push({ method: req.method, path: url.pathname });
-    if (url.pathname === '/v1/me/language-preference') { send(res, 200, { preference: null, schoolDefault: null, effective: { language: 'en', source: 'SYSTEM_DEFAULT' }, supportedLanguages: ['en', 'ko', 'es'] }); return; }
+    if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: null, schoolDefault: null, effective: { language: 'en', source: 'SYSTEM_DEFAULT' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
     if (actor !== 'crm-staff-synthetic' || !url.pathname.startsWith(prefix + '/')) { send(res, 403, { secret: 'private-canary' }); return; }
     if (req.method === 'GET' && url.pathname === `${prefix}/crm/leads`) { send(res, 200, [lead]); return; }
     const step = url.pathname === `${prefix}/crm/leads/${id(3)}/register` ? 'register'
@@ -93,7 +93,8 @@ async function open(viewport, actor = 'crm-staff-synthetic') {
 async function choose(page) {
   assert.equal(commands.length, 0); await page.getByLabel('Status filter').selectOption('WON'); await page.getByRole('button', { name: 'Load CRM leads', exact: true }).click();
   await page.getByRole('button', { name: 'Set up adult membership', exact: true }).focus(); await page.keyboard.press('Enter');
-  await page.getByRole('heading', { name: 'Set up Ari Stone' }).waitFor(); assert.equal(commands.length, 0);
+  const heading = page.getByRole('heading', { name: 'Set up Ari Stone' }); await heading.waitFor(); assert(await heading.evaluate(e => e === document.activeElement), 'Opening setup must transfer keyboard focus to its heading');
+  assert(await page.getByRole('button', { name: 'Load CRM leads', exact: true }).isDisabled()); assert.equal(commands.length, 0);
 }
 async function register(page) { await page.getByLabel('Date of birth', { exact: true }).fill('1990-01-02'); await page.getByRole('checkbox', { name: /reviewed this lead/ }).check(); await page.getByRole('button', { name: 'Register adult', exact: true }).click(); }
 async function accountStep(page) { await page.getByRole('checkbox', { name: /responsible for their own billing/ }).check(); await page.getByRole('button', { name: 'Create or reuse account', exact: true }).click(); await page.getByText('Existing account reused', { exact: false }).waitFor(); }
