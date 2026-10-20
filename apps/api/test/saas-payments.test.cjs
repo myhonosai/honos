@@ -166,6 +166,32 @@ test('HTTP: webhook needs a valid signature over the raw body; nothing else reac
   } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
 });
 
+test('HTTP: an initial invoice dependency returns 503 and the identical signed delivery can retry', async () => {
+  const sim = new StripeSimulator(SECRET), calls = [];
+  const identity = { organizationId: U(), checkoutId: U(), subscriptionId: U() };
+  const { app, base } = await appWith(async (operation, params) => {
+    assert.equal(operation, 'ingestProviderEvent'); calls.push(params);
+    if (calls.length === 1) throw Object.assign(new Error('SAAS_PROVIDER_EVENT_NOT_READY'), { code: '55006' });
+    return { event: { eventId: U(), providerEventId: JSON.parse(params[0]).eventId, type: 'invoice.paid',
+      outcome: 'ALREADY_APPLIED', detail: 'FIRST_INVOICE_COVERED_BY_CHECKOUT', ...identity }, replayed: false };
+  }, adapterWith(sim));
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const delivery = sim.sign({ id: 'evt_invoice_dependency', object: 'event', api_version: '2026-09-30.endive',
+      type: 'invoice.paid', livemode: false, created: now, data: { object: { id: 'in_dependency',
+        parent: { subscription_details: { subscription: 'sub_dependency' } }, billing_reason: 'subscription_create',
+        amount_paid: 14900, currency: 'usd', lines: { data: [{ period: { start: now, end: now + 2592000 } }] } } } });
+    const request = { method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': delivery.signature }, body: delivery.raw };
+    const retry = await send(`${base}/payments/webhooks/stripe`, request);
+    assert.equal(retry.status, 503); assert.equal(JSON.parse(retry.body).code, 'SAAS_PROVIDER_EVENT_RETRY');
+    assert.equal(calls.length, 1, 'no automatic database retry');
+    const applied = await send(`${base}/payments/webhooks/stripe`, request);
+    assert.equal(applied.status, 200);
+    assert.deepEqual(JSON.parse(applied.body), { received: true, outcome: 'ALREADY_APPLIED', replayed: false });
+    assert.deepEqual(calls[0], calls[1], 'retry preserves the normalized event and digest');
+  } finally { await app.close(); }
+});
+
 test('service: checkout opens through the adapter; failure and unknown outcomes are recorded safely', async () => {
   const previous = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
   try {

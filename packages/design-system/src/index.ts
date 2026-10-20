@@ -28,3 +28,5 @@ export type HonStatus = 'VERIFIED' | 'WAITING' | 'NEEDS_ATTENTION' | 'UNAVAILABL
 
 export * from './interface-themes.js';
 export * from './ai-environment.js';
+
+export * from './localization/index.js';

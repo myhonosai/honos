@@ -165,7 +165,7 @@ describe('school account readiness — merged B5/B3 facts only', () => {
   });
   it('keeps invoice, multi-school purchasing and reactivation gaps unavailable, without links or commands', () => {
     const html = renderToStaticMarkup(<SchoolReadinessNextSteps account={account('paid')}/>);
-    expect(html).toContain('School invoice history and detail'); expect(html).toContain('Unavailable until');
+    expect(html).toContain('School invoice history and detail'); expect(html).toContain('Not connected on this screen yet');
     expect(html).toContain('Purchasing for another school'); expect(html).toContain('payment does not activate features or clear a suspension');
     expect(html).not.toMatch(/<button|<a |<form/);
   });
