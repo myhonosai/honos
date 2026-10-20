@@ -20,6 +20,7 @@ const { MembershipService } = await import('../../../apps/api/dist/billing/membe
 const { CrmAdultMembershipDraftService } = await import('../../../apps/api/dist/billing/crm-adult-membership-draft.service.js');
 const { LeadRegistrationService } = await import('../../../apps/api/dist/crm/lead-registration.service.js');
 const { OwnerLaunchService } = await import('../../../apps/api/dist/owner-launch/owner-launch.service.js');
+const { LeadRegistrationRecoveryService } = await import('../../../apps/api/dist/crm/lead-registration-recovery.service.js');
 
 const admin = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
 const blocker = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
@@ -69,7 +70,7 @@ const deadlocks = async () => Number((await admin.query('SELECT deadlocks FROM p
 await admin.connect(); await blocker.connect();
 const database = new RuntimeDatabaseService();
 const services = { accounts: new BillingAccountService(database), memberships: new MembershipService(database), drafts: new CrmAdultMembershipDraftService(database),
-  registrations: new LeadRegistrationService(database), launch: new OwnerLaunchService(database) };
+  registrations: new LeadRegistrationService(database), launch: new OwnerLaunchService(database), recovery: new LeadRegistrationRecoveryService(database) };
 try {
   const marker = (await admin.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
   assert.deepEqual(marker, { owner: flexibleBillingAccountsFixture.owner, marker: 'HON disposable flexible billing accounts validation' });
@@ -113,7 +114,7 @@ try {
     const registered = await services.registrations.register(context(), lead, registerInput);
     assert.equal(registered.result.outcome, 'REGISTERED');
     const account = await services.accounts.create(context(), { responsiblePersonId: adult, currency: 'USD' });
-    return { person: adult, student: registered.result.studentProfileId, account: account.account.id };
+    return { lead, person: adult, student: registered.result.studentProfileId, account: account.account.id };
   }
   const draftInput = (student) => ({ studentProfileId: student, planCode: 'STAFF-OPAQUE', confirmation: 'I_CONFIRM_DIRECT_HUMAN_ADULT_CRM_MEMBERSHIP_DRAFT' });
   async function msDraft() {
@@ -151,6 +152,10 @@ try {
     'Adult CRM DRAFT confirmation': { prepare: async () => { const adult = await crmAdult(); await services.drafts.draft(context(), draftInput(adult.student)); return adult; },
       run: (d) => services.drafts.confirmCurrentDraft(context({ idempotencyKey: '' }), { studentProfileId: d.student }),
       check: (r) => assert.equal(typeof r, 'object'), stages: ['family_access_grants', 'people', 'billing_accounts'] },
+    // 0174: read-only recovery takes the 0163 confirmation's SHARE set in canonical order.
+    'CRM registration recovery': { prepare: async () => { const adult = await crmAdult(); await services.drafts.draft(context(), draftInput(adult.student)); return adult; },
+      run: (d) => services.recovery.recover(context({ idempotencyKey: '' }), d.lead),
+      check: (r) => assert.equal(r.workflowState, 'CURRENT_DRAFT'), stages: ['family_access_grants', 'people', 'crm_leads', 'billing_accounts', 'invoices'] },
     'Billing account create': { prepare: async () => ({ payer: await person() }),
       run: (d, db = database) => new BillingAccountService(db).create(context(), { responsiblePersonId: d.payer, currency: 'USD' }),
       check: (r) => { assert.equal(r.replayed, false); assert.equal(r.account.classification, 'CANONICAL'); },
