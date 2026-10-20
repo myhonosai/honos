@@ -117,8 +117,12 @@ try{
   // ---------- recovery through the Events API ----------
   const sinceHours=Math.min(72,Math.ceil((Date.now()-Date.parse(s.startedAt))/3600_000)+1);
   const r1=await payments.recoverEvents(H('operator'),{sinceHours});
-  const ours=r1.results.filter(e=>e.organizationId===s.organizationId);
-  log('recovery 1',{fetched:r1.fetched,applied:r1.results.length,thisCheckout:ours.map(e=>[e.type,e.providerEventId,e.outcome,e.detail])});
+  log('recovery 1',{fetched:r1.fetched,applied:r1.results.length,thisCheckout:r1.results.filter(e=>e.organizationId===s.organizationId).map(e=>[e.type,e.providerEventId,e.outcome,e.detail])});
+  // One explicit dependency pass: an initial invoice listed before its checkout is safely deferred.
+  // There is no polling loop and no second checkout or payment is created.
+  const catchUp=await payments.recoverEvents(H('operator'),{sinceHours});
+  const ours=catchUp.results.filter(e=>e.organizationId===s.organizationId);
+  log('recovery dependency pass',{fetched:catchUp.fetched,thisCheckout:ours.map(e=>[e.type,e.providerEventId,e.outcome,e.detail])});
   const completed=ours.find(e=>e.type==='checkout.session.completed');
   assert.ok(completed,'checkout.session.completed not recovered yet; re-run verify shortly.');
   assert.ok(['APPLIED','ALREADY_APPLIED'].includes(completed.outcome),`completed event outcome ${completed.outcome}/${completed.detail}`);
@@ -130,6 +134,10 @@ try{
   log('completed event api_version',evStripe.api_version);
   // ---------- HON records ----------
   const sub=(await billing.readOrganizationSubscription(H('operator'),s.organizationId)).current;
+  const initialInvoice=ours.find(e=>e.type==='invoice.paid');
+  assert.ok(initialInvoice,'initial invoice not attributed: inspect the recorded event; historical NULL-attribution receipts are not repaired by replay.');
+  assert.deepEqual([initialInvoice.organizationId,initialInvoice.checkoutId,initialInvoice.subscriptionId,initialInvoice.outcome,initialInvoice.detail],
+   [s.organizationId,s.checkoutId,sub.subscriptionId,'ALREADY_APPLIED','FIRST_INVOICE_COVERED_BY_CHECKOUT']);
   assert.deepEqual([sub.status,sub.planCode,sub.offerKind,sub.paymentStatus,sub.currentPeriod.index],['IN_SERVICE','CORE','REGULAR_MONTHLY','PAID',0]);
   assert.equal((await payments.readPlanOptions(H('schoolOwner'),s.schoolId)).paymentVerification,'PROVIDER_VERIFIED');
   const co=(await admin.query('SELECT status,amount_minor,currency,provider,provider_mode,provider_subscription_ref,subscription_id,invoice_id FROM hon.saas_checkout_sessions WHERE id=$1',[s.checkoutId])).rows[0];

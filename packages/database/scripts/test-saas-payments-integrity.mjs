@@ -82,6 +82,24 @@ const start=(who,school,offerId,key=K())=>payments.startSchoolCheckout(H(who),sc
 const sessionOf=r=>r.checkout.providerSessionId;
 const subOf=async org=>(await billing.readOrganizationSubscription(H('operator'),org)).current;
 const offerOf=(opts,kind)=>opts.offers.find(o=>o.offerKind===kind).offerId;
+// A NOT_READY event must leave no claim, audit/outbox or final provider-event row behind.
+async function eventWrites(id){return (await admin.query(`WITH k AS (SELECT md5('saas.provider.event:STRIPE_SIMULATED:'||$1)::uuid id)
+ SELECT (SELECT count(*)::int FROM hon.saas_requests,k WHERE idempotency_key=k.id) requests,
+ (SELECT count(*)::int FROM hon.saas_audit,k WHERE idempotency_key=k.id) audit,
+ (SELECT count(*)::int FROM hon.saas_outbox o JOIN hon.saas_audit a ON a.id=o.audit_id,k WHERE a.idempotency_key=k.id) outbox,
+ (SELECT count(*)::int FROM hon.saas_provider_events WHERE provider='STRIPE_SIMULATED' AND provider_event_id=$1) events`,[id])).rows[0];}
+async function initialAttribution(delivery,organizationId,checkoutId,subscriptionId){
+ const receipt=await deliver(delivery),event=receipt.event;
+ assert.deepEqual([event.outcome,event.detail,event.organizationId,event.checkoutId,event.subscriptionId],
+  ['ALREADY_APPLIED','FIRST_INVOICE_COVERED_BY_CHECKOUT',organizationId,checkoutId,subscriptionId]);
+ const stored=(await admin.query('SELECT organization_id,checkout_id,subscription_id FROM hon.saas_provider_events WHERE provider=$1 AND provider_event_id=$2',
+  ['STRIPE_SIMULATED',event.providerEventId])).rows;
+ assert.deepEqual(stored,[{organization_id:organizationId,checkout_id:checkoutId,subscription_id:subscriptionId}]);
+ const audit=(await admin.query("SELECT organization_id FROM hon.saas_audit WHERE action_code='saas.provider.event' AND entity_id=$1",[event.eventId])).rows;
+ assert.deepEqual(audit,[{organization_id:organizationId}]);
+ assert.deepEqual(await eventWrites(event.providerEventId),{requests:1,audit:1,outbox:1,events:1});
+ return receipt;
+}
 
 await Promise.all([admin.connect(),restricted.connect()]);
 try{
@@ -187,7 +205,7 @@ try{
  assert.deepEqual([dupA.replayed,dupA.event.eventId],[true,actA.event.eventId],'a redelivered event is a replay');
  const altered={...JSON.parse(paidA.completed.raw.toString())};altered.data.object.amount_total=100;
  await deny(deliver(sim.sign(altered)),409,'SAAS_PROVIDER_EVENT_CONFLICT'); // same event id, different content
- assert.deepEqual(await outcome(paidA.firstInvoice),['ALREADY_APPLIED','FIRST_INVOICE_COVERED_BY_CHECKOUT']);
+ await initialAttribution(paidA.firstInvoice,A.id,coA.checkout.checkoutId,actA.event.subscriptionId);
  let subA=await subOf(A.id);
  assert.deepEqual([subA.status,subA.planCode,subA.offerKind,subA.paymentStatus,(await options('ownerA',A.school)).paymentVerification,subA.currentPeriod.index],['IN_SERVICE','CORE','REGULAR_MONTHLY','PAID','PROVIDER_VERIFIED',0]);
  assert.equal(subA.paidThroughAt,subA.currentPeriod.endsAt);
@@ -238,11 +256,23 @@ try{
  assert.equal((await options(`owner${loser}`,O[loser].school)).offers.find(o=>o.offerKind==='FOUNDER_MONTHLY').founderSlotsRemaining,1);
  const coL=await start(`owner${loser}`,O[loser].school,founderMonthly);
  assert.equal(coL.checkout.status,'OPEN');
- // Out of order: the first subscription invoice arrives before the checkout completion.
+ // Out of order: the first invoice cannot finalize until its checkout mapping has committed.
  const paidL=sim.completeCheckout(sessionOf(coL));
- assert.deepEqual(await outcome(paidL.firstInvoice),['ALREADY_APPLIED','FIRST_INVOICE_COVERED_BY_CHECKOUT']);
- assert.deepEqual(await outcome(paidL.completed),['APPLIED','SUBSCRIPTION_ACTIVATED']);
+ await deny(deliver(paidL.firstInvoice),503,'SAAS_PROVIDER_EVENT_RETRY');
+ assert.deepEqual(await eventWrites(paidL.firstInvoice.event.id),{requests:0,audit:0,outbox:0,events:0});
+ assert.equal(await subOf(O[loser].id),null,'an early invoice does not activate a subscription');
+ // Different events can overlap. The invoice either observes the committed checkout or safely retries.
+ const overlap=await Promise.allSettled([deliver(paidL.completed),deliver(paidL.firstInvoice)]);
+ assert.equal(overlap[0].status,'fulfilled',overlap[0].reason?.stack);
+ assert.deepEqual([overlap[0].value.event.outcome,overlap[0].value.event.detail],['APPLIED','SUBSCRIPTION_ACTIVATED']);
+ if(overlap[1].status==='rejected')http(503,'SAAS_PROVIDER_EVENT_RETRY')(overlap[1].reason);
  const subL=await subOf(O[loser].id);
+ const initialL=await initialAttribution(paidL.firstInvoice,O[loser].id,coL.checkout.checkoutId,subL.subscriptionId);
+ const duplicateL=await initialAttribution(paidL.firstInvoice,O[loser].id,coL.checkout.checkoutId,subL.subscriptionId);
+ assert.equal(duplicateL.replayed,true);assert.equal(duplicateL.event.eventId,initialL.event.eventId);
+ const conflictingL=structuredClone(paidL.firstInvoice.event);conflictingL.data.object.amount_paid++;
+ await deny(deliver(sim.sign(conflictingL)),409,'SAAS_PROVIDER_EVENT_CONFLICT');
+ assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_payment_evidence WHERE organization_id=$1 AND kind='PAYMENT_RECEIVED'",[O[loser].id])).rows[0].n,1);
  assert.deepEqual([subL.offerKind,subL.priceMinor,subL.paymentStatus],['FOUNDER_MONTHLY',7900,'PAID']);
  assert.equal((await admin.query("SELECT status FROM hon.saas_founder_reservations WHERE organization_id=$1 AND status='ALLOCATED'",[O[loser].id])).rowCount,1);
  // The second winner's payment is asynchronous and then fails: no subscription; the slot returns.
@@ -363,20 +393,58 @@ try{
  await payments.cancelCheckout(H('ownerY'),coY.checkout.checkoutId,{expectedVersion:(await options('ownerY',O.Y.school)).checkout.version},K());
  assert.deepEqual(await outcome(sim.refund('pi_unknown000001',null,5000)),['NEEDS_REVIEW','UNMATCHED_PAYMENT']);
  assert.deepEqual(await outcome(sim.renewal('sub_unknown000001',Math.floor(Date.now()/1000),14900).delivery),['NEEDS_REVIEW','UNKNOWN_PROVIDER_SUBSCRIPTION']);
+ // A genuinely unmatched initial invoice is reviewable and cannot acquire scope from provider metadata.
+ const unknownInitial=structuredClone(paidL.firstInvoice.event);unknownInitial.id='evt_unmatched_initial_invoice';
+ Object.assign(unknownInitial.data.object,{subscription:'sub_unknownInitial001',id:'in_unknownInitial001',
+  metadata:{honOrganizationId:A.id,honCheckoutId:coA.checkout.checkoutId}});
+ const unknownReceipt=await deliver(sim.sign(unknownInitial));
+ assert.deepEqual([unknownReceipt.event.outcome,unknownReceipt.event.detail,unknownReceipt.event.organizationId,unknownReceipt.event.checkoutId,unknownReceipt.event.subscriptionId],
+  ['NEEDS_REVIEW','UNKNOWN_PROVIDER_SUBSCRIPTION',null,null,null]);
+ assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_provider_payment_refs WHERE ref='in_unknownInitial001'")).rows[0].n,0);
 
  // ---------- 13. missed webhooks: recovery re-fetches provider events and applies them once ----------
  const coV=await start('ownerV',O.V.school,offerOf(await options('ownerV',O.V.school),'REGULAR_MONTHLY'));
  const missed=sim.completeCheckout(sessionOf(coV)); // never delivered by webhook
+ // Force the recovery tie seen in the sandbox: Stripe lists newest first, both timestamps equal.
+ missed.firstInvoice.event.created=missed.completed.event.created;
+ missed.firstInvoice=sim.sign(missed.firstInvoice.event);
  assert.equal(await subOf(O.V.id),null);
  await deny(payments.recoverEvents(H('support'),{sinceHours:1}),403,'SAAS_FORBIDDEN');
  const recovered=await payments.recoverEvents(H('operator'),{sinceHours:1});
  assert.equal(recovered.fetched,sim.events.length);
  assert.equal((await subOf(O.V.id)).paymentStatus,'PAID');
  assert.ok(recovered.results.some(r=>r.type==='checkout.session.completed'&&r.organizationId===O.V.id&&r.outcome==='APPLIED'));
+ assert.equal(recovered.results.some(r=>r.providerEventId===missed.firstInvoice.event.id),false,'early invoice deferred rather than finalized without a tenant');
+ assert.deepEqual(await eventWrites(missed.firstInvoice.event.id),{requests:0,audit:0,outbox:0,events:0});
  const again=await payments.recoverEvents(H('operator'),{sinceHours:1});
+ await initialAttribution(missed.firstInvoice,O.V.id,coV.checkout.checkoutId,(await subOf(O.V.id)).subscriptionId);
  assert.equal(again.results.filter(r=>r.outcome==='APPLIED'&&r.organizationId===O.V.id).length,1,'already-applied events replay');
  assert.equal((await admin.query('SELECT count(*)::int n FROM hon.saas_subscriptions WHERE organization_id=$1',[O.V.id])).rows[0].n,1);
  assert.equal((await deliver(missed.completed)).replayed,true); // the late webhook is a replay
+ // Failure after reference linking must roll back the references AND the idempotency claim.
+ const rollbackEvent=structuredClone(paidA.firstInvoice.event);rollbackEvent.id='evt_initial_invoice_rollback';
+ Object.assign(rollbackEvent.data.object,{id:'in_initialRollback001',payment_intent:'pi_initialRollback001'});
+ const paymentCounts=async()=>(await admin.query(`SELECT
+  (SELECT count(*)::int FROM hon.saas_subscriptions) subscriptions,
+  (SELECT count(*)::int FROM hon.saas_invoices) invoices,
+  (SELECT count(*)::int FROM hon.saas_payment_evidence) evidence,
+  (SELECT count(*)::int FROM hon.saas_credit_allowances) allowances`)).rows[0];
+ const beforeRollback=await paymentCounts();
+ await admin.query(`CREATE FUNCTION hon.fixture_initial_invoice_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+  BEGIN IF NEW.provider_event_id='evt_initial_invoice_rollback' THEN RAISE EXCEPTION 'FIXTURE_RETRY' USING ERRCODE='40001'; END IF; RETURN NEW; END $$;
+  REVOKE ALL ON FUNCTION hon.fixture_initial_invoice_failure() FROM PUBLIC;
+  CREATE TRIGGER fixture_initial_invoice_failure BEFORE INSERT ON hon.saas_provider_events FOR EACH ROW EXECUTE FUNCTION hon.fixture_initial_invoice_failure()`);
+ try{
+  await deny(deliver(sim.sign(rollbackEvent)),503,'SAAS_PROVIDER_EVENT_RETRY');
+  assert.deepEqual(await eventWrites(rollbackEvent.id),{requests:0,audit:0,outbox:0,events:0});
+  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_provider_payment_refs WHERE ref IN ('in_initialRollback001','pi_initialRollback001')")).rows[0].n,0);
+  assert.deepEqual(await paymentCounts(),beforeRollback);
+ }finally{await admin.query('DROP TRIGGER fixture_initial_invoice_failure ON hon.saas_provider_events; DROP FUNCTION hon.fixture_initial_invoice_failure()');}
+ await initialAttribution(sim.sign(rollbackEvent),A.id,coA.checkout.checkoutId,subA.subscriptionId);
+ assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_provider_payment_refs WHERE ref IN ('in_initialRollback001','pi_initialRollback001')")).rows[0].n,2);
+ const anotherId=structuredClone(rollbackEvent);anotherId.id='evt_initial_invoice_duplicate';
+ await initialAttribution(sim.sign(anotherId),A.id,coA.checkout.checkoutId,subA.subscriptionId);
+ assert.deepEqual(await paymentCounts(),beforeRollback,'new event IDs for an already-covered first invoice cannot duplicate accounting');
  // Events for another provider than the configured one are refused in the database itself.
  const otherProvider={provider:'STRIPE',eventId:'evt_wrongprovider01',type:'customer.created',livemode:false,createdAt:iso(Date.now()),object:{}};
  await sqlDeny(restricted.query('SELECT hon.ingest_saas_provider_event($1::jsonb,$2)',[JSON.stringify(otherProvider),'0'.repeat(64)]),'42501');
