@@ -11,6 +11,8 @@ BEGIN;
 -- - INACTIVE: the paid-access program can only be INACTIVE (0170 CHECK). Every path here that changes access
 --   requires it to be ACTIVE, so nothing changes for any real organization until a reviewed migration after
 --   owner approval. Existing provisioned schools are untouched; no suspension, cancellation, refund or dunning.
+-- - Six staff scope resolvers (achievements, staff reporting, follow-ups, human work, teaching studio, testing
+--   registration review) also require the entitlement to be ACTIVE and in effect, closing the recorded coverage gaps.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls)
     AND rolname NOT IN ('hon_runtime','anon','authenticated','service_role')) THEN
@@ -596,6 +598,138 @@ BEGIN
     jsonb_build_object('outcome', result->>'outcome', 'detail', result->>'detail'),
     jsonb_build_object('outcome', result->>'outcome', 'detail', result->>'detail', 'checkoutId', c.id, 'access', hon.saas_organization_access(c.organization_id)), at);
 END $$;
+
+-- ---------- staff scope resolvers: entitlement in effect (the six recorded B6A coverage gaps) ----------
+-- These resolvers checked identity and permission but not the entitlement, so a SUSPENDED organization (which
+-- includes one awaiting its first payment) still resolved them. Each now also requires the organization's
+-- entitlement to be ACTIVE and in effect, the same test resolve_renewal_scope already applies. The check is
+-- applied after each resolver's existing ambiguity rule, so for an organization in effect the result is exactly
+-- what it was; signatures, volatility, SECURITY DEFINER, search path, owner and grants are unchanged.
+CREATE OR REPLACE FUNCTION hon.resolve_achievement_scope(subject text,p_school uuid) RETURNS TABLE(principal_id uuid,organization_id uuid,school_id uuid) LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+ SELECT DISTINCT p.id,g.organization_id,g.school_id FROM hon.users u JOIN hon.principals p ON p.user_id=u.id JOIN hon.principal_role_grants g ON g.principal_id=p.id
+ WHERE u.external_subject=subject AND g.school_id=p_school AND EXISTS(SELECT 1 FROM unnest(ARRAY['achievement.definition.read','achievement.definition.manage','achievement.award.read','achievement.award.record']) code WHERE hon.achievement_permission(p.id,g.organization_id,g.school_id,code))
+  AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=g.organization_id AND e.status='ACTIVE' AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
+$$;
+
+CREATE OR REPLACE FUNCTION hon.resolve_follow_up_scope(subject text) RETURNS TABLE(principal_id uuid,organization_id uuid,school_id uuid) LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+ WITH candidates AS(SELECT DISTINCT p.id principal_id,g.organization_id,g.school_id FROM hon.users u JOIN hon.principals p ON p.user_id=u.id JOIN hon.principal_role_grants g ON g.principal_id=p.id
+ WHERE u.external_subject=subject AND hon.follow_up_has_permission(p.id,g.organization_id,g.school_id,'crm.lead.read')
+ AND (hon.follow_up_has_permission(p.id,g.organization_id,g.school_id,'crm.follow_up.self_manage') OR hon.follow_up_has_permission(p.id,g.organization_id,g.school_id,'crm.follow_up.manage')))
+ SELECT c.* FROM candidates c WHERE (SELECT count(*) FROM candidates)=1
+  AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=c.organization_id AND e.status='ACTIVE' AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
+$$;
+
+CREATE OR REPLACE FUNCTION hon.resolve_human_work_scope(subject text) RETURNS TABLE(principal_id uuid,organization_id uuid,school_id uuid) LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+ WITH candidates AS(SELECT DISTINCT p.id principal_id,g.organization_id,g.school_id FROM hon.users u JOIN hon.principals p ON p.user_id=u.id JOIN hon.principal_role_grants g ON g.principal_id=p.id
+ WHERE u.external_subject=subject AND (hon.human_work_permission(p.id,g.organization_id,g.school_id,'work_item.create') OR hon.human_work_permission(p.id,g.organization_id,g.school_id,'work_item.manage') OR hon.human_work_permission(p.id,g.organization_id,g.school_id,'work_item.self_manage')))
+ SELECT c.* FROM candidates c WHERE (SELECT count(*) FROM candidates)=1
+  AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=c.organization_id AND e.status='ACTIVE' AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
+$$;
+
+CREATE OR REPLACE FUNCTION hon.resolve_teaching_studio_scope(subject text,p_school uuid) RETURNS TABLE(principal_id uuid,organization_id uuid,school_id uuid)
+LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+ SELECT DISTINCT p.id,g.organization_id,g.school_id FROM hon.users u JOIN hon.principals p ON p.user_id=u.id JOIN hon.principal_role_grants g ON g.principal_id=p.id
+ WHERE u.external_subject=subject AND g.school_id=p_school AND EXISTS(SELECT 1 FROM unnest(ARRAY['teaching.studio.read','teaching.lesson.manage','teaching.resource.manage','teaching.assessment.record']) code
+  WHERE hon.teaching_studio_permission(p.id,g.organization_id,g.school_id,code))
+  AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=g.organization_id AND e.status='ACTIVE' AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
+$$;
+
+-- The caller requires exactly one scope. Every candidate must be in effect, so a suspended scope can neither be
+-- returned nor be silently dropped to turn an ambiguous (refused) subject into a resolved one.
+CREATE OR REPLACE FUNCTION hon.resolve_testing_registration_review_scopes(p_subject text)
+RETURNS TABLE(principal_id uuid,organization_id uuid,school_id uuid)
+LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+ WITH scopes AS(SELECT DISTINCT p.id principal_id,g.organization_id,g.school_id
+ FROM hon.users u JOIN hon.principals p ON p.user_id=u.id AND p.principal_type='HUMAN_USER' AND p.is_active
+ JOIN hon.principal_role_grants g ON g.principal_id=p.id AND g.revoked_at IS NULL AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())
+ JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id AND (r.management_school_id IS NULL OR r.management_school_id=g.school_id)
+ JOIN hon.role_permissions rp ON rp.role_id=r.id AND rp.organization_id=r.organization_id AND rp.permission_code='testing.registration.review'
+ JOIN hon.schools s ON s.id=g.school_id AND s.organization_id=g.organization_id AND s.status='ACTIVE'
+ JOIN hon.organizations o ON o.id=s.organization_id AND o.status='ACTIVE'
+ WHERE u.external_subject=p_subject AND length(btrim(p_subject)) BETWEEN 1 AND 200
+  AND (SELECT count(*) FROM hon.principals x WHERE x.user_id=u.id AND x.principal_type='HUMAN_USER' AND x.is_active)=1
+ ORDER BY g.organization_id,g.school_id LIMIT 2)
+ SELECT s.* FROM scopes s WHERE NOT EXISTS(SELECT 1 FROM scopes x WHERE NOT EXISTS(SELECT 1 FROM hon.organization_entitlements e
+  WHERE e.organization_id=x.organization_id AND e.status='ACTIVE' AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp())))
+ ORDER BY s.organization_id,s.school_id;
+$$;
+
+-- Same body as 0141 with the entitlement test on the single final candidate (statement time, as 0141 uses).
+CREATE OR REPLACE FUNCTION hon.resolve_current_staff_reporting_scope(p_subject text)
+RETURNS TABLE (organization_id uuid, school_id uuid)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, hon
+AS $$
+  WITH live_identity AS MATERIALIZED (
+    SELECT principal.id AS principal_id
+    FROM hon.users AS app_user
+    JOIN hon.principals AS principal ON principal.user_id = app_user.id
+    WHERE app_user.external_subject = p_subject
+      AND principal.principal_type = 'HUMAN_USER' AND principal.is_active
+      -- users has no separate activation flag; a live user is its unique active
+      -- human principal. Reject any additional active principal, not just staff.
+      AND (SELECT count(*) FROM hon.principals AS other
+           WHERE other.user_id = app_user.id AND other.is_active) = 1
+      -- Match 0077: any HQ grant excludes an ordinary-staff default, even expired.
+      AND NOT EXISTS (SELECT 1 FROM hon.hq_operator_grants AS hq
+                      WHERE hq.principal_id = principal.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM hon.family_access_grants AS family
+        WHERE family.principal_id = principal.id AND family.effective_from <= statement_timestamp()
+          AND (family.effective_until IS NULL OR family.effective_until > statement_timestamp())
+      )
+      -- A mixed role at ANY school is disqualifying, even without reporting.view.
+      AND NOT EXISTS (
+        SELECT 1 FROM hon.principal_role_grants AS mixed
+        JOIN hon.roles AS mixed_role ON mixed_role.id = mixed.role_id
+          AND mixed_role.organization_id = mixed.organization_id
+        WHERE mixed.principal_id = principal.id AND mixed.revoked_at IS NULL
+          AND mixed.effective_from <= statement_timestamp()
+          AND (mixed.effective_until IS NULL OR mixed.effective_until > statement_timestamp())
+          AND mixed_role.code ~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)'
+      )
+  ), current_scopes AS MATERIALIZED (
+    SELECT DISTINCT identity.principal_id, role_grant.organization_id, role_grant.school_id
+    FROM live_identity AS identity
+    JOIN hon.principal_role_grants AS role_grant ON role_grant.principal_id = identity.principal_id
+    JOIN hon.roles AS role ON role.id = role_grant.role_id AND role.organization_id = role_grant.organization_id
+    JOIN hon.schools AS school ON school.id = role_grant.school_id
+      AND school.organization_id = role_grant.organization_id AND school.status = 'ACTIVE'
+    JOIN hon.organizations AS organization ON organization.id = school.organization_id AND organization.status = 'ACTIVE'
+    WHERE role_grant.revoked_at IS NULL AND role_grant.effective_from <= statement_timestamp()
+      AND (role_grant.effective_until IS NULL OR role_grant.effective_until > statement_timestamp())
+      AND (role.management_school_id IS NULL OR role.management_school_id = school.id)
+      AND role.code !~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)'
+  ), candidates AS MATERIALIZED (
+    SELECT scope.organization_id, scope.school_id
+    FROM current_scopes AS scope
+    -- Conservative exact-one live school, including a second non-reporting scope.
+    WHERE (SELECT count(*) FROM current_scopes) = 1
+      AND hon.staff_member_eligible(scope.principal_id, scope.organization_id, scope.school_id)
+      AND EXISTS (
+        SELECT 1 FROM hon.principal_role_grants AS role_grant
+        JOIN hon.roles AS role ON role.id = role_grant.role_id AND role.organization_id = role_grant.organization_id
+        JOIN hon.role_permissions AS role_permission ON role_permission.role_id = role.id
+          AND role_permission.organization_id = role.organization_id
+        JOIN hon.permissions AS permission ON permission.code = role_permission.permission_code
+        WHERE role_grant.principal_id = scope.principal_id
+          AND role_grant.organization_id = scope.organization_id AND role_grant.school_id = scope.school_id
+          AND role_grant.revoked_at IS NULL AND role_grant.effective_from <= statement_timestamp()
+          AND (role_grant.effective_until IS NULL OR role_grant.effective_until > statement_timestamp())
+          AND (role.management_school_id IS NULL OR role.management_school_id = scope.school_id)
+          AND role.code !~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)'
+          AND permission.code = 'reporting.view' AND permission.is_staff_assignable
+      )
+  )
+  SELECT candidates.organization_id, candidates.school_id FROM candidates
+  WHERE (SELECT count(*) FROM candidates) = 1
+    AND EXISTS (SELECT 1 FROM hon.organization_entitlements AS entitlement
+                WHERE entitlement.organization_id = candidates.organization_id AND entitlement.status = 'ACTIVE'
+                  AND entitlement.effective_from <= statement_timestamp()
+                  AND (entitlement.effective_until IS NULL OR entitlement.effective_until > statement_timestamp()));
+$$;
 
 COMMENT ON FUNCTION hon.saas_organization_access(uuid) IS
   'Central access authority: the canonical entitlement plus how it was obtained (provisioned, awaiting first payment, payment-activated) and its plan capabilities.';

@@ -13,9 +13,9 @@ can still see its billing).
 
 | Classification | Meaning | Count |
 |---|---|---|
-| STATUS_GATED | Checks `status = 'ACTIVE'`: a SUSPENDED entitlement is refused | 132 |
+| STATUS_GATED | Checks `status = 'ACTIVE'`: a SUSPENDED entitlement is refused | 138 |
 | TIER_ONLY | Reads the tier but not the status: a SUSPENDED entitlement would still pass | 2 |
-| UNGATED | No entitlement reference (directly or through helpers) | 57 |
+| UNGATED | No entitlement reference (directly or through helpers) | 51 |
 | HQ_SCOPE | HQ platform functions, governed by HQ grants | 74 |
 | PROVIDER_SCOPE | Provider entry points with no human subject | 1 |
 
@@ -206,9 +206,13 @@ can still see its billing).
 | `hon.register_owner_launch_student(text,jsonb,text,uuid,uuid)` | STATUS_GATED | `lock_owner_launch_actor` |
 | `hon.require_ai_invocation_plan_access()` | STATUS_GATED |  |
 | `hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)` | STATUS_GATED | `require_saas_school_actor` |
+| `hon.resolve_achievement_scope(text,uuid)` | STATUS_GATED |  |
 | `hon.resolve_chad_follow_up_scope(text)` | STATUS_GATED |  |
 | `hon.resolve_community_scope(text,uuid)` | STATUS_GATED | `community_permission` |
 | `hon.resolve_crm_lead_close_scope(text,uuid)` | STATUS_GATED |  |
+| `hon.resolve_current_staff_reporting_scope(text)` | STATUS_GATED |  |
+| `hon.resolve_follow_up_scope(text)` | STATUS_GATED |  |
+| `hon.resolve_human_work_scope(text)` | STATUS_GATED |  |
 | `hon.resolve_instructor_qualification_scope(text)` | STATUS_GATED | `instructor_qualification_permission` |
 | `hon.resolve_marketplace_scope(text,uuid)` | STATUS_GATED | `marketplace_permission` |
 | `hon.resolve_owner_launch_scope(text)` | STATUS_GATED |  |
@@ -217,7 +221,9 @@ can still see its billing).
 | `hon.resolve_retention_attention_alert(text,uuid,uuid,integer,text,uuid,uuid,uuid)` | STATUS_GATED | `require_retention_attention_actor` |
 | `hon.resolve_retention_review_scope(text,uuid)` | STATUS_GATED |  |
 | `hon.resolve_teaching_assistant_scope(text)` | STATUS_GATED |  |
+| `hon.resolve_teaching_studio_scope(text,uuid)` | STATUS_GATED |  |
 | `hon.resolve_testing_certificate_scope(text,uuid)` | STATUS_GATED | `testing_certificate_permission` |
+| `hon.resolve_testing_registration_review_scopes(text)` | STATUS_GATED |  |
 | `hon.resolve_testing_scorecard_scope(text,uuid)` | STATUS_GATED | `testing_scorecard_permission` |
 | `hon.save_approved_marketing_draft(text,uuid)` | STATUS_GATED | `marketing_owner` |
 | `hon.save_approved_teaching_draft(text,uuid)` | STATUS_GATED | `read_teaching_invocation` |
@@ -267,20 +273,14 @@ can still see its billing).
 | `hon.reject_marketing_draft(uuid)` | UNGATED |  |
 | `hon.reject_teaching_draft(uuid)` | UNGATED |  |
 | `hon.require_tenant_context()` | UNGATED |  |
-| `hon.resolve_achievement_scope(text,uuid)` | UNGATED |  |
 | `hon.resolve_authorized_scope(text,uuid,text)` | UNGATED |  |
 | `hon.resolve_automation_rule_scope(text,text)` | UNGATED |  |
 | `hon.resolve_campaign_scope(text,text)` | UNGATED |  |
-| `hon.resolve_current_staff_reporting_scope(text)` | UNGATED |  |
-| `hon.resolve_follow_up_scope(text)` | UNGATED |  |
-| `hon.resolve_human_work_scope(text)` | UNGATED |  |
 | `hon.resolve_lead_import_scope(text,text)` | UNGATED |  |
 | `hon.resolve_parent_family_scope(text,uuid)` | UNGATED |  |
 | `hon.resolve_parent_journey_scopes(text)` | UNGATED |  |
 | `hon.resolve_public_form_scope(text,text)` | UNGATED |  |
 | `hon.resolve_staff_availability_scope(text,text)` | UNGATED |  |
-| `hon.resolve_teaching_studio_scope(text,uuid)` | UNGATED |  |
-| `hon.resolve_testing_registration_review_scopes(text)` | UNGATED |  |
 | `hon.search_school(text,uuid,uuid,text,text[],uuid)` | UNGATED |  |
 | `hon.set_my_language_preference(text,jsonb,uuid,uuid,uuid)` | UNGATED |  |
 | `hon.set_school_language_default(text,uuid,jsonb,uuid,uuid,uuid)` | UNGATED |  |

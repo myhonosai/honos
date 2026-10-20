@@ -90,6 +90,12 @@ const transitions=async org=>(await admin.query("SELECT kind,outcome,reason FROM
 const checkoutRow=async id=>(await admin.query("SELECT status,status_reason,version FROM hon.saas_checkout_sessions WHERE id=$1",[id])).rows[0];
 const allowances=async org=>(await admin.query("SELECT a.allowance_credits,a.period_index FROM hon.saas_credit_allowances a JOIN hon.saas_subscriptions s ON s.id=a.subscription_id WHERE s.organization_id=$1",[org])).rows;
 const capable=async(org,cap)=>(await admin.query('SELECT hon.saas_capability_allowed($1,$2) a',[org,cap])).rows[0].a;
+// A deferred (NOT_READY) provider event must leave no claim, audit/outbox or provider-event row behind.
+async function eventWrites(id){return (await admin.query(`WITH k AS (SELECT md5('saas.provider.event:STRIPE_SIMULATED:'||$1)::uuid id)
+ SELECT (SELECT count(*)::int FROM hon.saas_requests,k WHERE idempotency_key=k.id) requests,
+ (SELECT count(*)::int FROM hon.saas_audit,k WHERE idempotency_key=k.id) audit,
+ (SELECT count(*)::int FROM hon.saas_outbox o JOIN hon.saas_audit a ON a.id=o.audit_id,k WHERE a.idempotency_key=k.id) outbox,
+ (SELECT count(*)::int FROM hon.saas_provider_events WHERE provider='STRIPE_SIMULATED' AND provider_event_id=$1) events`,[id])).rows[0];}
 const placeAwaiting=async(k,who='owner')=>access.awaitFirstPayment(H(who),O[k].id,{expectedEntitlementVersion:(await ent(O[k].id)).version},K());
 
 await Promise.all([admin.connect(),restricted.connect()]);
@@ -192,9 +198,12 @@ try{
  const coA=await start('ownerA',O.A.school,offer(optsA,'COMPLETE','FOUNDER_MONTHLY'));
  assert.deepEqual([coA.checkout.planCode,coA.checkout.offerKind,coA.checkout.amountMinor],['COMPLETE','FOUNDER_MONTHLY',14900]);
  const paidA=sim.completeCheckout(coA.checkout.providerSessionId);
- // Out of order: the first subscription invoice arrives before the checkout completion.
- assert.deepEqual(await outcome(paidA.firstInvoice),['ALREADY_APPLIED','FIRST_INVOICE_COVERED_BY_CHECKOUT']);
+ // Out of order: the first subscription invoice arrives before the checkout completion. Since 0173 it cannot be
+ // finalized without its checkout mapping: it is refused for provider redelivery and leaves nothing behind.
+ await deny(deliver(paidA.firstInvoice),503,'SAAS_PROVIDER_EVENT_RETRY');
+ assert.deepEqual(await eventWrites(paidA.firstInvoice.event.id),{requests:0,audit:0,outbox:0,events:0});
  assert.equal((await ent(O.A.id)).status,'SUSPENDED','an invoice event alone never activates');
+ assert.deepEqual(await transitions(O.A.id),['AWAITING_FIRST_PAYMENT:APPLIED:AWAITING_INITIAL_PAYMENT']);
  // The same completion delivered six times concurrently activates exactly once.
  await Promise.all(Array.from({length:8},()=>readAccess(O.Q.id)));
  const racedA=await Promise.allSettled(Array.from({length:6},()=>deliver(paidA.completed)));
@@ -205,6 +214,12 @@ try{
  const firstA=okA.find(r=>!r.replayed);
  assert.deepEqual([firstA.event.outcome,firstA.event.detail,firstA.event.organizationId],['APPLIED','ACCESS_ACTIVATED',O.A.id]);
  assert.equal((await deliver(paidA.completed)).replayed,true);
+ // The redelivered early invoice now attributes to A's checkout and subscription and changes nothing else.
+ const invA=await deliver(paidA.firstInvoice);
+ assert.deepEqual([invA.replayed,invA.event.outcome,invA.event.detail,invA.event.organizationId,invA.event.checkoutId,invA.event.subscriptionId],
+  [false,'ALREADY_APPLIED','FIRST_INVOICE_COVERED_BY_CHECKOUT',O.A.id,coA.checkout.checkoutId,firstA.event.subscriptionId]);
+ assert.deepEqual(await eventWrites(paidA.firstInvoice.event.id),{requests:1,audit:1,outbox:1,events:1});
+ assert.equal((await deliver(paidA.firstInvoice)).replayed,true);
  const entA=await ent(O.A.id);
  assert.deepEqual([entA.tier,entA.status,entA.version],['COMPLETE','ACTIVE',vA+2]);
  a=await readAccess(O.A.id);
@@ -332,7 +347,7 @@ try{
  assert.deepEqual((await admin.query('SELECT status,mutations_enabled FROM hon.saas_access_program')).rows,[{status:'INACTIVE',mutations_enabled:false}]);
  assert.equal((await admin.query("SELECT pg_get_constraintdef(oid) d FROM pg_constraint WHERE conname='saas_access_program_status_check'")).rows[0].d,STATUS_CHECK);
  await deny(placeAwaiting('Q'),422,'SAAS_ACCESS_NOT_ACTIVE');
- console.log('PASS: HON paid access B6A proof (program INACTIVE as shipped; ACTIVE simulated in the disposable database only, then restored) — every B6A command refused while inactive; HQ-owner-only awaiting placement with version, idempotency and closed input; awaiting schools keep billing, plan and checkout but no capabilities; school-chosen Core or Complete with server-frozen price; verified payment activates tier, access state and the full 12,000/5,000 allowance once in one transaction (6 concurrent replays, out-of-order invoice); Core lacks Complete capabilities; tampered amount, late payment, inactive program and forced failure become HQ review states with no partial grant; HQ retry completes held or failed activations and refuses refunded payments; simultaneous purchases isolated; provisioned schools untouched.');
+ console.log('PASS: HON paid access B6A proof (program INACTIVE as shipped; ACTIVE simulated in the disposable database only, then restored) — every B6A command refused while inactive; HQ-owner-only awaiting placement with version, idempotency and closed input; awaiting schools keep billing, plan and checkout but no capabilities; school-chosen Core or Complete with server-frozen price; verified payment activates tier, access state and the full 12,000/5,000 allowance once in one transaction (6 concurrent replays; an invoice before checkout is deferred for redelivery, then attributed); Core lacks Complete capabilities; tampered amount, late payment, inactive program and forced failure become HQ review states with no partial grant; HQ retry completes held or failed activations and refuses refunded payments; simultaneous purchases isolated; provisioned schools untouched.');
 }finally{
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
  await cleanup().catch(e=>console.error(e));

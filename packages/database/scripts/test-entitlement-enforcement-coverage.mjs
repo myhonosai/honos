@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 // call runs in a rolled-back savepoint, so nothing persists. Outcomes:
 //   ENFORCED            the suspended call is refused where the active call is not, or refused differently
 //   OPEN_BY_DESIGN      both succeed and the function is on the reviewed allowlist (billing recovery, settings, ...)
-//   OPEN_KNOWN_GAP      both succeed and the function is a reviewed gap that B6B must gate before suspension
+//   OPEN_KNOWN_GAP      both succeed and the function is a reviewed gap (none remain after 0172)
 //   NOT_REACHED         both refused identically before any entitlement decision (needs richer input)
 // The proof fails on any OPEN function that is neither allowlisted nor a recorded gap, and when an allowlisted
 // recovery path stops working for a suspended school. Disposable localhost database only.
@@ -46,17 +46,10 @@ const OPEN_BY_DESIGN={
  'hon.principal_has_school_permission(uuid,uuid,uuid,text)':'boolean permission predicate; grants nothing by itself',
  'hon.human_action_reviewer()':'returns the fixed reviewer identity; no school data',
 };
-// Reviewed gaps: staff scope resolvers that check identity and permission but not entitlement status. A suspended
-// school's staff still resolve these scopes. Harmless while nothing suspends a paying school (B6A never does), but
-// B6B must gate them (or every caller) before payment-driven suspension or restriction is enabled.
-const OPEN_KNOWN_GAP={
- 'hon.resolve_achievement_scope(text,uuid)':'achievements',
- 'hon.resolve_current_staff_reporting_scope(text)':'staff reporting',
- 'hon.resolve_follow_up_scope(text)':'follow-ups',
- 'hon.resolve_human_work_scope(text)':'human work queue',
- 'hon.resolve_teaching_studio_scope(text,uuid)':'teaching studio',
- 'hon.resolve_testing_registration_review_scopes(text)':'testing registration review',
-};
+// Reviewed gaps: none open. The six staff scope resolvers recorded here before (achievements, staff reporting,
+// follow-ups, human work queue, teaching studio, testing registration review) are gated in 0172 and are now in
+// MUST_ENFORCE. A new open function must be reviewed into OPEN_BY_DESIGN or gated; it cannot be parked here silently.
+const OPEN_KNOWN_GAP={};
 // Must stay refused for a suspended school (a regression that un-gates one of these fails the proof).
 const MUST_ENFORCE=['hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)','hon.read_champions_contests_for_school(text,uuid)',
  'hon.read_champions_school_rewards(text,uuid)','hon.read_champions_school_statistics(text,uuid)','hon.read_champions_school_view(text,uuid)',
@@ -64,7 +57,10 @@ const MUST_ENFORCE=['hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)
  'hon.read_school_command_center(text,uuid,uuid)','hon.read_school_health_score(text,uuid,uuid)','hon.resolve_chad_follow_up_scope(text)',
  'hon.resolve_crm_lead_close_scope(text,uuid)','hon.resolve_instructor_qualification_scope(text)','hon.resolve_owner_launch_scope(text)',
  'hon.resolve_planned_absence_review_scope(text)','hon.resolve_renewal_scope(text)','hon.resolve_retention_review_scope(text,uuid)',
- 'hon.resolve_teaching_assistant_scope(text)','hon.resolve_testing_certificate_scope(text,uuid)','hon.resolve_testing_scorecard_scope(text,uuid)'];
+ 'hon.resolve_teaching_assistant_scope(text)','hon.resolve_testing_certificate_scope(text,uuid)','hon.resolve_testing_scorecard_scope(text,uuid)',
+ // Formerly recorded gaps, gated in 0172.
+ 'hon.resolve_achievement_scope(text,uuid)','hon.resolve_current_staff_reporting_scope(text)','hon.resolve_follow_up_scope(text)',
+ 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)'];
 
 async function call(f,k,target=k){
  const a=args(f,k,target);
@@ -121,7 +117,7 @@ try{
   if(await call(f,'ACTIVE','SUSPENDED')==='OK')cross.push(f.sig);
  await restricted.query('ROLLBACK');
  assert.deepEqual(cross,[],'a school owner reached another organization');
- console.log(`PASS: B6A entitlement enforcement coverage — ${fns.length} runtime-callable functions called as an all-permission school owner for an ACTIVE and a SUSPENDED organization: ${enforced.length} refuse the suspended school, ${open.length-Object.keys(OPEN_KNOWN_GAP).length} stay open by reviewed design (billing recovery, settings, public intake, predicates), ${Object.keys(OPEN_KNOWN_GAP).length} recorded gaps for B6B (${Object.values(OPEN_KNOWN_GAP).join(', ')}), ${by('NOT_REACHED').length} refused identically before any entitlement decision with generic input (covered by the static inventory); no cross-organization access.`);
+ console.log(`PASS: B6A entitlement enforcement coverage — ${fns.length} runtime-callable functions called as an all-permission school owner for an ACTIVE and a SUSPENDED organization: ${enforced.length} refuse the suspended school, ${open.length-Object.keys(OPEN_KNOWN_GAP).length} stay open by reviewed design (billing recovery, settings, public intake, predicates), ${Object.keys(OPEN_KNOWN_GAP).length} recorded gaps, ${by('NOT_REACHED').length} refused identically before any entitlement decision with generic input (covered by the static inventory); no cross-organization access.`);
 }finally{
  await restricted.query('ROLLBACK').catch(()=>{});
  await admin.query('ROLLBACK').catch(()=>{});

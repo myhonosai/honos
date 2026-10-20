@@ -64,11 +64,11 @@ Refusals (422): `SAAS_ACCESS_NOT_ACTIVE`, `SAAS_ACCESS_STATE_EXISTS`, `SAAS_ACCE
 
 ## 5. Entitlement enforcement
 
-- **Static inventory** (`HON_ENTITLEMENT_ENFORCEMENT_INVENTORY.md`, regenerated): 266 runtime-callable functions; 132 check `status = 'ACTIVE'`.
+- **Static inventory** (`HON_ENTITLEMENT_ENFORCEMENT_INVENTORY.md`, regenerated): 266 runtime-callable functions; 138 check `status = 'ACTIVE'`.
 - **Behavioural sweep** (`test-entitlement-enforcement-coverage.mjs`): every runtime-callable function is called by an all-permission owner for an ACTIVE and a SUSPENDED organization.
-  - 19 refuse the suspended school.
+  - 25 refuse the suspended school.
   - 12 stay open by reviewed design: billing account, plan options, language settings, public form and kiosk intake, and boolean predicates.
-  - **6 scope resolvers ignore entitlement status**: achievements, staff reporting, follow-ups, human work, teaching studio, testing registration review. They are recorded gaps and must be gated before the program is activated (otherwise a school awaiting its first payment could use them).
+  - **0 recorded gaps.** The 6 staff scope resolvers that ignored entitlement status (achievements, staff reporting, follow-ups, human work, teaching studio, testing registration review) are gated in 0172. Each now also requires the organization's entitlement to be ACTIVE and in effect, the same test `resolve_renewal_scope` applies. The check runs after each resolver's existing ambiguity rule, so an organization in effect resolves exactly as before, and a suspended scope can never be dropped to turn an ambiguous subject into a resolved one. They are on the proof's must-enforce list.
   - 229 refuse generic input before any entitlement decision; the static inventory covers them.
   - No function lets one school's owner reach another organization.
 
@@ -77,11 +77,12 @@ Refusals (422): `SAAS_ACCESS_NOT_ACTIVE`, `SAAS_ACCESS_STATE_EXISTS`, `SAAS_ACCE
 - `test-saas-paid-access-integrity.mjs` (CI): the program is INACTIVE as shipped and every command refused. ACTIVE is then simulated **only in the disposable database** (drop the CHECK, flip, restore) and the journey runs through the real API services, the real Stripe test-mode adapter and the simulator, covering every row of §3. The proof restores and re-asserts the shipped INACTIVE state.
 - Mutation testing: 19 of 20 mutations of 0172 are caught. The survivor removes a redundant price re-check that the checkout step already guarantees.
 - Existing B1–B5.1 proofs pass unchanged.
+- Since 0173 (PR #40) an initial invoice delivered before its checkout completes is refused for redelivery (503 `SAAS_PROVIDER_EVENT_RETRY`) with no event, receipt, audit or outbox row. The B6A proof asserts that, then that the redelivered invoice is attributed to the activated organization, checkout and subscription, and never activates access by itself. 0172 replaces `saas_activate_checkout`; 0173 replaces only `ingest_saas_provider_event` and still calls it, so they apply in order without overwriting each other.
 
 ## 7. Path to activation (not done here)
 
 1. Owner approves D1, D2 and D12 ([plan §4](HON_B6_IMPLEMENTATION_PLAN.md#4-owner-decisions-still-open)).
-2. Gate the 6 scope resolvers in §5.
+2. ~~Gate the 6 scope resolvers in §5.~~ Done in 0172.
 3. Self-serve registration (with Manus) calls the T1 equivalent for new schools, instead of an HQ command.
 4. Run in the real Stripe sandbox.
 5. A reviewed migration flips `saas_access_program` to ACTIVE.

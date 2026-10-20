@@ -67,7 +67,8 @@
 
 - [x] Migration `0172`: central access authority (provisioned vs awaiting vs payment-activated), HQ-owner awaiting-first-payment placement, activation on a verified payment inside B5's transaction (server-decided tier, capabilities and full allowance), recoverable HQ review and HQ-owner retry. Program stays INACTIVE by CHECK; every command refused. [Contract](docs/architecture/HON_PAID_ACCESS_B6A.md).
 - [x] Behavioural entitlement coverage proof (ACTIVE vs SUSPENDED for every runtime-callable function) and regenerated inventory.
-- [ ] Gate the 6 scope resolvers that ignore entitlement status (achievements, staff reporting, follow-ups, human work, teaching studio, testing registration review) before activation.
+- [x] Gate the 6 scope resolvers that ignored entitlement status (achievements, staff reporting, follow-ups, human work, teaching studio, testing registration review) in 0172; coverage proof now has 0 recorded gaps.
+- [x] Synchronize with main after PR #40 (0173): the early-invoice assertion now expects safe redelivery, then attributed replay.
 - [ ] Owner: approve D1, D2, D12; then self-serve registration (with Manus), real Stripe sandbox run, and a reviewed migration that flips the program. B6B not started.
 - [ ] Codex: HQ access view and retry (`/v1/hq/saas/organizations/:organizationId/access`, `.../access-retry`); school billing `access.state`.
 
