@@ -55,6 +55,7 @@ for (const [name, Service, invoke, completeOnly] of commands) {
           return { rows: eligible ? [{ tier }] : [], rowCount: eligible ? 1 : 0 };
         }
         if (sql.includes('principal_has_school_permission')) return { rows: [{ allowed: true }], rowCount: 1 };
+        if (sql.includes('require_current_direct_human_billing_account_actor')) return { rows: [{ authorized: true }], rowCount: 1 };
         if (sql.includes('FROM hon.action_requests')) return { rows: [request], rowCount: 1 };
         if (sql.includes('set_config') || sql.includes('hon.authorize_campaign_lead')) return { rows: [], rowCount: 0 };
         assert.equal(entitlementReads, 1, 'Existing domain work follows the entitlement gate');
