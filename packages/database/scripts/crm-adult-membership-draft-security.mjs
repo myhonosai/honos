@@ -7,7 +7,8 @@ export const crmAdultMembershipDraftFunctions = [
   ['hon.crm_adult_membership_relation(uuid)', true, false, '0162_crm_adult_membership_draft.sql'],
   ['hon.read_crm_adult_membership_preparation(text,uuid)', true, true, '0162_crm_adult_membership_draft.sql'],
   ['hon.read_crm_adult_membership_draft_confirmation(text,uuid)', true, true, '0163_crm_adult_membership_draft_confirmation.sql'],
-  ['hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)', true, true, '0162_crm_adult_membership_draft.sql'],
+  // 0168 replaces 0162's body (idempotency_records locked first); the live source must match the latest definition.
+  ['hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)', true, true, '0168_crm_adult_membership_draft_lock_order.sql'],
 ];
 export async function verifyCrmAdultMembershipDraftSecurity(admin, runtimeRole) {
   const migrations = Object.fromEntries(await Promise.all([...new Set(crmAdultMembershipDraftFunctions.map(([, , , migration]) => migration))].map(async migration => [migration, await readFile(new URL(`../migrations/${migration}`, import.meta.url), 'utf8')])));
@@ -30,7 +31,7 @@ export async function verifyCrmAdultMembershipDraftSecurity(admin, runtimeRole) 
   }
   for (const [signature, definer, execute, migrationFile] of crmAdultMembershipDraftFunctions) {
     const name = signature.split('(')[0].slice(4);
-    const expected = migrations[migrationFile].match(new RegExp(`CREATE FUNCTION hon\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)\\$\\$;`))?.[1];
+    const expected = migrations[migrationFile].match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION hon\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)\\$\\$;`))?.[1];
     assert(expected, `source found for ${signature}`);
     const row = (await admin.query(`SELECT p.prosrc,p.prosecdef AS definer,p.provolatile AS volatility,p.proconfig AS config,
       (o.rolsuper OR o.rolbypassrls) AS trusted,has_function_privilege($2,p.oid,'EXECUTE') AS execute,

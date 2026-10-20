@@ -8,7 +8,7 @@ Source commit: `22211bf` on `manus/crm-enrollment-workflow` (the adult-workflow 
 
 | Layer | Files |
 | --- | --- |
-| Migrations | `0159_flexible_billing_accounts.sql`, `0160_crm_lead_registration.sql`, `0162_crm_adult_membership_draft.sql`, `0163_crm_adult_membership_draft_confirmation.sql` |
+| Migrations | `0159_flexible_billing_accounts.sql`, `0160_crm_lead_registration.sql`, `0162_crm_adult_membership_draft.sql`, `0163_crm_adult_membership_draft_confirmation.sql` (plus this PR's additive `0168` lock-order fix) |
 | Contracts | `crm-lead-registration.ts`, `crm-adult-membership-draft.ts`, billing-account input/classification in `index.ts` |
 | API | lead registration controller/service/DTO; adult membership draft controller/service/DTO; billing-account guard, payer lookup, classification and explicit additional-account command |
 | Runtime grants | exact reconciliation and verification blocks in `infra/postgres/010` and `011` |
@@ -24,7 +24,7 @@ The DRAFT reuses the existing `hon.memberships`, `hon.billing_accounts` and `hon
 - Filenames are kept **exactly** as PR #27 names them. A disposable database that applied PR #27's current files therefore has identical ledger entries and identical SQL; nothing is renamed or rewritten.
 - `0158`, `0172` and `0173` (and every other file on main) are unchanged.
 - `0161` (curriculum enrollment preparation) is intentionally absent, leaving a gap. If it lands later under its PR #27 name it sorts before `0162`, but it only creates two read functions and depends on nothing in `0162`/`0163`, so a database that already applied `0162`/`0163` can apply it afterwards. `0151` (CRM intake-stage read) is the same: independent read functions in a reserved gap.
-- Databases that recorded PR #27's **older** CRM filenames (`0152_flexible_billing_accounts.sql` … `0162_crm_adult_membership_draft_confirmation.sql` as listed in `CRM_ENROLLMENT_MIGRATION_LINEAGE_RECONCILIATION.md` on the Manus branch) must not run the ordinary runner; they need a reviewed environment-specific baseline. No persistent environment is known to have applied them.
+- **Deployment gate (enforced):** databases that recorded PR #27's **older** CRM filenames (`0152_flexible_billing_accounts.sql` … `0162_crm_adult_membership_draft_confirmation.sql`, listed in `migrate.mjs`) are refused by the migration runner before any file is applied. Such an environment needs a reviewed, environment-specific baseline that first verifies installed objects and `hon.schema_migrations`. No persistent environment is known to have applied them; this PR does not touch any persistent database.
 
 ## Changes made here (beyond copying)
 
@@ -32,6 +32,14 @@ The DRAFT reuses the existing `hon.memberships`, `hon.billing_accounts` and `hon
 2. `infra/postgres/010`: an exact grant block for the two `0159` billing-account authority functions. The canonical baseline revokes every `hon` function from the runtime, so without it re-running `010` after `0159` would break billing-account creation.
 3. Flexible billing proof/verifier: the "unrelated helper must stay ungranted" check now uses `hon.require_crm_lead_close_actor(text)` (on main) instead of the intake-stage helper from `0151`.
 4. `run-db-proofs.sh`: CI now runs the flexible-billing, lead-registration and adult-DRAFT proofs (the adult proof in its own mode-0700 loopback cluster).
+
+## Review corrections (Codex review of `fdefe99`)
+
+**Lock order (deadlock).** The conventional billing-account command reserves its `idempotency_records` row (ROW EXCLUSIVE) and later takes SHARE ROW EXCLUSIVE on `billing_accounts`. 0162's DRAFT command took SHARE ROW EXCLUSIVE on `billing_accounts` (and `memberships`) *before* `idempotency_records`. With the billing command between its reservation and its account lock, an arriving DRAFT formed a wait cycle; PostgreSQL aborted one side (`40P01`, reproduced locally). The same shape applied to the existing membership command, which also reserves idempotency before inserting memberships. Migration `0168_crm_adult_membership_draft_lock_order.sql` re-creates `hon.draft_crm_adult_membership` with 0162's body verbatim except that `idempotency_records` is locked first, matching the idempotency-first order every conventional command uses. Same tables, same mode, no new lock, no authorization or effect change; owner, SECURITY DEFINER and ACL are kept by `CREATE OR REPLACE`. 0162 is not rewritten. `011` and the adult security verifier now check the 0168 body.
+
+**Legacy idempotency replay.** Before 0159 the billing-account service fingerprinted `{ responsiblePersonId (as submitted), currency }`; this PR fingerprints the normalized input with `createAdditional`. A retry of a request completed before the upgrade would have been refused as `IDEMPOTENCY_KEY_REUSED`. The service now also accepts the legacy fingerprint (submitted and lower-cased id) for a normal, non-additional request only, and returns the stored receipt verbatim (legacy receipts have no `classification`/`reused`). Different payer, currency or an additional-account request never matches.
+
+Regression proof: `test-billing-account-crm-draft-compatibility-integrity.mjs` (flexible-billing fixture) holds each command at its lock point and runs both arrival orders, then replays seeded pre-0159 records. It failed on the previous code for both issues and passes with the fixes.
 
 ## B6A compatibility
 

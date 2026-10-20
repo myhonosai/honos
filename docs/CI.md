@@ -35,6 +35,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 | `champions-club` | `test-saas-refunds-rewards-integrity.mjs` | HON refunds and Champions rewards (B4): first-purchase 30-day eligibility (regular, founder, lifetime), approve/deny/evidence, refund reserve, duplicate refusal under contention, ladder application once per entry, credit capped and restored on void, free months never invoiced with full allowance, alerts block fulfillment without reversal |
 | `champions-club` | `test-saas-credits-integrity.mjs` | HON premium credits (B3): owner-gated activation, verified-cost-linked pricing, one allowance per period, idempotent reserve, finalize/release/unknown/resolve, exact balance under 8-way contention, thresholds and hard stop, plan capabilities, suspension, expiry without rollover |
 | `flexible-billing-accounts` | `test-flexible-billing-account-integrity.mjs` | Flexible school-to-family billing accounts (0159): deterministic canonical backfill of pre-existing rows, one canonical account per payer under concurrency, explicit audited additional accounts, direct-human authority, no payment/membership effect |
+| `flexible-billing-accounts` | `test-billing-account-crm-draft-compatibility-integrity.mjs` | Billing-account command vs adult CRM DRAFT held deterministically in both lock arrival orders (no deadlock, duplicate account/membership or partial transaction); pre-0159 billing-account idempotency records replay their original receipt, different requests under the same key refused |
 | `crm-lead-registration` | `test-crm-lead-registration-integrity.mjs` | CRM lead registration (0160): direct-human scope, adult/guardian-child identity separation, idempotency, rollback, no payment/membership/messaging/AI effect |
 | `crm-adult-membership-draft` | `test-crm-adult-membership-draft-integrity.mjs` | Adult registered CRM conversion to one membership DRAFT (0162/0163): canonical payer relation proof, replay/race/authority/no-effect coverage. Runs in its own mode-0700 loopback cluster (`127.0.0.1:55435`) |
 
@@ -73,7 +74,7 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 
 ## Known limitations
 
-- **22 of 87** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
+- **23 of 88** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.

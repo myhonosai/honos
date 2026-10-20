@@ -6,7 +6,9 @@ import { validateCreateBillingAccountInput, type BillingAccountClassification, t
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 export type BillingAccountCommandReceipt = BillingAccountSummary & { reused: boolean };
-export interface CreateBillingAccountResult { account: BillingAccountCommandReceipt; replayed: boolean; }
+/** Receipt stored before 0159 (no classification or reuse fact); replayed verbatim, never rewritten. */
+export type LegacyBillingAccountReceipt = Omit<BillingAccountSummary, 'classification'>;
+export interface CreateBillingAccountResult { account: BillingAccountCommandReceipt | LegacyBillingAccountReceipt; replayed: boolean; }
 export interface BillingAccountPayerChoice { id: string; displayName: string; }
 type BillingAccountReadContext = Omit<CommandContext, 'idempotencyKey'>;
 type NormalizedInput = { responsiblePersonId: string; currency: string; createAdditional: boolean; additionalReason?: string };
@@ -32,6 +34,23 @@ function normalizedInput(input: CreateBillingAccountInput): NormalizedInput {
   };
 }
 
+function fingerprint(value: object): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+/**
+ * Fingerprints the pre-0159 service recorded for the same request: it hashed
+ * `{ responsiblePersonId (as submitted), currency }`. Only a normal (canonical)
+ * request can be equivalent to a legacy one; an additional-account request
+ * never is. Both submitted and lower-cased person ids are accepted because the
+ * legacy service did not normalize case.
+ */
+function legacyFingerprints(input: CreateBillingAccountInput, normalized: NormalizedInput): string[] {
+  if (normalized.createAdditional) return [];
+  return [...new Set([input.responsiblePersonId, normalized.responsiblePersonId])]
+    .map(responsiblePersonId => fingerprint({ responsiblePersonId, currency: normalized.currency }));
+}
+
 function assertDirectHumanContext(context: Pick<CommandContext, 'principalType' | 'source' | 'actionRequestId' | 'delegatedByPrincipalId'>): void {
   if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI'
     || context.actionRequestId !== undefined || context.delegatedByPrincipalId !== undefined) {
@@ -46,7 +65,8 @@ export class BillingAccountService {
   async create(context: CommandContext, input: CreateBillingAccountInput): Promise<CreateBillingAccountResult> {
     assertDirectHumanContext(context);
     const normalized = normalizedInput(input);
-    const requestFingerprint = createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+    const requestFingerprint = fingerprint(normalized);
+    const equivalentFingerprints = new Set([requestFingerprint, ...legacyFingerprints(input, normalized)]);
     return this.database.withTenantTransaction(context, async (client) => {
       await client.query(
         "SELECT set_config('app.hon_source',$1,true),set_config('app.hon_action_request_id',$2,true),set_config('app.hon_delegated_by_principal_id',$3,true)",
@@ -66,14 +86,14 @@ export class BillingAccountService {
         [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey, requestFingerprint],
       );
       if (!reservation.rowCount) {
-        const existing = await client.query<{ request_fingerprint: string; status: 'IN_PROGRESS' | 'COMPLETED'; response_body: BillingAccountCommandReceipt | null }>(
+        const existing = await client.query<{ request_fingerprint: string; status: 'IN_PROGRESS' | 'COMPLETED'; response_body: BillingAccountCommandReceipt | LegacyBillingAccountReceipt | null }>(
           `SELECT request_fingerprint, status, response_body FROM hon.idempotency_records
            WHERE organization_id = $1 AND school_id = $2 AND principal_id = $3 AND idempotency_key = $4 FOR UPDATE`,
           [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey],
         );
         const record = existing.rows[0];
         if (!record) throw new Error('HON billing account idempotency record unexpectedly missing.');
-        if (record.request_fingerprint !== requestFingerprint) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', detail: 'The idempotency key was already used for another billing account.' });
+        if (!equivalentFingerprints.has(record.request_fingerprint)) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', detail: 'The idempotency key was already used for another billing account.' });
         if (record.status === 'COMPLETED' && record.response_body) return { account: record.response_body, replayed: true };
         throw new ConflictException({ code: 'IDEMPOTENCY_IN_PROGRESS', detail: 'The matching billing account command is being processed.' });
       }

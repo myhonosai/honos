@@ -2419,6 +2419,7 @@ END $$;
 -- End CRM lead registration exact verification.
 
 -- Adult CRM membership draft exact verification, including immutable source and function drift.
+-- draft_crm_adult_membership is verified against its 0168 definition (idempotency_records locked first).
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOREACH t IN ARRAY ARRAY['people','student_profiles','crm_lead_registration_conversions','crm_leads','family_members','billing_accounts','memberships','crm_adult_membership_draft_sources'] LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity) THEN RAISE EXCEPTION 'Adult CRM draft FORCE RLS required: %',t; END IF;
@@ -2433,7 +2434,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.crm_adult_membership_relation(uuid)',true,false,'71d39ddcd35a15c7baf094045aaf1979c5d61516dab7818d3cee0bb009c81457'),
 ('hon.read_crm_adult_membership_preparation(text,uuid)',true,true,'909adac7587840fbcd7e464e7b2b2c6b920d44b2d6264822fbcbffe1cc43243f'),
 ('hon.read_crm_adult_membership_draft_confirmation(text,uuid)',true,true,'1c28232bde9839acda9d7e38724a711842827dd17cf871a81c2770a67f211c05'),
-('hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)',true,true,'e6cdefc053003e0b28e36297e8c02538ab1b0574ae4c571d0b9295afd07acfca')) e(signature,definer,runtime_allowed,body_hash) LOOP
+('hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)',true,true,'8d554d62d5da9db186b343ac81e63468007a4e8cf61f4d5af0b17425c49c8b61')) e(signature,definer,runtime_allowed,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash

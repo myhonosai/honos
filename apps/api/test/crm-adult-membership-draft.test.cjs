@@ -93,7 +93,7 @@ test('service verifies current confirmation and stored creation receipts inside 
   await assert.rejects(service.draft(context(),input()), e=>e.getStatus()===503);
   await assert.rejects(service.confirmCurrentDraft(context({ idempotencyKey: '' }),{ studentProfileId }), e=>e.getStatus()===503);
   for(const file of ['crm-adult-membership-draft.service.ts','crm-adult-membership-draft.controller.ts']) assert.doesNotMatch(readFileSync(`src/billing/${file}`,'utf8'), /OwnerLaunch|MembershipService|ActionEngine|fetch\(|PaymentService|createDraft\(/);
-  const migrations=[readFileSync('../../packages/database/migrations/0162_crm_adult_membership_draft.sql','utf8'),readFileSync('../../packages/database/migrations/0163_crm_adult_membership_draft_confirmation.sql','utf8')];
+  const migrations=[readFileSync('../../packages/database/migrations/0162_crm_adult_membership_draft.sql','utf8'),readFileSync('../../packages/database/migrations/0163_crm_adult_membership_draft_confirmation.sql','utf8'),readFileSync('../../packages/database/migrations/0168_crm_adult_membership_draft_lock_order.sql','utf8')];
   for(const migration of migrations) assert.doesNotMatch(migration, /(?:INSERT INTO|UPDATE|DELETE FROM) hon\.(?:billing_accounts|membership_payment_schedules|invoices|payment_attempts|family_members|student_curriculum_enrollments|communication_messages|action_requests|ai_usage_ledger)/);
-  assert.match(migrations[0], /'executionAllowed',false,'humanOnly',true/); assert.match(migrations[1], /read_crm_adult_membership_draft_confirmation/);
+  assert.match(migrations[0], /'executionAllowed',false,'humanOnly',true/); assert.match(migrations[2], /'executionAllowed',false,'humanOnly',true/); assert.match(migrations[2], /LOCK TABLE hon\.idempotency_records IN SHARE ROW EXCLUSIVE MODE;\s*LOCK TABLE hon\.users,/); assert.match(migrations[1], /read_crm_adult_membership_draft_confirmation/);
 });

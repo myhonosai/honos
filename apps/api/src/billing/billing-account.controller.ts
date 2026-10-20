@@ -35,7 +35,7 @@ export class BillingAccountController {
     const requestId = randomUUID();
     const command: CommandContext = { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey, source: 'HUMAN_UI' };
     const result = await this.accounts.create(command, input);
-    response.status(result.replayed || result.account.reused ? HttpStatus.OK : HttpStatus.CREATED);
+    response.status(result.replayed || ('reused' in result.account && result.account.reused) ? HttpStatus.OK : HttpStatus.CREATED);
     return { data: result.account, meta: { requestId, correlationId: requestId, replayed: result.replayed } };
   }
 

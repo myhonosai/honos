@@ -77,6 +77,15 @@ try {
   `);
 
   const applied = new Set((await client.query('SELECT filename FROM hon.schema_migrations')).rows.map((row) => row.filename));
+  // Deployment gate: earlier drafts of Manus PR #27 used these CRM filenames before they were renumbered to
+  // 0159-0163. A database that recorded any of them has CRM objects under another ledger identity and needs a
+  // reviewed, environment-specific baseline; the ordinary runner must not replay or reinterpret that history.
+  const supersededCrmFilenames = ['0152_flexible_billing_accounts.sql', '0153_crm_lead_registration.sql', '0154_staff_curriculum_enrollment_preparation.sql',
+    '0155_crm_adult_membership_draft.sql', '0158_flexible_billing_accounts.sql', '0159_crm_lead_registration.sql', '0160_staff_curriculum_enrollment_preparation.sql',
+    '0161_crm_adult_membership_draft.sql', '0162_crm_adult_membership_draft_confirmation.sql'].filter((file) => applied.has(file));
+  if (supersededCrmFilenames.length) {
+    throw new Error(`Refusing to migrate: superseded CRM migration history recorded (${supersededCrmFilenames.join(', ')}). See docs/architecture/CRM_ADULT_DRAFT_MAIN_INTEGRATION.md.`);
+  }
   for (const file of files) {
     if (applied.has(file)) continue;
     let sql = await readFile(join(migrationsDirectory.pathname, file), 'utf8');

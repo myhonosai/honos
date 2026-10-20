@@ -94,6 +94,7 @@ proof champions-club test-entitlement-enforcement-coverage.mjs "B6A behavioural 
 # CRM adult registration to membership DRAFT (Manus PR #27 lineage, migrations 0159, 0160, 0162, 0163).
 setup flexible-billing-accounts HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE
 proof flexible-billing-accounts test-flexible-billing-account-integrity.mjs "Flexible billing accounts: deterministic canonical backfill, explicit audited additional accounts, direct-human authority"
+proof flexible-billing-accounts test-billing-account-crm-draft-compatibility-integrity.mjs "Billing account vs adult CRM DRAFT: both lock arrival orders without deadlock or duplicates; pre-0159 idempotency replay preserved"
 setup crm-lead-registration HON_CRM_LEAD_REGISTRATION_VALIDATION_TARGET hon_crm_registration_validation HON_CRM_LEAD_REGISTRATION_ENV_FILE
 proof crm-lead-registration test-crm-lead-registration-integrity.mjs "CRM lead registration: direct-human scope, adult/guardian-child identity separation, idempotency, rollback, no payment or membership effect"
 
