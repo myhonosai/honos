@@ -1,3 +1,6 @@
+import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
+import { CrmAdultMembershipDraftService } from './billing/crm-adult-membership-draft.service.js';
+import { CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
 import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
@@ -55,6 +58,9 @@ import { LeadCreateHumanUiGuard } from './crm/lead-create-human-ui.guard.js';
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
+import { LeadRegistrationController } from './crm/lead-registration.controller.js';
+import { LeadRegistrationService } from './crm/lead-registration.service.js';
+import { LeadRegistrationHumanUiGuard } from './crm/lead-registration.dto.js';
 import { TrialAppointmentController } from './crm/trial-appointment.controller.js';
 import { TrialAppointmentService } from './crm/trial-appointment.service.js';
 import { TrialAppointmentOutcomeController } from './crm/trial-appointment-outcome.controller.js';
@@ -67,6 +73,7 @@ import { MembershipService } from './billing/membership.service.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
+import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
 import { InvoiceController } from './billing/invoice.controller.js';
 import { InvoiceService } from './billing/invoice.service.js';
 import { InvoiceHumanUiGuard } from './billing/invoice-human-ui.guard.js';
@@ -268,6 +275,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentMessageHistoryController,
     LeadController,
     LeadCloseController,
+    LeadRegistrationController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
     PipelineController,
@@ -305,6 +313,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
+    CrmAdultMembershipDraftController,
     BillingAccountController,
     InvoiceController,
     HqController,
@@ -368,6 +377,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadCreateHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
+    LeadRegistrationService,
+    LeadRegistrationHumanUiGuard,
     TrialAppointmentService,
     TrialAppointmentOutcomeService,
     CrmLeadActionTool,
@@ -414,8 +425,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipActivationHumanUiGuard,
     BillingAccountService,
+    BillingAccountHumanUiGuard,
     InvoiceService,
     InvoiceHumanUiGuard,
     HqOnboardingService,

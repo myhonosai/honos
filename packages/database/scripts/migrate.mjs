@@ -3,6 +3,7 @@ import { requireClassPassLocalUrls } from './classpass-local-guard.mjs';
 import { requirePromotionReadinessLocalUrls } from './promotion-readiness-local-guard.mjs';
 import { requireOwnerLaunchLocalUrls } from './owner-launch-local-guard.mjs';
 import { requireRetentionAcknowledgementLocalUrls } from './retention-review-acknowledgement-local-guard.mjs';
+import { requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -12,6 +13,8 @@ const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error('DATABASE_URL must be configured before HON migrations can run.');
 }
+const parsedDatabaseUrl = new URL(databaseUrl);
+const isLoopbackDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(parsedDatabaseUrl.hostname);
 
 if (new URL(databaseUrl).username === 'hon_classpass_owner') requireClassPassLocalUrls();
 if (new URL(databaseUrl).username === 'hon_curriculum_library_owner') requireCurriculumLibraryLocalUrls();
@@ -28,14 +31,19 @@ const localFixtureRuntimeAlias = (() => {
     && runtime.hostname === owner.hostname && runtime.port === owner.port && runtime.pathname === owner.pathname
     && runtime.username === `${prefix}_runtime`;
 })();
-if (stopAfter && stopAfter !== '0113_hq_ai_task_profiles.sql') {
-  throw new Error('Only the guarded attendance backfill proof may stop migrations at 0113.');
+if (stopAfter && stopAfter !== '0113_hq_ai_task_profiles.sql' && stopAfter !== '0158_hon_payment_provider_test_mode.sql') {
+  throw new Error('Only the guarded attendance-backfill or flexible-billing proof may stop migrations.');
 }
 if (stopAfter) {
   const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
-  if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_attendance_backfill_validation' || owner.username !== 'hon_attendance_backfill_owner'
-    || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_attendance_backfill_runtime') {
-    throw new Error('Stopping at 0113 requires the exact marked attendance-backfill localhost aliases.');
+  const attendanceBackfill = stopAfter === '0113_hq_ai_task_profiles.sql'
+    && owner.hostname === 'localhost' && owner.port === '5432' && owner.pathname === '/hon_attendance_backfill_validation' && owner.username === 'hon_attendance_backfill_owner'
+    && runtime.hostname === owner.hostname && runtime.port === owner.port && runtime.pathname === owner.pathname && runtime.username === 'hon_attendance_backfill_runtime';
+  const flexibleBilling = stopAfter === '0158_hon_payment_provider_test_mode.sql'
+    && owner.hostname === 'localhost' && owner.port === '5432' && owner.pathname === '/hon_flexible_billing_accounts_validation' && owner.username === 'hon_flexible_billing_accounts_owner'
+    && runtime.hostname === owner.hostname && runtime.port === owner.port && runtime.pathname === owner.pathname && runtime.username === 'hon_flexible_billing_accounts_runtime';
+  if (!attendanceBackfill && !flexibleBilling) {
+    throw new Error('Stopping migrations requires the exact marked disposable localhost aliases.');
   }
 }
 const files = (await readdir(migrationsDirectory))
@@ -43,7 +51,7 @@ const files = (await readdir(migrationsDirectory))
   .filter((file) => !stopAfter || file <= stopAfter)
   .sort();
 
-const client = new Client({ connectionString: databaseUrl, ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false } });
+const client = new Client({ connectionString: databaseUrl, ssl: isLoopbackDatabase ? false : { rejectUnauthorized: false } });
 await client.connect();
 try {
   if (new URL(databaseUrl).username === 'hon_owner_launch_owner') {
@@ -86,6 +94,10 @@ try {
       const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
       if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_class_sessions_read_validation' || runtime.hostname !== owner.hostname || runtime.port !== owner.port || runtime.pathname !== owner.pathname || runtime.username !== 'hon_class_sessions_read_runtime') throw new Error('Class Sessions aliases require exact disposable localhost database.');
       sql = sql.replaceAll('hon_runtime', 'hon_class_sessions_read_runtime');
+    }
+    if (new URL(databaseUrl).username === 'hon_flexible_billing_accounts_owner') {
+      await requireFlexibleBillingAccountsLocalUrls();
+      sql = sql.replaceAll('hon_runtime', 'hon_flexible_billing_accounts_runtime');
     }
     if (new URL(databaseUrl).username === 'hon_attendance_owner') {
       const owner = new URL(databaseUrl), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');

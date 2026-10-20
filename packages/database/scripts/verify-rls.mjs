@@ -112,6 +112,8 @@ const expectedRlsTables = [
   'communication_messages',
   'crm_activities',
   'crm_appointments',
+  'crm_lead_registration_conversions',
+  'crm_adult_membership_draft_sources',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',
