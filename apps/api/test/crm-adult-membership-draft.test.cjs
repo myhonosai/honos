@@ -97,3 +97,23 @@ test('service verifies current confirmation and stored creation receipts inside 
   for(const migration of migrations) assert.doesNotMatch(migration, /(?:INSERT INTO|UPDATE|DELETE FROM) hon\.(?:billing_accounts|membership_payment_schedules|invoices|payment_attempts|family_members|student_curriculum_enrollments|communication_messages|action_requests|ai_usage_ledger)/);
   assert.match(migrations[0], /'executionAllowed',false,'humanOnly',true/); assert.match(migrations[2], /'executionAllowed',false,'humanOnly',true/); assert.match(migrations[2], /LOCK TABLE hon\.idempotency_records IN SHARE ROW EXCLUSIVE MODE;\s*LOCK TABLE hon\.users,/); assert.match(migrations[1], /read_crm_adult_membership_draft_confirmation/);
 });
+
+test('0169 gives the Owner Launch, CRM registration and adult DRAFT bodies one canonical lock order', () => {
+  const migration = readFileSync('../../packages/database/migrations/0169_crm_owner_launch_canonical_lock_order.sql', 'utf8');
+  const body = (name) => migration.match(new RegExp(`CREATE OR REPLACE FUNCTION hon\\.${name}\\([\\s\\S]*?\\nEND \\$\\$;`))[0];
+  const iam = /hon\.(?:users|principals|principal_role_grants|roles|role_permissions|permissions|family_access_grants|hq_operator_grants|organizations|schools|organization_entitlements)\b/;
+  const locks = migration.match(/LOCK TABLE [^;]*;/g);
+  assert.equal(locks.length, 5);
+  for (const lock of locks) {
+    if (iam.test(lock)) assert.match(lock, / IN SHARE MODE;$/, 'IAM/entitlement tables are only ever taken in SHARE');
+    assert.doesNotMatch(lock, /idempotency_records/, 'the idempotency key is a row reservation, never a table lock');
+  }
+  const draft = body('draft_crm_adult_membership');
+  assert.equal(draft.match(/INSERT INTO hon\.idempotency_records/g).length, 1);
+  assert.ok(draft.indexOf('INSERT INTO hon.idempotency_records') < draft.indexOf('LOCK TABLE'), 'reservation precedes every table lock');
+  assert.match(draft, /ON CONFLICT\(organization_id,school_id,principal_id,idempotency_key\) DO NOTHING RETURNING true INTO reserved;/);
+  assert.deepEqual(draft.match(/FOR UPDATE/g), ['FOR UPDATE', 'FOR UPDATE'], 'only the replayed idempotency row is row-locked (plus the comment)');
+  assert.match(draft, /'executionAllowed',false,'humanOnly',true/);
+  assert.match(body('register_crm_lead_person'), /LOCK TABLE hon\.users,[^;]*IN SHARE MODE;\s*LOCK TABLE hon\.people,hon\.student_profiles,hon\.families,hon\.family_members,hon\.crm_lead_registration_conversions IN SHARE ROW EXCLUSIVE MODE;/);
+  assert.match(body('read_owner_launch_membership_draft'), /LOCK TABLE hon\.people,[^;]*hon\.billing_accounts,hon\.memberships,hon\.membership_payment_schedules,hon\.invoices,hon\.audit_events IN SHARE MODE;/);
+});

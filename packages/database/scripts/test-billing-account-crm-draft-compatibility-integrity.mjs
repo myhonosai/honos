@@ -47,14 +47,17 @@ function gated(database, { before, after }) {
   };
 }
 function gate() { let open; const opened = new Promise((resolve) => { open = resolve; }); let reach; const reached = new Promise((resolve) => { reach = resolve; }); return { open, opened, reach, reached }; }
-async function waitForBlockedBackend() {
+// Returns once the second command waits on a lock or (0169: no shared lock left to wait on) has already finished.
+async function waitForBlockedBackend(second) {
+  let settled = false; second.then(() => { settled = true; }, () => { settled = true; });
   for (let attempt = 0; attempt < 200; attempt++) {
+    if (settled) return;
     const waiting = (await admin.query(`SELECT count(*)::int AS count FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid
       WHERE NOT l.granted AND a.datname=current_database()`)).rows[0].count;
     if (waiting > 0) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error('The second transaction never waited on the first; the interleaving was not exercised.');
+  throw new Error('The second transaction neither waited nor finished; the interleaving was not exercised.');
 }
 async function effects(person) {
   return (await admin.query(`SELECT
@@ -73,8 +76,8 @@ try {
   const marker = (await admin.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
   assert.deepEqual(marker, { owner: flexibleBillingAccountsFixture.owner, marker: 'HON disposable flexible billing accounts validation' });
   const lockOrder = (await admin.query("SELECT prosrc FROM pg_proc WHERE oid='hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)'::regprocedure")).rows[0].prosrc;
-  assert.match(lockOrder, /LOCK TABLE hon\.idempotency_records IN SHARE ROW EXCLUSIVE MODE;\s*LOCK TABLE hon\.users,/, '0168 lock order is installed');
-  assert.doesNotMatch(lockOrder, /hon\.crm_adult_membership_draft_sources,hon\.idempotency_records/, '0162 lock order is replaced'); assertions += 2;
+  assert.match(lockOrder, /DO NOTHING RETURNING true INTO reserved;\s*reserved:=coalesce\(reserved,false\);\s*LOCK TABLE hon\.users,[^;]*IN SHARE MODE;/, '0169 reservation-first lock order is installed');
+  assert.doesNotMatch(lockOrder, /LOCK TABLE hon\.idempotency_records|hon\.crm_adult_membership_draft_sources,hon\.idempotency_records/, '0162 and 0168 lock orders are replaced'); assertions += 2;
 
   await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'PRIVATE_LOCK_ORG','PRIVATE_LOCK_ORG')", [ids.org]);
   await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug) VALUES($1,$2,'PRIVATE_LOCK_SCHOOL',$3)", [ids.school, ids.org, `lock-${ids.school}`]);
@@ -115,7 +118,7 @@ try {
     const first = billing.create(context({ idempotencyKey: billingKey }), { responsiblePersonId: adult.person, currency: 'USD' });
     await held.reached;
     const second = drafts.draft(draftContext({ idempotencyKey: draftKey }), draftInput(adult.student));
-    await waitForBlockedBackend();
+    await waitForBlockedBackend(second);
     held.open();
     const [account, draft] = await Promise.all([first, second]);
     assert.equal(account.account.id, adult.account); assert.equal(account.account.reused, true); assert.equal(draft.replayed, false);
@@ -136,7 +139,7 @@ try {
     const first = drafts.draft(draftContext(), draftInput(adult.student));
     await held.reached;
     const second = billing.create(context(), { responsiblePersonId: adult.person, currency: 'USD' });
-    await waitForBlockedBackend();
+    await waitForBlockedBackend(second);
     held.open();
     const [draft, account] = await Promise.all([first, second]);
     assert.equal(draft.replayed, false); assert.equal(account.account.id, adult.account); assert.equal(account.account.reused, true);

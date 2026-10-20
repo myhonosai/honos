@@ -8,7 +8,7 @@ Source commit: `22211bf` on `manus/crm-enrollment-workflow` (the adult-workflow 
 
 | Layer | Files |
 | --- | --- |
-| Migrations | `0159_flexible_billing_accounts.sql`, `0160_crm_lead_registration.sql`, `0162_crm_adult_membership_draft.sql`, `0163_crm_adult_membership_draft_confirmation.sql` (plus this PR's additive `0168` lock-order fix) |
+| Migrations | `0159_flexible_billing_accounts.sql`, `0160_crm_lead_registration.sql`, `0162_crm_adult_membership_draft.sql`, `0163_crm_adult_membership_draft_confirmation.sql` (plus this PR's additive `0168` and `0169` lock-order fixes) |
 | Contracts | `crm-lead-registration.ts`, `crm-adult-membership-draft.ts`, billing-account input/classification in `index.ts` |
 | API | lead registration controller/service/DTO; adult membership draft controller/service/DTO; billing-account guard, payer lookup, classification and explicit additional-account command |
 | Runtime grants | exact reconciliation and verification blocks in `infra/postgres/010` and `011` |
@@ -40,6 +40,19 @@ The DRAFT reuses the existing `hon.memberships`, `hon.billing_accounts` and `hon
 **Legacy idempotency replay.** Before 0159 the billing-account service fingerprinted `{ responsiblePersonId (as submitted), currency }`; this PR fingerprints the normalized input with `createAdditional`. A retry of a request completed before the upgrade would have been refused as `IDEMPOTENCY_KEY_REUSED`. The service now also accepts the legacy fingerprint (submitted and lower-cased id) for a normal, non-additional request only, and returns the stored receipt verbatim (legacy receipts have no `classification`/`reused`). Different payer, currency or an additional-account request never matches.
 
 Regression proof: `test-billing-account-crm-draft-compatibility-integrity.mjs` (flexible-billing fixture) holds each command at its lock point and runs both arrival orders, then replays seeded pre-0159 records. It failed on the previous code for both issues and passes with the fixes.
+
+## Comprehensive lock-order correction (Codex review of `3a15082`)
+
+0168 removed one cycle but created another. Its table lock on `idempotency_records` cycled with the Owner Launch DRAFT, which holds IAM tables in SHARE and then inserts its idempotency row. An audit of the whole transaction family (Owner Launch registration, DRAFT, confirmation and booking context; CRM registration, DRAFT and confirmation; billing-account create; membership create and activation) found three more cycles. Additive migration `0169_crm_owner_launch_canonical_lock_order.sql` gives the family one order:
+
+1. the idempotency key row;
+2. IAM tables in SHARE;
+3. domain tables, people first;
+4. audit and outbox last.
+
+It re-creates `draft_crm_adult_membership`, `register_crm_lead_person` and `read_owner_launch_membership_draft`. 0160, 0162, 0168 and 0139 are not rewritten.
+
+The audit, the cycles, the 440-interleaving proof and the residuals are in [CRM_OWNER_LAUNCH_LOCK_ORDER.md](CRM_OWNER_LAUNCH_LOCK_ORDER.md).
 
 ## B6A compatibility
 

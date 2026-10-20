@@ -95,8 +95,19 @@ proof champions-club test-entitlement-enforcement-coverage.mjs "B6A behavioural 
 setup flexible-billing-accounts HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE
 proof flexible-billing-accounts test-flexible-billing-account-integrity.mjs "Flexible billing accounts: deterministic canonical backfill, explicit audited additional accounts, direct-human authority"
 proof flexible-billing-accounts test-billing-account-crm-draft-compatibility-integrity.mjs "Billing account vs adult CRM DRAFT: both lock arrival orders without deadlock or duplicates; pre-0159 idempotency replay preserved"
+proof flexible-billing-accounts test-crm-owner-launch-lock-order-integrity.mjs "Owner Launch / CRM / billing canonical lock order: every workflow paused at every lock stage against every other; pre-0169 deadlocks reproduced, none with 0169"
 setup crm-lead-registration HON_CRM_LEAD_REGISTRATION_VALIDATION_TARGET hon_crm_registration_validation HON_CRM_LEAD_REGISTRATION_ENV_FILE
 proof crm-lead-registration test-crm-lead-registration-integrity.mjs "CRM lead registration: direct-human scope, adult/guardian-child identity separation, idempotency, rollback, no payment or membership effect"
+
+# Owner Launch regression (registration, booking, membership DRAFT and confirmations) over the full
+# migration chain, including 0169's re-created confirmation body. Its test loads the generated
+# descriptor itself and refuses inherited database URLs, so it is not sourced like the others.
+setup owner-launch HON_OWNER_LAUNCH_VALIDATION_TARGET hon_owner_launch_validation HON_OWNER_LAUNCH_ENV_FILE
+echo "::group::Owner Launch regression (test-owner-launch-integrity.mjs)"
+"${clean_env[@]}" "HON_OWNER_LAUNCH_ENV_FILE=$job_dir/owner-launch.env" bash -c 'cd "$1" && node scripts/test-owner-launch-integrity.mjs' _ "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Owner Launch regression: registration, booking, membership DRAFT and confirmations unchanged | \`test-owner-launch-integrity.mjs\` | pass |")
 
 # This proof needs an isolated PostgreSQL cluster because the application-wide
 # local PostgreSQL service can already contain developer-created roles. It still
@@ -120,7 +131,7 @@ summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-m
 /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
 rm -f "$adult_draft_dir/$adult_draft_fixture.env"
 
-echo "All $passed disposable-database proofs passed (6 fixtures, all migrations applied)."
+echo "All $passed disposable-database proofs passed (7 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

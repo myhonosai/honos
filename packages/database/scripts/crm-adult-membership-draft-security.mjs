@@ -7,8 +7,8 @@ export const crmAdultMembershipDraftFunctions = [
   ['hon.crm_adult_membership_relation(uuid)', true, false, '0162_crm_adult_membership_draft.sql'],
   ['hon.read_crm_adult_membership_preparation(text,uuid)', true, true, '0162_crm_adult_membership_draft.sql'],
   ['hon.read_crm_adult_membership_draft_confirmation(text,uuid)', true, true, '0163_crm_adult_membership_draft_confirmation.sql'],
-  // 0168 replaces 0162's body (idempotency_records locked first); the live source must match the latest definition.
-  ['hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)', true, true, '0168_crm_adult_membership_draft_lock_order.sql'],
+  // 0168 and then 0169 (canonical lock order) replace 0162's body; the live source must match the latest definition.
+  ['hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)', true, true, '0169_crm_owner_launch_canonical_lock_order.sql'],
 ];
 export async function verifyCrmAdultMembershipDraftSecurity(admin, runtimeRole) {
   const migrations = Object.fromEntries(await Promise.all([...new Set(crmAdultMembershipDraftFunctions.map(([, , , migration]) => migration))].map(async migration => [migration, await readFile(new URL(`../migrations/${migration}`, import.meta.url), 'utf8')])));

@@ -16,7 +16,7 @@ export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,me
  const draft=(r,c=context(),patch={})=>checked(()=>service.draftMembership(c,input(r,patch)),effects);
  const callRaw=(c,value)=>checked(()=>raw(c,'SELECT hon.draft_owner_launch_membership($1,$2::jsonb,$3,$4,$5)',[c.externalSubject,JSON.stringify(value),c.idempotencyKey,c.requestId,c.correlationId]));
  const person=async r=>(await owner.query('SELECT person_id FROM hon.student_profiles WHERE id=$1',[r.receipt.studentProfileId])).rows[0].person_id;
- const account=async(r,currency='USD')=>owner.query('INSERT INTO hon.billing_accounts(organization_id,school_id,responsible_person_id,currency) VALUES($1,$2,$3,$4) RETURNING id',[scope.organizationId,scope.schoolId,await person(r),currency]);
+ const account=async(r,currency='USD',classification='CANONICAL')=>owner.query('INSERT INTO hon.billing_accounts(organization_id,school_id,responsible_person_id,currency,account_classification) VALUES($1,$2,$3,$4,$5) RETURNING id',[scope.organizationId,scope.schoolId,await person(r),currency,classification]);
  const firstContext=context(),first=await draft(registrations[0],firstContext);
  assert.equal(first.receipt.state,'DRAFT');assert.equal(first.receipt.billingAccountCreated,true);assert.equal(first.replayed,false);
  assert(!/payer|participant|personId|familyId|billingAccountId|PII_CANARY|paymentSchedule|activation|invoice/i.test(JSON.stringify(first)));
@@ -42,7 +42,7 @@ export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,me
  const guardianReused=await draft(guardianReuse,context(),{currency:'EUR'});assert.equal(guardianReused.receipt.billingAccountCreated,false);
  assert.equal((await owner.query('SELECT billing_account_id FROM hon.memberships WHERE id=$1',[guardianReused.receipt.membershipId])).rows[0].billing_account_id,guardianAccount.account.id);check();
  await account(registrations[2],'CAD');await assert.rejects(()=>draft(registrations[2]),e=>status(400)(e)&&e.getResponse().code==='MEMBERSHIP_DRAFT_NEEDS_STAFF');
- await account(registrations[3]);await account(registrations[3]);await assert.rejects(()=>draft(registrations[3]),e=>status(400)(e)&&e.getResponse().code==='MEMBERSHIP_DRAFT_NEEDS_STAFF');check();
+ await account(registrations[3]);await account(registrations[3],'USD','ADDITIONAL');await assert.rejects(()=>draft(registrations[3]),e=>status(400)(e)&&e.getResponse().code==='MEMBERSHIP_DRAFT_NEEDS_STAFF');check();
  // Identical concurrent same-key and different-key commands create one account,
  // one membership and one pair of canonical creation facts, never double draft.
  for(const [r,sameKey]of [[registrations[4],true],[registrations[5],false]]){

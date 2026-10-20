@@ -2166,7 +2166,8 @@ DO $$ DECLARE f record; BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.guardian_child_registration_receipts'::regclass AND contype='u' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_digest)') THEN RAISE EXCEPTION 'Child registration scoped replay key required'; END IF;
 END $$;
 DO $$ BEGIN
- IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_membership_draft(text)'::regprocedure) IS DISTINCT FROM '77fe22668845ad87ce3005affb7c2113' THEN RAISE EXCEPTION 'Owner launch DRAFT confirmation body drift'; END IF;
+ -- read_owner_launch_membership_draft: 0169 body (same tables and mode as 0139, canonical lock order).
+ IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_membership_draft(text)'::regprocedure) IS DISTINCT FROM '1f3b2c97a98d71b279e38db7e39f646b' THEN RAISE EXCEPTION 'Owner launch DRAFT confirmation body drift'; END IF;
  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_first_class_booking_context(text)'::regprocedure) IS DISTINCT FROM 'aa3867a643ba61d184acccfeab21e179' THEN RAISE EXCEPTION 'Owner launch booking context body drift'; END IF;
  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang WHERE p.oid='hon.read_owner_launch_first_class_booking_context(text)'::regprocedure AND p.prorettype='jsonb'::regtype AND NOT p.proretset AND p.prokind='f' AND p.proargnames=ARRAY['p_subject']::text[] AND p.proargmodes IS NULL AND l.lanname='plpgsql'
   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantor<>p.proowner OR a.is_grantable OR a.privilege_type<>'EXECUTE' OR a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))
@@ -2370,7 +2371,8 @@ DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles W
     ('hon.crm_lead_registration_has_permission(uuid,uuid,uuid,text)','e3b71364e299c4be376b83b3e4daa41a',false,true,'boolean',false),
     ('hon.resolve_crm_lead_registration_scope(text,uuid)','97012048ddae1177aadeba233454afcf',true,true,'record',true),
     ('hon.require_crm_lead_registration_actor(text,text)','b1473f5d95b499f8c1d9c10907b34e08',false,true,'uuid',false),
-    ('hon.register_crm_lead_person(text,uuid,jsonb,uuid,uuid,uuid)','577abbf84cbe4e1b64f2d6ecf09a7904',true,true,'jsonb',false)
+    -- register_crm_lead_person: 0169 body (IAM tables in SHARE, CRM domain tables in SHARE ROW EXCLUSIVE).
+    ('hon.register_crm_lead_person(text,uuid,jsonb,uuid,uuid,uuid)','539030f1832cdf3f320e356bf57e7c41',true,true,'jsonb',false)
   ) expected(signature,source_md5,runtime_allowed,definer,return_type,return_set) LOOP
     SELECT proc.*,owner.rolsuper,owner.rolbypassrls,owner.rolname owner_name INTO p
       FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
@@ -2419,7 +2421,7 @@ END $$;
 -- End CRM lead registration exact verification.
 
 -- Adult CRM membership draft exact verification, including immutable source and function drift.
--- draft_crm_adult_membership is verified against its 0168 definition (idempotency_records locked first).
+-- draft_crm_adult_membership is verified against its 0169 definition (canonical lock order: key reservation, IAM SHARE, domain SHARE ROW EXCLUSIVE).
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOREACH t IN ARRAY ARRAY['people','student_profiles','crm_lead_registration_conversions','crm_leads','family_members','billing_accounts','memberships','crm_adult_membership_draft_sources'] LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity) THEN RAISE EXCEPTION 'Adult CRM draft FORCE RLS required: %',t; END IF;
@@ -2434,7 +2436,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.crm_adult_membership_relation(uuid)',true,false,'71d39ddcd35a15c7baf094045aaf1979c5d61516dab7818d3cee0bb009c81457'),
 ('hon.read_crm_adult_membership_preparation(text,uuid)',true,true,'909adac7587840fbcd7e464e7b2b2c6b920d44b2d6264822fbcbffe1cc43243f'),
 ('hon.read_crm_adult_membership_draft_confirmation(text,uuid)',true,true,'1c28232bde9839acda9d7e38724a711842827dd17cf871a81c2770a67f211c05'),
-('hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)',true,true,'8d554d62d5da9db186b343ac81e63468007a4e8cf61f4d5af0b17425c49c8b61')) e(signature,definer,runtime_allowed,body_hash) LOOP
+('hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)',true,true,'c106968a870a801571fbb6d0031dc419cc0bf0a6e9375966a1931bee25493ab4')) e(signature,definer,runtime_allowed,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
