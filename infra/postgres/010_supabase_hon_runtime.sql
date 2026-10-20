@@ -1292,6 +1292,16 @@ DO $$ DECLARE r text; col text; f text; BEGIN
 END $$;
 -- End adult CRM membership draft exact reconciliation.
 
+-- CRM lead registration recovery exact reconciliation: one read-only function, runtime EXECUTE only.
+DO $$ DECLARE r text; BEGIN
+  REVOKE ALL ON FUNCTION hon.read_crm_lead_registration_recovery(text,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_crm_lead_registration_recovery(text,uuid) FROM %I',r);
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_crm_lead_registration_recovery(text,uuid) TO hon_runtime;
+END $$;
+-- End CRM lead registration recovery exact reconciliation.
+
 -- Champions Club contests exact reconciliation:
 DO $$ DECLARE t text; r text; col text; f text; BEGIN
   FOREACH t IN ARRAY ARRAY['champions_contests','champions_contest_prizes','champions_contest_schools','champions_contest_pauses',

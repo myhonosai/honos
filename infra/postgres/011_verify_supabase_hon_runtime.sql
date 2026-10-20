@@ -2462,3 +2462,19 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   END LOOP;
 END $$;
 -- End adult CRM membership draft exact verification.
+
+-- CRM lead registration recovery exact verification (0174): one read-only definer, runtime EXECUTE only, no overload.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+    AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='6877cda093563126e5a409a81f3f72a8ba714a737c231d30bdbc0931ff43ebb1'
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    AND p.prorettype='jsonb'::regtype AND NOT p.proretset AND p.prokind='f' AND p.prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
+    AND p.pronargs=2 AND oidvectortypes(p.proargtypes)='text, uuid' AND p.proargnames=ARRAY['subject','selected_lead']
+    AND p.proargmodes IS NULL AND p.proargdefaults IS NULL
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname='read_crm_lead_registration_recovery')=1
+  INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.read_crm_lead_registration_recovery(text,uuid)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM lead registration recovery function'; END IF;
+END $$;
+-- End CRM lead registration recovery exact verification.
