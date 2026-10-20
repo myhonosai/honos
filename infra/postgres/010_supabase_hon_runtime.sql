@@ -1292,11 +1292,11 @@ DO $$ DECLARE r text; col text; f text; BEGIN
 END $$;
 -- End adult CRM membership draft exact reconciliation.
 
--- CRM lead registration recovery exact reconciliation: one read-only function, runtime EXECUTE only.
+-- CRM lead registration recovery exact reconciliation: one read-only function with runtime EXECUTE; its private current-DRAFT check has none.
 DO $$ DECLARE r text; BEGIN
-  REVOKE ALL ON FUNCTION hon.read_crm_lead_registration_recovery(text,uuid) FROM PUBLIC;
+  REVOKE ALL ON FUNCTION hon.crm_adult_membership_draft_is_current(uuid),hon.read_crm_lead_registration_recovery(text,uuid) FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
-    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_crm_lead_registration_recovery(text,uuid) FROM %I',r);
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.crm_adult_membership_draft_is_current(uuid),hon.read_crm_lead_registration_recovery(text,uuid) FROM %I',r);
   END LOOP;
   GRANT EXECUTE ON FUNCTION hon.read_crm_lead_registration_recovery(text,uuid) TO hon_runtime;
 END $$;

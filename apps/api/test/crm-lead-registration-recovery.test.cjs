@@ -25,13 +25,14 @@ const states = () => [
   { leadId, workflowState: 'BILLING_ACCOUNT_REQUIRED', historicalRegistrationReceipt: registration() },
   { leadId, workflowState: 'READY_FOR_DRAFT', historicalRegistrationReceipt: registration(), billingAccount: account },
   { leadId, workflowState: 'CURRENT_DRAFT', historicalRegistrationReceipt: registration(), billingAccount: account, currentMembershipDraft: { state: 'RECORDED_DRAFT', receipt: draft() } },
+  { leadId, workflowState: 'CURRENT_DRAFT_BY_OTHER_STAFF', historicalRegistrationReceipt: registration(), billingAccount: account, currentMembershipDraft: { state: 'RECORDED_DRAFT' } },
 ];
 
 test('closed recovery contract: exact states, historical receipt distinct from current DRAFT, no extra identifiers', () => {
   for (const value of states()) assert.deepEqual(contracts.verifyCrmLeadRegistrationRecovery(value, leadId), value);
   assert.deepEqual(contracts.validateCrmLeadRegistrationRecoveryInput({}), {});
   for (const body of [{ studentProfileId: randomUUID() }, { receiptId: randomUUID() }, { leadId }, { membershipId: randomUUID() }, null, [], 'x']) assert.throws(() => contracts.validateCrmLeadRegistrationRecoveryInput(body));
-  const [, review, required, ready, current] = states();
+  const [, review, required, ready, current, other] = states();
   const rejects = [
     { ...review, leadId: randomUUID() },
     { ...review, historicalRegistrationReceipt: registration() },
@@ -49,6 +50,13 @@ test('closed recovery contract: exact states, historical receipt distinct from c
     { ...current, currentMembershipDraft: draft() },
     { ...current, currentMembershipDraft: undefined },
     { ...current, membershipId: randomUUID() },
+    // Another staff member's current DRAFT discloses no receipt, membership id or creator.
+    { ...other, currentMembershipDraft: current.currentMembershipDraft },
+    { ...other, currentMembershipDraft: { state: 'RECORDED_DRAFT', membershipId: randomUUID() } },
+    { ...other, currentMembershipDraft: { state: 'RECORDED_DRAFT', createdBy: randomUUID() } },
+    { ...other, currentMembershipDraft: { state: 'DRAFT' } },
+    { ...other, creatorPrincipalId: randomUUID() },
+    { ...other, billingAccount: undefined },
   ];
   for (const value of rejects) assert.throws(() => contracts.verifyCrmLeadRegistrationRecovery(JSON.parse(JSON.stringify(value)), leadId));
   assert.throws(() => contracts.verifyCrmLeadRegistrationRecovery(states()[0], 'not-a-uuid'));
@@ -131,4 +139,11 @@ test('0174 is read-only, uses the canonical SHARE lock order and reuses the 0160
   assert.match(body, /hon\.crm_adult_membership_relation\(c\.resulting_student_profile_id\)/);
   assert.match(body, /hon\.read_crm_adult_membership_draft_confirmation\(subject,c\.resulting_student_profile_id\)/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION hon\.read_crm_lead_registration_recovery\(text,uuid\) TO hon_runtime;/);
+  // Noncreators get a yes/no from a private, lock-free, DML-free helper; 0163 stays the only creator-owned confirmation.
+  const helper = migration.match(/CREATE FUNCTION hon\.crm_adult_membership_draft_is_current\([\s\S]*?\nEND \$\$;/)[0];
+  assert.match(helper, /RETURNS boolean/); assert.doesNotMatch(helper, /\b(?:INSERT|UPDATE|DELETE|TRUNCATE|MERGE|LOCK)\b/);
+  assert.doesNotMatch(migration, /GRANT EXECUTE ON FUNCTION[^;]*crm_adult_membership_draft_is_current/);
+  assert.doesNotMatch(migration, /read_crm_adult_membership_draft_confirmation\(text,uuid\)/, '0163 is neither replaced nor re-granted');
+  assert.match(body, /x\.actor_principal_id=actor\) THEN\s*-- Creator: the unchanged creator-owned 0163 confirmation/);
+  assert.match(body, /current_draft:=jsonb_build_object\('state','RECORDED_DRAFT'\);\s*state:='CURRENT_DRAFT_BY_OTHER_STAFF';/);
 });

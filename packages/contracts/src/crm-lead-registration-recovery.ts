@@ -4,19 +4,22 @@ import { verifyCrmAdultMembershipDraftConfirmation, type CrmAdultMembershipDraft
 
 /** Read-only selector: the lead id travels in the path; the body is always exactly `{}`. */
 export const CRM_LEAD_REGISTRATION_RECOVERY_COMMAND = 'crm-lead-registration-recovery' as const;
-export type CrmLeadRegistrationRecoveryState = 'NOT_REGISTERED' | 'NEEDS_STAFF_REVIEW' | 'BILLING_ACCOUNT_REQUIRED' | 'READY_FOR_DRAFT' | 'CURRENT_DRAFT';
+export type CrmLeadRegistrationRecoveryState = 'NOT_REGISTERED' | 'NEEDS_STAFF_REVIEW' | 'BILLING_ACCOUNT_REQUIRED' | 'READY_FOR_DRAFT' | 'CURRENT_DRAFT' | 'CURRENT_DRAFT_BY_OTHER_STAFF';
 export type CrmAdultRegistrationReceipt = Extract<CrmLeadRegistrationResult, { outcome: 'REGISTERED' }> & { registrationPath: 'ADULT'; familyId: null };
 /** No account id, payer id, version or balance: only what the existing DRAFT preparation already discloses. */
 export interface CrmLeadRegistrationRecoveryAccount { classification: 'CANONICAL'; currency: string }
 /**
  * `historicalRegistrationReceipt` is the immutable creation response, never proof of current state.
  * `currentMembershipDraft` is present only when the creator-owned current-DRAFT confirmation succeeded now.
+ * `CURRENT_DRAFT_BY_OTHER_STAFF` says only that another staff member's DRAFT is exactly current now: no receipt,
+ * membership id or creator, and no confirmation, change or activation right for the current staff member.
  */
 export type CrmLeadRegistrationRecovery =
   | { leadId: string; workflowState: 'NOT_REGISTERED' | 'NEEDS_STAFF_REVIEW' }
   | { leadId: string; workflowState: 'BILLING_ACCOUNT_REQUIRED'; historicalRegistrationReceipt: CrmAdultRegistrationReceipt }
   | { leadId: string; workflowState: 'READY_FOR_DRAFT'; historicalRegistrationReceipt: CrmAdultRegistrationReceipt; billingAccount: CrmLeadRegistrationRecoveryAccount }
-  | { leadId: string; workflowState: 'CURRENT_DRAFT'; historicalRegistrationReceipt: CrmAdultRegistrationReceipt; billingAccount: CrmLeadRegistrationRecoveryAccount; currentMembershipDraft: CrmAdultMembershipDraftConfirmation };
+  | { leadId: string; workflowState: 'CURRENT_DRAFT'; historicalRegistrationReceipt: CrmAdultRegistrationReceipt; billingAccount: CrmLeadRegistrationRecoveryAccount; currentMembershipDraft: CrmAdultMembershipDraftConfirmation }
+  | { leadId: string; workflowState: 'CURRENT_DRAFT_BY_OTHER_STAFF'; historicalRegistrationReceipt: CrmAdultRegistrationReceipt; billingAccount: CrmLeadRegistrationRecoveryAccount; currentMembershipDraft: { state: 'RECORDED_DRAFT' } };
 export interface CrmLeadRegistrationRecoveryContext extends CommandContext { externalSubject: string }
 export interface CrmLeadRegistrationRecoveryApiResponse { data: CrmLeadRegistrationRecovery; meta: { requestId: string; correlationId: string; replayed: false } }
 
@@ -71,6 +74,12 @@ export function verifyCrmLeadRegistrationRecovery(value: unknown, selectedLeadId
     if (uuid(row.leadId) !== leadId) invalid();
     return { leadId, workflowState: state, historicalRegistrationReceipt: receipt(row.historicalRegistrationReceipt, leadId), billingAccount: account(row.billingAccount),
       currentMembershipDraft: verifyCrmAdultMembershipDraftConfirmation(row.currentMembershipDraft) };
+  }
+  if (state === 'CURRENT_DRAFT_BY_OTHER_STAFF') {
+    const row = record(value, ['leadId', 'workflowState', 'historicalRegistrationReceipt', 'billingAccount', 'currentMembershipDraft']);
+    if (uuid(row.leadId) !== leadId || record(row.currentMembershipDraft, ['state']).state !== 'RECORDED_DRAFT') invalid();
+    return { leadId, workflowState: state, historicalRegistrationReceipt: receipt(row.historicalRegistrationReceipt, leadId), billingAccount: account(row.billingAccount),
+      currentMembershipDraft: { state: 'RECORDED_DRAFT' } };
   }
   return invalid();
 }

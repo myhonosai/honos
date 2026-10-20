@@ -2467,7 +2467,7 @@ END $$;
 DO $$ DECLARE safe boolean; BEGIN
   SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
     AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
-    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='6877cda093563126e5a409a81f3f72a8ba714a737c231d30bdbc0931ff43ebb1'
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='87b01d2fe2307aff23b2ea9fdd021d386b965e71cad1cb308d0f7e3b7b9ac33a'
     AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
       WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
     AND p.prorettype='jsonb'::regtype AND NOT p.proretset AND p.prokind='f' AND p.prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
@@ -2476,5 +2476,13 @@ DO $$ DECLARE safe boolean; BEGIN
     AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname='read_crm_lead_registration_recovery')=1
   INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.read_crm_lead_registration_recovery(text,uuid)'::regprocedure;
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM lead registration recovery function'; END IF;
+  -- Private actor-independent current-DRAFT check: never callable by the runtime or anyone but its owner.
+  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+    AND (owner.rolsuper OR owner.rolbypassrls) AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='3f44ad99d0b571e6cc052370017b2b475bc6b5f1b018da51f2816eddd4173845'
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)
+    AND p.prorettype='boolean'::regtype AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname='crm_adult_membership_draft_is_current')=1
+  INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.crm_adult_membership_draft_is_current(uuid)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM adult membership current-DRAFT check'; END IF;
 END $$;
 -- End CRM lead registration recovery exact verification.

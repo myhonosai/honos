@@ -50,7 +50,7 @@ Bodies are otherwise verbatim. Authorization (including the post-lock actor re-c
 
 **Owner Launch unchanged.** `test-owner-launch-integrity.mjs` now runs in CI on its own fixture and passes with 0169: 102 assertion groups covering registration, guardian/child, booking, membership DRAFT and both confirmations. Running it surfaced a break introduced earlier in this PR, not by 0169. Two Owner Launch proof fixtures inserted a second account for the same payer directly. 0159's one-canonical-account index now refuses that insert, so those fixtures now insert the second account as `ADDITIONAL`. The Owner Launch functions still see two accounts for the payer and return the same staff-review outcome.
 
-**0174 addition.** The read-only CRM registration recovery (`read_crm_lead_registration_recovery`) takes the 0163 confirmation's SHARE set in the same canonical order and joins the matrix as a twelfth workflow paused at five lock stages: 540 interleavings, all committing with 0169 bodies (local disposable run). Against the pre-0169 bodies 28 of 540 fail; none of those failures involves the recovery read.
+**0174 addition.** The read-only CRM registration recovery (`read_crm_lead_registration_recovery`) takes the 0163 confirmation's SHARE set in the same canonical order and joins the matrix as a twelfth workflow paused at five lock stages: 540 interleavings, all committing with 0169 bodies (local disposable run). Against the pre-0169 bodies 27–28 of 540 fail depending on timing; none of those failures involves the recovery read.
 
 ## Known residuals (not fixed here)
 

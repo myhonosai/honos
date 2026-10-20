@@ -2,9 +2,9 @@
 
 ## CRM registration recovery backend — Claude (2026-10-20)
 
-- [x] Read-only `POST …/crm/leads/:leadId/registration-recovery` (migration 0174) recovers an adult CRM lead's workflow state after navigation, refresh or session loss: `NOT_REGISTERED`, `NEEDS_STAFF_REVIEW`, `BILLING_ACCOUNT_REQUIRED`, `READY_FOR_DRAFT`, `CURRENT_DRAFT`. Reuses the 0160/0162 authorities and the 0163 creator-owned current-DRAFT confirmation; historical registration receipt kept distinct from current DRAFT; no DML, audit, outbox or idempotency. See `docs/architecture/CRM_LEAD_REGISTRATION_RECOVERY.md`.
+- [x] Read-only `POST …/crm/leads/:leadId/registration-recovery` (migration 0174) recovers an adult CRM lead's workflow state after navigation, refresh or session loss: `NOT_REGISTERED`, `NEEDS_STAFF_REVIEW`, `BILLING_ACCOUNT_REQUIRED`, `READY_FOR_DRAFT`, `CURRENT_DRAFT`, `CURRENT_DRAFT_BY_OTHER_STAFF`. Reuses the 0160/0162 authorities and the 0163 creator-owned current-DRAFT confirmation; historical registration receipt kept distinct from current DRAFT; no DML, audit, outbox or idempotency. See `docs/architecture/CRM_LEAD_REGISTRATION_RECOVERY.md`.
 - [ ] Codex: connect an explicit **Resume setup** action to the recovery endpoint per the integration requirements in that document.
-- [ ] Owner decision: whether a DRAFT created by one staff member should be shown as current to another authorized staff member (today creator-only, as 0163).
+- [x] Owner decision (2026-10-20): other authorized staff see `CURRENT_DRAFT_BY_OTHER_STAFF` (yes/no only); 0163 confirmation, DRAFT command and activation permissions unchanged.
 
 ## Connected adult CRM frontend — Codex (2026-10-20)
 
