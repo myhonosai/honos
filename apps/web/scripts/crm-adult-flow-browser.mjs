@@ -115,7 +115,7 @@ try {
         assert.equal(await page.getByText('Current DRAFT verified.', { exact: false }).count(), 0);
         await page.getByRole('button', { name: 'Check current DRAFT', exact: true }).focus(); await page.keyboard.press('Enter'); await page.getByText('Current DRAFT verified.', { exact: false }).waitFor();
         assert.equal(commands.length, 3); assert.equal(new Set(commands.map(c => c.key)).size, 3); assert.deepEqual(commands.map(c => c.step), ['register', 'account', 'draft']); await visual(page, `${name}-confirmed`);
-        mode = 'drift'; await page.getByRole('button', { name: 'Check current DRAFT', exact: true }).click(); await page.getByRole('alert').waitFor(); assert.equal(await page.getByText('Current DRAFT verified.', { exact: false }).count(), 0);
+        mode = 'drift'; await page.getByRole('button', { name: 'Check current DRAFT', exact: true }).click(); await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByText('Current DRAFT verified.', { exact: false }).count(), 0);
       } finally { await context.close(); }
     });
   }
@@ -124,13 +124,13 @@ try {
     try { await choose(page); await register(page);
       if (scenario === 'unknown') { await page.getByRole('button', { name: 'Retry exact request' }).waitFor(); assert.equal(commands.length, 1); await page.getByRole('button', { name: 'Retry exact request' }).click(); await page.getByRole('heading', { name: /Create or reuse this adult/ }).waitFor(); assert.equal(commands.length, 2); assert.deepEqual(commands[0], commands[1]); }
       if (scenario === 'review') { await page.getByText(/Staff review required/).waitFor(); assert.equal(await page.getByRole('button', { name: 'Create or reuse account' }).count(), 0); }
-      if (scenario === 'deny-account') { await page.getByRole('heading', { name: /Create or reuse this adult/ }).waitFor(); await page.getByRole('checkbox', { name: /responsible for their own billing/ }).check(); await page.getByRole('button', { name: 'Create or reuse account' }).click(); await page.getByRole('alert').waitFor(); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert(!(await page.locator('body').innerText()).includes('private-canary')); }
+      if (scenario === 'deny-account') { await page.getByRole('heading', { name: /Create or reuse this adult/ }).waitFor(); await page.getByRole('checkbox', { name: /responsible for their own billing/ }).check(); await page.getByRole('button', { name: 'Create or reuse account' }).click(); await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert.equal(await page.getByLabel('School UUID', { exact: true }).inputValue(), ''); assert(!(await page.locator('body').innerText()).includes('private-canary')); }
       if (scenario === 'slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert.equal(await page.getByText(/Registration recorded for this adult/).count(), 0); }
     } finally { await context.close(); }
   });
   for (const actor of [null, 'family-synthetic', 'hq-synthetic', 'foreign-school-synthetic']) await check(`${actor ?? 'anonymous'}: authentication and API authorization remain required`, async () => {
     reset(); const { context, page } = await open({ width: 390, height: 844 }, actor);
-    try { if (!actor) await page.waitForURL(`${origin}/auth/login`); else { await page.getByRole('button', { name: 'Load CRM leads', exact: true }).click(); await page.getByRole('alert').waitFor(); assert.equal(await page.getByRole('button', { name: 'Set up adult membership' }).count(), 0); } assert.equal(commands.length, 0); } finally { await context.close(); }
+    try { if (!actor) await page.waitForURL(`${origin}/auth/login`); else { await page.getByRole('button', { name: 'Load CRM leads', exact: true }).click(); await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByRole('button', { name: 'Set up adult membership' }).count(), 0); } assert.equal(commands.length, 0); } finally { await context.close(); }
   });
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
 } finally { await browser?.close(); app.kill('SIGTERM'); await new Promise(done => api.close(done)); await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); }
