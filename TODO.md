@@ -1,5 +1,12 @@
 # HON Delivery Backlog
 
+## Connected adult CRM frontend — Codex (2026-10-20)
+
+- [x] Connect a freshly authorized CRM lead row to explicit adult registration, canonical self-payer account create/reuse, adult membership preparation/DRAFT, and separate current-DRAFT confirmation. Reuse merged #41 APIs only; no backend, migration, activation, payment or guardian/child changes. Verify duplicate protection, exact uncertain retries, stale/access clearing, keyboard/mobile behavior and CI.
+- [x] Correct #41 error-status documentation: CRM deadlock/conflict 409 versus Owner Launch recoverable 503; no handler behavior changes.
+- [ ] Backend follow-up from #41: strengthen same-key cross-command concurrency assertions for every loser-side membership/account/source/audit/outbox effect and actual error status. No backend correction is included in this frontend task.
+
+
 ## Codex school checkout — merged B5 TEST_MODE integration (2026-10-19)
 
 - [x] Synchronize exact merged main `d823edc` (tree `35f5126`), preserve #28 foundation and Claude's B5 backend verbatim; isolate `codex/school-checkout-test-mode`. Coordinate #30/#27 and preserve #29 B6/invoice/multi-school dependencies. No Manus migration reconciliation by Codex.
