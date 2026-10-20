@@ -1,0 +1,16 @@
+.flow { border: 1px solid #389cc2 !important; border-radius: 16px; background: #f5fbff; color: #142d48; scroll-margin-top: 18px; overflow-wrap: anywhere; }
+.flow header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.flow header h2 { flex: 1 1 100%; }
+.flow ol { display: flex; flex-wrap: wrap; gap: 24px; padding-inline-start: 22px; }
+.flow li[aria-current=step] { font-weight: 700; color: #075777; }
+.flow label { display: flex; flex-direction: column; gap: 8px; margin-block: 18px; max-width: 560px; }
+.flow .check { flex-direction: row; align-items: flex-start; }
+.flow input { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.flow .check input { flex: 0 0 20px; width: 20px; min-width: 20px; height: 20px; margin: 2px 8px 0 0; }
+.flow button { min-height: 44px; white-space: normal; }
+.flow button:focus-visible, .flow input:focus-visible { outline: 3px solid #0987b1; outline-offset: 3px; }
+.notice, .error, .receipt { padding: 16px; border-radius: 10px; margin-block: 16px; }
+.notice { background: #e6f3f8; color: #14394d; }
+.error { background: #fff0ed; color: #872c20; border: 1px solid #c4796f; }
+.receipt { background: #e6f5ee; color: #174331; }
+@media (max-width: 640px) { .flow ol { flex-direction: column; gap: 8px; } .flow button { width: 100%; } }
