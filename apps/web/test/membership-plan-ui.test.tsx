@@ -89,7 +89,7 @@ it('publishes a revision against the reviewed version, including marking it unav
   expect(JSON.parse(publish.mock.calls[0]![0].body)).toMatchObject({ expectedVersion:1,priceMinor:15900,availability:'UNAVAILABLE' }); expect(text(render())).toContain('Existing memberships keep their original plan version');
 });
 it('requires explicit options, selection, version review and confirmation before creating a plan-bound DRAFT', async () => {
-  const f = vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({ plans:[listing,{ ...listing,planId:id(33),currency:'KRW' }] })).mockResolvedValueOnce(response({ receipt,plan }));
+  const f = vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({ plans:[listing,{ ...listing,planId:id(33),planCode:'KRW-ADULT',currency:'KRW' }] })).mockResolvedValueOnce(response({ receipt,plan }));
   picker(); expect(f).not.toHaveBeenCalled(); click('Load available membership plans'); await settle();
   expect(elements(render()).find(e => e.type === 'option' && e.props.value === id(33))!.props.disabled).toBe(true);
   expect(button(render(),'Review membership DRAFT')).toBeUndefined(); pickerReady(); click('Create DRAFT from selected plan'); await settle();
@@ -101,7 +101,7 @@ it('blocks parallel commands and retries only the same DRAFT request after an un
   const f = vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({plans:[listing]})); picker(); click('Load available membership plans'); await settle(); pickerReady();
   let fail!: (e: Error) => void; f.mockImplementationOnce(() => new Promise((_yes,no) => { fail = no; }));
   const b = button(render(),'Create DRAFT from selected plan'); b.props.onClick(); b.props.onClick(); expect(f).toHaveBeenCalledTimes(2); fail(new Error('lost')); await settle();
-  expect(callbacks.onBlocking).toHaveBeenLastCalledWith(true); expect(button(render(),'Load available membership plans').props.disabled).toBe(true);
+  expect(callbacks.onBlocking).toHaveBeenLastCalledWith(true); expect(button(render(),'Reload available membership plans').props.disabled).toBe(true);
   f.mockResolvedValueOnce(response({receipt,plan},200,true)); click('Retry exact DRAFT request'); await settle();
   expect(f.mock.calls[1]![1]!.body).toBe(f.mock.calls[2]![1]!.body); expect(f.mock.calls[1]![1]!.headers).toEqual(f.mock.calls[2]![1]!.headers); expect(callbacks.onCreated).toHaveBeenCalledWith({receipt,plan},true);
 });
