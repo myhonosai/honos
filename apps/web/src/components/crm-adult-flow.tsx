@@ -1,27 +1,38 @@
 'use client';
 
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { LeadListItem, CrmAdultMembershipPreparation, CrmAdultMembershipDraftReceipt, CrmLeadRegistrationResult } from '@hon/contracts';
+import type { LeadListItem, CrmAdultMembershipPreparation, CrmAdultMembershipDraftReceipt, CrmLeadRegistrationResult, CrmLeadRegistrationRecovery, CrmLeadRegistrationRecoveryAccount } from '@hon/contracts';
 import { adultRequest, sendAdultRequest, AdultAccessError, AdultUncertainError, type AdultAccount, type AdultRequest, type AdultScope } from './crm-adult-flow-http';
 import styles from './crm-adult-flow.module.css';
 
 type Registered = Extract<CrmLeadRegistrationResult, { outcome: 'REGISTERED' }>;
-type Props = AdultScope & { row: LeadListItem; onCancel(): void; onBusy(busy: boolean): void; onStarted(): void; onAccessLost(): void };
-export function CrmAdultFlow({ row, organizationId, schoolId, onCancel, onBusy, onStarted, onAccessLost }: Props): React.ReactElement {
+type Props = AdultScope & { row: LeadListItem; initialRecovery?: CrmLeadRegistrationRecovery; onRecover?(): void; onCancel(): void; onBusy(busy: boolean): void; onStarted(): void; onAccessLost(): void };
+export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, onRecover, onCancel, onBusy, onStarted, onAccessLost }: Props): React.ReactElement {
+  const recoveredRegistration = initialRecovery && 'historicalRegistrationReceipt' in initialRecovery ? initialRecovery.historicalRegistrationReceipt : null;
+  const recoveredAccount = initialRecovery && 'billingAccount' in initialRecovery ? initialRecovery.billingAccount : null;
+  const recoveredDraft = initialRecovery?.workflowState === 'CURRENT_DRAFT' ? initialRecovery.currentMembershipDraft.receipt : null;
+  const otherCurrent = initialRecovery?.workflowState === 'CURRENT_DRAFT_BY_OTHER_STAFF';
   const [birthDate, setBirthDate] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [plan, setPlan] = useState('');
   const [consent, setConsent] = useState(false);
-  const [registered, setRegistered] = useState<Registered | null>(null);
-  const [account, setAccount] = useState<AdultAccount | null>(null);
+  const [registered, setRegistered] = useState<Registered | null>(recoveredRegistration);
+  const [account, setAccount] = useState<AdultAccount | CrmLeadRegistrationRecoveryAccount | null>(recoveredAccount);
   const [prepared, setPrepared] = useState<CrmAdultMembershipPreparation | null>(null);
-  const [receipt, setReceipt] = useState<CrmAdultMembershipDraftReceipt | null>(null);
-  const [current, setCurrent] = useState(false);
+  const [receipt, setReceipt] = useState<CrmAdultMembershipDraftReceipt | null>(recoveredDraft);
+  const [current, setCurrent] = useState(recoveredDraft !== null);
   const [pending, setPending] = useState<AdultRequest | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(initialRecovery ? ({
+    NOT_REGISTERED: 'No registration is recorded for this lead. Begin only after reviewing the adult registration details.',
+    NEEDS_STAFF_REVIEW: 'Staff review required. No later setup step is available.',
+    BILLING_ACCOUNT_REQUIRED: 'Historical adult registration recovered. Review the billing-account step before continuing.',
+    READY_FOR_DRAFT: 'Canonical billing account verified during recovery. Check DRAFT readiness before creating a membership DRAFT.',
+    CURRENT_DRAFT: 'Current DRAFT confirmed by the authorized recovery read.',
+    CURRENT_DRAFT_BY_OTHER_STAFF: 'A current DRAFT exists, created by another staff member. This view grants no confirmation, change, ownership-transfer or activation rights.',
+  }[initialRecovery.workflowState]) : '');
   const [error, setError] = useState('');
-  const [review, setReview] = useState(false);
+  const [review, setReview] = useState(initialRecovery?.workflowState === 'NEEDS_STAFF_REVIEW');
   const active = useRef(false), generation = useRef(0), heading = useRef<HTMLHeadingElement | null>(null);
   const scope = { organizationId, schoolId };
   useEffect(() => { heading.current?.focus(); }, []);
@@ -59,7 +70,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, onCancel, onBusy, 
     } finally { if (epoch === generation.current) { active.current = false; setBusy(false); onBusy(false); } }
   }
   function submit(event: FormEvent): void {
-    event.preventDefault(); if (active.current || pending || !consent || review || receipt) return;
+    event.preventDefault(); if (active.current || pending || !consent || review || receipt || otherCurrent) return;
     try {
       // Validate before allocating a command key; each consequential step gets a distinct key.
       const step = !registered ? 'register' : !account ? 'account' : 'draft';
@@ -73,15 +84,16 @@ export function CrmAdultFlow({ row, organizationId, schoolId, onCancel, onBusy, 
   const locked = busy || pending !== null;
   return <section className={styles.flow} aria-labelledby="adult-flow-title" aria-busy={busy}>
     <header><p>ADULT CRM SETUP</p><h2 id="adult-flow-title" ref={heading} tabIndex={-1}>Set up {row.givenName} {row.familyName}</h2><p>Register adult → billing account → membership DRAFT</p>
-      <button type="button" disabled={busy} onClick={onCancel}>Close adult setup</button></header>
+      <button type="button" disabled={busy} onClick={onCancel}>Close adult setup</button>
+      {onRecover && <button type="button" disabled={locked} onClick={onRecover}>Refresh saved setup</button>}</header>
     <p>Each step is a separate authorized action. A DRAFT does not activate membership, create a payment schedule or collect payment.</p>
-    <ol aria-label="Adult setup progress"><li aria-current={!registered ? 'step' : undefined}>Registration{registered ? ' — recorded' : ''}</li><li aria-current={registered && !account ? 'step' : undefined}>Billing account{account ? ' — recorded' : ''}</li><li aria-current={account ? 'step' : undefined}>Membership DRAFT{receipt ? ' — recorded' : ''}</li></ol>
+    <ol aria-label="Adult setup progress"><li aria-current={!registered && !review ? 'step' : undefined}>Registration{registered ? ' — recorded' : ''}</li><li aria-current={registered && !account ? 'step' : undefined}>Billing account{account ? ' — verified' : ''}</li><li aria-current={account ? 'step' : undefined}>Membership DRAFT{receipt || otherCurrent ? ' — recorded' : ''}</li></ol>
     {message && <p role="status" className={styles.notice}>{message}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {pending && <div className={styles.notice}><p>An action may already have completed. This retry retains its exact data and idempotency key.</p><button type="button" disabled={busy} onClick={() => void run(pending)}>Retry exact request</button></div>}
-    {registered && <p>Registration recorded for this adult lead. Student reference: <code>{registered.studentProfileId}</code></p>}
-    {account && <p>{account.reused === true ? 'Existing account reused' : account.reused === false ? 'Account created' : 'Historical account receipt'} · {account.currency} · <code>{account.id}</code></p>}
-    {!review && !receipt && <form onSubmit={submit}><fieldset disabled={locked}>
+    {registered && !otherCurrent && <p>Registration recorded for this adult lead. Historical registration receipt; not proof of current membership. Student reference: <code>{registered.studentProfileId}</code></p>}
+    {account && !otherCurrent && <p>{'id' in account ? <>{account.reused === true ? 'Existing account reused' : account.reused === false ? 'Account created' : 'Historical account receipt'} · {account.currency} · <code>{account.id}</code></> : <>Verified canonical account · {account.currency}. No account identifier was returned.</>}</p>}
+    {!review && !receipt && !otherCurrent && <form onSubmit={submit}><fieldset disabled={locked}>
       {!registered ? <><h3>1. Register this adult</h3><label>Date of birth<input type="date" required min="1900-01-01" value={birthDate} onChange={e => { setBirthDate(e.target.value); setConsent(false); setError(''); }} /></label>
         <label className={styles.check}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />I reviewed this lead as an adult registering without a guardian.</label><button disabled={!consent || !birthDate}>Register adult</button></>
       : !account ? <><h3>2. Create or reuse this adult’s account</h3><p>The responsible person is the exact adult returned by registration. A matching canonical account is reused; a different currency requires staff review.</p>

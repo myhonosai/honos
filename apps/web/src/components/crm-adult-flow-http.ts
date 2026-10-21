@@ -4,6 +4,8 @@ import {
   validateCreateBillingAccountInput, validateCrmAdultMembershipDraftInput,
   verifyCrmAdultMembershipPreparation, verifyCrmAdultMembershipDraftReceipt,
   verifyCrmAdultMembershipDraftConfirmation,
+  CRM_LEAD_REGISTRATION_RECOVERY_COMMAND, validateCrmLeadRegistrationRecoveryInput, verifyCrmLeadRegistrationRecovery,
+  type CrmLeadRegistrationRecovery,
   type CrmLeadRegistrationResult, type CrmAdultMembershipDraftReceipt,
 } from '@hon/contracts';
 
@@ -20,6 +22,9 @@ export type AdultResult =
 export class AdultAccessError extends Error {}
 export class AdultUncertainError extends Error {}
 export class AdultRejectedError extends Error {}
+export class AdultRecoveryError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
 const markers = { register: 'crm-lead-register', account: 'billing.account.create', prepare: 'crm-adult-membership-prepare', draft: 'crm-adult-membership-draft', confirm: 'crm-adult-membership-draft-confirmation' } as const;
 function invalid(): never { throw new Error('The response could not be verified. No completed action is assumed.'); }
 function uuid(v: unknown): string { if (typeof v !== 'string' || !CRM_LEAD_REGISTRATION_UUID.test(v)) invalid(); return v.toLowerCase(); }
@@ -28,6 +33,36 @@ function closed(v: unknown, required: string[], optional: string[] = []): Record
   if (required.some(k => !Object.hasOwn(r, k)) || Object.keys(r).some(k => !required.includes(k) && !optional.includes(k))) invalid(); return r;
 }
 const root = (s: AdultScope) => `/api/v1/organizations/${uuid(s.organizationId)}/schools/${uuid(s.schoolId)}`;
+
+/** Explicit read only. No command key, caller receipt, account id or stored workflow state. */
+export async function readAdultRecovery(scope: AdultScope, leadId: string, contactPersonId: string, signal?: AbortSignal): Promise<CrmLeadRegistrationRecovery> {
+  const selected = uuid(leadId), contact = uuid(contactPersonId);
+  const path = `${root(scope)}/crm/leads/${selected}/registration-recovery`;
+  try {
+    const response = await fetch(path, {
+      method: 'POST', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': CRM_LEAD_REGISTRATION_RECOVERY_COMMAND },
+      body: JSON.stringify(validateCrmLeadRegistrationRecoveryInput({})),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
+    });
+    if (response.status === 401 || response.status === 403) throw new AdultAccessError('Your session, school permission or active entitlement is unavailable. Reload the authorized lead list.');
+    if (response.status === 404) throw new AdultRecoveryError(404, 'This lead is unavailable. Reload the authorized lead list before selecting a record.');
+    if (response.status === 409) throw new AdultRecoveryError(409, 'The recovery read conflicted with a record change. No saved state is assumed. Try the read again.');
+    if (response.status !== 200 || response.redirected
+      || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')
+      || !/^private,\s*no-store$/i.test(response.headers.get('cache-control') ?? '')) invalid();
+    const text = await response.text(); if (text.length > 12000) invalid();
+    const envelope = closed(JSON.parse(text), ['data', 'meta']);
+    const meta = closed(envelope.meta, ['requestId', 'correlationId', 'replayed']);
+    if (uuid(meta.requestId) !== uuid(meta.correlationId) || meta.replayed !== false) invalid();
+    const result = verifyCrmLeadRegistrationRecovery(envelope.data, selected);
+    if ('historicalRegistrationReceipt' in result && result.historicalRegistrationReceipt.sourceContactPersonId !== contact) invalid();
+    return result;
+  } catch (error) {
+    if (error instanceof AdultAccessError || error instanceof AdultRecoveryError) throw error;
+    throw new AdultRecoveryError(503, 'Saved setup could not be verified. No workflow state is assumed. Try this read again.');
+  }
+}
 export function adultRequest(s: AdultScope, step: AdultStep, selection: string, value: string, key?: string): AdultRequest {
   let path: string, input: object;
   const base = root(s), selected = uuid(selection);

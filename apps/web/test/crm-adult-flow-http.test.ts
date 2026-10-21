@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { adultRequest, sendAdultRequest, AdultAccessError, AdultUncertainError, AdultRejectedError } from '../src/components/crm-adult-flow-http';
+import { adultRequest, sendAdultRequest, readAdultRecovery, AdultAccessError, AdultRecoveryError, AdultUncertainError, AdultRejectedError } from '../src/components/crm-adult-flow-http';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { organizationId: id(1), schoolId: id(2) }, key = id(9), date = '2026-10-20T09:00:00.000Z';
 const meta = { requestId: id(8), correlationId: id(8), replayed: false };
@@ -68,5 +68,48 @@ describe('merged adult CRM transport integration', () => {
     f.mockResolvedValue(reply({ studentDisplayName: 'Ari', currency: 'USD', readiness: 'READY_FOR_DRAFT' }, 200, { replayed: true }));
     await expect(sendAdultRequest(adultRequest(scope, 'prepare', id(5), ''))).rejects.toBeInstanceOf(AdultRejectedError);
     f.mockResolvedValue(reply({ outcome: 'NEEDS_STAFF_REVIEW' })); expect(await sendAdultRequest(register())).toMatchObject({ registration: { outcome: 'NEEDS_STAFF_REVIEW' } });
+  });
+});
+
+describe('merged 0174 recovery transport', () => {
+  const base = { leadId: id(3), historicalRegistrationReceipt: registration, billingAccount: { classification: 'CANONICAL', currency: 'USD' } };
+  const recovery = () => readAdultRecovery(scope, id(3), id(4));
+  it('sends exactly the read contract without an idempotency key and accepts all six closed states', async () => {
+    const f = vi.spyOn(globalThis, 'fetch');
+    for (const data of [
+      { leadId: id(3), workflowState: 'NOT_REGISTERED' }, { leadId: id(3), workflowState: 'NEEDS_STAFF_REVIEW' },
+      { leadId: id(3), workflowState: 'BILLING_ACCOUNT_REQUIRED', historicalRegistrationReceipt: registration },
+      { ...base, workflowState: 'READY_FOR_DRAFT' }, { ...base, workflowState: 'CURRENT_DRAFT', currentMembershipDraft: { state: 'RECORDED_DRAFT', receipt } },
+      { ...base, workflowState: 'CURRENT_DRAFT_BY_OTHER_STAFF', currentMembershipDraft: { state: 'RECORDED_DRAFT' } },
+    ]) { f.mockResolvedValue(reply(data)); expect(await recovery()).toEqual(data); }
+    for (const [path, options] of f.mock.calls) {
+      expect(path).toBe(`/api/v1/organizations/${id(1)}/schools/${id(2)}/crm/leads/${id(3)}/registration-recovery`);
+      expect(options).toMatchObject({ method: 'POST', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', body: '{}' });
+      expect(options!.headers).toEqual({ Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': 'crm-lead-registration-recovery' });
+      expect(options!.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+  it('refuses wrong lead/contact, replayed reads, extra membership data and invented account identifiers', async () => {
+    const f = vi.spyOn(globalThis, 'fetch');
+    const other = { ...base, workflowState: 'CURRENT_DRAFT_BY_OTHER_STAFF', currentMembershipDraft: { state: 'RECORDED_DRAFT' } };
+    for (const data of [
+      { ...base, workflowState: 'READY_FOR_DRAFT', leadId: id(99) },
+      { ...base, workflowState: 'READY_FOR_DRAFT', historicalRegistrationReceipt: { ...registration, sourceContactPersonId: id(99) } },
+      { ...base, workflowState: 'READY_FOR_DRAFT', billingAccount: { ...base.billingAccount, id: id(6) } },
+      { ...other, currentMembershipDraft: { state: 'RECORDED_DRAFT', receipt } },
+      { ...other, creatorId: id(99) }, { leadId: id(3), workflowState: 'NEEDS_STAFF_REVIEW', historicalRegistrationReceipt: registration },
+    ]) { f.mockResolvedValue(reply(data)); await expect(recovery()).rejects.toMatchObject({ status: 503 }); }
+    f.mockResolvedValue(reply(other, 200, { replayed: true })); await expect(recovery()).rejects.toBeInstanceOf(AdultRecoveryError);
+  });
+  it.each([401, 403, 404, 409, 503])('handles %s without displaying private errors or automatically retrying', async status => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(reply({ secret: 'private-canary' }, status));
+    await expect(recovery()).rejects.toBeInstanceOf(status === 401 || status === 403 ? AdultAccessError : AdultRecoveryError);
+    expect(f).toHaveBeenCalledTimes(1);
+    try { await recovery(); } catch (e) { expect((e as Error).message).not.toContain('private-canary'); }
+  });
+  it('does not fetch malformed selectors and treats canceled/network reads as unverified, never command uncertainty', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    await expect(readAdultRecovery({ ...scope, schoolId: '../foreign' }, id(3), id(4))).rejects.toThrow(); expect(f).not.toHaveBeenCalled();
+    await expect(recovery()).rejects.toMatchObject({ status: 503 }); expect(f).toHaveBeenCalledTimes(1);
   });
 });
