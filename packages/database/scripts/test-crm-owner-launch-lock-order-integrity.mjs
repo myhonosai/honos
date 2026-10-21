@@ -21,6 +21,7 @@ const { CrmAdultMembershipDraftService } = await import('../../../apps/api/dist/
 const { LeadRegistrationService } = await import('../../../apps/api/dist/crm/lead-registration.service.js');
 const { OwnerLaunchService } = await import('../../../apps/api/dist/owner-launch/owner-launch.service.js');
 const { LeadRegistrationRecoveryService } = await import('../../../apps/api/dist/crm/lead-registration-recovery.service.js');
+const { MembershipPlanService } = await import('../../../apps/api/dist/billing/membership-plan.service.js');
 
 const admin = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
 const blocker = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
@@ -70,7 +71,8 @@ const deadlocks = async () => Number((await admin.query('SELECT deadlocks FROM p
 await admin.connect(); await blocker.connect();
 const database = new RuntimeDatabaseService();
 const services = { accounts: new BillingAccountService(database), memberships: new MembershipService(database), drafts: new CrmAdultMembershipDraftService(database),
-  registrations: new LeadRegistrationService(database), launch: new OwnerLaunchService(database), recovery: new LeadRegistrationRecoveryService(database) };
+  registrations: new LeadRegistrationService(database), launch: new OwnerLaunchService(database), recovery: new LeadRegistrationRecoveryService(database),
+  plans: new MembershipPlanService(database) };
 try {
   const marker = (await admin.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
   assert.deepEqual(marker, { owner: flexibleBillingAccountsFixture.owner, marker: 'HON disposable flexible billing accounts validation' });
@@ -89,7 +91,7 @@ try {
   await admin.query("INSERT INTO hon.principals(id,principal_type,user_id,display_name) VALUES($1,'HUMAN_USER',$2,'PRIVATE_LOCK_STAFF')", [ids.staff, ids.user]);
   await admin.query("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,'FRONT_DESK','PRIVATE_LOCK_ROLE')", [ids.role, ids.org]);
   for (const permission of ['school.view', 'people.create', 'student.profile.manage', 'curriculum.progress.record', 'program.manage', 'schedule.session.manage',
-    'crm.lead.read', 'crm.lead.register', 'family.create', 'family.member.manage', 'billing.membership.create', 'billing.account.create', 'billing.membership.activate', 'schedule.booking.manage']) {
+    'crm.lead.read', 'crm.lead.register', 'family.create', 'family.member.manage', 'billing.membership.create', 'billing.account.create', 'billing.membership.activate', 'schedule.booking.manage', 'billing.membership_plan.manage']) {
     await admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [ids.role, ids.org, permission]);
   }
   await admin.query("INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,$4,clock_timestamp()-interval '1 day')", [ids.grant, ids.org, ids.school, ids.staff, ids.role]);
@@ -117,6 +119,17 @@ try {
     return { lead, person: adult, student: registered.result.studentProfileId, account: account.account.id };
   }
   const draftInput = (student) => ({ studentProfileId: student, planCode: 'STAFF-OPAQUE', confirmation: 'I_CONFIRM_DIRECT_HUMAN_ADULT_CRM_MEMBERSHIP_DRAFT' });
+  // 0175: the plan-bound DRAFT uses one plan that is never revised; revisions alternate between two other plans, so
+  // the two sides of a cell never share a plan and no revision makes another workflow stale (and the 200-plan cap holds).
+  const publishPlan = async () => (await services.plans.create(context(), { planCode: `LOCK-${randomUUID().slice(0, 8).toUpperCase()}`, displayName: 'Lock plan', availability: 'AVAILABLE',
+    currency: 'USD', priceMinor: 10000, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', confirmation: 'I_CONFIRM_DIRECT_HUMAN_MEMBERSHIP_PLAN_CHANGE' })).plan;
+  let draftPlan; const revisionPlans = []; let revisionTurn = 0;
+  const sharedDraftPlan = async () => (draftPlan ??= await publishPlan());
+  async function nextRevisionPlan() {
+    while (revisionPlans.length < 2) revisionPlans.push(await publishPlan());
+    const plan = revisionPlans[revisionTurn++ % 2];
+    return { ...plan, version: (await admin.query('SELECT current_version FROM hon.membership_plans WHERE id=$1', [plan.planId])).rows[0].current_version };
+  }
   async function msDraft() {
     const payer = await person();
     const account = await services.accounts.create(context(), { responsiblePersonId: payer, currency: 'USD' });
@@ -156,6 +169,16 @@ try {
     'CRM registration recovery': { prepare: async () => { const adult = await crmAdult(); await services.drafts.draft(context(), draftInput(adult.student)); return adult; },
       run: (d) => services.recovery.recover(context({ idempotencyKey: '' }), d.lead),
       check: (r) => assert.equal(r.workflowState, 'CURRENT_DRAFT'), stages: ['family_access_grants', 'people', 'crm_leads', 'billing_accounts', 'invoices'] },
+    // 0175: the plan-bound DRAFT takes the 0169 DRAFT set, then the catalog tables in SHARE; plan writers take IAM SHARE then the catalog.
+    'Adult CRM DRAFT from plan': { prepare: async () => ({ ...(await crmAdult()), plan: await sharedDraftPlan() }),
+      run: (d) => services.plans.draftAdultMembershipFromPlan(context(), { studentProfileId: d.student, membershipPlanId: d.plan.planId, membershipPlanVersion: d.plan.version,
+        confirmation: 'I_CONFIRM_DIRECT_HUMAN_ADULT_CRM_MEMBERSHIP_DRAFT_FROM_PLAN' }),
+      check: (r, d) => { assert.equal(r.replayed, false); assert.equal(r.receipt.state, 'DRAFT'); assert.equal(r.receipt.planCode, d.plan.planCode); },
+      stages: ['users', 'family_access_grants', 'people', 'billing_accounts', 'membership_plans', 'audit_events'] },
+    'Membership plan revision': { prepare: async () => ({ plan: await nextRevisionPlan() }),
+      run: (d) => services.plans.revise(context(), d.plan.planId, { displayName: 'Lock plan', availability: 'AVAILABLE', currency: 'USD', priceMinor: 10000 + d.plan.version, billingFrequency: 'MONTHLY',
+        termKind: 'OPEN_ENDED', expectedVersion: d.plan.version, confirmation: 'I_CONFIRM_DIRECT_HUMAN_MEMBERSHIP_PLAN_CHANGE' }),
+      check: (r, d) => { assert.equal(r.replayed, false); assert.equal(r.plan.version, d.plan.version + 1); }, stages: ['users', 'membership_plans', 'audit_events'] },
     'Billing account create': { prepare: async () => ({ payer: await person() }),
       run: (d, db = database) => new BillingAccountService(db).create(context(), { responsiblePersonId: d.payer, currency: 'USD' }),
       check: (r) => { assert.equal(r.replayed, false); assert.equal(r.account.classification, 'CANONICAL'); },

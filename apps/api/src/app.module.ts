@@ -1,5 +1,8 @@
 import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
 import { CrmAdultMembershipDraftService } from './billing/crm-adult-membership-draft.service.js';
+import { CrmAdultMembershipDraftFromPlanController, MembershipPlanController } from './billing/membership-plan.controller.js';
+import { MembershipPlanService } from './billing/membership-plan.service.js';
+import { CrmAdultMembershipDraftFromPlanHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard } from './billing/membership-plan.dto.js';
 import { CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
@@ -318,6 +321,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InterfaceThemeController,
     MembershipController,
     CrmAdultMembershipDraftController,
+    CrmAdultMembershipDraftFromPlanController,
+    MembershipPlanController,
     BillingAccountController,
     InvoiceController,
     HqController,
@@ -432,6 +437,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InterfaceThemeService,
     MembershipService,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
+    MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
     BillingAccountService,
     BillingAccountHumanUiGuard,

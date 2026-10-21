@@ -2486,3 +2486,44 @@ DO $$ DECLARE safe boolean; BEGIN
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM adult membership current-DRAFT check'; END IF;
 END $$;
 -- End CRM lead registration recovery exact verification.
+
+-- School membership plan catalog exact verification (0175): private immutable tables, five runtime entry points, private helpers and guards, no overloads.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_plans','membership_plan_versions','membership_plan_selections'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School membership plan table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_membership_plan()',false,false,'6b25106590748dffc6e8c3250cf6ca7e5f14eae80d2506d7c8d7201da432a3c3'),
+('hon.guard_membership_plan_version()',false,false,'2977003ee266b7d2967f4f5155ffa646c1b6925a9aec55f554eb80e706062c98'),
+('hon.guard_membership_plan_selection()',false,false,'31cc7aaabb6ec7e731a343f261d55dcb540877e3a6ee6553fe4b97c68d7343e4'),
+('hon.require_membership_plan_manager(text)',true,false,'55b5a9821f0a106e18d89b443ec3b7d4e480e968c6918f2c9738227d2c5ff63c'),
+('hon.membership_plan_validated_terms(jsonb)',true,false,'b108ba63c4c2da714d076a085895bfb2cadbb0b97b7db06d74901693472d3874'),
+('hon.membership_plan_version_summary(uuid,integer)',true,false,'a0af232d46adc9230ea2c5df1db23c9e9ca4029edfaaa1507b1aba20e24eb92c'),
+('hon.read_school_membership_plan_catalog(text)',true,true,'5cc7728519fdd3e0ad77d0c0186037557a7213e31724e03c8bfa3978ec1fbc35'),
+('hon.create_school_membership_plan(text,jsonb,uuid,uuid,uuid)',true,true,'31ecdbf8ff1323a7984d0058cd84aa9a52d12caa7ae73a4e07c9f8d3433e907f'),
+('hon.revise_school_membership_plan(text,uuid,jsonb,uuid,uuid,uuid)',true,true,'9f7aec2b0ddc75389a31de58c236839f7a3f03ce0eb805c89ae23727d78cf90b'),
+('hon.read_crm_adult_membership_plan_options(text)',true,true,'8575e3f29e4789bee79392277fdce335983f7d7a10db6943a387bbc12a0b6d12'),
+('hon.draft_crm_adult_membership_from_plan(text,jsonb,uuid,uuid,uuid)',true,true,'d4a22f1dbcdaac65d4f0a7032df761ae02ee944b5a0367d158e2e1c69c231458')) e(signature,definer,runtime_allowed,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school membership plan function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('membership_plans','membership_plan_guard','hon.guard_membership_plan()'),('membership_plans','membership_plan_no_truncate','hon.guard_membership_plan()'),
+    ('membership_plan_versions','membership_plan_version_guard','hon.guard_membership_plan_version()'),('membership_plan_versions','membership_plan_version_no_truncate','hon.guard_membership_plan_version()'),
+    ('membership_plan_selections','membership_plan_selection_immutable','hon.guard_membership_plan_selection()'),('membership_plan_selections','membership_plan_selection_no_truncate','hon.guard_membership_plan_selection()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school membership plan guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='billing.membership_plan.manage' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'School membership plan permission invariant required'; END IF;
+END $$;
+-- End school membership plan catalog exact verification.

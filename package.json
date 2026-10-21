@@ -26,6 +26,7 @@
     "db:test-billing-account-crm-draft-compatibility": "pnpm --filter @hon/database db:test-billing-account-crm-draft-compatibility",
     "db:test-crm-owner-launch-lock-order": "pnpm --filter @hon/database db:test-crm-owner-launch-lock-order",
     "db:test-crm-lead-registration-recovery": "pnpm --filter @hon/database db:test-crm-lead-registration-recovery",
+    "db:test-school-membership-plan-catalog": "pnpm --filter @hon/database db:test-school-membership-plan-catalog",
     "db:setup-crm-adult-membership-draft": "pnpm --filter @hon/database db:setup-crm-adult-membership-draft",
     "db:test-crm-adult-membership-draft": "pnpm --filter @hon/database db:test-crm-adult-membership-draft",
     "db:test-knowledge": "pnpm --filter @hon/database db:test-knowledge",

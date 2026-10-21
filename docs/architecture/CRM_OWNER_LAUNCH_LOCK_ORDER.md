@@ -10,7 +10,7 @@ Every command in this family acquires its locks in this order and never goes bac
 | --- | --- | --- |
 | 0 | Its own idempotency key, where the command has one: an `IN_PROGRESS` row reservation (`INSERT … ON CONFLICT DO NOTHING`), then `FOR UPDATE` of that row on replay | ROW EXCLUSIVE + row lock. Never a table lock on `idempotency_records` |
 | 1 | IAM and entitlement tables (`users`, `principals`, `principal_role_grants`, `roles`, `role_permissions`, `permissions`, `family_access_grants`, `hq_operator_grants`, `organizations`, `schools`, `organization_entitlements`) | SHARE only. This blocks grant and entitlement writers until commit and never blocks another reader, so the order inside the level does not matter |
-| 2 | Domain tables, in this fixed order: `people`, `student_profiles`, `families`, `family_members`, `crm_lead_registration_conversions`, `crm_leads`, `student_curriculum_enrollments`, registration receipts, `billing_accounts`, `memberships`, `crm_adult_membership_draft_sources`, `membership_payment_schedules`, `invoices` | Writers use SHARE ROW EXCLUSIVE (or ROW EXCLUSIVE inserts). Confirmations use SHARE. A row already frozen by its table lock is read without `FOR UPDATE` |
+| 2 | Domain tables, in this fixed order: `people`, `student_profiles`, `families`, `family_members`, `crm_lead_registration_conversions`, `crm_leads`, `student_curriculum_enrollments`, registration receipts, `billing_accounts`, `memberships`, `crm_adult_membership_draft_sources`, `membership_plans`, `membership_plan_versions`, `membership_plan_selections` (0175), `membership_payment_schedules`, `invoices` | Writers use SHARE ROW EXCLUSIVE (or ROW EXCLUSIVE inserts). Confirmations use SHARE. A row already frozen by its table lock is read without `FOR UPDATE` |
 | 3 | Append-only evidence: `audit_events`, `outbox_events` | Written last. A reader that locks `audit_events` locks it last |
 
 ## Workflow audit (after 0169)
@@ -27,6 +27,8 @@ Every command in this family acquires its locks in this order and never goes bac
 | Billing-account create (service + 0159) | idempotency row → `billing_accounts` SRE → insert → audit, outbox → idempotency update |
 | Membership create (service) | idempotency row → `memberships` insert (FK key-share on account and person rows) → schedule → audit, outbox → idempotency update |
 | Membership activation (service) | membership row FOR UPDATE → idempotency row → membership update → audit, outbox → idempotency update |
+| Membership plan create / revise (0175) | idempotency row reservation → IAM SHARE → `membership_plans`, `membership_plan_versions` SRE → inserts (head, version) / version insert + head update → audit, outbox → idempotency update |
+| Adult CRM DRAFT from plan (0175) | idempotency row reservation → IAM SHARE → the exact 0169 DRAFT set SRE → `membership_plans`, `membership_plan_versions` SHARE → inserts (membership, source, selection) → audit, outbox → idempotency update |
 | CRM lead close (0145, unchanged) | IAM SHARE → lead row FOR UPDATE → lead update → audit, outbox |
 
 **Triggers and helpers.** Triggers on these tables only guard immutability or capture lead attribution on lead insert/update; none takes a table lock. `lock_owner_launch_actor` and `lock_current_direct_human_billing_accounts` are covered above. Foreign-key checks take KEY SHARE row locks, which conflict only with `FOR UPDATE` row locks. 0169 removes the DRAFT's redundant `FOR UPDATE` on billing-account, conversion, source and membership rows, so no FK check waits on them.
@@ -51,6 +53,8 @@ Bodies are otherwise verbatim. Authorization (including the post-lock actor re-c
 **Owner Launch unchanged.** `test-owner-launch-integrity.mjs` now runs in CI on its own fixture and passes with 0169: 102 assertion groups covering registration, guardian/child, booking, membership DRAFT and both confirmations. Running it surfaced a break introduced earlier in this PR, not by 0169. Two Owner Launch proof fixtures inserted a second account for the same payer directly. 0159's one-canonical-account index now refuses that insert, so those fixtures now insert the second account as `ADDITIONAL`. The Owner Launch functions still see two accounts for the payer and return the same staff-review outcome.
 
 **0174 addition.** The read-only CRM registration recovery (`read_crm_lead_registration_recovery`) takes the 0163 confirmation's SHARE set in the same canonical order and joins the matrix as a twelfth workflow paused at five lock stages: 540 interleavings, all committing with 0169 bodies (local disposable run). Against the pre-0169 bodies 27–28 of 540 fail depending on timing; none of those failures involves the recovery read.
+
+**0175 addition.** The plan-bound adult DRAFT and the membership plan revision join the matrix as workflows 13 and 14, paused at six and three lock stages: 756 interleavings, all committing with 0169 bodies (local disposable run). Against the pre-0169 bodies 30 of 756 fail; the new failures pair the plan-bound DRAFT with the pre-0169 Owner Launch DRAFT confirmation order, exactly like the free-text DRAFT, and none occur with 0169.
 
 ## Known residuals (not fixed here)
 
