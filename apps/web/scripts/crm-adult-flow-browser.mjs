@@ -1,5 +1,6 @@
 /** Actual production Next application, real session gate, synthetic localhost API contracts. No database/provider access. */
 import assert from 'node:assert/strict';
+import { createFamilyFixture, runFamilyBrowserChecks } from './crm-family-browser.mjs';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -30,9 +31,11 @@ const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.school
 const program = { programId: id(38), name: 'Adult martial arts' };
 const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
 let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
+const familyFixture = createFamilyFixture({ id, scope, date, origin, send, rejected, plans: () => publishedPlans });
 function plainPlan(p) { const { programName, ...terms } = p; return terms; }
 function rejected(res, status, code) { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({code})); }
-function reset(value = 'ready') { publishedPlans = [{ ...seedPlan }, { ...seedPlan, planId:id(31), planCode:'KRW-ADULT', displayName:'Korean won plan', currency:'KRW',priceMinor:160000 }, { ...seedPlan,planId:id(32),planCode:'CLOSED',displayName:'Previous offer',availability:'UNAVAILABLE' }]; mode = value; registered = false; accounted = false; drafted = false; keys = new Map(); commands = []; recoveryReads = [];
+function reset(value = 'ready') { publishedPlans = [{ ...seedPlan }, { ...seedPlan, planId:id(31), planCode:'KRW-ADULT', displayName:'Korean won plan', currency:'KRW',priceMinor:160000 }, { ...seedPlan,planId:id(32),planCode:'CLOSED',displayName:'Previous offer',availability:'UNAVAILABLE' }, { ...seedPlan,planId:id(34),planCode:'JUNIOR',displayName:'Junior Monthly',description:'Junior martial arts',programId:null,programName:null,priceMinor:9900 }]; mode = value; registered = false; accounted = false; drafted = false; keys = new Map(); commands = []; recoveryReads = [];
+  familyFixture.reset(value);
   if (value.startsWith('recovery-')) { const state = value.slice(9); registered = !['NOT_REGISTERED', 'NEEDS_STAFF_REVIEW'].includes(state); accounted = ['READY_FOR_DRAFT', 'CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); drafted = ['CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); }
 }
 reset();
@@ -48,6 +51,7 @@ const api = createServer(async (req, res) => {
     }
     if (actor !== 'crm-staff-synthetic' || !url.pathname.startsWith(prefix + '/')) { send(res, 403, { secret: 'private-canary' }); return; }
     if (req.method === 'GET' && url.pathname === `${prefix}/crm/leads`) { send(res, 200, [lead]); return; }
+    if (await familyFixture.handle(req, res, url)) return;
     const plansRoot = `${prefix}/billing/membership-plans`, draftsRoot = `${prefix}/billing/crm-adult-membership-drafts`;
     const planStep = url.pathname === plansRoot + '/catalog' ? 'catalog' : url.pathname === plansRoot ? 'create'
       : url.pathname.startsWith(plansRoot + '/') && url.pathname.endsWith('/revisions') ? 'revise'
@@ -315,6 +319,7 @@ try {
       }
     } finally { await context.close(); }
   });
+  await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin });
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
 } finally { await browser?.close(); app.kill('SIGTERM'); await new Promise(done => api.close(done)); await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); }
 console.log(`PASS: ${report.checks.length} browser checks; ${report.screenshots.length} actual application screenshots; synthetic API verification only.`);

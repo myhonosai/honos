@@ -1,5 +1,11 @@
 # HON Delivery Backlog
 
+## Guardian/child CRM frontend — Codex (2026-10-21)
+
+- [ ] Connect merged 0176 family recovery, explicit canonical guardian payer designation, sibling addition (10 children total) and per-child published-plan DRAFTs to the existing staff CRM. Preserve adult setup, all six adult recovery states, creator-only DRAFT details and historical terms.
+- [ ] Verify exact-request retries, scope/session invalidation, all family/child states, mobile/keyboard accessibility, signed-session API/disposable PostgreSQL integration and full CI. Browser fixtures are synthetic; no production verification or payment/activation claim.
+- [ ] Publish one focused frontend PR for independent review; no automatic merge, deployment, backend/migration changes or PR #27/#17/#3 changes.
+
 ## CRM Resume Setup frontend — Codex (2026-10-20)
 
 - [x] Connect explicit Resume setup to merged 0174 recovery using the shared closed validator; support all six states in the existing adult panel, without automatic reads/commands or invented account identifiers.
