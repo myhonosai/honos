@@ -22,6 +22,7 @@ const { LeadRegistrationService } = await import('../../../apps/api/dist/crm/lea
 const { OwnerLaunchService } = await import('../../../apps/api/dist/owner-launch/owner-launch.service.js');
 const { LeadRegistrationRecoveryService } = await import('../../../apps/api/dist/crm/lead-registration-recovery.service.js');
 const { MembershipPlanService } = await import('../../../apps/api/dist/billing/membership-plan.service.js');
+const { GuardianChildEnrollmentService } = await import('../../../apps/api/dist/crm/guardian-child-enrollment.service.js');
 
 const admin = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
 const blocker = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
@@ -72,7 +73,7 @@ await admin.connect(); await blocker.connect();
 const database = new RuntimeDatabaseService();
 const services = { accounts: new BillingAccountService(database), memberships: new MembershipService(database), drafts: new CrmAdultMembershipDraftService(database),
   registrations: new LeadRegistrationService(database), launch: new OwnerLaunchService(database), recovery: new LeadRegistrationRecoveryService(database),
-  plans: new MembershipPlanService(database) };
+  plans: new MembershipPlanService(database), guardianChild: new GuardianChildEnrollmentService(database) };
 try {
   const marker = (await admin.query("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
   assert.deepEqual(marker, { owner: flexibleBillingAccountsFixture.owner, marker: 'HON disposable flexible billing accounts validation' });
@@ -136,6 +137,16 @@ try {
     const created = await services.memberships.createDraft(context(), { billingAccountId: account.account.id, participantPersonId: payer, planCode: 'STAFF-OPAQUE' });
     return created.membership;
   }
+  // 0176: a registered guardian/child family with the guardian's canonical account, optionally designated as payer.
+  const childName = () => ({ childGivenName: `Kid${randomUUID().slice(0, 8)}`, childFamilyName: `Lock${randomUUID().slice(0, 8)}`, childBirthDate: '2016-04-05' });
+  async function gcFamily(designate = true) {
+    const { lead, person: guardian } = await wonLead();
+    const registered = await services.registrations.register(context(), lead, { registrationPath: 'GUARDIAN_CHILD', ...childName(), confirmation: 'I_CONFIRM_DIRECT_HUMAN_CRM_REGISTRATION' });
+    assert.equal(registered.result.outcome, 'REGISTERED');
+    await services.accounts.create(context(), { responsiblePersonId: guardian, currency: 'USD' });
+    if (designate) await services.guardianChild.designatePayer(context(), lead, { confirmation: 'I_CONFIRM_DIRECT_HUMAN_GUARDIAN_PAYER_DESIGNATION' });
+    return { lead, guardian, student: registered.result.studentProfileId };
+  }
 
   // Each workflow: prepare (unpaused), run (optionally through a gated database), exact outcome check, and its lock stages.
   // A stage names the next table the workflow locks (blocker holds EXCLUSIVE on it) or a statement it has just run.
@@ -179,6 +190,24 @@ try {
       run: (d) => services.plans.revise(context(), d.plan.planId, { displayName: 'Lock plan', availability: 'AVAILABLE', currency: 'USD', priceMinor: 10000 + d.plan.version, billingFrequency: 'MONTHLY',
         termKind: 'OPEN_ENDED', expectedVersion: d.plan.version, confirmation: 'I_CONFIRM_DIRECT_HUMAN_MEMBERSHIP_PLAN_CHANGE' }),
       check: (r, d) => { assert.equal(r.replayed, false); assert.equal(r.plan.version, d.plan.version + 1); }, stages: ['users', 'membership_plans', 'audit_events'] },
+    // 0176: guardian/child enrollment takes the 0169 domain order, then its own tables, then the catalog (DRAFT only).
+    'Guardian payer designation': { prepare: () => gcFamily(false),
+      run: (d) => services.guardianChild.designatePayer(context(), d.lead, { confirmation: 'I_CONFIRM_DIRECT_HUMAN_GUARDIAN_PAYER_DESIGNATION' }),
+      check: (r) => { assert.equal(r.replayed, false); assert.equal(r.receipt.state, 'PAYER_DESIGNATED'); },
+      stages: ['idempotency_records', 'users', 'people', 'crm_guardian_child_payer_designations', 'audit_events'] },
+    'Guardian additional child': { prepare: () => gcFamily(),
+      run: (d) => services.guardianChild.addChild(context(), d.lead, { ...childName(), confirmation: 'I_CONFIRM_DIRECT_HUMAN_GUARDIAN_CHILD_ADDITION' }),
+      check: (r) => { assert.equal(r.replayed, false); assert.equal(r.result.outcome, 'CHILD_ADDED'); },
+      stages: ['users', 'people', 'crm_guardian_child_enrolled_children', 'audit_events'] },
+    'Guardian child DRAFT from plan': { prepare: async () => ({ ...(await gcFamily()), plan: await sharedDraftPlan() }),
+      run: (d) => services.guardianChild.draftMembershipFromPlan(context(), { studentProfileId: d.student, membershipPlanId: d.plan.planId, membershipPlanVersion: d.plan.version,
+        confirmation: 'I_CONFIRM_DIRECT_HUMAN_GUARDIAN_CHILD_MEMBERSHIP_DRAFT_FROM_PLAN' }),
+      check: (r, d) => { assert.equal(r.replayed, false); assert.equal(r.receipt.state, 'DRAFT'); assert.equal(r.receipt.planCode, d.plan.planCode); },
+      stages: ['users', 'people', 'memberships', 'crm_guardian_child_enrolled_children', 'crm_guardian_child_membership_draft_sources', 'membership_plans', 'audit_events'] },
+    'Guardian/child enrollment read': { prepare: () => gcFamily(),
+      run: (d) => services.guardianChild.read(context({ idempotencyKey: '' }), d.lead),
+      check: (r) => { assert.equal(r.workflowState, 'PAYER_DESIGNATED'); assert.equal(r.children[0].workflowState, 'READY_FOR_DRAFT'); },
+      stages: ['users', 'people', 'crm_guardian_child_payer_designations', 'invoices'] },
     'Billing account create': { prepare: async () => ({ payer: await person() }),
       run: (d, db = database) => new BillingAccountService(db).create(context(), { responsiblePersonId: d.payer, currency: 'USD' }),
       check: (r) => { assert.equal(r.replayed, false); assert.equal(r.account.classification, 'CANONICAL'); },
@@ -254,7 +283,8 @@ try {
   await install();
   const legacy = await bodies();
   for (const name of Object.keys(changed)) assert.notEqual(legacy[name], expected[name], `${name} pre-0169 body installed`);
-  const old = await matrix();
+  const legacyOnly = (a, b) => ![a, b].some((name) => name.startsWith('Guardian'));
+  const old = await matrix(legacyOnly);
   const reported = old.failures.filter((failure) => failure.startsWith('Owner Launch DRAFT @student_registration_receipts vs Adult CRM DRAFT:'));
   assert.equal(reported.length, 1, 'the reported Owner Launch DRAFT vs adult CRM DRAFT conflict reproduces on the pre-0169 bodies');
   assert.match(reported[0], /wait cycle observed/); assertions += 4;
@@ -265,7 +295,7 @@ try {
   // Ablations: each remaining part of 0169 is necessary on its own.
   // (a) 0169 CRM bodies with the pre-0169 Owner Launch DRAFT confirmation order: the confirmation still cycles.
   await install(current, { read_owner_launch_membership_draft: functionSql(await migration(changed.read_owner_launch_membership_draft), 'read_owner_launch_membership_draft') });
-  const confirmation = await matrix((a, b) => [a, b].includes('Owner Launch DRAFT confirmation'));
+  const confirmation = await matrix((a, b) => legacyOnly(a, b) && [a, b].includes('Owner Launch DRAFT confirmation'));
   assert.ok(confirmation.failures.some((failure) => /wait cycle observed/.test(failure)), 'pre-0169 confirmation order still forms a cycle with 0169 CRM bodies');
   // (b) 0169 DRAFT that still row-locks the replayed membership under its table lock: replay vs held activation cycles.
   const rowLocked = functionSql(await migration(current), 'draft_crm_adult_membership')

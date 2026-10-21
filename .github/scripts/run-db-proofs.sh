@@ -98,6 +98,7 @@ proof flexible-billing-accounts test-billing-account-crm-draft-compatibility-int
 proof flexible-billing-accounts test-crm-owner-launch-lock-order-integrity.mjs "Owner Launch / CRM / billing canonical lock order: every workflow paused at every lock stage against every other; pre-0169 deadlocks reproduced, none with 0169"
 proof flexible-billing-accounts test-crm-lead-registration-recovery-integrity.mjs "CRM lead registration recovery (0174): read-only session recovery, historical receipt vs current DRAFT, stale/revoked/duplicate/cross-school refusal, zero effects"
 proof flexible-billing-accounts test-school-membership-plan-catalog-integrity.mjs "School membership plan catalog (0175): per-school versioned plans, immutable terms, AVAILABLE-only staff options, plan-bound adult DRAFT with exact version binding, no schedule/invoice/payment effect"
+proof flexible-billing-accounts test-crm-guardian-child-enrollment-integrity.mjs "CRM guardian/child enrollment (0176): separate guardian/child identities, explicit payer designation through the canonical account, additional children with staff-review ambiguity, one plan-bound DRAFT per child, no schedule/invoice/payment effect"
 setup crm-lead-registration HON_CRM_LEAD_REGISTRATION_VALIDATION_TARGET hon_crm_registration_validation HON_CRM_LEAD_REGISTRATION_ENV_FILE
 proof crm-lead-registration test-crm-lead-registration-integrity.mjs "CRM lead registration: direct-human scope, adult/guardian-child identity separation, idempotency, rollback, no payment or membership effect"
 

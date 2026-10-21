@@ -818,6 +818,12 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - [ ] Owner decisions: discounts, one-time fees, agreements, payment start, fixed-term renewal, repricing, retiring the free-text DRAFT route, other cadences, catalog permission holders, tax/eligibility/class limits, multi-location catalogs (listed in the spec).
 - [ ] Follow-up: read the bound plan terms of an existing membership for current-DRAFT confirmation, recovery and activation review.
 
+## CRM guardian/child enrollment backend — Claude (2026-10-21)
+
+- [x] Migration 0176 (branch `claude/project-thread-xsrj9t`, not merged or deployed): immutable child snapshot captured at GUARDIAN_CHILD registration (no backfill), explicit per-family guardian payer designation through the guardian's existing canonical account, up to 10 additional children with lead attribution and non-writing staff review for possible existing records, one plan-bound DRAFT per child (0175 version binding), and a family/child Resume Setup read. Adult 0174 recovery, 0163 confirmation and B6A unchanged. No schedule, invoice, payment, agreement, consent or activation. Spec: `docs/architecture/CRM_GUARDIAN_CHILD_ENROLLMENT.md`.
+- [ ] Codex: family enrollment screen per `docs/CODEX_CRM_GUARDIAN_CHILD_ENROLLMENT.md`.
+- [ ] Owner decisions: co-guardians/other payers, staff-review resolution path (incl. twins), backfill of pre-0176 registrations, 10-child limit, activation/schedules/sibling discounts/agreements/consent, free-text child DRAFT.
+
 
 ### School membership catalog frontend — review branch `codex/school-membership-plans`
 
