@@ -85,7 +85,7 @@ it('ignores late recovery responses after leaving the family context', async () 
   start(family('BILLING_ACCOUNT_REQUIRED')); click('Refresh family setup'); unmount(); resolve(response(family())); await settle(); expect(text(render())).not.toContain('Guardian payer designation verified');
 });
 it('uses the child API, exact version and explicit child confirmation through the shared published-plan picker', async () => {
-  const f = vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({plans:[listing,{...listing,planId:id(33),currency:'KRW'}]})).mockResolvedValueOnce(response({receipt,plan}));
+  const f = vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({plans:[listing,{...listing,planId:id(33),planCode:'KRW-JUNIOR',currency:'KRW'}]})).mockResolvedValueOnce(response({receipt,plan}));
   view = () => AdultMembershipPlanPicker({scope,studentProfileId:id(12),currency:'USD',childName:'Mina Stone',disabled:false,...pickerCallbacks}); render(); click('Load available membership plans'); await settle();
   expect(elements(render()).find(e => e.type==='option' && e.props.value===id(33))!.props.disabled).toBe(true);
   fill('Available membership plan',plan.planId); click('Review membership DRAFT'); expect(text(render())).toContain('confirm the membership DRAFT for Mina Stone'); expect(button('Create DRAFT from selected plan').props.disabled).toBe(true);
@@ -100,7 +100,7 @@ it('invalidates a stale child plan review rather than automatically resubmitting
   expect(text(render())).toContain('Reload available plans and review the new version'); expect(button('Create DRAFT from selected plan')).toBeUndefined(); expect(pickerCallbacks.onCreated).not.toHaveBeenCalled(); expect(f).toHaveBeenCalledTimes(2);
 });
 it('opens family recovery only by staff action, retains it on blur and clears it on pagehide/school switch', async () => {
-  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce({ok:true,status:200,json:async()=>({data:[row]})} as Response).mockResolvedValueOnce(response(family()));
+  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce({ok:true,status:200,json:async()=>({data:[row],meta:{}})} as Response).mockResolvedValueOnce(response(family()));
   view=()=>CrmLeadsWorkbench({initialScope:scope}); render(); expect(f).not.toHaveBeenCalled();
   elements(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}}); await settle(); click('Set up / resume family'); await settle(); expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(true);
   window.dispatchEvent(new Event('blur')); expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(true);

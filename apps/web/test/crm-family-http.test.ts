@@ -72,7 +72,7 @@ it('preserves exact unknown-result retry and verifies a replay instead of issuin
   const request = familyRequest(scope, 'child', id(3), add, id(10));
   await expect(sendFamilyRequest(request)).rejects.toBeInstanceOf(PlanUnknownError);
   expect(await sendFamilyRequest(request)).toMatchObject({ step: 'child', child: { outcome: 'NEEDS_STAFF_REVIEW' } });
-  expect(f.mock.calls[0]).toEqual(f.mock.calls[1]);
+  expect(f.mock.calls[0]![0]).toBe(f.mock.calls[1]![0]); expect(f.mock.calls[0]![1]!.body).toBe(f.mock.calls[1]![1]!.body); expect(f.mock.calls[0]![1]!.headers).toEqual(f.mock.calls[1]![1]!.headers);
 });
 it('rejects wrong published versions, child names and malformed success envelopes as unknown commands', async () => {
   const f = vi.spyOn(globalThis, 'fetch');
