@@ -817,3 +817,10 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - [ ] Codex: catalog management screen and the adult DRAFT plan picker per `docs/CODEX_SCHOOL_MEMBERSHIP_PLANS.md`.
 - [ ] Owner decisions: discounts, one-time fees, agreements, payment start, fixed-term renewal, repricing, retiring the free-text DRAFT route, other cadences, catalog permission holders, tax/eligibility/class limits, multi-location catalogs (listed in the spec).
 - [ ] Follow-up: read the bound plan terms of an existing membership for current-DRAFT confirmation, recovery and activation review.
+
+
+### School membership catalog frontend — review branch `codex/school-membership-plans`
+
+- Frontend integration with merged PR #45 / migration 0175: school-scoped catalog, version publication and adult enrollment plan picker; awaiting PR verification and owner review, not merged or deployed.
+- Preserve the legacy free-text DRAFT path, all Resume Setup states and existing membership terms. No activation/payment behavior or backend/migration changes.
+- Follow-ups: authorized historical membership-plan terms read after recovery; broader Korean/Spanish catalog copy; backend coordination if a plan-management-only role cannot use the existing reporting-school selectors. Original policy decisions remain in `docs/architecture/SCHOOL_MEMBERSHIP_PLAN_CATALOG.md`.

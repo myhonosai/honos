@@ -1,6 +1,6 @@
 # Codex handoff: school membership plans
 
-Backend: branch `claude/project-thread-vf7rij` (migration 0175), based on main `c1438c5` (PR #44). Contracts live in `packages/contracts/src/school-membership-plans.ts` and are exported from `@hon/contracts`. Use the shared validators and verifiers; do not re-implement them. Backend design and owner decisions: [School membership plan catalog](architecture/SCHOOL_MEMBERSHIP_PLAN_CATALOG.md).
+Backend: merged PR #45, main `c450e6de8406f45ab16208b57d6ac607f91f7512` (migration 0175). The original development branch was `claude/project-thread-vf7rij`, based on PR #44. Contracts live in `packages/contracts/src/school-membership-plans.ts` and are exported from `@hon/contracts`. Use the shared validators and verifiers; do not re-implement them. Backend design and owner decisions: [School membership plan catalog](architecture/SCHOOL_MEMBERSHIP_PLAN_CATALOG.md).
 
 These are a school's own student membership plans, not HON's Core/Complete subscription. Never show HON SaaS prices or credits in these screens.
 
@@ -60,3 +60,15 @@ The existing free-text route stays available until the owner decides to retire i
 ## Boundaries
 
 No frontend file, appearance, localization infrastructure or shared visual component was changed by this backend PR. Nothing here creates a schedule, invoice, payment method, charge, agreement, discount, communication or activation, and the UI must not imply that it does: label prices as "published price", not as a charge or a balance. No plan, receipt or key enters URLs, storage or telemetry. Guardian/child DRAFTs (PR #27) are out of scope.
+
+## Frontend integration handoff (review branch)
+
+`codex/school-membership-plans` adds `/staff/billing/membership-plans`, linked from CRM leads. Catalog management resolves the signed-in staff school through the existing reporting-school selectors, then independently authorized plan APIs. Multiple returned schools require explicit selection; an unresolved selector is unavailable, never an invitation to guess IDs. A role limited to plan management without an existing reporting-school selection path may require backend coordination; no new resolver or permissions are added here.
+
+Creation and revision require a full terms review and explicit confirmation. Prices convert exactly from entered major units using the currency's minor-unit exponent, without rounding or FX. A publication receipt is historical evidence; a separate reload verifies the current catalog. Unknown outcomes retain the exact immutable request in memory for explicit retry. Stale versions require a fresh load and review. No background commands or persistence of private plan/receipt/key data are introduced.
+
+The connected adult CRM flow now offers the published-plan picker after the existing preparation read. It uses the canonical account currency, the exact selected ID/version, an optional UTC term start and shared end-date preview. The separately disclosed legacy free-text option remains available. All six Resume Setup states and creator-only current-DRAFT confirmation are preserved. A fresh plan-bound creation displays its returned immutable terms; recovery and ordinary confirmation do **not** contain a historical plan binding, so the UI explicitly says original terms are unavailable there. A future authorized historical membership-plan read is needed for that display; matching the current catalog by code is unsafe.
+
+Verification uses two distinct layers: actual production-build browser interaction with deterministic signed-session localhost API fixtures, and the actual frontend HTTP transport against real Nest guards/controllers/services and a marked disposable PostgreSQL database. The latter checks plan publication/revision, stale rollback, bound DRAFT creation, exact replay after later publication, immutable original price/version, permissions, school isolation, session denial, recovery compatibility and absence of schedule/invoice/payment effects. The existing full CI database security proofs remain unchanged. Screenshots stay in the private short-retention browser artifact; no public deployment or individual screenshot uploads.
+
+New catalog/picker copy currently uses English fallback; shared locale-aware date and currency formatting and existing appearance/language preferences remain intact. This does not claim complete Korean or Spanish coverage. Historical policy decisions in the architecture document remain open. There is no guardian/child enrollment, agreement signing, activation, billing schedule, discount, tax, refund or payment action in this interface.

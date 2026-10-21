@@ -1,0 +1,33 @@
+.page { max-width: 1160px; margin: 0 auto; padding: 32px 24px 80px; color: #152d45; font-family: Inter, sans-serif; overflow-wrap: anywhere; }
+.page nav, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.page nav { margin-bottom: 28px; }
+.page a, .picker a { color: #16549b; font-weight: 650; }
+.page h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.12; letter-spacing: -.035em; }
+.page h2 { font-size: 23px; }
+.kicker { color: #075c78; font-size: 12px; font-weight: 750; letter-spacing: .12em; }
+.intro { padding: 26px; background: linear-gradient(135deg,#e7f4fa,#f3f6fc); border: 1px solid #c2dce9; border-radius: 16px; margin-block: 24px; }
+.page p, .picker p { line-height: 1.6; }
+.panel, .card, .review { padding: 22px; border: 1px solid #cddde8; background: #fff; border-radius: 14px; margin-block: 20px; min-width: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,300px),1fr)); gap: 16px; }
+.grid .card { margin: 0; }
+.page button, .picker button { min-height: 44px; padding: 11px 16px; border: 1px solid #1d5d9b; background: #19568d; color: white; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; white-space: normal; }
+.page button:disabled, .picker button:disabled { opacity: .55; cursor: not-allowed; }
+.page :is(input,select,textarea), .picker :is(input,select) { box-sizing: border-box; min-height: 44px; max-width: 100%; width: 100%; padding: 11px; border: 1px solid #a6bccb; border-radius: 7px; background: white; color: #152d45; font: inherit; }
+.page textarea { resize: vertical; }
+.page label, .picker label { display: flex; flex-direction: column; gap: 8px; margin-block: 14px; font-weight: 650; }
+.formGrid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 18px; }
+.page fieldset, .picker fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.check { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 10px !important; }
+.check input { width: 20px !important; min-width: 20px !important; height: 20px !important; min-height: 20px !important; margin-top: 3px; }
+.error, .notice { padding: 14px 16px; border-radius: 9px; margin-block: 16px; }
+.error { border: 1px solid #c98070; background: #fff0ed; color: #832a1c; }
+.notice { border: 1px solid #bddae8; background: #eaf5fa; color: #204658; }
+.price strong { font-size: 28px; letter-spacing: -.03em; }
+.price span { display: block; font-size: 14px; }
+.terms dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.terms dt { font-size: 12px; color: #486176; }
+.terms dd { margin: 5px 0 0; font-weight: 650; }
+.picker { min-width: 0; margin-block: 18px; padding: 20px; background: #edf7fb; color: #152d45; border: 1px solid #b6d8e8; border-radius: 12px; }
+.page :is(button,input,select,textarea,a,summary):focus-visible, .picker :is(button,input,select,a,summary):focus-visible { outline: 3px solid #0085b0; outline-offset: 3px; }
+.page small, .picker small { font-weight: 400; line-height: 1.6; }
+@media(max-width:640px) { .page { padding: 22px 14px 65px; } .panel,.card,.review,.intro,.picker { padding: 18px; } .formGrid,.terms dl { grid-template-columns: 1fr; } .actions { align-items: stretch; } .actions button { flex: 1 1 100%; } }

@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { LeadListItem, CrmAdultMembershipPreparation, CrmAdultMembershipDraftReceipt, CrmLeadRegistrationResult, CrmLeadRegistrationRecovery, CrmLeadRegistrationRecoveryAccount } from '@hon/contracts';
+import type { LeadListItem, CrmAdultMembershipPreparation, CrmAdultMembershipDraftReceipt, CrmLeadRegistrationResult, CrmLeadRegistrationRecovery, CrmLeadRegistrationRecoveryAccount, MembershipPlanVersionSummary } from '@hon/contracts';
 import { adultRequest, sendAdultRequest, AdultAccessError, AdultUncertainError, type AdultAccount, type AdultRequest, type AdultScope } from './crm-adult-flow-http';
 import styles from './crm-adult-flow.module.css';
+import { AdultMembershipPlanPicker } from './membership-plans/picker';
+import { MembershipPlanTerms } from './membership-plans/terms';
 
 type Registered = Extract<CrmLeadRegistrationResult, { outcome: 'REGISTERED' }>;
 type Props = AdultScope & { row: LeadListItem; initialRecovery?: CrmLeadRegistrationRecovery; onRecover?(): void; onCancel(): void; onBusy(busy: boolean): void; onStarted(): void; onAccessLost(): void };
@@ -21,6 +23,8 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   const [prepared, setPrepared] = useState<CrmAdultMembershipPreparation | null>(null);
   const [receipt, setReceipt] = useState<CrmAdultMembershipDraftReceipt | null>(recoveredDraft);
   const [current, setCurrent] = useState(recoveredDraft !== null);
+  const [createdFromPlan, setCreatedFromPlan] = useState<MembershipPlanVersionSummary | null>(null);
+  const [planBlocking, setPlanBlocking] = useState(false);
   const [pending, setPending] = useState<AdultRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(initialRecovery ? ({
@@ -39,7 +43,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   useEffect(() => () => { generation.current++; active.current = false; }, [organizationId, schoolId, row.id]);
 
   async function run(request: AdultRequest): Promise<void> {
-    if (active.current) return;
+    if (active.current || planBlocking) return;
     active.current = true; const epoch = generation.current; setBusy(true); onBusy(true); setError(''); setMessage(''); setCurrent(false);
     if (request.key) onStarted();
     try {
@@ -70,7 +74,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     } finally { if (epoch === generation.current) { active.current = false; setBusy(false); onBusy(false); } }
   }
   function submit(event: FormEvent): void {
-    event.preventDefault(); if (active.current || pending || !consent || review || receipt || otherCurrent) return;
+    event.preventDefault(); if (active.current || planBlocking || pending || !consent || review || receipt || otherCurrent) return;
     try {
       // Validate before allocating a command key; each consequential step gets a distinct key.
       const step = !registered ? 'register' : !account ? 'account' : 'draft';
@@ -84,8 +88,8 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   const locked = busy || pending !== null;
   return <section className={styles.flow} aria-labelledby="adult-flow-title" aria-busy={busy}>
     <header><p>ADULT CRM SETUP</p><h2 id="adult-flow-title" ref={heading} tabIndex={-1}>Set up {row.givenName} {row.familyName}</h2><p>Register adult → billing account → membership DRAFT</p>
-      <button type="button" disabled={busy} onClick={onCancel}>Close adult setup</button>
-      {onRecover && <button type="button" disabled={locked} onClick={onRecover}>Refresh saved setup</button>}</header>
+      <button type="button" disabled={busy || planBlocking} onClick={onCancel}>Close adult setup</button>
+      {onRecover && <button type="button" disabled={locked || planBlocking} onClick={onRecover}>Refresh saved setup</button>}</header>
     <p>Each step is a separate authorized action. A DRAFT does not activate membership, create a payment schedule or collect payment.</p>
     <ol aria-label="Adult setup progress"><li aria-current={!registered && !review ? 'step' : undefined}>Registration{registered ? ' — recorded' : ''}</li><li aria-current={registered && !account ? 'step' : undefined}>Billing account{account ? ' — verified' : ''}</li><li aria-current={account ? 'step' : undefined}>Membership DRAFT{receipt || otherCurrent ? ' — recorded' : ''}</li></ol>
     {message && <p role="status" className={styles.notice}>{message}</p>}
@@ -93,16 +97,22 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     {pending && <div className={styles.notice}><p>An action may already have completed. This retry retains its exact data and idempotency key.</p><button type="button" disabled={busy} onClick={() => void run(pending)}>Retry exact request</button></div>}
     {registered && !otherCurrent && <p>Registration recorded for this adult lead. Historical registration receipt; not proof of current membership. Student reference: <code>{registered.studentProfileId}</code></p>}
     {account && !otherCurrent && <p>{'id' in account ? <>{account.reused === true ? 'Existing account reused' : account.reused === false ? 'Account created' : 'Historical account receipt'} · {account.currency} · <code>{account.id}</code></> : <>Verified canonical account · {account.currency}. No account identifier was returned.</>}</p>}
-    {!review && !receipt && !otherCurrent && <form onSubmit={submit}><fieldset disabled={locked}>
+    {!review && !receipt && !otherCurrent && registered && account && prepared && <AdultMembershipPlanPicker scope={scope} studentProfileId={registered.studentProfileId} currency={prepared.currency} disabled={locked}
+      onBlocking={blocked => { setPlanBlocking(blocked); onBusy(blocked); }} onStarted={onStarted} onAccessLost={onAccessLost}
+      onNeedsRefresh={reason => { setPrepared(null); setPlanBlocking(false); onBusy(false); setError(reason); }}
+      onCreated={(data, replayed) => { setReceipt(data.receipt); setCreatedFromPlan(data.plan); setCurrent(false); setPlanBlocking(false); onBusy(false); setConsent(false); setError(''); setMessage(replayed ? 'Historical plan-bound DRAFT creation replayed.' : 'Membership DRAFT recorded from the reviewed plan version. It is not active.'); }} />}
+    {!review && !receipt && !otherCurrent && <form onSubmit={submit}><fieldset disabled={locked || planBlocking}>
       {!registered ? <><h3>1. Register this adult</h3><label>Date of birth<input type="date" required min="1900-01-01" value={birthDate} onChange={e => { setBirthDate(e.target.value); setConsent(false); setError(''); }} /></label>
         <label className={styles.check}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />I reviewed this lead as an adult registering without a guardian.</label><button disabled={!consent || !birthDate}>Register adult</button></>
       : !account ? <><h3>2. Create or reuse this adult’s account</h3><p>The responsible person is the exact adult returned by registration. A matching canonical account is reused; a different currency requires staff review.</p>
         <label>Account currency<input required pattern="[A-Z]{3}" maxLength={3} value={currency} onChange={e => { setCurrency(e.target.value.toUpperCase()); setConsent(false); setError(''); }} /></label>
         <label className={styles.check}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />This adult is responsible for their own billing account in the currency shown.</label><button disabled={!consent || !/^[A-Z]{3}$/.test(currency)}>Create or reuse account</button></>
       : <><h3>3. Prepare membership DRAFT</h3>{!prepared ? <button type="button" onClick={() => void run(adultRequest(scope, 'prepare', registered.studentProfileId, ''))}>Check DRAFT readiness</button>
-        : <><p>{prepared.studentDisplayName} · {prepared.currency} · Ready for DRAFT preparation</p><label>Membership plan code<input required maxLength={80} value={plan} onChange={e => { setPlan(e.target.value); setConsent(false); setError(''); }} /></label><p>A school membership plan reference, not a HON Core/Complete subscription. This backend does not provide a plan picker or calculate a price.</p>
-          <label className={styles.check}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />I confirm this adult’s membership DRAFT with the plan code shown.</label><button disabled={!consent || !plan.trim()}>Create membership DRAFT</button></>}</>}
+        : <details><summary>Use legacy free-text plan code</summary><p>{prepared.studentDisplayName} · {prepared.currency} · Ready for DRAFT preparation</p><label>Membership plan code<input required maxLength={80} value={plan} onChange={e => { setPlan(e.target.value); setConsent(false); setError(''); }} /></label><p>This separate legacy option records a plan code without a published catalog-version binding. It does not establish a price or payment terms.</p>
+          <label className={styles.check}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />I confirm this adult’s membership DRAFT with the plan code shown.</label><button disabled={!consent || !plan.trim()}>Create membership DRAFT</button></details>}</>}
     </fieldset></form>}
+    {receipt && createdFromPlan && <div className={styles.receipt}><h3>Created from published plan: {createdFromPlan.displayName}</h3><p>Historical plan-version terms returned with creation; later catalog changes do not replace them.</p><MembershipPlanTerms plan={createdFromPlan}/></div>}
+    {receipt && !createdFromPlan && <p>Original published plan terms are unavailable in this receipt or recovery view. A plan code alone does not establish a catalog binding.</p>}
     {receipt && <div className={styles.receipt}><h3>Membership DRAFT creation receipt</h3><p>{receipt.planCode} · DRAFT · Recorded {receipt.recordedAt}</p><p>Historical creation receipt: <code>{receipt.membershipId}</code>. Current state requires a separate check.</p>
       <button type="button" disabled={busy} onClick={() => void run(adultRequest(scope, 'confirm', registered!.studentProfileId, ''))}>Check current DRAFT</button>
       {current && <p role="status">Current DRAFT verified. Membership activation and payments remain outside this workflow.</p>}</div>}
