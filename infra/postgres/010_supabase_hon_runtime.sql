@@ -1331,6 +1331,35 @@ DO $$ DECLARE r text; col text; t text; f text; BEGIN
 END $$;
 -- End school membership plan catalog exact reconciliation.
 
+-- CRM guardian/child enrollment exact reconciliation (0176): private immutable tables, four runtime entry points, private helpers.
+DO $$ DECLARE r text; col text; t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['crm_guardian_child_enrolled_children','crm_guardian_child_payer_designations','crm_guardian_child_membership_draft_sources'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_crm_guardian_child_enrollment_history()','hon.capture_crm_guardian_child_registration_child()',
+    'hon.require_crm_guardian_child_enrollment_actor(text)','hon.crm_guardian_child_family_relation(uuid)','hon.crm_guardian_child_child_relation(uuid)',
+    'hon.crm_guardian_child_current_designation(uuid,uuid,uuid,uuid,uuid)','hon.crm_guardian_child_membership_draft_current(uuid)',
+    'hon.read_crm_guardian_child_enrollment(text,uuid)','hon.designate_crm_guardian_child_payer(text,uuid,jsonb,uuid,uuid,uuid)',
+    'hon.add_crm_guardian_child_additional_child(text,uuid,jsonb,uuid,uuid,uuid)','hon.draft_crm_guardian_child_membership_from_plan(text,jsonb,uuid,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.read_crm_guardian_child_enrollment(text,uuid),hon.designate_crm_guardian_child_payer(text,uuid,jsonb,uuid,uuid,uuid),
+    hon.add_crm_guardian_child_additional_child(text,uuid,jsonb,uuid,uuid,uuid),hon.draft_crm_guardian_child_membership_from_plan(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+END $$;
+-- End CRM guardian/child enrollment exact reconciliation.
+
 -- Champions Club contests exact reconciliation:
 DO $$ DECLARE t text; r text; col text; f text; BEGIN
   FOREACH t IN ARRAY ARRAY['champions_contests','champions_contest_prizes','champions_contest_schools','champions_contest_pauses',
