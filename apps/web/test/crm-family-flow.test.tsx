@@ -73,12 +73,15 @@ it('adds a separate child, leaves ambiguous identities unchanged and enforces 10
   const full: CrmGuardianChildEnrollment = { ...data, children: Array.from({length:10},(_,i) => ({...data.children[0]!,studentProfileId:i ? id(100+i) : id(5),origin:i ? 'ADDITIONAL_CHILD' : 'CRM_REGISTRATION'})) };
   start(full); expect(text(render())).toContain('maximum of 10 children'); expect(button('Add child')).toBeUndefined();
 });
-it('binds each selected child picker independently and keeps creation evidence historical until recovery', () => {
+it('binds each selected child picker independently and keeps creation evidence historical until recovery', async () => {
   const data = family(); if (!('children' in data)) throw Error();
   start({ ...data, children: [...data.children,{...data.children[0]!,studentProfileId:id(12),displayName:'Mina Stone',origin:'ADDITIONAL_CHILD'}] });
   elements(render()).find(e => e.type === 'button' && text(e).startsWith('Mina Stone'))!.props.onClick();
   const picker = elements(render()).find(e => e.type === AdultMembershipPlanPicker)!; expect(picker.props.studentProfileId).toBe(id(12)); expect(picker.props.childName).toBe('Mina Stone'); expect(picker.props.currency).toBe('USD');
   picker.props.onCreated({receipt,plan},false); expect(text(render())).toContain('Historical DRAFT creation receipt for Mina Stone'); expect(text(render())).not.toContain('Current DRAFT verified'); expect(elements(render()).some(e => e.type === AdultMembershipPlanPicker)).toBe(false);
+  const currentFamily: CrmGuardianChildEnrollment = { ...data, children: [data.children[0]!, { ...data.children[0]!, studentProfileId:id(12), displayName:'Mina Stone', origin:'ADDITIONAL_CHILD', workflowState:'CURRENT_DRAFT', currentMembershipDraft:{state:'RECORDED_DRAFT',receipt,plan} }] };
+  vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response(currentFamily)); click('Refresh family setup'); await settle();
+  expect(text(render())).toContain('Current family setup verified'); expect(text(render())).not.toContain('Historical DRAFT creation receipt for Mina Stone'); expect(text(render())).not.toContain('Refresh family setup to verify its current status');
 });
 it('ignores late recovery responses after leaving the family context', async () => {
   let resolve!: (r:Response) => void; vi.spyOn(globalThis,'fetch').mockImplementationOnce(() => new Promise(yes => { resolve=yes; }));

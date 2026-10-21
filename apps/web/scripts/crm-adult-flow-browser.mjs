@@ -175,6 +175,10 @@ async function visual(page, name) {
   await page.addScriptTag({ content: axe }); const result = await page.evaluate(() => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } }));
   const violations = result.violations.map(v => ({ id: v.id, impact: v.impact })); report.accessibility.push({ name, violations }); assert.equal(violations.filter(v => ['serious', 'critical'].includes(v.impact)).length, 0, JSON.stringify(violations));
   await page.screenshot({ path: join(results, `${name}.png`), fullPage: true }); report.screenshots.push(`${name}.png`);
+  if (name.endsWith('family-current-drafts') || name.endsWith('family-two-children')) {
+    await page.locator('section[aria-labelledby="family-flow-title"]').screenshot({ path: join(results, `${name}-panel.png`) });
+    report.screenshots.push(`${name}-panel.png`);
+  }
 }
 try {
   let started = false; for (let i = 0; i < 100; i++) { try { await fetch(origin); started = true; break; } catch {} await new Promise(done => setTimeout(done, 250)); } assert(started, log.slice(-1200));

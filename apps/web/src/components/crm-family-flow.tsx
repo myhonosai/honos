@@ -37,8 +37,8 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
   }
   async function refresh(): Promise<void> {
     if (active.current || pickerBlocked || pending) return;
-    const generation = epoch.current; active.current = true; setBusy(true); onBusy(true); setError(''); setHistory(null);
-    try { await fresh(); }
+    const generation = epoch.current; active.current = true; setBusy(true); onBusy(true); setError(''); setHistory(null); setMessage('');
+    try { await fresh(); if (generation === epoch.current) setMessage('Current family setup verified. Review each child’s current status below.'); }
     catch (e) { if (generation !== epoch.current) return; if (e instanceof PlanAccessError) onAccessLost(); else setError(e instanceof Error ? e.message : 'Family setup is unavailable.'); }
     finally { if (generation === epoch.current) { active.current = false; setBusy(false); onBusy(false); } }
   }
