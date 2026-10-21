@@ -64,7 +64,7 @@ export function createFamilyFixture({ id, scope, date, origin, send, rejected, p
     seedChildren(count=1){registered=accounted=designated=true;children=Array.from({length:count},(_,i)=>child(i,i?'Mina Stone':'Kai Stone'));}};
 }
 
-export async function runFamilyBrowserChecks({ fixture, reset, open, visual, check, id, origin }) {
+export async function runFamilyBrowserChecks({ fixture, reset, open, visual, check, id, origin, replaceActor }) {
   async function begin(page){await page.getByLabel('Status filter').selectOption('WON');await page.getByRole('button',{name:'Load CRM leads',exact:true}).click();assert.equal(fixture.reads.length,0);await page.getByRole('button',{name:'Set up / resume family',exact:true}).focus();await page.keyboard.press('Enter');await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).waitFor();}
   async function confirm(page,label){await page.getByRole('checkbox').check();await page.getByRole('button',{name:label,exact:true}).click();}
   async function fields(page,given='Kai'){await page.getByLabel('Child given name',{exact:true}).fill(given);await page.getByLabel('Child family name',{exact:true}).fill('Stone');await page.getByLabel('Child date of birth',{exact:true}).fill(given==='Kai'?'2016-02-03':'2018-04-05');}
@@ -144,12 +144,13 @@ export async function runFamilyBrowserChecks({ fixture, reset, open, visual, che
       }finally{await context.close();}
     });
   }
-  for(const scenario of ['expired','revoked','scope-change','slow-command'])await check(`privacy restoration: ${scenario} never reveals unauthorized data`,async()=>{
+  for(const scenario of ['expired','changed-user','revoked','scope-change','slow-command'])await check(`privacy restoration: ${scenario} never reveals unauthorized data`,async()=>{
     reset('family-state-PAYER_DESIGNATION_REQUIRED');const {context,page}=await open({width:390,height:844});try{
       await begin(page);
       if(scenario==='slow-command'){fixture.mode='family-slow-payer';await confirm(page,'Designate guardian payer');}
       await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();
       if(scenario==='expired')await context.clearCookies();
+      if(scenario==='changed-user')await replaceActor(context);
       if(scenario==='revoked')fixture.mode='family-denied';
       if(scenario==='scope-change'){await page.getByRole('button',{name:'Discard local view',exact:true}).click();await page.getByLabel('School UUID',{exact:true}).fill(id(99));assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert.equal(fixture.commands.length,0);return;}
       const button=page.getByRole('button',{name:'Verify access and resume',exact:true});await button.waitFor();await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Verify access and resume')?.disabled);

@@ -14,7 +14,7 @@ type Props = AdultScope & { row: LeadListItem; initialRecovery?: CrmLeadRegistra
 export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, onRecover, onCancel, onBusy, onStarted, onAccessLost }: Props): React.ReactElement {
   const { date } = useLocale();
   const [pendingPlan, setPendingPlan] = useState<PlanRequest | null>(null);
-  const previousRecovery = useRef(initialRecovery);
+  const [previousRecovery, setPreviousRecovery] = useState(initialRecovery);
   const recoveredRegistration = initialRecovery && 'historicalRegistrationReceipt' in initialRecovery ? initialRecovery.historicalRegistrationReceipt : null;
   const recoveredAccount = initialRecovery && 'billingAccount' in initialRecovery ? initialRecovery.billingAccount : null;
   const recoveredDraft = initialRecovery?.workflowState === 'CURRENT_DRAFT' ? initialRecovery.currentMembershipDraft.receipt : null;
@@ -48,8 +48,8 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   useEffect(() => () => { generation.current++; active.current = false; }, [organizationId, schoolId, row.id]);
 
   // React applies this guarded state adjustment before committing the restored view.
-  if (previousRecovery.current !== initialRecovery) {
-    previousRecovery.current = initialRecovery;
+  if (previousRecovery !== initialRecovery) {
+    setPreviousRecovery(initialRecovery);
     setRegistered(recoveredRegistration); setAccount(recoveredAccount); setReceipt(recoveredDraft); setCurrent(recoveredDraft !== null);
     setPrepared(null); setCreatedFromPlan(null); setConsent(false); setBirthDate(''); setPlan(''); setError(''); setReview(initialRecovery?.workflowState === 'NEEDS_STAFF_REVIEW');
     setMessage('Current adult setup reverified. Historical requests are separate from current membership state.');

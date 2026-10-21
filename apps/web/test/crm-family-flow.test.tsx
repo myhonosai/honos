@@ -123,7 +123,7 @@ it('reveals nothing on focus alone and explicitly verifies session, school and f
   const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(true);
   window.dispatchEvent(new Event('focus'));await settle();expect(f).toHaveBeenCalledTimes(2);expect(privacyHidden()).toBe(true);
   f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response(family())).mockResolvedValueOnce(identityResponse());
-  click('Verify access and resume');click('Verify access and resume');await settle();expect(privacyHidden()).toBe(false);expect(f).toHaveBeenCalledTimes(6);
+  const restore=button('Verify access and resume').props.onClick;restore();restore();await settle();expect(privacyHidden()).toBe(false);expect(f).toHaveBeenCalledTimes(6);
   expect(f.mock.calls.slice(2).every(([,options])=>!(options?.headers as Record<string,string>)?.['Idempotency-Key'])).toBe(true);
 });
 it.each([401,403])('discards private enrollment and retries after denied restoration %s',async status=>{
@@ -154,4 +154,9 @@ it('retains the exact uncertain child DRAFT outside the picker through fresh fam
   const request=familyRequest(scope,'childDraft',id(5),{studentProfileId:id(5),membershipPlanId:plan.planId,membershipPlanVersion:1,confirmation:CRM_GUARDIAN_CHILD_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION},id(10));
   picker.props.onUncertain(request);let freshData=family();view=()=>CrmFamilyFlow({scope,row,initialFamily:freshData,...callbacks});render();render();
   const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({receipt,plan},200,true));click('Retry exact family request');await settle();expect(f.mock.calls[0]![1]!.body).toBe(request.body);expect((f.mock.calls[0]![1]!.headers as Record<string,string>)['Idempotency-Key']).toBe(request.key);expect(text(render())).toContain('Historical DRAFT creation receipt for Kai Stone');
+});
+
+it('conceals on hidden-tab visibility and never reveals on visibility restoration',async()=>{
+  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));expect(privacyHidden()).toBe(true);
+  Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'));await settle();expect(privacyHidden()).toBe(true);expect(f).toHaveBeenCalledTimes(2);
 });

@@ -25,13 +25,14 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
   const [confirmed, setConfirmed] = useState(false), [busy, setBusy] = useState(false), [pickerBlocked, setPickerBlocked] = useState(false);
   const [pending, setPending] = useState<FamilyRequest | null>(null), [error, setError] = useState(''), [message, setMessage] = useState('');
   const [history, setHistory] = useState<History | null>(null);
-  const previousFamily = useRef(initialFamily), pendingChild = useRef(''), preferredChild = useRef('');
+  const [previousFamily, setPreviousFamily] = useState(initialFamily);
+  const pendingChild = useRef(''), preferredChild = useRef('');
   const active = useRef(false), epoch = useRef(0), abort = useRef<AbortController | null>(null), heading = useRef<HTMLHeadingElement | null>(null);
   useEffect(() => { heading.current?.focus(); return () => { epoch.current++; abort.current?.abort(); active.current = false; }; }, [scope.organizationId, scope.schoolId, row.id]);
   // An explicit privacy restore supplies a newly authorized read. Keep exact
   // requests, but discard earlier receipts, inputs and catalog review facts.
-  if (previousFamily.current !== initialFamily) {
-    previousFamily.current = initialFamily; setFamily(initialFamily); setHistory(null); setSelected(''); setGiven(''); setSurname(''); setBirth(''); setConfirmed(false); setPickerBlocked(false); setMessage('Current family setup reverified. Review a child’s current status.'); setError('');
+  if (previousFamily !== initialFamily) {
+    setPreviousFamily(initialFamily); setFamily(initialFamily); setHistory(null); setSelected(''); setGiven(''); setSurname(''); setBirth(''); setConfirmed(false); setPickerBlocked(false); setMessage('Current family setup reverified. Review a child’s current status.'); setError('');
   }
   const verified = family && 'children' in family ? family : null;
   const child = verified?.children.find(c => c.studentProfileId === selected);

@@ -108,3 +108,18 @@ it('shows noncreator current-DRAFT visibility with no membership details or conf
   for (const label of ['Register adult', 'Create or reuse account', 'Check DRAFT readiness', 'Create membership DRAFT', 'Check current DRAFT']) expect(button(t, label)).toBeUndefined();
   expect(elements(t).filter(e => e.type === 'form' || e.type === 'a')).toHaveLength(0); expect(f).not.toHaveBeenCalled();
 });
+
+it('retains an uncertain adult published-plan request across fresh recovery without automatic resubmission',async()=>{
+  initialRecovery={...recovered,workflowState:'READY_FOR_DRAFT'};
+  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({studentDisplayName:'Ari Stone',currency:'USD',readiness:'READY_FOR_DRAFT'}));
+  render();button(render(),'Check DRAFT readiness').props.onClick();await settle();
+  const {AdultMembershipPlanPicker}=await import('../src/components/membership-plans/picker');
+  const picker=elements(render()).find(e=>e.type===AdultMembershipPlanPicker)!;
+  const {draftFromPlanRequest}=await import('../src/components/membership-plans/http');
+  const {CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION}=await import('@hon/contracts');
+  const plan={planId:id(40),planCode:'ADULT-MONTHLY',version:1,displayName:'Adult Monthly',description:null,programId:null,availability:'AVAILABLE' as const,currency:'USD',priceMinor:14900,billingFrequency:'MONTHLY' as const,termKind:'OPEN_ENDED' as const,termMonths:null,publishedAt:date};
+  const request=draftFromPlanRequest({organizationId:props.organizationId,schoolId:props.schoolId},{studentProfileId:id(5),membershipPlanId:plan.planId,membershipPlanVersion:1,confirmation:CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION},id(60));
+  picker.props.onUncertain(request);initialRecovery={...recovered,workflowState:'CURRENT_DRAFT',currentMembershipDraft:{state:'RECORDED_DRAFT',receipt}};render();render();expect(f).toHaveBeenCalledTimes(1);
+  f.mockResolvedValueOnce(response({receipt,plan}));const retry=button(render(),'Retry exact plan request').props.onClick;retry();retry();await settle();
+  expect(f).toHaveBeenCalledTimes(2);expect(f.mock.calls[1]![1]!.body).toBe(request.body);expect((f.mock.calls[1]![1]!.headers as Record<string,string>)['Idempotency-Key']).toBe(request.key);
+});

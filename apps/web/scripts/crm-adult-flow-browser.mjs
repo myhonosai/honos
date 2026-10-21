@@ -323,7 +323,15 @@ try {
       }
     } finally { await context.close(); }
   });
-  await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin });
+  for(const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]) await check(`${size}: adult privacy preserves exact uncertain registration without automatic replay`,async()=>{
+    reset('unknown');const {context,page}=await open(viewport);try{
+      await choose(page);await register(page);await page.getByRole('button',{name:'Retry exact request',exact:true}).waitFor();assert.equal(commands.length,1);
+      await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));await visual(page,`${size}-adult-privacy-hidden`);
+      await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();await page.getByRole('button',{name:'Retry exact request',exact:true}).waitFor();assert.equal(commands.length,1);
+      await page.getByRole('button',{name:'Retry exact request',exact:true}).click();await page.getByRole('button',{name:'Create or reuse account',exact:true}).waitFor();assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);await visual(page,`${size}-adult-privacy-restored`);
+    }finally{await context.close();}
+  });
+  await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin, replaceActor: context => context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}]) });
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
 } finally { await browser?.close(); app.kill('SIGTERM'); await new Promise(done => api.close(done)); await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); }
 console.log(`PASS: ${report.checks.length} browser checks; ${report.screenshots.length} actual application screenshots; synthetic API verification only.`);
