@@ -1,4 +1,4 @@
-.flow { border: 1px solid #389cc2 !important; border-radius: 16px; padding: clamp(16px, 3vw, 28px); background: #f5fbff; color: #142d48; overflow-wrap: anywhere; min-width: 0; }
+.flow { border: 1px solid #389cc2 !important; border-radius: 16px; padding: clamp(16px, 3vw, 28px); background: #f5fbff; color: #142d48; overflow-wrap: anywhere; min-width: 0; scroll-margin-top: 18px; }
 .flow header p:first-child { font-size: .8rem; letter-spacing: .12em; font-weight: 700; color: #075777; }
 .flow h2 { margin-top: 8px; }
 .flow section { margin-block: 24px; min-width: 0; }

@@ -9,13 +9,15 @@ import { familyRequest, sendFamilyRequest, type FamilyRequest } from '../crm-fam
 import { PlanAccessError, PlanRejectedError, PlanUnknownError, draftFromPlanRequest, readAdultPlanOptions, sendPlanRequest, type PlanRequest, type PlanScope } from './http';
 import { MembershipPlanTerms } from './terms';
 import styles from './plans.module.css';
+import { useLocale } from '../localization/provider';
 
 type Review = { input: Omit<CrmAdultMembershipDraftFromPlanInput, 'confirmation'>; plan: MembershipPlanListing };
-export function AdultMembershipPlanPicker({ scope, studentProfileId, currency, childName, disabled, onBlocking, onStarted, onCreated, onAccessLost, onNeedsRefresh }: {
+export function AdultMembershipPlanPicker({ scope, studentProfileId, currency, childName, disabled, onBlocking, onStarted, onCreated, onAccessLost, onNeedsRefresh, onUncertain }: {
   scope: PlanScope; studentProfileId: string; currency: string; disabled: boolean; onBlocking(blocked: boolean): void; onStarted(): void;
-  childName?: string;
+  childName?: string; onUncertain?(request: PlanRequest | FamilyRequest): void;
   onCreated(data: CrmAdultMembershipDraftFromPlan, replayed: boolean): void; onAccessLost(): void; onNeedsRefresh(message: string): void;
 }): React.ReactElement {
+  const { date } = useLocale();
   const [plans, setPlans] = useState<MembershipPlanListing[] | null>(null), [selected, setSelected] = useState(''), [start, setStart] = useState('');
   const [review, setReview] = useState<Review | null>(null), [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState<PlanRequest | FamilyRequest | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -57,7 +59,7 @@ export function AdultMembershipPlanPicker({ scope, studentProfileId, currency, c
     } catch (e) {
       if (generation !== epoch.current) return;
       if (e instanceof PlanAccessError) onAccessLost();
-      else if (e instanceof PlanUnknownError) { retained = true; setPending(request); setError(e.message); }
+      else if (e instanceof PlanUnknownError) { if (onUncertain) onUncertain(request); else { retained = true; setPending(request); setError(e.message); } }
       else {
         setPending(null); setReview(null); setConfirmed(false); setPlans(null); setSelected('');
         if (e instanceof PlanRejectedError && (['CRM_ADULT_MEMBERSHIP_UNAVAILABLE','MEMBERSHIP_PLAN_CURRENCY_MISMATCH'].includes(e.code)
@@ -88,7 +90,7 @@ export function AdultMembershipPlanPicker({ scope, studentProfileId, currency, c
         <button type="button" disabled={plan.currency !== currency} onClick={prepareReview}>Review membership DRAFT</button></>}
     </fieldset>}
     {review && <div className={styles.review}><h4>Review membership DRAFT</h4><MembershipPlanTerms plan={review.plan} programName={review.plan.programName}/>
-      <p>Term starts: {review.input.termStartedAt ?? 'Not set'}<br/>Term ends: {review.input.termStartedAt && review.plan.termKind === 'FIXED_MONTHS' ? `${membershipPlanFixedTermEnd(review.input.termStartedAt, review.plan.termMonths!)} (preview; HON verifies the actual end)` : 'Not set'}</p>
+      <p>Term starts: {review.input.termStartedAt ? date(review.input.termStartedAt) : 'Not set'}<br/>Term ends: {review.input.termStartedAt && review.plan.termKind === 'FIXED_MONTHS' ? `${date(membershipPlanFixedTermEnd(review.input.termStartedAt, review.plan.termMonths!))} (preview; HON verifies the actual end)` : 'Not set'}</p>
       <p>This records a DRAFT from the reviewed plan version. It does not activate membership, sign an agreement, create an invoice or collect payment.</p>
       <label className={styles.check}><input type="checkbox" disabled={locked} checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />{childName === undefined ? 'I reviewed this plan version and confirm this adult’s membership DRAFT.' : `I reviewed this plan version and confirm the membership DRAFT for ${childName}.`}</label>
       <div className={styles.actions}><button type="button" disabled={locked || !confirmed} onClick={publish}>Create DRAFT from selected plan</button><button type="button" disabled={locked} onClick={edit}>Change selection</button></div>

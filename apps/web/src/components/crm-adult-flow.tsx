@@ -6,10 +6,15 @@ import { adultRequest, sendAdultRequest, AdultAccessError, AdultUncertainError, 
 import styles from './crm-adult-flow.module.css';
 import { AdultMembershipPlanPicker } from './membership-plans/picker';
 import { MembershipPlanTerms } from './membership-plans/terms';
+import { useLocale } from './localization/provider';
+import { sendPlanRequest, PlanAccessError, PlanUnknownError, type PlanRequest } from './membership-plans/http';
 
 type Registered = Extract<CrmLeadRegistrationResult, { outcome: 'REGISTERED' }>;
 type Props = AdultScope & { row: LeadListItem; initialRecovery?: CrmLeadRegistrationRecovery; onRecover?(): void; onCancel(): void; onBusy(busy: boolean): void; onStarted(): void; onAccessLost(): void };
 export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, onRecover, onCancel, onBusy, onStarted, onAccessLost }: Props): React.ReactElement {
+  const { date } = useLocale();
+  const [pendingPlan, setPendingPlan] = useState<PlanRequest | null>(null);
+  const previousRecovery = useRef(initialRecovery);
   const recoveredRegistration = initialRecovery && 'historicalRegistrationReceipt' in initialRecovery ? initialRecovery.historicalRegistrationReceipt : null;
   const recoveredAccount = initialRecovery && 'billingAccount' in initialRecovery ? initialRecovery.billingAccount : null;
   const recoveredDraft = initialRecovery?.workflowState === 'CURRENT_DRAFT' ? initialRecovery.currentMembershipDraft.receipt : null;
@@ -41,6 +46,32 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   const scope = { organizationId, schoolId };
   useEffect(() => { heading.current?.focus(); }, []);
   useEffect(() => () => { generation.current++; active.current = false; }, [organizationId, schoolId, row.id]);
+
+  // React applies this guarded state adjustment before committing the restored view.
+  if (previousRecovery.current !== initialRecovery) {
+    previousRecovery.current = initialRecovery;
+    setRegistered(recoveredRegistration); setAccount(recoveredAccount); setReceipt(recoveredDraft); setCurrent(recoveredDraft !== null);
+    setPrepared(null); setCreatedFromPlan(null); setConsent(false); setBirthDate(''); setPlan(''); setError(''); setReview(initialRecovery?.workflowState === 'NEEDS_STAFF_REVIEW');
+    setMessage('Current adult setup reverified. Historical requests are separate from current membership state.');
+  }
+
+  function planCreated(data: { receipt: CrmAdultMembershipDraftReceipt; plan: MembershipPlanVersionSummary }, replayed: boolean): void {
+    setPendingPlan(null); setReceipt(data.receipt); setCreatedFromPlan(data.plan); setCurrent(false); setPlanBlocking(false); onBusy(false); setConsent(false); setError(''); setMessage(replayed ? 'Historical plan-bound DRAFT creation replayed.' : 'Membership DRAFT recorded from the reviewed plan version. It is not active.');
+  }
+  async function retryPlan(): Promise<void> {
+    if (!pendingPlan || active.current) return;
+    const request = pendingPlan, epoch = generation.current; active.current = true; setBusy(true); onBusy(true);
+    try {
+      const result = await sendPlanRequest(request);
+      if (epoch !== generation.current) return;
+      if (result.kind !== 'draft') throw new Error('No verified adult DRAFT result.');
+      planCreated(result.draft, result.replayed);
+    } catch (e) {
+      if (epoch !== generation.current) return;
+      if (e instanceof PlanAccessError) onAccessLost();
+      else { if (!(e instanceof PlanUnknownError)) setPendingPlan(null); setError(e instanceof Error ? e.message : 'Current DRAFT could not be verified.'); }
+    } finally { if (epoch === generation.current) { active.current = false; setBusy(false); onBusy(false); } }
+  }
 
   async function run(request: AdultRequest): Promise<void> {
     if (active.current || planBlocking) return;
@@ -74,7 +105,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     } finally { if (epoch === generation.current) { active.current = false; setBusy(false); onBusy(false); } }
   }
   function submit(event: FormEvent): void {
-    event.preventDefault(); if (active.current || planBlocking || pending || !consent || review || receipt || otherCurrent) return;
+    event.preventDefault(); if (active.current || planBlocking || pending || pendingPlan || !consent || review || receipt || otherCurrent) return;
     try {
       // Validate before allocating a command key; each consequential step gets a distinct key.
       const step = !registered ? 'register' : !account ? 'account' : 'draft';
@@ -85,7 +116,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
       void run(adultRequest(scope, step, selection, value, crypto.randomUUID()));
     } catch { setError('Review the required date, currency or plan code and confirmation before submitting.'); }
   }
-  const locked = busy || pending !== null;
+  const locked = busy || pending !== null || pendingPlan !== null;
   return <section className={styles.flow} aria-labelledby="adult-flow-title" aria-busy={busy}>
     <header><p>ADULT CRM SETUP</p><h2 id="adult-flow-title" ref={heading} tabIndex={-1}>Set up {row.givenName} {row.familyName}</h2><p>Register adult → billing account → membership DRAFT</p>
       <button type="button" disabled={busy || planBlocking} onClick={onCancel}>Close adult setup</button>
@@ -95,12 +126,14 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     {message && <p role="status" className={styles.notice}>{message}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {pending && <div className={styles.notice}><p>An action may already have completed. This retry retains its exact data and idempotency key.</p><button type="button" disabled={busy} onClick={() => void run(pending)}>Retry exact request</button></div>}
+    {pendingPlan && <div className={styles.notice}><p>A plan-bound DRAFT may already have been created. Its exact request is retained only in memory.</p><button type="button" disabled={busy} onClick={() => void retryPlan()}>Retry exact plan request</button></div>}
     {registered && !otherCurrent && <p>Registration recorded for this adult lead. Historical registration receipt; not proof of current membership. Student reference: <code>{registered.studentProfileId}</code></p>}
     {account && !otherCurrent && <p>{'id' in account ? <>{account.reused === true ? 'Existing account reused' : account.reused === false ? 'Account created' : 'Historical account receipt'} · {account.currency} · <code>{account.id}</code></> : <>Verified canonical account · {account.currency}. No account identifier was returned.</>}</p>}
     {!review && !receipt && !otherCurrent && registered && account && prepared && <AdultMembershipPlanPicker scope={scope} studentProfileId={registered.studentProfileId} currency={prepared.currency} disabled={locked}
       onBlocking={blocked => { setPlanBlocking(blocked); onBusy(blocked); }} onStarted={onStarted} onAccessLost={onAccessLost}
       onNeedsRefresh={reason => { setPrepared(null); setPlanBlocking(false); onBusy(false); setError(reason); }}
-      onCreated={(data, replayed) => { setReceipt(data.receipt); setCreatedFromPlan(data.plan); setCurrent(false); setPlanBlocking(false); onBusy(false); setConsent(false); setError(''); setMessage(replayed ? 'Historical plan-bound DRAFT creation replayed.' : 'Membership DRAFT recorded from the reviewed plan version. It is not active.'); }} />}
+      onUncertain={request => { if ('step' in request) return; setPendingPlan(request); setPrepared(null); setPlanBlocking(false); onBusy(false); setError('The adult plan-bound DRAFT outcome is uncertain. Retry only its retained exact request.'); }}
+      onCreated={planCreated} />}
     {!review && !receipt && !otherCurrent && <form onSubmit={submit}><fieldset disabled={locked || planBlocking}>
       {!registered ? <><h3>1. Register this adult</h3><label>Date of birth<input type="date" required min="1900-01-01" value={birthDate} onChange={e => { setBirthDate(e.target.value); setConsent(false); setError(''); }} /></label>
         <label className={styles.check}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />I reviewed this lead as an adult registering without a guardian.</label><button disabled={!consent || !birthDate}>Register adult</button></>
@@ -113,8 +146,8 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     </fieldset></form>}
     {receipt && createdFromPlan && <div className={styles.receipt}><h3>Created from published plan: {createdFromPlan.displayName}</h3><p>Historical plan-version terms returned with creation; later catalog changes do not replace them.</p><MembershipPlanTerms plan={createdFromPlan}/></div>}
     {receipt && !createdFromPlan && <p>Original published plan terms are unavailable in this receipt or recovery view. A plan code alone does not establish a catalog binding.</p>}
-    {receipt && <div className={styles.receipt}><h3>Membership DRAFT creation receipt</h3><p>{receipt.planCode} · DRAFT · Recorded {receipt.recordedAt}</p><p>Historical creation receipt: <code>{receipt.membershipId}</code>. Current state requires a separate check.</p>
-      <button type="button" disabled={busy} onClick={() => void run(adultRequest(scope, 'confirm', registered!.studentProfileId, ''))}>Check current DRAFT</button>
+    {receipt && <div className={styles.receipt}><h3>Membership DRAFT creation receipt</h3><p>{receipt.planCode} · DRAFT · Recorded {date(receipt.recordedAt)}</p><p>Historical creation receipt: <code>{receipt.membershipId}</code>. Current state requires a separate check.</p>
+      <button type="button" disabled={locked || planBlocking} onClick={() => void run(adultRequest(scope, 'confirm', registered!.studentProfileId, ''))}>Check current DRAFT</button>
       {current && <p role="status">Current DRAFT verified. Membership activation and payments remain outside this workflow.</p>}</div>}
   </section>;
 }

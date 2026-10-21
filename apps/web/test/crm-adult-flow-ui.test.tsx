@@ -2,6 +2,7 @@ import React, { type ReactElement } from 'react';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { CrmAdultFlow } from '../src/components/crm-adult-flow';
 import type { CrmLeadRegistrationRecovery } from '@hon/contracts';
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (v: string) => `Localized ${v}` }) }));
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
  useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.values)) hooks.values[i] = initial; return [hooks.values[i], (value: unknown) => { hooks.values[i] = typeof value === 'function' ? (value as (v: unknown) => unknown)(hooks.values[i]) : value; }]; },

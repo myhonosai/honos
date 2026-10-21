@@ -5,6 +5,7 @@ import { CrmFamilyFlow } from '../src/components/crm-family-flow';
 import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 import { AdultMembershipPlanPicker } from '../src/components/membership-plans/picker';
 import { family, scope, id, row, date, response, registration, receipt, plan, listing, payer } from './crm-family-fixtures';
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (v: string) => `Localized ${v}` }) }));
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
   useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.values)) hooks.values[i] = initial; return [hooks.values[i], (value: unknown) => { hooks.values[i] = typeof value === 'function' ? (value as (v: unknown) => unknown)(hooks.values[i]) : value; }]; },
@@ -102,11 +103,55 @@ it('invalidates a stale child plan review rather than automatically resubmitting
   view=()=>AdultMembershipPlanPicker({scope,studentProfileId:id(5),currency:'USD',childName:'Kai Stone',disabled:false,...pickerCallbacks}); render(); click('Load available membership plans'); await settle(); fill('Available membership plan',plan.planId); click('Review membership DRAFT'); agree(); click('Create DRAFT from selected plan'); await settle();
   expect(text(render())).toContain('Reload available plans and review the new version'); expect(button('Create DRAFT from selected plan')).toBeUndefined(); expect(pickerCallbacks.onCreated).not.toHaveBeenCalled(); expect(f).toHaveBeenCalledTimes(2);
 });
-it('opens family recovery only by staff action, retains it on blur and clears it on pagehide/school switch', async () => {
+it('opens recovery explicitly, conceals all CRM data on blur, then clears memory on pagehide/school switch', async () => {
   const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce({ok:true,status:200,json:async()=>({data:[row],meta:{}})} as Response).mockResolvedValueOnce(response(family()));
-  view=()=>CrmLeadsWorkbench({initialScope:scope}); render(); expect(f).not.toHaveBeenCalled();
+  view=()=>CrmLeadsWorkbench({initialScope:scope,sessionSubject:"family-staff"}); render(); expect(f).not.toHaveBeenCalled();
   elements(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}}); await settle(); click('Set up / resume family'); await settle(); expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(true);
-  window.dispatchEvent(new Event('blur')); expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(true);
+  window.dispatchEvent(new Event('blur')); expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(true); expect(elements(render()).some(e=>e.type==='div' && e.props.hidden===true && e.props.inert===true)).toBe(true); expect(text(render())).toContain('CRM information hidden');
   window.dispatchEvent(new Event('pagehide')); expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(false);
   fill('School UUID',id(22)); expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(false); expect(f).toHaveBeenCalledTimes(2);
+});
+
+function privacyHidden(): boolean { return elements(render()).some(e => e.type === 'div' && e.props.hidden === true && e.props.inert === true); }
+const identityResponse = (subject = 'family-staff') => new Response(JSON.stringify({data:{externalSubject:subject}}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+async function openFamilyWorkbench(f: ReturnType<typeof vi.spyOn>): Promise<void> {
+  f.mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response(family()));
+  view=()=>CrmLeadsWorkbench({initialScope:scope,sessionSubject:'family-staff'});render();
+  elements(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();click('Set up / resume family');await settle();
+}
+it('reveals nothing on focus alone and explicitly verifies session, school and family before restoring', async()=>{
+  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(true);
+  window.dispatchEvent(new Event('focus'));await settle();expect(f).toHaveBeenCalledTimes(2);expect(privacyHidden()).toBe(true);
+  f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response(family())).mockResolvedValueOnce(identityResponse());
+  click('Verify access and resume');click('Verify access and resume');await settle();expect(privacyHidden()).toBe(false);expect(f).toHaveBeenCalledTimes(6);
+  expect(f.mock.calls.slice(2).every(([,options])=>!(options?.headers as Record<string,string>)?.['Idempotency-Key'])).toBe(true);
+});
+it.each([401,403])('discards private enrollment and retries after denied restoration %s',async status=>{
+  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));
+  f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response({code:'private-canary'},status));
+  click('Verify access and resume');await settle();expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(false);expect(text(render())).not.toContain('private-canary');
+  expect(elements(render()).filter(e=>e.type==='input').map(e=>e.props.value)).toEqual(['','']);
+});
+it('rejects another signed-in user and never reveals old family or command memory',async()=>{
+  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));f.mockResolvedValueOnce(identityResponse('another-staff'));
+  click('Verify access and resume');await settle();expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(false);expect(f).toHaveBeenCalledTimes(3);
+});
+it.each([404,409,503])('keeps private data hidden when fresh recovery fails with %s',async status=>{
+  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));
+  f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response({},status));click('Verify access and resume');await settle();
+  expect(privacyHidden()).toBe(true);expect(text(render())).toContain('CRM information remains hidden');
+});
+it('ignores a late successful restore after focus is lost again',async()=>{
+  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));
+  let finish!:(r:Response)=>void;f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockImplementationOnce(()=>new Promise(yes=>{finish=yes;})).mockResolvedValueOnce(identityResponse());
+  click('Verify access and resume');await settle();window.dispatchEvent(new Event('blur'));finish(response(family()));await settle();expect(privacyHidden()).toBe(true);
+});
+it('retains the exact uncertain child DRAFT outside the picker through fresh family revalidation',async()=>{
+  const data=family();start(data);elements(render()).find(e=>e.type==='button'&&text(e).startsWith('Kai Stone'))!.props.onClick();
+  const picker=elements(render()).find(e=>e.type===AdultMembershipPlanPicker)!;
+  const {familyRequest}=await import('../src/components/crm-family-http');
+  const {CRM_GUARDIAN_CHILD_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION}=await import('@hon/contracts');
+  const request=familyRequest(scope,'childDraft',id(5),{studentProfileId:id(5),membershipPlanId:plan.planId,membershipPlanVersion:1,confirmation:CRM_GUARDIAN_CHILD_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION},id(10));
+  picker.props.onUncertain(request);let freshData=family();view=()=>CrmFamilyFlow({scope,row,initialFamily:freshData,...callbacks});render();render();
+  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({receipt,plan},200,true));click('Retry exact family request');await settle();expect(f.mock.calls[0]![1]!.body).toBe(request.body);expect((f.mock.calls[0]![1]!.headers as Record<string,string>)['Idempotency-Key']).toBe(request.key);expect(text(render())).toContain('Historical DRAFT creation receipt for Kai Stone');
 });

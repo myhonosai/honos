@@ -200,7 +200,7 @@ try {
       if (scenario === 'unknown') { await page.getByRole('button', { name: 'Retry exact request' }).waitFor(); assert.equal(commands.length, 1); await page.getByRole('button', { name: 'Retry exact request' }).click(); await page.getByRole('heading', { name: /Create or reuse this adult/ }).waitFor(); assert.equal(commands.length, 2); assert.deepEqual(commands[0], commands[1]); }
       if (scenario === 'review') { await page.getByText(/Staff review required/).waitFor(); assert.equal(await page.getByRole('button', { name: 'Create or reuse account' }).count(), 0); }
       if (scenario === 'deny-account') { await page.getByRole('heading', { name: /Create or reuse this adult/ }).waitFor(); await page.getByRole('checkbox', { name: /responsible for their own billing/ }).check(); await page.getByRole('button', { name: 'Create or reuse account' }).click(); await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert.equal(await page.getByLabel('School UUID', { exact: true }).inputValue(), ''); assert(!(await page.locator('body').innerText()).includes('private-canary')); }
-      if (scenario === 'slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert.equal(await page.getByText(/Registration recorded for this adult/).count(), 0); }
+      if (scenario === 'slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert(!(await page.getByRole('main').innerText()).includes('Registration recorded for this adult')); }
     } finally { await context.close(); }
   });
   for (const actor of [null, 'family-synthetic', 'hq-synthetic', 'foreign-school-synthetic']) await check(`${actor ?? 'anonymous'}: authentication and API authorization remain required`, async () => {
@@ -314,7 +314,7 @@ try {
       await resume(page); await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).click(); mode = scenario === 'plan-denied' || scenario === 'plan-slow' ? scenario : 'ready';
       await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();
       if (scenario === 'plan-denied') { await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByRole('heading',{name:'Set up Ari Stone',exact:true}).count(),0); assert.equal(commands.length,0); }
-      else if (scenario === 'plan-slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByLabel('Available membership plan',{exact:true}).count(),0); }
+      else if (scenario === 'plan-slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert(!(await page.getByLabel('Available membership plan',{exact:true}).isVisible())); }
       else {
         await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(30)); await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click(); await page.getByRole('checkbox',{name:/reviewed this plan version/}).check(); mode = scenario;
         await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();

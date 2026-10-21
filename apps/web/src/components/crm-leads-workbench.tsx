@@ -13,6 +13,9 @@ import { CrmFamilyFlow } from './crm-family-flow';
 import { readFamilyEnrollment } from './crm-family-http';
 import { PlanAccessError, PlanRejectedError } from './membership-plans/http';
 import styles from './staff-availability-workbench.module.css';
+import privacyStyles from './crm-enrollment-privacy.module.css';
+import { verifyEnrollmentSession } from './crm-enrollment-privacy';
+import { useLocale } from './localization/provider';
 
 function trialHref(organizationId: string, schoolId: string, leadId: string): string {
   return `/staff/crm/trials?${new URLSearchParams({ organizationId, schoolId, leadId }).toString()}`;
@@ -20,7 +23,12 @@ function trialHref(organizationId: string, schoolId: string, leadId: string): st
 
 export type CrmLeadsInitialScope = { organizationId?: string | undefined; schoolId?: string | undefined };
 
-export function CrmLeadsWorkbench({ initialScope = {} }: { initialScope?: CrmLeadsInitialScope } = {}): React.ReactElement {
+export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initialScope?: CrmLeadsInitialScope; sessionSubject?: string } = {}): React.ReactElement {
+  const { date } = useLocale();
+  const [concealed, setConcealed] = useState(false), [restoring, setRestoring] = useState(false), [privacyError, setPrivacyError] = useState('');
+  const privacyEpoch = useRef(0), restoreActive = useRef(false), restoreAbort = useRef<AbortController | null>(null);
+  const privateArea = useRef<HTMLDivElement | null>(null), shieldHeading = useRef<HTMLHeadingElement | null>(null);
+  useEffect(() => { if (concealed) shieldHeading.current?.focus(); }, [concealed]);
   const [organizationId, setOrganizationId] = useState(initialScope.organizationId ?? '');
   const [schoolId, setSchoolId] = useState(initialScope.schoolId ?? '');
   const [status, setStatus] = useState<CrmLeadStatus | ''>('OPEN');
@@ -50,6 +58,7 @@ export function CrmLeadsWorkbench({ initialScope = {} }: { initialScope?: CrmLea
   useEffect(() => { if (familyRow && !familyData) familyHeading.current?.focus(); }, [familyRow, familyData]);
 
   function clear(): void {
+    privacyEpoch.current++; restoreActive.current = false; restoreAbort.current?.abort(); setRestoring(false); setPrivacyError('');
     familyAbort.current?.abort(); familyReadActive.current = false; familyOpen.current = false;
     setFamilyRow(null); setFamilyData(null); setFamilyBusy(false); setFamilyLoading(false); setFamilyError('');
     recoveryAbort.current?.abort(); recoveryActive.current = false;
@@ -58,17 +67,24 @@ export function CrmLeadsWorkbench({ initialScope = {} }: { initialScope?: CrmLea
     setLeads(null); setError(''); setSelected(null); setNeedsReload(false); setAdult(null); setAdultBusy(false); setDraftEpoch(value => value + 1);
   }
   function accessLost(): void {
-    clear(); setOrganizationId(''); setSchoolId(''); setCreateBusy(false); setCloseBusy(false);
+    clear(); setConcealed(false); setOrganizationId(''); setSchoolId(''); setCreateBusy(false); setCloseBusy(false);
     setError('Human session or current school authority unavailable. Scoped list, draft, retry and receipt discarded.');
   }
   useEffect(() => {
     // Local invalidation only, never a session read, polling or background command.
-    const leave = (): void => { clear(); setCreateBusy(false); setCloseBusy(false); };
-    // A transient tab/window blur is not session loss. Preserve an in-flight family request and exact retry.
-    const blur = (): void => { if (!familyOpen.current) leave(); };
-    const hidden = (): void => { if (document.visibilityState === 'hidden') blur(); };
-    window.addEventListener('pagehide', leave); window.addEventListener('blur', blur); document.addEventListener('visibilitychange', hidden);
-    return () => { readEpoch.current++; recoveryAbort.current?.abort(); familyAbort.current?.abort(); window.removeEventListener('pagehide', leave); window.removeEventListener('blur', blur); document.removeEventListener('visibilitychange', hidden); };
+    const leave = (): void => { clear(); setCreateBusy(false); setCloseBusy(false); setConcealed(true); if (privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; } };
+    const hide = (): void => {
+      // Hide synchronously, including the accessibility tree. Mounted enrollment
+      // components keep only their in-memory request state; no command is retried.
+      if (privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; }
+      setConcealed(true); privacyEpoch.current++; restoreAbort.current?.abort(); restoreActive.current = false; setRestoring(false); setPrivacyError('');
+      readEpoch.current++; recoveryAbort.current?.abort(); familyAbort.current?.abort();
+      readActive.current = false; recoveryActive.current = false; familyReadActive.current = false;
+      setLoading(false); setRecovering(false); setFamilyLoading(false);
+    };
+    const hidden = (): void => { if (document.visibilityState === 'hidden') hide(); };
+    window.addEventListener('pagehide', leave); window.addEventListener('blur', hide); document.addEventListener('visibilitychange', hidden);
+    return () => { readEpoch.current++; privacyEpoch.current++; restoreAbort.current?.abort(); recoveryAbort.current?.abort(); familyAbort.current?.abort(); window.removeEventListener('pagehide', leave); window.removeEventListener('blur', hide); document.removeEventListener('visibilitychange', hidden); };
   }, []);
   async function load(event: FormEvent): Promise<void> {
     event.preventDefault(); if (closeBusy || createBusy || adultBusy || adult || familyRow || familyBusy || readActive.current) return;
@@ -120,12 +136,53 @@ export function CrmLeadsWorkbench({ initialScope = {} }: { initialScope?: CrmLea
     } finally { if (generation === readEpoch.current) { familyReadActive.current = false; setFamilyLoading(false); } }
   }
 
+  async function restorePrivateView(): Promise<void> {
+    if (restoreActive.current || familyBusy || adultBusy || closeBusy || createBusy) return;
+    const generation = ++privacyEpoch.current, controller = new AbortController(); restoreAbort.current = controller;
+    restoreActive.current = true; setRestoring(true); setPrivacyError('');
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
+    try {
+      await verifyEnrollmentSession(sessionSubject, signal);
+      const rows = await loadCrmLeads(organizationId, schoolId, status || undefined, signal);
+      const original = familyRow ?? adult;
+      const current = original ? rows.find(r => r.id === original.id && r.primaryPersonId === original.primaryPersonId) : null;
+      if (original && !current) throw new Error('The selected lead is not in the freshly authorized list. Information remains hidden. Close this local view and reload the school.');
+      const family = familyRow && current ? await readFamilyEnrollment({ organizationId, schoolId }, current.id, current.primaryPersonId, signal) : null;
+      const adultData = adult && current ? await readAdultRecovery({ organizationId, schoolId }, current.id, current.primaryPersonId, signal) : null;
+      await verifyEnrollmentSession(sessionSubject, signal);
+      if (generation !== privacyEpoch.current || signal.aborted || document.visibilityState === 'hidden') return;
+      // Keep component keys stable so exact unknown requests survive; replace all
+      // displayed authority/record facts with the fresh response before revealing.
+      setLeads(rows); setSelected(null);
+      if (familyRow && current && family) { setFamilyRow(current); setFamilyData(family); }
+      if (adult && current && adultData) { setAdult(current); setResuming(true); setRecovery(adultData); }
+      setConcealed(false);
+    } catch (e) {
+      if (generation !== privacyEpoch.current) return;
+      if (e instanceof PlanAccessError || e instanceof AdultAccessError || e instanceof CrmLeadAccessError) accessLost();
+      else setPrivacyError('CRM information remains hidden. The session, selected school and enrollment permissions could not all be verified. Retry verification or discard this local view.');
+    } finally { if (generation === privacyEpoch.current) { restoreActive.current = false; setRestoring(false); } }
+  }
+
+  useEffect(() => { if (!concealed) privateArea.current?.querySelector<HTMLElement>('#family-flow-title, #adult-flow-title')?.focus(); }, [concealed]);
+
   const snapshotEpoch = readEpoch.current;
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/billing/membership-plans">Membership plans</a><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
+    {concealed && <section className={privacyStyles.shield} aria-labelledby="crm-privacy-title" aria-busy={restoring}>
+      <h2 id="crm-privacy-title" ref={shieldHeading} tabIndex={-1}>CRM information hidden</h2>
+      <p>Focus left this window. Enrollment requests remain only in memory. No command will be resent automatically.</p>
+      <p>Verify your signed session, selected school and current enrollment permissions before revealing information.</p>
+      {(familyBusy || adultBusy || closeBusy || createBusy) && <p role="status">An existing request is settling. You can verify access when it finishes, or discard the local view.</p>}
+      {privacyError && <p role="alert">{privacyError}</p>}
+      <button type="button" disabled={restoring || familyBusy || adultBusy || closeBusy || createBusy} onClick={() => void restorePrivateView()}>{restoring ? 'Verifying access…' : 'Verify access and resume'}</button>{' '}
+      <button type="button" onClick={() => { clear(); setConcealed(false); }}>Discard local view</button>
+    </section>}
+    <div ref={privateArea} className={privacyStyles.sensitive} hidden={concealed} inert={concealed} aria-hidden={concealed || undefined}>
     <header><p>HUMAN CRM / LEADS</p><h1>Current school CRM leads</h1><p>A bounded, conventional CRM list. An earlier verified view may prefill untrusted UUIDs, but entries never grant access and no list is loaded until this page's server read verifies them.</p></header>
-    <aside><strong>Explicit CRM intake; response-backed list; separate CRM-only close.</strong><p>The server returns at most 50 existing CRM lead summaries for the selected filter. A separate explicit intake form uses the canonical lead-create service. Only a freshly loaded returned OPEN row can prepare an explicit human WON/LOST close; never a creation receipt. Terminal CRM state is not enrollment or payment. The separate adult setup panel uses the verified registration, account and DRAFT APIs; it never activates membership or collects payment. The lead list itself does not move a pipeline stage, contact anyone, record a trial, book a class, create a student/family/enrollment/membership, accept consent, or invoke a provider, AI, Action Engine, automation, or external delivery.</p></aside>
+    <details className={privacyStyles.compact}><summary>CRM scope and workflow safeguards</summary><aside><strong>Explicit CRM intake; response-backed list; separate CRM-only close.</strong><p>The server returns at most 50 existing CRM lead summaries for the selected filter. A separate explicit intake form uses the canonical lead-create service. Only a freshly loaded returned OPEN row can prepare an explicit human WON/LOST close; never a creation receipt. Terminal CRM state is not enrollment or payment. The separate adult setup panel uses the verified registration, account and DRAFT APIs; it never activates membership or collects payment. The lead list itself does not move a pipeline stage, contact anyone, record a trial, book a class, create a student/family/enrollment/membership, accept consent, or invoke a provider, AI, Action Engine, automation, or external delivery.</p></aside>
     <section aria-labelledby="crm-lead-automation"><h2 id="crm-lead-automation">CRM automation</h2><p>These local automation tabs pass only a closed trigger prefill to a separate, idle Automation Rules draft. They do not load a rule or scope, create or revise configuration, dry-run or execute automation, or pass lead, appointment, contact, receipt, permission, or authority facts.</p><nav aria-label="CRM automation tabs" className={styles.actions}><a href="/staff/automation/rules?trigger=LEAD_CREATED">Lead automation</a><a href="/staff/automation/rules?trigger=TRIAL_NO_SHOW">No-show automation</a></nav></section>
+    </details>
     <section aria-labelledby="crm-lead-scope"><h2 id="crm-lead-scope">Current school selectors / explicit list load</h2><form onSubmit={(event) => void load(event)}><fieldset disabled={loading || closeBusy || createBusy || adultBusy || familyBusy || familyLoading}><div className={styles.row}><label>Organization UUID<input required autoComplete="off" value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label><label>Status filter<select value={status} onChange={(event) => { setStatus(event.target.value as CrmLeadStatus | ''); clear(); }}><option value="">All current lead states</option><option value="OPEN">Open</option><option value="WON">Won</option><option value="LOST">Lost</option><option value="ARCHIVED">Archived</option></select></label></div><button disabled={adult !== null || familyRow !== null}>{loading ? 'Verifying school…' : 'Load CRM leads'}</button></fieldset></form>{error && <p className={styles.error} role="alert">{error}</p>}{!leads && !loading && !error && <p role="status">No verified school list is loaded.</p>}</section>
     <div hidden={adult !== null || familyRow !== null}><CrmLeadCreatePanel key={`${organizationId}:${schoolId}:${draftEpoch}`} organizationId={organizationId} schoolId={schoolId} disabled={loading || closeBusy || selected !== null || adult !== null || familyRow !== null} onStarted={() => { setNeedsReload(true); setSelected(null); }} onBusy={setCreateBusy} onAccessLost={accessLost} /></div>
     {needsReload && <p role="status">Loaded list snapshot only — not refreshed after a close or create attempt. No row status, filter membership or count has been inferred. Explicitly reload to verify current CRM facts. {familyRow ? 'Close family setup first if it is open.' : 'Close adult setup first if it is open.'}</p>}
@@ -134,6 +191,7 @@ export function CrmLeadsWorkbench({ initialScope = {} }: { initialScope?: CrmLea
     {familyRow && (familyData ? <CrmFamilyFlow key={`${organizationId}:${schoolId}:${familyRow.id}:${draftEpoch}`} scope={{ organizationId, schoolId }} row={familyRow} initialFamily={familyData} onCancel={closeFamily} onBusy={setFamilyBusy} onStarted={() => setNeedsReload(true)} onAccessLost={accessLost} onAdult={() => { const lead = familyRow; closeFamily(); void resume(lead, true); }} />
       : <section aria-labelledby="family-recovery-title" aria-busy={familyLoading}><h2 id="family-recovery-title" tabIndex={-1} ref={familyHeading}>Resume family setup for {familyRow.givenName} {familyRow.familyName}</h2>{familyLoading && <p role="status">Checking current family setup. No records are being created.</p>}{familyError && <p role="alert">{familyError}</p>}{!familyLoading && <button type="button" onClick={() => void resumeFamily(familyRow)}>Retry family setup read</button>}<button type="button" onClick={closeFamily}>Close family setup</button></section>)}
     {selected && <CrmLeadClosePanel key={selected.id} row={selected} organizationId={organizationId} schoolId={schoolId} onStarted={() => setNeedsReload(true)} onBusy={busy => { if (snapshotEpoch === readEpoch.current) setCloseBusy(busy); }} onCancel={() => setSelected(null)} />}
-    {leads && <section aria-labelledby="crm-lead-results"><h2 id="crm-lead-results">{leads.length === 0 ? 'No matching CRM leads' : `${leads.length} verified CRM ${leads.length === 1 ? 'lead' : 'leads'}`}</h2><p>Contact facts are the existing protected lead-list projection for this authorized current-school read. A trial handoff does not load or create an appointment; a follow-up handoff likewise only pre-fills an untrusted UUID after its own queue is authorized.</p>{leads.map((lead) => <article className={styles.row} key={lead.id}><div><strong>{lead.givenName} {lead.familyName}</strong><p>Status: {lead.status} · lead v{lead.version}</p><p>Email: {lead.email ?? 'Not recorded'} · Phone: {lead.phoneE164 ?? 'Not recorded'}</p><p>Next follow-up: {lead.nextFollowUpAt ?? 'Not scheduled'} · Created: {lead.createdAt}</p><p><code>{lead.id}</code></p></div><div className={styles.actions}>{lead.status === 'OPEN' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => setSelected(lead)}>Prepare CRM-only close</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => { setAdult(lead); setSelected(null); }}>Set up adult membership</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resume(lead)}>Resume setup</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resumeFamily(lead)}>Set up / resume family</button>}<a href={trialHref(organizationId, schoolId, lead.id)}>Prepare trial appointment</a>{crmFollowUpHref(lead.id) && <a href={crmFollowUpHref(lead.id)}>Create human follow-up</a>}</div></article>)}</section>}
+    {leads && <section aria-labelledby="crm-lead-results"><h2 id="crm-lead-results">{leads.length === 0 ? 'No matching CRM leads' : `${leads.length} verified CRM ${leads.length === 1 ? 'lead' : 'leads'}`}</h2><p>Contact facts are the existing protected lead-list projection for this authorized current-school read. A trial handoff does not load or create an appointment; a follow-up handoff likewise only pre-fills an untrusted UUID after its own queue is authorized.</p>{leads.map((lead) => <article className={styles.row} key={lead.id}><div><strong>{lead.givenName} {lead.familyName}</strong><p>Status: {lead.status} · lead v{lead.version}</p><p>Email: {lead.email ?? 'Not recorded'} · Phone: {lead.phoneE164 ?? 'Not recorded'}</p><p>Next follow-up: {lead.nextFollowUpAt ? date(lead.nextFollowUpAt) : 'Not scheduled'} · Created: {date(lead.createdAt)}</p><p><code>{lead.id}</code></p></div><div className={styles.actions}>{lead.status === 'OPEN' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => setSelected(lead)}>Prepare CRM-only close</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => { setAdult(lead); setSelected(null); }}>Set up adult membership</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resume(lead)}>Resume setup</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resumeFamily(lead)}>Set up / resume family</button>}<a href={trialHref(organizationId, schoolId, lead.id)}>Prepare trial appointment</a>{crmFollowUpHref(lead.id) && <a href={crmFollowUpHref(lead.id)}>Create human follow-up</a>}</div></article>)}</section>}
+    </div>
   </main>;
 }

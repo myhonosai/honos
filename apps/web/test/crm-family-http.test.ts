@@ -83,3 +83,8 @@ it('rejects wrong published versions, child names and malformed success envelope
   f.mockResolvedValueOnce(new Response(JSON.stringify({ data: payer, meta: {} }), { headers: { 'Content-Type': 'application/json' } }));
   await expect(sendFamilyRequest(familyRequest(scope, 'payer', id(3), { confirmation: CRM_GUARDIAN_CHILD_PAYER_DESIGNATION_CONFIRMATION }, id(12)))).rejects.toBeInstanceOf(PlanUnknownError);
 });
+
+it.each([400,404,409,422])('uses family billing guidance for rejected guardian account %s',async status=>{
+  vi.spyOn(globalThis,'fetch').mockResolvedValue(response({},status));
+  await expect(sendFamilyRequest(familyRequest(scope,'account',id(4),{currency:'USD'},id(10)))).rejects.toThrow('guardian’s canonical billing account');
+});

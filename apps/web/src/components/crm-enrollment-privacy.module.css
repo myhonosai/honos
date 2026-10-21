@@ -1,0 +1,7 @@
+.sensitive[hidden] { display: none !important; }
+.shield { border: 1px solid #389cc2; background: #f5fbff; color: #142d48; }
+.shield button { min-height: 44px; }
+.compact { margin-block: 12px; }
+.compact summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.jump { display: inline-block; margin-block: 12px; min-height: 44px; align-content: center; }
+@media (max-width: 640px) { .shield button { width: 100%; margin-top: 10px; } }

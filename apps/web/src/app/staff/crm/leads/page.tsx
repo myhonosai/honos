@@ -1,7 +1,7 @@
 import React from 'react';
 import { createHash } from 'node:crypto';
 import { cookies } from 'next/headers';
-import { HON_SESSION_COOKIE } from '@hon/auth';
+import { HON_SESSION_COOKIE, verifySession, sessionConfig } from '@hon/auth';
 import { CrmLeadsWorkbench } from '../../../../components/crm-leads-workbench';
 
 export const dynamic = 'force-dynamic';
@@ -18,5 +18,6 @@ export default async function CrmLeadsPage({ searchParams }: CrmLeadsPageProps) 
   // only remounts memory state after session changes; it is never API authority.
   const token = (await cookies()).get(HON_SESSION_COOKIE)?.value ?? '';
   const sessionViewKey = createHash('sha256').update(token).digest('hex');
-  return <CrmLeadsWorkbench key={sessionViewKey} initialScope={{ organizationId: value(query.organizationId), schoolId: value(query.schoolId) }} />;
+  const sessionSubject = verifySession(token, sessionConfig()).externalSubject;
+  return <CrmLeadsWorkbench key={sessionViewKey} sessionSubject={sessionSubject} initialScope={{ organizationId: value(query.organizationId), schoolId: value(query.schoolId) }} />;
 }
