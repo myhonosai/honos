@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/crm-adult-frontend-verification.yml'
       - 'apps/web/src/components/crm-adult-*'
+      - 'apps/web/src/components/membership-plans/**'
+      - 'apps/web/src/app/staff/billing/membership-plans/**'
+      - 'apps/web/test/membership-plan-*'
       - 'apps/web/src/components/crm-leads-workbench.tsx'
       - 'apps/web/test/crm-adult-flow*'
       - 'apps/web/scripts/crm-adult-flow-browser.mjs'
@@ -17,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   browser:
-    if: github.head_ref == 'codex/crm-resume-setup' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.head_ref == 'codex/school-membership-plans' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -37,7 +40,7 @@ jobs:
       - name: Install unchanged lockfile and build application
         run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Focused frontend integration tests
-        run: pnpm --filter @hon/web exec vitest run test/crm-adult-flow-http.test.ts test/crm-adult-flow-ui.test.tsx test/crm-adult-flow-recovery.test.tsx test/crm-leads-workbench.test.tsx test/crm-lifecycle-handoff.test.tsx test/staff-route-auth-layout.test.ts
+        run: pnpm --filter @hon/web exec vitest run test/membership-plan-http.test.ts test/membership-plan-ui.test.tsx test/crm-adult-flow-http.test.ts test/crm-adult-flow-ui.test.tsx test/crm-adult-flow-recovery.test.tsx test/crm-leads-workbench.test.tsx test/crm-lifecycle-handoff.test.tsx test/staff-route-auth-layout.test.ts
       - name: Frontend transport against the real API and guarded disposable PostgreSQL
         run: |
           set -euo pipefail

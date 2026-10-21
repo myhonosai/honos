@@ -347,6 +347,10 @@
     {
       "path": "/settings/language-region",
       "title": "HON OS | Language & Region"
+    },
+    {
+      "path": "/staff/billing/membership-plans",
+      "title": "HON OS | School membership plans"
     }
   ]
 }

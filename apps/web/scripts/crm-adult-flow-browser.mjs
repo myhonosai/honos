@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
-import { validateRegisterCrmLeadInput, validateCreateBillingAccountInput, validateCrmAdultMembershipDraftInput, validateCrmLeadRegistrationRecoveryInput, verifyCrmLeadRegistrationRecovery } from '@hon/contracts';
+import { validateRegisterCrmLeadInput, validateCreateBillingAccountInput, validateCrmAdultMembershipDraftInput, validateCrmLeadRegistrationRecoveryInput, verifyCrmLeadRegistrationRecovery, validateCreateMembershipPlanInput, validateReviseMembershipPlanInput, validateCrmAdultMembershipDraftFromPlanInput, verifyMembershipPlanCatalog, verifyCrmAdultMembershipDraftFromPlan } from '@hon/contracts';
 
 assert(process.env.GITHUB_ACTIONS === 'true');
 for (const key of ['DATABASE_URL', 'HON_RUNTIME_DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_SECRET_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) assert(!process.env[key], 'No database/provider credentials allowed.');
@@ -27,8 +27,12 @@ const report = { sourceSha: process.env.HON_CRM_SOURCE_SHA, syntheticFixturesOnl
 const probe = createServer(); await new Promise(done => probe.listen(0, '127.0.0.1', done)); const port = probe.address().port; await new Promise(done => probe.close(done));
 const origin = `http://127.0.0.1:${port}`, session = { mode: 'OIDC', audience: 'hon-crm-browser-synthetic', secret: randomBytes(32).toString('hex') };
 const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
-let mode, registered, accounted, drafted, keys, commands, recoveryReads;
-function reset(value = 'ready') { mode = value; registered = false; accounted = false; drafted = false; keys = new Map(); commands = []; recoveryReads = [];
+const program = { programId: id(38), name: 'Adult martial arts' };
+const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
+let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
+function plainPlan(p) { const { programName, ...terms } = p; return terms; }
+function rejected(res, status, code) { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({code})); }
+function reset(value = 'ready') { publishedPlans = [{ ...seedPlan }, { ...seedPlan, planId:id(31), planCode:'KRW-ADULT', displayName:'Korean won plan', currency:'KRW',priceMinor:160000 }, { ...seedPlan,planId:id(32),planCode:'CLOSED',displayName:'Previous offer',availability:'UNAVAILABLE' }]; mode = value; registered = false; accounted = false; drafted = false; keys = new Map(); commands = []; recoveryReads = [];
   if (value.startsWith('recovery-')) { const state = value.slice(9); registered = !['NOT_REGISTERED', 'NEEDS_STAFF_REVIEW'].includes(state); accounted = ['READY_FOR_DRAFT', 'CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); drafted = ['CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); }
 }
 reset();
@@ -39,8 +43,47 @@ const api = createServer(async (req, res) => {
     let actor; try { actor = verifySession(cookieValue(req.headers.cookie, HON_SESSION_COOKIE) ?? '', session).externalSubject; } catch { send(res, 401, {}); return; }
     report.requests.push({ method: req.method, path: url.pathname });
     if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: null, schoolDefault: null, effective: { language: 'en', source: 'SYSTEM_DEFAULT' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
+    if (actor === 'crm-staff-synthetic' && url.pathname === '/v1/staff/current-reporting-school' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({data:{state:'RESOLVED',...scope}})); return;
+    }
     if (actor !== 'crm-staff-synthetic' || !url.pathname.startsWith(prefix + '/')) { send(res, 403, { secret: 'private-canary' }); return; }
     if (req.method === 'GET' && url.pathname === `${prefix}/crm/leads`) { send(res, 200, [lead]); return; }
+    const plansRoot = `${prefix}/billing/membership-plans`, draftsRoot = `${prefix}/billing/crm-adult-membership-drafts`;
+    const planStep = url.pathname === plansRoot + '/catalog' ? 'catalog' : url.pathname === plansRoot ? 'create'
+      : url.pathname.startsWith(plansRoot + '/') && url.pathname.endsWith('/revisions') ? 'revise'
+      : url.pathname === draftsRoot + '/plan-options' ? 'options' : url.pathname === draftsRoot + '/from-plan' ? 'plan-draft' : null;
+    if (planStep) {
+      const markers = { catalog:'membership-plan-catalog-read',create:'membership-plan-create',revise:'membership-plan-revise',options:'crm-adult-membership-plan-options','plan-draft':'crm-adult-membership-draft-from-plan' };
+      if (req.method !== 'POST' || url.search || req.headers.origin !== origin || req.headers['sec-fetch-site'] !== 'same-origin' || req.headers['sec-fetch-mode'] !== 'same-origin' || req.headers['sec-fetch-dest'] !== 'empty' || req.headers['x-hon-human-command'] !== markers[planStep]) { rejected(res,403,'HUMAN_UI_REQUIRED'); return; }
+      let raw = ''; for await (const chunk of req) { raw += chunk; assert(raw.length < 4000); } const input = JSON.parse(raw), key = req.headers['idempotency-key'];
+      if (mode === 'plan-denied') { rejected(res,403,'MEMBERSHIP_PLAN_FORBIDDEN'); return; }
+      if (['catalog','options'].includes(planStep)) {
+        assert.deepEqual(input,{}); assert.equal(key,undefined);
+        if (mode === 'plan-slow') await new Promise(done => setTimeout(done,450));
+        if (planStep === 'catalog') { const data = {plans:publishedPlans,programs:[program]}; verifyMembershipPlanCatalog(data); send(res,200,data); }
+        else send(res,200,{plans:publishedPlans.filter(p => p.availability === 'AVAILABLE')});
+        return;
+      }
+      assert.match(key,/^[a-f0-9-]{36}$/); commands.push({step:planStep,key,raw});
+      if (keys.has(key)) { const old = keys.get(key); assert.equal(old.step,planStep); assert.equal(old.raw,raw); send(res,200,old.data,true); return; }
+      let data;
+      if (mode === 'plan-stale') { rejected(res,409,'MEMBERSHIP_PLAN_VERSION_STALE'); return; }
+      if (planStep === 'create' || planStep === 'revise') {
+        const terms = planStep === 'create' ? validateCreateMembershipPlanInput(input) : validateReviseMembershipPlanInput(input);
+        const prior = planStep === 'revise' ? publishedPlans.find(p => p.planId === url.pathname.split('/').at(-2)) : null;
+        if (planStep === 'revise' && (!prior || prior.version !== input.expectedVersion)) { rejected(res,409,'MEMBERSHIP_PLAN_VERSION_STALE'); return; }
+        const {confirmation,expectedVersion,planCode,...reviewed} = terms;
+        const p = {...reviewed,description:reviewed.description ?? null,programId:reviewed.programId ?? null,termMonths:reviewed.termMonths ?? null,planId:prior?.planId ?? id(40),planCode:prior?.planCode ?? planCode,version:prior ? prior.version+1 : 1,publishedAt:date,programName:reviewed.programId ? program.name : null};
+        publishedPlans = prior ? publishedPlans.map(old => old.planId === prior.planId ? p : old) : [...publishedPlans,p]; data = plainPlan(p);
+      } else {
+        validateCrmAdultMembershipDraftFromPlanInput(input); assert(accounted); assert.equal(input.studentProfileId,id(5));
+        const p = publishedPlans.find(p => p.planId === input.membershipPlanId && p.version === input.membershipPlanVersion && p.availability === 'AVAILABLE'); assert(p); assert.equal(p.currency,'USD');
+        assert.equal(input.termStartedAt,undefined); drafted = true; data = {receipt,plan:plainPlan(p)}; verifyCrmAdultMembershipDraftFromPlan(data,input);
+      }
+      keys.set(key,{step:planStep,raw,data});
+      if (mode === 'plan-unknown') { mode = 'ready'; send(res,503,{}); return; }
+      send(res,200,data); return;
+    }
     const step = url.pathname === `${prefix}/crm/leads/${id(3)}/registration-recovery` ? 'recover'
       : url.pathname === `${prefix}/crm/leads/${id(3)}/register` ? 'register'
       : url.pathname === `${prefix}/billing/accounts` ? 'account'
@@ -122,7 +165,7 @@ async function resume(page) {
 }
 async function register(page) { await page.getByLabel('Date of birth', { exact: true }).fill('1990-01-02'); await page.getByRole('checkbox', { name: /reviewed this lead/ }).check(); await page.getByRole('button', { name: 'Register adult', exact: true }).click(); }
 async function accountStep(page) { await page.getByRole('checkbox', { name: /responsible for their own billing/ }).check(); await page.getByRole('button', { name: 'Create or reuse account', exact: true }).click(); await page.getByText('Existing account reused', { exact: false }).waitFor(); }
-async function draftStep(page) { await page.getByRole('button', { name: 'Check DRAFT readiness', exact: true }).click(); await page.getByLabel('Membership plan code').fill('ADULT-MONTHLY'); await page.getByRole('checkbox', { name: /confirm this adult/ }).check(); await page.getByRole('button', { name: 'Create membership DRAFT', exact: true }).click(); await page.getByRole('heading', { name: 'Membership DRAFT creation receipt' }).waitFor(); }
+async function draftStep(page) { await page.getByRole('button', { name: 'Check DRAFT readiness', exact: true }).click(); await page.getByText('Use legacy free-text plan code', { exact: true }).click(); await page.getByLabel('Membership plan code').fill('ADULT-MONTHLY'); await page.getByRole('checkbox', { name: /confirm this adult/ }).check(); await page.getByRole('button', { name: 'Create membership DRAFT', exact: true }).click(); await page.getByRole('heading', { name: 'Membership DRAFT creation receipt' }).waitFor(); }
 async function visual(page, name) {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Horizontal overflow');
   await page.addScriptTag({ content: axe }); const result = await page.evaluate(() => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } }));
@@ -215,6 +258,61 @@ try {
       await context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject: 'crm-staff-synthetic' }, session), url: origin, httpOnly: true, sameSite: 'Lax' }]);
       await page.goto(`${origin}/staff/crm/leads?${new URLSearchParams(scope)}`); await resume(page); await page.getByRole('button', { name: 'Create or reuse account', exact: true }).waitFor();
       assert.equal(commands.length, 1); assert.equal(commands[0].step, 'register'); assert.equal(recoveryReads.length, 3);
+    } finally { await context.close(); }
+  });
+  // Published school catalog and plan-bound adult enrollment. Real built application; fixtures only here.
+  for (const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}],['tablet',{width:768,height:1024}]]) {
+    await check(`${size}: catalog creation/revision/unavailability, keyboard and accessibility`,async () => {
+      reset(); const {context,page} = await open(viewport);
+      try {
+        await page.goto(`${origin}/staff/billing/membership-plans`); assert.equal(commands.length,0);
+        await page.getByRole('button',{name:'Load my school plans',exact:true}).focus(); await page.keyboard.press('Enter');
+        await page.getByRole('heading',{name:'Adult Monthly',exact:true}).waitFor(); await visual(page,`${size}-membership-catalog`);
+        await page.getByRole('button',{name:'Create plan',exact:true}).click();
+        await page.getByLabel('Plan name',{exact:true}).fill('Adult Weekly'); await page.getByLabel('Plan code',{exact:false}).fill('ADULT-WEEKLY');
+        await page.getByLabel('School program',{exact:true}).selectOption(program.programId); await page.getByLabel('Published price',{exact:false}).fill('39.50');
+        await page.getByLabel('Billing frequency',{exact:true}).selectOption('WEEKLY'); await page.getByRole('button',{name:'Review plan',exact:true}).click();
+        await page.getByRole('heading',{name:'Review published terms',exact:true}).waitFor(); assert.equal(commands.length,0); assert(await page.getByRole('button',{name:'Publish plan',exact:true}).isDisabled());
+        await visual(page,`${size}-membership-plan-review`); await page.getByRole('checkbox',{name:/confirm publishing/}).check(); await page.getByRole('button',{name:'Publish plan',exact:true}).click();
+        await page.getByRole('heading',{name:'Recorded publication: Adult Weekly',exact:true}).waitFor(); assert.equal(commands.length,1);
+        await page.getByRole('button',{name:'Reload catalog',exact:true}).click(); await page.getByRole('button',{name:'Revise Adult Weekly',exact:true}).click();
+        assert(await page.getByLabel('Plan code',{exact:false}).getAttribute('readonly') !== null); await page.getByLabel('Published price',{exact:false}).fill('42.00'); await page.getByLabel('Availability',{exact:true}).selectOption('UNAVAILABLE');
+        await page.getByRole('button',{name:'Review plan',exact:true}).click(); await page.getByRole('checkbox',{name:/confirm publishing/}).check(); await page.getByRole('button',{name:'Publish new version',exact:true}).click();
+        await page.getByRole('heading',{name:'Recorded publication: Adult Weekly',exact:true}).waitFor(); assert.equal(publishedPlans.at(-1).version,2); assert.equal(publishedPlans.at(-1).availability,'UNAVAILABLE');
+        assert.equal(JSON.parse(commands[1].raw).expectedVersion,1); await visual(page,`${size}-membership-plan-revision`);
+      } finally { await context.close(); }
+    });
+    await check(`${size}: Resume Setup to version-bound DRAFT preserves historical/current distinction`,async () => {
+      reset('recovery-READY_FOR_DRAFT'); const {context,page} = await open(viewport);
+      try {
+        await resume(page); await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).click();
+        await page.getByRole('button',{name:'Load available membership plans',exact:true}).click(); const select = page.getByLabel('Available membership plan',{exact:true}); await select.waitFor(); await visual(page,`${size}-enrollment-plan-options`);
+        assert(await select.locator(`option[value="${id(31)}"]`).evaluate(option => option.disabled === true), await page.getByRole('main').innerText()); assert.equal(await select.locator(`option[value="${id(32)}"]`).count(),0);
+        await select.selectOption(id(30)); await visual(page,`${size}-enrollment-plan-picker`); await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();
+        assert(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).isDisabled()); await page.getByRole('checkbox',{name:/reviewed this plan version/}).check();
+        await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor();
+        assert.equal(commands.length,1); assert.equal(commands[0].step,'plan-draft'); assert.equal(await page.getByText('Current DRAFT verified.',{exact:false}).count(),0);
+        await page.getByRole('button',{name:'Check current DRAFT',exact:true}).click(); await page.getByText('Current DRAFT verified.',{exact:false}).waitFor(); await visual(page,`${size}-plan-bound-draft`);
+        await page.reload(); await resume(page); await page.getByText('Current DRAFT verified.',{exact:false}).waitFor();
+        assert.equal(await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).count(),0); assert.equal(commands.length,1);
+        assert((await page.getByRole('main').innerText()).includes('Original published plan terms are unavailable'));
+        const storage = await page.evaluate(() => JSON.stringify([Object.entries(localStorage),Object.entries(sessionStorage)])); assert(!storage.includes(id(30))); assert(!storage.includes(commands[0].key));
+      } finally { await context.close(); }
+    });
+  }
+  for (const scenario of ['plan-unknown','plan-stale','plan-denied','plan-slow']) await check(`${scenario}: exact retry, fresh review, authorization or stale response suppression`,async () => {
+    reset('recovery-READY_FOR_DRAFT'); const {context,page} = await open({width:390,height:844});
+    try {
+      await resume(page); await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).click(); mode = scenario === 'plan-denied' || scenario === 'plan-slow' ? scenario : 'ready';
+      await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();
+      if (scenario === 'plan-denied') { await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByRole('heading',{name:'Set up Ari Stone',exact:true}).count(),0); assert.equal(commands.length,0); }
+      else if (scenario === 'plan-slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByLabel('Available membership plan',{exact:true}).count(),0); }
+      else {
+        await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(30)); await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click(); await page.getByRole('checkbox',{name:/reviewed this plan version/}).check(); mode = scenario;
+        await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
+        if (scenario === 'plan-unknown') { await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).waitFor(); assert(await page.getByRole('button',{name:'Close adult setup',exact:true}).isDisabled()); await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor(); assert.deepEqual(commands[0],commands[1]); }
+        else { await page.getByRole('alert').waitFor(); await visual(page,'mobile-stale-plan-result'); await page.getByText('This plan changed since you loaded it. Reload and review the current version before submitting again.',{exact:true}).waitFor(); await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).waitFor({state:'detached'}); assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0); assert.equal(commands.length,1); assert.equal(drafted,false); }
+      }
     } finally { await context.close(); }
   });
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
