@@ -318,7 +318,7 @@ try {
       else {
         await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(30)); await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click(); await page.getByRole('checkbox',{name:/reviewed this plan version/}).check(); mode = scenario;
         await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
-        if (scenario === 'plan-unknown') { await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).waitFor(); assert(await page.getByRole('button',{name:'Close adult setup',exact:true}).isDisabled()); await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor(); assert.deepEqual(commands[0],commands[1]); }
+        if (scenario === 'plan-unknown') { await page.getByRole('button',{name:'Retry exact plan request',exact:true}).waitFor(); assert(await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).isDisabled()); await page.getByRole('button',{name:'Retry exact plan request',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor(); assert.deepEqual(commands[0],commands[1]); }
         else { await page.getByRole('alert').waitFor(); await visual(page,'mobile-stale-plan-result'); await page.getByText('This plan changed since you loaded it. Reload and review the current version before submitting again.',{exact:true}).waitFor(); await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).waitFor({state:'detached'}); assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0); assert.equal(commands.length,1); assert.equal(drafted,false); }
       }
     } finally { await context.close(); }
@@ -328,7 +328,7 @@ try {
       await choose(page);await register(page);await page.getByRole('button',{name:'Retry exact request',exact:true}).waitFor();assert.equal(commands.length,1);
       await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));await visual(page,`${size}-adult-privacy-hidden`);
       await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();await page.getByRole('button',{name:'Retry exact request',exact:true}).waitFor();assert.equal(commands.length,1);
-      await page.getByRole('button',{name:'Retry exact request',exact:true}).click();await page.getByRole('button',{name:'Create or reuse account',exact:true}).waitFor();assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);await visual(page,`${size}-adult-privacy-restored`);
+      await page.getByRole('button',{name:'Retry exact request',exact:true}).click();await page.getByText('Adult registration receipt replayed.',{exact:true}).waitFor();assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);await visual(page,`${size}-adult-privacy-restored`);
     }finally{await context.close();}
   });
   await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin, replaceActor: context => context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}]) });

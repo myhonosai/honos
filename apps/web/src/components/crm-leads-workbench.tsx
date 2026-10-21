@@ -42,6 +42,7 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
   const [draftEpoch, setDraftEpoch] = useState(0);
   const [adult, setAdult] = useState<LeadListItem | null>(null);
   const [adultBusy, setAdultBusy] = useState(false);
+  const adultOpen = useRef(false); adultOpen.current = adult !== null;
   const [resuming, setResuming] = useState(false);
   const [recovery, setRecovery] = useState<CrmLeadRegistrationRecovery | null>(null);
   const [recoveryError, setRecoveryError] = useState('');
@@ -74,6 +75,8 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
     // Local invalidation only, never a session read, polling or background command.
     const leave = (): void => { clear(); setCreateBusy(false); setCloseBusy(false); setConcealed(true); if (privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; } };
     const hide = (): void => {
+      // Preserve the pre-existing discard behavior outside enrollment.
+      if (!familyOpen.current && !adultOpen.current) { clear(); setCreateBusy(false); setCloseBusy(false); }
       // Hide synchronously, including the accessibility tree. Mounted enrollment
       // components keep only their in-memory request state; no command is retried.
       if (privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; }

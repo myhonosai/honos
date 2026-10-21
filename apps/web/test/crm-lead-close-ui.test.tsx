@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { CrmLeadClosePanel } from '../src/components/crm-lead-close-panel';
 import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (v: string) => `Localized ${v}` }) }));
 // Tiny deterministic hook runner: invoke the actual components and their event
 // handlers without adding a DOM/testing dependency or an application capability.
 const hooks=vi.hoisted(()=>({values:[] as unknown[],cursor:0}));

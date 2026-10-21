@@ -3,5 +3,4 @@
 .shield button { min-height: 44px; }
 .compact { margin-block: 12px; }
 .compact summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
-.jump { display: inline-block; margin-block: 12px; min-height: 44px; align-content: center; }
 @media (max-width: 640px) { .shield button { width: 100%; margin-top: 10px; } }

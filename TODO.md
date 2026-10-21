@@ -2,9 +2,9 @@
 
 ## CRM enrollment privacy and usability — Codex
 
-- [ ] Hide the entire sensitive CRM view on focus loss, retain immutable uncertain enrollment requests only in mounted memory, and require explicit session/exact-school recovery verification before revealing it. Never resend a command on focus restoration.
-- [ ] Correct family account errors, colocate current-DRAFT refresh, format timestamps with Language & Region, and reduce enrollment-panel scrolling. Preserve adult/family recovery, creator privacy and financial boundaries.
-- [ ] Verify focused interactions, actual desktop/mobile browser behavior, full CI and existing disposable PostgreSQL proofs; publish one frontend-only PR for independent review.
+- [x] Hide the entire sensitive CRM view on focus loss, retain immutable uncertain enrollment requests only in mounted memory, and require explicit session/exact-school recovery verification before revealing it. Never resend a command on focus restoration.
+- [x] Correct family account errors, colocate current-DRAFT refresh, format timestamps with Language & Region, and reduce enrollment-panel scrolling. Preserve adult/family recovery, creator privacy and financial boundaries.
+- [ ] Verify focused interactions, actual desktop/mobile browser behavior, full CI and existing disposable PostgreSQL proofs; complete the exact-head evidence in focused frontend-only PR #49 for independent review.
 
 ## Guardian/child CRM frontend — Codex (2026-10-21)
 
