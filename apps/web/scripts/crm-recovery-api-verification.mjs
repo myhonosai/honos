@@ -70,7 +70,11 @@ try {
     return originalFetch(origin + path.slice(4), { ...options, headers });
   };
   const tables = ['people', 'student_profiles', 'families', 'family_members', 'crm_leads', 'crm_lead_registration_conversions', 'billing_accounts', 'memberships', 'crm_adult_membership_draft_sources', 'membership_payment_schedules', 'invoices', 'payment_attempts', 'audit_events', 'outbox_events', 'idempotency_records', 'communication_messages', 'action_requests', 'ai_usage_ledger'];
-  const snapshot = async () => Object.fromEntries(await Promise.all(tables.map(async t => [t, (await sql(`SELECT md5(coalesce(string_agg(x::text,'|' ORDER BY x::text),'')) h,count(*)::int n FROM hon.${t} x`)).rows[0]])));
+  const snapshot = async () => {
+    const result = {};
+    for (const t of tables) result[t] = (await sql(`SELECT md5(coalesce(string_agg(x::text,'|' ORDER BY x::text),'')) h,count(*)::int n FROM hon.${t} x`)).rows[0];
+    return result;
+  };
   async function read(scope = { organizationId: org, schoolId: school }) { const before = await snapshot(); try { return await readAdultRecovery(scope, lead, person); } finally { assert.deepEqual(await snapshot(), before); } }
   const states = [];
   async function expectState(state) { const result = await read(); assert.equal(result.workflowState, state); states.push(state); return result; }
@@ -92,4 +96,8 @@ try {
   await expectState('NEEDS_STAFF_REVIEW');
   assert.equal(new Set(states).size, 6);
   console.log('PASS: frontend recovery transport through real signed-session Nest API and disposable PostgreSQL; all six states, creator/noncreator redaction, cross-school/revoked/session denials, and zero read effects on 18 tables. No API/identity mock, provider, production DB or activation.');
-} finally { globalThis.fetch = originalFetch; await app?.close(); await database.onModuleDestroy(); await owner.end(); }
+} finally {
+  globalThis.fetch = originalFetch;
+  try { if (app) await app.close(); else await database.onModuleDestroy(); }
+  finally { await owner.end(); }
+}
