@@ -7,7 +7,7 @@ const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
   useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.values)) hooks.values[i] = initial; return [hooks.values[i], (v: unknown) => { hooks.values[i] = typeof v === 'function' ? (v as Function)(hooks.values[i]) : v; }]; },
   useRef: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.values)) hooks.values[i] = { current: initial }; return hooks.values[i]; },
-  useEffect: (effect: () => (() => void) | void, deps: unknown[]) => { const i = hooks.cursor++, prior = hooks.values[i] as { deps: unknown[]; cleanup?: () => void } | undefined; if (!prior || deps.some((v, j) => v !== prior.deps[j])) { prior?.cleanup?.(); hooks.values[i] = { deps }; hooks.effects.push(() => { (hooks.values[i] as { cleanup?: () => void }).cleanup = effect() || undefined; }); } },
+  useEffect: (effect: () => (() => void) | void, deps: unknown[]) => { const i = hooks.cursor++, prior = hooks.values[i] as { deps: unknown[]; cleanup?: (() => void) | undefined } | undefined; if (!prior || deps.some((v, j) => v !== prior.deps[j])) { prior?.cleanup?.(); hooks.values[i] = { deps }; hooks.effects.push(() => { (hooks.values[i] as { cleanup?: (() => void) | undefined }).cleanup = effect() || undefined; }); } },
 }; });
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { organizationId: id(1), schoolId: id(2) };
@@ -18,7 +18,7 @@ type Element = ReactElement<Record<string, any>>;
 function elements(node: unknown): Element[] { if (Array.isArray(node)) return node.flatMap(elements); if (React.isValidElement(node)) { const e = node as Element; return [e, ...elements(e.props.children)]; } return []; }
 function text(node: unknown): string { if (Array.isArray(node)) return node.map(text).join(''); if (React.isValidElement(node)) return text((node as Element).props.children); return typeof node === 'string' ? node : ''; }
 function render(): Element { hooks.cursor = 0; const t = CrmLeadsWorkbench({ initialScope: scope }) as Element; hooks.effects.splice(0).forEach(run => run()); return t; }
-function unmount(): void { for (const v of hooks.values) if (v && typeof v === 'object' && 'cleanup' in v) (v as { cleanup?: () => void }).cleanup?.(); }
+function unmount(): void { for (const v of hooks.values) if (v && typeof v === 'object' && 'cleanup' in v) (v as { cleanup?: (() => void) | undefined }).cleanup?.(); }
 const button = (t: Element, label: string) => elements(t).find(e => e.type === 'button' && text(e) === label)!;
 const panel = () => elements(render()).find(e => e.type === CrmAdultFlow);
 const pending = () => elements(render()).find(e => e.type === CrmAdultRecoveryPending)!;

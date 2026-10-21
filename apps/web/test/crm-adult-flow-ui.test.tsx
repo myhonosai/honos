@@ -11,9 +11,9 @@ vi.mock('react', async () => { const actual = await vi.importActual<typeof impor
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const row = { id: id(3), primaryPersonId: id(4), status: 'WON' as const, pipelineStageId: id(8), version: 1, createdAt: '2026-10-20T00:00:00.000Z', givenName: 'Ari', familyName: 'Stone' };
 const date = '2026-10-20T09:00:00.000Z', meta = { requestId: id(8), correlationId: id(8), replayed: false };
-const registration = { outcome: 'REGISTERED', leadId: id(3), sourceContactPersonId: id(4), registrationPath: 'ADULT', studentProfileId: id(5), familyId: null, recordedAt: date };
+const registration = { outcome: 'REGISTERED', leadId: id(3), sourceContactPersonId: id(4), registrationPath: 'ADULT', studentProfileId: id(5), familyId: null, recordedAt: date } as const;
 const account = { id: id(6), responsiblePersonId: id(4), currency: 'USD', classification: 'CANONICAL', reused: true, version: 1, createdAt: date };
-const receipt = { membershipId: id(7), state: 'DRAFT', planCode: 'ADULT-MONTHLY', termStartedAt: null, termEndsAt: null, recordedAt: date };
+const receipt = { membershipId: id(7), state: 'DRAFT', planCode: 'ADULT-MONTHLY', termStartedAt: null, termEndsAt: null, recordedAt: date } as const;
 const response = (data: unknown, status = 200) => new Response(JSON.stringify({ data, meta }), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
 type Element = ReactElement<Record<string, any>>;
 function elements(node: unknown): Element[] { if (Array.isArray(node)) return node.flatMap(elements); if (React.isValidElement(node)) { const e = node as Element; return [e, ...elements(e.props.children)]; } return []; }
