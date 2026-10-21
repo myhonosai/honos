@@ -66,8 +66,16 @@ try {
     assertions += 2;
   }
   assert.deepEqual((await admin.query("SELECT is_sensitive,is_staff_assignable FROM hon.permissions WHERE code='billing.membership_plan.manage'")).rows, [{ is_sensitive: true, is_staff_assignable: true }]);
-  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.membership_plans")).rows[0].n, 0, 'no school policy or plan is seeded');
-  assertions += 4;
+  // Other proofs share this database and may already have published plans, so "nothing seeded" is checked as: the migration has no top-level plan
+  // insert, and every existing plan and version came from an audited direct-human command.
+  assert.doesNotMatch(migration.replace(/AS \$\$[\s\S]*?\$\$;/g, ''), /INSERT\s+INTO\s+hon\.membership_plan/i, 'no school policy or plan is seeded');
+  assert.deepEqual((await admin.query(`SELECT
+      (SELECT count(*)::int FROM hon.membership_plans p WHERE NOT EXISTS (SELECT 1 FROM hon.audit_events a WHERE a.action_code='billing.membership_plan.create'
+        AND a.entity_type='MEMBERSHIP_PLAN' AND a.entity_id=p.id AND a.source='HUMAN_UI')) unaudited_plans,
+      (SELECT count(*)::int FROM hon.membership_plan_versions v WHERE v.version>1 AND NOT EXISTS (SELECT 1 FROM hon.audit_events a WHERE a.action_code='billing.membership_plan.revise'
+        AND a.entity_id=v.plan_id AND (a.next_state->>'version')::int=v.version)) unaudited_versions`)).rows[0],
+    { unaudited_plans: 0, unaudited_versions: 0 }, 'every plan and version was published by an audited human command');
+  assertions += 5;
 
   // ---------- fixture: org A school 1 (home) and school 2, org B ----------
   await sql("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'PRIVATE_PLAN_ORG','PRIVATE_PLAN_ORG'),($2,'PRIVATE_PLAN_OTHER_ORG','PRIVATE_PLAN_OTHER_ORG')", [ids.org, ids.otherOrg]);
