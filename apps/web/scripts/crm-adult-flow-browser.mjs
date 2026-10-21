@@ -286,8 +286,8 @@ try {
       reset('recovery-READY_FOR_DRAFT'); const {context,page} = await open(viewport);
       try {
         await resume(page); await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).click();
-        await page.getByRole('button',{name:'Load available membership plans',exact:true}).click(); const select = page.getByLabel('Available membership plan',{exact:true}); await select.waitFor();
-        assert(await select.locator(`option[value="${id(31)}"]`).isDisabled()); assert.equal(await select.locator(`option[value="${id(32)}"]`).count(),0);
+        await page.getByRole('button',{name:'Load available membership plans',exact:true}).click(); const select = page.getByLabel('Available membership plan',{exact:true}); await select.waitFor(); await visual(page,`${size}-enrollment-plan-options`);
+        assert(await select.locator(`option[value="${id(31)}"]`).evaluate(option => option.disabled === true), await page.getByRole('main').innerText()); assert.equal(await select.locator(`option[value="${id(32)}"]`).count(),0);
         await select.selectOption(id(30)); await visual(page,`${size}-enrollment-plan-picker`); await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();
         assert(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).isDisabled()); await page.getByRole('checkbox',{name:/reviewed this plan version/}).check();
         await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor();
@@ -311,7 +311,7 @@ try {
         await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(30)); await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click(); await page.getByRole('checkbox',{name:/reviewed this plan version/}).check(); mode = scenario;
         await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
         if (scenario === 'plan-unknown') { await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).waitFor(); assert(await page.getByRole('button',{name:'Close adult setup',exact:true}).isDisabled()); await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor(); assert.deepEqual(commands[0],commands[1]); }
-        else { await page.getByRole('alert').waitFor(); assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0); assert.equal(commands.length,1); assert.equal(drafted,false); }
+        else { await page.getByRole('alert').waitFor(); await visual(page,'mobile-stale-plan-result'); await page.getByText('This plan changed since you loaded it. Reload and review the current version before submitting again.',{exact:true}).waitFor(); await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).waitFor({state:'detached'}); assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0); assert.equal(commands.length,1); assert.equal(drafted,false); }
       }
     } finally { await context.close(); }
   });
