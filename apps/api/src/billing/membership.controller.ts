@@ -5,11 +5,16 @@ import type { CommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
-import { ActivateMembershipDto } from './activate-membership.dto.js';
+import { ActivateMembershipDto, MembershipActivationPreviewDto } from './activate-membership.dto.js';
 import { CancelMembershipDto } from './cancel-membership.dto.js';
 import { CreateMembershipDto } from './create-membership.dto.js';
-import { MembershipService } from './membership.service.js';
-import { MembershipActivationHumanUiGuard } from './membership-activation-human-ui.guard.js';
+import { MembershipService, type MembershipLifecycleContext } from './membership.service.js';
+import { MembershipActivationHumanUiGuard, MembershipActivationPreviewHumanUiGuard } from './membership-activation-human-ui.guard.js';
+
+/** DTO instances may carry declared-but-absent fields as undefined; JSON bodies never do. */
+function definedFields(input: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(input ?? {}).filter(([, value]) => value !== undefined));
+}
 
 @Controller('organizations/:organizationId/schools/:schoolId/billing/memberships')
 @UseGuards(HonIdentityGuard)
@@ -63,9 +68,40 @@ export class MembershipController {
   }
 
   /**
-   * A human operator activates exactly one RLS-visible DRAFT membership. The
-   * guarded boundary resolves all authority and attribution; the body carries
-   * only the optimistic version observed by that operator.
+   * Step one of two-step activation (0177): read-only preview of one known membership. No Idempotency-Key, no
+   * effects. The body is `{}` (suggested dates) or one exact `{ startDate, endDate }` pair in the school timezone.
+   */
+  @Post(':membershipId/activation-preview')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(MembershipActivationPreviewHumanUiGuard)
+  async activationPreview(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('membershipId', new ParseUUIDPipe()) membershipId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() input: MembershipActivationPreviewDto,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    if (Object.keys(request.query ?? {}).length) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'billing.membership.activate');
+    if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) {
+      throw new ForbiddenException('HON membership activation is not authorized for this school.');
+    }
+    const requestId = randomUUID();
+    const context: MembershipLifecycleContext = { ...scope, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey: '',
+      source: 'HUMAN_UI', externalSubject: identity.externalSubject };
+    const data = await this.memberships.previewActivation(context, membershipId, definedFields(input));
+    return { data, meta: { requestId, correlationId: requestId, replayed: false } };
+  }
+
+  /**
+   * Step two: a human operator confirms exactly one previewed DRAFT membership. The guarded boundary resolves the
+   * route scope; the database re-proves live school-scoped authority, re-derives the preview facts and records the
+   * decision. A pre-0177 `{ expectedVersion }` body fails closed with ACTIVATION_TWO_STEP_CONFIRMATION_REQUIRED.
    */
   @Post(':membershipId/activate')
   @HttpCode(HttpStatus.OK)
@@ -99,7 +135,7 @@ export class MembershipController {
       throw new ForbiddenException('HON membership activation is not authorized for this school.');
     }
     const requestId = randomUUID();
-    const context: CommandContext = {
+    const context: MembershipLifecycleContext = {
       organizationId: scope.organizationId,
       schoolId: scope.schoolId,
       principalId: scope.principalId,
@@ -108,8 +144,9 @@ export class MembershipController {
       correlationId: requestId,
       idempotencyKey: normalizedIdempotencyKey,
       source: 'HUMAN_UI',
+      externalSubject: identity.externalSubject,
     };
-    const result = await this.memberships.activate(context, membershipId, input);
+    const result = await this.memberships.activate(context, membershipId, definedFields(input));
     response.status(HttpStatus.OK);
     return {
       data: result.membership,
@@ -152,7 +189,7 @@ export class MembershipController {
       throw new ForbiddenException('HON membership cancellation is not authorized for this school.');
     }
     const requestId = randomUUID();
-    const context: CommandContext = {
+    const context: MembershipLifecycleContext = {
       organizationId: scope.organizationId,
       schoolId: scope.schoolId,
       principalId: scope.principalId,
@@ -161,6 +198,7 @@ export class MembershipController {
       correlationId: requestId,
       idempotencyKey: normalizedIdempotencyKey,
       source: 'HUMAN_UI',
+      externalSubject: identity.externalSubject,
     };
     const result = await this.memberships.cancel(context, membershipId, input);
     response.status(HttpStatus.OK);

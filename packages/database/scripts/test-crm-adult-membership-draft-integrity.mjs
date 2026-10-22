@@ -6,6 +6,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { requireCrmAdultMembershipDraftLocalUrls } from './crm-adult-membership-draft-local-guard.mjs';
 import { verifyCrmAdultMembershipDraftSecurity } from './crm-adult-membership-draft-security.mjs';
+import { membershipFixtureQuery } from './membership-activation-test-support.mjs';
 
 requireCrmAdultMembershipDraftLocalUrls();
 const ownerUrl = new URL(process.env.DATABASE_URL);
@@ -122,7 +123,8 @@ try {
   await noWrite(()=>service.draft(firstContext,{...firstInput,planCode:'CHANGED'}),status(409));
   await noWrite(()=>service.draft(context(),firstInput),status(404));await noWrite(()=>prep(students[0].student),status(404));
   // Lifetime unique source holds after activation, while same-key creation receipt remains exact historical evidence.
-  await owner.query("UPDATE hon.memberships SET state='ACTIVE' WHERE id=$1",[first.receipt.membershipId]);
+  // 0177: lifecycle transitions are trigger-guarded; the disposable owner seeds this one state directly.
+  await membershipFixtureQuery(owner,"UPDATE hon.memberships SET state='ACTIVE' WHERE id=$1",[first.receipt.membershipId]);
   await noWrite(async()=>assert.deepEqual((await service.draft(firstContext,firstInput)).receipt,first.receipt));await noWrite(()=>service.draft(context(),firstInput),status(404));
   await noAnyWrite(()=>confirm(students[0].student),status(404));
   for(const [student,sameKey] of [[students[5],true],[students[6],false]]) {

@@ -26,6 +26,7 @@ export * from './crm-lead-registration.js';
 export * from './crm-lead-registration-recovery.js';
 export * from './school-membership-plans.js';
 export * from './crm-guardian-child-enrollment.js';
+export * from './membership-activation.js';
 export * from './kiosk.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;
@@ -274,7 +275,12 @@ export interface MembershipSummary {
   createdAt: string;
 }
 
-/** Human activation accepts only the version observed by the operator. */
+/**
+ * Pre-0177 single-step activation body. The API now refuses it with
+ * ACTIVATION_TWO_STEP_CONFIRMATION_REQUIRED; use the preview then
+ * ConfirmMembershipActivationInput (membership-activation.ts).
+ * @deprecated
+ */
 export interface ActivateMembershipInput {
   expectedVersion: number;
 }
@@ -288,7 +294,10 @@ export interface MembershipActivationContext {
   version: number;
 }
 
-/** Activation can return only the schema-supported ACTIVE membership state. */
+/**
+ * Pre-0177 activation response. Activation now returns MembershipActivationReceipt.
+ * @deprecated
+ */
 export interface ActivatedMembershipSummary {
   id: string;
   billingAccountId: string;

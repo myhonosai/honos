@@ -1,5 +1,14 @@
 # HON Delivery Backlog
 
+## Membership activation gate E1a backend — Claude (2026-10-22)
+
+- [x] Migration 0177: two-step direct-human activation (read-only server preview with digest → exact confirmation), runtime UPDATE/DELETE revoked on memberships with a seven-column DRAFT INSERT (D41 option C), settings-free transition trigger, immutable decision/effective-period/follow-up evidence, school-scoped `billing.membership.activation.override` (plus reserved `rules.manage` and `change.approve`), D29a identity-review override, D3 birth-date reminder and attestation, D40/D40a school-local inclusive dates, cancellation moved to a protected function with an unchanged contract. See `docs/architecture/MEMBERSHIP_ACTIVATION_GATE.md`.
+- [ ] Owner review and merge approval; no deployment (see `docs/architecture/MEMBERSHIP_ACTIVATION_GATE_DEPLOYMENT_AND_RISKS.md`).
+- [ ] Codex: two-step activation UI replacing `activateKnownMembership({ expectedVersion })` (`docs/architecture/MEMBERSHIP_ACTIVATION_GATE_CODEX_HANDOFF.md`).
+- [ ] Owner decision: should adult CRM registration refuse known minors (currently blocked only at activation)?
+- [ ] E1b: align lifecycle-state readers (operations report, parent billing view, command center, health, retention, renewal, revenue planning) with the derived effective status; date revisions for pre-0177 ACTIVE rows.
+- [ ] Update the nine non-CI manual billing/reporting proofs that seed ACTIVE rows directly to use `membershipFixtureQuery`.
+
 ## CRM final safety and reliability — Codex
 
 - [ ] PR #50 independent-review correction: separate WON/LOST close-instance ownership from read invalidation, preserve unknown close retries through concealment/restoration, and verify targeted lifecycle, signed-session API/disposable PostgreSQL, desktop/mobile/accessibility and all security proofs before another review. No automatic retry, reload workaround or backend change.

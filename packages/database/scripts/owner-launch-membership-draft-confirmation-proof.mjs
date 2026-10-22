@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { membershipFixtureQuery } from './membership-activation-test-support.mjs';
 
 /** Only the marked localhost owner proof may invoke this fixture. All GETs use
  * checked() with an EMPTY effects allowlist: every HON table must be unchanged. */
@@ -39,7 +40,8 @@ export async function proveOwnerLaunchMembershipDraftConfirmation({owner,service
  const mutate=async(sql,args,restore,restoreArgs=args,c=context())=>{await owner.query(sql,args);try{assert.deepEqual(await read(c),unavailable);}finally{await owner.query(restore,restoreArgs);}assert.deepEqual(await read(c),c.principalId===childIds.principal?childExpected:expected);};
  // Current state, canonical version, metadata and payer/participant drift all
  // fail unavailable rather than returning historical creation success or a fallback.
- for(const state of ['ACTIVE','CANCELLED'])await mutate('UPDATE hon.memberships SET state=$2 WHERE id=$1',[adultRow.id,state],"UPDATE hon.memberships SET state='DRAFT' WHERE id=$1",[adultRow.id]);
+ // 0177: lifecycle transitions are trigger-guarded; the disposable owner seeds and restores these states directly.
+ for(const state of ['ACTIVE','CANCELLED']){await membershipFixtureQuery(owner,'UPDATE hon.memberships SET state=$2 WHERE id=$1',[adultRow.id,state]);try{assert.deepEqual(await read(context()),unavailable);}finally{await membershipFixtureQuery(owner,"UPDATE hon.memberships SET state='DRAFT' WHERE id=$1",[adultRow.id]);}assert.deepEqual(await read(context()),expected);}
  for(const [column,value]of [['version',adultRow.version+1],['plan_code','CHANGED'],['term_started_at','2027-02-01T00:00:00Z'],['term_ends_at','2029-01-01T00:00:00Z'],['participant_person_id',childRow.participant_person_id],['billing_account_id',childRow.billing_account_id]])await mutate(`UPDATE hon.memberships SET ${column}=$2 WHERE id=$1`,[adultRow.id,value],`UPDATE hon.memberships SET ${column}=$2 WHERE id=$1`,[adultRow.id,adultRow[column]]);
  const payer=(await owner.query('SELECT responsible_person_id,currency FROM hon.billing_accounts WHERE id=$1',[adultRow.billing_account_id])).rows[0];
  await mutate('UPDATE hon.billing_accounts SET responsible_person_id=$2 WHERE id=$1',[adultRow.billing_account_id,childRow.participant_person_id],'UPDATE hon.billing_accounts SET responsible_person_id=$2 WHERE id=$1',[adultRow.billing_account_id,payer.responsible_person_id]);

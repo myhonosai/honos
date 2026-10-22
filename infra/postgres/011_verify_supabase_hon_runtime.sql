@@ -88,13 +88,15 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.payment_attempts', 'UPDATE') AS can_update_payment_attempts,
   has_table_privilege('hon_runtime', 'hon.payment_attempts', 'DELETE') AS can_delete_payment_attempts;
 
--- Human membership creation, activation, and direct ACTIVE-to-CANCELLED
--- cancellation use the reviewed RLS-bound SELECT/INSERT/UPDATE subset. DELETE,
--- payment-attempt writes, and every payment-provider action remain unavailable.
+-- Human membership creation uses an RLS-bound SELECT plus a DRAFT-only column
+-- INSERT (0177). Activation and direct ACTIVE-to-CANCELLED cancellation run only
+-- inside protected definer functions: expected true, false, true, false, false.
+-- DELETE, payment-attempt writes, and every payment-provider action remain unavailable.
 SELECT
   has_table_privilege('hon_runtime', 'hon.memberships', 'SELECT') AS can_read_memberships,
-  has_table_privilege('hon_runtime', 'hon.memberships', 'INSERT') AS can_insert_memberships,
-  has_table_privilege('hon_runtime', 'hon.memberships', 'UPDATE') AS can_update_memberships,
+  has_table_privilege('hon_runtime', 'hon.memberships', 'INSERT') AS can_insert_any_membership_column,
+  has_column_privilege('hon_runtime', 'hon.memberships', 'plan_code', 'INSERT') AS can_insert_draft_columns,
+  has_any_column_privilege('hon_runtime', 'hon.memberships', 'UPDATE') AS can_update_memberships,
   has_table_privilege('hon_runtime', 'hon.memberships', 'DELETE') AS can_delete_memberships;
 
 -- 4) RLS is enabled and forced on every operational table.
@@ -2570,3 +2572,61 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   END LOOP;
 END $$;
 -- End CRM guardian/child enrollment exact verification.
+-- Membership activation gate exact verification (0177): private immutable evidence, three runtime entry points,
+-- private helpers, the settings-free transition trigger, D41 option C membership privileges and the D30a permissions.
+DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_activation_decisions','membership_effective_periods','membership_activation_follow_ups'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Membership activation evidence table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_membership_activation_evidence()',false,false,'search_path=pg_catalog, hon','c60a35d8df72884601abcd51d9f032a18f10f626662601d9d609e6aab56b06af'),
+('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','6d63f5d9b6f80ffec813f603358bc3d71595a6781c3bfdbe876d51fd79d214a8'),
+('hon.membership_local_date(timestamptz,text)',false,false,'search_path=pg_catalog','60fb21bff4757c407e3acddc061c304629f0f035145d633924461e75090ad465'),
+('hon.membership_local_day_start(date,text)',false,false,'search_path=pg_catalog, hon','7d311eb5b3ec550b13b360c747cc628fc8d13369e2984c01a12cbd2c3794e4ec'),
+('hon.membership_effective_status_at(hon.membership_state,timestamptz,timestamptz,timestamptz)',false,false,'search_path=pg_catalog, hon','1430f67da4c27d157e9d520ac4b50e04c750391b22680ca21553fb7dfc33d613'),
+('hon.membership_activation_text_ok(text,integer)',false,false,'search_path=pg_catalog','da4065773ea5ed7bf34267f0ff311863463c5d168d8ec8c0ad97a506677dbfe3'),
+('hon.membership_activation_date(jsonb)',false,false,'search_path=pg_catalog','70dfaa487da94917b5204642ac4dd5685870f65062c9026e979e5919289b4963'),
+('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','069bd081b7b5cc340268f1c0e5a183664046b6b7f8e027398d4288197c1efde0'),
+('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','b7d183d8bdf941f49b13d717d43828ad0a24ca5aaa368ecd0be9171c0e87584c'),
+('hon.evaluate_membership_activation(uuid,boolean,date,date)',true,false,'search_path=pg_catalog, hon','9b2679af3efeb30175e068eeec49fa05e36190e6ad82eefa94f642f506601462'),
+('hon.preview_school_membership_activation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','19a4444b60c5c644f49be3da77ca2b5bbe52ff4d8aba4d8c94ce402b1bb7e271'),
+('hon.activate_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','81781b22ed586bfd90813c494446cfe7c61ac1631713829c63b443e7809323b0'),
+('hon.cancel_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','084582d01a38c7f8f5a9876bc338230eb07958c64342aa6d426a5b8b47861629')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe membership activation function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('membership_activation_decisions','membership_activation_decisions_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_activation_decisions','membership_activation_decisions_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('membership_effective_periods','membership_effective_periods_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_effective_periods','membership_effective_periods_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('membership_activation_follow_ups','membership_activation_follow_ups_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_activation_follow_ups','membership_activation_follow_ups_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('memberships','membership_state_transition_guard','hon.guard_membership_state_transition()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing membership activation guard: %',expected.name; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal)<>1 THEN
+    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard'; END IF;
+  -- D41 option C: SELECT; no table INSERT, no UPDATE at any level, no DELETE/TRUNCATE; INSERT on exactly the seven DRAFT columns.
+  SELECT array_agg(attname::text ORDER BY attname) INTO cols FROM pg_attribute
+    WHERE attrelid='hon.memberships'::regclass AND attnum>0 AND NOT attisdropped AND has_column_privilege('hon_runtime',attrelid,attnum,'INSERT');
+  IF NOT has_table_privilege('hon_runtime','hon.memberships','SELECT') OR has_table_privilege('hon_runtime','hon.memberships','INSERT')
+    OR has_any_column_privilege('hon_runtime','hon.memberships','UPDATE') OR has_table_privilege('hon_runtime','hon.memberships','DELETE')
+    OR has_table_privilege('hon_runtime','hon.memberships','TRUNCATE')
+    OR cols IS DISTINCT FROM ARRAY['billing_account_id','organization_id','participant_person_id','plan_code','school_id','term_ends_at','term_started_at'] THEN
+    RAISE EXCEPTION 'hon_runtime membership privileges must be exactly D41 option C'; END IF;
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('billing.membership.activation.override','billing.membership.rules.manage','billing.membership.change.approve')
+      AND is_sensitive AND is_staff_assignable)<>3 THEN
+    RAISE EXCEPTION 'Membership activation permissions must exist as sensitive staff-assignable permissions'; END IF;
+END $$;
+-- End membership activation gate exact verification.

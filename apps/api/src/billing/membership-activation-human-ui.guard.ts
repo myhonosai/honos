@@ -18,3 +18,9 @@ export class MembershipActivationHumanUiGuard extends CurriculumHumanUiGuard {
     return super.canActivate(context);
   }
 }
+
+/** The read-only preview is its own browser command, so a preview can never be replayed as a confirmation. */
+@Injectable()
+export class MembershipActivationPreviewHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.activation.preview';
+}

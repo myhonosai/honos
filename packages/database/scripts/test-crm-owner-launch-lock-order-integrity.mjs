@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
+import { confirmationFor } from './membership-activation-test-support.mjs';
 
 // Disposable-localhost lock-order matrix for the Owner Launch / CRM / billing transaction family (PR #41, 0169).
 // Every workflow is paused at each of its lock stages by a blocker transaction holding EXCLUSIVE on the next table
@@ -120,6 +121,11 @@ try {
     return { lead, person: adult, student: registered.result.studentProfileId, account: account.account.id };
   }
   const draftInput = (student) => ({ studentProfileId: student, planCode: 'STAFF-OPAQUE', confirmation: 'I_CONFIRM_DIRECT_HUMAN_ADULT_CRM_MEMBERSHIP_DRAFT' });
+  // Two-step activation (0177): preview, then confirm exactly what was previewed.
+  async function activate(membershipId, service = services.memberships) {
+    const preview = await service.previewActivation(context({ idempotencyKey: '' }), membershipId, {});
+    return service.activate(context(), membershipId, confirmationFor(preview));
+  }
   // 0175: the plan-bound DRAFT uses one plan that is never revised; revisions alternate between two other plans, so
   // the two sides of a cell never share a plan and no revision makes another workflow stale (and the 200-plan cap holds).
   const publishPlan = async () => (await services.plans.create(context(), { planCode: `LOCK-${randomUUID().slice(0, 8).toUpperCase()}`, displayName: 'Lock plan', availability: 'AVAILABLE',
@@ -215,9 +221,11 @@ try {
     'Membership create': { prepare: async () => { const payer = await person(); return { payer, account: (await services.accounts.create(context(), { responsiblePersonId: payer, currency: 'USD' })).account.id }; },
       run: (d, db = database) => new MembershipService(db).createDraft(context(), { billingAccountId: d.account, participantPersonId: d.payer, planCode: 'STAFF-OPAQUE' }),
       check: (r) => { assert.equal(r.replayed ?? false, false); assert.equal(r.membership.state, 'DRAFT'); }, stages: ['memberships', 'audit_events'] },
+    // 0177: a lock-free read-only preview, then the protected confirmation paused at each canonical stage.
     'Membership activation': { prepare: async () => ({ membership: await msDraft() }),
-      run: (d, db = database) => new MembershipService(db).activate(context(), d.membership.id, { expectedVersion: d.membership.version }),
-      check: (r) => { assert.equal(r.replayed, false); assert.equal(r.membership.state, 'ACTIVE'); }, stages: ['idempotency_records', 'audit_events'] },
+      run: (d, db = database) => activate(d.membership.id, new MembershipService(db)),
+      check: (r) => { assert.equal(r.replayed, false); assert.equal(r.membership.state, 'ACTIVE'); },
+      stages: ['idempotency_records', 'users', 'people', 'memberships', 'crm_adult_membership_draft_sources', 'membership_activation_decisions', 'audit_events'] },
   };
 
   // Runs workflow A paused at `stage`, then B on independent data; returns null on success or a failure description.
@@ -266,13 +274,17 @@ try {
   async function activationVsReplay() {
     const adult = await crmAdult(), c = context(); const first = await services.drafts.draft(c, draftInput(adult.student));
     const membership = (await admin.query('SELECT id,version FROM hon.memberships WHERE participant_person_id=$1', [adult.person])).rows[0];
-    let open, reach; const opened = new Promise((resolve) => { open = resolve; }), reached = new Promise((resolve) => { reach = resolve; });
-    const held = gated(database, async (sql) => { if (/FROM hon\.memberships[\s\S]*FOR UPDATE/.test(sql)) { reach(); await opened; } });
-    const a = track(new MembershipService(held).activate(context(), membership.id, { expectedVersion: membership.version }));
-    await reached;
+    // The 0177 activation is one protected statement: hold it just after its membership row lock by blocking the
+    // next table it locks (the CRM DRAFT sources, SHARE), then let the replay of the same DRAFT arrive.
+    const preview = await services.memberships.previewActivation(context({ idempotencyKey: '' }), membership.id, {});
+    await blocker.query('BEGIN'); await blocker.query('LOCK TABLE hon.crm_adult_membership_draft_sources IN EXCLUSIVE MODE');
+    const blockerPid = (await blocker.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    const a = track(services.memberships.activate(context(), membership.id, confirmationFor(preview)));
+    const aPid = await until(async () => (await waiting([blockerPid])).find((row) => row.relname === 'crm_adult_membership_draft_sources')?.pid, 'activation never held its membership row');
+    assert.equal((await admin.query("SELECT count(*)::int n FROM pg_locks l JOIN pg_class c ON c.oid=l.relation WHERE l.pid=$1 AND l.granted AND c.relname='memberships' AND l.mode='RowExclusiveLock'", [aPid])).rows[0].n, 1);
     const b = track(services.drafts.draft({ ...c, requestId: randomUUID() }, draftInput(adult.student)));
-    await until(async () => b.done || (await waiting()).length > 0, 'replay neither finished nor waited');
-    open();
+    await until(async () => b.done || (await waiting([blockerPid, aPid])).length > 0, 'replay neither finished nor waited');
+    await blocker.query('ROLLBACK');
     let cycle = false;
     while (!(a.done && b.done)) { cycle ||= await waitCycle(); await sleep(5); }
     return [...await Promise.allSettled([a.promise, b.promise]), first, cycle];
@@ -288,23 +300,29 @@ try {
   const reported = old.failures.filter((failure) => failure.startsWith('Owner Launch DRAFT @student_registration_receipts vs Adult CRM DRAFT:'));
   assert.equal(reported.length, 1, 'the reported Owner Launch DRAFT vs adult CRM DRAFT conflict reproduces on the pre-0169 bodies');
   assert.match(reported[0], /wait cycle observed/); assertions += 4;
+  // Before 0177 the TypeScript activation row-locked the membership and only then upgraded to ROW EXCLUSIVE for its
+  // UPDATE, so a pre-0169 replay holding the memberships table lock formed a cycle with it. The 0177 activation takes
+  // ROW EXCLUSIVE before its row lock (canonical order), so that cycle can no longer form, even with these bodies.
   const [oldActivation, oldReplay, , oldCycle] = await activationVsReplay();
-  assert.ok(oldCycle && [oldActivation, oldReplay].some((result) => result.status === 'rejected'), 'pre-0169 replay vs activation forms a wait cycle'); assertions++;
-  console.log(`Pre-0169 bodies: ${old.failures.length} of ${old.cells} interleavings failed, plus DRAFT replay vs held activation:\n  ${old.failures.join('\n  ')}`);
+  assert.equal(oldCycle, false, '0177 activation vs pre-0169 replay forms no wait cycle');
+  assert.deepEqual([oldActivation.status, oldReplay.status], ['fulfilled', 'fulfilled'], String(oldActivation.reason?.getResponse?.()?.code ?? oldReplay.reason?.getResponse?.()?.code)); assertions += 2;
+  console.log(`Pre-0169 bodies: ${old.failures.length} of ${old.cells} interleavings failed, DRAFT replay vs held 0177 activation completed without a cycle:\n  ${old.failures.join('\n  ')}`);
 
   // Ablations: each remaining part of 0169 is necessary on its own.
   // (a) 0169 CRM bodies with the pre-0169 Owner Launch DRAFT confirmation order: the confirmation still cycles.
   await install(current, { read_owner_launch_membership_draft: functionSql(await migration(changed.read_owner_launch_membership_draft), 'read_owner_launch_membership_draft') });
   const confirmation = await matrix((a, b) => legacyOnly(a, b) && [a, b].includes('Owner Launch DRAFT confirmation'));
   assert.ok(confirmation.failures.some((failure) => /wait cycle observed/.test(failure)), 'pre-0169 confirmation order still forms a cycle with 0169 CRM bodies');
-  // (b) 0169 DRAFT that still row-locks the replayed membership under its table lock: replay vs held activation cycles.
+  // (b) 0169 DRAFT that still row-locks the replayed membership under its table lock: replay vs held activation (cycled before 0177; now must not).
   const rowLocked = functionSql(await migration(current), 'draft_crm_adult_membership')
     .replace('AND m.billing_account_id=relation.account_id AND m.participant_person_id=relation.person_id;', 'AND m.billing_account_id=relation.account_id AND m.participant_person_id=relation.person_id FOR UPDATE;');
   assert.notEqual(rowLocked, functionSql(await migration(current), 'draft_crm_adult_membership'));
   await install(current, { draft_crm_adult_membership: rowLocked });
-  const [, , , rowCycle] = await activationVsReplay();
-  assert.ok(rowCycle, 'a replay row lock under the memberships table lock cycles with a held activation'); assertions += 3;
-  console.log(`Ablations: pre-0169 confirmation order with 0169 CRM bodies failed ${confirmation.failures.length} of ${confirmation.cells} interleavings; a replay membership row lock formed a wait cycle with a held activation.`);
+  // With the 0177 activation the row-locking replay simply waits for the activation's row lock and then replays.
+  const [rowActivation, rowReplay, , rowCycle] = await activationVsReplay();
+  assert.equal(rowCycle, false, 'a replay row lock no longer cycles with the 0177 activation');
+  assert.deepEqual([rowActivation.status, rowReplay.status], ['fulfilled', 'fulfilled']); assertions += 4;
+  console.log(`Ablations: pre-0169 confirmation order with 0169 CRM bodies failed ${confirmation.failures.length} of ${confirmation.cells} interleavings; a replay membership row lock no longer forms a wait cycle with the 0177 activation (row exclusive before row lock).`);
 
   // 2. The 0169 bodies, restored byte-for-byte: every interleaving of every pair completes.
   await install(current);
@@ -354,9 +372,9 @@ try {
   for (const order of ['activation first', 'replay first']) {
     const adult = await crmAdult(), c = context(); const first = await services.drafts.draft(c, draftInput(adult.student));
     const membership = (await admin.query('SELECT id,version FROM hon.memberships WHERE participant_person_id=$1', [adult.person])).rows[0];
-    const activate = () => services.memberships.activate(context(), membership.id, { expectedVersion: membership.version });
+    const activation_ = () => activate(membership.id);
     const replay = () => services.drafts.draft({ ...c, requestId: randomUUID() }, draftInput(adult.student));
-    const [x, y] = order === 'activation first' ? await race(activate, replay, 'idempotency_records') : await race(replay, activate, 'people');
+    const [x, y] = order === 'activation first' ? await race(activation_, replay, 'idempotency_records') : await race(replay, activation_, 'people');
     const [activation, replayed] = order === 'activation first' ? [x, y] : [y, x];
     assert.equal(activation.status, 'fulfilled', String(activation.reason?.getResponse?.()?.code)); assert.equal(activation.value.membership.state, 'ACTIVE');
     assert.equal(replayed.status, 'fulfilled', String(replayed.reason?.getResponse?.()?.code)); assert.deepEqual(replayed.value.receipt, first.receipt); assertions += 4;
@@ -378,7 +396,7 @@ try {
     assertions += 2;
   }
   assert.equal(await unfinished(), 0, 'no unfinished idempotency reservation'); assertions++;
-  console.log(`PASS: Owner Launch / CRM / billing lock order (${assertions} assertions): pre-0169 bodies failed ${old.failures.length} of ${old.cells} paused interleavings including the reported Owner Launch DRAFT vs adult CRM DRAFT deadlock, and each 0169 change is necessary on its own; with 0169 all ${fixed.cells} interleavings (${Object.keys(workflows).length} workflows, every lock stage of each against every other) commit with exact outcomes; same-key, same-adult, key-reuse and replay-vs-activation races leave one membership, one source, one audit and one outbox row; the reused-key residual fails closed with one command and no partial effect.`);
+  console.log(`PASS: Owner Launch / CRM / billing lock order (${assertions} assertions): pre-0169 bodies failed ${old.failures.length} of ${old.cells} paused interleavings including the reported Owner Launch DRAFT vs adult CRM DRAFT deadlock, the pre-0169 confirmation order is still necessary on its own (the replay row-lock ablation no longer cycles because the 0177 activation takes row exclusive before its row lock); with 0169 all ${fixed.cells} interleavings (${Object.keys(workflows).length} workflows, every lock stage of each against every other) commit with exact outcomes; same-key, same-adult, key-reuse and replay-vs-activation races leave one membership, one source, one audit and one outbox row; the reused-key residual fails closed with one command and no partial effect.`);
 } finally {
   // Never leave a pre-0169 body behind in the fixture, even when an assertion failed mid-matrix.
   await install(current).catch(() => {});

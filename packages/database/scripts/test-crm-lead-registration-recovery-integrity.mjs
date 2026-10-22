@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
+import { activateWithPreview } from './membership-activation-test-support.mjs';
 
 // Disposable-localhost proof for 0174 CRM lead registration recovery. The workflow is driven through the real
 // registration, billing-account, adult DRAFT and membership services; recovery is read through the real service and
@@ -156,7 +157,7 @@ try {
   await assert.rejects(restricted.query('SELECT hon.crm_adult_membership_draft_is_current($1::uuid)', [registration.result.studentProfileId]), (error) => error.code === '42501');
   // (b) Activation after the DRAFT: the historical DRAFT receipt still replays for its key, yet recovery no longer reports a current DRAFT to anyone.
   const membership = (await sql('SELECT id,version FROM hon.memberships WHERE participant_person_id=$1', [journey.person]))[0];
-  await services.memberships.activate(S.context(), membership.id, { expectedVersion: membership.version });
+  await activateWithPreview(services.memberships, S, membership.id);
   assert.deepEqual(await recover(S, journey.lead), { leadId: journey.lead, workflowState: 'NEEDS_STAFF_REVIEW' });
   assert.deepEqual(await recover(T, journey.lead), { leadId: journey.lead, workflowState: 'NEEDS_STAFF_REVIEW' });
   assertions += 11;
@@ -184,7 +185,7 @@ try {
     ['plan changed', (o) => sql("UPDATE hon.memberships SET plan_code='CHANGED-PLAN' WHERE id=$1", [o.membership])],
     ['version moved', (o) => sql('UPDATE hon.memberships SET version=version+1 WHERE id=$1', [o.membership])],
     ['term changed', (o) => sql("UPDATE hon.memberships SET term_ends_at='2031-01-01T00:00:00Z' WHERE id=$1", [o.membership])],
-    ['activated', (o) => services.memberships.activate(T.context(), o.membership, { expectedVersion: 1 })],
+    ['activated', (o) => activateWithPreview(services.memberships, T, o.membership)],
     ['second account', (o) => sql("INSERT INTO hon.billing_accounts(organization_id,school_id,responsible_person_id,currency,account_classification) VALUES($1,$2,$3,'USD','ADDITIONAL')", [ids.org, ids.school, o.person])],
     ['student archived', (o) => sql("UPDATE hon.student_profiles SET status='ARCHIVED' WHERE person_id=$1", [o.person])],
   ]) {
@@ -216,7 +217,7 @@ try {
   // Concurrent activation and noncreator reads: no deadlock, every read is one of the two consistent states, and the final read is review.
   { const o = await otherDraft(); const before = await snapshot();
     const reads = Array.from({ length: 4 }, () => services.recovery.recover(S.read(), o.lead));
-    const activation = services.memberships.activate(T.context(), o.membership, { expectedVersion: 1 });
+    const activation = activateWithPreview(services.memberships, T, o.membership);
     const results = await Promise.all([...reads, activation]);
     for (const value of results.slice(0, 4)) assert.ok(['CURRENT_DRAFT_BY_OTHER_STAFF', 'NEEDS_STAFF_REVIEW'].includes(value.workflowState));
     assert.equal(results[4].membership.state, 'ACTIVE');
