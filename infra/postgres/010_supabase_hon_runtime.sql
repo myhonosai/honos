@@ -134,7 +134,7 @@ GRANT INSERT ON TABLE
   -- execution and every other billing mutation remain unavailable.
   hon.invoices,
  hon.billing_accounts,
- hon.memberships,
+  -- hon.memberships: column-restricted DRAFT INSERT only (0177), granted below.
   hon.membership_payment_schedules,
   hon.action_requests,
   hon.action_approvals,
@@ -166,10 +166,8 @@ GRANT UPDATE ON TABLE
  hon.principal_interface_preferences,
   -- Human invoice issuance is the only reviewed invoice state transition.
   hon.invoices,
-  -- Human membership activation and direct cancellation are the only reviewed
-  -- membership state transitions; payment schedule and provider effects remain
-  -- outside this privilege.
-  hon.memberships,
+  -- hon.memberships has no runtime UPDATE (0177): activation and cancellation
+  -- run only inside the protected definer functions granted in the 0177 section.
  -- The conventional trial outcome command is a version-checked lifecycle update.
  hon.crm_appointments,
  -- Approval is the sole mutable knowledge transition; no DELETE privilege is granted.
@@ -1359,6 +1357,48 @@ DO $$ DECLARE r text; col text; t text; f text; BEGIN
     hon.add_crm_guardian_child_additional_child(text,uuid,jsonb,uuid,uuid,uuid),hon.draft_crm_guardian_child_membership_from_plan(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
 END $$;
 -- End CRM guardian/child enrollment exact reconciliation.
+
+-- Membership activation gate exact reconciliation (0177): no runtime UPDATE/DELETE on memberships, DRAFT-only
+-- column INSERT, private immutable evidence tables, three runtime entry points, private helpers.
+DO $$ DECLARE r text; col text; t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_activation_decisions','membership_effective_periods','membership_activation_follow_ups'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON TABLE hon.memberships FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE INSERT,UPDATE,DELETE,TRUNCATE ON TABLE hon.memberships FROM %I',r);
+  END LOOP;
+  FOR col IN SELECT attname FROM pg_attribute WHERE attrelid='hon.memberships'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE INSERT (%I),UPDATE (%I) ON hon.memberships FROM PUBLIC',col,col);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE INSERT (%I),UPDATE (%I) ON hon.memberships FROM %I',col,col,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_membership_activation_evidence()','hon.guard_membership_state_transition()','hon.membership_local_date(timestamptz,text)',
+    'hon.membership_local_day_start(date,text)','hon.membership_effective_status_at(hon.membership_state,timestamptz,timestamptz,timestamptz)',
+    'hon.membership_activation_text_ok(text,integer)','hon.membership_activation_date(jsonb)','hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',
+    'hon.require_membership_lifecycle_actor(text,text)','hon.evaluate_membership_activation(uuid,boolean,date,date)',
+    'hon.preview_school_membership_activation(text,uuid,jsonb)','hon.activate_school_membership(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.cancel_school_membership(text,uuid,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  GRANT INSERT (organization_id,school_id,billing_account_id,participant_person_id,plan_code,term_started_at,term_ends_at) ON hon.memberships TO hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.preview_school_membership_activation(text,uuid,jsonb),hon.activate_school_membership(text,uuid,jsonb,text,uuid,uuid),
+    hon.cancel_school_membership(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+END $$;
+-- End membership activation gate exact reconciliation.
 
 -- Champions Club contests exact reconciliation:
 DO $$ DECLARE t text; r text; col text; f text; BEGIN

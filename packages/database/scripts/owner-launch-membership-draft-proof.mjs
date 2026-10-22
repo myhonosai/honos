@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { membershipFixtureQuery } from './membership-activation-test-support.mjs';
 
 /** Runs only inside the marked localhost-only, rejecting-transport owner proof. */
 export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,memberships,scope,other,context,checked,raw,drift,ids,ownerRoleId,program,classSession}) {
@@ -102,8 +103,9 @@ export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,me
   try{await assert.rejects(()=>draft(registrations[7+i]),status(503));}finally{await owner.query(`DROP TRIGGER fixture_owner_launch_draft ON hon.${target}; DROP FUNCTION hon.fixture_fail_owner_launch_draft()`);}
  }check();
  // Prove current changed draft state cannot masquerade as a new DRAFT command.
- await owner.query("UPDATE hon.memberships SET state='ACTIVE' WHERE id=$1",[first.receipt.membershipId]);
- try{await assert.rejects(()=>checked(()=>service.draftMembership(firstContext,input(registrations[0]))),status(400));}finally{await owner.query("UPDATE hon.memberships SET state='DRAFT' WHERE id=$1",[first.receipt.membershipId]);}
+ // 0177: lifecycle transitions are trigger-guarded; the disposable owner seeds and restores this state directly.
+ await membershipFixtureQuery(owner,"UPDATE hon.memberships SET state='ACTIVE' WHERE id=$1",[first.receipt.membershipId]);
+ try{await assert.rejects(()=>checked(()=>service.draftMembership(firstContext,input(registrations[0]))),status(400));}finally{await membershipFixtureQuery(owner,"UPDATE hon.memberships SET state='DRAFT' WHERE id=$1",[first.receipt.membershipId]);}
  await drift("ALTER FUNCTION hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid) SET statement_timeout TO '1s'");check();
  // Whole-table checked() proves zero effects outside the five canonical tables
  // on every command, explicitly including schedules/methods/processors/invoices/

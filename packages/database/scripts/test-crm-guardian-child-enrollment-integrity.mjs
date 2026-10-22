@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
+import { activateWithPreview } from './membership-activation-test-support.mjs';
 
 // Disposable-localhost proof for 0176 guardian/child CRM enrollment. Every step runs through the real services:
 // guardian/child registration (0160/0169, unchanged), the guardian's canonical billing account (0159 command),
@@ -376,7 +377,7 @@ try {
   { const f = await gcFamily({ designate: true });
     const d = await services.gc.draftMembershipFromPlan(D.context(), drafter(f.student, monthly2));
     assert.equal((await read(f.lead)).children[0].workflowState, 'CURRENT_DRAFT');
-    await services.memberships.activate(D.context(), d.receipt.membershipId, { expectedVersion: 1 });
+    assert.equal((await activateWithPreview(services.memberships, D, d.receipt.membershipId)).membership.membershipSource, 'CRM_GUARDIAN_CHILD_PLAN');
     assert.equal((await read(f.lead)).children[0].workflowState, 'NEEDS_STAFF_REVIEW');
     assertions += 2; }
   // A guardian/child conversion recorded before 0176 has no snapshot: it stays a staff-review outcome (no backfill).
