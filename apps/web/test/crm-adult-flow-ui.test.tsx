@@ -153,3 +153,12 @@ it('retains an unexpected family request visibly without sending it through the 
   expect(text(render())).toContain('Unexpected retry request type');expect(button(render(),'Retry exact plan request')).toBeUndefined();expect(button(render(),'Refresh saved setup').props.disabled).toBe(true);expect(f).toHaveBeenCalledOnce();
   elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.onDiscard();expect(text(render())).toContain('Current setup must be verified again');expect(f).toHaveBeenCalledOnce();
 });
+
+it.each(['create','revise'] as const)('retains unexpected catalog %s commands without offering an adult replay',async kind=>{
+  initialRecovery={...recovered,workflowState:'READY_FOR_DRAFT'};const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({studentDisplayName:'Ari Stone',currency:'USD',readiness:'READY_FOR_DRAFT'}));render();button(render(),'Check DRAFT readiness').props.onClick();await settle();
+  const {AdultMembershipPlanPicker}=await import('../src/components/membership-plans/picker');const {createPlanRequest,revisePlanRequest}=await import('../src/components/membership-plans/http');const {MEMBERSHIP_PLAN_CHANGE_CONFIRMATION}=await import('@hon/contracts');
+  const terms={displayName:'Adult Monthly',availability:'AVAILABLE' as const,currency:'USD',priceMinor:14900,billingFrequency:'MONTHLY' as const,termKind:'OPEN_ENDED' as const,confirmation:MEMBERSHIP_PLAN_CHANGE_CONFIRMATION};
+  const request=kind==='create'?createPlanRequest(props,{...terms,planCode:'ADULT-MONTHLY'},id(60)):revisePlanRequest(props,id(40),{...terms,expectedVersion:1},id(60));
+  elements(render()).find(e=>e.type===AdultMembershipPlanPicker)!.props.onUncertain(request);
+  expect(text(render())).toContain('Unexpected retry request type');expect(button(render(),'Retry exact plan request')).toBeUndefined();expect(button(render(),'Refresh saved setup').props.disabled).toBe(true);expect(f).toHaveBeenCalledOnce();
+});

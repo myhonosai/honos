@@ -2,8 +2,8 @@
 
 ## CRM final safety and reliability — Codex
 
-- [ ] Fail closed to sign-in when the CRM page session expires; guard Discard while commands are unsettled and require deliberate abandonment of unknown retries.
-- [ ] Add adult retry Discard, preserve unexpected retry requests with visible fail-closed errors, avoid shielding an empty view, and preserve explicit verification for concealed facts. No grace period, backend, migration or financial changes.
+- [x] Fail closed to sign-in when the CRM page session expires; guard Discard while commands are unsettled and require deliberate abandonment of unknown retries.
+- [x] Add adult retry Discard, preserve unexpected retry requests with visible fail-closed errors, avoid shielding an empty view, and preserve explicit verification for concealed facts. No grace period, backend, migration or financial changes.
 - [ ] Verify adult/family regressions, exact retries, desktop/mobile and accessibility, full CI and existing disposable PostgreSQL proofs in one focused frontend PR.
 
 ## CRM enrollment privacy and usability — Codex
