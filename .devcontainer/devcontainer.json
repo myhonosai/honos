@@ -1,0 +1,25 @@
+{
+  "name": "HON OS reference preview",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "remoteUser": "node",
+  "containerEnv": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  },
+  "postCreateCommand": "corepack enable --install-directory /usr/local/share/npm-global/bin && corepack prepare pnpm@10.18.0 --activate && node --version && pnpm --version",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "HON reference preview - keep Private",
+      "protocol": "http",
+      "onAutoForward": "notify"
+    }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["docs/CODESPACES_PREVIEW.md"]
+    }
+  }
+}
