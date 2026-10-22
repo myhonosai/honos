@@ -7,6 +7,7 @@ import {
 } from '@hon/contracts';
 import { familyRequest, sendFamilyRequest, type FamilyRequest } from '../crm-family-http';
 import { PlanAccessError, PlanRejectedError, PlanUnknownError, draftFromPlanRequest, readAdultPlanOptions, sendPlanRequest, type PlanRequest, type PlanScope } from './http';
+import { CrmEnrollmentDiscard } from '../crm-enrollment-discard';
 import { MembershipPlanTerms } from './terms';
 import styles from './plans.module.css';
 import { useLocale } from '../localization/provider';
@@ -97,6 +98,6 @@ export function AdultMembershipPlanPicker({ scope, studentProfileId, currency, c
     </div>}
     {pending && <div className={styles.notice}><p>The action may already have completed. Only the exact saved request can be retried.</p><div className={styles.actions}>
       <button type="button" disabled={busy || disabled} onClick={() => void send(pending)}>Retry exact DRAFT request</button>
-      <button type="button" disabled={busy || disabled} onClick={() => { setPending(null); setPlans(null); setSelected(''); setReview(null); setConfirmed(false); onBlocking(false); onNeedsRefresh('Local retry discarded. This does not undo a DRAFT. Verify membership readiness again, or close setup and use Resume setup.'); }}>Discard local DRAFT retry</button></div></div>}
+      <CrmEnrollmentDiscard label="Discard local DRAFT retry" disabled={busy || disabled} onDiscard={() => { if (active.current || disabled) return; setPending(null); setPlans(null); setSelected(''); setReview(null); setConfirmed(false); onBlocking(false); onNeedsRefresh('Local recovery deliberately abandoned. This does not cancel or undo a DRAFT. Verify saved setup before starting another command.'); }}/></div></div>}
   </section>;
 }

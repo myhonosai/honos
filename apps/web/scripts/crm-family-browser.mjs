@@ -56,7 +56,7 @@ export function createFamilyFixture({ id, scope, date, origin, send, rejected, p
       const {programName,...plan}=p;const receipt={membershipId:id(70+children.indexOf(c)),state:'DRAFT',planCode:p.planCode,termStartedAt:null,termEndsAt:null,recordedAt:date};result={receipt,plan};verifyCrmGuardianChildMembershipDraftFromPlan(result,input);c.workflowState='CURRENT_DRAFT';c.currentMembershipDraft={state:'RECORDED_DRAFT',...result};
     }
     keys.set(key,{step,raw,result});
-    if(mode==='family-slow-payer'&&step==='payer')await new Promise(done=>setTimeout(done,700));
+    if(mode==='family-slow-payer'&&step==='payer')await new Promise(done=>setTimeout(done,1800));
     if((mode==='family-unknown-payer'&&step==='payer')||(mode==='family-unknown-draft'&&step==='draft')){mode='family-ready';send(res,503,{});return true;}
     send(res,step==='account'?201:200,result);return true;
   }
@@ -133,6 +133,15 @@ export async function runFamilyBrowserChecks({ fixture, reset, open, visual, che
         const heading=await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).boundingBox();assert(heading.y<viewport.height,'Family panel is reachable in one viewport after revalidation');
       }finally{await context.close();}
     });
+    await check(`${size}: deliberate family retry abandonment verifies saved state without repeating a command`,async()=>{
+      reset('family-state-PAYER_DESIGNATION_REQUIRED');fixture.mode='family-unknown-payer';const {context,page}=await open(viewport);try{
+        await begin(page);await confirm(page,'Designate guardian payer');await page.getByRole('button',{name:'Retry exact family request',exact:true}).waitFor();
+        const discard=page.getByRole('button',{name:'Discard local retry',exact:true});assert(await discard.isDisabled());await visual(page,`${size}-family-discard-warning`);
+        await page.getByRole('checkbox',{name:'I understand and deliberately abandon local recovery.',exact:true}).focus();await page.keyboard.press('Space');await discard.click();
+        await page.getByText(/Local recovery deliberately abandoned/).waitFor();assert.equal(fixture.commands.length,1);assert.equal(await page.getByRole('button',{name:'Designate guardian payer',exact:true}).count(),0);
+        await page.getByRole('button',{name:'Refresh family setup',exact:true}).click();await page.getByRole('heading',{name:'Add another child',exact:true}).waitFor();assert.equal(fixture.commands.length,1);await visual(page,`${size}-family-after-discard-recovery`);
+      }finally{await context.close();}
+    });
     await check(`${size}: uncertain child DRAFT retains its exact request through privacy verification`,async()=>{
       reset('family-unknown-draft');fixture.seedChildren();const {context,page}=await open(viewport);try{
         await begin(page);await page.getByRole('button',{name:/Kai Stone/}).click();await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(34));await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();await page.getByRole('checkbox',{name:/DRAFT for Kai Stone/}).check();await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
@@ -149,10 +158,11 @@ export async function runFamilyBrowserChecks({ fixture, reset, open, visual, che
       await begin(page);
       if(scenario==='slow-command'){fixture.mode='family-slow-payer';await confirm(page,'Designate guardian payer');}
       await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();
+      if(scenario==='slow-command'){assert(await page.getByRole('button',{name:'Discard local view',exact:true}).isDisabled());assert(await page.getByRole('checkbox',{name:'I understand and deliberately abandon local recovery.',exact:true}).isDisabled());}
       if(scenario==='expired')await context.clearCookies();
       if(scenario==='changed-user')await replaceActor(context);
       if(scenario==='revoked')fixture.mode='family-denied';
-      if(scenario==='scope-change'){await page.getByRole('button',{name:'Discard local view',exact:true}).click();await page.getByLabel('School UUID',{exact:true}).fill(id(99));assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert.equal(fixture.commands.length,0);return;}
+      if(scenario==='scope-change'){await page.getByRole('checkbox',{name:'I understand and deliberately abandon local recovery.',exact:true}).check();await page.getByRole('button',{name:'Discard local view',exact:true}).click();await page.getByLabel('School UUID',{exact:true}).fill(id(99));assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert.equal(fixture.commands.length,0);return;}
       const button=page.getByRole('button',{name:'Verify access and resume',exact:true});await button.waitFor();await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Verify access and resume')?.disabled);
       await button.click();
       if(scenario==='slow-command'){await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).waitFor();assert.equal(fixture.commands.length,1);}

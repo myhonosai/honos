@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
-import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
+import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE, SESSION_SECONDS } from '@hon/auth';
 import { validateRegisterCrmLeadInput, validateCreateBillingAccountInput, validateCrmAdultMembershipDraftInput, validateCrmLeadRegistrationRecoveryInput, verifyCrmLeadRegistrationRecovery, validateCreateMembershipPlanInput, validateReviseMembershipPlanInput, validateCrmAdultMembershipDraftFromPlanInput, verifyMembershipPlanCatalog, verifyCrmAdultMembershipDraftFromPlan } from '@hon/contracts';
 
 assert(process.env.GITHUB_ACTIONS === 'true');
@@ -329,6 +329,29 @@ try {
       await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));await visual(page,`${size}-adult-privacy-hidden`);
       await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();await page.getByRole('button',{name:'Retry exact request',exact:true}).waitFor();assert.equal(commands.length,1);
       await page.getByRole('button',{name:'Retry exact request',exact:true}).click();await page.getByText('Adult registration receipt replayed.',{exact:true}).waitFor();assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);await visual(page,`${size}-adult-privacy-restored`);
+    }finally{await context.close();}
+  });
+  for(const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]) {
+    await check(`${size}: an empty idle CRM view does not require privacy restoration`,async()=>{
+      reset();const {context,page}=await open(viewport);try{
+        const count=report.requests.length;await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+        assert.equal(await page.getByRole('heading',{name:'CRM information hidden',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Verify access and resume',exact:true}).count(),0);assert.equal(report.requests.length,count);assert.equal(commands.length,0);
+        await visual(page,`${size}-empty-crm-focus`);
+      }finally{await context.close();}
+    });
+    await check(`${size}: adult plan retry can be deliberately abandoned without losing authoritative DRAFT recovery`,async()=>{
+      reset('recovery-READY_FOR_DRAFT');const {context,page}=await open(viewport);try{
+        await resume(page);await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).click();await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(30));await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();await page.getByRole('checkbox',{name:/reviewed this plan version/}).check();mode='plan-unknown';await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
+        await page.getByRole('button',{name:'Retry exact plan request',exact:true}).waitFor();const discard=page.getByRole('button',{name:'Discard retry',exact:true});assert(await discard.isDisabled());assert(await page.getByRole('button',{name:'Close adult setup',exact:true}).isDisabled());await visual(page,`${size}-adult-plan-discard-warning`);
+        await page.getByRole('checkbox',{name:'I understand and deliberately abandon local recovery.',exact:true}).check();await discard.click();await page.getByText(/Current setup must be verified again/).waitFor();assert.equal(commands.length,1);assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0);
+        await page.getByRole('button',{name:'Refresh saved setup',exact:true}).click();await page.getByText('Current DRAFT verified.',{exact:false}).waitFor();assert.equal(commands.length,1);await visual(page,`${size}-adult-after-discard-recovery`);
+      }finally{await context.close();}
+    });
+  }
+  for(const bad of ['expired','invalid'])await check(`${bad} page session returns to sign-in without CRM information`,async()=>{
+    reset();const {context,page}=await open({width:390,height:844});try{
+      await context.addCookies([{name:HON_SESSION_COOKIE,value:bad==='expired'?issueSession({externalSubject:'crm-staff-synthetic'},session,Math.floor(Date.now()/1000)-SESSION_SECONDS-1):'invalid-session',url:origin,httpOnly:true,sameSite:'Lax'}]);
+      await page.goto(`${origin}/staff/crm/leads?${new URLSearchParams(scope)}`);await page.waitForURL(`${origin}/auth/login`);assert(!(await page.locator('body').innerText()).includes('Ari Stone'));assert.equal(commands.length,0);
     }finally{await context.close();}
   });
   await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin, replaceActor: context => context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}]) });

@@ -24,3 +24,14 @@ The shield protects screen and accessibility visibility, not against scripts alr
 Focused unit/interaction tests cover identity continuity, screen concealment, explicit restoration, all failure statuses, duplicate verification, stale responses, exact child DRAFT retries and family-specific errors. Existing adult/family tests and real transport-to-disposable-PostgreSQL integration remain in the browser workflow. Actual production-built Next browser checks use authorized synthetic sessions/local fixtures, with desktop/mobile screenshots, keyboard, visibility, overflow and axe checks. These browser fixtures are distinct from the real API/disposable-database proof. Full CI and the existing PostgreSQL security proofs must pass on the final head before independent review readiness is claimed.
 
 No backend, migration, contract, financial permission, payment/activation, original asset or unrelated PR change. Remaining staff-review, consent, agreements, alternate-payer, discount, payment and Korean/Spanish copy dependencies are unchanged. Execution results belong in the PR; no production readiness is implied.
+
+
+## Final safety follow-up after merged PR #49
+
+Baseline: `9db881458ccb4a21ec83505f4482116700513b77`. The page now catches invalid/expired session verification and redirects to the existing sign-in flow before rendering CRM props. Domain APIs remain independently authorized.
+
+Discard is disabled while a request is unsettled; live activity guards also reject stale Discard handlers. Once an outcome is unknown, staff can retry the immutable exact request or acknowledge an accurate warning and deliberately abandon only local recovery. Adult plan-bound and legacy DRAFT retries have dedicated Discard controls. Abandoning an adult/family retry requires a fresh saved-setup read before new commands; it never implies server cancellation or reversal. Unexpected retry types are retained, visibly fail closed, and cannot be executed through the wrong workflow.
+
+An empty idle view is not concealed. Loaded lead/enrollment facts, typed sensitive input, active requests and already-concealed views retain focus-loss protection. Late reads are invalidated when focus leaves an empty view. There is no automatic focus restoration or grace period: concealed information still requires the existing signed-session/exact-school/recovery verification.
+
+The bounded recovery limitation is unchanged: the selected lead must still appear in the freshly authorized, filtered list of at most 50 records. A status change or absence keeps the view hidden; deliberately discard and reload the appropriate filter. No unbounded or speculative backend endpoint is introduced. Browser refresh/navigation/session loss still cannot preserve ephemeral retries across document destruction; no storage or persistence contract is added. Korean/Spanish copy coverage remains separate work.

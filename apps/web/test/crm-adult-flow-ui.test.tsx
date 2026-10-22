@@ -1,5 +1,6 @@
 import React, { type ReactElement } from 'react';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { CrmEnrollmentDiscard } from '../src/components/crm-enrollment-discard';
 import { CrmAdultFlow } from '../src/components/crm-adult-flow';
 import type { CrmLeadRegistrationRecovery } from '@hon/contracts';
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (v: string) => `Localized ${v}` }) }));
@@ -122,4 +123,33 @@ it('retains an uncertain adult published-plan request across fresh recovery with
   picker.props.onUncertain(request);initialRecovery={...recovered,workflowState:'CURRENT_DRAFT',currentMembershipDraft:{state:'RECORDED_DRAFT',receipt}};render();render();expect(f).toHaveBeenCalledTimes(1);
   f.mockResolvedValueOnce(response({receipt,plan}));const retry=button(render(),'Retry exact plan request').props.onClick;retry();retry();await settle();
   expect(f).toHaveBeenCalledTimes(2);expect(f.mock.calls[1]![1]!.body).toBe(request.body);expect((f.mock.calls[1]![1]!.headers as Record<string,string>)['Idempotency-Key']).toBe(request.key);
+});
+
+it('offers deliberate adult DRAFT retry discard but guards a stale handler during exact replay', async () => {
+  initialRecovery={...recovered,workflowState:'READY_FOR_DRAFT'};
+  let finish!: (r:Response)=>void;
+  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({studentDisplayName:'Ari Stone',currency:'USD',readiness:'READY_FOR_DRAFT'})).mockRejectedValueOnce(new Error('unknown')).mockImplementationOnce(()=>new Promise(yes=>{finish=yes;}));
+  render();button(render(),'Check DRAFT readiness').props.onClick();await settle();fill('Membership plan code','ADULT-MONTHLY');submit(agree());await settle();
+  const discard=elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!;const retry=button(render(),'Retry exact request').props.onClick;retry();retry();
+  expect(elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.disabled).toBe(true);discard.props.onDiscard();expect(button(render(),'Retry exact request')).toBeDefined();expect(f).toHaveBeenCalledTimes(3);expect(f.mock.calls[1]).toEqual(f.mock.calls[2]);
+  finish(response(receipt));await settle();expect(text(render())).toContain('Historical creation receipt');
+});
+it('offers dedicated adult plan retry discard and requires a fresh recovery before a new command', async () => {
+  initialRecovery={...recovered,workflowState:'READY_FOR_DRAFT'};
+  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({studentDisplayName:'Ari Stone',currency:'USD',readiness:'READY_FOR_DRAFT'}));render();button(render(),'Check DRAFT readiness').props.onClick();await settle();
+  const {AdultMembershipPlanPicker}=await import('../src/components/membership-plans/picker');const picker=elements(render()).find(e=>e.type===AdultMembershipPlanPicker)!;
+  const {draftFromPlanRequest}=await import('../src/components/membership-plans/http');const {CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION}=await import('@hon/contracts');
+  picker.props.onUncertain(draftFromPlanRequest(props,{studentProfileId:id(5),membershipPlanId:id(40),membershipPlanVersion:1,confirmation:CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION},id(60)));
+  expect(button(render(),'Close adult setup').props.disabled).toBe(true);elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.onDiscard();
+  expect(text(render())).toContain('Current setup must be verified again');expect(elements(render()).some(e=>e.type==='form'||e.type===AdultMembershipPlanPicker)).toBe(false);expect(f).toHaveBeenCalledOnce();
+  button(render(),'Refresh saved setup').props.onClick();expect(refreshRecovery).toHaveBeenCalledOnce();expect(f).toHaveBeenCalledOnce();
+  initialRecovery={...recovered,workflowState:'CURRENT_DRAFT',currentMembershipDraft:{state:'RECORDED_DRAFT',receipt}};render();render();expect(text(render())).toContain('Current DRAFT verified.');expect(f).toHaveBeenCalledOnce();
+});
+it('retains an unexpected family request visibly without sending it through the adult route', async () => {
+  initialRecovery={...recovered,workflowState:'READY_FOR_DRAFT'};const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({studentDisplayName:'Ari Stone',currency:'USD',readiness:'READY_FOR_DRAFT'}));render();button(render(),'Check DRAFT readiness').props.onClick();await settle();
+  const {AdultMembershipPlanPicker}=await import('../src/components/membership-plans/picker');const {familyRequest}=await import('../src/components/crm-family-http');const {CRM_GUARDIAN_CHILD_PAYER_DESIGNATION_CONFIRMATION}=await import('@hon/contracts');
+  const request=familyRequest(props,'payer',id(3),{confirmation:CRM_GUARDIAN_CHILD_PAYER_DESIGNATION_CONFIRMATION},id(60));
+  elements(render()).find(e=>e.type===AdultMembershipPlanPicker)!.props.onUncertain(request);
+  expect(text(render())).toContain('Unexpected retry request type');expect(button(render(),'Retry exact plan request')).toBeUndefined();expect(button(render(),'Refresh saved setup').props.disabled).toBe(true);expect(f).toHaveBeenCalledOnce();
+  elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.onDiscard();expect(text(render())).toContain('Current setup must be verified again');expect(f).toHaveBeenCalledOnce();
 });
