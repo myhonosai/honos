@@ -20,6 +20,12 @@ const load = p => import(pathToFileURL(resolve(repo, 'apps/api/dist', p)).href);
 const { RuntimeDatabaseService } = await load('foundation/runtime-database.service.js');
 const { HonIdentityGuard } = await load('foundation/hon-identity.guard.js');
 const { HonIdentityService } = await load('foundation/hon-identity.service.js');
+const { LeadCloseController } = await load('crm/lead-close.controller.js');
+const { LeadCloseService } = await load('crm/lead-close.service.js');
+const { LeadCloseHumanUiGuard } = await load('crm/lead-close.dto.js');
+const { LeadController } = await load('crm/lead.controller.js');
+const { LeadService } = await load('crm/lead.service.js');
+const { LeadCreateHumanUiGuard } = await load('crm/lead-create-human-ui.guard.js');
 const { LeadRegistrationRecoveryController } = await load('crm/lead-registration-recovery.controller.js');
 const { LeadRegistrationRecoveryService } = await load('crm/lead-registration-recovery.service.js');
 const { LeadRegistrationRecoveryHumanUiGuard } = await load('crm/lead-registration-recovery.dto.js');
@@ -45,7 +51,7 @@ try {
   await sql("INSERT INTO hon.schools(id,organization_id,name,slug) VALUES($1,$2,'Synthetic school',$4),($3,$2,'Other synthetic school',$5)", [school, org, otherSchool, `synthetic-${school}`, `synthetic-${otherSchool}`]);
   await sql("INSERT INTO hon.organization_entitlements(organization_id,tier,effective_from) VALUES($1,'CORE',clock_timestamp()-interval '1 day')", [org]);
   await sql("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,'RECOVERY_FRONT_DESK','Synthetic role')", [role, org]);
-  for (const permission of ['crm.lead.read', 'crm.lead.register', 'student.profile.manage', 'billing.membership.create', 'billing.account.create', 'billing.membership_plan.manage']) await sql('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [role, org, permission]);
+  for (const permission of ['crm.lead.read', 'crm.lead.close', 'crm.lead.register', 'student.profile.manage', 'billing.membership.create', 'billing.account.create', 'billing.membership_plan.manage']) await sql('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [role, org, permission]);
   async function staff(atSchool = school) {
     const user = randomUUID(), principal = randomUUID(), grant = randomUUID(), subject = `recovery-http-${randomUUID()}`;
     await sql("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'Synthetic staff')", [user, subject, `${user}@example.test`]);
@@ -58,7 +64,7 @@ try {
   await sql("INSERT INTO hon.crm_pipeline_stages(id,organization_id,school_id,pipeline_id,name,position,terminal_status) VALUES($1,$2,$3,$4,'Won',1,'WON')", [stage, org, school, pipeline]);
   await sql("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'Synthetic','Adult')", [person, org, school]);
   await sql("INSERT INTO hon.crm_leads(id,organization_id,school_id,primary_person_id,pipeline_id,pipeline_stage_id,status) VALUES($1,$2,$3,$4,$5,$6,'WON')", [lead, org, school, person, pipeline, stage]);
-  const module = await Test.createTestingModule({ controllers: [LeadRegistrationRecoveryController, MembershipPlanController, CrmAdultMembershipDraftFromPlanController], providers: [HonIdentityGuard, HonIdentityService, LeadRegistrationRecoveryHumanUiGuard, LeadRegistrationRecoveryService, MembershipPlanService, ...Object.entries(planGuards).filter(([name]) => name.endsWith('Guard')).map(([,guard]) => guard), { provide: RuntimeDatabaseService, useValue: database }] }).compile();
+  const module = await Test.createTestingModule({ controllers: [LeadController, LeadCloseController, LeadRegistrationRecoveryController, MembershipPlanController, CrmAdultMembershipDraftFromPlanController], providers: [HonIdentityGuard, HonIdentityService, LeadService, LeadCloseService, LeadCloseHumanUiGuard, LeadCreateHumanUiGuard, LeadRegistrationRecoveryHumanUiGuard, LeadRegistrationRecoveryService, MembershipPlanService, ...Object.entries(planGuards).filter(([name]) => name.endsWith('Guard')).map(([,guard]) => guard), { provide: RuntimeDatabaseService, useValue: database }] }).compile();
   app = module.createNestApplication({ logger: false }); app.setGlobalPrefix('v1'); app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })); await app.listen(0, '127.0.0.1');
   const origin = `http://127.0.0.1:${app.getHttpServer().address().port}`; process.env.HON_PUBLIC_ORIGIN = origin;
   const ts = webRequire('typescript'), source = await readFile(resolve(repo, 'apps/web/src/components/crm-adult-flow-http.ts'), 'utf8');
@@ -69,14 +75,21 @@ try {
   const planCompiled = ts.transpileModule(planSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText.replace(/from\s+['"]@hon\/contracts['"]/g, 'from ' + JSON.stringify(contractsUrl));
   const plans = await import('data:text/javascript;base64,' + Buffer.from(planCompiled).toString('base64'));
   const { MEMBERSHIP_PLAN_CHANGE_CONFIRMATION, CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION } = await import(contractsUrl);
-  let actor = S;
-  globalThis.fetch = (path, options) => {
-    assert.match(path, /^\/api\/v1\/organizations\/[a-f0-9-]+\/schools\/[a-f0-9-]+\/(?:crm\/leads\/[a-f0-9-]+\/registration-recovery|billing\/(?:membership-plans(?:\/catalog|\/[a-f0-9-]+\/revisions)?|crm-adult-membership-drafts\/(?:plan-options|from-plan)))$/);
+  const closeSource = await readFile(resolve(repo, 'apps/web/src/components/crm-lead-close-http.ts'), 'utf8');
+  const closeCompiled = ts.transpileModule(closeSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText.replace(/from\s+['"]@hon\/contracts['"]/g, 'from ' + JSON.stringify(contractsUrl));
+  const close = await import('data:text/javascript;base64,' + Buffer.from(closeCompiled).toString('base64'));
+  const listSource = await readFile(resolve(repo, 'apps/web/src/components/crm-leads-http.ts'), 'utf8');
+  const list = await import('data:text/javascript;base64,' + Buffer.from(ts.transpileModule(listSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText).toString('base64'));
+  let actor = S, loseNextCloseResponse = false;
+  globalThis.fetch = async (path, options) => {
+    if (!/^\/api\/v1\/organizations\/[a-f0-9-]+\/schools\/[a-f0-9-]+\/crm\/leads(?:\?limit=50(?:&status=(?:OPEN|WON|LOST|ARCHIVED))?|\/[a-f0-9-]+\/close)$/.test(path)) assert.match(path, /^\/api\/v1\/organizations\/[a-f0-9-]+\/schools\/[a-f0-9-]+\/(?:crm\/leads\/[a-f0-9-]+\/registration-recovery|billing\/(?:membership-plans(?:\/catalog|\/[a-f0-9-]+\/revisions)?|crm-adult-membership-drafts\/(?:plan-options|from-plan)))$/);
     const headers = new Headers(options.headers); headers.set('Origin', origin); headers.set('Sec-Fetch-Site', 'same-origin'); headers.set('Sec-Fetch-Mode', 'same-origin'); headers.set('Sec-Fetch-Dest', 'empty');
     if (actor) headers.set('Cookie', `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: actor.subject }, session)}`);
-    return originalFetch(origin + path.slice(4), { ...options, headers });
+    const result = await originalFetch(origin + path.slice(4), { ...options, headers });
+    if (loseNextCloseResponse && path.endsWith('/close') && result.status === 200) { loseNextCloseResponse = false; throw new DOMException('Synthetic response lost after real commit', 'TimeoutError'); }
+    return result;
   };
-  const tables = ['people', 'student_profiles', 'families', 'family_members', 'crm_leads', 'crm_lead_registration_conversions', 'billing_accounts', 'memberships', 'crm_adult_membership_draft_sources', 'membership_payment_schedules', 'invoices', 'payment_attempts', 'audit_events', 'outbox_events', 'idempotency_records', 'communication_messages', 'action_requests', 'ai_usage_ledger', 'membership_plans', 'membership_plan_versions', 'membership_plan_selections'];
+  const tables = ['people', 'student_profiles', 'families', 'family_members', 'crm_leads', 'crm_lead_registration_conversions', 'crm_lead_close_requests', 'billing_accounts', 'memberships', 'crm_adult_membership_draft_sources', 'membership_payment_schedules', 'invoices', 'payment_attempts', 'audit_events', 'outbox_events', 'idempotency_records', 'communication_messages', 'action_requests', 'ai_usage_ledger', 'membership_plans', 'membership_plan_versions', 'membership_plan_selections'];
   const snapshot = async () => {
     const result = {};
     for (const t of tables) result[t] = (await sql(`SELECT md5(coalesce(string_agg(x::text,'|' ORDER BY x::text),'')) h,count(*)::int n FROM hon.${t} x`)).rows[0];
@@ -147,7 +160,35 @@ try {
   const after = await snapshot(); for (const table of noFinancialEffects) assert.deepEqual(after[table], financialBefore[table], table);
   console.log('PASS: actual frontend plan transports through signed-session Nest and guarded disposable PostgreSQL: create/revise/read/options/plan-DRAFT, stale rollback, v2 immutable history after v3, exact replay without effects, current confirmation/recovery, isolated schools, revoked permission and absent session. No schedules, invoices, payment, provider or activation effects.');
 
-  console.log('PASS: frontend recovery transport through real signed-session Nest API and disposable PostgreSQL; all six states, creator/noncreator redaction, cross-school/revoked/session denials, and zero read effects on 21 tables. No API/identity mock, provider, production DB or activation.');
+  // Real close and list routes, with loss injected only after the real backend commits.
+  actor = S;
+  const financialBeforeClose = await snapshot();
+  for (const status of ['WON', 'LOST']) {
+    const closeLead = randomUUID(), closePerson = randomUUID();
+    await sql("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'Synthetic','Close')", [closePerson,org,school]);
+    await sql("INSERT INTO hon.crm_leads(id,organization_id,school_id,primary_person_id,pipeline_id,pipeline_stage_id,status) VALUES($1,$2,$3,$4,$5,$6,'OPEN')", [closeLead,org,school,closePerson,pipeline,stage]);
+    const current = (await list.loadCrmLeads(org,school,'OPEN')).find(r=>r.id===closeLead); assert(current);
+    const request = close.prepareCrmLeadClose(org,school,current,{status,expectedVersion:current.version,closeNote:'Synthetic private close note'},randomUUID());
+    loseNextCloseResponse = true;
+    await assert.rejects(close.submitCrmLeadClose(request), e=>e instanceof close.CrmLeadCloseUncertainError);
+    assert(!(await list.loadCrmLeads(org,school,'OPEN')).some(r=>r.id===closeLead));
+    assert.equal((await list.loadCrmLeads(org,school)).find(r=>r.id===closeLead).status,status);
+    const beforeReplay = await snapshot();
+    const results = await Promise.all([close.submitCrmLeadClose(request),close.submitCrmLeadClose(request)]);
+    assert(results.every(r=>r.replayed&&r.receipt.status===status)); assert.deepEqual(await snapshot(),beforeReplay);
+    actor = U; await assert.rejects(close.submitCrmLeadClose(request),e=>e instanceof close.CrmLeadCloseRejectedError);
+    await assert.rejects(list.loadCrmLeads(org,school),e=>e instanceof list.CrmLeadAccessError);
+    actor = null; await assert.rejects(close.submitCrmLeadClose(request),e=>e instanceof close.CrmLeadCloseRejectedError);
+    actor = S; await sql("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='crm.lead.close'",[role]);
+    assert((await list.loadCrmLeads(org,school)).some(r=>r.id===closeLead)); // Read permission is not close permission.
+    await assert.rejects(close.submitCrmLeadClose(request),e=>e instanceof close.CrmLeadCloseRejectedError);
+    assert.deepEqual(await snapshot(),beforeReplay);
+    await sql("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'crm.lead.close')",[role,org]);
+  }
+  const afterClose = await snapshot(); for (const table of noFinancialEffects) assert.deepEqual(afterClose[table],financialBeforeClose[table],table);
+  console.log('PASS: close frontend transport through real signed-session Nest list/close routes and disposable PostgreSQL: WON and LOST, injected post-commit response loss, all-status restoration after leaving OPEN, concurrent exact-key replay without writes, cross-school/session denial, revoked close permission despite retained read permission, and zero financial effects. No mocked API or production/provider access.');
+
+  console.log('PASS: frontend recovery transport through real signed-session Nest API and disposable PostgreSQL; all six states, creator/noncreator redaction, cross-school/revoked/session denials, and zero read effects on 22 tables. No API/identity mock, provider, production DB or activation.');
 } finally {
   globalThis.fetch = originalFetch;
   try { if (app) await app.close(); else await database.onModuleDestroy(); }
