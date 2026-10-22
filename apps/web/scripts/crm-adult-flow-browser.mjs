@@ -149,7 +149,7 @@ const app = spawn(process.execPath, [requireWeb.resolve('next/dist/bin/next'), '
   env: { PATH: process.env.PATH, HOME: process.env.HOME, LANG: 'C.UTF-8', NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', HON_API_BASE_URL: 'http://127.0.0.1:3001', HON_AUTH_MODE: session.mode, HON_SESSION_AUDIENCE: session.audience, HON_SESSION_JWT_SECRET: session.secret }, stdio: ['ignore', 'pipe', 'pipe'] });
 let log = ''; app.stdout.on('data', d => { log += d; }); app.stderr.on('data', d => { log += d; });
 let browser;
-async function check(name, run) { try { await run(); report.checks.push(name); } catch (e) { report.failures.push({ name, error: e.message }); } }
+async function check(name, run) { try { await run(); report.checks.push(name); } catch (e) { report.failures.push({ name, error: e.message }); console.error(`FAIL: ${name}\n${e.stack ?? e.message}`); throw e; } }
 async function open(viewport, actor = 'crm-staff-synthetic') {
   const context = await browser.newContext({ viewport });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
@@ -186,6 +186,7 @@ async function visual(page, name) {
 try {
   let started = false; for (let i = 0; i < 100; i++) { try { await fetch(origin); started = true; break; } catch {} await new Promise(done => setTimeout(done, 250)); } assert(started, log.slice(-1200));
   browser = await chromium.launch({ executablePath: process.env.HON_CRM_CHROME, headless: true });
+  await runCloseBrowserChecks({fixture:closeFixture,reset,open,visual,check,captureFailure:async page=>{await page.screenshot({path:join(results,'close-first-failure.png'),fullPage:true});report.screenshots.push('close-first-failure.png');},replaceActor:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     await check(`${name}: connected registration/account/DRAFT/current confirmation; keyboard and accessibility`, async () => {
       reset(); const { context, page } = await open(viewport);
@@ -357,8 +358,7 @@ try {
       await page.goto(`${origin}/staff/crm/leads?${new URLSearchParams(scope)}`);await page.waitForURL(`${origin}/auth/login`);assert(!(await page.locator('body').innerText()).includes('Ari Stone'));assert.equal(commands.length,0);
     }finally{await context.close();}
   });
-  await runCloseBrowserChecks({fixture:closeFixture,reset,open,visual,check,replaceActor:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
   await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin, replaceActor: context => context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}]) });
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
-} finally { await browser?.close(); app.kill('SIGTERM'); await new Promise(done => api.close(done)); await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); }
+} finally { await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); await browser?.close(); app.kill('SIGTERM'); api.closeAllConnections(); await new Promise(done => api.close(done)); }
 console.log(`PASS: ${report.checks.length} browser checks; ${report.screenshots.length} actual application screenshots; synthetic API verification only.`);
