@@ -10,7 +10,7 @@ export function createCloseFixture({id,scope,date,origin,send,rejected}) {
     if(req.method==='GET'&&url.pathname===root){reads.push(url.search);if(holdRead){holdRead=false;await new Promise(done=>{readRelease=done;});}if(denyRead)rejected(res,403,'STAFF_SCOPE_DENIED');else send(res,200,hideLead||url.searchParams.has('status')&&url.searchParams.get('status')!==record.status?[]:[record]);return true;}
     if(url.pathname!==root+'/'+id(3)+'/close')return false;
     assert.equal(req.method,'POST');assert.equal(url.search,'');assert.equal(req.headers.origin,origin);assert.equal(req.headers['sec-fetch-site'],'same-origin');assert.equal(req.headers['x-hon-human-command'],'crm-lead-close');
-    let raw='';for await(const chunk of req){raw+=chunk;assert(raw.length<4000);}const input=validateCloseCrmLeadInput(JSON.parse(raw)),key=req.headers['idempotency-key'];assert.match(key,/^[a-f0-9-]{36}$/);
+    let raw='';for await(const chunk of req){raw+=chunk;assert(raw.length<4000);}const input=JSON.parse(raw);validateCloseCrmLeadInput(input);const key=req.headers['idempotency-key'];assert.match(key,/^[a-f0-9-]{36}$/);
     commands.push({key,raw,path:url.pathname});if(denyClose){rejected(res,403,'STAFF_SCOPE_DENIED');return true;}
     if(keys.has(key)){const old=keys.get(key);assert.equal(raw,old.raw);send(res,200,old.receipt,true);return true;}
     await new Promise(done=>{release=done;});
