@@ -1,5 +1,6 @@
 /** Actual production Next application, real session gate, synthetic localhost API contracts. No database/provider access. */
 import assert from 'node:assert/strict';
+import { createCloseFixture, runCloseBrowserChecks } from './crm-close-browser.mjs';
 import { createFamilyFixture, runFamilyBrowserChecks } from './crm-family-browser.mjs';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -8,7 +9,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
-import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
+import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE, SESSION_SECONDS } from '@hon/auth';
 import { validateRegisterCrmLeadInput, validateCreateBillingAccountInput, validateCrmAdultMembershipDraftInput, validateCrmLeadRegistrationRecoveryInput, verifyCrmLeadRegistrationRecovery, validateCreateMembershipPlanInput, validateReviseMembershipPlanInput, validateCrmAdultMembershipDraftFromPlanInput, verifyMembershipPlanCatalog, verifyCrmAdultMembershipDraftFromPlan } from '@hon/contracts';
 
 assert(process.env.GITHUB_ACTIONS === 'true');
@@ -31,11 +32,12 @@ const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.school
 const program = { programId: id(38), name: 'Adult martial arts' };
 const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
 let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
+const closeFixture = createCloseFixture({id,scope,date,origin,send,rejected});
 const familyFixture = createFamilyFixture({ id, scope, date, origin, send, rejected, plans: () => publishedPlans });
 function plainPlan(p) { const { programName, ...terms } = p; return terms; }
 function rejected(res, status, code) { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({code})); }
 function reset(value = 'ready') { publishedPlans = [{ ...seedPlan }, { ...seedPlan, planId:id(31), planCode:'KRW-ADULT', displayName:'Korean won plan', currency:'KRW',priceMinor:160000 }, { ...seedPlan,planId:id(32),planCode:'CLOSED',displayName:'Previous offer',availability:'UNAVAILABLE' }, { ...seedPlan,planId:id(34),planCode:'JUNIOR',displayName:'Junior Monthly',description:'Junior martial arts',programId:null,programName:null,priceMinor:9900 }]; mode = value; registered = false; accounted = false; drafted = false; keys = new Map(); commands = []; recoveryReads = [];
-  familyFixture.reset(value);
+  familyFixture.reset(value); closeFixture.reset(value);
   if (value.startsWith('recovery-')) { const state = value.slice(9); registered = !['NOT_REGISTERED', 'NEEDS_STAFF_REVIEW'].includes(state); accounted = ['READY_FOR_DRAFT', 'CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); drafted = ['CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); }
 }
 reset();
@@ -50,6 +52,7 @@ const api = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({data:{state:'RESOLVED',...scope}})); return;
     }
     if (actor !== 'crm-staff-synthetic' || !url.pathname.startsWith(prefix + '/')) { send(res, 403, { secret: 'private-canary' }); return; }
+    if (await closeFixture.handle(req,res,url)) return;
     if (req.method === 'GET' && url.pathname === `${prefix}/crm/leads`) { send(res, 200, [lead]); return; }
     if (await familyFixture.handle(req, res, url)) return;
     const plansRoot = `${prefix}/billing/membership-plans`, draftsRoot = `${prefix}/billing/crm-adult-membership-drafts`;
@@ -146,7 +149,7 @@ const app = spawn(process.execPath, [requireWeb.resolve('next/dist/bin/next'), '
   env: { PATH: process.env.PATH, HOME: process.env.HOME, LANG: 'C.UTF-8', NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', HON_API_BASE_URL: 'http://127.0.0.1:3001', HON_AUTH_MODE: session.mode, HON_SESSION_AUDIENCE: session.audience, HON_SESSION_JWT_SECRET: session.secret }, stdio: ['ignore', 'pipe', 'pipe'] });
 let log = ''; app.stdout.on('data', d => { log += d; }); app.stderr.on('data', d => { log += d; });
 let browser;
-async function check(name, run) { try { await run(); report.checks.push(name); } catch (e) { report.failures.push({ name, error: e.message }); } }
+async function check(name, run) { try { await run(); report.checks.push(name); } catch (e) { report.failures.push({ name, error: e.message }); console.error(`FAIL: ${name}\n${e.stack ?? e.message}`); throw e; } }
 async function open(viewport, actor = 'crm-staff-synthetic') {
   const context = await browser.newContext({ viewport });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
@@ -183,6 +186,7 @@ async function visual(page, name) {
 try {
   let started = false; for (let i = 0; i < 100; i++) { try { await fetch(origin); started = true; break; } catch {} await new Promise(done => setTimeout(done, 250)); } assert(started, log.slice(-1200));
   browser = await chromium.launch({ executablePath: process.env.HON_CRM_CHROME, headless: true });
+  await runCloseBrowserChecks({fixture:closeFixture,reset,open,visual,check,captureFailure:async page=>{await page.screenshot({path:join(results,'close-first-failure.png'),fullPage:true});report.screenshots.push('close-first-failure.png');},replaceActor:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     await check(`${name}: connected registration/account/DRAFT/current confirmation; keyboard and accessibility`, async () => {
       reset(); const { context, page } = await open(viewport);
@@ -331,7 +335,30 @@ try {
       await page.getByRole('button',{name:'Retry exact request',exact:true}).click();await page.getByText('Adult registration receipt replayed.',{exact:true}).waitFor();assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);await visual(page,`${size}-adult-privacy-restored`);
     }finally{await context.close();}
   });
+  for(const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]) {
+    await check(`${size}: an empty idle CRM view does not require privacy restoration`,async()=>{
+      reset();const {context,page}=await open(viewport);try{
+        const crmReads=()=>report.requests.filter(r=>r.path.startsWith(prefix+'/crm/')).length;const count=crmReads();await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+        assert.equal(await page.getByRole('heading',{name:'CRM information hidden',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Verify access and resume',exact:true}).count(),0);assert.equal(crmReads(),count);assert.equal(commands.length,0);
+        await visual(page,`${size}-empty-crm-focus`);
+      }finally{await context.close();}
+    });
+    await check(`${size}: adult plan retry can be deliberately abandoned without losing authoritative DRAFT recovery`,async()=>{
+      reset('recovery-READY_FOR_DRAFT');const {context,page}=await open(viewport);try{
+        await resume(page);await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).click();await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(30));await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();await page.getByRole('checkbox',{name:/reviewed this plan version/}).check();mode='plan-unknown';await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
+        await page.getByRole('button',{name:'Retry exact plan request',exact:true}).waitFor();const discard=page.getByRole('button',{name:'Discard retry',exact:true});assert(await discard.isDisabled());assert(await page.getByRole('button',{name:'Close adult setup',exact:true}).isDisabled());await visual(page,`${size}-adult-plan-discard-warning`);
+        await page.getByRole('checkbox',{name:'I understand and deliberately abandon local recovery.',exact:true}).check();await discard.click();await page.getByText(/Current setup must be verified again/).waitFor();assert.equal(commands.length,1);assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0);
+        await page.getByRole('button',{name:'Refresh saved setup',exact:true}).click();await page.getByText('Current DRAFT verified.',{exact:false}).waitFor();assert.equal(commands.length,1);await visual(page,`${size}-adult-after-discard-recovery`);
+      }finally{await context.close();}
+    });
+  }
+  for(const bad of ['expired','invalid'])await check(`${bad} page session returns to sign-in without CRM information`,async()=>{
+    reset();const {context,page}=await open({width:390,height:844});try{
+      await context.addCookies([{name:HON_SESSION_COOKIE,value:bad==='expired'?issueSession({externalSubject:'crm-staff-synthetic'},session,Math.floor(Date.now()/1000)-SESSION_SECONDS-1):'invalid-session',url:origin,httpOnly:true,sameSite:'Lax'}]);
+      await page.goto(`${origin}/staff/crm/leads?${new URLSearchParams(scope)}`);await page.waitForURL(`${origin}/auth/login`);assert(!(await page.locator('body').innerText()).includes('Ari Stone'));assert.equal(commands.length,0);
+    }finally{await context.close();}
+  });
   await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin, replaceActor: context => context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}]) });
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
-} finally { await browser?.close(); app.kill('SIGTERM'); await new Promise(done => api.close(done)); await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); }
+} finally { await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); await browser?.close(); app.kill('SIGTERM'); api.closeAllConnections(); await new Promise(done => api.close(done)); }
 console.log(`PASS: ${report.checks.length} browser checks; ${report.screenshots.length} actual application screenshots; synthetic API verification only.`);

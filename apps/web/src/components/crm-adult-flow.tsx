@@ -5,6 +5,8 @@ import type { LeadListItem, CrmAdultMembershipPreparation, CrmAdultMembershipDra
 import { adultRequest, sendAdultRequest, AdultAccessError, AdultUncertainError, type AdultAccount, type AdultRequest, type AdultScope } from './crm-adult-flow-http';
 import styles from './crm-adult-flow.module.css';
 import { AdultMembershipPlanPicker } from './membership-plans/picker';
+import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
+import type { FamilyRequest } from './crm-family-http';
 import { MembershipPlanTerms } from './membership-plans/terms';
 import { useLocale } from './localization/provider';
 import { sendPlanRequest, PlanAccessError, PlanUnknownError, type PlanRequest } from './membership-plans/http';
@@ -14,6 +16,8 @@ type Props = AdultScope & { row: LeadListItem; initialRecovery?: CrmLeadRegistra
 export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, onRecover, onCancel, onBusy, onStarted, onAccessLost }: Props): React.ReactElement {
   const { date } = useLocale();
   const [pendingPlan, setPendingPlan] = useState<PlanRequest | null>(null);
+  const [unexpectedRetry, setUnexpectedRetry] = useState<PlanRequest | FamilyRequest | null>(null);
+  const [recoveryRequired, setRecoveryRequired] = useState(false);
   const [previousRecovery, setPreviousRecovery] = useState(initialRecovery);
   const recoveredRegistration = initialRecovery && 'historicalRegistrationReceipt' in initialRecovery ? initialRecovery.historicalRegistrationReceipt : null;
   const recoveredAccount = initialRecovery && 'billingAccount' in initialRecovery ? initialRecovery.billingAccount : null;
@@ -50,16 +54,22 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   // React applies this guarded state adjustment before committing the restored view.
   if (previousRecovery !== initialRecovery) {
     setPreviousRecovery(initialRecovery);
-    setRegistered(recoveredRegistration); setAccount(recoveredAccount); setReceipt(recoveredDraft); setCurrent(recoveredDraft !== null);
+    setRecoveryRequired(false); setRegistered(recoveredRegistration); setAccount(recoveredAccount); setReceipt(recoveredDraft); setCurrent(recoveredDraft !== null);
     setPrepared(null); setCreatedFromPlan(null); setConsent(false); setBirthDate(''); setPlan(''); setError(''); setReview(initialRecovery?.workflowState === 'NEEDS_STAFF_REVIEW');
     setMessage('Current adult setup reverified. Historical requests are separate from current membership state.');
+  }
+
+  function discardRetry(): void {
+    if (active.current || planBlocking) return;
+    setPending(null); setPendingPlan(null); setUnexpectedRetry(null); setPrepared(null); setReceipt(null); setCreatedFromPlan(null); setCurrent(false); setConsent(false); setRecoveryRequired(true); setError('');
+    setMessage('Local recovery deliberately abandoned. This did not cancel or undo any server action. Refresh saved setup before starting another command.');
   }
 
   function planCreated(data: { receipt: CrmAdultMembershipDraftReceipt; plan: MembershipPlanVersionSummary }, replayed: boolean): void {
     setPendingPlan(null); setReceipt(data.receipt); setCreatedFromPlan(data.plan); setCurrent(false); setPlanBlocking(false); onBusy(false); setConsent(false); setError(''); setMessage(replayed ? 'Historical plan-bound DRAFT creation replayed.' : 'Membership DRAFT recorded from the reviewed plan version. It is not active.');
   }
   async function retryPlan(): Promise<void> {
-    if (!pendingPlan || active.current) return;
+    if (!pendingPlan || active.current || unexpectedRetry) return;
     const request = pendingPlan, epoch = generation.current; active.current = true; setBusy(true); onBusy(true);
     try {
       const result = await sendPlanRequest(request);
@@ -74,7 +84,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   }
 
   async function run(request: AdultRequest): Promise<void> {
-    if (active.current || planBlocking) return;
+    if (active.current || planBlocking || recoveryRequired || unexpectedRetry) return;
     active.current = true; const epoch = generation.current; setBusy(true); onBusy(true); setError(''); setMessage(''); setCurrent(false);
     if (request.key) onStarted();
     try {
@@ -105,7 +115,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     } finally { if (epoch === generation.current) { active.current = false; setBusy(false); onBusy(false); } }
   }
   function submit(event: FormEvent): void {
-    event.preventDefault(); if (active.current || planBlocking || pending || pendingPlan || !consent || review || receipt || otherCurrent) return;
+    event.preventDefault(); if (active.current || planBlocking || recoveryRequired || unexpectedRetry || pending || pendingPlan || !consent || review || receipt || otherCurrent) return;
     try {
       // Validate before allocating a command key; each consequential step gets a distinct key.
       const step = !registered ? 'register' : !account ? 'account' : 'draft';
@@ -116,25 +126,27 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
       void run(adultRequest(scope, step, selection, value, crypto.randomUUID()));
     } catch { setError('Review the required date, currency or plan code and confirmation before submitting.'); }
   }
-  const locked = busy || pending !== null || pendingPlan !== null;
+  const locked = busy || pending !== null || pendingPlan !== null || unexpectedRetry !== null;
   return <section className={styles.flow} aria-labelledby="adult-flow-title" aria-busy={busy}>
     <header><p>ADULT CRM SETUP</p><h2 id="adult-flow-title" ref={heading} tabIndex={-1}>Set up {row.givenName} {row.familyName}</h2><p>Register adult → billing account → membership DRAFT</p>
-      <button type="button" disabled={busy || planBlocking} onClick={onCancel}>Close adult setup</button>
+      <button type="button" disabled={locked || planBlocking} onClick={onCancel}>Close adult setup</button>
       {onRecover && <button type="button" disabled={locked || planBlocking} onClick={onRecover}>Refresh saved setup</button>}</header>
     <p>Each step is a separate authorized action. A DRAFT does not activate membership, create a payment schedule or collect payment.</p>
     <ol aria-label="Adult setup progress"><li aria-current={!registered && !review ? 'step' : undefined}>Registration{registered ? ' — recorded' : ''}</li><li aria-current={registered && !account ? 'step' : undefined}>Billing account{account ? ' — verified' : ''}</li><li aria-current={account ? 'step' : undefined}>Membership DRAFT{receipt || otherCurrent ? ' — recorded' : ''}</li></ol>
     {message && <p role="status" className={styles.notice}>{message}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {pending && <div className={styles.notice}><p>An action may already have completed. This retry retains its exact data and idempotency key.</p><button type="button" disabled={busy} onClick={() => void run(pending)}>Retry exact request</button></div>}
-    {pendingPlan && <div className={styles.notice}><p>A plan-bound DRAFT may already have been created. Its exact request is retained only in memory.</p><button type="button" disabled={busy} onClick={() => void retryPlan()}>Retry exact plan request</button></div>}
+    {pending && <div className={styles.notice}><p>An action may already have completed. This retry retains its exact data and idempotency key.</p><button type="button" disabled={busy} onClick={() => void run(pending)}>Retry exact request</button><CrmEnrollmentDiscard disabled={busy || planBlocking} onDiscard={discardRetry}/></div>}
+    {pendingPlan && <div className={styles.notice}><p>A plan-bound DRAFT may already have been created. Its exact request is retained only in memory.</p><button type="button" disabled={busy} onClick={() => void retryPlan()}>Retry exact plan request</button><CrmEnrollmentDiscard disabled={busy || planBlocking} onDiscard={discardRetry}/></div>}
+    {unexpectedRetry && <div className={styles.notice}><p role="alert">Unexpected retry request type. Its exact request is retained in memory, but cannot be safely retried here. Deliberately abandon local recovery, then refresh saved setup.</p><CrmEnrollmentDiscard disabled={busy || planBlocking} onDiscard={discardRetry}/></div>}
+    {recoveryRequired && <p role="status">Current setup must be verified again. Refresh saved setup; no new registration or membership command is available.</p>}
     {registered && !otherCurrent && <p>Registration recorded for this adult lead. Historical registration receipt; not proof of current membership. Student reference: <code>{registered.studentProfileId}</code></p>}
     {account && !otherCurrent && <p>{'id' in account ? <>{account.reused === true ? 'Existing account reused' : account.reused === false ? 'Account created' : 'Historical account receipt'} · {account.currency} · <code>{account.id}</code></> : <>Verified canonical account · {account.currency}. No account identifier was returned.</>}</p>}
-    {!review && !receipt && !otherCurrent && registered && account && prepared && <AdultMembershipPlanPicker scope={scope} studentProfileId={registered.studentProfileId} currency={prepared.currency} disabled={locked}
+    {!recoveryRequired && !unexpectedRetry && !review && !receipt && !otherCurrent && registered && account && prepared && <AdultMembershipPlanPicker scope={scope} studentProfileId={registered.studentProfileId} currency={prepared.currency} disabled={locked}
       onBlocking={blocked => { setPlanBlocking(blocked); onBusy(blocked); }} onStarted={onStarted} onAccessLost={onAccessLost}
       onNeedsRefresh={reason => { setPrepared(null); setPlanBlocking(false); onBusy(false); setError(reason); }}
-      onUncertain={request => { if ('step' in request) return; setPendingPlan(request); setPrepared(null); setPlanBlocking(false); onBusy(false); setError('The adult plan-bound DRAFT outcome is uncertain. Retry only its retained exact request.'); }}
+      onUncertain={request => { if ('step' in request || request.kind !== 'draft') { setUnexpectedRetry(request); setPrepared(null); setPlanBlocking(false); onBusy(false); setError('Unexpected retry request retained. No command was resent.'); return; } setPendingPlan(request); setPrepared(null); setPlanBlocking(false); onBusy(false); setError('The adult plan-bound DRAFT outcome is uncertain. Retry only its retained exact request.'); }}
       onCreated={planCreated} />}
-    {!review && !receipt && !otherCurrent && <form onSubmit={submit}><fieldset disabled={locked || planBlocking}>
+    {!recoveryRequired && !unexpectedRetry && !review && !receipt && !otherCurrent && <form onSubmit={submit}><fieldset disabled={locked || planBlocking}>
       {!registered ? <><h3>1. Register this adult</h3><label>Date of birth<input type="date" required min="1900-01-01" value={birthDate} onChange={e => { setBirthDate(e.target.value); setConsent(false); setError(''); }} /></label>
         <label className={styles.check}><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />I reviewed this lead as an adult registering without a guardian.</label><button disabled={!consent || !birthDate}>Register adult</button></>
       : !account ? <><h3>2. Create or reuse this adult’s account</h3><p>The responsible person is the exact adult returned by registration. A matching canonical account is reused; a different currency requires staff review.</p>

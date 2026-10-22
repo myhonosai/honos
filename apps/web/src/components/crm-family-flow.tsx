@@ -7,8 +7,9 @@ import {
   type LeadListItem, type CrmGuardianChildEnrollment, type CrmGuardianChildMembershipDraftFromPlan,
 } from '@hon/contracts';
 import { familyRequest, readFamilyEnrollment, sendFamilyRequest, type FamilyRequest } from './crm-family-http';
-import { PlanAccessError, PlanUnknownError, type PlanScope } from './membership-plans/http';
+import { PlanAccessError, PlanUnknownError, type PlanScope, type PlanRequest } from './membership-plans/http';
 import { AdultMembershipPlanPicker } from './membership-plans/picker';
+import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
 import { MembershipPlanTerms } from './membership-plans/terms';
 import styles from './crm-family-flow.module.css';
 import { useLocale } from './localization/provider';
@@ -24,6 +25,7 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
   const [given, setGiven] = useState(''), [surname, setSurname] = useState(''), [birth, setBirth] = useState(''), [currency, setCurrency] = useState('USD');
   const [confirmed, setConfirmed] = useState(false), [busy, setBusy] = useState(false), [pickerBlocked, setPickerBlocked] = useState(false);
   const [pending, setPending] = useState<FamilyRequest | null>(null), [error, setError] = useState(''), [message, setMessage] = useState('');
+  const [unexpectedRetry, setUnexpectedRetry] = useState<FamilyRequest | PlanRequest | null>(null);
   const [history, setHistory] = useState<History | null>(null);
   const [previousFamily, setPreviousFamily] = useState(initialFamily);
   const pendingChild = useRef(''), preferredChild = useRef('');
@@ -36,7 +38,7 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
   }
   const verified = family && 'children' in family ? family : null;
   const child = verified?.children.find(c => c.studentProfileId === selected);
-  const locked = busy || pickerBlocked || pending !== null;
+  const locked = busy || pickerBlocked || pending !== null || unexpectedRetry !== null;
   async function fresh(): Promise<void> {
     const generation = epoch.current;
     setFamily(null); setSelected(''); setConfirmed(false);
@@ -45,14 +47,14 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
     if (generation === epoch.current) { setFamily(data); if ('children' in data && data.children.some(c => c.studentProfileId === preferredChild.current)) setSelected(preferredChild.current); }
   }
   async function refresh(): Promise<void> {
-    if (active.current || pickerBlocked || pending) return;
+    if (active.current || pickerBlocked || pending || unexpectedRetry) return;
     const generation = epoch.current; active.current = true; setBusy(true); onBusy(true); setError(''); setHistory(null); setMessage('');
     try { await fresh(); if (generation === epoch.current) setMessage('Current family setup verified. Review each child’s current status below.'); }
     catch (e) { if (generation !== epoch.current) return; if (e instanceof PlanAccessError) onAccessLost(); else setError(e instanceof Error ? e.message : 'Family setup is unavailable.'); }
     finally { if (generation === epoch.current) { active.current = false; setBusy(false); onBusy(false); } }
   }
   async function run(request: FamilyRequest): Promise<void> {
-    if (active.current || pickerBlocked || pending && pending !== request) return;
+    if (active.current || pickerBlocked || unexpectedRetry || pending && pending !== request) return;
     const generation = epoch.current; active.current = true; setBusy(true); onBusy(true); onStarted(); setError(''); setMessage(''); setHistory(null);
 
     try {
@@ -89,6 +91,11 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
       void run(familyRequest(scope, step, selection, body, crypto.randomUUID()));
     } catch { setError('Review the child’s name, valid date of birth, account currency and explicit confirmation.'); }
   }
+  function discardRetry(): void {
+    if (active.current || pickerBlocked) return;
+    setPending(null); setUnexpectedRetry(null); setFamily(null); setSelected(''); setConfirmed(false); setHistory(null); onBusy(false);
+    setError('Local recovery deliberately abandoned. This did not cancel or undo any server action. Refresh family setup before continuing.');
+  }
   const edit = (): void => { setConfirmed(false); setError(''); };
   return <section className={styles.flow} aria-labelledby="family-flow-title" aria-busy={busy}>
     <header><p>FAMILY ENROLLMENT</p><h2 id="family-flow-title" tabIndex={-1} ref={heading}>Family setup for {row.givenName} {row.familyName}</h2><p>Register family → confirm guardian payer → prepare each child’s membership DRAFT</p>
@@ -97,8 +104,9 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
     {busy && <p role="status">Verifying the current authorized family records…</p>}
     {message && <p role="status" className={styles.notice}>{message}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {pending && <div className={styles.notice}><p>An action may already have completed. This in-memory retry preserves its exact input and idempotency key.</p><div className={styles.actions}><button type="button" disabled={busy} onClick={() => void run(pending)}>Retry exact family request</button><button type="button" disabled={busy} onClick={() => { setPending(null); setFamily(null); setSelected(''); setConfirmed(false); onBusy(false); setError('Local retry discarded. This does not undo any recorded action. Refresh family setup before continuing.'); }}>Discard local retry</button></div></div>}
-    {!family && !busy && !pending && <p role="status">Current family progress is unavailable. Refresh family setup before any new action.</p>}
+    {pending && <div className={styles.notice}><p>An action may already have completed. This in-memory retry preserves its exact input and idempotency key.</p><div className={styles.actions}><button type="button" disabled={busy} onClick={() => void run(pending)}>Retry exact family request</button><CrmEnrollmentDiscard label="Discard local retry" disabled={busy || pickerBlocked} onDiscard={discardRetry}/></div></div>}
+    {unexpectedRetry && <div className={styles.notice}><p role="alert">Unexpected retry request type. Its exact request is retained in memory, but cannot be safely retried here. Deliberately abandon local recovery, then refresh family setup.</p><CrmEnrollmentDiscard label="Discard local retry" disabled={busy || pickerBlocked} onDiscard={discardRetry}/></div>}
+    {!family && !busy && !pending && !unexpectedRetry && <p role="status">Current family progress is unavailable. Refresh family setup before any new action.</p>}
     {family?.workflowState === 'NEEDS_STAFF_REVIEW' && <div className={styles.notice}><h3>Staff review required</h3><p>This family cannot continue safely here. Possible existing identities, twins, changed relationships or an older registration require an authorized review. Existing records are preserved. No merge, relinking or resolution action is available.</p></div>}
     {family?.workflowState === 'ADULT_REGISTRATION' && <div className={styles.notice}><p>This is an adult registration. Continue through the existing adult Resume Setup workflow.</p><button type="button" disabled={locked} onClick={onAdult}>Open adult Resume Setup</button></div>}
     {verified && <><section aria-labelledby="guardian-overview"><h3 id="guardian-overview">Guardian &amp; family</h3><p><strong>{verified.guardian.displayName}</strong> · verified guardian for {verified.children.length} {verified.children.length === 1 ? 'child' : 'children'}</p><p>Guardian and children have separate identities. Historical registration is not evidence of current membership.</p>
@@ -111,9 +119,9 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
       {child.workflowState === 'AWAITING_PAYER_DESIGNATION' && <p>Complete the guardian payer step before choosing this child’s plan.</p>}
       {child.workflowState === 'CURRENT_DRAFT_BY_OTHER_STAFF' && <p>A current DRAFT exists, recorded by another staff member. Receipt, creator, confirmation, editing, transfer and activation controls are unavailable.</p>}
       {child.workflowState === 'CURRENT_DRAFT' && child.currentMembershipDraft && 'receipt' in child.currentMembershipDraft && <><h4>Verified current DRAFT</h4><p>Recorded {date(child.currentMembershipDraft.receipt.recordedAt)}. Original bound plan version; subsequent catalog changes do not replace these terms.</p><MembershipPlanTerms plan={child.currentMembershipDraft.plan}/></>}
-      {child.workflowState === 'READY_FOR_DRAFT' && verified?.workflowState === 'PAYER_DESIGNATED' && verified.billingAccount && <AdultMembershipPlanPicker key={child.studentProfileId} scope={scope} studentProfileId={child.studentProfileId} childName={child.displayName} currency={verified.billingAccount.currency} disabled={busy || pending !== null}
+      {child.workflowState === 'READY_FOR_DRAFT' && verified?.workflowState === 'PAYER_DESIGNATED' && verified.billingAccount && <AdultMembershipPlanPicker key={child.studentProfileId} scope={scope} studentProfileId={child.studentProfileId} childName={child.displayName} currency={verified.billingAccount.currency} disabled={busy || pending !== null || unexpectedRetry !== null}
         onBlocking={blocked => { setPickerBlocked(blocked); onBusy(blocked); }}
-        onUncertain={request => { if (!('step' in request) || request.step !== 'childDraft') return; pendingChild.current = child.displayName; setPending(request); setPickerBlocked(false); setSelected(''); setError('The child DRAFT outcome is uncertain. Retry only the exact family request retained in memory.'); }} onStarted={onStarted} onAccessLost={onAccessLost}
+        onUncertain={request => { if (!('step' in request) || request.step !== 'childDraft') { setUnexpectedRetry(request); setPickerBlocked(false); setSelected(''); onBusy(false); setError('Unexpected retry request retained. No command was resent.'); return; } pendingChild.current = child.displayName; setPending(request); setPickerBlocked(false); setSelected(''); setError('The child DRAFT outcome is uncertain. Retry only the exact family request retained in memory.'); }} onStarted={onStarted} onAccessLost={onAccessLost}
         onNeedsRefresh={reason => { setPickerBlocked(false); setFamily(null); setSelected(''); onBusy(false); setError(reason); }}
         onCreated={(draft, replayed) => { setPickerBlocked(false); onBusy(false); setFamily(null); setSelected(''); setHistory({ childName: child.displayName, draft }); setMessage(replayed ? 'Historical child DRAFT receipt replayed. Refresh family setup to verify current status.' : 'Child membership DRAFT recorded. Refresh family setup to verify its current status.'); }} />}
     </section>}

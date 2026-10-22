@@ -1,5 +1,13 @@
 # HON Delivery Backlog
 
+## CRM final safety and reliability — Codex
+
+- [ ] PR #50 independent-review correction: separate WON/LOST close-instance ownership from read invalidation, preserve unknown close retries through concealment/restoration, and verify targeted lifecycle, signed-session API/disposable PostgreSQL, desktop/mobile/accessibility and all security proofs before another review. No automatic retry, reload workaround or backend change.
+
+- [x] Fail closed to sign-in when the CRM page session expires; guard Discard while commands are unsettled and require deliberate abandonment of unknown retries.
+- [x] Add adult retry Discard, preserve unexpected retry requests with visible fail-closed errors, avoid shielding an empty view, and preserve explicit verification for concealed facts. No grace period, backend, migration or financial changes.
+- [ ] Verify adult/family regressions, exact retries, desktop/mobile and accessibility, full CI and existing disposable PostgreSQL proofs in one focused frontend PR.
+
 ## CRM enrollment privacy and usability — Codex
 
 - [x] Hide the entire sensitive CRM view on focus loss, retain immutable uncertain enrollment requests only in mounted memory, and require explicit session/exact-school recovery verification before revealing it. Never resend a command on focus restoration.

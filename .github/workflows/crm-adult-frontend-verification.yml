@@ -5,9 +5,15 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/crm-adult-frontend-verification.yml'
+      - 'apps/web/src/components/crm-lead-close-*'
+      - 'apps/web/test/crm-close-*'
+      - 'apps/web/test/crm-lead-close-*'
+      - 'apps/web/scripts/crm-close-*'
       - 'apps/web/src/components/crm-adult-*'
       - 'apps/web/src/components/crm-family-*'
-      - 'apps/web/src/components/crm-enrollment-privacy*'
+      - 'apps/web/src/components/crm-enrollment-*'
+      - 'apps/web/test/crm-enrollment-discard*'
+      - 'apps/web/test/crm-leads-page-session*'
       - 'apps/web/test/crm-enrollment-privacy*'
       - 'apps/web/src/app/staff/crm/leads/**'
       - 'apps/web/test/crm-family-*'
@@ -46,7 +52,7 @@ jobs:
       - name: Install unchanged lockfile and build application
         run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Focused frontend integration tests
-        run: pnpm --filter @hon/web exec vitest run test/crm-lead-create-ui.test.tsx test/crm-lead-close-ui.test.tsx test/crm-enrollment-privacy.test.ts test/crm-family-http.test.ts test/crm-family-flow.test.tsx test/membership-plan-http.test.ts test/membership-plan-ui.test.tsx test/crm-adult-flow-http.test.ts test/crm-adult-flow-ui.test.tsx test/crm-adult-flow-recovery.test.tsx test/crm-leads-workbench.test.tsx test/crm-lifecycle-handoff.test.tsx test/staff-route-auth-layout.test.ts
+        run: pnpm --filter @hon/web exec vitest run test/crm-leads-page-session.test.tsx test/crm-enrollment-discard.test.tsx test/crm-lead-create-ui.test.tsx test/crm-lead-close-ui.test.tsx test/crm-close-privacy.test.tsx test/crm-lead-close-http.test.ts test/crm-enrollment-privacy.test.ts test/crm-family-http.test.ts test/crm-family-flow.test.tsx test/membership-plan-http.test.ts test/membership-plan-ui.test.tsx test/crm-adult-flow-http.test.ts test/crm-adult-flow-ui.test.tsx test/crm-adult-flow-recovery.test.tsx test/crm-leads-workbench.test.tsx test/crm-lifecycle-handoff.test.tsx test/staff-route-auth-layout.test.ts
       - name: Frontend transport against the real API and guarded disposable PostgreSQL
         run: |
           set -euo pipefail

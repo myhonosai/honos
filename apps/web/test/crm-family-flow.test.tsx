@@ -1,6 +1,7 @@
 import React, { type ReactElement } from 'react';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { CrmGuardianChildEnrollment, CrmGuardianChildFamilyState, CrmGuardianChildChildState } from '@hon/contracts';
+import { CrmEnrollmentDiscard } from '../src/components/crm-enrollment-discard';
 import { CrmFamilyFlow } from '../src/components/crm-family-flow';
 import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 import { AdultMembershipPlanPicker } from '../src/components/membership-plans/picker';
@@ -161,4 +162,55 @@ it('retains the exact uncertain child DRAFT outside the picker through fresh fam
 it('conceals on hidden-tab visibility and never reveals on visibility restoration',async()=>{
   const f=await openFamilyWorkbench();Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));expect(privacyHidden()).toBe(true);
   Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'));await settle();expect(privacyHidden()).toBe(true);expect(f).toHaveBeenCalledTimes(2);
+});
+
+it('never discards an in-flight exact family retry, even through a stale Discard handler', async () => {
+  let finish!: (r: Response) => void;
+  const f = vi.spyOn(globalThis,'fetch').mockRejectedValueOnce(new Error('uncertain')).mockImplementationOnce(() => new Promise(yes => {finish=yes;})).mockResolvedValueOnce(response(family()));
+  start(family('PAYER_DESIGNATION_REQUIRED')); agree(); submit(); await settle();
+  const discard=elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!;
+  const retry=button('Retry exact family request').props.onClick; retry(); retry();
+  expect(elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.disabled).toBe(true);
+  discard.props.onDiscard(); expect(button('Retry exact family request')).toBeDefined(); expect(f).toHaveBeenCalledTimes(2);
+  expect(f.mock.calls[0]![1]!.body).toBe(f.mock.calls[1]![1]!.body); expect(f.mock.calls[0]![1]!.headers).toEqual(f.mock.calls[1]![1]!.headers);
+  finish(response(payer)); await settle(); expect(text(render())).toContain('Guardian payer designation verified');
+});
+it('deliberately abandons unknown family recovery without resending or treating it as cancellation', async () => {
+  const f=vi.spyOn(globalThis,'fetch').mockRejectedValueOnce(new Error('uncertain'));
+  start(family('PAYER_DESIGNATION_REQUIRED')); agree(); submit(); await settle();
+  elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.onDiscard();
+  expect(text(render())).toContain('did not cancel or undo'); expect(elements(render()).some(e=>e.type==='form')).toBe(false); expect(f).toHaveBeenCalledOnce();
+  f.mockResolvedValueOnce(response(family())); click('Refresh family setup'); await settle(); expect(text(render())).toContain('Current family setup verified'); expect(f).toHaveBeenCalledTimes(2);
+});
+it('retains an unexpected adult request visibly and never retries it through the family path', async () => {
+  start();elements(render()).find(e=>e.type==='button'&&text(e).startsWith('Kai Stone'))!.props.onClick();
+  const picker=elements(render()).find(e=>e.type===AdultMembershipPlanPicker)!;
+  const {draftFromPlanRequest}=await import('../src/components/membership-plans/http');
+  const {CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION}=await import('@hon/contracts');
+  const request=draftFromPlanRequest(scope,{studentProfileId:id(5),membershipPlanId:plan.planId,membershipPlanVersion:1,confirmation:CRM_ADULT_MEMBERSHIP_DRAFT_FROM_PLAN_CONFIRMATION},id(10));
+  const f=vi.spyOn(globalThis,'fetch');picker.props.onUncertain(request);
+  expect(text(render())).toContain('Unexpected retry request type'); expect(text(render())).toContain('retained in memory');
+  expect(button('Retry exact family request')).toBeUndefined(); expect(button('Refresh family setup').props.disabled).toBe(true); expect(f).not.toHaveBeenCalled();
+  elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.onDiscard();expect(button('Refresh family setup').props.disabled).toBe(false);expect(f).not.toHaveBeenCalled();
+});
+it('blocks stale shield Discard handlers while a command is active and preserves the mounted family', async () => {
+  await openFamilyWorkbench();window.dispatchEvent(new Event('blur'));
+  const discard=elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!;
+  const panel=elements(render()).find(e=>e.type===CrmFamilyFlow)!;panel.props.onBusy(true);
+  expect(elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.disabled).toBe(true); discard.props.onDiscard();
+  expect(privacyHidden()).toBe(true);expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(true);
+  panel.props.onBusy(false);elements(render()).find(e=>e.type===CrmEnrollmentDiscard)!.props.onDiscard();expect(privacyHidden()).toBe(false);expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(false);
+});
+it('leaves an empty idle view unshielded and ignores a late lead read after blur', async () => {
+  let finish!: (r: Response) => void;const f=vi.spyOn(globalThis,'fetch').mockImplementationOnce(()=>new Promise(yes=>{finish=yes;}));
+  view=()=>CrmLeadsWorkbench({initialScope:scope,sessionSubject:'family-staff'});render();window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(false);expect(f).not.toHaveBeenCalled();
+  elements(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});window.dispatchEvent(new Event('blur'));finish(response([row]));await settle();
+  expect(privacyHidden()).toBe(false);expect(text(render())).not.toContain('Ari Stone');expect(text(render())).toContain('No verified school list');
+});
+it('does not shield an empty authorized list, but shields typed sensitive input before any server load', async () => {
+  vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response([]));view=()=>CrmLeadsWorkbench({initialScope:scope,sessionSubject:'family-staff'});render();
+  elements(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(false);
+  const privateArea=elements(render()).find(e=>e.type==='div'&&e.props.onInputCapture)!;
+  privateArea.props.onInputCapture({target:{closest:()=>null}});window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(true);
+  window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(true);window.dispatchEvent(new Event('focus'));expect(privacyHidden()).toBe(true);
 });
