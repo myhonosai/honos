@@ -1,5 +1,12 @@
 # HON Delivery Backlog
 
+## Private Codespaces reference preview — Codex
+
+- [x] Prepare a minimal Node 22 / pnpm 10.18.0 devcontainer and [beginner guide](docs/CODESPACES_PREVIEW.md) for the existing public reference routes, forwarding only port 3000 with mandatory owner-only Private visibility verification. No automatic application start, database, provider, credential or authentication changes.
+- [x] Document clean install/build/start, cost controls, missing legacy assets and the existing isolated HQ/CRM/school browser fixtures. Authenticated interactive demo sessions remain separate follow-up work; screenshots and automated fixtures are not a running owner preview.
+- [x] Validate JSON against the official devcontainer schema, shell syntax, package-manager pin, existing reference routes, port/source boundaries and `git diff --check`. No dependency installation, Docker build or new browser run attempted in the blocked environment; repository CI is separate evidence.
+- [ ] Owner review/approval of the focused setup PR, then owner-executed Codespace creation and actual private desktop/mobile verification. No Codespace, external deployment or automatic merge performed.
+
 ## CRM final safety and reliability — Codex
 
 - [ ] PR #50 independent-review correction: separate WON/LOST close-instance ownership from read invalidation, preserve unknown close retries through concealment/restoration, and verify targeted lifecycle, signed-session API/disposable PostgreSQL, desktop/mobile/accessibility and all security proofs before another review. No automatic retry, reload workaround or backend change.
