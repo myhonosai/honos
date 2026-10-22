@@ -200,7 +200,7 @@ try {
       if (scenario === 'unknown') { await page.getByRole('button', { name: 'Retry exact request' }).waitFor(); assert.equal(commands.length, 1); await page.getByRole('button', { name: 'Retry exact request' }).click(); await page.getByRole('heading', { name: /Create or reuse this adult/ }).waitFor(); assert.equal(commands.length, 2); assert.deepEqual(commands[0], commands[1]); }
       if (scenario === 'review') { await page.getByText(/Staff review required/).waitFor(); assert.equal(await page.getByRole('button', { name: 'Create or reuse account' }).count(), 0); }
       if (scenario === 'deny-account') { await page.getByRole('heading', { name: /Create or reuse this adult/ }).waitFor(); await page.getByRole('checkbox', { name: /responsible for their own billing/ }).check(); await page.getByRole('button', { name: 'Create or reuse account' }).click(); await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert.equal(await page.getByLabel('School UUID', { exact: true }).inputValue(), ''); assert(!(await page.locator('body').innerText()).includes('private-canary')); }
-      if (scenario === 'slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert.equal(await page.getByText(/Registration recorded for this adult/).count(), 0); }
+      if (scenario === 'slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByRole('heading', { name: 'Set up Ari Stone' }).count(), 0); assert(!(await page.getByRole('main').innerText()).includes('Registration recorded for this adult')); }
     } finally { await context.close(); }
   });
   for (const actor of [null, 'family-synthetic', 'hq-synthetic', 'foreign-school-synthetic']) await check(`${actor ?? 'anonymous'}: authentication and API authorization remain required`, async () => {
@@ -314,16 +314,24 @@ try {
       await resume(page); await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).click(); mode = scenario === 'plan-denied' || scenario === 'plan-slow' ? scenario : 'ready';
       await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();
       if (scenario === 'plan-denied') { await page.getByRole('main').getByRole('alert').waitFor(); assert.equal(await page.getByRole('heading',{name:'Set up Ari Stone',exact:true}).count(),0); assert.equal(commands.length,0); }
-      else if (scenario === 'plan-slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert.equal(await page.getByLabel('Available membership plan',{exact:true}).count(),0); }
+      else if (scenario === 'plan-slow') { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.waitForTimeout(650); assert(!(await page.getByLabel('Available membership plan',{exact:true}).isVisible())); }
       else {
         await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(30)); await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click(); await page.getByRole('checkbox',{name:/reviewed this plan version/}).check(); mode = scenario;
         await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
-        if (scenario === 'plan-unknown') { await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).waitFor(); assert(await page.getByRole('button',{name:'Close adult setup',exact:true}).isDisabled()); await page.getByRole('button',{name:'Retry exact DRAFT request',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor(); assert.deepEqual(commands[0],commands[1]); }
+        if (scenario === 'plan-unknown') { await page.getByRole('button',{name:'Retry exact plan request',exact:true}).waitFor(); assert(await page.getByRole('button',{name:'Check DRAFT readiness',exact:true}).isDisabled()); await page.getByRole('button',{name:'Retry exact plan request',exact:true}).click(); await page.getByRole('heading',{name:'Created from published plan: Adult Monthly',exact:true}).waitFor(); assert.deepEqual(commands[0],commands[1]); }
         else { await page.getByRole('alert').waitFor(); await visual(page,'mobile-stale-plan-result'); await page.getByText('This plan changed since you loaded it. Reload and review the current version before submitting again.',{exact:true}).waitFor(); await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).waitFor({state:'detached'}); assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0); assert.equal(commands.length,1); assert.equal(drafted,false); }
       }
     } finally { await context.close(); }
   });
-  await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin });
+  for(const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]) await check(`${size}: adult privacy preserves exact uncertain registration without automatic replay`,async()=>{
+    reset('unknown');const {context,page}=await open(viewport);try{
+      await choose(page);await register(page);await page.getByRole('button',{name:'Retry exact request',exact:true}).waitFor();assert.equal(commands.length,1);
+      await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));await visual(page,`${size}-adult-privacy-hidden`);
+      await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();await page.getByRole('button',{name:'Retry exact request',exact:true}).waitFor();assert.equal(commands.length,1);
+      await page.getByRole('button',{name:'Retry exact request',exact:true}).click();await page.getByText('Adult registration receipt replayed.',{exact:true}).waitFor();assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);await visual(page,`${size}-adult-privacy-restored`);
+    }finally{await context.close();}
+  });
+  await runFamilyBrowserChecks({ fixture: familyFixture, reset, open, visual, check, id, origin, replaceActor: context => context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}]) });
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
 } finally { await browser?.close(); app.kill('SIGTERM'); await new Promise(done => api.close(done)); await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); }
 console.log(`PASS: ${report.checks.length} browser checks; ${report.screenshots.length} actual application screenshots; synthetic API verification only.`);

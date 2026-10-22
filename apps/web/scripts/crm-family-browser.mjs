@@ -56,14 +56,15 @@ export function createFamilyFixture({ id, scope, date, origin, send, rejected, p
       const {programName,...plan}=p;const receipt={membershipId:id(70+children.indexOf(c)),state:'DRAFT',planCode:p.planCode,termStartedAt:null,termEndsAt:null,recordedAt:date};result={receipt,plan};verifyCrmGuardianChildMembershipDraftFromPlan(result,input);c.workflowState='CURRENT_DRAFT';c.currentMembershipDraft={state:'RECORDED_DRAFT',...result};
     }
     keys.set(key,{step,raw,result});
-    if(mode==='family-unknown-payer'&&step==='payer'){mode='family-ready';send(res,503,{});return true;}
+    if(mode==='family-slow-payer'&&step==='payer')await new Promise(done=>setTimeout(done,700));
+    if((mode==='family-unknown-payer'&&step==='payer')||(mode==='family-unknown-draft'&&step==='draft')){mode='family-ready';send(res,503,{});return true;}
     send(res,step==='account'?201:200,result);return true;
   }
   return {reset,handle,data,get commands(){return commands;},get reads(){return reads;},get children(){return children;},set mode(value){mode=value;},
     seedChildren(count=1){registered=accounted=designated=true;children=Array.from({length:count},(_,i)=>child(i,i?'Mina Stone':'Kai Stone'));}};
 }
 
-export async function runFamilyBrowserChecks({ fixture, reset, open, visual, check, id, origin }) {
+export async function runFamilyBrowserChecks({ fixture, reset, open, visual, check, id, origin, replaceActor }) {
   async function begin(page){await page.getByLabel('Status filter').selectOption('WON');await page.getByRole('button',{name:'Load CRM leads',exact:true}).click();assert.equal(fixture.reads.length,0);await page.getByRole('button',{name:'Set up / resume family',exact:true}).focus();await page.keyboard.press('Enter');await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).waitFor();}
   async function confirm(page,label){await page.getByRole('checkbox').check();await page.getByRole('button',{name:label,exact:true}).click();}
   async function fields(page,given='Kai'){await page.getByLabel('Child given name',{exact:true}).fill(given);await page.getByLabel('Child family name',{exact:true}).fill('Stone');await page.getByLabel('Child date of birth',{exact:true}).fill(given==='Kai'?'2016-02-03':'2018-04-05');}
@@ -79,7 +80,7 @@ export async function runFamilyBrowserChecks({ fixture, reset, open, visual, che
         for(const name of ['Kai','Mina']) {
           await page.getByRole('button',{name:new RegExp(`${name} Stone`)}).click();await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(34));await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();
           await visual(page,`${size}-${name.toLowerCase()}-plan-review`);await page.getByRole('checkbox',{name:new RegExp(`DRAFT for ${name} Stone`)}).check();await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
-          await page.getByRole('heading',{name:`Historical DRAFT creation receipt for ${name} Stone`,exact:true}).waitFor();assert.equal(await page.getByRole('heading',{name:'Verified current DRAFT',exact:true}).count(),0);await page.getByRole('button',{name:'Refresh family setup',exact:true}).click();await page.getByRole('button',{name:new RegExp(`${name} Stone`)}).click();await page.getByRole('heading',{name:'Verified current DRAFT',exact:true}).waitFor();
+          await page.getByRole('heading',{name:`Historical DRAFT creation receipt for ${name} Stone`,exact:true}).waitFor();assert.equal(await page.getByRole('heading',{name:'Verified current DRAFT',exact:true}).count(),0);await page.getByRole('button',{name:'Check current membership status',exact:true}).click();await page.getByRole('heading',{name:'Verified current DRAFT',exact:true}).waitFor();
         }
         const drafts=fixture.commands.filter(c=>c.step==='draft');assert.equal(drafts.length,2);assert.notEqual(JSON.parse(drafts[0].raw).studentProfileId,JSON.parse(drafts[1].raw).studentProfileId);assert.equal(new Set(fixture.commands.map(c=>c.key)).size,6);await visual(page,`${size}-family-current-drafts`);
         const count=fixture.commands.length;await page.reload();await beginAfterReload(page);assert.equal(fixture.commands.length,count);
@@ -110,7 +111,7 @@ export async function runFamilyBrowserChecks({ fixture, reset, open, visual, che
         await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).waitFor();
         if(scenario==='family-cap'){assert.equal(await page.getByRole('button',{name:'Add child',exact:true}).count(),0);assert((await page.getByRole('main').innerText()).includes('maximum of 10 children'));}
         if(scenario==='family-duplicate'){await fields(page);await confirm(page,'Add child');await page.getByText(/no child was created or merged/).waitFor();assert.equal(fixture.children.length,1);}
-        if(scenario==='family-unknown-payer'||scenario==='family-payer-failed'){await confirm(page,'Designate guardian payer');if(scenario==='family-unknown-payer'){await page.getByRole('button',{name:'Retry exact family request',exact:true}).waitFor();await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('button',{name:'Retry exact family request',exact:true}).click();await page.getByRole('heading',{name:'Add another child',exact:true}).waitFor();assert.deepEqual(fixture.commands[0],fixture.commands[1]);}else{await page.getByRole('main').getByRole('alert').waitFor();await page.getByRole('button',{name:'Designate guardian payer',exact:true}).waitFor({state:'detached'});assert.equal(await page.getByRole('button',{name:'Designate guardian payer',exact:true}).count(),0);}}
+        if(scenario==='family-unknown-payer'||scenario==='family-payer-failed'){await confirm(page,'Designate guardian payer');if(scenario==='family-unknown-payer'){await page.getByRole('button',{name:'Retry exact family request',exact:true}).waitFor();await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));const commands=fixture.commands.length;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));assert.equal(fixture.commands.length,commands);await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();await page.getByRole('button',{name:'Retry exact family request',exact:true}).click();await page.getByRole('heading',{name:'Add another child',exact:true}).waitFor();assert.deepEqual(fixture.commands[0],fixture.commands[1]);}else{await page.getByRole('main').getByRole('alert').waitFor();await page.getByRole('button',{name:'Designate guardian payer',exact:true}).waitFor({state:'detached'});assert.equal(await page.getByRole('button',{name:'Designate guardian payer',exact:true}).count(),0);}}
         if(scenario==='family-stale'){await page.getByRole('button',{name:/Kai Stone/}).click();await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(34));await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();await page.getByRole('checkbox',{name:/DRAFT for Kai Stone/}).check();await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();await page.getByRole('main').getByRole('alert').waitFor();await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).waitFor({state:'detached'});assert.equal(await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).count(),0);assert.equal(fixture.children[0].workflowState,'READY_FOR_DRAFT');}
       }
     }finally{await context.close();}
@@ -118,4 +119,45 @@ export async function runFamilyBrowserChecks({ fixture, reset, open, visual, che
   await check('family: navigation/session loss restores progress without repeating commands',async()=>{
     reset('family-ready');fixture.seedChildren(2);const {context,page}=await open({width:390,height:844});try{await begin(page);await page.goto(origin+'/staff/search');await page.goto(origin+'/staff/crm/leads?organizationId='+id(1)+'&schoolId='+id(2));await beginAfterReload(page);assert.equal(fixture.children.length,2);await context.clearCookies();await page.getByRole('button',{name:'Refresh family setup',exact:true}).click();await page.getByRole('main').getByRole('alert').waitFor();assert.equal(await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).count(),0);assert.equal(fixture.commands.length,0);}finally{await context.close();}
   });
+  for (const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]) {
+    await check(`${size}: privacy shield hides all CRM information and never restores on focus alone`,async()=>{
+      reset('family-ready');fixture.seedChildren(2);const {context,page}=await open(viewport);try{
+        await begin(page);await page.getByRole('button',{name:/Kai Stone/}).click();await visual(page,`${size}-family-privacy-before`);
+        const count=fixture.commands.length,reads=fixture.reads.length;
+        await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();
+        assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert(!(await page.getByRole('main').innerText()).includes('Kai Stone'));
+        assert(await page.locator('[aria-hidden="true"][inert]').evaluate(e=>e.hidden&&getComputedStyle(e).display==='none'));
+        await visual(page,`${size}-family-privacy-hidden`);await page.evaluate(()=>window.dispatchEvent(new Event('focus')));assert.equal(fixture.commands.length,count);assert.equal(fixture.reads.length,reads);
+        await page.getByRole('button',{name:'Verify access and resume',exact:true}).focus();await page.keyboard.press('Enter');await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).waitFor();
+        assert(fixture.reads.length>reads);assert.equal(fixture.commands.length,count);await visual(page,`${size}-family-privacy-restored`);
+        const heading=await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).boundingBox();assert(heading.y<viewport.height,'Family panel is reachable in one viewport after revalidation');
+      }finally{await context.close();}
+    });
+    await check(`${size}: uncertain child DRAFT retains its exact request through privacy verification`,async()=>{
+      reset('family-unknown-draft');fixture.seedChildren();const {context,page}=await open(viewport);try{
+        await begin(page);await page.getByRole('button',{name:/Kai Stone/}).click();await page.getByRole('button',{name:'Load available membership plans',exact:true}).click();await page.getByLabel('Available membership plan',{exact:true}).selectOption(id(34));await page.getByRole('button',{name:'Review membership DRAFT',exact:true}).click();await page.getByRole('checkbox',{name:/DRAFT for Kai Stone/}).check();await page.getByRole('button',{name:'Create DRAFT from selected plan',exact:true}).click();
+        await page.getByRole('button',{name:'Retry exact family request',exact:true}).waitFor();assert.equal(fixture.commands.length,1);
+        await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();await page.getByRole('button',{name:'Retry exact family request',exact:true}).waitFor();assert.equal(fixture.commands.length,1);
+        await visual(page,`${size}-family-exact-retry`);await page.getByRole('button',{name:'Retry exact family request',exact:true}).click();await page.getByRole('heading',{name:'Historical DRAFT creation receipt for Kai Stone',exact:true}).waitFor();assert.deepEqual(fixture.commands[0],fixture.commands[1]);
+        await page.getByRole('button',{name:'Check current membership status',exact:true}).click();await page.getByRole('heading',{name:'Verified current DRAFT',exact:true}).waitFor();assert.equal(fixture.commands.length,2);assert.equal(fixture.children.length,1);
+        await visual(page,`${size}-family-verified-after-retry`);
+      }finally{await context.close();}
+    });
+  }
+  for(const scenario of ['expired','changed-user','revoked','scope-change','slow-command'])await check(`privacy restoration: ${scenario} never reveals unauthorized data`,async()=>{
+    reset('family-state-PAYER_DESIGNATION_REQUIRED');const {context,page}=await open({width:390,height:844});try{
+      await begin(page);
+      if(scenario==='slow-command'){fixture.mode='family-slow-payer';await confirm(page,'Designate guardian payer');}
+      await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();
+      if(scenario==='expired')await context.clearCookies();
+      if(scenario==='changed-user')await replaceActor(context);
+      if(scenario==='revoked')fixture.mode='family-denied';
+      if(scenario==='scope-change'){await page.getByRole('button',{name:'Discard local view',exact:true}).click();await page.getByLabel('School UUID',{exact:true}).fill(id(99));assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert.equal(fixture.commands.length,0);return;}
+      const button=page.getByRole('button',{name:'Verify access and resume',exact:true});await button.waitFor();await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Verify access and resume')?.disabled);
+      await button.click();
+      if(scenario==='slow-command'){await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).waitFor();assert.equal(fixture.commands.length,1);}
+      else{await page.getByRole('main').getByRole('alert').waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert.equal(await page.getByLabel('School UUID',{exact:true}).inputValue(),'');assert.equal(fixture.commands.length,0);}
+    }finally{await context.close();}
+  });
+
 }

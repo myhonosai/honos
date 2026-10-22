@@ -3,6 +3,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 import { CrmAdultFlow } from '../src/components/crm-adult-flow';
 import { CrmAdultRecoveryPending } from '../src/components/crm-adult-recovery-pending';
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (v: string) => `Localized ${v}` }) }));
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
   useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.values)) hooks.values[i] = initial; return [hooks.values[i], (v: unknown) => { hooks.values[i] = typeof v === 'function' ? (v as Function)(hooks.values[i]) : v; }]; },

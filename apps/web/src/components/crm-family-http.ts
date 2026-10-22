@@ -99,7 +99,7 @@ export async function sendFamilyRequest(request: FamilyRequest, signal?: AbortSi
   } catch (error) {
     if (error instanceof PlanAccessError || error instanceof PlanRejectedError) throw error;
     if (error instanceof AdultAccessError) throw new PlanAccessError(error.message);
-    if (error instanceof AdultRejectedError) throw new PlanRejectedError('', 409, error.message);
+    if (error instanceof AdultRejectedError) throw new PlanRejectedError('', 409, 'The guardian’s canonical billing account could not be created or reused. Verify the family’s current records and account currency with authorized staff, then refresh family setup. No payer designation or completed account action is assumed.');
     if (!request.key) throw new PlanReadError('Current family setup could not be verified. Retry the read; no records have been assumed.');
     throw new PlanUnknownError('The action may already have completed. Retry only the exact retained request, or discard it explicitly and refresh saved setup.');
   }
