@@ -114,35 +114,37 @@ it('opens recovery explicitly, conceals all CRM data on blur, then clears memory
 
 function privacyHidden(): boolean { return elements(render()).some(e => e.type === 'div' && e.props.hidden === true && e.props.inert === true); }
 const identityResponse = (subject = 'family-staff') => new Response(JSON.stringify({data:{externalSubject:subject}}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
-async function openFamilyWorkbench(f: ReturnType<typeof vi.spyOn>): Promise<void> {
+async function openFamilyWorkbench() {
+  const f=vi.spyOn(globalThis,'fetch');
   f.mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response(family()));
   view=()=>CrmLeadsWorkbench({initialScope:scope,sessionSubject:'family-staff'});render();
   elements(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();click('Set up / resume family');await settle();
+  return f;
 }
 it('reveals nothing on focus alone and explicitly verifies session, school and family before restoring', async()=>{
-  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(true);
+  const f=await openFamilyWorkbench();window.dispatchEvent(new Event('blur'));expect(privacyHidden()).toBe(true);
   window.dispatchEvent(new Event('focus'));await settle();expect(f).toHaveBeenCalledTimes(2);expect(privacyHidden()).toBe(true);
   f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response(family())).mockResolvedValueOnce(identityResponse());
   const restore=button('Verify access and resume').props.onClick;restore();restore();await settle();expect(privacyHidden()).toBe(false);expect(f).toHaveBeenCalledTimes(6);
   expect(f.mock.calls.slice(2).every(([,options])=>!(options?.headers as Record<string,string>)?.['Idempotency-Key'])).toBe(true);
 });
 it.each([401,403])('discards private enrollment and retries after denied restoration %s',async status=>{
-  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));
+  const f=await openFamilyWorkbench();window.dispatchEvent(new Event('blur'));
   f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response({code:'private-canary'},status));
   click('Verify access and resume');await settle();expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(false);expect(text(render())).not.toContain('private-canary');
   expect(elements(render()).filter(e=>e.type==='input').map(e=>e.props.value)).toEqual(['','']);
 });
 it('rejects another signed-in user and never reveals old family or command memory',async()=>{
-  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));f.mockResolvedValueOnce(identityResponse('another-staff'));
+  const f=await openFamilyWorkbench();window.dispatchEvent(new Event('blur'));f.mockResolvedValueOnce(identityResponse('another-staff'));
   click('Verify access and resume');await settle();expect(elements(render()).some(e=>e.type===CrmFamilyFlow)).toBe(false);expect(f).toHaveBeenCalledTimes(3);
 });
 it.each([404,409,503])('keeps private data hidden when fresh recovery fails with %s',async status=>{
-  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));
+  const f=await openFamilyWorkbench();window.dispatchEvent(new Event('blur'));
   f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response({},status));click('Verify access and resume');await settle();
   expect(privacyHidden()).toBe(true);expect(text(render())).toContain('CRM information remains hidden');
 });
 it('ignores a late successful restore after focus is lost again',async()=>{
-  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);window.dispatchEvent(new Event('blur'));
+  const f=await openFamilyWorkbench();window.dispatchEvent(new Event('blur'));
   let finish!:(r:Response)=>void;f.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(response([row])).mockImplementationOnce(()=>new Promise(yes=>{finish=yes;})).mockResolvedValueOnce(identityResponse());
   click('Verify access and resume');await settle();window.dispatchEvent(new Event('blur'));finish(response(family()));await settle();expect(privacyHidden()).toBe(true);
 });
@@ -157,6 +159,6 @@ it('retains the exact uncertain child DRAFT outside the picker through fresh fam
 });
 
 it('conceals on hidden-tab visibility and never reveals on visibility restoration',async()=>{
-  const f=vi.spyOn(globalThis,'fetch');await openFamilyWorkbench(f);Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));expect(privacyHidden()).toBe(true);
+  const f=await openFamilyWorkbench();Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));expect(privacyHidden()).toBe(true);
   Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'));await settle();expect(privacyHidden()).toBe(true);expect(f).toHaveBeenCalledTimes(2);
 });
