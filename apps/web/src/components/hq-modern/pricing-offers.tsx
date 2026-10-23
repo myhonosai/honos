@@ -111,7 +111,14 @@ export function HqPricingOffers(): React.ReactElement {
       {designProblems(draft).length > 0 && <div className={styles.warning}><p>{t('pricing.validation')}</p><ul>{designProblems(draft).map(problem => <li key={problem}>{t(`pricing.error.${problem}`)}</li>)}</ul></div>}
       <label className={styles.checkbox}><input type="checkbox" checked={acknowledged} disabled={!owner} onChange={event => setAcknowledged(event.target.checked)}/>{t('pricing.ack')}</label><div className={styles.actions}><button type="button" disabled aria-describedby="offer-publish-blocked">{t('pricing.publish-unavailable')}</button><button type="button" onClick={() => { setReview(false); requestAnimationFrame(() => heading.current?.focus()); }}>{t('pricing.close-review')}</button></div><p id="offer-publish-blocked" className={styles.note}>{t('pricing.backend')}</p>
     </section>}
-    {pendingLayout && <dialog ref={switchDialog} className={styles.switchDialog} aria-labelledby="offer-switch-title" aria-describedby="offer-switch-description" onCancel={event => { event.preventDefault(); continueEditing(); }}>
+    {pendingLayout && <dialog ref={switchDialog} className={styles.switchDialog} aria-labelledby="offer-switch-title" aria-describedby="offer-switch-description" onCancel={event => { event.preventDefault(); continueEditing(); }} onKeyDown={event => {
+      if (event.key !== 'Tab') return;
+      const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+      const first = buttons[0], last = buttons[buttons.length - 1];
+      if (first && last && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus();
+      }
+    }}>
       <h2 id="offer-switch-title">{t('pricing.unsaved-title')}</h2>
       <p id="offer-switch-description">{t('pricing.unsaved-description', { current: title(draft.layout), next: title(pendingLayout) })}</p>
       <p className={styles.note}>{t('pricing.unsaved-local')}</p>

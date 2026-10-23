@@ -40,7 +40,7 @@ const app = spawn(process.execPath, [requireWeb.resolve('next/dist/bin/next'), '
   env: { PATH: process.env.PATH, HOME: process.env.HOME, LANG: 'C.UTF-8', NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', HON_API_BASE_URL: 'http://127.0.0.1:3001', HON_AUTH_MODE: session.mode, HON_SESSION_AUDIENCE: session.audience, HON_SESSION_JWT_SECRET: session.secret }, stdio: ['ignore', 'pipe', 'pipe'] });
 let log = ''; app.stdout.on('data', d => { log += d; }); app.stderr.on('data', d => { log += d; });
 let browser;
-async function check(name, work) { try { await work(); report.checks.push(name); console.log('PASS ' + name); } catch (e) { report.failures.push({ name, message: e.message }); throw e; } }
+async function check(name, work) { try { await work(); report.checks.push(name); console.log('PASS ' + name); } catch (e) { report.failures.push({ name, message: e.message }); console.error('FAIL ' + name + ': ' + e.message); } }
 async function open(viewport, language = 'en', role = 'owner') {
   const context = await browser.newContext({ viewport, reducedMotion: 'reduce', serviceWorkers: 'block' });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
@@ -72,6 +72,7 @@ async function verifyKoreanFont(page, size) {
     const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
     report.koreanFonts.push({ size, fonts });
     assert(fonts.some(font => /Noto Sans (CJK KR|KR)/i.test(font.familyName) && font.glyphCount > 0), 'Chrome must render real Korean glyphs with the provisioned fallback');
+    console.log('KOREAN_FONT ' + JSON.stringify({ size, fonts }));
   } finally { await cdp.detach(); }
 }
 async function hitTest(page, locator, name) {
@@ -93,6 +94,7 @@ async function dirtySwitches(page, ui, tx, language, size) {
   assert(await keepEditing.evaluate(e => e === document.activeElement), 'Safe default focus');
   // Tab stays inside the native modal, and Escape is nondestructive.
   await page.keyboard.press('Tab'); assert(await dialog.evaluate(e => e.contains(document.activeElement)));
+  await page.keyboard.press('Shift+Tab'); assert(await keepEditing.evaluate(e => e === document.activeElement), 'Reverse tab wraps inside modal');
   await capture(page, `${language}-${size}-pricing-unsaved-changes`, { resetScroll: false });
   await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
   assert.equal(await amount.inputValue(), '250.02'); assert.equal(await layouts.inputValue(), 'monthly');
@@ -163,5 +165,6 @@ try {
   });
   assert(report.requests.every(r => r.method === 'GET' && ['/v1/me/language-preference', '/v1/hq/overview'].includes(r.path)), 'Unexpected API or mutation');
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors));
+  assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
 } catch (e) { console.error(e.stack ?? e); process.exitCode = 1; }
 finally { await browser?.close(); app.kill('SIGTERM'); await new Promise(done => api.close(done)); await writeFile(join(results, 'pricing-report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify({ checks: report.checks.length, screenshots: report.screenshots.length, axeScans: report.accessibility.length, failures: report.failures.length, jsErrors: report.pageErrors.length, pricingBackendConnected: false })); }
