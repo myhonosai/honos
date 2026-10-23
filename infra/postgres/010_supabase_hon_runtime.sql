@@ -1709,3 +1709,41 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 -- End HON paid-access B6A exact reconciliation.
+
+-- HON OS commercial offers (0181) exact reconciliation: three private deny-all tables, private helpers and eight runtime
+-- entry points (HQ offer management reads and owner commands, and the school purchaser discovery read).
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_saas_offer_sets()','hon.guard_saas_offer_set_offers()','hon.saas_hon_os_product_json()',
+      'hon.saas_offer_json(hon.saas_offer_set_offers)','hon.saas_offer_set_json(uuid)','hon.saas_offer_set_preview(uuid)',
+      'hon.saas_offer_set_content_valid(jsonb)','hon.saas_offer_set_write_content(uuid,jsonb)','hon.saas_offer_owner(text)',
+      'hon.read_saas_offer_management_from_hq(text)','hon.read_saas_offer_set_from_hq(text,uuid)',
+      'hon.create_saas_offer_set_draft(text,jsonb,uuid,uuid,uuid)','hon.revise_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)',
+      'hon.discard_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)','hon.publish_saas_offer_set(text,uuid,jsonb,uuid,uuid,uuid)',
+      'hon.stop_saas_offer_sales(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_saas_hon_os_offers_for_school(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_offer_management_from_hq(text), hon.read_saas_offer_set_from_hq(text,uuid),
+      hon.create_saas_offer_set_draft(text,jsonb,uuid,uuid,uuid), hon.revise_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.discard_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid), hon.publish_saas_offer_set(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.stop_saas_offer_sales(text,uuid,jsonb,uuid,uuid,uuid), hon.read_saas_hon_os_offers_for_school(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End HON OS commercial offers exact reconciliation.

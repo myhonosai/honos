@@ -151,6 +151,15 @@ const SAAS_BILLING_CALLS = {
   readOrganizationAccess: { sql: 'SELECT hon.read_saas_organization_access_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   awaitFirstPayment: { sql: 'SELECT hon.place_saas_organization_awaiting_payment($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   retryFirstPaymentActivation: { sql: 'SELECT hon.retry_saas_first_payment_activation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
+  readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },
+  readOfferSet: { sql: 'SELECT hon.read_saas_offer_set_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createOfferSetDraft: { sql: 'SELECT hon.create_saas_offer_set_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  reviseOfferSetDraft: { sql: 'SELECT hon.revise_saas_offer_set_draft($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  discardOfferSetDraft: { sql: 'SELECT hon.discard_saas_offer_set_draft($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  publishOfferSet: { sql: 'SELECT hon.publish_saas_offer_set($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  stopOfferSales: { sql: 'SELECT hon.stop_saas_offer_sales($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSchoolHonOsOffers: { sql: 'SELECT hon.read_saas_hon_os_offers_for_school($1,$2::uuid) AS data', arity: 2, readOnly: true },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 // Interface language persistence (0171): fixed subject-bound functions; the subject is the verified identity.
