@@ -1,10 +1,15 @@
 # HON Delivery Backlog
 
+## E1a two-step membership activation frontend — Codex
+
+- [x] Replace the obsolete one-step caller with server preview, inclusive school-local dates, explicit warning/override acknowledgements and exact digest-bound confirmation in PR #53. Preserve cancellation, delegated authority, CRM adult/family workflows and appearance preferences.
+- [ ] Final verification and independent review for PR #53: in-memory immutable retries, focus-loss concealment and explicit signed-session/exact-school restoration; frontend, signed-session/disposable PostgreSQL, desktop/mobile/accessibility and full CI checks. Evidence belongs in the PR; no deployment, persistent database changes, payments or E1b/E1c work.
+
 ## Membership activation gate E1a backend — Claude (2026-10-22)
 
 - [x] Migration 0177: two-step direct-human activation (read-only server preview with digest → exact confirmation), runtime UPDATE/DELETE revoked on memberships with a seven-column DRAFT INSERT (D41 option C), settings-free transition trigger, immutable decision/effective-period/follow-up evidence, school-scoped `billing.membership.activation.override` (plus reserved `rules.manage` and `change.approve`), D29a identity-review override, D3 birth-date reminder and attestation, D40/D40a school-local inclusive dates, cancellation moved to a protected function with an unchanged contract. See `docs/architecture/MEMBERSHIP_ACTIVATION_GATE.md`.
-- [ ] Owner review and merge approval; no deployment (see `docs/architecture/MEMBERSHIP_ACTIVATION_GATE_DEPLOYMENT_AND_RISKS.md`).
-- [ ] Codex: two-step activation UI replacing `activateKnownMembership({ expectedVersion })` (`docs/architecture/MEMBERSHIP_ACTIVATION_GATE_CODEX_HANDOFF.md`).
+- [x] Owner-approved PR #52 squash-merged as `2beb7f5fd4307a64c0ae3790795e45270c4f35ae`; no deployment (see `docs/architecture/MEMBERSHIP_ACTIVATION_GATE_DEPLOYMENT_AND_RISKS.md`).
+- [ ] Codex: two-step activation frontend implemented in PR #53; final verification and independent review remain pending (`docs/architecture/MEMBERSHIP_ACTIVATION_FRONTEND.md`).
 - [ ] Owner decision: should adult CRM registration refuse known minors (currently blocked only at activation)?
 - [ ] E1b: align lifecycle-state readers (operations report, parent billing view, command center, health, retention, renewal, revenue planning) with the derived effective status; date revisions for pre-0177 ACTIVE rows.
 - [ ] Update the nine non-CI manual billing/reporting proofs that seed ACTIVE rows directly to use `membershipFixtureQuery`.

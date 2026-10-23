@@ -4,6 +4,10 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened]
     paths:
+      - 'apps/web/src/components/membership-activation-*'
+      - 'apps/web/src/app/staff/billing/memberships/**'
+      - 'apps/web/test/membership-activation-*'
+      - 'apps/web/scripts/membership-activation-*'
       - '.github/workflows/crm-adult-frontend-verification.yml'
       - 'apps/web/src/components/crm-lead-close-*'
       - 'apps/web/test/crm-close-*'
@@ -52,7 +56,7 @@ jobs:
       - name: Install unchanged lockfile and build application
         run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Focused frontend integration tests
-        run: pnpm --filter @hon/web exec vitest run test/crm-leads-page-session.test.tsx test/crm-enrollment-discard.test.tsx test/crm-lead-create-ui.test.tsx test/crm-lead-close-ui.test.tsx test/crm-close-privacy.test.tsx test/crm-lead-close-http.test.ts test/crm-enrollment-privacy.test.ts test/crm-family-http.test.ts test/crm-family-flow.test.tsx test/membership-plan-http.test.ts test/membership-plan-ui.test.tsx test/crm-adult-flow-http.test.ts test/crm-adult-flow-ui.test.tsx test/crm-adult-flow-recovery.test.tsx test/crm-leads-workbench.test.tsx test/crm-lifecycle-handoff.test.tsx test/staff-route-auth-layout.test.ts
+        run: pnpm --filter @hon/web exec vitest run test/membership-activation-ui.test.tsx test/membership-activation-interaction.test.tsx test/membership-activation-page-session.test.tsx test/crm-leads-page-session.test.tsx test/crm-enrollment-discard.test.tsx test/crm-lead-create-ui.test.tsx test/crm-lead-close-ui.test.tsx test/crm-close-privacy.test.tsx test/crm-lead-close-http.test.ts test/crm-enrollment-privacy.test.ts test/crm-family-http.test.ts test/crm-family-flow.test.tsx test/membership-plan-http.test.ts test/membership-plan-ui.test.tsx test/crm-adult-flow-http.test.ts test/crm-adult-flow-ui.test.tsx test/crm-adult-flow-recovery.test.tsx test/crm-leads-workbench.test.tsx test/crm-lifecycle-handoff.test.tsx test/staff-route-auth-layout.test.ts
       - name: Frontend transport against the real API and guarded disposable PostgreSQL
         run: |
           set -euo pipefail
@@ -66,7 +70,7 @@ jobs:
           chmod 700 "$fixture_dir"
           trap 'rm -f "$fixture_dir/recovery.env"' EXIT
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET=postgresql://localhost:5432/hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE="$fixture_dir/recovery.env" node packages/database/scripts/setup-flexible-billing-accounts-validation.mjs
-          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-recovery-api-verification.mjs && node apps/web/scripts/crm-family-api-verification.mjs' _ "$fixture_dir/recovery.env"
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-recovery-api-verification.mjs && node apps/web/scripts/crm-family-api-verification.mjs && node apps/web/scripts/membership-activation-api-verification.mjs' _ "$fixture_dir/recovery.env"
       - name: Prepare pinned browser tools outside the repository
         run: |
           set -euo pipefail
