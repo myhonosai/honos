@@ -2,13 +2,14 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe,it,expect,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
-import {en,ko,es,translate} from '@hon/design-system';
+import {en,ko,es,translate,formatLocaleMoney,DEFAULT_LOCALE} from '@hon/design-system';
 import {validateSaasHonOsOfferSetDraftInput,validateSaasHonOsOfferSetReviseInput} from '@hon/contracts';
 import {createOfferFixtures} from '../scripts/fixtures/hq-offers.mjs';
 import {blankSet,blankOffer,formFromSet,formInput,usdMinor} from '../src/components/hq-modern/pricing-offers-model';
 import {PricingController} from '../src/components/hq-modern/pricing-offers-controller';
+import type {PricingRequest,PricingReceipt} from '../src/components/hq-modern/pricing-offers-http';
 import {PricingOffersView} from '../src/components/hq-modern/pricing-offers';
-vi.mock('../src/components/localization/provider',()=>({useLocale:()=>({t:(key:any,params:any)=>translate('en',key,params),money:(n:number)=>'USD '+n.toFixed(2),number:String,date:(s:string)=>s})}));
+vi.mock('../src/components/localization/provider',()=>({useLocale:()=>({t:(key:any,params:any)=>translate('en',key,params),money:(n:number,currency:string)=>formatLocaleMoney(DEFAULT_LOCALE,n,currency),number:String,date:(s:string)=>s,preferences:{...DEFAULT_LOCALE,timeZone:'Asia/Seoul'}})}));
 describe('whole HON OS offer-set form and source boundaries',()=>{
   it('round trips all six backend options without authoring IDs, currency or lifecycle fields',()=>{
     const fixture=createOfferFixtures(),set=fixture.detail(fixture.draftId).set,form=formFromSet(set),input=validateSaasHonOsOfferSetReviseInput(formInput(form));
@@ -45,8 +46,10 @@ describe('whole HON OS offer-set form and source boundaries',()=>{
     expect(readFileSync('src/components/hq-modern/pricing-offers.tsx','utf8')).toContain('<button type="button" disabled>{t(\'pricing.checkout-unavailable\')}</button>');
   });
   it('renders only authorized backend values, readonly history and an honestly disabled customer preview',async()=>{
-    const fixture=createOfferFixtures();const c=new PricingController({access:async()=>({subject:'owner',owner:true,management:fixture.management()}),detail:async id=>fixture.detail(id),send:vi.fn()});
-    await c.load();expect(renderToStaticMarkup(<PricingOffersView controller={c}/>)).toContain('USD 317.00');
-    await c.previewPublished();const html=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(html).toContain('Checkout unavailable');expect(html).toContain('Founder offers are hidden');expect(html).not.toContain('USD 183.00');
+    const fixture=createOfferFixtures();const c=new PricingController({access:async()=>({subject:'owner',owner:true,management:fixture.management()}),detail:async id=>fixture.detail(id),send:async(request:PricingRequest)=>({kind:request.kind,data:fixture.command(request.kind,request.target,JSON.parse(request.body),request.key,request.subject)}) as PricingReceipt});
+    await c.load();expect(renderToStaticMarkup(<PricingOffersView controller={c}/>)).toContain('$317');
+    await c.open(fixture.draftId);c.editOffer('amount','321.45');
+    await c.save();await c.review();const review=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(review).toContain('$321.45');expect(review).toContain('UTC');
+    await c.previewPublished();const html=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(html).toContain('Checkout unavailable');expect(html).toContain('Founder offers are hidden');expect(html).not.toContain('$183');
   });
 });

@@ -2,7 +2,7 @@
 import React,{useEffect,useRef,useState,useSyncExternalStore} from 'react';
 import Link from 'next/link';
 import { SAAS_HON_OS_OFFER_KINDS, type SaasHonOsOffer, type SaasHonOsOfferSet, type SaasHonOsOfferSetDetail, type SaasHonOsOfferStopReason } from '@hon/contracts';
-import { en, type TranslationKey } from '@hon/design-system';
+import { en, formatLocaleDateTime } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
 import { HqIcon } from './icon';
 import { PricingController, type PricingScreen } from './pricing-offers-controller';
@@ -34,13 +34,14 @@ export function HqPricingOffers():React.ReactElement {
 /** The same view is rendered in tests with a controller using the real transport contract. No bypass route exists. */
 export function PricingOffersView({controller}:{controller:PricingController}):React.ReactElement {
   const state=useSyncExternalStore(controller.subscribe,controller.snapshot,controller.snapshot);
-  const {t,money,number,date}=useLocale();const [confirmation,setConfirmation]=useState<Confirmation|null>(null);
+  const {t,money,number,date,preferences}=useLocale();const [confirmation,setConfirmation]=useState<Confirmation|null>(null);
   const [stopReason,setStopReason]=useState<SaasHonOsOfferStopReason>('OWNER_DISABLED');
   const heading=useRef<HTMLHeadingElement>(null),reviewHeading=useRef<HTMLHeadingElement>(null);
   const op=(key:OpKey,params?:Readonly<Record<string,string|number>>)=>t(`pricing.op.${key}`,params);
   const label=(key:string|null)=>key&&Object.hasOwn(en,'pricing.op.'+key)?op(key as OpKey):op('notRecorded');
   const title=(kind:typeof SAAS_HON_OS_OFFER_KINDS[number])=>t(`pricing.${kindLabels[kind]}`);
-  const price=(minor:number)=>money(minor/100,'USD');
+  const price=(minor:number)=>money(minor,'USD');
+  const utcDate=(value:string)=>formatLocaleDateTime({...preferences,timeZone:'UTC'},value);
   const dirty=controller.dirty(),editable=controller.editable(),form=state.form,detail=state.detail;
   const offer=form?.offers.find(o=>o.key===state.selected);
   useEffect(()=>{if(state.concealed)setConfirmation(null);},[state.concealed]);
@@ -71,7 +72,7 @@ export function PricingOffersView({controller}:{controller:PricingController}):R
     <div><dt>{op('refund')}</dt><dd>{o.refundWindowDays===null?op('notRecorded'):number(o.refundWindowDays)}</dd></div>
     <div><dt>{op('credits')}</dt><dd>{o.plannedMonthlyPremiumCredits===null?op('notRecorded'):number(o.plannedMonthlyPremiumCredits)}</dd></div>
     <div><dt>{op('fairUse')}</dt><dd>{o.aiFairUseReference??op('notRecorded')}</dd></div>
-    <div><dt>{op('opens')}</dt><dd>{o.salesOpensAt===null?op('notRecorded'):date(o.salesOpensAt)}</dd></div><div><dt>{op('closes')}</dt><dd>{o.salesClosesAt===null?op('notRecorded'):date(o.salesClosesAt)}</dd></div>
+    <div><dt>{op('opens')}</dt><dd>{o.salesOpensAt===null?op('notRecorded'):utcDate(o.salesOpensAt)}</dd></div><div><dt>{op('closes')}</dt><dd>{o.salesClosesAt===null?op('notRecorded'):utcDate(o.salesClosesAt)}</dd></div>
   </React.Fragment>)}</dl></article>)}</div>;
   return <div className={styles.workbench} data-pricing-design data-pricing-busy={state.busy?'true':'false'}>
     <nav className={styles.tabs} aria-label={t('Pricing & Offers')}>{(['overview','editor','preview','history'] as const).map(value=><button type="button" key={value} aria-pressed={state.screen===value} onClick={()=>navigate(value)}>{t(`pricing.${value}`)}</button>)}</nav>

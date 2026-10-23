@@ -1,4 +1,4 @@
-/** Actual Next app and signed synthetic sessions; presentation-only proof, no pricing backend simulation. */
+/** Actual Next app and signed synthetic sessions with explicitly synthetic contract fixtures; no live provider. */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
