@@ -1400,6 +1400,38 @@ DO $$ DECLARE r text; col text; t text; f text; BEGIN
 END $$;
 -- End membership activation gate exact reconciliation.
 
+-- Membership date revisions exact reconciliation (0178): private immutable revision evidence, private helpers,
+-- five runtime entry points. The runtime gains no privilege on hon.memberships (0177 D41 option C stands).
+DO $$ DECLARE r text; col text; t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_date_revisions','membership_date_revision_follow_ups'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_membership_date_revision_insert()','hon.membership_instant_text(timestamptz)',
+    'hon.membership_next_anchored_term_end(date,integer,date)','hon.membership_date_revision_retroactive_days(date,date,date,date,date)',
+    'hon.membership_current_period(uuid)','hon.membership_reporting_status(hon.membership_state,timestamptz,timestamptz,boolean,timestamptz)',
+    'hon.evaluate_membership_date_revision(uuid,text,boolean,date,date)','hon.preview_membership_date_revision(text,uuid,jsonb)',
+    'hon.revise_membership_dates(text,uuid,jsonb,text,uuid,uuid)','hon.read_membership_date_history(text,uuid)',
+    'hon.read_membership_date_confirmation_queue(text,jsonb)','hon.read_school_membership_status_summary(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.preview_membership_date_revision(text,uuid,jsonb),hon.revise_membership_dates(text,uuid,jsonb,text,uuid,uuid),
+    hon.read_membership_date_history(text,uuid),hon.read_membership_date_confirmation_queue(text,jsonb),
+    hon.read_school_membership_status_summary(text) TO hon_runtime;
+END $$;
+-- End membership date revisions exact reconciliation.
+
 -- Champions Club contests exact reconciliation:
 DO $$ DECLARE t text; r text; col text; f text; BEGIN
   FOREACH t IN ARRAY ARRAY['champions_contests','champions_contest_prizes','champions_contest_schools','champions_contest_pauses',

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { retentionAttentionTables as privateTables, retentionAttentionFunctions as functions, verifyRetentionAttentionSecurity } from './retention-attention-security.mjs';
+import { membershipFixtureQuery, membershipFixtureStatement } from './membership-activation-test-support.mjs';
 
 /** Extension of the descriptor-bound acknowledgement fixture, not a new remote harness. */
 export async function proveRetentionAttention({ owner, runtime, service, ids, context, other, checked, snapshot, raw, fixtureOwnerContext }) {
@@ -50,7 +51,7 @@ export async function proveRetentionAttention({ owner, runtime, service, ids, co
   const originalTerm=(await owner.query('SELECT term_ends_at FROM hon.memberships WHERE id=$1',[ids.membership])).rows[0].term_ends_at;
   // Original membership has no negative attendance fact and an explicit renewal review.
   assert.deepEqual((await evidence()).attentionCodes,[]);assert.deepEqual((await read()).alerts,[]);check();
-  await owner.query("UPDATE hon.memberships SET term_ends_at=clock_timestamp()+interval '10 days',version=version+1 WHERE id=$1",[ids.membership]);
+  await membershipFixtureQuery(owner,"UPDATE hon.memberships SET term_ends_at=clock_timestamp()+interval '10 days',version=version+1 WHERE id=$1",[ids.membership]);
   const e=await evidence(),value=input(e);assert.deepEqual(e.attentionCodes,['TERM_ENDING_WITHIN_30_DAYS']);assert(!JSON.stringify(e).includes('PII_CANARY'));
   const a=await record(value);assert.equal(a.state,'OPEN');assert.deepEqual(await checked(()=>service.recordAttention(context(),ids.membership,value)),a);assert.deepEqual(await counts(a.alertId),expectation());check();
   for(const patch of [{evidenceCode:'INVENTED_RISK'},{note:'private'},{evidenceVersion:'V2'},{idempotencyKey:'text'},{observedAt:'bad'}])await assert.rejects(()=>record({...value,...patch}),status(400));
@@ -120,7 +121,7 @@ export async function proveRetentionAttention({ owner, runtime, service, ids, co
     await owner.query('BEGIN');await owner.query(`LOCK TABLE hon.${table} IN ROW EXCLUSIVE MODE`);const waiting=assert.rejects(work(),status(403));await new Promise(r=>setTimeout(r,100));await owner.query('UPDATE hon.principal_role_grants SET revoked_at=now(),revoked_by_principal_id=principal_id WHERE id=$1',[ids.grant]);await owner.query('COMMIT');await waiting;await owner.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE id=$1',[ids.grant]);
   }check();
   // Changed live facts deny even a previously successful receipt.
-  await owner.query("UPDATE hon.memberships SET term_ends_at=clock_timestamp()-interval '1 day',version=version+1 WHERE id=$1",[ids.membership]);await assert.rejects(()=>record(value),status(409));const ended=await evidence();assert.deepEqual(ended.attentionCodes,['TERM_ENDED']);const endedAlert=await record(input(ended));check();
+  await membershipFixtureQuery(owner,"UPDATE hon.memberships SET term_ends_at=clock_timestamp()-interval '1 day',version=version+1 WHERE id=$1",[ids.membership]);await assert.rejects(()=>record(value),status(409));const ended=await evidence();assert.deepEqual(ended.attentionCodes,['TERM_ENDED']);const endedAlert=await record(input(ended));check();
   // Atomic failure at the final inert fact rolls back root/history/receipt/audit.
   await owner.query("CREATE FUNCTION hon.attention_fixture_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'local atomicity probe'; END $$; CREATE TRIGGER attention_fixture_fail BEFORE INSERT ON hon.retention_attention_outbox FOR EACH ROW EXECUTE FUNCTION hon.attention_fixture_fail()");
   const atomicInput=input(await evidence());await assert.rejects(()=>record(atomicInput),status(503));await assert.rejects(()=>resolve(resolution(endedAlert)),status(503));
@@ -131,12 +132,12 @@ export async function proveRetentionAttention({ owner, runtime, service, ids, co
   await owner.query('BEGIN');await fixtureOwnerContext(randomUUID());
   await owner.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'PII_CANARY','PII_CANARY')",[person,ids.org,ids.school]);
   await owner.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id) VALUES($1,$2,$3,$4)',[billing,ids.org,ids.school,person]);
-  await owner.query("INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state) VALUES($1,$2,$3,$4,$5,'FIXTURE','ACTIVE')",[membership,ids.org,ids.school,billing,person]);
+  await membershipFixtureStatement(owner,"INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state) VALUES($1,$2,$3,$4,$5,'FIXTURE','ACTIVE')",[membership,ids.org,ids.school,billing,person]);
   await owner.query('INSERT INTO hon.student_profiles(id,organization_id,school_id,person_id) VALUES($1,$2,$3,$4)',[student,ids.org,ids.school,person]);
   await owner.query("INSERT INTO hon.attendance_records(id,organization_id,school_id,class_session_id,student_profile_id,status,recorded_at) VALUES($1,$2,$3,$4,$5,'UNEXCUSED_ABSENCE',clock_timestamp()-interval '1 day')",[attendance,ids.org,ids.school,ids.session,student]);await owner.query('COMMIT');
   const absence=await evidence(context(),membership);assert.deepEqual(absence.attentionCodes,['RENEWAL_REVIEW_NOT_RECORDED','UNEXCUSED_ABSENCE_RECORDED']);await record({...input(absence),evidenceCode:'UNEXCUSED_ABSENCE_RECORDED'},context(),membership);check();
   for(const table of privateTables)for(const sql of [`UPDATE hon.${table} SET id=id`,`DELETE FROM hon.${table}`,`TRUNCATE hon.${table}`])await assert.rejects(()=>owner.query(sql),e=>['42501','0A000'].includes(e.code));check();
-  await owner.query('UPDATE hon.memberships SET term_ends_at=$2,version=version+1 WHERE id=$1',[ids.membership,originalTerm]);await owner.query("UPDATE hon.organization_entitlements SET tier='ESSENTIAL' WHERE organization_id=$1",[ids.org]);
+  await membershipFixtureQuery(owner,'UPDATE hon.memberships SET term_ends_at=$2,version=version+1 WHERE id=$1',[ids.membership,originalTerm]);await owner.query("UPDATE hon.organization_entitlements SET tier='ESSENTIAL' WHERE organization_id=$1",[ids.org]);
   await verifyRetentionAttentionSecurity(owner,'hon_retention_acknowledgement_runtime');
   console.log(`Retention factual attention integrity passed: ${groups} assertion groups, ${probes} rollback-only ACL/RLS/schema/function probes; two blocked distinct humans shared one root/audit/inert outbox and two receipts; exact replay, resolution version/concurrency, immutable private history and whole-platform no-effect checks passed.`);
 }

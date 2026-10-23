@@ -54,7 +54,11 @@ try {
   const migration = await readFile(new URL('../migrations/0177_membership_activation_gate.sql', import.meta.url), 'utf8');
 
   // ---------- 1. posture ----------
-  const bodyOf = (name) => migration.match(new RegExp(`CREATE FUNCTION hon\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)\\$\\$;`))?.[1];
+  // 0178 (E1b-1) replaces exactly three 0177 functions; every other 0177 body must still be byte-identical.
+  const revisions = await readFile(new URL('../migrations/0178_membership_date_revisions.sql', import.meta.url), 'utf8');
+  const replacedBy0178 = ['guard_membership_state_transition', 'membership_lifecycle_permission', 'require_membership_lifecycle_actor'];
+  const bodyOf = (name) => (replacedBy0178.includes(name) ? revisions : migration)
+    .match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION hon\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)\\$\\$;`))?.[1];
   const entry = ['preview_school_membership_activation(text,uuid,jsonb)', 'activate_school_membership(text,uuid,jsonb,text,uuid,uuid)', 'cancel_school_membership(text,uuid,jsonb,text,uuid,uuid)'];
   const definers = ['membership_lifecycle_permission(uuid,uuid,uuid,text)', 'require_membership_lifecycle_actor(text,text)', 'evaluate_membership_activation(uuid,boolean,date,date)'];
   const plain = ['guard_membership_activation_evidence()', 'guard_membership_state_transition()', 'membership_local_date(timestamptz,text)', 'membership_local_day_start(date,text)',
@@ -62,7 +66,7 @@ try {
   for (const signature of [...entry, ...definers, ...plain]) {
     const name = signature.replace(/\(.*$/, '');
     const body = bodyOf(name);
-    assert.ok(body, `0177 defines ${name}`);
+    assert.ok(body, `0177 or its 0178 replacement defines ${name}`);
     const row = (await admin.query(`SELECT p.prosrc=$2 exact,p.prosecdef definer,has_function_privilege($1,p.oid,'EXECUTE') runtime_execute,
       has_function_privilege('public',p.oid,'EXECUTE') public_execute,(SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)::int overloads,
       p.proconfig config FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, body, `hon.${signature}`])).rows[0];
@@ -661,10 +665,14 @@ try {
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
   assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
     'crm_guardian_child_membership_draft_current', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
-    'draft_owner_launch_membership', 'evaluate_membership_activation', 'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
-    'read_crm_guardian_child_enrollment', 'read_crm_lead_registration_recovery', 'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
-    'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'record_retention_attention_alert', 'renewal_membership_facts',
-    'resolve_retention_attention_alert', 'revenue_plan_snapshot']);
+    'draft_owner_launch_membership', 'evaluate_membership_activation', 'evaluate_membership_date_revision', 'guard_membership_date_revision_insert',
+    'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
+    'read_crm_guardian_child_enrollment', 'read_crm_lead_registration_recovery', 'read_membership_date_confirmation_queue', 'read_membership_date_history',
+    'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
+    'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_status_summary', 'record_retention_attention_alert',
+    'renewal_membership_facts', 'resolve_retention_attention_alert', 'revenue_plan_snapshot', 'revise_membership_dates']);
+  // 0178 (E1b-1) readers are date-management paths only: revision evaluation, its insert guard, history, the legacy
+  // confirmation queue and the status summary. None books, checks in or grants a benefit.
   // Four retention/health reads also read attendance as a signal; no reader of memberships books, checks in or records attendance.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),
     ['acknowledge_retention_review_evidence', 'read_retention_review_signals', 'read_school_health_score', 'record_retention_attention_alert']);

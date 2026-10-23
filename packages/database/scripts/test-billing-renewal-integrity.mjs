@@ -5,6 +5,7 @@ import { RuntimeDatabaseService } from '../../../apps/api/dist/foundation/runtim
 import { RenewalService } from '../../../apps/api/dist/billing/renewal.service.js';
 import { RenewalController } from '../../../apps/api/dist/billing/renewal.controller.js';
 import { verifyRenewalDrift } from './test-billing-renewal-verifier.mjs';
+import { membershipFixtureStatement } from './membership-activation-test-support.mjs';
 for (const [key,role] of [['DATABASE_URL','hon_renewal_owner'],['HON_RUNTIME_DATABASE_URL','hon_renewal_runtime']]) {
  const u=new URL(process.env[key]??''); if(u.hostname!=='localhost'||u.port!=='5432'||u.pathname!=='/hon_renewal_validation'||u.username!==role) throw new Error('Only exact disposable localhost renewal database and roles allowed; never remote URLs.');
 }
@@ -53,7 +54,7 @@ try {
   const person=randomUUID(),account=randomUUID(),invoice=randomUUID();
   await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name,email) VALUES($1,$2,$3,'PRIVATE_PAYER','PRIVATE_PARTICIPANT','private@example.test')",[person,org,school]);
   await admin.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id) VALUES($1,$2,$3,$4)',[account,org,school,person]);
-  await admin.query("INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at) VALUES($1,$2,$3,$4,$5,'PRIVATE_PLAN',$6,$7,$8)",[membership,org,school,account,person,state,state==='ACTIVE'?'2026-01-01T00:00:00Z':null,state==='ACTIVE'?'2027-01-01T00:00:00Z':null]);
+  await membershipFixtureStatement(admin,"INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at) VALUES($1,$2,$3,$4,$5,'PRIVATE_PLAN',$6,$7,$8)",[membership,org,school,account,person,state,state==='ACTIVE'?'2026-01-01T00:00:00Z':null,state==='ACTIVE'?'2027-01-01T00:00:00Z':null]);
   if(state==='ACTIVE')await admin.query("INSERT INTO hon.membership_payment_schedules(organization_id,school_id,membership_id,frequency,amount_minor,currency,next_charge_at,auto_renew) VALUES($1,$2,$3,'MONTHLY',12000,'USD','2027-01-01T00:00:00Z',true)",[org,school,membership]);
   await admin.query("INSERT INTO hon.invoices(id,organization_id,school_id,billing_account_id,membership_id,status,currency,subtotal_minor,total_minor) VALUES($1,$2,$3,$4,$5,'DRAFT','USD',12000,12000)",[invoice,org,school,account,membership]);
   await admin.query("INSERT INTO hon.payment_attempts(organization_id,school_id,invoice_id,provider_code,provider_account_reference,provider_idempotency_reference,provider_payment_reference,amount_minor,currency) VALUES($1,$2,$3,'FIXTURE_INERT','PRIVATE_PROVIDER_ACCOUNT',$4,'PRIVATE_PROVIDER_TOKEN',12000,'USD')",[org,school,invoice,randomUUID()]);

@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
+import { membershipFixtureStatement } from './membership-activation-test-support.mjs';
 
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for operations report security tests.');
@@ -251,7 +252,7 @@ try {
        ($5, $2, $6, $7)`,
       [ids.billingAccountA, ids.organization, ids.schoolA, ids.personA1, ids.billingAccountB, ids.schoolB, ids.personB],
     );
-    await administrator.query(
+    await membershipFixtureStatement(administrator,
       `INSERT INTO hon.memberships (
          id, organization_id, school_id, billing_account_id, participant_person_id, plan_code, state
        ) VALUES

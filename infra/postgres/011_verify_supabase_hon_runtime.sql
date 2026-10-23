@@ -2584,14 +2584,14 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_membership_activation_evidence()',false,false,'search_path=pg_catalog, hon','c60a35d8df72884601abcd51d9f032a18f10f626662601d9d609e6aab56b06af'),
-('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','6d63f5d9b6f80ffec813f603358bc3d71595a6781c3bfdbe876d51fd79d214a8'),
+('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','fa56ec9b289b8cdba2d8700db672666afacb2d9a0a5294c60474384dbdaa06f2'),
 ('hon.membership_local_date(timestamptz,text)',false,false,'search_path=pg_catalog','60fb21bff4757c407e3acddc061c304629f0f035145d633924461e75090ad465'),
 ('hon.membership_local_day_start(date,text)',false,false,'search_path=pg_catalog, hon','7d311eb5b3ec550b13b360c747cc628fc8d13369e2984c01a12cbd2c3794e4ec'),
 ('hon.membership_effective_status_at(hon.membership_state,timestamptz,timestamptz,timestamptz)',false,false,'search_path=pg_catalog, hon','1430f67da4c27d157e9d520ac4b50e04c750391b22680ca21553fb7dfc33d613'),
 ('hon.membership_activation_text_ok(text,integer)',false,false,'search_path=pg_catalog','da4065773ea5ed7bf34267f0ff311863463c5d168d8ec8c0ad97a506677dbfe3'),
 ('hon.membership_activation_date(jsonb)',false,false,'search_path=pg_catalog','70dfaa487da94917b5204642ac4dd5685870f65062c9026e979e5919289b4963'),
-('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','069bd081b7b5cc340268f1c0e5a183664046b6b7f8e027398d4288197c1efde0'),
-('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','b7d183d8bdf941f49b13d717d43828ad0a24ca5aaa368ecd0be9171c0e87584c'),
+('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','877c7aac877d73b1efa3aecb9f11c102042c1daa6f065cf62a204055d0029704'),
+('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','8d7b4d4019d4fa4679148f0f9a53af9ed347d08f545c60fb8761240c3e3cf4a2'),
 ('hon.evaluate_membership_activation(uuid,boolean,date,date)',true,false,'search_path=pg_catalog, hon','9b2679af3efeb30175e068eeec49fa05e36190e6ad82eefa94f642f506601462'),
 ('hon.preview_school_membership_activation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','19a4444b60c5c644f49be3da77ca2b5bbe52ff4d8aba4d8c94ce402b1bb7e271'),
 ('hon.activate_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','81781b22ed586bfd90813c494446cfe7c61ac1631713829c63b443e7809323b0'),
@@ -2616,7 +2616,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
       RAISE EXCEPTION 'Missing membership activation guard: %',expected.name; END IF;
   END LOOP;
   IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal)<>1 THEN
-    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard'; END IF;
+    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard (body replaced by 0178)'; END IF;
   -- D41 option C: SELECT; no table INSERT, no UPDATE at any level, no DELETE/TRUNCATE; INSERT on exactly the seven DRAFT columns.
   SELECT array_agg(attname::text ORDER BY attname) INTO cols FROM pg_attribute
     WHERE attrelid='hon.memberships'::regclass AND attnum>0 AND NOT attisdropped AND has_column_privilege('hon_runtime',attrelid,attnum,'INSERT');
@@ -2630,3 +2630,52 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
     RAISE EXCEPTION 'Membership activation permissions must exist as sensitive staff-assignable permissions'; END IF;
 END $$;
 -- End membership activation gate exact verification.
+-- Membership date revisions exact verification (0178): private immutable revision evidence with a settings-free insert
+-- guard, five runtime entry points, private helpers, the E1b-D1 permissions mapped to system owners only, and no new
+-- runtime privilege on hon.memberships. The three 0177 functions 0178 replaces are pinned in the 0177 section above.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_date_revisions','membership_date_revision_follow_ups'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Membership date revision evidence table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_membership_date_revision_insert()',false,false,'search_path=pg_catalog, hon','307aee8273bb3a18e677e8ac26561c1cd64fc0286fbbd18aa16dc5202240dfbc'),
+('hon.membership_instant_text(timestamptz)',false,false,'search_path=pg_catalog','8008e27252c49128b17c779d789a2d75c66632e8c1444104cce0caa2f3d063ef'),
+('hon.membership_next_anchored_term_end(date,integer,date)',false,false,'search_path=pg_catalog','8fce7468323ed9826804fc67f4598e2adb5836a51bae1861edb571c88592cb9c'),
+('hon.membership_date_revision_retroactive_days(date,date,date,date,date)',false,false,'search_path=pg_catalog','505e045f8c94792404a1501fffa9c2060102a8953344a0900f929288bbc1181e'),
+('hon.membership_current_period(uuid)',false,false,'search_path=pg_catalog, hon','3e64412fb06e4d4cc987bea9999c49e0ef83128090f96847c3ec641d5b677d42'),
+('hon.membership_reporting_status(hon.membership_state,timestamptz,timestamptz,boolean,timestamptz)',false,false,'search_path=pg_catalog, hon','262b9d5dd9b24f21ed2c221b13d107078071f55daa6f06dd93b32072cc72ba11'),
+('hon.evaluate_membership_date_revision(uuid,text,boolean,date,date)',true,false,'search_path=pg_catalog, hon','2d72aaae85518d66eb6a55d3e56457e3171fee1642e9c4fb03e3c66f156727a3'),
+('hon.preview_membership_date_revision(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','3d7a20a9140cb2d11cc2d1aa1fc5336e6240a53cbb72ec7a09e69ff994865bf6'),
+('hon.revise_membership_dates(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','630627c13a9defd707c6615d43787512101d3c5c2a33172a7d544fb231e292ed'),
+('hon.read_membership_date_history(text,uuid)',true,true,'search_path=pg_catalog, hon','d943418c1f02b86a303f71ef42df0f456621ce77f5eb29347182de387ff1da1f'),
+('hon.read_membership_date_confirmation_queue(text,jsonb)',true,true,'search_path=pg_catalog, hon','f200b7dcfe7eecf66b643a2ea78eef6ffb0b2671eac2830223fbb233b488f538'),
+('hon.read_school_membership_status_summary(text)',true,true,'search_path=pg_catalog, hon','cf87534888d223dda57d31a24272c78c29474711154146048357d16411662cad')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe membership date revision function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('membership_date_revisions','membership_date_revisions_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_date_revisions','membership_date_revisions_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('membership_date_revisions','membership_date_revision_insert_guard','hon.guard_membership_date_revision_insert()'),
+    ('membership_date_revision_follow_ups','membership_date_revision_follow_ups_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_date_revision_follow_ups','membership_date_revision_follow_ups_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing membership date revision guard: %',expected.name; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.membership_date_revisions'::regclass AND NOT tgisinternal)<>3
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.membership_date_revision_follow_ups'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'Membership date revision evidence must carry exactly its reviewed triggers'; END IF;
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('billing.membership.dates.revise','billing.membership.dates.retroactive')
+      AND is_sensitive AND is_staff_assignable)<>2 THEN
+    RAISE EXCEPTION 'Membership date permissions must exist as sensitive staff-assignable permissions'; END IF;
+END $$;
+-- End membership date revisions exact verification.

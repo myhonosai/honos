@@ -67,3 +67,22 @@ export async function membershipFixtureQuery(ownerClient, text, values = []) {
     throw error;
   }
 }
+
+/**
+ * The same fixture write inside a transaction the caller already opened (it fails fast outside one). The 0177/0178
+ * transition guard is disabled only for this one statement, under a savepoint, and re-enabled before returning.
+ */
+export async function membershipFixtureStatement(ownerClient, text, values = []) {
+  await assertDisposable(ownerClient);
+  await ownerClient.query('SAVEPOINT membership_fixture');
+  try {
+    await ownerClient.query('ALTER TABLE hon.memberships DISABLE TRIGGER membership_state_transition_guard');
+    const result = await ownerClient.query(text, values);
+    await ownerClient.query('ALTER TABLE hon.memberships ENABLE TRIGGER membership_state_transition_guard');
+    await ownerClient.query('RELEASE SAVEPOINT membership_fixture');
+    return result.rows;
+  } catch (error) {
+    await ownerClient.query('ROLLBACK TO SAVEPOINT membership_fixture');
+    throw error;
+  }
+}
