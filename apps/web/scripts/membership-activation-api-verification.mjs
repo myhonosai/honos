@@ -63,7 +63,7 @@ try {
   };
   const separated = (await sql("SELECT relname FROM pg_class WHERE relnamespace='hon'::regnamespace AND relkind='r' AND relname ~ '^(saas_|payment|invoice|refund|membership_payment|organization_entitlement|document_ack|agreement|consent|communication_|action_|ai_|school_payment|stripe|provider)' ORDER BY relname")).rows.map(x => x.relname);
   const effects = ['memberships', 'idempotency_records', 'audit_events', 'outbox_events', 'work_items', 'membership_activation_decisions', 'membership_effective_periods', 'membership_activation_follow_ups'];
-  async function snapshot(tables) { return Object.fromEntries(await Promise.all(tables.map(async table => [table, (await sql(`SELECT md5(coalesce(string_agg(t::text,'|' ORDER BY t::text),'')) h FROM hon.${table} t`)).rows[0].h]))); }
+  async function snapshot(tables) { const result = {}; for (const table of tables) result[table] = (await sql(`SELECT md5(coalesce(string_agg(t::text,'|' ORDER BY t::text),'')) h FROM hon.${table} t`)).rows[0].h; return result; }
   async function unchanged(work, tables = [...separated, ...effects]) { const before = await snapshot(tables); try { return await work(); } finally { assert.deepEqual(await snapshot(tables), before); } }
   const read = scope => unchanged(() => web.previewMembershipActivation(scope, {}));
   const request = (scope, p) => web.prepareMembershipActivation(scope, confirmationFor(p), randomUUID());
@@ -82,7 +82,9 @@ try {
   await assert.rejects(web.activateKnownMembership(unknownRequest), e => e instanceof web.MembershipActivationError && e.uncertain);
   const exactReplay = await unchanged(() => web.activateKnownMembership(unknownRequest)); assert.equal(exactReplay.replayed, true); assert(exactReplay.receipt.followUps.some(x => x.kind === 'BIRTH_DATE_MISSING'));
   const c = await draft(), earlier = await read(c.scope), stale = request(c.scope, earlier);
-  await sql('UPDATE hon.people SET given_name=$2 WHERE id=$1', [c.person, 'Changed synthetic name']);
+  // Names are display-only, intentionally absent from the backend digest. Change
+  // an evaluated fact (birth-date recorded -> missing) to prove actual staleness.
+  await sql('UPDATE hon.student_profiles SET birth_date=NULL WHERE person_id=$1', [c.person]);
   await unchanged(() => assert.rejects(web.activateKnownMembership(stale), e => rejected(409)(e) && e.code === 'ACTIVATION_PREVIEW_STALE'));
   const minor = await draft('2018-04-05'), minorPreview = await read(minor.scope); assert(minorPreview.blocks.some(x => x.code === 'MINOR_GUARDIAN_OF_RECORD_REQUIRED'));
   actor = other; await unchanged(() => assert.rejects(web.previewMembershipActivation(c.scope, {}), rejected(403)));
