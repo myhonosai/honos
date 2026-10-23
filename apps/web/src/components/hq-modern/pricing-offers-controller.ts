@@ -39,7 +39,7 @@ export class PricingController {
       const changed=!!id&&detail?.set.revision!==this.state.detail?.set.revision||!!id&&detail?.set.status!==this.state.detail?.set.status;
       const fresh=detail&&id&&!this.dirty()&&!this.state.pending;
       this.patch({status:'ready',owner:access.owner,management:access.management,error:null,
-        ...(restore?{concealed:false}:{}),...(fresh?{detail,form:formFromSet(detail.set),baseline:formFingerprint(formFromSet(detail.set)),stale:false}:changed?{stale:true}:{} )});
+        ...(restore?{concealed:false}:{}),...(fresh&&detail?{detail,form:formFromSet(detail.set),baseline:formFingerprint(formFromSet(detail.set)),stale:false}:changed?{stale:true}:{} )});
     }catch(e){if(epoch===this.readEpoch){this.patch({status:'failed'});this.fail(e);}}
   }
   navigate=(screen:PricingScreen)=>{this.patch({screen});};
@@ -54,8 +54,9 @@ export class PricingController {
   selectOffer=(key:string)=>{if(this.state.form?.offers.some(o=>o.key===key))this.patch({selected:key});};
   async open(id:string|null,clone=false,fresh=false,localKey?:string){
     if(this.state.busy||this.state.pending||this.state.concealed)return;
-    if(this.dirty()){this.patch({intent:{id,clone,fresh,localKey}});return;}
-    await this.openNow({id,clone,fresh,localKey});
+    const intent:Intent={id,clone,fresh,...(localKey?{localKey}:{})};
+    if(this.dirty()){this.patch({intent});return;}
+    await this.openNow(intent);
   }
   private async openNow(intent:Intent){
     const epoch=++this.readEpoch;this.patch({status:'loading',intent:null,review:null,acknowledged:false,error:null});

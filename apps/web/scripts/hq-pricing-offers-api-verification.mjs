@@ -35,7 +35,7 @@ try{
   const org=randomUUID(),school=randomUUID(),role=randomUUID();
   await sql("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'Synthetic dojo','Synthetic dojo')",[org]);
   await sql("INSERT INTO hon.organization_entitlements(organization_id,tier,status,effective_from) VALUES($1,'COMPLETE','ACTIVE',clock_timestamp()-interval '1 day')",[org]);
-  await sql("INSERT INTO hon.schools(id,organization_id,name,slug) VALUES($1,$2,'Synthetic school',$1::text)",[school,org]);
+  await sql("INSERT INTO hon.schools(id,organization_id,name,slug) VALUES($1::uuid,$2::uuid,'Synthetic school',$3)",[school,org,'synthetic-'+school]);
   await sql("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,'SYNTHETIC_PURCHASER','Synthetic purchaser')",[role,org]);
   await sql("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'billing.hon.purchase')",[role,org]);
   await sql("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$3)",[org,school,actors.school.principal,role]);

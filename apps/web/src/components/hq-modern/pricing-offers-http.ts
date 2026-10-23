@@ -56,7 +56,7 @@ async function exchange(path: string, request?: PricingRequest): Promise<unknown
 }
 export async function readPricingIdentity(): Promise<string> {
   const row = closed(await exchange('/api/v1/identity/me'), ['externalSubject']);
-  if (typeof row.externalSubject !== 'string' || !row.externalSubject.length || row.externalSubject.length > 512 || /[\u0000-\u001f\u007f]/.test(row.externalSubject)) invalid();
+  if (typeof row.externalSubject !== 'string' || !row.externalSubject.length || row.externalSubject.length > 512 || /[\u0000-\u001f\u007f]/.test(row.externalSubject)) return invalid();
   return row.externalSubject;
 }
 /** Fresh session binding plus independent HQ billing authorization; role is only a conservative UI affordance. */
@@ -66,7 +66,7 @@ export async function readPricingAccess(expectedSubject?: string): Promise<Prici
   const [view, overview] = await Promise.all([exchange(root), exchange('/api/v1/hq/overview')]);
   let management: SaasHonOsOfferManagementView, owner: boolean;
   try { management = validateSaasHonOsOfferManagementView(view); owner = verifyHqOverviewSnapshot(closed(overview,['overview']).overview).callerHqRole === 'OWNER'; }
-  catch { invalid(); }
+  catch { return invalid(); }
   if (await readPricingIdentity() !== subject) throw new PricingError('IDENTITY_CHANGED',401);
   return { subject, management, owner };
 }
