@@ -61,7 +61,7 @@ describe('E1a closed frontend transport', () => {
   it('renders inert, preserves billing boundaries and uses calendar dates without converting to user timezone', () => {
     const f = vi.spyOn(globalThis, 'fetch'); const html = renderToStaticMarkup(<MembershipActivationWorkbench sessionSubject="synthetic" />);
     expect(f).not.toHaveBeenCalled(); expect(html).toContain('Review and confirm membership activation'); expect(html).not.toContain('Confirm membership activation</button>'); expect(html).toContain('does not collect tuition');
-    expect(formatLocaleCalendarDate({ ...DEFAULT_LOCALE, timeZone: 'Pacific/Honolulu' }, '2027-11-07')).toContain('7');
+    expect(formatLocaleCalendarDate({ ...DEFAULT_LOCALE, timeZone: 'America/Los_Angeles' }, '2027-11-07')).toContain('7');
     const source = readFileSync('src/components/membership-activation-workbench.tsx', 'utf8');
     expect(source).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|window.location.reload/);
     expect(source).toContain('instance.current === life'); expect(source).toContain('verifyEnrollmentSession');

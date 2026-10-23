@@ -14,5 +14,5 @@ it.each(['missing', 'invalid', 'expired', 'wrong-signature', 'unconfigured'])('f
 });
 it('passes verified identity continuity and remounts memory after a changed session without exposing its cookie', async () => {
   state.token = issueSession({ externalSubject: 'synthetic' }, config); const result = await Page();
-  expect(result.props.sessionSubject).toBe('synthetic'); expect(result.key).toMatch(/^[a-f0-9]{64}$/); expect(JSON.stringify(result)).not.toContain(state.token);
+  expect(result).toMatchObject({ props: { sessionSubject: 'synthetic' } }); expect(result.key).toMatch(/^[a-f0-9]{64}$/); expect(JSON.stringify(result)).not.toContain(state.token);
 });
