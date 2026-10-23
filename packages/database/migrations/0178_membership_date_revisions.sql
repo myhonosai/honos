@@ -888,9 +888,12 @@ DO $$ DECLARE r text; col text; t text; BEGIN
   END IF;
 END $$;
 DO $$ BEGIN
-  IF has_any_column_privilege('hon_runtime','hon.memberships','UPDATE') OR has_table_privilege('hon_runtime','hon.memberships','DELETE')
-    OR has_table_privilege('hon_runtime','hon.memberships','INSERT') OR has_table_privilege('hon_runtime','hon.membership_date_revisions','SELECT') THEN
-    RAISE EXCEPTION 'Membership date revisions must not widen runtime privileges';
+  -- Environments without the runtime role (fixtures provision theirs after migrating) have nothing to widen.
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    IF has_any_column_privilege('hon_runtime','hon.memberships','UPDATE') OR has_table_privilege('hon_runtime','hon.memberships','DELETE')
+      OR has_table_privilege('hon_runtime','hon.memberships','INSERT') OR has_table_privilege('hon_runtime','hon.membership_date_revisions','SELECT') THEN
+      RAISE EXCEPTION 'Membership date revisions must not widen runtime privileges';
+    END IF;
   END IF;
 END $$;
 COMMIT;
