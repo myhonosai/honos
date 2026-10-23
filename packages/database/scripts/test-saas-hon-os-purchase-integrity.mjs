@@ -17,13 +17,14 @@ process.env.HON_PUBLIC_ORIGIN='https://hon.example';
 const {RuntimeDatabaseService}=await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saas-billing.service.js');
 const {SaasPaymentsService}=await import('../../../apps/api/dist/payments/saas-payments.service.js');
+const {HqEntitlementService}=await import('../../../apps/api/dist/hq/hq-entitlement.service.js');
 const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-billing/saas-school-billing.service.js');
 const {StripeTestModeAdapter}=await import('../../../apps/api/dist/payments/stripe-test-mode-adapter.js');
 const {StripeSimulator}=await import('../../../apps/api/dist/payments/stripe-simulator.js');
 const contracts=await import('@hon/contracts');
 const SECRET='whsec_disposableFixtureSecret0123456789',KEY='sk_test_disposableFixtureKey0123456789';
 const sim=new StripeSimulator(SECRET);
-const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),schoolBilling=new SaasSchoolBillingService(billing);
+const database=new RuntimeDatabaseService(),hqEntitlement=new HqEntitlementService(database),billing=new SaasBillingService(database),schoolBilling=new SaasSchoolBillingService(billing);
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
 const offerTables=['saas_offer_sales_stops','saas_offer_set_offers','saas_offer_sets'];
@@ -39,7 +40,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 // A promotion whose sales window closes while a school's checkout is still open (owner decision D6, revised).
 const SHORT_CLOSE=NOW+60_000;
 // COMPLETE organizations buy; C is CORE; E's entitlement has ended; G has a legacy (LEGACY_ENTITLEMENT) subscription.
-const NAMES=['M','A','FA','FL','FM1','FM2','FM3','L','L2','X','R','Y','Z','Q','V','T','U','W','C','E','G'];
+const NAMES=['M','A','FA','FL','FM1','FM2','FM3','L','L2','X','R','Y','Z','Q','V','T','U','N','W','C','E','G'];
 const O=Object.fromEntries(NAMES.map(k=>[k,{id:randomUUID(),tier:k==='C'?'CORE':'COMPLETE',school:randomUUID(),role:randomUUID()}]));
 const humans=Object.fromEntries(['owner','operator','support','staffM',...NAMES.map(k=>`owner${k}`)].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`hon-os-buy-${k}-${randomUUID()}`}]));
 const H=k=>humans[k].subject;
@@ -74,6 +75,12 @@ async function cleanup(){
   await admin.query("UPDATE hon.saas_payment_program SET status='DISABLED',provider=NULL,test_tax_reference=NULL,authorization_reference=NULL,version=1,changed_by_principal_id=NULL");
   await admin.query('SET CONSTRAINTS ALL IMMEDIATE');
   for(const t of all)await admin.query(`ALTER TABLE hon.${t} ENABLE TRIGGER USER`);
+  // Section 9b's HQ tier transition evidence (immutable outside a disposable cleanup).
+  for(const t of ['hq_entitlement_outbox','hq_entitlement_audit','hq_entitlement_requests'])await admin.query(`ALTER TABLE hon.${t} DISABLE TRIGGER USER`);
+  await admin.query('DELETE FROM hon.hq_entitlement_outbox WHERE audit_id IN (SELECT id FROM hon.hq_entitlement_audit WHERE organization_id=ANY($1::uuid[]))',[fixtureOrgs()]);
+  const hqKeys=(await admin.query('DELETE FROM hon.hq_entitlement_audit WHERE organization_id=ANY($1::uuid[]) RETURNING actor_principal_id,idempotency_key',[fixtureOrgs()])).rows;
+  for(const r of hqKeys)await admin.query('DELETE FROM hon.hq_entitlement_requests WHERE actor_principal_id=$1 AND idempotency_key=$2',[r.actor_principal_id,r.idempotency_key]);
+  for(const t of ['hq_entitlement_outbox','hq_entitlement_audit','hq_entitlement_requests'])await admin.query(`ALTER TABLE hon.${t} ENABLE TRIGGER USER`);
   for(const t of ['principal_role_grants','role_permissions','roles','organization_entitlements','schools'])await admin.query(`DELETE FROM hon.${t} WHERE organization_id=ANY($1::uuid[])`,[fixtureOrgs()]);
   await admin.query('DELETE FROM hon.organizations WHERE id=ANY($1::uuid[])',[fixtureOrgs()]);
   await admin.query('COMMIT');
@@ -81,7 +88,9 @@ async function cleanup(){
 }
 async function untouched(){const out={};for(const t of ['organization_entitlements','saas_founder_reservations','saas_catalog_versions','saas_credit_allowances','saas_credit_ledger','saas_access_program',
  'saas_credit_program','billing_accounts','memberships','invoices','payment_attempts','ai_usage_ledger','champions_reward_entries','audit_events','outbox_events'])
- out[t]=(await admin.query(`SELECT to_jsonb(t)::text r FROM hon.${t} t ORDER BY 1`)).rows.map(r=>r.r);return out;}
+ // N's entitlement is changed on purpose by HQ in section 9b and asserted there.
+ out[t]=(await admin.query(`SELECT to_jsonb(t)::text r FROM hon.${t} t WHERE $1::text IS NULL OR to_jsonb(t)->>'organization_id' IS DISTINCT FROM $1::text ORDER BY 1`,
+  [t==='organization_entitlements'?O.N.id:null])).rows.map(r=>r.r);return out;}
 const deliver=d=>payments.handleWebhook(d.raw,d.signature);
 const outcome=async d=>{const r=await deliver(d);return [r.event.outcome,r.event.detail];};
 const view=(who,school)=>billing.readSchoolHonOsOffers(H(who),school);
@@ -145,7 +154,7 @@ try{
  const legacyBefore=(await admin.query("SELECT to_jsonb(s)::text r FROM hon.saas_subscriptions s WHERE source<>'HON_OS_OFFER' ORDER BY 1")).rows;
 
  // ---------- 1. HQ publishes the offer set (owner only, digest-approved) ----------
- const d1=await billing.createOfferSetDraft(H('owner'),{basedOnSetId:null,termsReference:TERMS,founderTotalLimit:3,offers:offersV1()},K());
+ const d1=await billing.createOfferSetDraft(H('owner'),{basedOnSetId:null,termsReference:TERMS,founderTotalLimit:4,offers:offersV1()},K());
  const pub1=await billing.publishOfferSet(H('owner'),d1.set.setId,{expectedRevision:d1.set.revision,previewDigest:d1.preview.previewDigest,approval:contracts.SAAS_HON_OS_OFFER_PUBLISH_APPROVAL},K());
  const V1=Object.fromEntries(pub1.set.offers.map(o=>[o.offerCode,o.offerId]));
 
@@ -263,27 +272,29 @@ try{
  assert.deepEqual([invFL.length,invFL[0].kind,invFL[0].description],[1,'LIFETIME_PURCHASE','HON OS — Founder lifetime — one-time purchase']);
  assert.equal((await snapshotOf(coFL.checkout.checkoutId)).sref,null);
 
- // ---------- 7. the one HON OS founder pool (limit 3) under contention; cancellation returns the slot ----------
+ // ---------- 7. the one HON OS founder pool (limit 4) under contention; cancellation returns the slot ----------
  let mgmt=await billing.readOfferManagement(H('operator'));
- assert.deepEqual(mgmt.honOsSales.founderPool,{limit:3,allocated:2,held:0,remaining:1});
+ assert.deepEqual(mgmt.honOsSales.founderPool,{limit:4,allocated:2,held:0,remaining:2});
+ // FM3 holds a founder slot and pays only after HQ lowers the founder cap (section 9b).
+ const coFM3=await startOf('FM3',V1.OS_FOUNDER_MONTHLY);
  const race=await Promise.allSettled(['FM1','FM2'].map(k=>startOf(k,V1.OS_FOUNDER_MONTHLY)));
  assert.equal(race.filter(r=>r.status==='fulfilled').length,1,'exactly one school holds the last founder slot');
  const winner=race[0].status==='fulfilled'?'FM1':'FM2',loser=winner==='FM1'?'FM2':'FM1',coWin=race.find(r=>r.status==='fulfilled').value;
  http(422,'SAAS_FOUNDER_SOLD_OUT')(race.find(r=>r.status==='rejected').reason);
- assert.equal((await eligibility('FM3')).OS_FOUNDER_MONTHLY,'FOUNDER_SOLD_OUT');
- assert.equal((await eligibility('FM3')).OS_FOUNDER_LIFETIME,'FOUNDER_SOLD_OUT');
- assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:3,allocated:2,held:1,remaining:0});
+ assert.equal((await eligibility('X')).OS_FOUNDER_MONTHLY,'FOUNDER_SOLD_OUT');
+ assert.equal((await eligibility('X')).OS_FOUNDER_LIFETIME,'FOUNDER_SOLD_OUT');
+ assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:4,allocated:2,held:2,remaining:0});
  await deny(payments.cancelCheckout(H(`owner${loser}`),coWin.checkout.checkoutId,{expectedVersion:coWin.checkout.version},K()),403,'SAAS_FORBIDDEN');
  const cancelled=await payments.cancelCheckout(H(`owner${winner}`),coWin.checkout.checkoutId,{expectedVersion:coWin.checkout.version},K());
  assert.deepEqual([cancelled.checkout.status,cancelled.providerExpiry],['CANCELLED','REQUESTED']);
- assert.equal((await eligibility('FM3')).OS_FOUNDER_MONTHLY,'ELIGIBLE','a cancelled hold returns its slot');
+ assert.equal((await eligibility('X')).OS_FOUNDER_MONTHLY,'ELIGIBLE','a cancelled hold returns its slot');
  const coLoser=await startOf(loser,V1.OS_FOUNDER_MONTHLY);
  assert.deepEqual(form(coLoser.checkout.checkoutId),['subscription','18300','month','HON OS — Founder monthly']);
  await pay(coLoser);
- assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:3,allocated:3,held:0,remaining:0});
- await deny(startOf('FM3',V1.OS_FOUNDER_MONTHLY),422,'SAAS_FOUNDER_SOLD_OUT');
+ assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:4,allocated:3,held:1,remaining:0});
+ await deny(startOf(winner,V1.OS_FOUNDER_MONTHLY),422,'SAAS_FOUNDER_SOLD_OUT');
  await deny(startOf(winner,V1.OS_FOUNDER_LIFETIME),422,'SAAS_FOUNDER_SOLD_OUT');
- await deny(startOf('FM3',V1.OS_FOUNDER_ANNUAL),422,'SAAS_FOUNDER_SOLD_OUT');
+ await deny(startOf('X',V1.OS_FOUNDER_ANNUAL),422,'SAAS_FOUNDER_SOLD_OUT');
 
  // ---------- 8. regular lifetime with a sale limit of 1, under contention ----------
  const lifeRace=await Promise.allSettled(['L','L2'].map(k=>startOf(k,V1.OS_LIFETIME)));
@@ -348,6 +359,22 @@ try{
  const replayZ=await deliver(paidZ.completed);
  assert.deepEqual([replayZ.replayed,(await admin.query('SELECT count(*)::int n FROM hon.saas_subscriptions WHERE organization_id=$1',[O.Z.id])).rows[0].n],[true,1],'a replayed payment never creates a second subscription');
  assert.deepEqual(await outcome(sim.completeCheckout(sessionOf(coQ)).completed),['NEEDS_REVIEW','OFFER_SALES_STOPPED'],'an explicit stop-sales still applies');
+ // Version 3 lowered the founder cap to 3 while 4 founder slots were committed (3 allocated + FM3's open hold). A held slot is
+ // contractual: FM3's payment activates against the cap it accepted under, and lowering the cap never revokes it.
+ assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:3,allocated:3,held:1,remaining:0});
+ await pay(coFM3);
+ const rowFM3=await subscriptionRow(O.FM3.id);
+ assert.deepEqual([rowFM3.offer_kind,rowFM3.price_minor,rowFM3.accepted_offer.offerSetVersion],['FOUNDER_MONTHLY',18300,1]);
+ assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:3,allocated:4,held:0,remaining:0});
+ await deny(startOf('N',V2.OS_FOUNDER_MONTHLY),422,'SAAS_FOUNDER_SOLD_OUT');
+ // Defensive recheck: HQ moves N from COMPLETE to CORE (the real 0146 transition) between checkout and payment, so the
+ // HON OS payment no longer matches the access it was bought under and goes to review instead of activating.
+ const coN=await startOf('N',V2.OS_MONTHLY);
+ const entN0=await row('SELECT tier::text,version FROM hon.organization_entitlements WHERE organization_id=$1',[O.N.id]);
+ await hqEntitlement.transition(H('owner'),O.N.id,{targetTier:'CORE',expectedVersion:entN0.version},K());
+ assert.deepEqual(await outcome(sim.completeCheckout(sessionOf(coN)).completed),['NEEDS_REVIEW','ENTITLEMENT_CHANGED']);
+ assert.deepEqual(await row('SELECT tier::text,status::text,version FROM hon.organization_entitlements WHERE organization_id=$1',[O.N.id]),
+  {tier:'CORE',status:'ACTIVE',version:entN0.version+1},'the review never changes the entitlement HQ set');
  // V's promotion window has closed meanwhile: its accepted terms are honored, and new checkouts are refused.
  if(Date.now()<=SHORT_CLOSE+1000)await pause(SHORT_CLOSE+1100-Date.now());
  await deny(startOf('W',V1.OS_SHORT),422,'SAAS_OFFER_NOT_AVAILABLE');
@@ -360,11 +387,11 @@ try{
  await deny(payments.handleWebhook(Buffer.from(paidLate.completed.raw.toString().replace('"amount_total":317000','"amount_total":100')),paidLate.completed.signature),400,'INVALID_WEBHOOK');
  const live=sim.liveEvent();await deny(payments.handleWebhook(live.raw,live.signature),400,'INVALID_WEBHOOK');
  const review=(await payments.readPayments(H('operator')));
- assert.deepEqual(['X','R','Y','T','U','Q'].map(k=>review.checkouts.find(c=>c.organizationId===O[k].id)).map(c=>[c.status,c.statusReason]),
+ assert.deepEqual(['X','R','Y','T','U','Q','N'].map(k=>review.checkouts.find(c=>c.organizationId===O[k].id)).map(c=>[c.status,c.statusReason]),
   [['PAID_NEEDS_REVIEW','AMOUNT_MISMATCH'],['PAID_NEEDS_REVIEW','RECURRING_MISMATCH'],['PAID_NEEDS_REVIEW','OFFER_SALES_STOPPED'],['PAID_NEEDS_REVIEW','PAID_AFTER_CLOSE'],
-   ['PAID_NEEDS_REVIEW','PAID_AFTER_CLOSE'],['PAID_NEEDS_REVIEW','OFFER_SALES_STOPPED']]);
- assert.equal(review.reconciliation.paidNeedsReview,6);
- for(const k of ['X','R','Y','T','U','Q'])assert.equal(await subOf(O[k].id),null,'review never creates a subscription');
+   ['PAID_NEEDS_REVIEW','PAID_AFTER_CLOSE'],['PAID_NEEDS_REVIEW','OFFER_SALES_STOPPED'],['PAID_NEEDS_REVIEW','ENTITLEMENT_CHANGED']]);
+ assert.equal(review.reconciliation.paidNeedsReview,7);
+ for(const k of ['X','R','Y','T','U','Q','N'])assert.equal(await subOf(O[k].id),null,'review never creates a subscription');
 
  // ---------- 10. price changes affect new purchases only ----------
  await deny(startOf('W',V1.OS_MONTHLY),422,'SAAS_OFFER_NOT_AVAILABLE'); // retired offer
@@ -406,11 +433,11 @@ try{
  const sales=Object.fromEntries(mgmt.honOsSales.offers.filter(r=>r.subscriptions+r.openCheckouts+r.paidNeedsReview>0).map(r=>[`${r.setVersion}:${r.offerCode}`,[r.subscriptions,r.openCheckouts,r.paidNeedsReview,r.saleLimit]]));
  assert.equal(mgmt.honOsSales.offers.length,12,'the published set (4) and every retired offer that had a checkout (8)');
  assert.equal(mgmt.honOsSales.offers.every(r=>r.saleStatus===(r.setVersion===3?'ON_SALE':'NOT_ON_SALE')),true,'retired offers are never shown as on sale');
- assert.deepEqual(sales,{'1:OS_MONTHLY':[2,0,3,null],'1:OS_ANNUAL':[1,0,2,null],'1:OS_FOUNDER_MONTHLY':[1,0,0,null],'1:OS_FOUNDER_ANNUAL':[1,0,0,null],'1:OS_FOUNDER_LIFETIME':[1,0,0,5],
-  '1:OS_LIFETIME':[1,0,0,1],'1:OS_PROMO':[0,0,1,null],'1:OS_SHORT':[1,0,0,null],'3:OS_MONTHLY':[1,0,0,null]});
- assert.deepEqual(mgmt.honOsSales.founderPool,{limit:3,allocated:3,held:0,remaining:0});
+ assert.deepEqual(sales,{'1:OS_MONTHLY':[2,0,3,null],'1:OS_ANNUAL':[1,0,2,null],'1:OS_FOUNDER_MONTHLY':[2,0,0,null],'1:OS_FOUNDER_ANNUAL':[1,0,0,null],'1:OS_FOUNDER_LIFETIME':[1,0,0,5],
+  '1:OS_LIFETIME':[1,0,0,1],'1:OS_PROMO':[0,0,1,null],'1:OS_SHORT':[1,0,0,null],'3:OS_MONTHLY':[1,0,1,null]});
+ assert.deepEqual(mgmt.honOsSales.founderPool,{limit:3,allocated:4,held:0,remaining:0},'commitments above a lowered cap are kept, never revoked');
  const hon=(await admin.query("SELECT offer_kind,billing_interval,count(*)::int n FROM hon.saas_subscriptions WHERE source='HON_OS_OFFER' AND status<>'VOIDED' GROUP BY 1,2 ORDER BY 1")).rows.map(r=>[r.offer_kind,r.billing_interval,r.n]);
- assert.deepEqual(hon,[['FOUNDER_ANNUAL','ANNUAL',1],['FOUNDER_LIFETIME','LIFETIME',1],['FOUNDER_MONTHLY','MONTHLY',1],['LIFETIME','LIFETIME',1],['REGULAR_ANNUAL','ANNUAL',1],['REGULAR_MONTHLY','MONTHLY',4]]);
+ assert.deepEqual(hon,[['FOUNDER_ANNUAL','ANNUAL',1],['FOUNDER_LIFETIME','LIFETIME',1],['FOUNDER_MONTHLY','MONTHLY',2],['LIFETIME','LIFETIME',1],['REGULAR_ANNUAL','ANNUAL',1],['REGULAR_MONTHLY','MONTHLY',4]]);
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_checkout_sessions WHERE hon_os_offer_id IS NOT NULL AND provider_recurring='NONE' AND provider_subscription_ref IS NOT NULL")).rows[0].n,0,
   'no one-time purchase has a provider subscription');
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_subscriptions s JOIN hon.saas_checkout_sessions c ON c.subscription_id=s.id WHERE s.accepted_offer<>c.accepted_offer OR s.accepted_offer_digest<>c.accepted_offer_digest OR s.price_minor<>(s.accepted_offer->>'priceMinor')::int")).rows[0].n,0);
@@ -427,7 +454,7 @@ try{
  try{await admin.query('ALTER TABLE hon.saas_subscriptions DISABLE TRIGGER USER');
   await sqlDeny(admin.query(`UPDATE hon.saas_subscriptions SET accepted_offer=jsonb_set(accepted_offer,'{priceMinor}','100') WHERE organization_id=$1`,[O.M.id]),'23514');}
  finally{await admin.query('ROLLBACK');}
- console.log(`PASS: HON OS purchase binding (0182) proof (TEST MODE, SIMULATED Stripe) — six HQ-published offer kinds bought end to end through the real adapter at the exact accepted offer (snapshot + SHA-256 digest on checkout, subscription and invoice); monthly and annual renewals at the accepted price only (period and amount mismatches to review); one-time annual and lifetime purchases with no provider subscription; unpublished, future, stopped, retired, unsupported-terms, ineligible and sold-out offers refused; sale limit and cumulative founder pool atomic under contention, cancellation returns the slot; a routine price change or closed sales window during an open checkout honors the accepted terms, while explicit stop-sales (including on a retired offer), expiry, amount and recurring mismatches go to HQ review; payment replay and unsigned, tampered or live deliveries refused; refund windows from the accepted offer; refunds and disputes reconciled; price change affects new purchases only; entitlements, legacy records, credits and paid access unchanged.`);
+ console.log(`PASS: HON OS purchase binding (0182) proof (TEST MODE, SIMULATED Stripe) — six HQ-published offer kinds bought end to end through the real adapter at the exact accepted offer (snapshot + SHA-256 digest on checkout, subscription and invoice); monthly and annual renewals at the accepted price only (period and amount mismatches to review); one-time annual and lifetime purchases with no provider subscription; unpublished, future, stopped, retired, unsupported-terms, ineligible and sold-out offers refused; sale limit and cumulative founder pool atomic under contention, cancellation returns the slot, a founder hold is honored after HQ lowers the cap; entitlement lapse before payment goes to review; a routine price change or closed sales window during an open checkout honors the accepted terms, while explicit stop-sales (including on a retired offer), expiry, amount and recurring mismatches go to HQ review; payment replay and unsigned, tampered or live deliveries refused; refund windows from the accepted offer; refunds and disputes reconciled; price change affects new purchases only; entitlements, legacy records, credits and paid access unchanged.`);
 }finally{
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }

@@ -1768,3 +1768,16 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 -- End HON OS purchase binding exact reconciliation.
+
+-- HON OS new-school onboarding (0183) exact reconciliation: the registration initializer and the HON OS activation core
+-- are private (no runtime role may execute them). Replaced functions keep their existing grants.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.initialize_saas_hon_os_school_account(text,jsonb,uuid,uuid,uuid)',
+      'hon.saas_activate_hon_os_checkout_core(uuid,jsonb,timestamptz,boolean)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+END $$;
+-- End HON OS new-school onboarding exact reconciliation.
