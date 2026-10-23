@@ -63,7 +63,7 @@ describe('HQ owner presentation interaction, no backend assumptions', () => {
   it('Discard Changes restores the last local copy, and overview cards cannot silently discard unsaved edits', () => {
     button('Offer editor').props.onClick(); fill('amount', '101'); fill('layout', 'annual'); button('Save Local Draft').props.onClick();
     fill('layout', 'monthly'); fill('amount', '202'); button('Offer overview').props.onClick();
-    button('Design this option · Regular annual').props.onClick(); expect(nodes(render(), 'dialog')).toHaveLength(1);
+    button('Design this option · Regular annual').props.onClick({ currentTarget: undefined }); expect(nodes(render(), 'dialog')).toHaveLength(1);
     button('Discard Changes').props.onClick(); expect(field('layout').props.value).toBe('annual'); fill('layout', 'monthly'); expect(field('amount').props.value).toBe('101');
     fill('layout', 'annual'); fill('terms', 'Unsaved only'); fill('layout', 'lifetime'); button('Discard Changes').props.onClick(); fill('layout', 'annual'); expect(field('terms').props.value).toBe('');
   });

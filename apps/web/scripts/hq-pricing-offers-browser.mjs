@@ -98,6 +98,7 @@ async function dirtySwitches(page, ui, tx, language, size) {
   await capture(page, `${language}-${size}-pricing-unsaved-changes`, { resetScroll: false });
   await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
   assert.equal(await amount.inputValue(), '250.02'); assert.equal(await layouts.inputValue(), 'monthly');
+  await page.waitForFunction(() => document.activeElement?.id === 'offer-layout');
   assert(await layouts.evaluate(e => e === document.activeElement), 'Restore focus to selector');
   await layouts.selectOption('annual'); await dialog.getByRole('button', { name: tx('pricing.continue-editing'), exact: true }).click(); assert.equal(await amount.inputValue(), '250.02');
   await layouts.selectOption('annual'); await dialog.getByRole('button', { name: tx('pricing.discard-changes'), exact: true }).click();

@@ -40,10 +40,10 @@ export function HqPricingOffers(): React.ReactElement {
     setPendingLayout(null); setDraft({ ...(drafts[layout] ?? emptyOfferDesign(layout)) });
     setErrors([]); setKept(false); navigate('editor');
   }
-  function select(layout: DesignOfferLayout): void {
+  function select(layout: DesignOfferLayout, opener?: HTMLElement | null): void {
     if (layout === draft.layout) { navigate('editor'); return; }
     if (hasUnsavedDesign(draft, drafts[draft.layout])) {
-      switchOpener.current = typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null;
+      switchOpener.current = opener ?? (typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null);
       setPendingLayout(layout); return;
     }
     switchTo(layout);
@@ -79,7 +79,7 @@ export function HqPricingOffers(): React.ReactElement {
       <section className={styles.cards} aria-label={t('pricing.overview')}>{DESIGN_OFFER_LAYOUTS.map(layout => <article key={layout} className={styles.offer}>
         <div className={styles.offerTop}><HqIcon name={isLifetimeDesign(layout) ? 'gift' : isFounderDesign(layout) ? 'trophy' : 'chart'}/><span className={styles.status}>{t(drafts[layout] ? 'pricing.local-draft' : 'pricing.not-configured')}</span></div>
         <h3>{title(layout)}</h3><p>{billing(layout)}</p><strong className={styles.price}>{drafts[layout] ? price(drafts[layout]!) : t('pricing.no-price')}</strong><p className={styles.note}>HON OS · {t('pricing.design')}</p>
-        <button type="button" onClick={() => select(layout)}>{t('pricing.edit')}<span className={styles.srOnly}> · {title(layout)}</span><HqIcon name="arrow" size={16}/></button>
+        <button type="button" onClick={event => select(layout, event.currentTarget)}>{t('pricing.edit')}<span className={styles.srOnly}> · {title(layout)}</span><HqIcon name="arrow" size={16}/></button>
       </article>)}</section>
       <section className={base.panel}><h3>{t('pricing.published')}</h3><p>{t('pricing.no-published')}</p><Link className={styles.historyLink} href="/hq/revenue">{t('pricing.history-link')} →</Link></section>
     </>}
@@ -88,7 +88,7 @@ export function HqPricingOffers(): React.ReactElement {
       {!owner && <p role="status" className={styles.warning}>{t('pricing.owner-only')}</p>}
       <form onSubmit={event => { event.preventDefault(); if (!owner) return; const problems = designProblems(draft); setErrors(problems); setKept(false); if (!problems.length) { setDrafts(old => ({ ...old, [draft.layout]: { ...draft } })); setKept(true); } }}>
         <fieldset disabled={!owner}><legend>{t('pricing.payment')}</legend>
-          <div className={styles.field}><label htmlFor="offer-layout">{t('pricing.payment')}</label><select id="offer-layout" value={draft.layout} onChange={event => select(event.target.value as DesignOfferLayout)}>{DESIGN_OFFER_LAYOUTS.map(layout => <option key={layout} value={layout}>{title(layout)}</option>)}</select></div>
+          <div className={styles.field}><label htmlFor="offer-layout">{t('pricing.payment')}</label><select id="offer-layout" value={draft.layout} onChange={event => select(event.target.value as DesignOfferLayout, event.currentTarget)}>{DESIGN_OFFER_LAYOUTS.map(layout => <option key={layout} value={layout}>{title(layout)}</option>)}</select></div>
           <p className={styles.note}>{billing(draft.layout)}</p>
           {field('name', 'pricing.name', { problem: 'terms' })}
           <div className={styles.fieldPair}>{field('amount', 'pricing.amount', { max: 13, problem: 'price' })}{field('currency', 'pricing.currency', { max: 3, problem: 'price' })}</div>
