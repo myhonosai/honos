@@ -12,6 +12,11 @@ export const isAnnualDesign = (layout: DesignOfferLayout) => layout.endsWith('an
 export function emptyOfferDesign(layout: DesignOfferLayout): OfferDesign {
   return { layout, name: 'HON OS', amount: '', currency: 'USD', eligibility: '', terms: '', saleStart: '', saleEnd: '', founderLimit: '', annualDiscount: '', renewal: '', serviceTerms: '', fairUse: '', credits: '', usageLimits: '' };
 }
+/** Compare every local field, including incomplete values; never normalize away an owner's edits. */
+export function hasUnsavedDesign(draft: OfferDesign, retained?: OfferDesign): boolean {
+  const baseline = retained ?? emptyOfferDesign(draft.layout);
+  return (Object.keys(draft) as (keyof OfferDesign)[]).some(key => draft[key] !== baseline[key]);
+}
 /** Preview formatting only. Reject precision loss instead of silently rounding a draft price. */
 export function designPrice(amount: string, currency: string, locale = 'en-US'): string | null {
   if (!/^[A-Z]{3}$/.test(currency) || !/^\d{1,9}(?:\.\d{1,3})?$/.test(amount)) return null;

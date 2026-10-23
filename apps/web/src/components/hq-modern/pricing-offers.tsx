@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useLocale } from '../localization/provider';
 import { useHqModern } from './shell';
 import { HqIcon } from './icon';
-import { DESIGN_OFFER_LAYOUTS, emptyOfferDesign, designPrice, designProblems, isAnnualDesign, isFounderDesign, isLifetimeDesign, customerDesignVisible,
+import { DESIGN_OFFER_LAYOUTS, emptyOfferDesign, hasUnsavedDesign, designPrice, designProblems, isAnnualDesign, isFounderDesign, isLifetimeDesign, customerDesignVisible,
   type DesignOfferLayout, type OfferDesign, type DesignProblem } from './pricing-offers-model';
 import base from './hq-modern.module.css';
 import styles from './pricing-offers.module.css';
@@ -21,13 +21,40 @@ export function HqPricingOffers(): React.ReactElement {
   const [draft, setDraft] = useState<OfferDesign>(() => emptyOfferDesign('monthly'));
   const [errors, setErrors] = useState<DesignProblem[]>([]), [kept, setKept] = useState(false);
   const [review, setReview] = useState(false), [acknowledged, setAcknowledged] = useState(false);
+  const [pendingLayout, setPendingLayout] = useState<DesignOfferLayout | null>(null);
+  const [retainedLayout, setRetainedLayout] = useState<DesignOfferLayout | null>(null);
+  const switchDialog = useRef<HTMLDialogElement | null>(null), continueButton = useRef<HTMLButtonElement | null>(null);
+  const switchOpener = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement | null>(null), reviewHeading = useRef<HTMLHeadingElement | null>(null);
   useEffect(() => { if (review) reviewHeading.current?.focus(); }, [review]);
+  useEffect(() => {
+    if (pendingLayout && switchDialog.current && !switchDialog.current.open) {
+      switchDialog.current.showModal(); continueButton.current?.focus();
+    }
+  }, [pendingLayout]);
   const title = (layout: DesignOfferLayout) => t(`pricing.${layout}`);
   const billing = (layout: DesignOfferLayout) => t(isLifetimeDesign(layout) ? 'pricing.one-time' : isAnnualDesign(layout) ? 'pricing.recurring-year' : 'pricing.recurring-month');
   const price = (d: OfferDesign) => designPrice(d.amount, d.currency, formattingLocale) ?? t('pricing.no-price');
   const navigate = (next: Screen) => { setReview(false); setAcknowledged(false); setScreen(next); requestAnimationFrame(() => heading.current?.focus()); };
-  function select(layout: DesignOfferLayout): void { setDraft({ ...(drafts[layout] ?? emptyOfferDesign(layout)) }); setErrors([]); setKept(false); navigate('editor'); }
+  function switchTo(layout: DesignOfferLayout): void {
+    setPendingLayout(null); setDraft({ ...(drafts[layout] ?? emptyOfferDesign(layout)) });
+    setErrors([]); setKept(false); navigate('editor');
+  }
+  function select(layout: DesignOfferLayout): void {
+    if (layout === draft.layout) { navigate('editor'); return; }
+    if (hasUnsavedDesign(draft, drafts[draft.layout])) {
+      switchOpener.current = typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null;
+      setPendingLayout(layout); return;
+    }
+    switchTo(layout);
+  }
+  function continueEditing(): void {
+    setPendingLayout(null); setScreen('editor');
+    requestAnimationFrame(() => {
+      if (switchOpener.current?.isConnected) switchOpener.current.focus();
+      else heading.current?.focus();
+    });
+  }
   function change<K extends keyof OfferDesign>(key: K, value: OfferDesign[K]): void {
     if (!owner) return;
     setDraft(old => ({ ...old, [key]: value })); setErrors([]); setKept(false); setReview(false); setAcknowledged(false);
@@ -43,9 +70,10 @@ export function HqPricingOffers(): React.ReactElement {
   // Drafts are explicitly internal. Founder data cannot enter the customer preview without a future verified contract.
   const previewDrafts = DESIGN_OFFER_LAYOUTS.map(layout => layout === draft.layout ? draft : drafts[layout] ?? emptyOfferDesign(layout)).filter(customerDesignVisible);
   return <div className={styles.workbench} data-pricing-design>
+    <nav className={styles.tabs} aria-label={t('Pricing & Offers')}>{(['overview', 'editor', 'preview', 'history'] as const).map(value => <button key={value} type="button" aria-pressed={screen === value} onClick={() => navigate(value)}>{t(`pricing.${value}`)}</button>)}</nav>
     <section className={`${base.panel} ${styles.hero}`}><div><span className={styles.kicker}>{t('pricing.design')}</span><h2>{t('pricing.heading')}</h2><p>{t('pricing.intro')}</p></div><div className={styles.productMark}><HqIcon name="shield" size={24}/><strong>HON OS</strong><span>{t('pricing.payment')}</span></div></section>
     <aside className={styles.boundary} aria-label={t('pricing.design')}><HqIcon name="attention"/><div><strong>{t('pricing.backend')}</strong><p>{t('pricing.notice')}</p></div></aside>
-    <nav className={styles.tabs} aria-label={t('Pricing & Offers')}>{(['overview', 'editor', 'preview', 'history'] as const).map(value => <button key={value} type="button" aria-pressed={screen === value} onClick={() => navigate(value)}>{t(`pricing.${value}`)}</button>)}</nav>
+    {retainedLayout && <p role="status" className={styles.kept}>{t('pricing.switch-retained', { offer: title(retainedLayout) })}</p>}
     <h2 ref={heading} tabIndex={-1} className={styles.screenTitle}>{t(`pricing.${screen}`)}</h2>
     {screen === 'overview' && <>
       <section className={styles.cards} aria-label={t('pricing.overview')}>{DESIGN_OFFER_LAYOUTS.map(layout => <article key={layout} className={styles.offer}>
@@ -83,5 +111,19 @@ export function HqPricingOffers(): React.ReactElement {
       {designProblems(draft).length > 0 && <div className={styles.warning}><p>{t('pricing.validation')}</p><ul>{designProblems(draft).map(problem => <li key={problem}>{t(`pricing.error.${problem}`)}</li>)}</ul></div>}
       <label className={styles.checkbox}><input type="checkbox" checked={acknowledged} disabled={!owner} onChange={event => setAcknowledged(event.target.checked)}/>{t('pricing.ack')}</label><div className={styles.actions}><button type="button" disabled aria-describedby="offer-publish-blocked">{t('pricing.publish-unavailable')}</button><button type="button" onClick={() => { setReview(false); requestAnimationFrame(() => heading.current?.focus()); }}>{t('pricing.close-review')}</button></div><p id="offer-publish-blocked" className={styles.note}>{t('pricing.backend')}</p>
     </section>}
+    {pendingLayout && <dialog ref={switchDialog} className={styles.switchDialog} aria-labelledby="offer-switch-title" aria-describedby="offer-switch-description" onCancel={event => { event.preventDefault(); continueEditing(); }}>
+      <h2 id="offer-switch-title">{t('pricing.unsaved-title')}</h2>
+      <p id="offer-switch-description">{t('pricing.unsaved-description', { current: title(draft.layout), next: title(pendingLayout) })}</p>
+      <p className={styles.note}>{t('pricing.unsaved-local')}</p>
+      <div className={styles.actions}>
+        <button type="button" disabled={!owner} onClick={() => {
+          if (!owner) return;
+          // Incomplete design notes are safe to retain locally; this is not publication validation.
+          setDrafts(old => ({ ...old, [draft.layout]: { ...draft } })); setRetainedLayout(draft.layout); switchTo(pendingLayout);
+        }}>{t('pricing.save-local')}</button>
+        <button type="button" disabled={!owner} onClick={() => { if (owner) switchTo(pendingLayout); }}>{t('pricing.discard-changes')}</button>
+        <button ref={continueButton} type="button" onClick={continueEditing}>{t('pricing.continue-editing')}</button>
+      </div>
+    </dialog>}
   </div>;
 }

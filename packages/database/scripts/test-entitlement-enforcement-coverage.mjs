@@ -35,6 +35,7 @@ function args(f,k,target=k){
 const OPEN_BY_DESIGN={
  'hon.read_saas_school_billing_account(text,uuid)':'billing recovery: the school sees why access is unavailable and what it owes',
  'hon.read_saas_school_plan_options(text,uuid)':'billing recovery: plan selection and checkout for the first or a renewed payment',
+ 'hon.read_saas_hon_os_offers_for_school(text,uuid)':'billing recovery: the published HON OS offers a school may buy (read only, purchase NOT_CONNECTED)',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',

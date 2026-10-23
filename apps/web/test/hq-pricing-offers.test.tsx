@@ -10,7 +10,7 @@ vi.mock('../src/components/localization/provider', async () => {
   return { useLocale: () => ({ t: (key: any) => translate(state.language, key), formattingLocale: 'en-US', number: (n: number) => String(n), preferences: DEFAULT_LOCALE }) };
 });
 import { HqPricingOffers } from '../src/components/hq-modern/pricing-offers';
-import { DESIGN_OFFER_LAYOUTS, emptyOfferDesign, designPrice, designProblems, customerDesignVisible } from '../src/components/hq-modern/pricing-offers-model';
+import { DESIGN_OFFER_LAYOUTS, emptyOfferDesign, hasUnsavedDesign, designPrice, designProblems, customerDesignVisible } from '../src/components/hq-modern/pricing-offers-model';
 afterEach(() => { state.role = 'OWNER'; state.language = 'en'; vi.restoreAllMocks(); });
 describe('HON OS HQ non-production pricing presentation', () => {
   it('offers six payment layouts for one HON OS product without configured prices, fictitious inventory or product tiers', () => {
@@ -31,6 +31,17 @@ describe('HON OS HQ non-production pricing presentation', () => {
   it('formats currency precisely for local preview and rejects rounding or unsupported input', () => {
     expect(designPrice('249.01', 'USD')).toContain('249.01'); expect(designPrice('150000', 'KRW')).toContain('150,000'); expect(designPrice('1.234', 'BHD')).toContain('1.234');
     for (const [amount, currency] of [['1.001', 'USD'], ['1.1', 'KRW'], ['0', 'USD'], ['-1', 'USD'], ['1e6', 'USD'], ['NaN', 'USD'], ['1234567890', 'USD'], ['249', '../USD']]) expect(designPrice(amount!, currency!)).toBeNull();
+  });
+  it('detects changes to every design field, including incomplete, invalid and whitespace-only edits', () => {
+    for (const layout of DESIGN_OFFER_LAYOUTS) {
+      const baseline = emptyOfferDesign(layout);
+      expect(hasUnsavedDesign(baseline)).toBe(false);
+      for (const key of Object.keys(baseline).filter(key => key !== 'layout') as Exclude<keyof typeof baseline, 'layout'>[]) {
+        const changed = { ...baseline, [key]: baseline[key] + ' ' };
+        expect(hasUnsavedDesign(changed, baseline), `${layout}/${key}`).toBe(true);
+        expect(hasUnsavedDesign(changed, { ...changed })).toBe(false);
+      }
+    }
   });
   it('checks separate founder, annual, lifetime, credit and date requirements without calculating billing', () => {
     const founder = emptyOfferDesign('founder-annual'); expect(designProblems(founder)).toEqual(expect.arrayContaining(['founder', 'eligibility', 'renewal', 'usage']));

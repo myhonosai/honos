@@ -39,6 +39,19 @@ jobs:
         run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Pricing presentation and HQ/localization regressions
         run: pnpm --filter @hon/web exec vitest run test/hq-pricing-offers.test.tsx test/hq-pricing-offers-interaction.test.tsx test/hq-modern.test.tsx test/hq-saas-review.test.tsx test/localization.test.tsx
+      - name: Diagnose and provision Korean browser fonts
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hon-pricing-results"
+          fc-list ':lang=ko' family | sort -u > "$RUNNER_TEMP/hon-pricing-results/korean-fonts-before.txt"
+          if ! fc-list ':lang=ko' family | grep -q 'Noto Sans CJK KR'; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends fonts-noto-cjk
+            fc-cache -f
+          fi
+          fc-list ':lang=ko' family | sort -u > "$RUNNER_TEMP/hon-pricing-results/korean-fonts-after.txt"
+          grep 'Noto Sans CJK KR' "$RUNNER_TEMP/hon-pricing-results/korean-fonts-after.txt"
+          dpkg-query -W fonts-noto-cjk > "$RUNNER_TEMP/hon-pricing-results/korean-font-package.txt"
       - name: Prepare pinned browser tools outside the workspace
         run: |
           set -euo pipefail

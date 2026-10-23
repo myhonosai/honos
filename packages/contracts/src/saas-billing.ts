@@ -75,6 +75,11 @@ export const SAAS_COMMANDS = {
   recoverPaymentEvents: 'saas-payment-recover',
   awaitFirstPayment: 'saas-access-await',
   retryFirstPaymentActivation: 'saas-access-retry',
+  createOfferSetDraft: 'saas-offer-set-draft',
+  reviseOfferSetDraft: 'saas-offer-set-revise',
+  discardOfferSetDraft: 'saas-offer-set-discard',
+  publishOfferSet: 'saas-offer-set-publish',
+  stopOfferSales: 'saas-offer-sales-stop',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

@@ -8,7 +8,7 @@ vi.mock('react', async importOriginal => {
   return { ...actual, ...hooks, default: { ...actual, ...hooks } };
 });
 vi.mock('../src/components/hq-modern/shell', () => ({ useHqModern: () => ({ overview: { callerHqRole: harness.role } }) }));
-vi.mock('../src/components/localization/provider', async () => { const { translate } = await import('@hon/design-system'); return { useLocale: () => ({ t: (key: any) => translate('en', key), formattingLocale: 'en-US', number: (n: number) => String(n) }) }; });
+vi.mock('../src/components/localization/provider', async () => { const { translate } = await import('@hon/design-system'); return { useLocale: () => ({ t: (key: any, params: any) => translate('en', key, params), formattingLocale: 'en-US', number: (n: number) => String(n) }) }; });
 import { HqPricingOffers } from '../src/components/hq-modern/pricing-offers';
 const render = () => { harness.cursor = 0; return HqPricingOffers(); };
 const nodes = (tree: any, type: string): any[] => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(value => nodes(value, type)) : [...(tree.type === type ? [tree] : []), ...nodes(tree.props?.children, type)];
@@ -39,5 +39,32 @@ describe('HQ owner presentation interaction, no backend assumptions', () => {
   it('denies editor controls to a verified HQ operator without inventing pricing permission', () => {
     harness.role = 'OPERATOR'; button('Offer editor').props.onClick(); expect(html()).toContain('Only the verified HQ owner'); expect(nodes(render(), 'fieldset').every(f => f.props.disabled)).toBe(true); expect(button('Keep local design draft').props.disabled).toBe(true);
     fill('amount', '999'); expect(field('amount').props.value).toBe(''); nodes(render(), 'form')[0].props.onSubmit({ preventDefault: vi.fn() }); expect(html()).not.toContain('Local design draft retained');
+  });
+  it('requires an explicit choice and preserves incomplete founder, annual, price and usage edits on Continue Editing and Escape', () => {
+    button('Offer editor').props.onClick(); fill('layout', 'founder-annual');
+    const values = { name: 'Custom name', amount: 'not finished', currency: 'KRW', saleStart: '2026-11-01', saleEnd: '2027-01-01', terms: 'Terms in progress', eligibility: 'Owner review', founderLimit: '13', annualDiscount: '7.25', renewal: 'Unfinished renewal', credits: '12345', usageLimits: 'Limit notes' };
+    for (const [key, value] of Object.entries(values)) fill(key, value);
+    fill('layout', 'monthly'); expect(nodes(render(), 'dialog')).toHaveLength(1); expect(field('layout').props.value).toBe('founder-annual');
+    button('Continue Editing').props.onClick(); expect(nodes(render(), 'dialog')).toHaveLength(0);
+    for (const [key, value] of Object.entries(values)) expect(field(key).props.value).toBe(value);
+    fill('layout', 'lifetime'); const preventDefault = vi.fn(); nodes(render(), 'dialog')[0].props.onCancel({ preventDefault }); expect(preventDefault).toHaveBeenCalled();
+    for (const [key, value] of Object.entries(values)) expect(field(key).props.value).toBe(value);
+    // Selecting the same option must not reload its older retained copy.
+    fill('layout', 'founder-annual'); expect(nodes(render(), 'dialog')).toHaveLength(0); expect(field('amount').props.value).toBe('not finished');
+  });
+  it('Save Local Draft retains every partial lifetime field across switches without validation or network/storage writes', () => {
+    const fetch = vi.spyOn(globalThis, 'fetch'); button('Offer editor').props.onClick(); fill('layout', 'founder-lifetime');
+    fill('amount', '0.'); fill('founderLimit', '10'); fill('eligibility', 'Eligibility notes'); fill('serviceTerms', 'Service notes'); fill('fairUse', 'Fair use notes'); fill('credits', '5'); fill('usageLimits', 'Usage notes');
+    fill('layout', 'monthly'); button('Save Local Draft').props.onClick(); expect(field('layout').props.value).toBe('monthly'); expect(html()).toContain('including incomplete fields'); expect(html()).toContain('Nothing was saved to HON');
+    fill('layout', 'founder-lifetime'); expect(nodes(render(), 'dialog')).toHaveLength(0);
+    for (const [key, value] of Object.entries({ amount: '0.', founderLimit: '10', eligibility: 'Eligibility notes', serviceTerms: 'Service notes', fairUse: 'Fair use notes', credits: '5', usageLimits: 'Usage notes' })) expect(field(key).props.value).toBe(value);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it('Discard Changes restores the last local copy, and overview cards cannot silently discard unsaved edits', () => {
+    button('Offer editor').props.onClick(); fill('amount', '101'); fill('layout', 'annual'); button('Save Local Draft').props.onClick();
+    fill('layout', 'monthly'); fill('amount', '202'); button('Offer overview').props.onClick();
+    button('Design this option · Regular annual').props.onClick(); expect(nodes(render(), 'dialog')).toHaveLength(1);
+    button('Discard Changes').props.onClick(); expect(field('layout').props.value).toBe('annual'); fill('layout', 'monthly'); expect(field('amount').props.value).toBe('101');
+    fill('layout', 'annual'); fill('terms', 'Unsaved only'); fill('layout', 'lifetime'); button('Discard Changes').props.onClick(); fill('layout', 'annual'); expect(field('terms').props.value).toBe('');
   });
 });

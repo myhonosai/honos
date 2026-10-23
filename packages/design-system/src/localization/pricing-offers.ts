@@ -5,7 +5,7 @@ export const pricingEn = {
   'pricing.notice': 'This is an internal UX review. Changes stay in this page’s memory and are lost on reload. Nothing is saved, published, charged or activated.',
   'pricing.heading': 'One product. Clear payment choices.',
   'pricing.intro': 'Shape HON OS offers in one place, with clear terms and a deliberate publication review.',
-  'pricing.backend': 'Verified offer-management backend pending · issue #59',
+  'pricing.backend': 'Offer-management backend integration pending · issue #59',
   'pricing.overview': 'Offer overview',
   'pricing.editor': 'Offer editor',
   'pricing.preview': 'Customer pricing preview',
@@ -50,6 +50,11 @@ export const pricingEn = {
   'pricing.usage-note': 'Planning values only. No credits are granted and no provider capabilities are enabled.',
   'pricing.keep': 'Keep local design draft',
   'pricing.kept': 'Local design draft retained on this page only. It was not saved to HON.',
+  'pricing.unsaved-title': 'Keep your unsaved changes?',
+  'pricing.unsaved-description': 'You changed {current}. Choose what to do before switching to {next}.',
+  'pricing.unsaved-local': 'Save Local Draft keeps every field, including incomplete notes, in this page’s memory only. It is not saved to HON and will be lost on reload or leaving this page. Discard Changes restores the last local copy, if any.',
+  'pricing.save-local': 'Save Local Draft', 'pricing.discard-changes': 'Discard Changes', 'pricing.continue-editing': 'Continue Editing',
+  'pricing.switch-retained': '{offer}: local draft retained, including incomplete fields. Nothing was saved to HON.',
   'pricing.reset': 'Clear this local draft',
   'pricing.review': 'Review publication requirements',
   'pricing.publication': 'Publication review · unavailable',
@@ -82,12 +87,18 @@ export const pricingEn = {
 } as const;
 type PricingCopy = Record<keyof typeof pricingEn, string>;
 export const pricingKo: PricingCopy = {
+  'pricing.unsaved-title': '저장하지 않은 변경 내용을 유지할까요?',
+  'pricing.unsaved-description': '{current}의 내용을 변경했습니다. {next}(으)로 전환하기 전에 처리 방법을 선택하세요.',
+  'pricing.unsaved-local': '로컬 초안 저장은 미완성 메모를 포함한 모든 필드를 이 페이지의 메모리에만 유지합니다. HON에 저장되지 않으며 새로고침하거나 페이지를 떠나면 사라집니다. 변경 내용 버리기는 이전 로컬 사본이 있으면 복원합니다.',
+  'pricing.save-local': '로컬 초안 저장', 'pricing.discard-changes': '변경 내용 버리기', 'pricing.continue-editing': '계속 편집',
+  'pricing.switch-retained': '{offer}: 미완성 필드를 포함한 로컬 초안을 유지했습니다. HON에는 저장되지 않았습니다.',
+
   'Pricing & Offers': '가격 및 판매 조건',
   'pricing.design': '디자인 작업 공간 · 미연결',
   'pricing.notice': '내부 UX 검토용입니다. 변경 사항은 이 페이지 메모리에만 남으며 새로고침 시 사라집니다. 저장, 게시, 결제 또는 활성화되지 않습니다.',
   'pricing.heading': '하나의 제품, 명확한 결제 선택.',
   'pricing.intro': 'HON OS 판매 조건을 한곳에서 설계하고 명확한 약관과 게시 검토 절차를 확인하세요.',
-  'pricing.backend': '검증된 판매 관리 백엔드 대기 중 · 이슈 #59',
+  'pricing.backend': '판매 관리 백엔드 연결 대기 중 · 이슈 #59',
   'pricing.overview': '판매 조건 개요', 'pricing.editor': '판매 조건 편집기', 'pricing.preview': '고객 가격 미리보기', 'pricing.history': '버전 및 감사 기록',
   'pricing.monthly': '일반 월간', 'pricing.annual': '일반 연간', 'pricing.founder-monthly': '창립 회원 월간', 'pricing.founder-annual': '창립 회원 연간', 'pricing.lifetime': '평생 이용', 'pricing.founder-lifetime': '창립 회원 평생 이용',
   'pricing.recurring-month': '정기 결제 · 매월', 'pricing.recurring-year': '정기 결제 · 매년', 'pricing.one-time': '일시불 · 평생 이용 약관 필요',
@@ -119,10 +130,16 @@ export const pricingKo: PricingCopy = {
   'pricing.error.annual': '소수 둘째 자리까지 0 이상 100 미만의 할인율을 입력하세요.', 'pricing.error.renewal': '갱신 및 해지 조건을 설명하세요.', 'pricing.error.lifetime': '평생 이용 권한, 서비스 및 공정 사용 조건을 설명하세요.', 'pricing.error.usage': '제안 크레딧과 사용 한도를 지정하세요.', 'pricing.error.dates': '유효한 날짜를 순서대로 입력하세요. 종료일은 시작일보다 빠를 수 없습니다.',
 };
 export const pricingEs: PricingCopy = {
+  'pricing.unsaved-title': '¿Conservar los cambios sin guardar?',
+  'pricing.unsaved-description': 'Ha modificado {current}. Elija qué hacer antes de cambiar a {next}.',
+  'pricing.unsaved-local': 'Guardar borrador local conserva todos los campos, incluso las notas incompletas, solo en la memoria de esta página. No se guarda en HON y se pierde al recargar o salir. Descartar cambios restaura la última copia local, si existe.',
+  'pricing.save-local': 'Guardar borrador local', 'pricing.discard-changes': 'Descartar cambios', 'pricing.continue-editing': 'Seguir editando',
+  'pricing.switch-retained': '{offer}: borrador local conservado, incluidos los campos incompletos. No se guardó nada en HON.',
+
   'Pricing & Offers': 'Precios y ofertas', 'pricing.design': 'Diseño · sin conexión',
   'pricing.notice': 'Revisión interna de UX. Los cambios solo permanecen en la memoria de esta página y se pierden al recargar. No se guarda, publica, cobra ni activa nada.',
   'pricing.heading': 'Un producto. Opciones de pago claras.', 'pricing.intro': 'Diseñe las ofertas de HON OS en un solo lugar, con condiciones claras y una revisión antes de publicar.',
-  'pricing.backend': 'Backend de ofertas verificado pendiente · incidencia #59', 'pricing.overview': 'Resumen de ofertas', 'pricing.editor': 'Editor de ofertas', 'pricing.preview': 'Vista previa para clientes', 'pricing.history': 'Versiones y auditoría',
+  'pricing.backend': 'Integración del backend de ofertas pendiente · incidencia #59', 'pricing.overview': 'Resumen de ofertas', 'pricing.editor': 'Editor de ofertas', 'pricing.preview': 'Vista previa para clientes', 'pricing.history': 'Versiones y auditoría',
   'pricing.monthly': 'Mensual estándar', 'pricing.annual': 'Anual estándar', 'pricing.founder-monthly': 'Mensual para fundadores', 'pricing.founder-annual': 'Anual para fundadores', 'pricing.lifetime': 'De por vida', 'pricing.founder-lifetime': 'De por vida para fundadores',
   'pricing.recurring-month': 'Recurrente · cada mes', 'pricing.recurring-year': 'Recurrente · cada año', 'pricing.one-time': 'Pago único · requiere condiciones de por vida',
   'pricing.unavailable': 'No disponible', 'pricing.not-configured': 'Sin configurar', 'pricing.local-draft': 'Borrador de diseño local', 'pricing.published': 'Ofertas publicadas', 'pricing.no-published': 'No se pueden verificar las ofertas publicadas. Ningún borrador está disponible para comprar.', 'pricing.edit': 'Diseñar esta opción',
