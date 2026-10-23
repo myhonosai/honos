@@ -869,3 +869,11 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - [ ] Owner-directed isolated design foundation: one HON OS product with six payment layouts, local owner-only editor, founder/annual/lifetime/AI terms, internal customer preview and permanently unavailable publication/history pending merged #59 contracts. Preserve public pricing, all historical billing and security. No API invention, financial operations or provider activation.
 - [ ] Run presentation/interaction/localization tests, full CI/security proofs and authenticated synthetic desktop/mobile browser verification; publish one focused unmerged PR with exact source/evidence and stop for review.
 - E1b-1 #56 paused safely at remote `codex/membership-date-management` / `fb767a874469bb82bf242d474f42fe3c8c09351b`. Work and unexecuted tests preserved; resume at verification, not from scratch. See `docs/CODEX_HQ_PRICING_OFFERS_UX.md` for sequencing and backend coordination.
+
+
+## Codex — operational HQ Pricing & Offers frontend (review branch)
+
+- Baseline: merged #61 backend / migration 0181 and owner-approved #62 UX foundation, main `409134dd88061d6016a3d716fb8779588efdd6de`.
+- [ ] Source review/merge: whole-set create/revise/save, server quote/digest review, explicit protected publication, bounded history, stop-sales/discard, localization and immutable retry/identity/privacy handling. Implementation and test sources are on the isolated frontend branch; exact execution evidence and final commit are reported on its PR. This is not a production deployment.
+- [ ] Separate gates: founder remaining/reserved/allocated inventory projection, complete audit/history contracts, approved merged #63 purchase binding and D1–D9/D6 decisions, real Stripe sandbox verification, B6 first-payment onboarding and customer checkout checkpoint. Customer checkout/financial activation stay disabled in this frontend scope.
+- Issue #56 stays paused at `fb767a874469bb82bf242d474f42fe3c8c09351b`. No automatic resume. See `docs/CODEX_HQ_PRICING_OFFERS_INTEGRATION.md`.
