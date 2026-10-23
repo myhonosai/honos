@@ -79,6 +79,9 @@ import { InterfaceThemeController } from './preferences/interface-theme.controll
 import { InterfaceThemeService } from './preferences/interface-theme.service.js';
 import { MembershipController } from './billing/membership.controller.js';
 import { MembershipService } from './billing/membership.service.js';
+import { MembershipDateRevisionController } from './billing/membership-date-revision.controller.js';
+import { MembershipDateRevisionService } from './billing/membership-date-revision.service.js';
+import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
@@ -323,6 +326,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
+    MembershipDateRevisionController,
+    MembershipStatusReportController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
     MembershipPlanController,
@@ -441,6 +446,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    MembershipDateRevisionService,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,

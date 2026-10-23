@@ -1,6 +1,7 @@
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { membershipFixtureQuery } from './membership-activation-test-support.mjs';
 
 const owner = new URL(process.env.DATABASE_URL ?? ''), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
 if (owner.hostname !== 'localhost' || owner.port !== '5432' || owner.pathname !== '/hon_parent_journey_validation' || owner.username !== 'hon_parent_journey_owner'
@@ -30,7 +31,7 @@ try {
   await admin.query("INSERT INTO hon.testing_registration_interests(id,organization_id,school_id,testing_event_id,family_id,student_profile_id,requested_by_principal_id,status) VALUES($1,$2,$3,$4,$5,$6,$7,'SUBMITTED')", [ids.interest, ids.organization, ids.school, ids.event, ids.family, ids.child, ids.guardian]);
   await admin.query('ALTER TABLE hon.testing_registration_interests ENABLE TRIGGER USER');
   await admin.query("INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id,currency) VALUES($1,$2,$3,$4,'USD')", [ids.account, ids.organization, ids.school, ids.payer]);
-  await admin.query("INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state) VALUES($1,$2,$3,$4,$5,'PRIVATE_PLAN','ACTIVE')", [ids.membership, ids.organization, ids.school, ids.account, ids.child]);
+  await membershipFixtureQuery(admin,"INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state) VALUES($1,$2,$3,$4,$5,'PRIVATE_PLAN','ACTIVE')", [ids.membership, ids.organization, ids.school, ids.account, ids.child]);
   await admin.query('ALTER TABLE hon.testing_certificates DISABLE TRIGGER USER');
   await admin.query("INSERT INTO hon.testing_certificates(id,organization_id,school_id,testing_candidate_id,student_curriculum_enrollment_id,curriculum_id,target_rank_id,target_rank_name,title,issued_at,issued_by_principal_id) VALUES($1,$2,$3,$4,$5,$6,$7,'Private rank','Private certificate',clock_timestamp(),$8)", [ids.certificate, ids.organization, ids.school, ids.candidate, ids.enrollment, ids.curriculum, ids.rank, ids.guardian]);
   await admin.query('ALTER TABLE hon.testing_certificates ENABLE TRIGGER USER');

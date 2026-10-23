@@ -24,6 +24,7 @@ const { OwnerLaunchService } = await import('../../../apps/api/dist/owner-launch
 const { LeadRegistrationRecoveryService } = await import('../../../apps/api/dist/crm/lead-registration-recovery.service.js');
 const { MembershipPlanService } = await import('../../../apps/api/dist/billing/membership-plan.service.js');
 const { GuardianChildEnrollmentService } = await import('../../../apps/api/dist/crm/guardian-child-enrollment.service.js');
+const { MembershipDateRevisionService } = await import('../../../apps/api/dist/billing/membership-date-revision.service.js');
 
 const admin = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
 const blocker = new pg.Client({ connectionString: ownerUrl.toString(), ssl: false });
@@ -93,7 +94,8 @@ try {
   await admin.query("INSERT INTO hon.principals(id,principal_type,user_id,display_name) VALUES($1,'HUMAN_USER',$2,'PRIVATE_LOCK_STAFF')", [ids.staff, ids.user]);
   await admin.query("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,'FRONT_DESK','PRIVATE_LOCK_ROLE')", [ids.role, ids.org]);
   for (const permission of ['school.view', 'people.create', 'student.profile.manage', 'curriculum.progress.record', 'program.manage', 'schedule.session.manage',
-    'crm.lead.read', 'crm.lead.register', 'family.create', 'family.member.manage', 'billing.membership.create', 'billing.account.create', 'billing.membership.activate', 'schedule.booking.manage', 'billing.membership_plan.manage']) {
+    'crm.lead.read', 'crm.lead.register', 'family.create', 'family.member.manage', 'billing.membership.create', 'billing.account.create', 'billing.membership.activate', 'schedule.booking.manage', 'billing.membership_plan.manage',
+    'billing.membership.dates.revise']) {
     await admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [ids.role, ids.org, permission]);
   }
   await admin.query("INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,$4,clock_timestamp()-interval '1 day')", [ids.grant, ids.org, ids.school, ids.staff, ids.role]);
@@ -226,6 +228,19 @@ try {
       run: (d, db = database) => activate(d.membership.id, new MembershipService(db)),
       check: (r) => { assert.equal(r.replayed, false); assert.equal(r.membership.state, 'ACTIVE'); },
       stages: ['idempotency_records', 'users', 'people', 'memberships', 'crm_adult_membership_draft_sources', 'membership_activation_decisions', 'audit_events'] },
+    // 0178: a lock-free read-only preview, then the protected revision paused at each canonical stage (the membership
+    // row is taken FOR NO KEY UPDATE after memberships ROW EXCLUSIVE; plans, schedules/invoices and renewals in SHARE).
+    'Membership date revision': { prepare: async () => {
+        const membership = await msDraft(); await activate(membership.id);
+        const today = (await admin.query("SELECT (clock_timestamp() AT TIME ZONE timezone)::date::text d FROM hon.schools WHERE id=$1", [ids.school])).rows[0].d;
+        const endDate = new Date(Date.parse(`${today}T00:00:00Z`) + 30 * 86400000).toISOString().slice(0, 10);
+        const preview = await new MembershipDateRevisionService(database).preview(context({ idempotencyKey: '' }), membership.id, { changeKind: 'EARLY_END', startDate: today, endDate });
+        return { membership, body: { expectedVersion: preview.version, expectedPeriodVersion: preview.currentPeriod.periodVersion, previewDigest: preview.previewDigest,
+          changeKind: 'EARLY_END', startDate: today, endDate, dateSource: preview.proposedDates.dateSource, acknowledgedWarnings: preview.warnings.map((w) => w.code),
+          reasonCode: 'MEMBER_REQUESTED', reasonText: 'Member asked to end on this date.', confirmation: 'I_CONFIRM_MEMBERSHIP_DATE_CHANGE_NO_PAYMENT_INVOICE_REFUND_OR_AGREEMENT_CHANGE' } }; },
+      run: (d, db = database) => new MembershipDateRevisionService(db).revise(context(), d.membership.id, d.body),
+      check: (r) => { assert.equal(r.replayed, false); assert.equal(r.receipt.changeKind, 'EARLY_END'); assert.deepEqual(r.receipt.financialEffects, []); },
+      stages: ['idempotency_records', 'users', 'billing_accounts', 'memberships', 'membership_plans', 'invoices', 'membership_renewal_reviews', 'membership_date_revisions', 'audit_events'] },
   };
 
   // Runs workflow A paused at `stage`, then B on independent data; returns null on success or a failure description.
@@ -295,7 +310,8 @@ try {
   await install();
   const legacy = await bodies();
   for (const name of Object.keys(changed)) assert.notEqual(legacy[name], expected[name], `${name} pre-0169 body installed`);
-  const legacyOnly = (a, b) => ![a, b].some((name) => name.startsWith('Guardian'));
+  // Workflows added after 0169 (0176 guardian/child, 0178 date revisions) run only in the canonical matrix.
+  const legacyOnly = (a, b) => ![a, b].some((name) => name.startsWith('Guardian') || name === 'Membership date revision');
   const old = await matrix(legacyOnly);
   const reported = old.failures.filter((failure) => failure.startsWith('Owner Launch DRAFT @student_registration_receipts vs Adult CRM DRAFT:'));
   assert.equal(reported.length, 1, 'the reported Owner Launch DRAFT vs adult CRM DRAFT conflict reproduces on the pre-0169 bodies');
