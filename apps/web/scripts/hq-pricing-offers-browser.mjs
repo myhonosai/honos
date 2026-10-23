@@ -32,7 +32,7 @@ const api = createServer((req, res) => {
   const language = subject.split('-').at(-1); const lang = ['en', 'ko', 'es'].includes(language) ? language : 'en';
   if (req.url === '/v1/me/language-preference') { send(200, validateMyLanguagePreferenceView({ preference: { language: lang, version: 1, updatedAt: '2026-10-23T12:00:00.000Z' }, schoolDefault: null, effective: { language: lang, source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] })); return; }
   if (!/^pricing-(owner|operator)-(en|ko|es)$/.test(subject)) { send(403, {}); return; }
-  if (req.url === '/v1/hq/overview') { send(200, overview(subject.includes('-owner-') ? 'OWNER' : 'OPERATOR')); return; }
+  if (req.url === '/v1/hq/overview') { send(200, { overview: overview(subject.includes('-owner-') ? 'OWNER' : 'OPERATOR') }); return; }
   send(404, {}); // No invented offer, publish, founder, checkout or billing endpoint.
 });
 await new Promise(done => api.listen(3001, '127.0.0.1', done));

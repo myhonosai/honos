@@ -351,6 +351,10 @@
     {
       "path": "/staff/billing/membership-plans",
       "title": "HON OS | School membership plans"
+    },
+    {
+      "path": "/hq/pricing-offers",
+      "title": "HON HQ | Pricing & Offers · Design review"
     }
   ]
 }

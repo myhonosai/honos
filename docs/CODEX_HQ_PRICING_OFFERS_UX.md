@@ -37,6 +37,12 @@ No new endpoint names, permission strings, database fields, SKU IDs or provider 
 
 Codex must inspect the independently reviewed **merged** #59 contracts before writing any transport or merge candidate for operational management/public checkout. Client role labels, draft amount, founder cap and local review acknowledgement confer no financial authority. New publication must not reprice subscriptions, mutate existing accepted rights or create provider objects. Claude owns backend/security and compatibility; Codex owns this UI and later integration. No Manus dependency.
 
+### Pending PR #61 compatibility observations (not integrated)
+
+Read-only inspection of Claude's unmerged PR #61 at `da18d58ca70ba417460e0c56362b7598761f5937` found no overlapping changed files. Its draft architecture specifies **whole versioned offer sets**, server-derived intervals/founder flags, USD cents only, a set-level founder cap and terms reference, closed eligibility/price-lock/renewal/refund policy enums, server-derived preview quotes/issues/digest and owner-only commands. Its school read reports `purchase: NOT_CONNECTED`; purchase binding and an unauthenticated public-pricing read are explicitly excluded.
+
+Accordingly, later integration must edit/preview/publish a complete set with optimistic revision, not save this local per-option design model to an invented API. Replace illustrative currency/discount/free-text controls with the exact supported merged fields; do not send unsupported currencies or infer policy enums from notes. Keep amount/currency truthful and the requested multi-currency design visibly pending if the final contract remains USD-only. Founder reservation, purchase binding, public marketing pricing, actual invoices/entitlement activation and funded AI allowance remain separate dependencies even after a source merge of #61. This is a compatibility note, not an independent security approval of that PR.
+
 ## Pending owner decisions
 
 Final monthly/annual/lifetime prices, founder capacity and duration, price guarantees, annual discount/renewal rights, lifetime scope, refunds/taxes, measured AI/voice/support economics and funded allowances remain policy gates. No configuration here resolves them. Historical Essential/Core/Complete subscriptions, prices, entitlements, invoices, refunds and lifetime rights remain readable under their original contracts; this foundation changes none of them.
