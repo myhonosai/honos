@@ -123,6 +123,8 @@ const expectedRlsTables = [
   'membership_activation_decisions',
   'membership_effective_periods',
   'membership_activation_follow_ups',
+  'membership_date_revisions',
+  'membership_date_revision_follow_ups',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',

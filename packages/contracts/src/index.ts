@@ -27,6 +27,7 @@ export * from './crm-lead-registration-recovery.js';
 export * from './school-membership-plans.js';
 export * from './crm-guardian-child-enrollment.js';
 export * from './membership-activation.js';
+export * from './membership-date-revision.js';
 export * from './kiosk.js';
 
 export const HON_TIERS = ['ESSENTIAL', 'CORE', 'COMPLETE'] as const;

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { RuntimeDatabaseService } from '../../../apps/api/dist/foundation/runtime-database.service.js';
 import { RevenuePlanningService } from '../../../apps/api/dist/planning/revenue-planning.service.js';
 import { RevenuePlanningController } from '../../../apps/api/dist/planning/revenue-planning.controller.js';
+import { membershipFixtureQuery, membershipFixtureStatement } from './membership-activation-test-support.mjs';
 for(const key of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL']) {
  if(!process.env[key]) throw new Error('Administrator and restricted runtime URLs required.');
  const u=new URL(process.env[key]);if(u.hostname!=='localhost'||u.pathname!=='/hon_revenue_validation') throw new Error('Only disposable localhost/hon_revenue_validation is allowed; remote fixtures forbidden.');
@@ -66,7 +67,7 @@ try{
  const person=async(org,school)=>{const id=randomUUID();await admin.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name,email,phone_e164) VALUES($1,$2,$3,'PRIVATE_CONTACT','PRIVATE_NAME','private@example.test','+15551234567')",[id,org,school]);return id;};
  const membership=async(org,school,currency='USD',frequency='MONTHLY',amount=10000)=>{
   const payer=await person(org,school),account=randomUUID(),m=randomUUID();await admin.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id,currency) VALUES($1,$2,$3,$4,$5)',[account,org,school,payer,currency]);
-  await admin.query("INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at) VALUES($1,$2,$3,$4,$5,'PRIVATE_PLAN_CODE','ACTIVE',clock_timestamp()-interval '1 day')",[m,org,school,account,payer]);await admin.query("INSERT INTO hon.membership_payment_schedules(organization_id,school_id,membership_id,frequency,amount_minor,currency,auto_renew) VALUES($1,$2,$3,$4,$5,$6,true)",[org,school,m,frequency,amount,currency]);return {m,account};
+  await membershipFixtureStatement(admin,"INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at) VALUES($1,$2,$3,$4,$5,'PRIVATE_PLAN_CODE','ACTIVE',clock_timestamp()-interval '1 day')",[m,org,school,account,payer]);await admin.query("INSERT INTO hon.membership_payment_schedules(organization_id,school_id,membership_id,frequency,amount_minor,currency,auto_renew) VALUES($1,$2,$3,$4,$5,$6,true)",[org,school,m,frequency,amount,currency]);return {m,account};
  };
  const memberships=[];for(let n=0;n<5;n++)memberships.push(await membership(ids.org,ids.school));await membership(ids.org,ids.school,'USD','ANNUAL',999999);await membership(ids.org,ids.school,'EUR','MONTHLY',999999);
  await membership(ids.org,ids.sibling,'USD','MONTHLY',777777);await membership(ids.otherOrg,ids.otherSchool,'USD','MONTHLY',888888);
@@ -112,11 +113,12 @@ try{
  const changed=await svc.read(c(),p.plan.id);assert.equal(changed.evidence.eligibleMonthlyMinor,50001);assert.equal(changed.signals.newMembershipMonthlyMinor.numerator,50001);assert.equal(changed.signals.newMembershipMonthlyMinor.denominator,5);assert.notEqual(changed.snapshotHash,p.snapshotHash);assert.deepEqual(await svc.read(c(),p.plan.id,1),p);
  await admin.query('UPDATE hon.membership_payment_schedules SET amount_minor=10000 WHERE membership_id=$1',[memberships[0].m]);
  // Exclusion rules must be observed, not normalize annual schedules or currencies.
+ const fixtureWrite=(sql,args)=>sql.includes('hon.memberships')?membershipFixtureQuery(admin,sql,args):admin.query(sql,args);
  for(const [apply,restore] of [
   ["UPDATE hon.membership_payment_schedules SET auto_renew=false WHERE membership_id=$1","UPDATE hon.membership_payment_schedules SET auto_renew=true WHERE membership_id=$1"],
   ["UPDATE hon.membership_payment_schedules SET currency='EUR' WHERE membership_id=$1","UPDATE hon.membership_payment_schedules SET currency='USD' WHERE membership_id=$1"],
   ["UPDATE hon.memberships SET term_ends_at=clock_timestamp()-interval '1 hour' WHERE id=$1","UPDATE hon.memberships SET term_ends_at=NULL WHERE id=$1"],
- ]) {await admin.query(apply,[memberships[0].m]);const excluded=await svc.read(c(),p.plan.id);assert.equal(excluded.evidence.eligibleMemberships,4);assert.equal(excluded.evidence.excludedMemberships,3);assert.equal(excluded.signals.newMembershipMonthlyMinor.source,'UNAVAILABLE');await admin.query(restore,[memberships[0].m]);}
+ ]) {await fixtureWrite(apply,[memberships[0].m]);const excluded=await svc.read(c(),p.plan.id);assert.equal(excluded.evidence.eligibleMemberships,4);assert.equal(excluded.evidence.excludedMemberships,3);assert.equal(excluded.signals.newMembershipMonthlyMinor.source,'UNAVAILABLE');await fixtureWrite(restore,[memberships[0].m]);}
  const duplicateSchedule=(await admin.query("INSERT INTO hon.membership_payment_schedules(organization_id,school_id,membership_id,frequency,amount_minor,currency,auto_renew) VALUES($1,$2,$3,'MONTHLY',10000,'USD',true) RETURNING id",[ids.org,ids.school,memberships[0].m])).rows[0].id;
  assert.equal((await svc.read(c(),p.plan.id)).evidence.eligibleMemberships,4);await admin.query('DELETE FROM hon.membership_payment_schedules WHERE id=$1',[duplicateSchedule]);
  // An unresolved/repeated trial disables historical signals, never replaces saved evidence.
