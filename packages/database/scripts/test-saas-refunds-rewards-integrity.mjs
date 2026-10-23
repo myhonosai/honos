@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B4 (0157) integrity proof through the real API services on a disposable
@@ -120,6 +121,8 @@ try{
  for(const sig of ['saas_refund_eligibility(uuid,timestamptz)','saas_account_credit_grants(uuid)','saas_reward_entry_state(hon.champions_reward_entries)','saas_evidence_referral_alert()'])
   assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,false,sig);
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
 
  // ---------- fixture ----------
  await admin.query('BEGIN');
@@ -489,5 +492,6 @@ try{
  assert.deepEqual(await untouched(),before,'No entitlement, school-to-family billing, role grant or shared audit row changed.');
  console.log(`PASS: HON refunds and Champions rewards B4 proof — ${b4Commands} B4 commands with exact evidence; first-purchase 30-day eligibility for regular, founder monthly and paid lifetime; approve/deny/evidence with history; duplicate requests refused under 6-way contention; refund reserve; $100 credits 1-4 and welcome credits applied once (6-way contention); credit capped at the invoice and restored on void; zero-total unissuable; 6 then 12 total free months never invoiced with the full allowance; prize manual; lifetime recorded with conversion blocked; chargeback/refund alerts block fulfillment without reversal or debt; no execution, payout or school-billing effect.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }

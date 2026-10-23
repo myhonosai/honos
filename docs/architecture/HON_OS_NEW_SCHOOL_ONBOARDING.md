@@ -146,5 +146,5 @@ There is no new route or contract shape.
 
 1. **Public sign-up (Manus).** Identity verification, terms acceptance record and the reviewed path that calls the initializer. Until then, no real school can register itself.
 2. **Paid-access activation.** A reviewed migration to flip `saas_access_program` to ACTIVE, after the owner approves B6 D1, D2 and D12 and runs in the real Stripe sandbox.
-3. **D8.** A school awaiting payment still sees the legacy Core/Complete catalog (`/hon-plan`) and can still buy it through the B6A legacy path. Before commercial launch, the awaiting path must offer only HON OS. That is a small, separate change: refuse legacy checkout for awaiting organizations and hide the legacy offers.
+3. **D8.** Done in `0184` ([HON_OS_ONLY_NEW_SALES.md](HON_OS_ONLY_NEW_SALES.md)): legacy Core/Complete new sales are closed for every new customer, so an awaiting school sees and can buy only HON OS.
 4. **Policy and refunds.** The credit policy for HON OS (see AI credits), refunds of held payments, B6B (grace, suspension, cancellation, refund and dispute effects) and live mode.

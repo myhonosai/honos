@@ -294,3 +294,19 @@ test('HON OS checkout receipt: closed shape tied to the checkout interval', () =
     assert.throws(() => contracts.validateSaasHonOsCheckoutReceipt(bad), JSON.stringify(bad).slice(0, 120));
   assert.equal(contracts.SAAS_COMMANDS.startHonOsCheckout, 'saas-hon-os-checkout-start');
 });
+
+test('D8: a closed legacy sale is a 422 rule refusal before any provider call; held legacy checkouts keep a closed shape', async () => {
+  const sim = new StripeSimulator(SECRET), calls = [];
+  const closed = Object.assign(new Error('SAAS_LEGACY_SALES_CLOSED'), { code: '23514' });
+  const db = { callSaasBilling: async (operation) => { calls.push(operation); throw closed; } };
+  const service = new SaasPaymentsService(new SaasBillingService(db), db, adapterWith(sim));
+  await assert.rejects(service.startSchoolCheckout('verified-human', U(), { offerId: U() }, U()),
+    e => e.getStatus() === 422 && e.getResponse().code === 'SAAS_LEGACY_SALES_CLOSED');
+  await assert.rejects(service.startHqCheckout('verified-human', { organizationId: U(), offerId: U() }, U()),
+    e => e.getStatus() === 422 && e.getResponse().code === 'SAAS_LEGACY_SALES_CLOSED');
+  assert.deepEqual(calls, ['createSchoolCheckout', 'createHqCheckout']);
+  assert.equal(sim.requests.length, 0, 'no provider session is requested');
+  const held = checkout({ status: 'PAID_NEEDS_REVIEW', statusReason: 'LEGACY_SALES_CLOSED', providerSessionId: 'cs_test_held', version: 3 });
+  assert.equal(contracts.validateSaasCheckout(held), held);
+  assert.throws(() => contracts.validateSaasCheckout({ ...held, statusReason: 'LEGACY_SALES_REOPENED' }));
+});

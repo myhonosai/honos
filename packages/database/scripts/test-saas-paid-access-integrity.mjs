@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON paid access B6A (0172) integrity proof: the central access authority and the first-payment activation
@@ -111,6 +112,8 @@ try{
  assert.deepEqual((await admin.query('SELECT status,mutations_enabled FROM hon.saas_access_program')).rows,[{status:'INACTIVE',mutations_enabled:false}]);
  assert.equal((await admin.query("SELECT pg_get_constraintdef(oid) d FROM pg_constraint WHERE conname='saas_access_program_status_check'")).rows[0].d,STATUS_CHECK);
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
 
  // ---------- fixture ----------
  await admin.query('BEGIN');
@@ -349,6 +352,7 @@ try{
  await deny(placeAwaiting('Q'),422,'SAAS_ACCESS_NOT_ACTIVE');
  console.log('PASS: HON paid access B6A proof (program INACTIVE as shipped; ACTIVE simulated in the disposable database only, then restored) — every B6A command refused while inactive; HQ-owner-only awaiting placement with version, idempotency and closed input; awaiting schools keep billing, plan and checkout but no capabilities; school-chosen Core or Complete with server-frozen price; verified payment activates tier, access state and the full 12,000/5,000 allowance once in one transaction (6 concurrent replays; an invoice before checkout is deferred for redelivery, then attributed); Core lacks Complete capabilities; tampered amount, late payment, inactive program and forced failure become HQ review states with no partial grant; HQ retry completes held or failed activations and refuses refunded payments; simultaneous purchases isolated; provisioned schools untouched.');
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
  await cleanup().catch(e=>console.error(e));
  await Promise.allSettled([admin.end(),restricted.end(),database.onModuleDestroy?.()]);

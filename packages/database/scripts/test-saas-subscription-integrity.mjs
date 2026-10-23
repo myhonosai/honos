@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B1 (0154) integrity proof through the real API service on a disposable
@@ -67,6 +68,8 @@ try{
 
  // ---------- fixture ----------
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
  await admin.query('BEGIN');
  for(const h of Object.values(humans)){await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[h.user,h.subject,`${h.user}@example.test`]);await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[h.id,h.user]);}
  for(const[n,o]of Object.entries(O)){
@@ -297,5 +300,6 @@ try{
  assert.deepEqual(await untouched(),before,'No entitlement, school billing, AI usage, Champions or shared audit/outbox row changed.');
  console.log(`PASS: HON subscription catalog B1 proof — ${commands} commands with exact evidence; owner-only publication; atomic founder inventory under concurrency; entitlement-linked records; undecided policies refused; financial activation pinned off.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }

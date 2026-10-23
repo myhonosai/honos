@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON OS purchase binding (0182) integrity proof, TEST MODE, SIMULATED PROVIDER. The real API services, the real Stripe
@@ -127,6 +128,8 @@ try{
  assert.equal((await restricted.query("SELECT has_function_privilege(current_user,'hon.create_saas_hon_os_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid)','EXECUTE') a")).rows[0].a,true);
  for(const t of ['saas_checkout_sessions','saas_subscriptions','saas_offer_set_offers'])await sqlDeny(restricted.query(`SELECT * FROM hon.${t}`));
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
 
  // ---------- fixture ----------
  await admin.query('BEGIN');
@@ -456,5 +459,6 @@ try{
  finally{await admin.query('ROLLBACK');}
  console.log(`PASS: HON OS purchase binding (0182) proof (TEST MODE, SIMULATED Stripe) — six HQ-published offer kinds bought end to end through the real adapter at the exact accepted offer (snapshot + SHA-256 digest on checkout, subscription and invoice); monthly and annual renewals at the accepted price only (period and amount mismatches to review); one-time annual and lifetime purchases with no provider subscription; unpublished, future, stopped, retired, unsupported-terms, ineligible and sold-out offers refused; sale limit and cumulative founder pool atomic under contention, cancellation returns the slot, a founder hold is honored after HQ lowers the cap; entitlement lapse before payment goes to review; a routine price change or closed sales window during an open checkout honors the accepted terms, while explicit stop-sales (including on a retired offer), expiry, amount and recurring mismatches go to HQ review; payment replay and unsigned, tampered or live deliveries refused; refund windows from the accepted offer; refunds and disputes reconciled; price change affects new purchases only; entitlements, legacy records, credits and paid access unchanged.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }
