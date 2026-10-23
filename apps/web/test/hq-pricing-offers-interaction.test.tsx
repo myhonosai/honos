@@ -42,6 +42,29 @@ describe('operational pricing controller, explicit commands and independent read
     const s=setup(false);await s.c.load();await s.c.open(s.fixture.draftId);s.c.editOffer('amount','999');await s.c.save();expect(s.send).not.toHaveBeenCalled();
     s.setOwner(true);await s.c.open(s.fixture.originalId);s.c.editOffer('amount','999');await s.c.save();expect(s.send).not.toHaveBeenCalled();expect(s.fixture.detail(s.fixture.originalId).set.offers[0]!.priceMinor).toBe(31700);
   });
+  it('allows an owner emergency stop only for the retired offer with a server-reported live checkout',async()=>{
+    const s=setup(),old=s.fixture.detail(s.fixture.originalId).set,live=old.offers[0]!,expired=old.offers[1]!;
+    s.fixture.seedCheckout(live.offerId);s.fixture.seedCheckout(expired.offerId,{expiresAt:'2026-10-22T12:00:00.000Z'});
+    const d=s.fixture.detail(s.fixture.draftId);s.fixture.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},crypto.randomUUID());
+    await s.c.load();await s.c.open(old.setId);expect(s.c.canStop(live.offerId)).toBe(true);expect(s.c.canStop(expired.offerId)).toBe(false);expect(s.c.canStop(old.offers[2]!.offerId)).toBe(false);
+    await s.c.stop(expired.offerId,'TERMS_REVIEW');expect(s.send).not.toHaveBeenCalled();await s.c.stop(live.offerId,'TERMS_REVIEW');expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.c.snapshot().receipt?.kind).toBe('stop');expect(s.c.snapshot().detail!.set.status).toBe('RETIRED');expect(s.c.canStop(live.offerId)).toBe(false);expect(s.fixture.detail(old.setId).set.offers[0]!.priceMinor).toBe(live.priceMinor);
+  });
+  it('denies an operator retired-offer actions and retains published-offer stop support without a checkout',async()=>{
+    const denied=setup(false),old=denied.fixture.detail(denied.fixture.originalId).set;denied.fixture.seedCheckout(old.offers[0]!.offerId);
+    const d=denied.fixture.detail(denied.fixture.draftId);denied.fixture.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},crypto.randomUUID());
+    await denied.c.load();await denied.c.open(old.setId);await denied.c.stop(old.offers[0]!.offerId,'OWNER_DISABLED');expect(denied.c.canStop(old.offers[0]!.offerId)).toBe(false);expect(denied.send).not.toHaveBeenCalled();
+    const owner=setup();await owner.c.load();await owner.c.open(owner.fixture.originalId);await owner.c.stop(owner.c.snapshot().detail!.set.offers[0]!.offerId,'OWNER_DISABLED');expect(owner.send).toHaveBeenCalledTimes(1);
+  });
+  it('preserves an uncertain retired stop across concealment and permits only its exact explicit replay after checkout expiry',async()=>{
+    const s=setup(),old=s.fixture.detail(s.fixture.originalId).set,offer=old.offers[0]!;s.fixture.seedCheckout(offer.offerId);const d=s.fixture.detail(s.fixture.draftId);
+    s.fixture.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},crypto.randomUUID());
+    await s.c.load();await s.c.open(old.setId);const original=s.api.send,wait=deferred<PricingReceipt>();s.api.send=vi.fn(async req=>{await original(req);return wait.promise;});
+    const command=s.c.stop(offer.offerId,'TERMS_REVIEW');const request=s.c.snapshot().pending!;await s.c.stop(offer.offerId,'TERMS_REVIEW');expect(s.api.send).toHaveBeenCalledTimes(1);
+    s.c.conceal();wait.reject(new PricingError('UNKNOWN',0,true));await command;expect(s.c.snapshot().pending).toBe(request);expect(s.c.snapshot().busy).toBe(false);
+    s.fixture.advanceTime(24*3600_000);await s.c.load(true);expect(s.c.canStop(offer.offerId)).toBe(false);s.api.send=vi.fn(original);expect(s.api.send).not.toHaveBeenCalled();await s.c.retry();
+    expect(s.api.send).toHaveBeenCalledWith(request,true);expect(s.c.snapshot().receipt!.data.replayed).toBe(true);expect(s.fixture.mutations).toBe(2);
+  });
   it('settles an in-flight command behind the shield without a read epoch unlocking or stranding it',async()=>{
     const s=setup();await edit(s);const original=s.api.send,wait=deferred<PricingReceipt>();s.api.send=vi.fn(()=>wait.promise);const run=s.c.save();const request=s.c.snapshot().pending!;
     s.c.conceal();expect(s.c.snapshot().busy).toBe(true);await s.c.abandon();expect(s.c.snapshot().pending).toBe(request);await s.c.load(true);expect(s.c.snapshot().concealed).toBe(true);

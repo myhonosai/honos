@@ -62,8 +62,8 @@ const app=spawn(process.execPath,[requireWeb.resolve('next/dist/bin/next'),'star
 let log='';app.stdout.on('data',d=>{log+=d;});app.stderr.on('data',d=>{log+=d;});let browser;
 async function check(name,work){try{await work();report.checks.push(name);console.log('PASS '+name);}catch(e){report.failures.push({name,message:e.message});console.error('FAIL '+name+': '+e.stack);}}
 const token=subject=>({name:HON_SESSION_COOKIE,value:issueSession({externalSubject:subject},session),url:origin,httpOnly:true,sameSite:'Lax'});
-async function open(viewport,language='en',role='owner'){
-  const subject=`pricing-${role}-${language}`;fixtures.set(subject,createOfferFixtures());roles.delete(subject);
+async function open(viewport,language='en',role='owner',configure=()=>{}){
+  const subject=`pricing-${role}-${language}`,fixture=createOfferFixtures();configure(fixture);fixtures.set(subject,fixture);roles.delete(subject);
   const context=await browser.newContext({viewport,reducedMotion:'reduce',serviceWorkers:'block'});
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());await context.routeWebSocket('**/*',s=>s.close());
   if(role)await context.addCookies([token(subject)]);const page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(e.message));await page.goto(origin+'/hq/pricing-offers');
@@ -115,6 +115,7 @@ try{
       if(language==='ko')await verifyKoreanFont(page,size);
       if(size==='mobile')for(const key of ['overview','editor','preview','history'])await hitTest(page,ui.getByRole('button',{name:tx('pricing.'+key),exact:true}),`${language}/${size}/${key}/initial`);
       await capture(page,`${language}-${size}-offers-overview`);if(size==='mobile')await capture(page,`${language}-${size}-offers-overview-viewport`,{fullPage:false});
+      const old=fixture.detail(fixture.originalId).set;fixture.seedCheckout(old.offers[0].offerId);fixture.seedCheckout(old.offers[1].offerId,{expiresAt:'2026-10-22T12:00:00.000Z'});
       await button('open').nth(1).click();const amount=page.getByLabel(op('price'),{exact:true});await amount.waitFor();await amount.fill('321.45');
       await page.locator('#offer-select').selectOption({index:1});await page.locator('#offer-select').selectOption({index:0});assert.equal(await amount.inputValue(),'321.45');
       await button('newSet').click();const dialog=page.getByRole('dialog');await dialog.waitFor();const continueButton=dialog.getByRole('button',{name:tx('pricing.continue-editing'),exact:true});
@@ -132,6 +133,10 @@ try{
       await ui.getByRole('button',{name:tx('pricing.preview'),exact:true}).click();await ui.locator('[data-customer-pricing-preview]').waitFor();const preview=ui.locator('[data-customer-pricing-preview]');assert.equal(await preview.locator('article').count(),3);assert.equal(await preview.getByRole('button',{disabled:true}).count(),3);assert(!(await preview.innerText()).includes('183.00'));await capture(page,`${language}-${size}-offers-published-customer-preview`);
       await ui.getByRole('button',{name:tx('pricing.editor'),exact:true}).click();const annual=ui.getByRole('button',{name:op('stop')+' · '+tx('pricing.annual'),exact:true});await annual.click();await dialog.waitFor();await dialog.getByRole('combobox').selectOption('TERMS_REVIEW');await dialog.getByRole('button',{name:op('confirm'),exact:true}).click();await idle(page);assert(fixture.detail(fixture.draftId).set.offers.find(o=>o.offerKind==='REGULAR_ANNUAL').salesStop);await capture(page,`${language}-${size}-offers-sales-stopped`);
       await ui.getByRole('button',{name:tx('pricing.history'),exact:true}).click();await ui.getByText(op('historyNote'),{exact:true}).waitFor();await capture(page,`${language}-${size}-offers-history`);
+      const retired=ui.locator('[data-retired-checkouts]');assert.equal(await retired.locator('article').count(),1,'Only live unexpired older checkouts require attention');await retired.getByRole('button',{name:op('reviewRetired'),exact:true}).click();
+      const emergency=ui.locator('[data-retired-stop]');assert.equal(await emergency.count(),1,'No retired action for an expired or absent checkout');assert(await amount.isDisabled());await capture(page,`${language}-${size}-offers-retired-live-checkout`);
+      const before=fixture.mutations;await emergency.click();await dialog.waitFor();await dialog.getByText(op('retiredStopWarning'),{exact:true}).waitFor();assert.equal(fixture.mutations,before,'Opening confirmation is not a stop');await capture(page,`${language}-${size}-offers-retired-stop-confirmation`,{resetScroll:false});
+      await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});assert.equal(fixture.mutations,before);await emergency.click();await dialog.getByRole('button',{name:op('confirm'),exact:true}).click();await idle(page);assert.equal(fixture.mutations,before+1);assert(fixture.detail(fixture.originalId).set.offers[0].salesStop);assert(await emergency.isDisabled());await capture(page,`${language}-${size}-offers-retired-stop-receipt`);
       for(const mode of ['Big Button','Modern','Classic']){await page.getByRole('group',{name:tx('Platform view'),exact:true}).getByRole('button',{name:tx(mode),exact:true}).click();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));}
       await page.reload();await ui.getByRole('heading',{name:op('drafts'),exact:true}).waitFor();assert.equal(fixture.management().published.setId,fixture.draftId,'Verified fixture backend survives page reload; no browser storage needed');
     }finally{await context.close();}
@@ -155,6 +160,13 @@ try{
     for(const width of [320,390]){const x=await open({width,height:740},'ko');try{for(const mode of ['Big Button','Modern','Classic']){await x.page.getByRole('group',{name:translate('ko','Platform view'),exact:true}).getByRole('button',{name:translate('ko',mode),exact:true}).click();for(const tab of ['overview','editor','preview','history']){const control=x.page.locator('[data-pricing-design]').getByRole('button',{name:translate('ko','pricing.'+tab),exact:true});await control.scrollIntoViewIfNeeded();await control.focus();await hitTest(x.page,control,`ko/${width}/${mode}/${tab}`);}}}finally{await x.context.close();}}
     const denied=await open({width:390,height:844},'en','school');try{await denied.page.getByText('HQ access denied',{exact:true}).waitFor();assert.equal(await denied.page.locator('[data-pricing-design]').count(),0);}finally{await denied.context.close();}
     const absent=await open({width:390,height:844},'en',null);try{assert(new URL(absent.page.url()).pathname.startsWith('/auth/'));}finally{await absent.context.close();}
+  });
+  await check('Operator cannot emergency-stop a retired offer through the UI or its API',async()=>{
+    const x=await open({width:390,height:844},'ko','operator',f=>{const old=f.detail(f.originalId).set;f.seedCheckout(old.offers[0].offerId);const d=f.detail(f.draftId);f.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},'fixture-publication');});
+    try{const op=key=>translate('ko','pricing.op.'+key),ui=x.page.locator('[data-pricing-design]');await ui.locator('[data-retired-checkouts]').getByRole('button',{name:op('reviewRetired'),exact:true}).click();await ui.locator('[data-retired-stop]').waitFor();assert(await ui.locator('[data-retired-stop]').isDisabled());
+      const id=x.fixture.detail(x.fixture.originalId).set.offers[0].offerId,before=x.fixture.mutations;const status=await x.page.evaluate(async id=>(await fetch('/api/v1/hq/saas/offers/'+id+'/stop-sales',{method:'POST',mode:'same-origin',credentials:'same-origin',headers:{'Content-Type':'application/json','X-HON-Human-Command':'saas-offer-sales-stop','Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({reasonCode:'TERMS_REVIEW'})})).status,id);
+      assert.equal(status,403);assert.equal(x.fixture.mutations,before);await capture(x.page,'ko-mobile-retired-stop-operator-denied');
+    }finally{await x.context.close();}
   });
   assert(!report.requests.some(r=>/checkout|payments|credits|subscriptions/.test(r.path)),'No financial activation or unmerged purchase endpoint');
   assert.equal(report.pageErrors.length,0,JSON.stringify(report.pageErrors));assert.equal(report.failures.length,0,JSON.stringify(report.failures));

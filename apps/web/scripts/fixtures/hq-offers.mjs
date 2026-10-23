@@ -12,7 +12,9 @@ export const syntheticSetInput=()=>({basedOnSetId:null,termsReference:'Synthetic
 function responseOffer(value,position){return {...value,offerId:randomUUID(),position,billingInterval:saasHonOsOfferBillingInterval(value.offerKind),founder:value.offerKind.startsWith('FOUNDER'),currency:'USD',premiumCreditsStatus:'PLANNING_ONLY_NOT_A_CREDIT_GRANT',salesStop:null};}
 const fail=(code,status)=>{throw Object.assign(new Error(code),{code,status});};
 export function createOfferFixtures(){
-  const sets=new Map(),requests=new Map();let next=1,mutations=0;
+  const sets=new Map(),requests=new Map(),checkouts=new Map();let next=1,mutations=0,clock=Date.parse(T);
+  const live=offerId=>[...checkouts.values()].filter(c=>c.offerId===offerId&&['CREATED','OPEN'].includes(c.status)&&Date.parse(c.expiresAt)>clock).length;
+  const seedCheckout=(offerId,patch={})=>{const c={id:randomUUID(),offerId,status:'OPEN',expiresAt:new Date(clock+23.99*3600_000).toISOString(),...patch};checkouts.set(c.id,c);return c;};
   const make=(body)=>{const set={setId:randomUUID(),setVersion:next++,productCode:'HON_OS',status:'DRAFT',revision:1,basedOnSetId:body.basedOnSetId??null,
     termsReference:body.termsReference,founderTotalLimit:body.founderTotalLimit,offers:body.offers.map((o,i)=>responseOffer(o,i+1)),approvedPreviewDigest:null,
     chargesEnabled:false,creditGrantsEnabled:false,createdAt:T,updatedAt:T,publishedAt:null,retiredAt:null,discardedAt:null};sets.set(set.setId,set);return set;};
@@ -34,8 +36,8 @@ export function createOfferFixtures(){
   const management=()=>{const published=[...sets.values()].find(s=>s.status==='PUBLISHED')??null;return structuredClone({product:HON_OS_PRODUCT,published,
     onSaleOfferIds:published?.offers.filter(o=>!o.salesStop).map(o=>o.offerId)??[],drafts:[...sets.values()].filter(s=>s.status==='DRAFT'),
     history:[...sets.values()].map(s=>({setId:s.setId,setVersion:s.setVersion,status:s.status,revision:s.revision,offerCount:s.offers.length,createdAt:s.createdAt,publishedAt:s.publishedAt,retiredAt:s.retiredAt,discardedAt:s.discardedAt})).reverse(),
-    honOsSales:{offers:(published?.offers??[]).map(o=>({offerId:o.offerId,setVersion:published.setVersion,offerCode:o.offerCode,offerKind:o.offerKind,displayName:o.displayName,priceMinor:o.priceMinor,saleLimit:o.saleLimit,
-      saleStatus:o.salesStop?'NOT_ON_SALE':o.annualRenewal==='AUTO_RENEW_AT_CURRENT_PRICE'?'TERMS_UNSUPPORTED':'ON_SALE',subscriptions:0,openCheckouts:0,paidNeedsReview:0})),
+    honOsSales:{offers:[...sets.values()].sort((a,b)=>b.setVersion-a.setVersion).flatMap(s=>s.offers.filter(o=>s.status==='PUBLISHED'||[...checkouts.values()].some(c=>c.offerId===o.offerId)).map(o=>({offerId:o.offerId,setVersion:s.setVersion,offerCode:o.offerCode,offerKind:o.offerKind,displayName:o.displayName,priceMinor:o.priceMinor,saleLimit:o.saleLimit,
+      saleStatus:s.status!=='PUBLISHED'||o.salesStop?'NOT_ON_SALE':o.annualRenewal==='AUTO_RENEW_AT_CURRENT_PRICE'?'TERMS_UNSUPPORTED':'ON_SALE',subscriptions:0,openCheckouts:live(o.offerId),paidNeedsReview:[...checkouts.values()].filter(c=>c.offerId===o.offerId&&c.status==='PAID_NEEDS_REVIEW').length}))),
       founderPool:{limit:published?.founderTotalLimit??null,allocated:2,held:1,remaining:published?.founderTotalLimit===null||!published?null:Math.max(published.founderTotalLimit-3,0)}},
     legacySales:[],paidAccessProgram:'INACTIVE',purchase:'UNAVAILABLE',chargesEnabled:false,creditGrantsEnabled:false});};
   function command(kind,target,body,key,subject='owner'){
@@ -45,7 +47,7 @@ export function createOfferFixtures(){
     if(kind==='create'){validateSaasHonOsOfferSetDraftInput(body);const set=make(body);result={...detail(set.setId),replayed:false};}
     else if(kind==='stop'){
       validateSaasHonOsOfferStopSalesInput(body);const set=[...sets.values()].find(s=>s.offers.some(o=>o.offerId===target)),offer=set?.offers.find(o=>o.offerId===target);
-      if(!offer)fail('SAAS_UNAVAILABLE',404);if(set.status!=='PUBLISHED')fail('SAAS_OFFER_NOT_PUBLISHED',422);if(offer.salesStop)fail('SAAS_OFFER_SALES_ALREADY_STOPPED',422);
+      if(!offer)fail('SAAS_UNAVAILABLE',404);if(set.status!=='PUBLISHED'&&!(set.status==='RETIRED'&&live(offer.offerId)>0))fail('SAAS_OFFER_NOT_PUBLISHED',422);if(offer.salesStop)fail('SAAS_OFFER_SALES_ALREADY_STOPPED',422);
       offer.salesStop={reasonCode:body.reasonCode,stoppedAt:T};result={offer:structuredClone(offer),replayed:false};
     }else{
       ({revise:validateSaasHonOsOfferSetReviseInput,publish:validateSaasHonOsOfferSetPublishInput,discard:validateSaasHonOsOfferSetDiscardInput})[kind](body);
@@ -58,5 +60,5 @@ export function createOfferFixtures(){
     }
     mutations++;requests.set(requestKey,{fingerprint,result:structuredClone(result)});return result;
   }
-  return {sets,originalId:original.setId,draftId:draft.setId,detail,management,command,get mutations(){return mutations;}};
+  return {sets,checkouts,seedCheckout,advanceTime:ms=>{clock+=ms;},originalId:original.setId,draftId:draft.setId,detail,management,command,get mutations(){return mutations;}};
 }

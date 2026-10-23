@@ -58,4 +58,11 @@ describe('whole HON OS offer-set form and source boundaries',()=>{
     await c.load();const overview=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(overview).toContain('Verified founder pool snapshot');expect(overview).toContain('<dd>27</dd>');expect(overview).toContain('Published terms are not supported for purchase');
     await c.previewPublished();expect(renderToStaticMarkup(<PricingOffersView controller={c}/>)).not.toContain('$3,170');
   });
+  it('shows retired checkout warnings and only offers an eligible owner the retired emergency action',async()=>{
+    const f=createOfferFixtures(),old=f.detail(f.originalId).set;f.seedCheckout(old.offers[0]!.offerId);f.seedCheckout(old.offers[1]!.offerId,{expiresAt:'2026-10-22T12:00:00.000Z'});const d=f.detail(f.draftId);
+    f.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},crypto.randomUUID());
+    for(const owner of [true,false]){const c=new PricingController({access:async()=>({subject:'owner',owner,management:f.management()}),detail:async id=>f.detail(id),send:vi.fn()});await c.load();await c.open(old.setId);
+      const html=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(html).toContain('approximately 24 hours from opening');expect(html).toContain('Open, unexpired checkouts: 1');expect(html.match(/data-retired-stop="true"/g)).toHaveLength(1);
+      expect(html).toMatch(owner?/data-retired-stop="true">/:/data-retired-stop="true" disabled=""/);expect(html).toContain('No live checkout is reported');}
+  });
 });

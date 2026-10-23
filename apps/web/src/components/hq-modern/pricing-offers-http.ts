@@ -76,6 +76,13 @@ export async function readPricingSet(id: string): Promise<SaasHonOsOfferSetDetai
   if (result.set.setId !== key) invalid();
   return result;
 }
+/** Presentation/preflight only. Live checkout counts are server facts, never browser expiry calculations. */
+export function pricingCanStopOffer(management:SaasHonOsOfferManagementView|null,detail:SaasHonOsOfferSetDetail|null,offerId:string):boolean {
+  const offer=detail?.set.offers.find(o=>o.offerId===offerId);
+  if(!offer||offer.salesStop!==null||!management||!detail)return false;
+  if(detail.set.status==='PUBLISHED')return management.published?.setId===detail.set.setId;
+  return detail.set.status==='RETIRED'&&management.honOsSales.offers.some(row=>row.offerId===offerId&&row.setVersion===detail.set.setVersion&&row.openCheckouts>0);
+}
 export function pricingOfferInput(o: SaasHonOsOffer): SaasHonOsOfferInput {
   return { offerCode:o.offerCode, offerKind:o.offerKind, displayName:o.displayName, priceMinor:o.priceMinor,
     salesOpensAt:o.salesOpensAt, salesClosesAt:o.salesClosesAt, eligibility:o.eligibility, saleLimit:o.saleLimit,
@@ -99,6 +106,14 @@ export async function sendPricingRequest(request: PricingRequest, retry = false)
   const access = await readPricingAccess(request.subject);
   if (!access.owner) throw new PricingError('FORBIDDEN',403);
   const input = JSON.parse(request.body);
+  if (!retry && request.kind === 'stop' && request.target) {
+    const published=access.management.published;
+    const row=access.management.honOsSales.offers.find(o=>o.offerId===request.target);
+    const summary=published?.offers.some(o=>o.offerId===request.target)?published:access.management.history.find(s=>s.setVersion===row?.setVersion&&s.status==='RETIRED');
+    if(!summary)throw new PricingError('SAAS_UNAVAILABLE',404);
+    const live=await readPricingSet(summary.setId);
+    if(!pricingCanStopOffer(access.management,live,request.target))throw new PricingError(live.set.offers.some(o=>o.offerId===request.target&&o.salesStop!==null)?'SAAS_OFFER_SALES_ALREADY_STOPPED':'SAAS_OFFER_NOT_PUBLISHED',422);
+  }
   if (!retry && request.target && request.kind !== 'stop') {
     const live = await readPricingSet(request.target);
     if (live.set.status !== 'DRAFT') throw new PricingError('SAAS_OFFER_SET_NOT_DRAFT',409);

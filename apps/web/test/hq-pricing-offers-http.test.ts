@@ -48,4 +48,25 @@ describe('fixed HQ offer APIs and closed verified commands',()=>{
     const data=s.f.detail(s.f.draftId);vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({data}),{headers:{'content-type':'application/json','cache-control':'private, no-store'}})));
     await expect(readPricingSet(s.f.originalId)).rejects.toMatchObject({code:'INVALID_RESPONSE'});
   });
+  it('uses fresh retired checkout facts, refuses expired/no-live offers and denies operator stops before POST',async()=>{
+    const s=setup(),old=s.f.detail(s.f.originalId).set;s.f.seedCheckout(old.offers[0]!.offerId);s.f.seedCheckout(old.offers[1]!.offerId,{expiresAt:'2026-10-22T12:00:00.000Z'});const d=s.f.detail(s.f.draftId);
+    s.f.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},key(),subject);
+    const request=preparePricingRequest('stop',old.offers[0]!.offerId,{reasonCode:'TERMS_REVIEW'},key(),subject);
+    for(const o of old.offers.slice(1,3))await expect(sendPricingRequest(preparePricingRequest('stop',o.offerId,{reasonCode:'OWNER_DISABLED'},key(),subject))).rejects.toBeDefined();
+    s.role('OPERATOR');await expect(sendPricingRequest(request)).rejects.toMatchObject({code:'FORBIDDEN'});expect(s.calls.filter(c=>c.options.method==='POST')).toHaveLength(0);
+    s.role('OWNER');const receipt=await sendPricingRequest(request);expect(receipt.kind).toBe('stop');expect(s.calls.filter(c=>c.options.method==='POST')).toHaveLength(1);
+  });
+  it('rechecks liveness after a confirmation delay and preserves the exact stopped request after a lost response',async()=>{
+    const s=setup(),old=s.f.detail(s.f.originalId).set;s.f.seedCheckout(old.offers[0]!.offerId);const d=s.f.detail(s.f.draftId);
+    s.f.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},key(),subject);
+    const request=preparePricingRequest('stop',old.offers[0]!.offerId,{reasonCode:'TERMS_REVIEW'},key(),subject);s.lose();await expect(sendPricingRequest(request)).rejects.toMatchObject({code:'UNKNOWN',uncertain:true});
+    s.f.advanceTime(24*3600_000);await expect(sendPricingRequest(preparePricingRequest('stop',old.offers[0]!.offerId,{reasonCode:'TERMS_REVIEW'},key(),subject))).rejects.toBeDefined();
+    const replay=await sendPricingRequest(request,true);expect(replay.data.replayed).toBe(true);const posts=s.calls.filter(c=>c.options.method==='POST');expect(posts).toHaveLength(2);expect(posts[0]!.options.body).toBe(posts[1]!.options.body);expect(posts[0]!.options.headers).toEqual(posts[1]!.options.headers);
+  });
+  it('refuses a newly expired retired checkout after the owner has already read and reviewed it',async()=>{
+    const s=setup(),old=s.f.detail(s.f.originalId).set;s.f.seedCheckout(old.offers[0]!.offerId);const d=s.f.detail(s.f.draftId);s.f.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},key(),subject);
+    expect((await readPricingAccess()).management.honOsSales.offers.find(o=>o.offerId===old.offers[0]!.offerId)!.openCheckouts).toBe(1);
+    const request=preparePricingRequest('stop',old.offers[0]!.offerId,{reasonCode:'TERMS_REVIEW'},key(),subject);s.f.advanceTime(24*3600_000);
+    await expect(sendPricingRequest(request)).rejects.toMatchObject({code:'SAAS_OFFER_NOT_PUBLISHED'});expect(s.calls.filter(c=>c.options.method==='POST')).toHaveLength(0);
+  });
 });

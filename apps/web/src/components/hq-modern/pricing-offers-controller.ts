@@ -1,5 +1,5 @@
 import { SAAS_HON_OS_OFFER_PUBLISH_APPROVAL, type SaasHonOsOfferKind, type SaasHonOsOfferSetDetail, type SaasHonOsOfferManagementView, type SaasHonOsOfferStopReason } from '@hon/contracts';
-import { PricingError, pricingApi, preparePricingRequest, type PricingApi, type PricingReceipt, type PricingRequest } from './pricing-offers-http';
+import { PricingError, pricingApi, preparePricingRequest, pricingCanStopOffer, type PricingApi, type PricingReceipt, type PricingRequest } from './pricing-offers-http';
 import { blankSet, blankOffer, formFromSet, formInput, formFingerprint, type OfferFields, type OfferSetForm } from './pricing-offers-model';
 
 export type PricingScreen='overview'|'editor'|'preview'|'history';
@@ -116,9 +116,9 @@ export class PricingController {
     const d=this.state.detail;if(!this.editable()||this.dirty()||!d)return;
     await this.run(preparePricingRequest('discard',d.set.setId,{expectedRevision:d.set.revision},crypto.randomUUID(),this.subject!));
   }
+  canStop=(offerId:string)=>{const s=this.state;return !s.busy&&!s.pending&&!s.concealed&&!s.stale&&s.owner&&s.status==='ready'&&pricingCanStopOffer(s.management,s.detail,offerId);};
   async stop(offerId:string,reason:SaasHonOsOfferStopReason){
-    const s=this.state;if(s.busy||s.pending||s.concealed||!s.owner||s.status!=='ready'||s.detail?.set.status!=='PUBLISHED'
-      ||!s.detail.set.offers.some(o=>o.offerId===offerId&&o.salesStop===null))return;
+    if(!this.canStop(offerId))return;
     await this.run(preparePricingRequest('stop',offerId,{reasonCode:reason},crypto.randomUUID(),this.subject!));
   }
   retry=async()=>{if(this.state.pending&&!this.state.busy&&!this.state.concealed)await this.run(this.state.pending,true);};

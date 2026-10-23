@@ -71,14 +71,40 @@ try{
   await assert.rejects(http.sendPricingRequest(stale),e=>e.code==='SAAS_OFFER_PREVIEW_CHANGED');
   receipt=await http.sendPricingRequest(publish);assert.equal(receipt.data.set.status,'PUBLISHED');const publishedSnapshot=structuredClone(receipt.data.set.offers);
   await assert.rejects(http.sendPricingRequest(http.preparePricingRequest('revise',id,{...revised,expectedRevision:2},randomUUID(),subject)),e=>e.code==='SAAS_OFFER_SET_NOT_DRAFT');pass('publication requires the actual server digest; published configuration is not editable');
+  assert.deepEqual(await snapshot(),before);
+  // Test-only fixture setup: existing backend services + in-memory signed Stripe simulator. No provider network.
+  const {SaasPaymentsService}=await load('payments/saas-payments.service.js'),{StripeSimulator}=await load('payments/stripe-simulator.js'),{StripeTestModeAdapter}=await load('payments/stripe-test-mode-adapter.js');
+  const fakeSecret='whsec_disposableFixtureSecret0123456789',sim=new StripeSimulator(fakeSecret);
+  const payments=new SaasPaymentsService(module.get(SaasBillingService),database,new StripeTestModeAdapter({secretKey:'sk_test_disposableFixtureKey0123456789',webhookSecret:fakeSecret,provider:'STRIPE_SIMULATED',transport:sim.transport}));
+  await payments.setPaymentProgram(subject,{action:'ENABLE_TEST_MODE',expectedVersion:1,authorizationReference:'PR64 disposable simulator only',provider:'STRIPE_SIMULATED',testTaxReference:'Synthetic fixture: no tax collected'},randomUUID());
+  let checkout;try{process.env.HON_PUBLIC_ORIGIN='https://hon.example';checkout=await payments.startSchoolHonOsCheckout(actors.school.subject,school,{offerId:publishedSnapshot[0].offerId},randomUUID());}finally{process.env.HON_PUBLIC_ORIGIN=origin;}
+  assert.equal(checkout.checkout.status,'OPEN');assert.equal(sim.requests.length,1);assert.equal(sim.requests[0].path,'/v1/checkout/sessions');
+  const seeded=await snapshot();for(const table of tables.filter(t=>!['saas_checkout_sessions','saas_payment_program'].includes(t)))assert.deepEqual(seeded[table],before[table],table);
   const next=http.preparePricingRequest('create',null,{...input,basedOnSetId:id,offers:input.offers.map(o=>({...o,priceMinor:o.priceMinor+123}))},randomUUID(),subject),newSet=(await http.sendPricingRequest(next)).data.set;
   const newPreview=await http.readPricingSet(newSet.setId);await http.sendPricingRequest(http.preparePricingRequest('publish',newSet.setId,{expectedRevision:newSet.revision,previewDigest:newPreview.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},randomUUID(),subject));
   assert.equal((await http.readPricingSet(id)).set.status,'RETIRED');assert.deepEqual((await http.readPricingSet(id)).set.offers,publishedSnapshot);pass('new prices create a different set; the retired version keeps its exact published terms');
+  const retiredOffer=publishedSnapshot[0].offerId,retired=http.preparePricingRequest('stop',retiredOffer,{reasonCode:'TERMS_REVIEW'},randomUUID(),subject);
+  assert.equal((await http.readPricingAccess()).management.honOsSales.offers.find(o=>o.offerId===retiredOffer).openCheckouts,1);
+  assert.equal((await direct('operator',retired)).status,403);assert.equal((await direct('school',retired)).status,403);
+  actor='operator';await assert.rejects(http.sendPricingRequest({...retired,subject:actors.operator.subject}),e=>e.code==='FORBIDDEN');actor='owner';
+  const noLive=http.preparePricingRequest('stop',publishedSnapshot[1].offerId,{reasonCode:'OWNER_DISABLED'},randomUUID(),subject);await assert.rejects(http.sendPricingRequest(noLive));assert.equal((await direct('owner',noLive)).status,422);
+  loseNext=true;await assert.rejects(http.sendPricingRequest(retired),e=>e.code==='UNKNOWN'&&e.uncertain);const retiredReceipt=await http.sendPricingRequest(retired,true);assert(retiredReceipt.data.replayed);assert.equal(retiredReceipt.data.offer.salesStop.reasonCode,'TERMS_REVIEW');
+  const evidence=async()=>{const args=[actors.owner.principal,retired.key];return(await sql("SELECT (SELECT count(*)::int FROM hon.saas_requests WHERE actor_principal_id=$1 AND idempotency_key=$2) requests,(SELECT count(*)::int FROM hon.saas_audit WHERE actor_principal_id=$1 AND idempotency_key=$2) audits,(SELECT count(*)::int FROM hon.saas_outbox o JOIN hon.saas_audit a ON a.id=o.audit_id WHERE a.actor_principal_id=$1 AND a.idempotency_key=$2 AND o.payload->>'executionAllowed'='false') inert_outbox",args)).rows[0];};
+  assert.deepEqual(await evidence(),{requests:1,audits:1,inert_outbox:1});pass('real retired-offer emergency stop: live count, operator/school denial, no-live refusal, unknown-result exact replay and one inert audited action');
   const stop=http.preparePricingRequest('stop',newSet.offers[0].offerId,{reasonCode:'TERMS_REVIEW'},randomUUID(),subject);const stopped=await http.sendPricingRequest(stop);assert.equal(stopped.data.offer.salesStop.reasonCode,'TERMS_REVIEW');assert(!(await http.readPricingAccess()).management.onSaleOfferIds.includes(newSet.offers[0].offerId));
   const discardId=(await http.sendPricingRequest(http.preparePricingRequest('create',null,input,randomUUID(),subject))).data.set.setId;await http.sendPricingRequest(http.preparePricingRequest('discard',discardId,{expectedRevision:1},randomUUID(),subject));assert.equal((await http.readPricingSet(discardId)).set.status,'DISCARDED');pass('stop-sales and discard keep authoritative lifecycle/history evidence');
+  assert.deepEqual(await snapshot(),seeded,'HQ configuration commands do not alter the fixture checkout or financial records');
+  // Exercise the existing signature-verifying backend with a SIMULATED delivery only, after the explicit stop.
+  await new Promise(done=>setTimeout(done,1100));const delivery=sim.completeCheckout(checkout.checkout.providerSessionId).completed;
+  const held=await payments.handleWebhook(delivery.raw,delivery.signature);assert.deepEqual([held.event.outcome,held.event.detail],['NEEDS_REVIEW','OFFER_SALES_STOPPED']);
+  const heldRow=(await sql('SELECT status,status_reason,subscription_id,invoice_id FROM hon.saas_checkout_sessions WHERE id=$1',[checkout.checkout.checkoutId])).rows[0];assert.deepEqual(heldRow,{status:'PAID_NEEDS_REVIEW',status_reason:'OFFER_SALES_STOPPED',subscription_id:null,invoice_id:null});
+  assert.equal((await http.readPricingAccess()).management.honOsSales.offers.find(o=>o.offerId===retiredOffer).openCheckouts,0);
+  assert((await http.sendPricingRequest(retired,true)).data.replayed);assert.deepEqual(await evidence(),{requests:1,audits:1,inert_outbox:1});assert.equal(sim.requests.length,1);
+  pass('SIMULATED signed payment after retired stop is held for HQ review; no subscription/invoice/payment evidence, no refund or provider network; exact replay still works with zero live checkouts');
   const countBefore=(await sql('SELECT count(*)::int n FROM hon.saas_requests')).rows[0].n;
   await sql("UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp()-interval '1 second' WHERE principal_id=$1",[actors.owner.principal]);
   await assert.rejects(http.sendPricingRequest(stop,true),e=>e.code==='FORBIDDEN');assert.equal((await direct('owner',stop)).status,403);assert.equal((await sql('SELECT count(*)::int n FROM hon.saas_requests')).rows[0].n,countBefore);pass('live grant expiration refuses even retained idempotency replay');
-  assert.deepEqual(await snapshot(),before);pass('subscriptions, historical prices, invoices, payments, checkout, entitlements, credits and paid access remain byte-identical');
-  console.log(JSON.stringify({checks:checks.length,realSignedSession:true,realPostgreSQL:true,mockedIdentity:false,mockedApi:false,providerCalls:0,financialActivation:false}));
+  const final=await snapshot();for(const table of tables.filter(t=>t!=='saas_checkout_sessions'))assert.deepEqual(final[table],seeded[table],table);
+  assert.equal(final.saas_checkout_sessions.length,seeded.saas_checkout_sessions.length);pass('subscriptions, historical prices, invoices, payments, entitlements, credits and paid access unchanged; only the deliberately simulated fixture checkout moved to review');
+  console.log(JSON.stringify({checks:checks.length,realSignedSession:true,realPostgreSQL:true,mockedIdentity:false,mockedApi:false,providerCalls:0,simulatedProviderRequests:sim.requests.length,simulatedSignedWebhook:true,financialActivation:false}));
 }finally{globalThis.fetch=originalFetch;try{if(app)await app.close();else await database.onModuleDestroy();}finally{await owner.end();}}
