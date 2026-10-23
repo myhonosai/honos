@@ -1,6 +1,6 @@
 # HQ Pricing & Offers — operational frontend integration
 
-Status: implemented on a focused review branch; no source merge or production deployment authorized. Exact CI results, commit and private screenshots belong on the PR. This follows the approved visual foundation in PR #62 and uses only merged PR #61 / migration 0181. PR #63 purchase binding is excluded. The old UX handoff remains historical evidence.
+Status: implemented on a focused review branch; no source merge or production deployment authorized. Exact CI results, commit and private screenshots belong on the PR. This follows the approved visual foundation in PR #62 and protected offer-management commands from PR #61 / migration 0181. PR #63 merged during verification at `33adbfe6bb5fbe507ee28e104ce6c3386d91f464`; its expanded authorized HQ read projection is respected, but operational customer purchase integration is excluded. The old UX handoff remains historical evidence.
 
 ## Owner workflow
 
@@ -29,12 +29,12 @@ Reload, leaving the route, account navigation, full document destruction or comp
 
 ## Current backend limitations / Claude coordination
 
-- Founder pool/per-offer **configured limits** and server-listed sale state are authoritative. The 0181 management projection does not expose remaining/reserved/allocated purchase inventory. UI explicitly says unavailable and never subtracts legacy inventory or infers availability from a truncated list. A future independently authorized read contract is required if actual quantities are needed.
+- The merged 0182 management projection supplies cumulative founder pool `limit`, `allocated`, `held` and `remaining`. Show those exact backend quantities separately from draft limits; never subtract legacy inventory, infer quantities from bounded lists or create a reservation. Honor server `TERMS_UNSUPPORTED` sale status. Founder inventory is a snapshot, not a purchaser eligibility decision or guarantee.
 - USD only; no unsupported currencies, arbitrary renewal/eligibility policy strings, per-option saves or client-generated official calculations.
 - History is bounded, without a pagination cursor or actor-level audit projection. No fabricated authors, counts, revisions or complete-history claims.
 - Planned credits are `PLANNING_ONLY_NOT_A_CREDIT_GRANT`. No allowance is promised or granted. Capability policy is not a statement that every future AI capability is operational.
 - HQ-only customer preview uses only currently published, server-listed regular offers and verified server quote fields. Founder prices remain hidden there until purchaser-specific eligibility is independently checked. No public route, customer checkout or school-facing purchase flow is changed. Checkout remains disabled.
-- PR #63, migration 0182, D1–D9/D6 corrections, actual Stripe sandbox evidence and B6 first-payment onboarding remain separate gates. Do not use an unmerged contract or begin operational checkout integration in this PR. Request a separate checkpoint after its approved merge.
+- PR #63 / migration 0182 is now merged. This branch preserves it and adopts only the current HQ read shape. It does not call school purchase or checkout endpoints. Request a separate implementation checkpoint after this HQ integration is independently reviewed and merged; actual Stripe sandbox evidence and B6 first-payment onboarding remain separate gates.
 - Existing identity and HQ overview endpoints do not supply the SaaS no-store response header. Their fixed reads explicitly prohibit browser caching and strictly verify their existing envelopes. Financial offer reads/commands require the backend no-store response header. No backend header behavior is modified here.
 
 ## Verification design and evidence boundaries

@@ -90,6 +90,7 @@ proof champions-club test-saas-school-billing-integrity.mjs "HON school billing 
 proof champions-club test-language-preferences-integrity.mjs "Interface language persistence: self-only personal preference, exact-school audited default, precedence, idempotent race-safe updates"
 proof champions-club test-saas-paid-access-integrity.mjs "HON paid access B6A (program INACTIVE; ACTIVE simulated in the disposable DB only): awaiting first payment, server-decided tier and allowance on verified payment, replay/out-of-order/tampering/refund safeguards, HQ review and retry"
 proof champions-club test-saas-hon-os-offers-integrity.mjs "HON OS commercial offers (0181): one product, HQ-priced versioned offers, owner-only digest-approved publication, immutable published offers, stop-sales, exact-school discovery, legacy billing untouched"
+proof champions-club test-saas-hon-os-purchase-integrity.mjs "HON OS purchase binding (0182): six HQ-published offers bought end to end in TEST MODE through the simulated Stripe adapter at the exact accepted offer, sale limit and founder pool under contention, review paths, renewals, refunds and disputes"
 proof champions-club test-entitlement-enforcement-coverage.mjs "B6A behavioural entitlement coverage: every runtime-callable function called for ACTIVE vs SUSPENDED organizations; reviewed allowlist, recorded gaps, no cross-organization access"
 
 # CRM adult registration to membership DRAFT (Manus PR #27 lineage, migrations 0159, 0160, 0162, 0163).

@@ -14,6 +14,8 @@ const contracts = require('@hon/contracts');
 // Prices here are fixture values an HQ owner might choose; nothing in the product hard-codes them.
 const T = '2026-10-23T12:00:00.000Z', U = () => randomUUID(), DIGEST = 'a'.repeat(64);
 const interval = kind => contracts.saasHonOsOfferBillingInterval(kind);
+const recurring = o => o.billingInterval === 'MONTHLY' ? 'MONTH' : o.billingInterval === 'ONE_TIME' ? 'NONE'
+  : o.annualRenewal === 'AUTO_RENEW_AT_LOCKED_PRICE' ? 'YEAR' : o.annualRenewal === 'NO_AUTO_RENEWAL' ? 'NONE' : null;
 const offerInput = (code, kind, priceMinor, patch = {}) => ({ offerCode:code, offerKind:kind, displayName:`HON OS ${code}`, priceMinor,
   salesOpensAt:T, salesClosesAt:null, eligibility:'ANY_ACTIVE_ORGANIZATION', saleLimit:interval(kind) === 'ONE_TIME' ? 25 : null,
   priceLock:interval(kind) === 'ONE_TIME' ? 'NONE' : 'WHILE_CONTINUOUSLY_SUBSCRIBED', priceLockMonths:null,
@@ -39,11 +41,12 @@ const preview = s => ({ setId:s.setId, revision:s.revision, previewDigest:DIGEST
     lifetimeBreakEvenMonths:o.billingInterval === 'ONE_TIME' ? Math.ceil(o.priceMinor / 31700) : null, founderDiscountPercentVsRegular:o.founder ? 42 : null })) });
 const management = (patch = {}) => { const pub = published(); return { product:product(), published:pub, onSaleOfferIds:pub.offers.map(o => o.offerId), drafts:[set({ setVersion:2 })],
   history:[{ setId:pub.setId, setVersion:1, status:'PUBLISHED', revision:1, offerCount:6, createdAt:T, publishedAt:T, retiredAt:null, discardedAt:null }],
-  honOsSales:{ status:'CHECKOUT_NOT_CONNECTED' }, legacySales:[{ catalogVersion:1, planCode:'CORE', offerKind:'REGULAR_MONTHLY', priceMinor:14900, status:'IN_SERVICE', subscriptions:3 }],
-  paidAccessProgram:'INACTIVE', purchase:'NOT_CONNECTED', chargesEnabled:false, creditGrantsEnabled:false, ...patch }; };
+  honOsSales:{ offers:[{ offerId:pub.offers[0].offerId, setVersion:1, offerCode:'OS_MONTHLY', offerKind:'REGULAR_MONTHLY', displayName:pub.offers[0].displayName, priceMinor:31700,
+    saleLimit:null, saleStatus:'ON_SALE', subscriptions:2, openCheckouts:1, paidNeedsReview:1 }], founderPool:{ limit:30, allocated:4, held:1, remaining:25 } }, legacySales:[{ catalogVersion:1, planCode:'CORE', offerKind:'REGULAR_MONTHLY', priceMinor:14900, status:'IN_SERVICE', subscriptions:3 }],
+  paidAccessProgram:'INACTIVE', purchase:'TEST_MODE', chargesEnabled:false, creditGrantsEnabled:false, ...patch }; };
 const schoolView = (patch = {}) => ({ schoolId:U(), product:product(), offerSetVersion:1, termsReference:'Fixture HON OS terms',
-  offers:published().offers.map(({ salesStop, salesOpensAt, position, saleLimit, ...o }) => ({ ...o, eligibility:o.founder ? 'REQUIRES_HQ_FOUNDER_RESERVATION' : 'ELIGIBLE' })),
-  purchase:'NOT_CONNECTED', paidAccessProgram:'INACTIVE', chargesEnabled:false, ...patch });
+  offers:published().offers.map(({ salesStop, salesOpensAt, position, saleLimit, ...o }) => ({ ...o, eligibility:o.founder ? 'FOUNDER_SOLD_OUT' : 'ELIGIBLE', recurringBilling:recurring(o) })),
+  purchase:'TEST_MODE', checkout:null, purchased:null, paidAccessProgram:'INACTIVE', chargesEnabled:false, ...patch });
 
 test('HON OS product policy is the full capability set and never a legacy tier', () => {
   assert.equal(contracts.HON_OS_PRODUCT.productCode, 'HON_OS');
@@ -110,14 +113,28 @@ test('responses fail closed on activation flags, repricing claims, credit grants
     { ...preview(s), product:{ ...product(), capabilities:[...contracts.SAAS_PLAN_CAPABILITIES.CORE] } }, { ...preview(s), product:{ ...product(), legacyTiersForNewSale:true } },
     { ...preview(s), quotes:preview(s).quotes.map((q, i) => i === 0 ? { ...q, priceMinor:1 } : q) }, { ...preview(s), comparisonOfferCode:'OS_UNKNOWN' }])
     assert.throws(() => contracts.validateSaasHonOsOfferSetDetail({ set:s, preview:bad }));
+  const m = management(), row = m.honOsSales.offers[0];
+  assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(management({ purchase:'UNAVAILABLE', honOsSales:{ offers:[], founderPool:{ limit:null, allocated:0, held:0, remaining:null } } })));
+  assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(management({ honOsSales:{ offers:[], founderPool:{ limit:0, allocated:0, held:0, remaining:0 } } })));
+  // One view object per case: each management() call publishes fresh offer IDs.
+  const sale = (saleStatus, patch = {}) => { const x = management(patch); x.honOsSales.offers[0] = { ...x.honOsSales.offers[0], offerId:x.published.offers[0].offerId, saleStatus }; return x; };
+  assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(sale('TERMS_UNSUPPORTED')));
+  assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(sale('NOT_ON_SALE', { onSaleOfferIds:[] })));
   for (const bad of [management({ chargesEnabled:true }), management({ creditGrantsEnabled:true }), management({ purchase:'CONNECTED' }), management({ honOsSales:{ status:'LIVE', sold:4 } }),
+    management({ honOsSales:{ ...m.honOsSales, founderPool:{ limit:30, allocated:4, held:1, remaining:30 } } }), management({ honOsSales:{ ...m.honOsSales, founderPool:{ limit:null, allocated:0, held:0, remaining:5 } } }),
+    management({ honOsSales:{ ...m.honOsSales, offers:[{ ...row, revenueMinor:63400 }] } }), management({ honOsSales:{ ...m.honOsSales, offers:[{ ...row, subscriptions:-1 }] } }),
+    sale('PURCHASABLE'), sale('TERMS_UNSUPPORTED', { onSaleOfferIds:[] }), sale('ON_SALE', { onSaleOfferIds:[] }),
     management({ published:set() }), management({ drafts:[published()] }), management({ onSaleOfferIds:[U()] }), management({ paidAccessProgram:'ON' }),
     management({ legacySales:[{ catalogVersion:1, planCode:'ESSENTIAL', offerKind:'REGULAR_MONTHLY', priceMinor:9900, status:'IN_SERVICE', subscriptions:1 }] })])
     assert.throws(() => contracts.validateSaasHonOsOfferManagementView(bad));
   const sv = schoolView();
   for (const bad of [schoolView({ chargesEnabled:true }), schoolView({ purchase:'CONNECTED' }), schoolView({ offerSetVersion:null }),
     schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, eligibility:'REQUIRES_HQ_FOUNDER_RESERVATION' } : o) }),
-    schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, saleLimit:null } : o) }), schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, salesStop:null } : o) })])
+    schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, saleLimit:null } : o) }), schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, salesStop:null } : o) }),
+    schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, recurringBilling:'YEAR' } : o) }), schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, eligibility:'FOUNDER_SOLD_OUT' } : o) }),
+    schoolView({ offers:sv.offers.map((o, i) => i === 0 ? { ...o, eligibility:'NOT_AVAILABLE_TERMS' } : o) }), schoolView({ offers:sv.offers.map((o, i) => i === 1 ? { ...o, annualRenewal:'AUTO_RENEW_AT_CURRENT_PRICE' } : o) }),
+    schoolView({ purchased:{ subscriptionId:U(), offerId:U(), offerKind:'LIFETIME', displayName:'Lifetime', priceMinor:950000, recurringBilling:'NONE', offerSetVersion:1,
+      acceptedOfferDigest:DIGEST, status:'IN_SERVICE', serviceStartedAt:null } }), schoolView({ checkout:{} })])
     assert.throws(() => contracts.validateSaasHonOsSchoolOfferView(bad));
   assert.throws(() => contracts.validateSaasHonOsOfferSetPublishReceipt({ set:set(), retiredSetId:null, replayed:false }));
   assert.throws(() => contracts.validateSaasHonOsOfferSetDiscardReceipt({ set:set(), replayed:false }));

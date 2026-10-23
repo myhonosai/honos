@@ -2,7 +2,7 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe,it,expect,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
-import {en,ko,es,translate,formatLocaleMoney,DEFAULT_LOCALE} from '@hon/design-system';
+import {en,ko,es,translate,formatLocaleMoney,formatLocaleDateTime,DEFAULT_LOCALE} from '@hon/design-system';
 import {validateSaasHonOsOfferSetDraftInput,validateSaasHonOsOfferSetReviseInput} from '@hon/contracts';
 import {createOfferFixtures} from '../scripts/fixtures/hq-offers.mjs';
 import {blankSet,blankOffer,formFromSet,formInput,usdMinor} from '../src/components/hq-modern/pricing-offers-model';
@@ -49,7 +49,13 @@ describe('whole HON OS offer-set form and source boundaries',()=>{
     const fixture=createOfferFixtures();const c=new PricingController({access:async()=>({subject:'owner',owner:true,management:fixture.management()}),detail:async id=>fixture.detail(id),send:async(request:PricingRequest)=>({kind:request.kind,data:fixture.command(request.kind,request.target,JSON.parse(request.body),request.key,request.subject)}) as PricingReceipt});
     await c.load();expect(renderToStaticMarkup(<PricingOffersView controller={c}/>)).toContain('$317');
     await c.open(fixture.draftId);c.editOffer('amount','321.45');
-    await c.save();await c.review();const review=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(review).toContain('$321.45');expect(review).toContain('UTC');
+    await c.save();await c.review();const review=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(review).toContain('$321.45');expect(review).toContain(formatLocaleDateTime(DEFAULT_LOCALE,fixture.detail(fixture.draftId).set.offers[0]!.salesOpensAt!));
     await c.previewPublished();const html=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(html).toContain('Checkout unavailable');expect(html).toContain('Founder offers are hidden');expect(html).not.toContain('$183');
+  });
+  it('displays backend founder quantities and omits server-unsupported published terms from the disabled preview',async()=>{
+    const f=createOfferFixtures();f.sets.get(f.originalId)!.offers.find(o=>o.offerKind==='REGULAR_ANNUAL')!.annualRenewal='AUTO_RENEW_AT_CURRENT_PRICE';
+    const c=new PricingController({access:async()=>({subject:'owner',owner:true,management:f.management()}),detail:async id=>f.detail(id),send:vi.fn()});
+    await c.load();const overview=renderToStaticMarkup(<PricingOffersView controller={c}/>);expect(overview).toContain('Verified founder pool snapshot');expect(overview).toContain('<dd>27</dd>');expect(overview).toContain('Published terms are not supported for purchase');
+    await c.previewPublished();expect(renderToStaticMarkup(<PricingOffersView controller={c}/>)).not.toContain('$3,170');
   });
 });

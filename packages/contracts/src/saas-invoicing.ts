@@ -4,7 +4,7 @@
 // Unverified evidence must never be presented as processor-confirmed payment.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
-import { saasUuid } from './saas-billing.js';
+import { SAAS_SOLD_OFFER_KINDS, saasUuid, type SaasSoldOfferKind } from './saas-billing.js';
 
 export type SaasInvoiceKind = 'SUBSCRIPTION_PERIOD' | 'LIFETIME_PURCHASE';
 export type SaasInvoiceStatus = 'DRAFT' | 'ISSUED' | 'VOID';
@@ -40,7 +40,7 @@ export interface SaasInvoiceSettlement {
 export interface SaasInvoiceSummary {
   invoiceId: string; invoiceNumber: string | null; organizationId: string; organizationName: string; subscriptionId: string;
   kind: SaasInvoiceKind; periodIndex: number | null; servicePeriod: { startsAt: string; endsAt: string | null };
-  planCode: 'CORE' | 'COMPLETE'; offerKind: 'REGULAR_MONTHLY' | 'FOUNDER_MONTHLY' | 'FOUNDER_LIFETIME'; description: string; currency: 'USD';
+  planCode: 'CORE' | 'COMPLETE'; offerKind: SaasSoldOfferKind; description: string; currency: 'USD';
   status: SaasInvoiceStatus; version: number; subtotalMinor: number; taxStatus: SaasTaxStatus; taxMinor: number | null;
   taxVerificationReference: string | null; totalMinor: number | null; settlement: SaasInvoiceSettlement;
   delivery: 'NOT_SENT'; collection: 'DISABLED'; createdAt: string; issuedAt: string | null; voidedAt: string | null;
@@ -162,7 +162,7 @@ function validateInvoice(value: unknown, detail: boolean): void {
   if (!isUuid(i.invoiceId) || (i.invoiceNumber !== null && (typeof i.invoiceNumber !== 'string' || !/^HON-20\d{2}-\d{6}$/.test(i.invoiceNumber)))
     || !isUuid(i.organizationId) || !text(i.organizationName, 300) || !isUuid(i.subscriptionId) || !has(['SUBSCRIPTION_PERIOD','LIFETIME_PURCHASE'], i.kind)
     || (period ? !count(i.periodIndex) : i.periodIndex !== null) || !has(['CORE','COMPLETE'], i.planCode)
-    || !has(['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME'], i.offerKind) || (i.offerKind === 'FOUNDER_LIFETIME') === period
+    || !has(SAAS_SOLD_OFFER_KINDS, i.offerKind) || (i.offerKind === 'FOUNDER_LIFETIME' || i.offerKind === 'LIFETIME') === period
     || !text(i.description, 300) || i.currency !== 'USD' || !has(SAAS_INVOICE_STATUSES, i.status) || !isInt(i.version, 1, 2147483647)
     || !isInt(i.subtotalMinor, 0, 100_000_000) || !has(['UNRESOLVED','NO_TAX_APPLICABLE','TAX_LINES'], i.taxStatus)
     || (i.taxStatus === 'UNRESOLVED' ? i.taxMinor !== null || i.totalMinor !== null || i.taxVerificationReference !== null

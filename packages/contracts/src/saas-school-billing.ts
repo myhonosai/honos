@@ -6,7 +6,7 @@
 // requires the paid-access program to be ACTIVE (it is INACTIVE until the owner approves).
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
-import { SAAS_SUBSCRIPTION_PAYMENT_STATUSES, validateSaasSubscriptionForSchool, type SaasSubscription,
+import { SAAS_SOLD_OFFER_KINDS, SAAS_SUBSCRIPTION_PAYMENT_STATUSES, validateSaasSubscriptionForSchool, type SaasSoldOfferKind, type SaasSubscription,
   type SaasSubscriptionPaymentStatus } from './saas-billing.js';
 import type { SaasEvidenceKind, SaasInvoiceKind, SaasInvoiceLineKind, SaasPaymentStandingFacts, SaasSettlementState, SaasTaxStatus } from './saas-invoicing.js';
 
@@ -16,7 +16,9 @@ const count = (v: unknown): v is number => isInt(v, 0, Number.MAX_SAFE_INTEGER);
 const nts = (v: unknown) => v === null || isTimestamp(v);
 const code = (v: unknown): v is string => typeof v === 'string' && /^[A-Z][A-Z0-9_]{0,59}$/.test(v);
 const PLAN_CODES = ['CORE','COMPLETE'] as const;
-const OFFER_KINDS = ['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME'] as const;
+// Legacy catalog kinds plus the HON OS kinds (0182).
+const OFFER_KINDS = SAAS_SOLD_OFFER_KINDS;
+const lifetimeKind = (kind: unknown) => kind === 'FOUNDER_LIFETIME' || kind === 'LIFETIME';
 
 // ---------- query ----------
 export interface SaasSchoolInvoiceCursor { issuedAt: string; invoiceId: string }
@@ -95,8 +97,8 @@ export interface SaasSchoolBillingAccount {
     paidAccessProgram: 'INACTIVE' | 'ACTIVE'; activation: SaasAccountActivation; alignment: SaasAccessAlignment };
   subscription: Omit<SaasSubscription, 'organizationName'> | null;
   subscriptionHistory: { version: number; status: string; statusReason: string; periodIndex: number | null; periodStart: string | null; periodEnd: string | null; occurredAt: string }[];
-  subscriptions: { subscriptionId: string; source: 'CATALOG_OFFER' | 'LEGACY_ENTITLEMENT'; catalogVersion: number | null; planCode: 'ESSENTIAL' | 'CORE' | 'COMPLETE';
-    offerKind: typeof OFFER_KINDS[number] | null; billingInterval: 'MONTHLY' | 'LIFETIME' | 'NONE'; priceMinor: number | null; currency: 'USD';
+  subscriptions: { subscriptionId: string; source: 'CATALOG_OFFER' | 'LEGACY_ENTITLEMENT' | 'HON_OS_OFFER'; catalogVersion: number | null; planCode: 'ESSENTIAL' | 'CORE' | 'COMPLETE';
+    offerKind: typeof OFFER_KINDS[number] | null; billingInterval: 'MONTHLY' | 'ANNUAL' | 'LIFETIME' | 'NONE'; priceMinor: number | null; currency: 'USD';
     status: string; statusReason: string; serviceStartedAt: string | null; createdAt: string }[];
   payment: { status: SaasSubscriptionPaymentStatus; verification: 'PROVIDER_VERIFIED' | 'HQ_ATTESTED' | 'NONE'; paidThroughAt: string | null; unpaidSince: string | null;
     verified: SaasPaymentStandingFacts; recorded: SaasPaymentStandingFacts; evidenceCounts: { hqAttested: number; providerVerified: number };
@@ -118,7 +120,7 @@ export interface SaasAccessReadiness {
     graceDays: number; restrictAfterDays: number; suspendAfterDays: number; premiumAiWouldBeSuspended: boolean;
     condition: { entitlement: SaasEntitlementView | null; subscriptionStatus: string | null; paymentStatus: SaasSubscriptionPaymentStatus;
       paymentVerification: 'PROVIDER_VERIFIED' | 'HQ_ATTESTED' | 'NONE'; paidThroughAt: string | null; unpaidSince: string | null;
-      billingInterval: 'MONTHLY' | 'LIFETIME' | 'NONE' | null; planMatchesEntitlement: boolean | null };
+      billingInterval: 'MONTHLY' | 'ANNUAL' | 'LIFETIME' | 'NONE' | null; planMatchesEntitlement: boolean | null };
     enforcement: 'NONE' };
   asOf: string;
 }
@@ -141,7 +143,7 @@ function invoice(value: unknown, detail: boolean): void {
   const period = i.kind === 'SUBSCRIPTION_PERIOD';
   if (!isUuid(i.invoiceId) || typeof i.invoiceNumber !== 'string' || !/^HON-20\d{2}-\d{6}$/.test(i.invoiceNumber) || !isUuid(i.subscriptionId)
     || !has(['SUBSCRIPTION_PERIOD','LIFETIME_PURCHASE'], i.kind) || (period ? !count(i.periodIndex) : i.periodIndex !== null)
-    || !has(PLAN_CODES, i.planCode) || !has(OFFER_KINDS, i.offerKind) || (i.offerKind === 'FOUNDER_LIFETIME') === period
+    || !has(PLAN_CODES, i.planCode) || !has(OFFER_KINDS, i.offerKind) || lifetimeKind(i.offerKind) === period
     || !text(i.description, 300) || i.currency !== 'USD' || !has(['ISSUED','VOID'], i.status) || !isInt(i.subtotalMinor, 0, 100_000_000)
     || !has(['NO_TAX_APPLICABLE','TAX_LINES'], i.taxStatus) || !isInt(i.taxMinor, 0, 100_000_000) || (i.taxStatus === 'NO_TAX_APPLICABLE') !== (i.taxMinor === 0)
     || i.totalMinor !== (i.subtotalMinor as number) + (i.taxMinor as number) || !((i.totalMinor as number) > 0)
@@ -254,9 +256,9 @@ export function validateSaasSchoolBillingAccount(value: unknown): SaasSchoolBill
     const s = record(v, drift);
     exactKeys(s, ['subscriptionId','source','catalogVersion','planCode','offerKind','billingInterval','priceMinor','currency','status','statusReason',
       'serviceStartedAt','createdAt'], drift);
-    if (!isUuid(s.subscriptionId) || !has(['CATALOG_OFFER','LEGACY_ENTITLEMENT'], s.source) || !nullable(s.catalogVersion, (x): x is number => isInt(x, 1, 2147483647))
+    if (!isUuid(s.subscriptionId) || !has(['CATALOG_OFFER','LEGACY_ENTITLEMENT','HON_OS_OFFER'], s.source) || !nullable(s.catalogVersion, (x): x is number => isInt(x, 1, 2147483647))
       || !has(['ESSENTIAL','CORE','COMPLETE'], s.planCode) || !nullable(s.offerKind, (x): x is string => has(OFFER_KINDS, x))
-      || !has(['MONTHLY','LIFETIME','NONE'], s.billingInterval) || !nullable(s.priceMinor, (x): x is number => isInt(x, 100, 10_000_000)) || s.currency !== 'USD'
+      || !has(['MONTHLY','ANNUAL','LIFETIME','NONE'], s.billingInterval) || !nullable(s.priceMinor, (x): x is number => isInt(x, 100, 10_000_000)) || s.currency !== 'USD'
       || !code(s.status) || !code(s.statusReason) || !nts(s.serviceStartedAt) || !isTimestamp(s.createdAt)) drift();
   });
   const p = record(r.payment, drift);
@@ -311,7 +313,7 @@ export function validateSaasAccessReadiness(value: unknown): SaasAccessReadiness
   exactKeys(c, ['entitlement','subscriptionStatus','paymentStatus','paymentVerification','paidThroughAt','unpaidSince','billingInterval','planMatchesEntitlement'], drift);
   validateSaasEntitlementView(c.entitlement);
   if (!nullable(c.subscriptionStatus, code) || !has(SAAS_SUBSCRIPTION_PAYMENT_STATUSES, c.paymentStatus) || !has(PAYMENT_VERIFICATIONS, c.paymentVerification)
-    || !nts(c.paidThroughAt) || !nts(c.unpaidSince) || !nullable(c.billingInterval, (x): x is string => has(['MONTHLY','LIFETIME','NONE'], x))
+    || !nts(c.paidThroughAt) || !nts(c.unpaidSince) || !nullable(c.billingInterval, (x): x is string => has(['MONTHLY','ANNUAL','LIFETIME','NONE'], x))
     || !nullable(c.planMatchesEntitlement, (x): x is boolean => typeof x === 'boolean')) drift();
   return r as unknown as SaasAccessReadiness;
 }

@@ -56,7 +56,8 @@ export class SaasOffersHqController {
 
 /**
  * The HON OS offers a school purchaser (billing.hon.purchase at the exact school) may see now: published, on sale,
- * with server-evaluated eligibility. Read only; purchasing is NOT_CONNECTED and the path is only a selector.
+ * with server-evaluated eligibility, the latest HON OS checkout and the purchased offer. Purchasing is the separate
+ * POST schools/:schoolId/hon-os-offers/checkout command (SaasHonOsCheckoutSchoolController, test mode only).
  */
 @Controller('schools/:schoolId/hon-os-offers')
 @UseGuards(HonIdentityGuard)

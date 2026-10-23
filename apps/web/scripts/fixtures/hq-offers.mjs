@@ -34,7 +34,10 @@ export function createOfferFixtures(){
   const management=()=>{const published=[...sets.values()].find(s=>s.status==='PUBLISHED')??null;return structuredClone({product:HON_OS_PRODUCT,published,
     onSaleOfferIds:published?.offers.filter(o=>!o.salesStop).map(o=>o.offerId)??[],drafts:[...sets.values()].filter(s=>s.status==='DRAFT'),
     history:[...sets.values()].map(s=>({setId:s.setId,setVersion:s.setVersion,status:s.status,revision:s.revision,offerCount:s.offers.length,createdAt:s.createdAt,publishedAt:s.publishedAt,retiredAt:s.retiredAt,discardedAt:s.discardedAt})).reverse(),
-    honOsSales:{status:'CHECKOUT_NOT_CONNECTED'},legacySales:[],paidAccessProgram:'INACTIVE',purchase:'NOT_CONNECTED',chargesEnabled:false,creditGrantsEnabled:false});};
+    honOsSales:{offers:(published?.offers??[]).map(o=>({offerId:o.offerId,setVersion:published.setVersion,offerCode:o.offerCode,offerKind:o.offerKind,displayName:o.displayName,priceMinor:o.priceMinor,saleLimit:o.saleLimit,
+      saleStatus:o.salesStop?'NOT_ON_SALE':o.annualRenewal==='AUTO_RENEW_AT_CURRENT_PRICE'?'TERMS_UNSUPPORTED':'ON_SALE',subscriptions:0,openCheckouts:0,paidNeedsReview:0})),
+      founderPool:{limit:published?.founderTotalLimit??null,allocated:2,held:1,remaining:published?.founderTotalLimit===null||!published?null:Math.max(published.founderTotalLimit-3,0)}},
+    legacySales:[],paidAccessProgram:'INACTIVE',purchase:'UNAVAILABLE',chargesEnabled:false,creditGrantsEnabled:false});};
   function command(kind,target,body,key,subject='owner'){
     const fingerprint=JSON.stringify([kind,target,body]),requestKey=subject+key;
     if(requests.has(requestKey)){const prior=requests.get(requestKey);if(prior.fingerprint!==fingerprint)fail('IDEMPOTENCY_KEY_REUSED',409);return {...structuredClone(prior.result),replayed:true};}

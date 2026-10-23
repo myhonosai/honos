@@ -108,9 +108,9 @@ try{
  assert.equal(initial.published,null);assert.deepEqual(initial.drafts,[]);assert.deepEqual(initial.history,[]);assert.deepEqual(initial.onSaleOfferIds,[]);
  assert.deepEqual(initial.product,{...contracts.HON_OS_PRODUCT,capabilities:[...contracts.HON_OS_PRODUCT.capabilities]});
  assert.ok(initial.product.capabilities.includes('ai.workforce'),'HON OS is the full (COMPLETE) capability policy');
- assert.deepEqual(initial.honOsSales,{status:'CHECKOUT_NOT_CONNECTED'});
+ assert.deepEqual(initial.honOsSales,{offers:[],founderPool:{limit:null,allocated:0,held:0,remaining:null}},'no HON OS sales recorded before any purchase');
  assert.deepEqual(initial.legacySales,[{catalogVersion:legacyCatalog.catalogVersion,planCode:'CORE',offerKind:'REGULAR_MONTHLY',priceMinor:coreRegular.priceMinor,status:legacySub.status,subscriptions:1}]);
- assert.equal(initial.paidAccessProgram,'INACTIVE');assert.equal(initial.purchase,'NOT_CONNECTED');assert.equal(initial.chargesEnabled,false);assert.equal(initial.creditGrantsEnabled,false);
+ assert.equal(initial.paidAccessProgram,'INACTIVE');assert.equal(initial.purchase,'UNAVAILABLE','payment program DISABLED: no checkout');assert.equal(initial.chargesEnabled,false);assert.equal(initial.creditGrantsEnabled,false);
  assert.ok(await api.readOfferManagement(H('owner')));
  for(const who of ['support','purchaser1','clerk2'])await deny(api.readOfferManagement(H(who)),403,'SAAS_FORBIDDEN');
  await deny(api.readOfferManagement('offers-unknown-subject'),403,'SAAS_FORBIDDEN');
@@ -205,13 +205,14 @@ try{
 
  // ---------- 7. school discovery: exact school, on-sale only, server-evaluated eligibility ----------
  const s2=await api.readSchoolHonOsOffers(H('purchaser2'),O[2].school);
- assert.equal(s2.offerSetVersion,1);assert.equal(s2.purchase,'NOT_CONNECTED');assert.equal(s2.paidAccessProgram,'INACTIVE');assert.equal(s2.chargesEnabled,false);
- assert.deepEqual(s2.offers.map(o=>[o.offerCode,o.eligibility]),[['OS_MONTHLY','ELIGIBLE'],['OS_ANNUAL','ELIGIBLE'],['OS_FOUNDER_MONTHLY','REQUIRES_HQ_FOUNDER_RESERVATION'],
-  ['OS_FOUNDER_ANNUAL','REQUIRES_HQ_FOUNDER_RESERVATION'],['OS_LIFETIME','ELIGIBLE']],'founder lifetime opens in 30 days, so it is not on sale yet');
+ assert.equal(s2.offerSetVersion,1);assert.equal(s2.purchase,'UNAVAILABLE');assert.equal(s2.paidAccessProgram,'INACTIVE');assert.equal(s2.chargesEnabled,false);
+ assert.equal(s2.checkout,null);assert.equal(s2.purchased,null);
+ // Purchase binding (0182): founder offers are self-serve inside the HON OS founder pool; eligibility is the server's decision.
+ assert.deepEqual(s2.offers.map(o=>[o.offerCode,o.eligibility,o.recurringBilling]),[['OS_MONTHLY','ELIGIBLE','MONTH'],['OS_ANNUAL','ELIGIBLE','YEAR'],
+  ['OS_FOUNDER_MONTHLY','ELIGIBLE','MONTH'],['OS_FOUNDER_ANNUAL','ELIGIBLE','NONE'],['OS_LIFETIME','ELIGIBLE','NONE']],'founder lifetime opens in 30 days, so it is not on sale yet');
  for(const o of s2.offers)for(const hidden of ['salesStop','salesOpensAt','position','saleLimit'])assert.ok(!(hidden in o),hidden);
  const s1=await api.readSchoolHonOsOffers(H('purchaser1'),O[1].school);
- assert.equal(s1.offers.find(o=>o.offerCode==='OS_FOUNDER_MONTHLY').eligibility,'NOT_ELIGIBLE_EXISTING_SUBSCRIPTION','new-organization founder offer refused to a school with a legacy subscription');
- assert.equal(s1.offers.find(o=>o.offerCode==='OS_MONTHLY').eligibility,'ELIGIBLE');
+ assert.deepEqual([...new Set(s1.offers.map(o=>o.eligibility))],['NOT_ELIGIBLE_ENTITLEMENT'],'a CORE organization (with a legacy subscription) cannot buy HON OS (COMPLETE policy) yet');
  await deny(api.readSchoolHonOsOffers(H('purchaser3'),O[2].school),403,'SAAS_FORBIDDEN');
  await deny(api.readSchoolHonOsOffers(H('clerk2'),O[2].school),403,'SAAS_FORBIDDEN');
  for(const who of ['owner','operator'])await deny(api.readSchoolHonOsOffers(H(who),O[2].school),403,'SAAS_FORBIDDEN');
