@@ -115,7 +115,7 @@ ALTER TABLE hon.saas_checkout_sessions
   ADD CONSTRAINT saas_checkout_sessions_status_reason_check CHECK (status_reason IN ('CREATED','PROVIDER_SESSION_OPENED','PROVIDER_CREATE_FAILED',
     'PAYMENT_VERIFIED','PROVIDER_EXPIRED','LOCAL_EXPIRED','CANCELLED_BY_REQUESTER','CANCELLED_BY_HQ','ASYNC_PAYMENT_FAILED','PAID_AFTER_CLOSE',
     'AMOUNT_MISMATCH','FOUNDER_UNAVAILABLE','ENTITLEMENT_CHANGED','SUBSCRIPTION_EXISTS','ACCESS_PROGRAM_INACTIVE',
-    'OFFER_NO_LONGER_ON_SALE','SALE_LIMIT_REACHED','RECURRING_MISMATCH'));
+    'OFFER_SALES_STOPPED','SALE_LIMIT_REACHED','RECURRING_MISMATCH'));
 CREATE INDEX saas_checkout_sessions_hon_os_offer ON hon.saas_checkout_sessions (hon_os_offer_id) WHERE hon_os_offer_id IS NOT NULL;
 CREATE INDEX saas_subscriptions_hon_os_offer ON hon.saas_subscriptions (hon_os_offer_id) WHERE hon_os_offer_id IS NOT NULL;
 
@@ -296,15 +296,20 @@ BEGIN
   used := hon.saas_hon_os_founder_usage(p_at, c.id);
   reason := CASE
     WHEN c.status IN ('EXPIRED','CANCELLED','FAILED','PAID_NEEDS_REVIEW') THEN 'PAID_AFTER_CLOSE'
+    -- A checkout is valid only until it expires, even if the expiry sweep has not closed it yet.
+    WHEN greatest(occurred, c.created_at) >= c.expires_at THEN 'PAID_AFTER_CLOSE'
     WHEN (o->>'amountTotal')::bigint IS DISTINCT FROM c.amount_minor OR o->>'currency' IS DISTINCT FROM 'usd' THEN 'AMOUNT_MISMATCH'
     -- One-time offers must never have created a provider subscription; recurring offers must have one.
     WHEN (c.provider_recurring = 'NONE') <> (o->>'subscriptionRef' IS NULL) THEN 'RECURRING_MISMATCH'
     WHEN ent.organization_id IS NULL OR ent.status <> 'ACTIVE' OR ent.tier::text <> 'COMPLETE' OR ent.effective_from > p_at
       OR (ent.effective_until IS NOT NULL AND ent.effective_until <= p_at) OR hon.saas_awaiting_first_payment(c.organization_id) THEN 'ENTITLEMENT_CHANGED'
     WHEN EXISTS (SELECT 1 FROM hon.saas_subscriptions x WHERE x.organization_id = c.organization_id AND x.status <> 'VOIDED') THEN 'SUBSCRIPTION_EXISTS'
-    -- Stopped, closed or superseded before the customer paid: HQ decides (owner decision D6). Provider times have whole-second
-    -- precision and a payment cannot precede its checkout, so the payment time is never taken as earlier than the checkout.
-    WHEN NOT hon.saas_hon_os_offer_on_sale(v_offer, least(greatest(occurred, c.created_at), p_at)) THEN 'OFFER_NO_LONGER_ON_SALE'
+    -- Owner decision D6 (revised 2026-10-23): a valid checkout keeps its accepted offer if HQ publishes a new price
+    -- version or the offer's sales window ends before payment. Only an explicit HQ stop-sales on that offer, at or
+    -- before the payment, sends it to review. Provider times have whole-second precision and a payment cannot
+    -- precede its checkout, so the payment time is never taken as earlier than the checkout.
+    WHEN EXISTS (SELECT 1 FROM hon.saas_offer_sales_stops x WHERE x.offer_id = c.hon_os_offer_id
+      AND x.stopped_at <= least(greatest(occurred, c.created_at), p_at)) THEN 'OFFER_SALES_STOPPED'
     WHEN v_offer.sale_limit IS NOT NULL AND hon.saas_hon_os_offer_usage(v_offer.id, p_at, c.id) >= v_offer.sale_limit THEN 'SALE_LIMIT_REACHED'
     WHEN v_offer.founder AND (used->>'allocated')::integer + (used->>'held')::integer >= coalesce(v_limit, 0) THEN 'FOUNDER_UNAVAILABLE' END;
   IF reason IS NOT NULL THEN
@@ -775,6 +780,41 @@ BEGIN
     'evidenceStrength', 'RECORDED', 'currency', 'USD', 'execution', 'UNAVAILABLE');
 END $$;
 
+-- ---------- emergency stop-sales (owner decision D6, revised) ----------
+-- A routine price change (a new published version) leaves open checkouts on the retired offer valid. HQ can still stop
+-- them explicitly: stopping sales is allowed on a published offer, and on a retired offer while it has a live checkout.
+CREATE OR REPLACE FUNCTION hon.stop_saas_offer_sales(p_subject text, p_offer uuid, p jsonb, p_key uuid, p_request uuid, p_correlation uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE actor uuid; replay jsonb; o hon.saas_offer_set_offers%ROWTYPE; at timestamptz; snapshot jsonb;
+BEGIN
+  IF p_offer IS NULL OR p IS NULL OR jsonb_typeof(p) <> 'object'
+    OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['reasonCode']
+    OR jsonb_typeof(p->'reasonCode') <> 'string' OR p->>'reasonCode' NOT IN ('OWNER_DISABLED','PRICE_CHANGE_PENDING','TERMS_REVIEW') THEN
+    RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
+  END IF;
+  actor := hon.saas_offer_owner(p_subject);
+  replay := hon.saas_claim_request(actor, p_key, 'saas.offers.stop_sales', hon.saas_fingerprint(ARRAY['saas.offers.stop_sales', p_offer::text, p::text]), p_request, p_correlation);
+  IF replay IS NOT NULL THEN RETURN replay; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('saas.offer_sets', 0));
+  -- Serialized with checkout opening and payment activation, so a stop is either before or after each of them.
+  PERFORM pg_advisory_xact_lock(hashtextextended('saas.hon_os.inventory', 0));
+  SELECT * INTO o FROM hon.saas_offer_set_offers WHERE id = p_offer;
+  IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
+  at := clock_timestamp();
+  IF NOT EXISTS (SELECT 1 FROM hon.saas_offer_sets s WHERE s.id = o.set_id AND (s.status = 'PUBLISHED'
+      OR (s.status = 'RETIRED' AND EXISTS (SELECT 1 FROM hon.saas_checkout_sessions c WHERE c.hon_os_offer_id = o.id
+        AND c.status IN ('CREATED','OPEN') AND c.expires_at > at)))) THEN
+    RAISE EXCEPTION 'SAAS_OFFER_NOT_PUBLISHED' USING ERRCODE = '23514';
+  END IF;
+  IF EXISTS (SELECT 1 FROM hon.saas_offer_sales_stops WHERE offer_id = p_offer) THEN
+    RAISE EXCEPTION 'SAAS_OFFER_SALES_ALREADY_STOPPED' USING ERRCODE = '23514';
+  END IF;
+  INSERT INTO hon.saas_offer_sales_stops(offer_id,set_id,reason_code,stopped_by_principal_id,stopped_at) VALUES (p_offer,o.set_id,p->>'reasonCode',actor,at);
+  SELECT hon.saas_offer_json(x) INTO snapshot FROM hon.saas_offer_set_offers x WHERE x.id = p_offer;
+  RETURN hon.saas_record(actor, p_key, 'saas.offers.stop_sales', 'saas.offers.sales_stopped', 'OFFER', p_offer, NULL, NULL, snapshot,
+    jsonb_build_object('offer', snapshot), at);
+END $$;
+
 -- ---------- HON OS reads ----------
 CREATE OR REPLACE FUNCTION hon.read_saas_hon_os_offers_for_school(p_subject text, p_school uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
@@ -831,6 +871,9 @@ BEGIN
     'honOsSales',jsonb_build_object(
       'offers',(SELECT coalesce(jsonb_agg(jsonb_build_object('offerId',g.id,'setVersion',g.set_version,'offerCode',g.offer_code,'offerKind',g.offer_kind,
           'displayName',g.display_name,'priceMinor',g.price_minor,'saleLimit',g.sale_limit,
+          -- HQ sees whether a published offer can actually be bought: unsupported terms are never shown as on sale.
+          'saleStatus',(SELECT CASE WHEN x.set_id IS DISTINCT FROM pub OR NOT hon.saas_hon_os_offer_on_sale(x, at) THEN 'NOT_ON_SALE'
+            WHEN hon.saas_hon_os_recurring(x) IS NULL THEN 'TERMS_UNSUPPORTED' ELSE 'ON_SALE' END FROM hon.saas_offer_set_offers x WHERE x.id = g.id),
           'subscriptions',(SELECT count(*) FROM hon.saas_subscriptions s WHERE s.hon_os_offer_id = g.id AND s.status <> 'VOIDED')::integer,
           'openCheckouts',(SELECT count(*) FROM hon.saas_checkout_sessions c WHERE c.hon_os_offer_id = g.id AND c.status IN ('CREATED','OPEN')
             AND c.expires_at > at)::integer,

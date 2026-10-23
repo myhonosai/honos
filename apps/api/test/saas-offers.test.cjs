@@ -42,7 +42,7 @@ const preview = s => ({ setId:s.setId, revision:s.revision, previewDigest:DIGEST
 const management = (patch = {}) => { const pub = published(); return { product:product(), published:pub, onSaleOfferIds:pub.offers.map(o => o.offerId), drafts:[set({ setVersion:2 })],
   history:[{ setId:pub.setId, setVersion:1, status:'PUBLISHED', revision:1, offerCount:6, createdAt:T, publishedAt:T, retiredAt:null, discardedAt:null }],
   honOsSales:{ offers:[{ offerId:pub.offers[0].offerId, setVersion:1, offerCode:'OS_MONTHLY', offerKind:'REGULAR_MONTHLY', displayName:pub.offers[0].displayName, priceMinor:31700,
-    saleLimit:null, subscriptions:2, openCheckouts:1, paidNeedsReview:1 }], founderPool:{ limit:30, allocated:4, held:1, remaining:25 } }, legacySales:[{ catalogVersion:1, planCode:'CORE', offerKind:'REGULAR_MONTHLY', priceMinor:14900, status:'IN_SERVICE', subscriptions:3 }],
+    saleLimit:null, saleStatus:'ON_SALE', subscriptions:2, openCheckouts:1, paidNeedsReview:1 }], founderPool:{ limit:30, allocated:4, held:1, remaining:25 } }, legacySales:[{ catalogVersion:1, planCode:'CORE', offerKind:'REGULAR_MONTHLY', priceMinor:14900, status:'IN_SERVICE', subscriptions:3 }],
   paidAccessProgram:'INACTIVE', purchase:'TEST_MODE', chargesEnabled:false, creditGrantsEnabled:false, ...patch }; };
 const schoolView = (patch = {}) => ({ schoolId:U(), product:product(), offerSetVersion:1, termsReference:'Fixture HON OS terms',
   offers:published().offers.map(({ salesStop, salesOpensAt, position, saleLimit, ...o }) => ({ ...o, eligibility:o.founder ? 'FOUNDER_SOLD_OUT' : 'ELIGIBLE', recurringBilling:recurring(o) })),
@@ -116,9 +116,14 @@ test('responses fail closed on activation flags, repricing claims, credit grants
   const m = management(), row = m.honOsSales.offers[0];
   assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(management({ purchase:'UNAVAILABLE', honOsSales:{ offers:[], founderPool:{ limit:null, allocated:0, held:0, remaining:null } } })));
   assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(management({ honOsSales:{ offers:[], founderPool:{ limit:0, allocated:0, held:0, remaining:0 } } })));
+  // One view object per case: each management() call publishes fresh offer IDs.
+  const sale = (saleStatus, patch = {}) => { const x = management(patch); x.honOsSales.offers[0] = { ...x.honOsSales.offers[0], offerId:x.published.offers[0].offerId, saleStatus }; return x; };
+  assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(sale('TERMS_UNSUPPORTED')));
+  assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(sale('NOT_ON_SALE', { onSaleOfferIds:[] })));
   for (const bad of [management({ chargesEnabled:true }), management({ creditGrantsEnabled:true }), management({ purchase:'CONNECTED' }), management({ honOsSales:{ status:'LIVE', sold:4 } }),
     management({ honOsSales:{ ...m.honOsSales, founderPool:{ limit:30, allocated:4, held:1, remaining:30 } } }), management({ honOsSales:{ ...m.honOsSales, founderPool:{ limit:null, allocated:0, held:0, remaining:5 } } }),
     management({ honOsSales:{ ...m.honOsSales, offers:[{ ...row, revenueMinor:63400 }] } }), management({ honOsSales:{ ...m.honOsSales, offers:[{ ...row, subscriptions:-1 }] } }),
+    sale('PURCHASABLE'), sale('TERMS_UNSUPPORTED', { onSaleOfferIds:[] }), sale('ON_SALE', { onSaleOfferIds:[] }),
     management({ published:set() }), management({ drafts:[published()] }), management({ onSaleOfferIds:[U()] }), management({ paidAccessProgram:'ON' }),
     management({ legacySales:[{ catalogVersion:1, planCode:'ESSENTIAL', offerKind:'REGULAR_MONTHLY', priceMinor:9900, status:'IN_SERVICE', subscriptions:1 }] })])
     assert.throws(() => contracts.validateSaasHonOsOfferManagementView(bad));

@@ -84,6 +84,8 @@ export interface SaasHonOsOfferSetHistoryEntry {
 export interface SaasLegacySalesRow { catalogVersion: number; planCode: 'CORE' | 'COMPLETE'; offerKind: 'REGULAR_MONTHLY' | 'FOUNDER_MONTHLY' | 'FOUNDER_LIFETIME'; priceMinor: number; status: string; subscriptions: number }
 export interface SaasHonOsSalesRow {
   offerId: string; setVersion: number; offerCode: string; offerKind: SaasHonOsOfferKind; displayName: string; priceMinor: number; saleLimit: number | null;
+  /** Whether a school can buy it now; TERMS_UNSUPPORTED is published but never purchasable (renewal repricing is not built). */
+  saleStatus: 'ON_SALE' | 'TERMS_UNSUPPORTED' | 'NOT_ON_SALE';
   subscriptions: number; openCheckouts: number; paidNeedsReview: number;
 }
 /** Recorded test-mode HON OS sales and the one cumulative HON OS founder pool (separate from the legacy founder inventory). */
@@ -304,11 +306,12 @@ export function validateSaasHonOsOfferManagementView(value: unknown): SaasHonOsO
   if (!Array.isArray(sales.offers) || sales.offers.length > 100) drift();
   for (const row of sales.offers as unknown[]) {
     const o = record(row, drift);
-    exactKeys(o, ['offerId','setVersion','offerCode','offerKind','displayName','priceMinor','saleLimit','subscriptions','openCheckouts','paidNeedsReview'], drift);
+    exactKeys(o, ['offerId','setVersion','offerCode','offerKind','displayName','priceMinor','saleLimit','saleStatus','subscriptions','openCheckouts','paidNeedsReview'], drift);
     if (!isUuid(o.offerId) || !isInt(o.setVersion, 1, 2147483647) || typeof o.offerCode !== 'string' || !OFFER_CODE.test(o.offerCode)
       || !has(SAAS_HON_OS_OFFER_KINDS, o.offerKind) || !text(o.displayName, 80) || !isInt(o.priceMinor, 100, 10_000_000)
       || !nint(o.saleLimit, 1, 1_000_000) || !isInt(o.subscriptions, 0, 2147483647) || !isInt(o.openCheckouts, 0, 2147483647)
-      || !isInt(o.paidNeedsReview, 0, 2147483647)) drift();
+      || !isInt(o.paidNeedsReview, 0, 2147483647) || !has(['ON_SALE','TERMS_UNSUPPORTED','NOT_ON_SALE'], o.saleStatus)
+      || (o.saleStatus !== 'NOT_ON_SALE' && !(r.onSaleOfferIds as unknown[]).includes(o.offerId))) drift();
   }
   const pool = record(sales.founderPool, drift); exactKeys(pool, ['limit','allocated','held','remaining'], drift);
   if (!nint(pool.limit, 0, 1000) || !isInt(pool.allocated, 0, 2147483647) || !isInt(pool.held, 0, 2147483647)
