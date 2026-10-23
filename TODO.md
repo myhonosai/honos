@@ -864,3 +864,8 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - Frontend integration with merged PR #45 / migration 0175: school-scoped catalog, version publication and adult enrollment plan picker; awaiting PR verification and owner review, not merged or deployed.
 - Preserve the legacy free-text DRAFT path, all Resume Setup states and existing membership terms. No activation/payment behavior or backend/migration changes.
 - Follow-ups: authorized historical membership-plan terms read after recovery; broader Korean/Spanish catalog copy; backend coordination if a plan-management-only role cannot use the existing reporting-school selectors. Original policy decisions remain in `docs/architecture/SCHOOL_MEMBERSHIP_PLAN_CATALOG.md`.
+## Codex — HQ Pricing & Offers UX priority (issues #58–#60)
+
+- [ ] Owner-directed isolated design foundation: one HON OS product with six payment layouts, local owner-only editor, founder/annual/lifetime/AI terms, internal customer preview and permanently unavailable publication/history pending merged #59 contracts. Preserve public pricing, all historical billing and security. No API invention, financial operations or provider activation.
+- [ ] Run presentation/interaction/localization tests, full CI/security proofs and authenticated synthetic desktop/mobile browser verification; publish one focused unmerged PR with exact source/evidence and stop for review.
+- E1b-1 #56 paused safely at remote `codex/membership-date-management` / `fb767a874469bb82bf242d474f42fe3c8c09351b`. Work and unexecuted tests preserved; resume at verification, not from scratch. See `docs/CODEX_HQ_PRICING_OFFERS_UX.md` for sequencing and backend coordination.

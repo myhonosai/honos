@@ -29,6 +29,7 @@ export const HQ_NAV = [
   { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/schools', title: 'Schools', icon: 'school' },
   { path: '/hq/revenue', title: 'Revenue', icon: 'chart' },
+  { path: '/hq/pricing-offers', title: 'Pricing & Offers', icon: 'settings' },
   { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
   { path: '/hq/growth', title: 'Growth & Referrals', icon: 'growth' },
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },

@@ -1,4 +1,6 @@
+import { pricingEn } from './pricing-offers.js';
 export const en = {
+  ...pricingEn,
   " · Deterministic simulator, not Stripe sandbox": " · Deterministic simulator, not Stripe sandbox",
   " · Reservation recorded": " · Reservation recorded",
   " · Stripe provider": " · Stripe provider",
