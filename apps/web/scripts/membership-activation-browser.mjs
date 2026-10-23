@@ -8,8 +8,8 @@ import {
 
 export function createActivationFixture({ id, scope, origin, send, rejected }) {
   const membershipId = id(80), root = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/billing/memberships/${membershipId}`;
-  let mode, state, version, keys, commands, reads, finish;
-  function reset(next = 'routine') { mode = next; state = 'DRAFT'; version = 1; keys = new Map(); commands = []; reads = []; finish = null; }
+  let mode, state, version, keys, commands, reads, finish, held, signalHeld;
+  function reset(next = 'routine') { mode = next; state = 'DRAFT'; version = 1; keys = new Map(); commands = []; reads = []; finish = null; held = new Promise(done => { signalHeld = done; }); }
   reset();
   function preview(input) {
     const dates = Object.keys(input).length ? input : { startDate: '2026-10-22', endDate: null };
@@ -53,11 +53,11 @@ export function createActivationFixture({ id, scope, origin, send, rejected }) {
       followUps: [...(reviewed.birthDateRecorded ? [] : [{ kind: 'BIRTH_DATE_MISSING', workItemId: id(85) }]), ...(body.overrides.length ? [{ kind: 'IDENTITY_REVIEW_UNRESOLVED', workItemId: id(86) }] : [])],
       adultVerification: body.adultVerification ? { kind: 'STAFF_ATTESTATION', method: body.adultVerification.method } : null, reasonCode: body.reasonCode, requirementsNotEvaluated: [...MEMBERSHIP_REQUIREMENTS_NOT_EVALUATED], recordedAt: '2026-10-22T12:00:00.000Z' }, membershipId);
     keys.set(key, { raw, data }); state = 'ACTIVE'; version++;
-    const held = mode.startsWith('hold-'); if (held) await new Promise(done => { finish = done; });
+    if (mode.startsWith('hold-')) await new Promise(done => { finish = done; signalHeld(); });
     if (mode.includes('unknown')) { mode = 'routine'; send(res, 503, {}); } else send(res, 200, data);
     return true;
   }
-  return { reset, handle, membershipId, scope, get commands() { return commands; }, get reads() { return reads; }, release() { assert(finish); finish(); }, setMode(value) { mode = value; } };
+  return { reset, handle, membershipId, scope, get commands() { return commands; }, get reads() { return reads; }, waitUntilHeld: () => held, release() { assert(finish); finish(); }, setMode(value) { mode = value; } };
 }
 
 export async function runActivationBrowserChecks({ fixture, open, visual, check, origin }) {
@@ -90,11 +90,13 @@ export async function runActivationBrowserChecks({ fixture, open, visual, check,
     });
     for (const outcome of ['success', 'unknown']) await check(`${size}: ${outcome} settles behind shield without reload; exact retry is explicit`, async () => {
       fixture.reset('hold-' + outcome); const { context, page } = await open(viewport); try {
-        await begin(page); await activate(page); await page.waitForFunction(() => !!document.querySelector('button:disabled'));
+        await begin(page); await final(page);
+        await page.getByRole('button', { name: 'Confirm membership activation', exact: true }).evaluate(button => { button.click(); button.click(); });
+        await fixture.waitUntilHeld(); assert.equal(fixture.commands.length, 1, 'Synchronous repeated clicks must produce one request');
         await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.getByRole('heading', { name: 'Membership information hidden' }).waitFor();
         assert(!(await page.getByRole('main').innerText()).includes('Synthetic Jordan Lee')); assert(await page.getByRole('button', { name: 'Verify access and resume' }).isDisabled());
         // The actual request settles behind the shield. No full-document navigation is involved.
-        await page.waitForTimeout(100); fixture.release(); await page.getByRole('button', { name: 'Verify access and resume' }).waitFor();
+        fixture.release(); await page.getByRole('button', { name: 'Verify access and resume' }).waitFor();
         await page.getByRole('button', { name: 'Verify access and resume' }).click(); await page.getByText('Session and exact-school activation access verified.', { exact: false }).waitFor();
         assert.equal(fixture.commands.length, 1);
         if (outcome === 'unknown') { await page.getByRole('button', { name: 'Retry exact retained activation' }).click(); await page.getByText('idempotent replay', { exact: false }).waitFor(); assert.deepEqual(fixture.commands[0], fixture.commands[1]); }

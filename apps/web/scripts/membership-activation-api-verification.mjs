@@ -70,11 +70,13 @@ try {
   const rejected = status => error => error instanceof web.MembershipActivationError && error.status === status;
 
   const a = await draft(), p = await read(a.scope); assert.equal(p.state, 'DRAFT'); assert.equal(p.schoolTimezone, 'America/Los_Angeles');
+  console.log('PASS: signed-session E1a preview is verified and has zero effects.');
   const command = request(a.scope, p), safeBefore = await snapshot(separated);
   const simultaneous = await Promise.all([web.activateKnownMembership(command), web.activateKnownMembership(command)]);
   assert.deepEqual(simultaneous.map(r => r.replayed).sort(), [false, true]); assert.deepEqual(simultaneous[0].receipt, simultaneous[1].receipt); assert.deepEqual(await snapshot(separated), safeBefore);
   await unchanged(() => web.activateKnownMembership(command)); assert.equal((await web.loadMembershipActivationContext(a.scope)).state, 'ACTIVE');
   assert.equal((await sql('SELECT count(*)::int n FROM hon.membership_activation_decisions WHERE membership_id=$1', [a.scope.membershipId])).rows[0].n, 1);
+  console.log('PASS: concurrent exact confirmation/replay, one decision and live context.');
   const b = await draft(null), birth = await read(b.scope); assert(birth.warnings.some(w => w.code === 'BIRTH_DATE_MISSING')); assert.equal(birth.blocks.length, 0);
   const unknownRequest = request(b.scope, birth); loseResponse = true;
   await assert.rejects(web.activateKnownMembership(unknownRequest), e => e instanceof web.MembershipActivationError && e.uncertain);
@@ -92,4 +94,12 @@ try {
   await unchanged(() => assert.rejects(web.activateKnownMembership(revoked), rejected(403)));
   await unchanged(() => assert.rejects(web.activateKnownMembership(command), rejected(403)));
   console.log('PASS: E1a actual frontend transport -> real signed-session Nest -> restricted-runtime disposable PostgreSQL. Delegated staff preview and confirmation, zero-effect preview, concurrent same-key replay with one decision, post-commit lost response/exact replay, missing-birth reminder, minor guard, stale facts, cross-school, expired/absent session, live permission revocation including replay, and zero financial/entitlement/provider effects. Synthetic data only; not production or a browser mock.');
-} finally { globalThis.fetch = originalFetch; if (app) await app.close(); await database.onModuleDestroy(); await owner.end(); }
+} catch (error) {
+  console.error(error instanceof Error ? error.stack : error); throw error;
+} finally {
+  globalThis.fetch = originalFetch;
+  // Nest closes its registered RuntimeDatabaseService. Never end its pool twice,
+  // or cleanup can mask the actual assertion/transport failure.
+  if (app) await app.close(); else await database.onModuleDestroy();
+  await owner.end();
+}
