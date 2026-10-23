@@ -132,17 +132,20 @@ export class StripeTestModeAdapter implements PaymentProviderAdapter {
 
   async createCheckoutSession(input: HostedCheckoutRequest): Promise<HostedCheckoutSession> {
     if (!/^[0-9a-f-]{36}$/.test(input.checkoutId) || !Number.isSafeInteger(input.amountMinor) || input.amountMinor < 100
-      || !/^https:\/\//.test(input.successUrl) || !/^https:\/\//.test(input.cancelUrl)) throw new PaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
+      || !/^https:\/\//.test(input.successUrl) || !/^https:\/\//.test(input.cancelUrl)
+      // Recurring billing must match the interval: monthly is MONTH, lifetime is a one-time payment, annual is YEAR or one-time.
+      || !(input.billingInterval === 'MONTHLY' ? input.recurring === 'MONTH' : input.billingInterval === 'LIFETIME' ? input.recurring === 'NONE'
+        : input.billingInterval === 'ANNUAL' && (input.recurring === 'YEAR' || input.recurring === 'NONE'))) throw new PaymentProviderError('PRE_SEND', 'INVALID_REQUEST');
     const f = new URLSearchParams();
-    const monthly = input.billingInterval === 'MONTHLY';
-    f.set('mode', monthly ? 'subscription' : 'payment');
+    const recurring = input.recurring === 'MONTH' ? 'month' : input.recurring === 'YEAR' ? 'year' : null;
+    f.set('mode', recurring ? 'subscription' : 'payment');
     f.set('client_reference_id', input.checkoutId);
     f.set('metadata[honCheckoutId]', input.checkoutId); f.set('metadata[honOrganizationId]', input.organizationId); f.set('metadata[honMode]', 'test');
     f.set('line_items[0][quantity]', '1');
     f.set('line_items[0][price_data][currency]', 'usd');
     f.set('line_items[0][price_data][unit_amount]', String(input.amountMinor));
     f.set('line_items[0][price_data][product_data][name]', input.productName);
-    if (monthly) { f.set('line_items[0][price_data][recurring][interval]', 'month'); f.set('subscription_data[metadata][honCheckoutId]', input.checkoutId); }
+    if (recurring) { f.set('line_items[0][price_data][recurring][interval]', recurring); f.set('subscription_data[metadata][honCheckoutId]', input.checkoutId); }
     else f.set('payment_intent_data[metadata][honCheckoutId]', input.checkoutId);
     f.set('success_url', input.successUrl); f.set('cancel_url', input.cancelUrl);
     f.set('expires_at', String(Math.floor(Date.parse(input.expiresAt) / 1000)));

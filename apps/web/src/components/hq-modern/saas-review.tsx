@@ -11,7 +11,7 @@ import styles from './saas-review.module.css';
 export const subscriptionStatus: Record<SaasSubscriptionStatus, string> = {
   PENDING_ACTIVATION: 'Pending activation', IN_SERVICE: 'Service period recorded', SUSPENDED: 'Suspended', VOIDED: 'Voided',
 };
-const offers = { REGULAR_MONTHLY: 'Regular monthly', FOUNDER_MONTHLY: 'Founder monthly', FOUNDER_LIFETIME: 'Paid founder lifetime' };
+const offers = { REGULAR_MONTHLY: 'Regular monthly', FOUNDER_MONTHLY: 'Founder monthly', FOUNDER_LIFETIME: 'Paid founder lifetime', REGULAR_ANNUAL: 'HON OS annual', FOUNDER_ANNUAL: 'HON OS founder annual', LIFETIME: 'HON OS lifetime' };
 const n = (value: number) => value.toLocaleString('en-US');
 const time = (value: string | null) => value === null ? 'Not recorded' : `${new Date(value).toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
 /** Both contracts use USD; preserve every minor/micro unit, with no assumed unit economics. */

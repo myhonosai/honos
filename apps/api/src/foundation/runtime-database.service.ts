@@ -160,6 +160,7 @@ const SAAS_BILLING_CALLS = {
   publishOfferSet: { sql: 'SELECT hon.publish_saas_offer_set($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   stopOfferSales: { sql: 'SELECT hon.stop_saas_offer_sales($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readSchoolHonOsOffers: { sql: 'SELECT hon.read_saas_hon_os_offers_for_school($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createSchoolHonOsCheckout: { sql: 'SELECT hon.create_saas_hon_os_checkout_from_school($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 // Interface language persistence (0171): fixed subject-bound functions; the subject is the verified identity.

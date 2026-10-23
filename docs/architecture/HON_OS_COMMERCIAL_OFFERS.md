@@ -1,6 +1,6 @@
 # HON OS commercial offers: HQ Pricing & Offers (migration 0181)
 
-Status: **implemented in a reviewable PR, not merged, not deployed, not applied to any persistent database.** Purchasing HON OS offers is **not connected**. Nothing here charges, opens a checkout, grants AI credits, changes an entitlement, or reprices an existing subscription.
+Status: **merged (PR #61, `501f396`), not deployed, not applied to any persistent database.** Nothing in 0181 charges, opens a checkout, grants AI credits, changes an entitlement, or reprices an existing subscription. Test-mode purchasing of these offers is added by 0182, see [HON_OS_PURCHASE_BINDING.md](HON_OS_PURCHASE_BINDING.md); where the two documents differ on the school view, management view or purchase status, 0182 is current.
 
 ## Why this exists
 
@@ -82,14 +82,14 @@ Error codes: `SAAS_FORBIDDEN` (403), `SAAS_UNAVAILABLE` (404), `SAAS_VERSION_CON
 - To "edit" a published offer, create a draft with `basedOnSetId` = the published set, prefilled from it, then preview and publish. Do not present editing a published price in place; the server refuses it.
 - Show the server preview (`quotes`, `issues`) and send back exactly `preview.previewDigest` and `set.revision`. Never compute or send a price for publication.
 - `SAAS_OFFER_PREVIEW_CHANGED` means the draft changed after the owner looked at it: reload and re-preview.
-- `honOsSales.status` is `CHECKOUT_NOT_CONNECTED`; show it as such, never as zero sales. `legacySales` are real legacy Core/Complete aggregates.
+- `honOsSales` (0182) lists test-mode HON OS sales per offer and the founder pool; see the purchase-binding document. `legacySales` are real legacy Core/Complete aggregates.
 - `premiumCreditsStatus: PLANNING_ONLY_NOT_A_CREDIT_GRANT` must be shown as planning text, not as an allowance.
-- The school view's `purchase: NOT_CONNECTED` means no buy button may start a HON OS checkout yet. `REQUIRES_HQ_FOUNDER_RESERVATION` and `NOT_ELIGIBLE_EXISTING_SUBSCRIPTION` are server decisions; display them, do not re-derive them.
+- The school view's `purchase` and `eligibility` values changed in 0182 (`TEST_MODE`/`UNAVAILABLE`, founder offers self-serve); see the purchase-binding document. Eligibility values are server decisions; display them, do not re-derive them.
 - Operators with `hq.billing.manage` can read but every command is owner-only; hide or disable command controls for them and still handle 403.
 
 ## What is deliberately not in this change
 
-1. **Purchase binding.** HON OS offer IDs are not B1 catalog offers, so the existing checkout and subscription record paths refuse them with `SAAS_OFFER_NOT_AVAILABLE` (proven). Connecting them needs annual and one-time checkout, a subscription offer snapshot column, founder and sale-limit counting at purchase, and limiting the B6A awaiting path to HON OS offers. That is a separate reviewed PR touching payments and B6.
+1. **Purchase binding.** Added separately by 0182 ([HON_OS_PURCHASE_BINDING.md](HON_OS_PURCHASE_BINDING.md)). The legacy checkout and subscription record paths still refuse HON OS offer IDs with `SAAS_OFFER_NOT_AVAILABLE`; the B6A awaiting path is still unchanged.
 2. **Legacy catalog changes.** 0154 publication rules, `SAAS_OWNER_APPROVED_DRAFT`, legacy allowances and founder inventory are unchanged. Legacy Core/Complete schools keep their records and prices.
 3. **Public (unauthenticated) pricing read** for the marketing site.
 4. **HON OS sales performance**, which needs purchase binding first.

@@ -197,7 +197,7 @@ import { ChampionsCommandGuard, ChampionsReadGuard } from './champions/champions
 import { SaasBillingHqController, SaasCreditsSchoolController } from './saas-billing/saas-billing.controller.js';
 import { SaasBillingService } from './saas-billing/saas-billing.service.js';
 import { SaasOffersHqController, SaasOffersSchoolController } from './saas-billing/saas-offers.controller.js';
-import { PaymentWebhookController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
+import { PaymentWebhookController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
 import { SaasPaymentsService } from './payments/saas-payments.service.js';
 import { SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
 import { SaasSchoolBillingService } from './school-billing/saas-school-billing.service.js';
@@ -341,7 +341,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
