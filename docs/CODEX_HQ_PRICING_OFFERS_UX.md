@@ -1,0 +1,56 @@
+# HON HQ Pricing & Offers — design foundation and backend handoff
+
+**Status: PARTIAL / REQUIRES OWNER REVIEW.** This PR implements a working internal design workbench, not operational pricing administration or the public purchase flow. Latest owner direction temporarily prioritizes this isolated presentation work over #56. Draft strategy #57 and issues #58/#59/#60 were reviewed; strategy changes are not silently merged into runtime policy.
+
+## Owner walkthrough
+
+1. Open **HON HQ → Pricing & Offers** (`/hq/pricing-offers`) using an existing authorized HQ account. The existing verified-session layout and independently authorized HQ overview gate remain mandatory. This workbench is not exposed on public `/pricing`.
+2. Overview shows **six payment-option layouts for one HON OS product**: monthly, annual, founder monthly, founder annual, lifetime and optional founder lifetime. They are not configured offers, backend IDs or functional tiers. All prices and quantities start blank; neither $249/$149 nor 12,000 credits becomes a default or commercial promise.
+3. Select **Design this option**. The verified HQ owner may edit local display name, exact currency amount, sale dates, eligibility/guarantee notes, founder cap, annual discount note and renewal details, lifetime service/entitlement/fair-use terms, proposed AI credits/limits and offer/refund notes. The payment-option selector distinguishes recurrence from one-time rights. HQ operators see disabled form controls. This is conservative presentation, not a new authorization contract.
+4. **Keep local design draft** validates presentation fields and retains only a copy in React memory. It explicitly does not save to HON. Reload, navigation out or a remount destroys it. No browser storage, URL state, telemetry, file export or backend write exists.
+5. **Customer pricing preview** shows HON OS with regular monthly, annual and one-time lifetime layout choices, labeled INTERNAL DRAFT PREVIEW. Founder prices are always withheld in this milestone because verified publication and eligibility do not exist. Checkout is disabled. Future capabilities are not advertised as operational.
+6. **Review publication requirements** shows price/terms, preserved historical rights, required owner policy and economics review, separate financial activation gates and an explicit acknowledgement. **Publish remains disabled even after all fields and acknowledgement are complete.** There is no successful publication state.
+7. **Versions & audit** says unavailable. No fake actor, timestamp, saved version, published history or audit event is created. Existing HON revenue/invoice/history views remain unchanged and linked separately.
+
+## UX structure
+
+The existing HQ shell supplies the approved navy/cyan glass styling, persistent HON assistant, responsive navigation and separate View / AI Style groups. New components use the same typography, panel boundaries and density conventions; Big Button increases target size and Classic reduces density. Focus rings, labeled native controls, ordered sections, keyboard-native navigation and publication-heading focus are included. English, Korean and Spanish copy is centralized in the shared design-system localization catalogs; user-entered terms are never automatically translated.
+
+Internal view state is intentionally not exported as a network contract. `pricing-offers-model.ts` is a browser-only layout/draft model. It performs local validation/formatting, not eligibility, official billing calculations, inventory, entitlement policy or price authority. Annual price is entered separately; no official discount is computed from a truncated catalog or inferred monthly price. Currency precision is checked before formatting, including zero- and three-decimal currencies.
+
+## Claude coordination — #59 must merge before operational integration
+
+No new endpoint names, permission strings, database fields, SKU IDs or provider mappings are assumed. The final merged contracts must answer these needs:
+
+| UI area | Required server-owned contract/evidence | Current state |
+| --- | --- | --- |
+| Catalog | One HON OS product/capability policy, stable offer IDs, bounded/paginated exact authorized read, current draft/published revisions, status and effective windows | Unavailable |
+| Owner edit | Independently authorized HQ edit capability, closed typed input and response, precise amount/currency scale, allowed recurrence, expected version, idempotency/replay and stale/denied errors | Unavailable |
+| Founder | Actual eligibility, inventory scope, cap, reserved/allocated/available quantities, guarantee/expiry policy and independent publication gate | Unavailable; local proposed cap reserves nothing |
+| Annual | Authoritative annual amount, recurrence/renewal/cancellation rules, approved discount policy and immutable accepted terms | Unavailable |
+| Lifetime | Explicit one-time entitlement duration, service/fair-use/refund terms, AI cost constraints and separately approved publication | Unavailable |
+| AI usage | Approved funded allowance and limits, cost/economics approval evidence, linked existing ledger; no UI credit issuance | Planning fields only |
+| Review/publish | Server-derived review/digest/warnings, live owner permission, current version, explicit confirmation, safe retries and immutable publication receipt | Unavailable; button disabled |
+| History/audit | Independently authorized historical versions, author/time/reason, immutable accepted snapshots and legacy/customer continuation guarantees | Unavailable |
+| Customer pricing | Only published eligible offers and verified released capabilities; founder eligibility independently derived, same product policy for every payment choice | Internal draft layout only |
+| Checkout | Existing authorized TEST_MODE provider path and B6 INACTIVE safeguards, verified provider evidence and payment/access separation | Existing flow unchanged; no integration here |
+
+Codex must inspect the independently reviewed **merged** #59 contracts before writing any transport or merge candidate for operational management/public checkout. Client role labels, draft amount, founder cap and local review acknowledgement confer no financial authority. New publication must not reprice subscriptions, mutate existing accepted rights or create provider objects. Claude owns backend/security and compatibility; Codex owns this UI and later integration. No Manus dependency.
+
+## Pending owner decisions
+
+Final monthly/annual/lifetime prices, founder capacity and duration, price guarantees, annual discount/renewal rights, lifetime scope, refunds/taxes, measured AI/voice/support economics and funded allowances remain policy gates. No configuration here resolves them. Historical Essential/Core/Complete subscriptions, prices, entitlements, invoices, refunds and lifetime rights remain readable under their original contracts; this foundation changes none of them.
+
+## Verification and scope
+
+Unit/interaction tests cover idle/no-network behavior, local validation, owner/operator presentation, all six payment layouts, founder withholding, immutable publication disablement, lack of fake history, currency precision, shared localization and no storage/financial calls. The scoped workflow builds the actual app and records signed-session synthetic desktop/mobile captures for all three languages, appearance groups, publication blockers, keyboard access, HQ/operator/school/no-session boundaries and axe scans. These are **presentation tests**, not proof of #59 APIs, real providers, invoices, billing or entitlement activation.
+
+Screenshots and sanitized report are private GitHub Actions artifacts with three-day retention. No individual screenshot/blob upload. Exact CI results and source SHA are reported on the PR; local shell networking and dependency metadata remain unavailable, so local builds/browser checks are not claimed. Full repository CI and existing disposable PostgreSQL proofs remain required. No persistent DB or production access.
+
+## Paused E1b-1 checkpoint — preserve and resume separately
+
+- Issue **#56**, remote branch `codex/membership-date-management`, exact remote source commit **`fb767a874469bb82bf242d474f42fe3c8c09351b`**. This is based on main `fb3c793c7b98390da70f52b68a8d764e6bcebf9b`; its full source tree is `773450ec810cbd414094d143b56745da287e2b5a`.
+- Fifteen frontend/test/workflow/document files preserve the in-progress date preview/confirmation, history, individual legacy queue, reporting summary and privacy/exact-retry implementation. Local worktree `/workspace/honos-membership-date-management` is preserved. No E1b code is copied into this pricing PR.
+- Test sources and browser/API-to-disposable-database harnesses are committed, **not yet executed or verified**. Shell Git access failed at the proxy; offline install lacked package metadata. No passing tests or screenshot evidence is claimed for this checkpoint. Resume by reviewing the real backend's conditional date suggestions, then run/fix targeted tests and full CI on that branch.
+- E1a/E1b release gates, known-minor recovery, persistent migration/history checks, D10 parent privacy, manual fixture issues, Node security review, E1b-2/E1c restrictions and no-financial-effects boundary remain outstanding.
+- After owner review of this UX PR, return to #56 at its verification checkpoint under the next owner-approved sequencing. Public pricing/checkout replacement remains dependent on independently reviewed merged #59 contracts. Do not automatically merge this PR, resume unrelated work or deploy.
