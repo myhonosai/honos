@@ -1,6 +1,8 @@
 # HON HQ Pricing & Offers — design foundation and backend handoff
 
-**Status: PARTIAL / REQUIRES OWNER REVIEW.** This PR implements a working internal design workbench, not operational pricing administration or the public purchase flow. Latest owner direction temporarily prioritizes this isolated presentation work over #56. Draft strategy #57 and issues #58/#59/#60 were reviewed; strategy changes are not silently merged into runtime policy.
+**Historical PR #62 foundation reference.** The owner approved and merged that UX foundation. See [the operational frontend follow-up](CODEX_HQ_PRICING_OFFERS_INTEGRATION.md) for current implementation scope and verification boundaries; descriptions of unavailable controls below describe the original design-only milestone.
+
+**Original milestone status: PARTIAL / REQUIRES OWNER REVIEW.** This PR implements a working internal design workbench, not operational pricing administration or the public purchase flow. Latest owner direction temporarily prioritizes this isolated presentation work over #56. Draft strategy #57 and issues #58/#59/#60 were reviewed; strategy changes are not silently merged into runtime policy.
 
 ## Owner walkthrough
 

@@ -1,70 +1,89 @@
-import React from 'react';
-import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { renderToStaticMarkup } from 'react-dom/server';
-const harness = vi.hoisted(() => ({ slots: [] as any[], cursor: 0, role: 'OWNER' }));
-vi.mock('react', async importOriginal => {
-  const actual = await importOriginal<typeof import('react')>();
-  const hooks = { useState(initial: any) { const i = harness.cursor++; if (!harness.slots[i]) harness.slots[i] = { value: typeof initial === 'function' ? initial() : initial }; return [harness.slots[i].value, (value: any) => { harness.slots[i].value = typeof value === 'function' ? value(harness.slots[i].value) : value; }]; }, useRef(initial: any) { const i = harness.cursor++; return harness.slots[i] ?? (harness.slots[i] = { current: initial }); }, useEffect() {} };
-  return { ...actual, ...hooks, default: { ...actual, ...hooks } };
-});
-vi.mock('../src/components/hq-modern/shell', () => ({ useHqModern: () => ({ overview: { callerHqRole: harness.role } }) }));
-vi.mock('../src/components/localization/provider', async () => { const { translate } = await import('@hon/design-system'); return { useLocale: () => ({ t: (key: any, params: any) => translate('en', key, params), formattingLocale: 'en-US', number: (n: number) => String(n) }) }; });
-import { HqPricingOffers } from '../src/components/hq-modern/pricing-offers';
-const render = () => { harness.cursor = 0; return HqPricingOffers(); };
-const nodes = (tree: any, type: string): any[] => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(value => nodes(value, type)) : [...(tree.type === type ? [tree] : []), ...nodes(tree.props?.children, type)];
-const text = (tree: any): string => typeof tree === 'string' ? tree : Array.isArray(tree) ? tree.map(text).join('') : tree && typeof tree === 'object' ? text(tree.props?.children) : '';
-const html = () => renderToStaticMarkup(render());
-const button = (name: string) => nodes(render(), 'button').find(node => text(node).startsWith(name));
-const field = (id: string) => [...nodes(render(), 'input'), ...nodes(render(), 'select'), ...nodes(render(), 'textarea')].find(node => node.props.id === 'offer-' + id);
-const fill = (id: string, value: string) => field(id).props.onChange({ target: { value } });
-beforeEach(() => { harness.slots = []; harness.cursor = 0; harness.role = 'OWNER'; vi.stubGlobal('requestAnimationFrame', (f: () => void) => f()); });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-describe('HQ owner presentation interaction, no backend assumptions', () => {
-  it('validates and retains an in-memory design, previews one product and never performs network activity', () => {
-    const fetch = vi.spyOn(globalThis, 'fetch'); button('Offer editor').props.onClick(); nodes(render(), 'form')[0].props.onSubmit({ preventDefault: vi.fn() }); expect(html()).toContain('Complete the highlighted draft requirements');
-    fill('amount', '249.01'); fill('terms', 'Draft terms for owner review.'); fill('renewal', 'Draft monthly renewal conditions.'); fill('credits', '12000'); fill('usageLimits', 'Draft limits pending verified costs.');
-    nodes(render(), 'form')[0].props.onSubmit({ preventDefault: vi.fn() }); expect(html()).toContain('It was not saved to HON');
-    button('Customer pricing preview').props.onClick(); expect(html()).toContain('249.01'); expect(html()).toContain('One HON OS product'); expect(html()).not.toContain('Founder monthly'); expect(button('Checkout unavailable').props.disabled).toBe(true); expect(fetch).not.toHaveBeenCalled();
+import {describe,it,expect,vi} from 'vitest';
+import {PricingController} from '../src/components/hq-modern/pricing-offers-controller';
+import {PricingError,type PricingApi,type PricingRequest,type PricingReceipt} from '../src/components/hq-modern/pricing-offers-http';
+import {createOfferFixtures} from '../scripts/fixtures/hq-offers.mjs';
+function setup(owner=true){
+  const fixture=createOfferFixtures();let allowed=owner,subject='owner';
+  const access=vi.fn(async(expected?:string)=>{if(expected&&subject!==expected)throw new PricingError('IDENTITY_CHANGED',401);return{subject,owner:allowed,management:fixture.management()};});
+  const send=vi.fn(async(request:PricingRequest,_retry=false)=>({kind:request.kind,data:fixture.command(request.kind,request.target,JSON.parse(request.body),request.key,request.subject)}) as PricingReceipt);
+  const api:PricingApi={access,detail:async id=>fixture.detail(id),send},c=new PricingController(api);
+  return{c,fixture,api,send,access,setOwner:(v:boolean)=>{allowed=v;},setSubject:(v:string)=>{subject=v;}};
+}
+const deferred=<T,>()=>{let resolve!:(v:T)=>void,reject!:(e:unknown)=>void;const promise=new Promise<T>((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};};
+async function edit(s:ReturnType<typeof setup>){await s.c.load();await s.c.open(s.fixture.draftId);s.c.editOffer('amount','321.45');}
+describe('operational pricing controller, explicit commands and independent read/command lifetimes',()=>{
+  it('loads real-shaped records without commands and saves all six offers with exact revision after explicit action',async()=>{
+    const s=setup();await edit(s);expect(s.send).not.toHaveBeenCalled();await s.c.save();expect(s.send).toHaveBeenCalledTimes(1);
+    const request=s.send.mock.calls[0]![0],body=JSON.parse(request.body);expect(body.offers).toHaveLength(6);expect(body.expectedRevision).toBe(1);expect(body.offers[0].priceMinor).toBe(32145);
+    expect(s.c.snapshot().receipt?.kind).toBe('revise');expect(s.c.snapshot().detail?.set.revision).toBe(2);expect(s.c.dirty()).toBe(false);
   });
-  it('shows founder and lifetime configuration separately, hides founder prices in customer preview and publishes nothing', () => {
-    const fetch = vi.spyOn(globalThis, 'fetch'); button('Offer editor').props.onClick(); fill('layout', 'founder-lifetime'); fill('amount', '3576'); fill('founderLimit', '20'); fill('eligibility', 'Draft eligibility'); fill('serviceTerms', 'Draft service terms'); fill('fairUse', 'Draft fair-use terms');
-    expect(html()).toContain('Lifetime configuration'); expect(field('renewal')).toBeUndefined();
-    button('Review publication requirements').props.onClick(); expect(html()).toContain('Publication review · unavailable'); expect(button('Publish unavailable').props.disabled).toBe(true);
-    const checkbox = nodes(render(), 'input').find(n => n.props.type === 'checkbox'); checkbox.props.onChange({ target: { checked: true } }); expect(button('Publish unavailable').props.disabled).toBe(true);
-    button('Customer pricing preview').props.onClick(); expect(html()).not.toContain('3,576'); expect(html()).not.toContain('Founder lifetime'); expect(html()).toContain('Founder prices are hidden'); expect(fetch).not.toHaveBeenCalled();
+  it('preserves all edited fields while switching options and never writes a per-option save',async()=>{
+    const s=setup();await edit(s);const first=s.c.snapshot().selected!,other=s.c.snapshot().form!.offers[1]!.key;
+    s.c.editOffer('aiFairUseReference','Unfinished terms');s.c.selectOffer(other);s.c.editOffer('annualRenewal','AUTO_RENEW_AT_CURRENT_PRICE');s.c.selectOffer(first);
+    expect(s.c.snapshot().form!.offers[0]!.amount).toBe('321.45');expect(s.c.snapshot().form!.offers[0]!.aiFairUseReference).toBe('Unfinished terms');expect(s.send).not.toHaveBeenCalled();
   });
-  it('clears publication acknowledgement after edits and does not present local history as a server audit', () => {
-    button('Offer editor').props.onClick(); button('Review publication requirements').props.onClick(); fill('amount', '99'); expect(html()).not.toContain('offer-publication-title'); button('Versions & audit').props.onClick(); expect(html()).toContain('audit records are unavailable'); expect(html()).not.toMatch(/Published version [0-9]|Price updated successfully/);
+  it('guards replacing a dirty set; Continue, local save/restore and deliberate discard preserve the right copy',async()=>{
+    const s=setup();await edit(s);await s.c.open(null);expect(s.c.snapshot().intent).toBeTruthy();await s.c.decide('continue');expect(s.c.snapshot().form!.offers[0]!.amount).toBe('321.45');
+    await s.c.open(null);await s.c.decide('save');expect(s.c.snapshot().localCopies).toContain(s.fixture.draftId);expect(s.c.snapshot().form!.offers).toHaveLength(0);
+    await s.c.restoreLocal(s.fixture.draftId);expect(s.c.snapshot().form!.offers[0]!.amount).toBe('321.45');await s.c.open(s.fixture.originalId);await s.c.decide('discard');
+    expect(s.c.snapshot().detail!.set.status).toBe('PUBLISHED');expect(s.c.snapshot().localCopies).toContain(s.fixture.draftId);expect(s.send).not.toHaveBeenCalled();
   });
-  it('denies editor controls to a verified HQ operator without inventing pricing permission', () => {
-    harness.role = 'OPERATOR'; button('Offer editor').props.onClick(); expect(html()).toContain('Only the verified HQ owner'); expect(nodes(render(), 'fieldset').every(f => f.props.disabled)).toBe(true); expect(button('Keep local design draft').props.disabled).toBe(true);
-    fill('amount', '999'); expect(field('amount').props.value).toBe(''); nodes(render(), 'form')[0].props.onSubmit({ preventDefault: vi.fn() }); expect(html()).not.toContain('Local design draft retained');
+  it('retains incomplete new-set local copies and allows explicit restoration without backend writes',async()=>{
+    const s=setup();await s.c.load();await s.c.open(null);s.c.addOffer('FOUNDER_LIFETIME');s.c.editOffer('amount','31.');await s.c.open(s.fixture.draftId);await s.c.decide('save');
+    const key=s.c.snapshot().localCopies[0]!;await s.c.restoreLocal(key);expect(s.c.snapshot().form!.offers[0]!.amount).toBe('31.');expect(s.c.snapshot().form!.setId).toBeNull();expect(s.send).not.toHaveBeenCalled();
   });
-  it('requires an explicit choice and preserves incomplete founder, annual, price and usage edits on Continue Editing and Escape', () => {
-    button('Offer editor').props.onClick(); fill('layout', 'founder-annual');
-    const values = { name: 'Custom name', amount: 'not finished', currency: 'KRW', saleStart: '2026-11-01', saleEnd: '2027-01-01', terms: 'Terms in progress', eligibility: 'Owner review', founderLimit: '13', annualDiscount: '7.25', renewal: 'Unfinished renewal', credits: '12345', usageLimits: 'Limit notes' };
-    for (const [key, value] of Object.entries(values)) fill(key, value);
-    fill('layout', 'monthly'); expect(nodes(render(), 'dialog')).toHaveLength(1); expect(field('layout').props.value).toBe('founder-annual');
-    button('Continue Editing').props.onClick(); expect(nodes(render(), 'dialog')).toHaveLength(0);
-    for (const [key, value] of Object.entries(values)) expect(field(key).props.value).toBe(value);
-    fill('layout', 'lifetime'); const preventDefault = vi.fn(); nodes(render(), 'dialog')[0].props.onCancel({ preventDefault }); expect(preventDefault).toHaveBeenCalled();
-    for (const [key, value] of Object.entries(values)) expect(field(key).props.value).toBe(value);
-    // Selecting the same option must not reload its older retained copy.
-    fill('layout', 'founder-annual'); expect(nodes(render(), 'dialog')).toHaveLength(0); expect(field('amount').props.value).toBe('not finished');
+  it('publishes only a saved reviewed complete set with explicit acknowledgement and the server digest',async()=>{
+    const s=setup();await edit(s);await s.c.review();expect(s.c.snapshot().review).toBeNull();await s.c.save();await s.c.review();const digest=s.c.snapshot().review!.preview.previewDigest;
+    await s.c.publish();expect(s.send).toHaveBeenCalledTimes(1);s.c.acknowledge(true);await s.c.publish();expect(s.send).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(s.send.mock.calls[1]![0].body)).toEqual({expectedRevision:2,previewDigest:digest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'});
+    expect(s.fixture.detail(s.fixture.originalId).set.status).toBe('RETIRED');expect(s.c.snapshot().detail!.set.status).toBe('PUBLISHED');expect(s.fixture.management().chargesEnabled).toBe(false);
   });
-  it('Save Local Draft retains every partial lifetime field across switches without validation or network/storage writes', () => {
-    const fetch = vi.spyOn(globalThis, 'fetch'); button('Offer editor').props.onClick(); fill('layout', 'founder-lifetime');
-    fill('amount', '0.'); fill('founderLimit', '10'); fill('eligibility', 'Eligibility notes'); fill('serviceTerms', 'Service notes'); fill('fairUse', 'Fair use notes'); fill('credits', '5'); fill('usageLimits', 'Usage notes');
-    fill('layout', 'monthly'); button('Save Local Draft').props.onClick(); expect(field('layout').props.value).toBe('monthly'); expect(html()).toContain('including incomplete fields'); expect(html()).toContain('Nothing was saved to HON');
-    fill('layout', 'founder-lifetime'); expect(nodes(render(), 'dialog')).toHaveLength(0);
-    for (const [key, value] of Object.entries({ amount: '0.', founderLimit: '10', eligibility: 'Eligibility notes', serviceTerms: 'Service notes', fairUse: 'Fair use notes', credits: '5', usageLimits: 'Usage notes' })) expect(field(key).props.value).toBe(value);
-    expect(fetch).not.toHaveBeenCalled();
+  it('blocks unauthorized writes and never edits a published historical price',async()=>{
+    const s=setup(false);await s.c.load();await s.c.open(s.fixture.draftId);s.c.editOffer('amount','999');await s.c.save();expect(s.send).not.toHaveBeenCalled();
+    s.setOwner(true);await s.c.open(s.fixture.originalId);s.c.editOffer('amount','999');await s.c.save();expect(s.send).not.toHaveBeenCalled();expect(s.fixture.detail(s.fixture.originalId).set.offers[0]!.priceMinor).toBe(31700);
   });
-  it('Discard Changes restores the last local copy, and overview cards cannot silently discard unsaved edits', () => {
-    button('Offer editor').props.onClick(); fill('amount', '101'); fill('layout', 'annual'); button('Save Local Draft').props.onClick();
-    fill('layout', 'monthly'); fill('amount', '202'); button('Offer overview').props.onClick();
-    button('Design this option · Regular annual').props.onClick({ currentTarget: undefined }); expect(nodes(render(), 'dialog')).toHaveLength(1);
-    button('Discard Changes').props.onClick(); expect(field('layout').props.value).toBe('annual'); fill('layout', 'monthly'); expect(field('amount').props.value).toBe('101');
-    fill('layout', 'annual'); fill('terms', 'Unsaved only'); fill('layout', 'lifetime'); button('Discard Changes').props.onClick(); fill('layout', 'annual'); expect(field('terms').props.value).toBe('');
+  it('allows an owner emergency stop only for the retired offer with a server-reported live checkout',async()=>{
+    const s=setup(),old=s.fixture.detail(s.fixture.originalId).set,live=old.offers[0]!,expired=old.offers[1]!;
+    s.fixture.seedCheckout(live.offerId);s.fixture.seedCheckout(expired.offerId,{expiresAt:'2026-10-22T12:00:00.000Z'});
+    const d=s.fixture.detail(s.fixture.draftId);s.fixture.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},crypto.randomUUID());
+    await s.c.load();await s.c.open(old.setId);expect(s.c.canStop(live.offerId)).toBe(true);expect(s.c.canStop(expired.offerId)).toBe(false);expect(s.c.canStop(old.offers[2]!.offerId)).toBe(false);
+    await s.c.stop(expired.offerId,'TERMS_REVIEW');expect(s.send).not.toHaveBeenCalled();await s.c.stop(live.offerId,'TERMS_REVIEW');expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.c.snapshot().receipt?.kind).toBe('stop');expect(s.c.snapshot().detail!.set.status).toBe('RETIRED');expect(s.c.canStop(live.offerId)).toBe(false);expect(s.fixture.detail(old.setId).set.offers[0]!.priceMinor).toBe(live.priceMinor);
+  });
+  it('denies an operator retired-offer actions and retains published-offer stop support without a checkout',async()=>{
+    const denied=setup(false),old=denied.fixture.detail(denied.fixture.originalId).set;denied.fixture.seedCheckout(old.offers[0]!.offerId);
+    const d=denied.fixture.detail(denied.fixture.draftId);denied.fixture.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},crypto.randomUUID());
+    await denied.c.load();await denied.c.open(old.setId);await denied.c.stop(old.offers[0]!.offerId,'OWNER_DISABLED');expect(denied.c.canStop(old.offers[0]!.offerId)).toBe(false);expect(denied.send).not.toHaveBeenCalled();
+    const owner=setup();await owner.c.load();await owner.c.open(owner.fixture.originalId);await owner.c.stop(owner.c.snapshot().detail!.set.offers[0]!.offerId,'OWNER_DISABLED');expect(owner.send).toHaveBeenCalledTimes(1);
+  });
+  it('preserves an uncertain retired stop across concealment and permits only its exact explicit replay after checkout expiry',async()=>{
+    const s=setup(),old=s.fixture.detail(s.fixture.originalId).set,offer=old.offers[0]!;s.fixture.seedCheckout(offer.offerId);const d=s.fixture.detail(s.fixture.draftId);
+    s.fixture.command('publish',d.set.setId,{expectedRevision:1,previewDigest:d.preview.previewDigest,approval:'APPROVE_FOR_NEW_PURCHASES_ONLY'},crypto.randomUUID());
+    await s.c.load();await s.c.open(old.setId);const original=s.api.send,wait=deferred<PricingReceipt>();s.api.send=vi.fn(async req=>{await original(req);return wait.promise;});
+    const command=s.c.stop(offer.offerId,'TERMS_REVIEW');const request=s.c.snapshot().pending!;await s.c.stop(offer.offerId,'TERMS_REVIEW');expect(s.api.send).toHaveBeenCalledTimes(1);
+    s.c.conceal();wait.reject(new PricingError('UNKNOWN',0,true));await command;expect(s.c.snapshot().pending).toBe(request);expect(s.c.snapshot().busy).toBe(false);
+    s.fixture.advanceTime(24*3600_000);await s.c.load(true);expect(s.c.canStop(offer.offerId)).toBe(false);s.api.send=vi.fn(original);expect(s.api.send).not.toHaveBeenCalled();await s.c.retry();
+    expect(s.api.send).toHaveBeenCalledWith(request,true);expect(s.c.snapshot().receipt!.data.replayed).toBe(true);expect(s.fixture.mutations).toBe(2);
+  });
+  it('settles an in-flight command behind the shield without a read epoch unlocking or stranding it',async()=>{
+    const s=setup();await edit(s);const original=s.api.send,wait=deferred<PricingReceipt>();s.api.send=vi.fn(()=>wait.promise);const run=s.c.save();const request=s.c.snapshot().pending!;
+    s.c.conceal();expect(s.c.snapshot().busy).toBe(true);await s.c.abandon();expect(s.c.snapshot().pending).toBe(request);await s.c.load(true);expect(s.c.snapshot().concealed).toBe(true);
+    wait.resolve(await original(request));await run;expect(s.c.snapshot().busy).toBe(false);expect(s.c.snapshot().concealed).toBe(true);await s.c.load(true);expect(s.c.snapshot().concealed).toBe(false);expect(s.c.snapshot().pending).toBeNull();
+  });
+  it('retains the exact unknown request across restoration and blocks duplicates and edits until explicit retry',async()=>{
+    const s=setup();await edit(s);const original=s.api.send,wait=deferred<PricingReceipt>();s.api.send=vi.fn(()=>wait.promise);const run=s.c.save();await s.c.save();expect(s.api.send).toHaveBeenCalledTimes(1);const request=s.c.snapshot().pending!;
+    s.c.conceal();wait.reject(new PricingError('UNKNOWN',0,true));await run;expect(s.c.snapshot().busy).toBe(false);expect(s.c.snapshot().pending).toBe(request);expect(s.c.snapshot().receipt).toBeNull();
+    await s.c.load(true);s.c.editOffer('amount','999');expect(s.c.snapshot().form!.offers[0]!.amount).toBe('321.45');s.api.send=vi.fn(original);expect(s.api.send).not.toHaveBeenCalled();
+    await s.c.retry();expect(s.api.send).toHaveBeenCalledWith(request,true);expect(s.c.snapshot().pending).toBeNull();
+  });
+  it('fails closed for expired sessions, switched identities, revoked owner access and repeated concealment during restoration',async()=>{
+    const s=setup();await edit(s);s.c.conceal();s.setSubject('another-owner');await s.c.load(true);expect(s.c.snapshot().concealed).toBe(true);expect(s.c.snapshot().error!.code).toBe('IDENTITY_CHANGED');
+    s.setSubject('owner');s.setOwner(false);await s.c.load(true);expect(s.c.snapshot().owner).toBe(false);await s.c.save();expect(s.send).not.toHaveBeenCalled();
+    s.c.conceal();const wait=deferred<Awaited<ReturnType<PricingApi['access']>>>();s.api.access=vi.fn(()=>wait.promise);const restoration=s.c.load(true);s.c.conceal();wait.resolve({subject:'owner',owner:true,management:s.fixture.management()});await restoration;expect(s.c.snapshot().concealed).toBe(true);
+  });
+  it('invalidates publication review after edits, rejects stale results and distinguishes a verified receipt from failed refresh',async()=>{
+    const s=setup();await s.c.load();await s.c.open(s.fixture.draftId);await s.c.review();s.c.acknowledge(true);s.c.editOffer('amount','323');expect(s.c.snapshot().review).toBeNull();
+    s.api.send=vi.fn(async()=>{throw new PricingError('SAAS_VERSION_CONFLICT',409);});await s.c.save();expect(s.c.snapshot().pending).toBeTruthy();expect(s.c.snapshot().receipt).toBeNull();expect(s.c.snapshot().stale).toBe(true);
+    const t=setup();await edit(t);t.api.access=vi.fn(async()=>{throw new PricingError('UNAVAILABLE');});await t.c.save();expect(t.c.snapshot().receipt?.kind).toBe('revise');expect(t.c.snapshot().stale).toBe(true);expect(t.c.snapshot().pending).toBeNull();
   });
 });
