@@ -9,7 +9,7 @@ import { scope, id, current, preview, input, receipt, envelope, rejected } from 
 afterEach(() => vi.restoreAllMocks());
 describe('E1a closed frontend transport', () => {
   it('uses the exact preview marker, no-store human POST and no idempotency key', async () => {
-    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(envelope(preview()));
+    const f = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => envelope(preview()));
     expect(await previewMembershipActivation(scope, {})).toEqual(preview());
     const [path, options] = f.mock.calls[0]!;
     expect(path).toBe(membershipActivationPath(scope) + '/activation-preview');
