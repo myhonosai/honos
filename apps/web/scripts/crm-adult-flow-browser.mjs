@@ -1,5 +1,6 @@
 /** Actual production Next application, real session gate, synthetic localhost API contracts. No database/provider access. */
 import assert from 'node:assert/strict';
+import { createActivationFixture, runActivationBrowserChecks } from './membership-activation-browser.mjs';
 import { createCloseFixture, runCloseBrowserChecks } from './crm-close-browser.mjs';
 import { createFamilyFixture, runFamilyBrowserChecks } from './crm-family-browser.mjs';
 import { createServer } from 'node:http';
@@ -33,6 +34,7 @@ const program = { programId: id(38), name: 'Adult martial arts' };
 const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
 let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
 const closeFixture = createCloseFixture({id,scope,date,origin,send,rejected});
+const activationFixture = createActivationFixture({id,scope,origin,send,rejected});
 const familyFixture = createFamilyFixture({ id, scope, date, origin, send, rejected, plans: () => publishedPlans });
 function plainPlan(p) { const { programName, ...terms } = p; return terms; }
 function rejected(res, status, code) { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({code})); }
@@ -52,6 +54,7 @@ const api = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({data:{state:'RESOLVED',...scope}})); return;
     }
     if (actor !== 'crm-staff-synthetic' || !url.pathname.startsWith(prefix + '/')) { send(res, 403, { secret: 'private-canary' }); return; }
+    if (await activationFixture.handle(req,res,url)) return;
     if (await closeFixture.handle(req,res,url)) return;
     if (req.method === 'GET' && url.pathname === `${prefix}/crm/leads`) { send(res, 200, [lead]); return; }
     if (await familyFixture.handle(req, res, url)) return;
@@ -186,6 +189,7 @@ async function visual(page, name) {
 try {
   let started = false; for (let i = 0; i < 100; i++) { try { await fetch(origin); started = true; break; } catch {} await new Promise(done => setTimeout(done, 250)); } assert(started, log.slice(-1200));
   browser = await chromium.launch({ executablePath: process.env.HON_CRM_CHROME, headless: true });
+  await runActivationBrowserChecks({fixture:activationFixture,open,visual,check,origin});
   await runCloseBrowserChecks({fixture:closeFixture,reset,open,visual,check,captureFailure:async page=>{await page.screenshot({path:join(results,'close-first-failure.png'),fullPage:true});report.screenshots.push('close-first-failure.png');},replaceActor:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     await check(`${name}: connected registration/account/DRAFT/current confirmation; keyboard and accessibility`, async () => {
