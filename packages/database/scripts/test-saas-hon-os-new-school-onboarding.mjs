@@ -235,8 +235,8 @@ try{
  for(const who of ['ownerNA','owner','operator','support','taken'])await deny(payments.startSchoolHonOsCheckout(H(who),S.NM.schoolId,{offerId:V.OS_MONTHLY},K()),403,'SAAS_FORBIDDEN');
  for(const body of [{offerId:V.OS_MONTHLY,priceMinor:100},{offerId:V.OS_MONTHLY,organizationId:org('NA')},{}])
   await deny(payments.startSchoolHonOsCheckout(H('ownerNM'),S.NM.schoolId,body,K()),400,'INVALID_SAAS_INPUT');
- // D8 is not part of this change: a school awaiting its first payment can still see the legacy Core/Complete catalog.
- assert.deepEqual([...new Set((await payments.readPlanOptions(H('ownerNZ'),S.NZ.schoolId)).offers.map(o=>o.planCode))].sort(),['COMPLETE','CORE']);
+ // D8 (0184): a school awaiting its first payment sees no legacy Core/Complete offer and cannot open a legacy checkout.
+ assert.deepEqual((await payments.readPlanOptions(H('ownerNZ'),S.NZ.schoolId)).offers,[]);
 
  // ---------- 3. regular monthly: out-of-order first invoice, concurrent duplicate deliveries, replay ----------
  const coNM=await startOf('NM',V.OS_MONTHLY);

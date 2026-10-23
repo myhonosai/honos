@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON OS commercial offers (0181) integrity proof through the real API service on a disposable database:
@@ -76,6 +77,8 @@ try{
 
  // ---------- fixture ----------
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
  await admin.query('BEGIN');
  for(const h of Object.values(humans)){await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[h.user,h.subject,`${h.user}@example.test`]);await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[h.id,h.user]);}
  for(const[n,o]of Object.entries(O)){
@@ -276,4 +279,6 @@ try{
  assert.deepEqual(await untouched(),before,'legacy catalog, subscriptions, founder inventory, entitlements, payments, credits and paid access unchanged');
  assert.equal((await api.readOfferManagement(H('owner'))).paidAccessProgram,'INACTIVE');
  console.log(`PASS: HON OS commercial offers (0181) proof — ${commands} owner commands with exact audit/outbox evidence; six HQ-priced offer kinds (monthly, annual, founder monthly/annual, lifetime, founder lifetime) on one HON OS product; operator/support/school identities refused; idempotent replay and key reuse; revision conflicts; server preview quotes and readiness; publish only with the digest of the exact previewed revision; published offers immutable (UPDATE/DELETE/INSERT/TRUNCATE refused); stop-sales once and published only; price change = new version with new offer IDs and the prior set retired intact; concurrent publishes leave one published set; exact-school purchaser discovery with on-sale filtering and server eligibility; HON OS offer IDs refused by the legacy subscription path; legacy catalog, subscriptions, founder records, entitlements and paid access (INACTIVE) unchanged.`);
-}finally{await cleanup().catch(e=>console.error('cleanup failed',e));await Promise.all([admin.end(),restricted.end()]);}
+}finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
+ await cleanup().catch(e=>console.error('cleanup failed',e));await Promise.all([admin.end(),restricted.end()]);}

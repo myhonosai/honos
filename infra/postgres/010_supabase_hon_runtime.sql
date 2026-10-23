@@ -1781,3 +1781,27 @@ DO $$ DECLARE r text; f text; BEGIN
   END LOOP;
 END $$;
 -- End HON OS new-school onboarding exact reconciliation.
+
+-- HON OS-only new sales (0184, owner decision D8) exact reconciliation: the pinned new-sales policy is a private deny-all
+-- table, and its read helper and the legacy new-sale guard are private. Replaced functions keep their existing grants.
+DO $$ DECLARE r text; col text; f text; BEGIN
+  ALTER TABLE hon.saas_new_sales_policy ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE hon.saas_new_sales_policy FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON TABLE hon.saas_new_sales_policy FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.saas_new_sales_policy FROM %I',r);
+  END LOOP;
+  FOR col IN SELECT attname FROM pg_attribute WHERE attrelid='hon.saas_new_sales_policy'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.saas_new_sales_policy FROM PUBLIC',col);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.saas_new_sales_policy FROM %I',col,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.saas_legacy_new_sales_open()','hon.guard_saas_legacy_new_sale()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+END $$;
+-- End HON OS-only new sales exact reconciliation.

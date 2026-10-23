@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B2 (0155) integrity proof through the real API service on a disposable
@@ -76,6 +77,8 @@ try{
 
  // ---------- fixture: catalog, founder reservation, subscriptions ----------
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
  await admin.query('BEGIN');
  for(const h of Object.values(humans)){await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[h.user,h.subject,`${h.user}@example.test`]);await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[h.id,h.user]);}
  for(const[k,o]of Object.entries(O)){
@@ -266,5 +269,6 @@ try{
   [1,2,3,4].map(n=>`HON-${year}-00000${n}`));
  console.log(`PASS: HON invoices and payment evidence B2 proof — ${commands} commands with exact evidence; gapless numbering under concurrency; owner-verified tax required before issue; HQ attestation never provider-verified; refunds/chargebacks reduce standing; recorded owner decisions enable nothing; no subscription, founder, entitlement, school-billing or Champions effect.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }
