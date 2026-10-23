@@ -11,11 +11,12 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_refund_requests','saas_refund_history','saas_reward_fulfillment','saas_reward_applications','saas_account_credit_ledger',
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions'];
+ 'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
+ 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms','saas_access_transitions'];
+ 'saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
@@ -163,6 +164,24 @@ export const saasBillingFunctions = [
  ['hon.read_saas_organization_access_from_hq(text,uuid)',true,true],
  ['hon.place_saas_organization_awaiting_payment(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.retry_saas_first_payment_activation(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0181 HON OS commercial offers (HQ Pricing & Offers; no checkout connection)
+ ['hon.guard_saas_offer_sets()',false,false],
+ ['hon.guard_saas_offer_set_offers()',false,false],
+ ['hon.saas_hon_os_product_json()',false,false],
+ ['hon.saas_offer_json(hon.saas_offer_set_offers)',false,false],
+ ['hon.saas_offer_set_json(uuid)',false,false],
+ ['hon.saas_offer_set_preview(uuid)',false,false],
+ ['hon.saas_offer_set_content_valid(jsonb)',false,false],
+ ['hon.saas_offer_set_write_content(uuid,jsonb)',false,false],
+ ['hon.saas_offer_owner(text)',false,false],
+ ['hon.read_saas_offer_management_from_hq(text)',true,true],
+ ['hon.read_saas_offer_set_from_hq(text,uuid)',true,true],
+ ['hon.create_saas_offer_set_draft(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.revise_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.discard_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.publish_saas_offer_set(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.stop_saas_offer_sales(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_hon_os_offers_for_school(text,uuid)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
@@ -185,6 +204,8 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
    : paymentTables.includes(table) ? ['guard_saas_payments','saas_guarded',27]
    : table === 'saas_access_states' ? ['guard_saas_access','saas_guarded',27]
+   : table === 'saas_offer_sets' ? ['guard_saas_offer_sets','saas_guarded',27]
+   : table === 'saas_offer_set_offers' ? ['guard_saas_offer_set_offers','saas_offer_rows',31]
    : refundRewardTables.includes(table) ? ['guard_saas_refunds_rewards','saas_guarded',27]
    : creditTables.includes(table) ? ['guard_saas_credits','saas_guarded',27]
    : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];

@@ -18,6 +18,9 @@ import {
   validateSaasRefundRequestList, validateSaasRefundRequestReceipt, validateSaasRefundReserve, validateSaasRefundStatusFilter,
   validateSaasRewardApplyInput, validateSaasRewardApplyReceipt, validateSaasRewardFulfillmentInput, validateSaasRewardFulfillmentReceipt,
   validateSaasRewardPreview,
+  validateSaasHonOsOfferManagementView, validateSaasHonOsOfferSetDetail, validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
+  validateSaasHonOsOfferSetDiscardInput, validateSaasHonOsOfferSetPublishInput, validateSaasHonOsOfferStopSalesInput, validateSaasHonOsOfferSetReceipt,
+  validateSaasHonOsOfferSetDiscardReceipt, validateSaasHonOsOfferSetPublishReceipt, validateSaasHonOsOfferStopSalesReceipt, validateSaasHonOsSchoolOfferView,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
 
@@ -40,8 +43,9 @@ const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED',
   'SAAS_REWARD_PERIOD_TAKEN','SAAS_NO_ACCOUNT_CREDIT','SAAS_ALERT_ATTRIBUTION_UNDECIDED',
   'SAAS_PAYMENTS_NOT_ACTIVE','SAAS_CHECKOUT_OPEN',
   'SAAS_ACCESS_NOT_ACTIVE','SAAS_ACCESS_STATE_EXISTS','SAAS_ACCESS_STATE_CHANGED','SAAS_ACCESS_PAYMENT_UNVERIFIED','SAAS_ACCESS_PAYMENT_REVERSED',
-  'SAAS_ACCESS_NOT_RETRYABLE']);
-const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT']);
+  'SAAS_ACCESS_NOT_RETRYABLE',
+  'SAAS_OFFER_PREVIEW_CHANGED','SAAS_OFFER_SET_NOT_READY','SAAS_OFFER_NOT_PUBLISHED','SAAS_OFFER_SALES_ALREADY_STOPPED']);
+const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT','SAAS_OFFER_SET_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
   try { return work(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); }
@@ -220,6 +224,39 @@ export class SaasBillingService {
   async resolveReferralAlert(subject: string, alertId: unknown, body: unknown, key: unknown) {
     const [alert, input, idempotencyKey] = parse(() => [saasUuid(alertId), validateSaasReferralAlertResolveInput(body), saasUuid(key)] as const);
     return this.run('resolveReferralAlert', [subject, alert, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasReferralAlertReceipt);
+  }
+
+  // ---------- HON OS commercial offers (0181): HQ Pricing & Offers; nothing here sells, charges or grants ----------
+  async readOfferManagement(subject: string) {
+    return this.run('readOfferManagement', [subject], validateSaasHonOsOfferManagementView);
+  }
+  async readOfferSet(subject: string, setId: unknown) {
+    const set = parse(() => saasUuid(setId));
+    return this.run('readOfferSet', [subject, set], validateSaasHonOsOfferSetDetail);
+  }
+  async createOfferSetDraft(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasHonOsOfferSetDraftInput(body), saasUuid(key)] as const);
+    return this.run('createOfferSetDraft', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetReceipt);
+  }
+  async reviseOfferSetDraft(subject: string, setId: unknown, body: unknown, key: unknown) {
+    const [set, input, idempotencyKey] = parse(() => [saasUuid(setId), validateSaasHonOsOfferSetReviseInput(body), saasUuid(key)] as const);
+    return this.run('reviseOfferSetDraft', [subject, set, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetReceipt);
+  }
+  async discardOfferSetDraft(subject: string, setId: unknown, body: unknown, key: unknown) {
+    const [set, input, idempotencyKey] = parse(() => [saasUuid(setId), validateSaasHonOsOfferSetDiscardInput(body), saasUuid(key)] as const);
+    return this.run('discardOfferSetDraft', [subject, set, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetDiscardReceipt);
+  }
+  async publishOfferSet(subject: string, setId: unknown, body: unknown, key: unknown) {
+    const [set, input, idempotencyKey] = parse(() => [saasUuid(setId), validateSaasHonOsOfferSetPublishInput(body), saasUuid(key)] as const);
+    return this.run('publishOfferSet', [subject, set, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetPublishReceipt);
+  }
+  async stopOfferSales(subject: string, offerId: unknown, body: unknown, key: unknown) {
+    const [offer, input, idempotencyKey] = parse(() => [saasUuid(offerId), validateSaasHonOsOfferStopSalesInput(body), saasUuid(key)] as const);
+    return this.run('stopOfferSales', [subject, offer, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferStopSalesReceipt);
+  }
+  async readSchoolHonOsOffers(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.run('readSchoolHonOsOffers', [subject, school], validateSaasHonOsSchoolOfferView);
   }
 
   /** Shared fixed-function call with the SaaS error mapping (used by the B5 payments service). */
