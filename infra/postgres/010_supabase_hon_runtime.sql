@@ -1747,3 +1747,24 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   END IF;
 END $$;
 -- End HON OS commercial offers exact reconciliation.
+
+-- HON OS purchase binding (0182) exact reconciliation: private purchase helpers and one runtime entry point (the school
+-- purchaser's test-mode HON OS checkout). The purchase columns live in already private deny-all tables.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.saas_hon_os_billing_interval(text)','hon.saas_hon_os_recurring(hon.saas_offer_set_offers)',
+      'hon.saas_hon_os_offer_on_sale(hon.saas_offer_set_offers,timestamptz)','hon.saas_hon_os_accepted_offer(hon.saas_offer_set_offers)',
+      'hon.saas_hon_os_digest(jsonb)','hon.saas_hon_os_offer_usage(uuid,timestamptz,uuid)','hon.saas_hon_os_founder_usage(timestamptz,uuid)',
+      'hon.saas_hon_os_refusal(uuid,hon.saas_offer_set_offers,timestamptz)','hon.saas_open_hon_os_checkout(uuid,uuid,uuid,uuid,timestamptz)',
+      'hon.saas_hon_os_purchase_json(hon.saas_checkout_sessions)','hon.create_saas_hon_os_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid)',
+      'hon.saas_activate_hon_os_checkout(uuid,jsonb,timestamptz)','hon.saas_planned_monthly_credits(hon.saas_subscriptions)',
+      'hon.saas_refund_window_hours(uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_saas_hon_os_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End HON OS purchase binding exact reconciliation.

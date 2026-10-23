@@ -22,7 +22,7 @@ export function useInvoiceRead<T>(key: string, load: ((signal: AbortSignal) => P
   return state.key === key ? state : { key, kind: load ? 'loading' : 'idle' };
 }
 export const invoiceStatus = { DRAFT: 'Draft', ISSUED: 'Issued record', VOID: 'Void' };
-export const invoiceOffer = { REGULAR_MONTHLY: 'Regular monthly', FOUNDER_MONTHLY: 'Founder monthly', FOUNDER_LIFETIME: 'Paid founder lifetime offer' };
+export const invoiceOffer = { REGULAR_MONTHLY: 'Regular monthly', FOUNDER_MONTHLY: 'Founder monthly', FOUNDER_LIFETIME: 'Paid founder lifetime offer', REGULAR_ANNUAL: 'HON OS annual', FOUNDER_ANNUAL: 'HON OS founder annual', LIFETIME: 'HON OS lifetime offer' };
 export const settlementLabel = {
   NOT_ISSUED: 'Not issued', VOID: 'Void', UNPAID: 'No payment recorded', PARTIALLY_PAID: 'Partially paid in recorded evidence',
   PAID_ATTESTED: 'Recorded as paid by HQ (not processor-confirmed)', PAID_VERIFIED: 'Provider-confirmed payment', REVERSED: 'Reversed in recorded evidence',

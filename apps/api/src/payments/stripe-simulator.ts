@@ -6,7 +6,7 @@ import { createHmac } from 'node:crypto';
  * selected by environment. Results it produces are SIMULATED, not provider-verified by Stripe.
  */
 type Json = Record<string, unknown>;
-interface SimSession { id: string; checkoutId: string; mode: 'subscription' | 'payment'; amount: number; expiresAt: number; status: 'open' | 'complete' | 'expired' }
+interface SimSession { id: string; checkoutId: string; mode: 'subscription' | 'payment'; interval: 'month' | 'year' | null; amount: number; productName: string; expiresAt: number; status: 'open' | 'complete' | 'expired' }
 export interface SignedDelivery { raw: Buffer; signature: string; event: Json }
 
 export class StripeSimulator {
@@ -34,7 +34,8 @@ export class StripeSimulator {
       const checkoutId = form!.get('client_reference_id')!;
       const existing = [...this.sessions.values()].find(s => s.checkoutId === checkoutId); // idempotency on the checkout id
       const s = existing ?? { id: this.id(`cs_test_${checkoutId.replaceAll('-', '').slice(0, 12)}`), checkoutId,
-        mode: form!.get('mode') as 'subscription' | 'payment', amount: Number(form!.get('line_items[0][price_data][unit_amount]')),
+        mode: form!.get('mode') as 'subscription' | 'payment', interval: form!.get('line_items[0][price_data][recurring][interval]') as 'month' | 'year' | null,
+        amount: Number(form!.get('line_items[0][price_data][unit_amount]')), productName: form!.get('line_items[0][price_data][product_data][name]') ?? '',
         expiresAt: Number(form!.get('expires_at')), status: 'open' as const };
       this.sessions.set(s.id, s);
       return Response.json({ id: s.id, object: 'checkout.session', livemode: false, client_reference_id: checkoutId, url: `https://checkout.simulated.invalid/c/pay/${s.id}` });
@@ -76,7 +77,7 @@ export class StripeSimulator {
       amount_total: options.amount ?? s.amount, currency: 'usd', customer, subscription, invoice,
       payment_intent: s.mode === 'payment' ? paymentIntent : null, payment_status: options.paid === false ? 'unpaid' : 'paid', status: 'complete' });
     const firstInvoice = subscription ? this.emit('invoice.paid', this.invoiceObject(invoice!, subscription, 'subscription_create', options.amount ?? s.amount, paymentIntent,
-      this.seconds(), this.seconds() + 30 * 86400)) : null;
+      this.seconds(), this.seconds() + (s.interval === 'year' ? 365 : 30) * 86400)) : null;
     return { completed, firstInvoice, customer, subscription, paymentIntent: s.mode === 'payment' ? paymentIntent : paymentIntent, invoice, charge };
   }
   asyncPaymentSucceeded(sessionId: string) {

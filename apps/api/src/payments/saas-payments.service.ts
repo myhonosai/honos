@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import {
   saasUuid, validateSaasCheckoutCancelInput, validateSaasCheckoutReceipt, validateSaasCheckoutSweepReceipt, validateSaasHqCheckoutInput,
   validateSaasPaymentProgramInput, validateSaasPaymentProgramReceipt, validateSaasPaymentRecoveryInput, validateSaasPaymentsView,
-  validateSaasProviderEventReceipt, validateSaasSchoolCheckoutInput, validateSaasSchoolPlanOptions,
-  type SaasCheckout, type SaasCheckoutReceipt, type SaasPaymentRecoveryResult, type SaasProviderEventReceipt,
+  validateSaasProviderEventReceipt, validateSaasSchoolCheckoutInput, validateSaasSchoolPlanOptions, validateSaasHonOsCheckoutReceipt,
+  type SaasCheckout, type SaasCheckoutReceipt, type SaasHonOsCheckoutReceipt, type SaasHonOsRecurringBilling, type SaasPaymentRecoveryResult,
+  type SaasProviderEventReceipt,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
@@ -19,6 +20,9 @@ const PLAN_NAMES = { CORE: 'HON Core', COMPLETE: 'HON Complete' } as const;
 const OFFER_LABELS = { REGULAR_MONTHLY: 'monthly', FOUNDER_MONTHLY: 'founder monthly', FOUNDER_LIFETIME: 'founder paid lifetime' } as const;
 
 export interface CheckoutStartResult extends SaasCheckoutReceipt { providerCall: 'OPENED' | 'ALREADY_OPEN' | 'NOT_OPENABLE' }
+export interface HonOsCheckoutStartResult extends SaasHonOsCheckoutReceipt { providerCall: 'OPENED' | 'ALREADY_OPEN' | 'NOT_OPENABLE' }
+/** What the provider session sells: decided by the server, never by the client. */
+interface ProviderPurchase { productName: string; recurring: SaasHonOsRecurringBilling }
 export interface CheckoutCancelResult extends SaasCheckoutReceipt { providerExpiry: 'REQUESTED' | 'NOT_NEEDED' | 'FAILED' }
 
 /**
@@ -44,12 +48,24 @@ export class SaasPaymentsService {
   async startSchoolCheckout(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CheckoutStartResult> {
     const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateSaasSchoolCheckoutInput(body), saasUuid(key)] as const);
     const receipt = await this.billing.call('createSchoolCheckout', [subject, school, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCheckoutReceipt);
-    return this.openWithProvider(subject, receipt);
+    return this.openWithProvider(subject, receipt, this.legacyPurchase(receipt.checkout));
+  }
+  /**
+   * HON OS purchase (0182): the school sends only the offer ID. Price, kind, renewal and terms come from the HQ-published
+   * offer, frozen by the database as the accepted offer; the provider session sells exactly that, in TEST MODE.
+   */
+  async startSchoolHonOsCheckout(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<HonOsCheckoutStartResult> {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateSaasSchoolCheckoutInput(body), saasUuid(key)] as const);
+    const receipt = await this.billing.call('createSchoolHonOsCheckout', [subject, school, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
+      validateSaasHonOsCheckoutReceipt);
+    const opened = await this.openWithProvider(subject, { checkout: receipt.checkout, replayed: receipt.replayed },
+      { productName: receipt.purchase.productName, recurring: receipt.purchase.recurringBilling });
+    return { ...opened, purchase: receipt.purchase };
   }
   async startHqCheckout(subject: string, body: unknown, key: unknown): Promise<CheckoutStartResult> {
     const [input, idempotencyKey] = parse(() => [validateSaasHqCheckoutInput(body), saasUuid(key)] as const);
     const receipt = await this.billing.call('createHqCheckout', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCheckoutReceipt);
-    return this.openWithProvider(subject, receipt);
+    return this.openWithProvider(subject, receipt, this.legacyPurchase(receipt.checkout));
   }
   async cancelCheckout(subject: string, checkoutId: unknown, body: unknown, key: unknown): Promise<CheckoutCancelResult> {
     const [checkout, input, idempotencyKey] = parse(() => [saasUuid(checkoutId), validateSaasCheckoutCancelInput(body), saasUuid(key)] as const);
@@ -114,7 +130,14 @@ export class SaasPaymentsService {
     return list.find(c => c?.checkoutId === checkout.checkoutId) ?? checkout;
   }
 
-  private async openWithProvider(subject: string, receipt: SaasCheckoutReceipt): Promise<CheckoutStartResult> {
+  private legacyPurchase(checkout: SaasCheckout): ProviderPurchase {
+    if (checkout.offerKind !== 'REGULAR_MONTHLY' && checkout.offerKind !== 'FOUNDER_MONTHLY' && checkout.offerKind !== 'FOUNDER_LIFETIME')
+      throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    return { productName: `${PLAN_NAMES[checkout.planCode]} — ${OFFER_LABELS[checkout.offerKind]}`,
+      recurring: checkout.billingInterval === 'MONTHLY' ? 'MONTH' : 'NONE' };
+  }
+
+  private async openWithProvider(subject: string, receipt: SaasCheckoutReceipt, purchase: ProviderPurchase): Promise<CheckoutStartResult> {
     const checkout: SaasCheckout = receipt.replayed ? await this.current(subject, receipt.checkout) : receipt.checkout;
     receipt = { ...receipt, checkout };
     if (checkout.status === 'OPEN') return { ...receipt, providerCall: 'ALREADY_OPEN' };
@@ -126,8 +149,8 @@ export class SaasPaymentsService {
     try {
       // The provider deduplicates on the checkout id, so a retry after an unknown outcome reuses the same session.
       session = await this.provider.createCheckoutSession({ checkoutId: checkout.checkoutId, organizationId: checkout.organizationId,
-        planCode: checkout.planCode, offerKind: checkout.offerKind, billingInterval: checkout.billingInterval, amountMinor: checkout.amountMinor,
-        productName: `${PLAN_NAMES[checkout.planCode]} — ${OFFER_LABELS[checkout.offerKind]}`, expiresAt: checkout.expiresAt,
+        planCode: checkout.planCode, offerKind: checkout.offerKind, billingInterval: checkout.billingInterval, recurring: purchase.recurring,
+        amountMinor: checkout.amountMinor, productName: purchase.productName, expiresAt: checkout.expiresAt,
         successUrl: `${back}?checkout=${checkout.checkoutId}&result=success`, cancelUrl: `${back}?checkout=${checkout.checkoutId}&result=cancelled` });
     } catch (error) {
       if (error instanceof PaymentProviderError && error.outcome !== 'UNKNOWN') {
