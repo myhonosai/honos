@@ -197,6 +197,9 @@ export const saasBillingFunctions = [
  ['hon.saas_planned_monthly_credits(hon.saas_subscriptions)',false,false],
  ['hon.saas_refund_window_hours(uuid)',false,false],
  ['hon.create_saas_hon_os_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0183 HON OS new-school onboarding (D7): private registration and the HON OS activation core
+ ['hon.initialize_saas_hon_os_school_account(text,jsonb,uuid,uuid,uuid)',false,true],
+ ['hon.saas_activate_hon_os_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',false,false],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
