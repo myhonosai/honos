@@ -12,11 +12,11 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
  'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
- 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops'];
+ 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops'];
+ 'saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
@@ -200,12 +200,19 @@ export const saasBillingFunctions = [
  // 0183 HON OS new-school onboarding (D7): private registration and the HON OS activation core
  ['hon.initialize_saas_hon_os_school_account(text,jsonb,uuid,uuid,uuid)',false,true],
  ['hon.saas_activate_hon_os_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',false,false],
+ // 0184 HON OS-only new sales (D8): the pinned policy read and the legacy new-sale guard
+ ['hon.saas_legacy_new_sales_open()',false,false],
+ ['hon.guard_saas_legacy_new_sale()',false,false],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
  ['saas_payment_evidence','saas_referral_alert',5,'saas_evidence_referral_alert'],
  ['saas_invoices','saas_free_period_check',7,'saas_invoice_free_period_check'],
  ['saas_credit_allowances','saas_champions_basis',7,'saas_allowance_free_month_basis'],
+ // 0184: no new legacy sale while legacy sales are closed.
+ ['saas_subscriptions','saas_legacy_new_sale',7,'guard_saas_legacy_new_sale'],
+ ['saas_checkout_sessions','saas_legacy_new_sale',23,'guard_saas_legacy_new_sale'],
+ ['saas_founder_reservations','saas_legacy_new_sale',7,'guard_saas_legacy_new_sale'],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');

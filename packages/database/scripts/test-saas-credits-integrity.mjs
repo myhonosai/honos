@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B3 (0156) integrity proof through the real API service on a disposable
@@ -80,6 +81,8 @@ try{
  for(const sig of ['saas_current_allowance(uuid,uuid,timestamptz)','saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)','require_saas_school_actor(text,uuid)','saas_record_thresholds(uuid,timestamptz)'])
   assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,false,sig);
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
 
  // ---------- fixture ----------
  await admin.query('BEGIN');
@@ -319,5 +322,6 @@ try{
  assert.deepEqual(await untouched(),before,'No entitlement, school billing, HON invoice/evidence, Champions or shared audit row changed.');
  console.log(`PASS: HON premium credits B3 proof — ${commands} commands with exact evidence; owner-gated program; verified-cost-linked pricing; one allowance per period; idempotent reserve; finalize/release/unknown/resolve; exact balance under 8-way contention; 75/90/100 thresholds and hard stop; plan capabilities; suspension; expiry without rollover; provider cost kept apart from credits; no billing or Champions effect.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }
