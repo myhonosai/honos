@@ -864,3 +864,8 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - Frontend integration with merged PR #45 / migration 0175: school-scoped catalog, version publication and adult enrollment plan picker; awaiting PR verification and owner review, not merged or deployed.
 - Preserve the legacy free-text DRAFT path, all Resume Setup states and existing membership terms. No activation/payment behavior or backend/migration changes.
 - Follow-ups: authorized historical membership-plan terms read after recovery; broader Korean/Spanish catalog copy; backend coordination if a plan-management-only role cannot use the existing reporting-school selectors. Original policy decisions remain in `docs/architecture/SCHOOL_MEMBERSHIP_PLAN_CATALOG.md`.
+## Codex — E1b-1 membership date-management frontend (issue #56)
+
+- [ ] Integrate merged 0178 preview/confirmation, date history, individual legacy queue and separate status summary on an isolated frontend branch. Preserve signed-session/exact-school authorization, privacy shielding, immutable uncertain-request retries and all financial/parent boundaries.
+- [ ] Verify frontend interactions, API-to-disposable-database integration, desktop/mobile browser accessibility, full CI and security proofs. Report exact commits and actual results; no production readiness claim or automatic merge.
+- One-product commercial frontend #60 remains queued until #56 is completed and independently reviewed backend #59 is merged. No pricing, checkout, entitlement, parent publication, E1b-2 or E1c work in this assignment.

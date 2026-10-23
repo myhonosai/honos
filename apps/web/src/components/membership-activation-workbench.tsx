@@ -133,7 +133,7 @@ export function MembershipActivationWorkbench({ sessionSubject }: { sessionSubje
   const warningLabel = (w: MembershipActivationPreview['warnings'][number]) => `${warningText[w.code]}${w.days ? ` (${w.days} days)` : ''}${w.planEndDate ? ` Plan suggestion: ${calendar(w.planEndDate)}.` : ''}`;
   const dateSummary = (start: string, end: string | null) => <dl><dt>Starts · school-local date</dt><dd>{calendar(start)}</dd><dt>Last valid day · inclusive</dt><dd>{calendar(end)}</dd></dl>;
   return <main className={styles.page}>
-    <nav aria-label="Membership navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/crm/leads">CRM enrollment</a></nav>
+    <nav aria-label="Membership navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/crm/leads">CRM enrollment</a><a href="/staff/billing/membership-dates">Membership dates and history</a></nav>
     <header><p>DIRECT HUMAN STAFF · MEMBERSHIP LIFECYCLE</p><h1>Review and confirm membership activation</h1><p>1. Review the server preview. 2. Confirm this membership and its exact dates.</p></header>
     <aside><strong>Membership confirmation is separate from financial enrollment.</strong><p>This does not collect tuition, sign an agreement, record customer consent, authorize recurring payments or complete financial enrollment. No billing schedule is created. Card collection never authorizes recurring billing.</p></aside>
     {hidden ? <section aria-labelledby="activation-shield"><h2 id="activation-shield" tabIndex={-1} ref={shieldHeading}>Membership information hidden</h2>

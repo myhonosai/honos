@@ -1,0 +1,35 @@
+# Staff membership date management — E1b-1 / issue #56
+
+Frontend integration of the merged 0178 contracts, not a production release. Route: `/staff/billing/membership-dates`, linked from the existing E1a activation screen. The authenticated staff layout and page independently fail closed; the session-cookie hash remounts component memory for a changed server session. Known selectors and legacy queue rows never confer authority.
+
+## Implemented scope
+
+- Explicit history load for one known membership; immutable historical plan identity and newest-first date history, confirmed school-local dates, inclusive last valid day, timezone and effective status from the backend.
+- A successful authorized preview reveals date-change actions. History-only staff do not gain revision authority. `canConfirm`, blocks and retroactive permission requirements come from the server. No owner-role shortcut.
+- Correct / extend / end early / individually confirm legacy dates. 0178 only suggests dates for stored legacy terms and fixed-term extensions. Other cases require staff-entered dates; the browser does not calculate a term or derive dates from legacy timestamps. Valid edits invalidate the old digest, reasons, acknowledgements and final confirmation, then request a fresh preview.
+- Two explicit steps: preview and per-warning acknowledgements, applicable reason code plus 10–500-character explanation, adjustment reason when required, then a separate final summary and checkbox before the command.
+- Frozen scope/body/key for uncertain results. No automatic resend. Session identity is checked before each explicit attempt; the protected API rechecks live school permissions, active entitlement, versions and digest. A refused/stale request requires new review and a fresh key. Unknown/in-progress and access failures preserve the exact request in memory.
+- Immediate focus/visibility-loss concealment; foreground restoration rechecks session identity and the current view's exact-school API. Retained commands additionally require date-preview authorization before reveal. Read epochs invalidate late reads; separate component-instance/command ownership lets writes settle behind the shield. No timeout unlock or page reload. Discard is disabled until settlement, then requires explicit acknowledgement that it only abandons browser recovery, not a server action.
+- A separately authorized, paginated legacy queue with individual review only, and a separately authorized backend-calculated reporting summary. No totals are calculated from truncated lists. Each new read replaces the prior view.
+- Receipts are historical evidence, not current status. Refresh current history explicitly. Financial disclosures, required permissions, backend blockers and not-evaluated requirements remain visible. Scheduled memberships are never described as currently IN_EFFECT.
+
+## Security and exclusions
+
+No backend, shared contract, database migration, protected runtime function, parent screen, billing/payment, entitlement, provider or AI changes. No financial action is reachable. No sensitive records or retry keys in URL, browser storage or telemetry. Internal DRAFTs are not published to parents; E1b-2/D10 publication is not implemented. E1c, renewals and payment schedules remain excluded. Adult/family enrollment, cancellation and E1a activation remain unchanged except for the navigation link.
+
+## Verification and evidence
+
+- Unit/interaction tests: `membership-dates-http.test.ts`, `membership-dates-interaction.test.tsx`, `membership-dates-page-session.test.tsx`. The existing E1a/adult/family tests continue in full CI and the scoped browser workflow.
+- `membership-dates-api-verification.mjs`: **actual frontend transport → signed-session Nest → restricted runtime → marked disposable PostgreSQL**. It checks read-only facts, concurrent exact replay and one revision, post-commit response loss/retry, current history, stale versions, cross-school/session/tier/permission denial and financial isolation. Fixture SQL is isolated test setup, never application behavior.
+- `membership-dates-browser.mjs`: **actual production Next app + real signed synthetic sessions + deterministic localhost API fixtures**. It checks desktop/mobile preview, distinct confirmation, receipt/history, legacy review, summary, blockers/retroactive refusal, stale response, double clicks, focus loss, busy settlement and exact retry. The existing workflow retains screenshots and axe reports as private Actions artifacts; no individual image/blob uploads or public preview.
+- These are separate kinds of evidence. Synthetic browser tests do not prove a production deployment, actual customer records or provider integration. Local dependency installation is blocked by an unavailable shell proxy and incomplete offline metadata; no repeated network attempts or lockfile changes. Exact-head CI results are reported in the PR.
+
+## Preserved limitations and release gates
+
+- All E1a and E1b-1 release prerequisites remain: known-minor registration recovery, persistent migration-history and runtime verification, coordinated frontend/backend rollout, parent DRAFT publication/privacy work, and documented older manual fixture failures. See `MEMBERSHIP_DATE_REVISIONS.md` and `MEMBERSHIP_ACTIVATION_GATE_DEPLOYMENT_AND_RISKS.md`. No persistent migrations were executed.
+- Full document destruction (reload/close/navigation out) loses in-memory recovery. Never start another command on the assumption that losing a browser request reverses the server action. Restoring a queue restarts its first page; restoration reads never mutate anything.
+- New screen copy is English. Dates/numbers use the shared Language & Region utilities. Korean/Spanish copy, physical-device/screen-reader/zoom review remain follow-ups; do not claim full localization or manual-device verification.
+- The pre-existing CRM recovery list is still bounded to 50 leads; this work does not change that contract. Date history is bounded by the shared 200-period contract; the legacy queue uses the server cursor.
+- Node.js security patch PR #55 is separate and untouched. New public one-product pricing/checkout #60 must wait for completion of #56 and independent review/merge of #59. No public tier, pricing or purchase changes are included here.
+
+One focused unmerged PR. Owner approval is required for merge; production deployment remains NO-GO.
