@@ -11,7 +11,9 @@ import { assertLegacySalesClosed } from './saas-legacy-sales-simulation.mjs';
 // and cross-tenant schools are refused; exceptions end by expiry, revocation or a later change, and closing them suspends
 // the entitlement; a live exception is never a purchase basis and its scope cannot be widened by an HQ tier change;
 // existing customers are untouched; the D7 first-purchase path and the D8 legacy closure still hold for a provisioned
-// school. Paid access ACTIVE is simulated only for the D7 and superseded cases and restored before the proof ends.
+// school; a pilot converts to paid only revoke-first: awaiting-first-payment is refused while an exception is active or
+// scheduled and works (then D7) once it was revoked or expired. Paid access ACTIVE is simulated only for the D7 and
+// conversion cases and restored before the proof ends.
 const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
 if(owner.hostname!=='localhost'||owner.port!=='5432'||owner.pathname!=='/hon_champions_validation'||owner.username!=='hon_champions_owner'||runtime.hostname!==owner.hostname||runtime.port!==owner.port||runtime.pathname!==owner.pathname||runtime.username!=='hon_champions_runtime')throw new Error('Only exact disposable localhost validation URLs permitted; never remote DB.');
 if(Object.keys(process.env).some(key=>/^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HEYGEN|HIGGSFIELD|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(key)))throw new Error('Provider credentials/execution switches are forbidden.');
@@ -44,7 +46,7 @@ const K=()=>randomUUID(),iso=d=>new Date(d).toISOString(),HOUR=3600_000,DAY=24*H
 // LG: an existing legacy customer (ACTIVE Complete, legacy subscription). PS: a pre-D9 provisioned school (ACTIVE Core,
 // no subscription). SX: a suspended organization holding a subscription. AW: awaiting its first payment.
 const O=Object.fromEntries(['LG','PS','SX','AW'].map(k=>[k,{id:randomUUID(),tier:k==='PS'?'CORE':'COMPLETE',school:randomUUID(),role:randomUUID()}]));
-const humans=Object.fromEntries(['owner','exowner','operator','onboarder','support','stranger',...['P1','P2','P3','P4','P5'].map(k=>`owner${k}`),
+const humans=Object.fromEntries(['owner','exowner','operator','onboarder','support','stranger',...['P1','P2','P3','P4','P5','P6'].map(k=>`owner${k}`),
  ...Object.keys(O).map(k=>`owner${k}`)].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`d9-${k}-${randomUUID()}`}]));
 const H=k=>humans[k].subject;
 const P={};
@@ -158,6 +160,10 @@ try{
   termsReference:'Fixture HON OS terms v1 (not customer terms)',founderTotalLimit:0,offers:[osOffer('OS_MONTHLY','REGULAR_MONTHLY',31700,'Monthly')]},K());
   return[dr.set.setId,{expectedRevision:dr.set.revision,previewDigest:dr.preview.previewDigest,approval:contracts.SAAS_HON_OS_OFFER_PUBLISH_APPROVAL},K()];})());
  const OS=pub.set.offers[0].offerId;
+ // The D7 first purchase: HON OS checkout by the school's own owner, then the verified (simulated) payment activates it.
+ const firstPurchase=async k=>{const co=await payments.startSchoolHonOsCheckout(H(`owner${k}`),P[k].schoolId,{offerId:OS},K());
+  const paid=sim.completeCheckout(co.checkout.providerSessionId);const d=await payments.handleWebhook(paid.completed.raw,paid.completed.signature);
+  assert.deepEqual([d.event.outcome,d.event.detail],['APPLIED','ACCESS_ACTIVATED'],k);};
  const legacyOffer=(await payments.readPlanOptions(H('ownerLG'),O.LG.school)).offers;
  assert.deepEqual(legacyOffer,[],'D8: no legacy offer is listed');
  const before=await untouched();
@@ -196,6 +202,7 @@ try{
  P.P3={...won[0]};await addSchoolOwner('P3');
  P.P4=await provision('owner',slug('P4'));await addSchoolOwner('P4');
  P.P5=await provision('owner',slug('P5'));await addSchoolOwner('P5');
+ P.P6=await provision('owner',slug('P6'));await addSchoolOwner('P6');
 
  // ---------- 2. D8 and D7 for a provisioned school ----------
  const opts=await payments.readPlanOptions(H('ownerP1'),P.P1.schoolId);
@@ -334,6 +341,7 @@ try{
  const in3={...exceptionInput('P3'),purpose:'INTERNAL_TESTING',reason:'Fixture internal QA window for HQ testing',startsAt:iso(Date.now()),expiresAt:iso(Date.now()+3000)};
  const x3=(await grant('owner',P.P3.organizationId,in3)).exception;
  assert.equal(x3.lifecycle,'IN_EFFECT');
+ const x6=(await grant('owner',P.P6.organizationId,{...in3,schoolId:P.P6.schoolId,purpose:'APPROVED_PILOT',reason:'Fixture pilot that runs to its expiry',expiresAt:iso(Date.now()+3000)})).exception;
  assert.deepEqual(await staffScope('P3'),[P.P3.organizationId]);
  await sleep(3500);
  const lapsed=await caps(P.P3.organizationId);
@@ -347,19 +355,46 @@ try{
  assert.equal(x4.lifecycle,'SCHEDULED');
  assert.deepEqual([(await caps(P.P4.organizationId)).capabilities,await staffScope('P4')],[[],[]],'scheduled: nothing yet');
  await deny(payments.startSchoolHonOsCheckout(H('ownerP4'),P.P4.schoolId,{offerId:OS},K()),422,'SAAS_ACCESS_EXCEPTION_ACTIVE');
- // Superseded: with paid access ACTIVE the HQ owner places P4 awaiting its first payment, which replaces the grant.
+ // Revoke-first pilot conversion (owner policy): while an exception is active (P2) or scheduled (P4), the HQ owner
+ // cannot place the school awaiting its first payment, even with paid access ACTIVE (simulated); nothing changes.
  await setAccessProgram(true);
- await access.awaitFirstPayment(H('owner'),P.P4.organizationId,{expectedEntitlementVersion:2},K());
+ const states=async o=>(await row('SELECT count(*)::int n FROM hon.saas_access_states WHERE organization_id=$1',[o])).n;
+ for(const[k,x,tier]of [['P2',null,'CORE'],['P4',x4,'COMPLETE']]){
+  await deny(access.awaitFirstPayment(H('owner'),P[k].organizationId,{expectedEntitlementVersion:2},K()),422,'SAAS_ACCESS_EXCEPTION_ACTIVE');
+  assert.deepEqual(await ent(P[k].organizationId).then(e=>[e.tier,e.status,e.version]),[tier,'ACTIVE',2],`${k}: entitlement unchanged`);
+  assert.equal(await states(P[k].organizationId),0,`${k}: no awaiting state`);
+  assert.equal((await access.readAccessExceptions(H('owner'),P[k].organizationId)).exceptions[0].lifecycle,k==='P2'?'IN_EFFECT':'SCHEDULED');
+ }
+ assert.equal((await row("SELECT count(*)::int n FROM hon.saas_audit WHERE action_code='saas.access.await' AND organization_id=ANY($1::uuid[])",[[P.P2.organizationId,P.P4.organizationId]])).n,0,'no refused transition was recorded');
+ // The database backstop refuses an access state written around the command while an exception is open and unexpired.
+ await sqlDeny(admin.query("INSERT INTO hon.saas_access_states(organization_id,state,reason,version,changed_by_principal_id,created_at,updated_at) VALUES($1,'AWAITING_FIRST_PAYMENT','AWAITING_INITIAL_PAYMENT',1,$2,clock_timestamp(),clock_timestamp())",
+  [P.P4.organizationId,humans.owner.id]),'23514','SAAS_ACCESS_EXCEPTION_ACTIVE');
+ // Revoked: the HQ owner revokes P4's scheduled pilot first; then P4 can await its first payment and buy HON OS (D7).
+ assert.equal((await access.revokeAccessException(H('owner'),x4.exceptionId,{reason:'Pilot converting to a paid subscription'},K())).entitlementSuspended,true);
+ await access.awaitFirstPayment(H('owner'),P.P4.organizationId,{expectedEntitlementVersion:3},K());
+ assert.equal((await caps(P.P4.organizationId)).state,'AWAITING_FIRST_PAYMENT');
+ await firstPurchase('P4');
+ assert.deepEqual(await ent(P.P4.organizationId).then(e=>[e.tier,e.status,e.version,e.effective_until]),['COMPLETE','ACTIVE',5,null]);
+ assert.equal((await caps(P.P4.organizationId)).state,'PAYMENT_ACTIVE');
+ // Expired: P6's pilot reached its expiry and nobody closed it. It no longer blocks; the transition closes its record as
+ // EXPIRED (its lapsed entitlement suspended) before holding the school awaiting, and P6 buys HON OS (D7).
+ assert.equal((await access.readAccessExceptions(H('owner'),P.P6.organizationId)).exceptions[0].lifecycle,'EXPIRED');
+ await access.awaitFirstPayment(H('owner'),P.P6.organizationId,{expectedEntitlementVersion:2},K());
+ const x6end=(await access.readAccessExceptions(H('owner'),P.P6.organizationId)).exceptions[0];
+ assert.deepEqual([x6end.exceptionId,x6end.status,x6end.lifecycle,x6end.endReason],[x6.exceptionId,'ENDED','EXPIRED','EXPIRED']);
+ assert.deepEqual(await ent(P.P6.organizationId).then(e=>[e.status,e.version]),['SUSPENDED',4]);
+ await firstPurchase('P6');
+ assert.deepEqual(await ent(P.P6.organizationId).then(e=>[e.status,e.version,e.effective_until]),['ACTIVE',5,null]);
+ assert.deepEqual([await allowances(P.P4.organizationId),await allowances(P.P6.organizationId)],[0,0],'no AI credits at HON OS activation');
  await setAccessProgram(false);
- assert.equal((await access.readAccessExceptions(H('owner'),P.P4.organizationId)).exceptions[0].lifecycle,'SUPERSEDED');
- // Closing: unauthorized, then a billing operator closes the lapsed and superseded exceptions; live ones stay.
+ // Closing: unauthorized, then a billing operator closes the lapsed exception; live ones stay. (Supersession and batches
+ // above 200 are proved in test-saas-access-exception-hardening.mjs.)
  for(const who of ['support','ownerP3','stranger'])await deny(access.closeExpiredAccessExceptions(H(who),{},K()),403,'SAAS_FORBIDDEN');
  await deny(access.closeExpiredAccessExceptions(H('operator'),{extra:true},K()),400,'INVALID_SAAS_INPUT');
  const kX=K();
  const closed=await access.closeExpiredAccessExceptions(H('operator'),{},kX);
- assert.deepEqual(closed.closed.map(x=>[x.organizationId,x.endReason]).sort(),[[P.P3.organizationId,'EXPIRED'],[P.P4.organizationId,'SUPERSEDED']].sort());
+ assert.deepEqual(closed.closed.map(x=>[x.organizationId,x.endReason]),[[P.P3.organizationId,'EXPIRED']]);
  assert.deepEqual(await ent(P.P3.organizationId).then(e=>[e.status,e.version]),['SUSPENDED',3],'closing suspends the lapsed entitlement');
- assert.deepEqual(await ent(P.P4.organizationId).then(e=>[e.status,e.version]),['SUSPENDED',3],'the awaiting entitlement is left as B6A set it');
  assert.equal((await access.closeExpiredAccessExceptions(H('operator'),{},kX)).replayed,true);
  assert.deepEqual((await access.closeExpiredAccessExceptions(H('owner'),{},K())).closed,[],'nothing left to close');
  assert.equal((await access.readAccessExceptions(H('owner'),P.P2.organizationId)).exceptions[0].lifecycle,'IN_EFFECT','a live exception is never closed');
@@ -382,7 +417,7 @@ try{
  assert.deepEqual(await staffScope('LG'),[O.LG.id],'legacy customer keeps operating');
  await assertLegacySalesClosed(admin);
  assert.equal((await row('SELECT status FROM hon.saas_access_program')).status,'INACTIVE');
- console.log('PASS: secure HQ provisioning (D9) — provisioned schools get no access, credits or capability (owner and onboarding operator, idempotent, one school under a five-way race, unauthorized provisioners refused); D8 closure and the D7 first purchase hold for a provisioned school; only a current HQ owner grants an exception (operators, support, school owners, strangers, an expired owner, AI and delegated contexts, forged fields and direct writes refused); exceptions are scoped, windowed (90-day cap), audited, idempotent, one per school under a five-way race, never a purchase basis and never widened by a tier change; revocation, expiry, scheduling, supersession, closing and renewal behave; existing customers untouched; no AI credits.');
+ console.log('PASS: secure HQ provisioning (D9) — provisioned schools get no access, credits or capability (owner and onboarding operator, idempotent, one school under a five-way race, unauthorized provisioners refused); D8 closure and the D7 first purchase hold for a provisioned school; only a current HQ owner grants an exception (operators, support, school owners, strangers, an expired owner, AI and delegated contexts, forged fields and direct writes refused); exceptions are scoped, windowed (90-day cap), audited, idempotent, one per school under a five-way race, never a purchase basis and never widened by a tier change; revocation, expiry, scheduling, closing and renewal behave; awaiting-first-payment is refused while an exception is active or scheduled (command and database backstop) and works, followed by the D7 purchase, after revocation or expiry; existing customers untouched; no AI credits.');
 }finally{
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}

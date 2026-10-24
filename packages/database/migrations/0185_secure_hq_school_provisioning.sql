@@ -16,6 +16,11 @@ BEGIN;
 -- - Boundaries: an exception is only for an organization with no access in effect, no access state (awaiting or
 --   paid), no live subscription, no unresolved checkout and no other live exception. While one is live, HON OS
 --   checkout is refused (SAAS_ACCESS_EXCEPTION_ACTIVE) and an HQ tier transition cannot widen its scope.
+-- - Review corrections (2026-10-24): grant, revoke and close hold the HQ actor's authority through the mutation (the
+--   identity tables are share-locked and authority is rechecked after every wait and before returning); closing
+--   selects only expired or superseded exceptions before its 200 limit; placing a school awaiting its first payment
+--   is refused while an exception is active or scheduled (revoke-first pilot conversion, with an access-state trigger
+--   as backstop); Champions contest eligibility and the freeze require the entitlement window (0152 counts replaced).
 -- - Unchanged: existing entitlements, legacy subscriptions, renewals, lifetime rights, D7 registration and
 --   activation, D8 legacy sales closure. Paid access stays pinned INACTIVE (0170). Nothing here is deployed.
 -- Number: 0179 is reserved for E1b-2 and 0180 for E1c.
@@ -180,9 +185,9 @@ END $$;
 CREATE FUNCTION hon.grant_saas_access_exception(p_subject text, p_org uuid, p_input jsonb, p_key uuid, p_request_id uuid,
   p_correlation_id uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
-DECLARE actor uuid; fp text; replay jsonb; at timestamptz := clock_timestamp(); ts constant text := '^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$';
+DECLARE actor uuid; fp text; replay jsonb; at timestamptz; ts constant text := '^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$';
   v_school uuid; v_starts timestamptz; v_expires timestamptz; v_expected integer; t hon.saas_access_policy_terms%ROWTYPE;
-  ent hon.organization_entitlements%ROWTYPE; prior jsonb; nxt jsonb; open_x hon.saas_access_exceptions%ROWTYPE; v_id uuid;
+  ent hon.organization_entitlements%ROWTYPE; prior jsonb; nxt jsonb; open_x hon.saas_access_exceptions%ROWTYPE; v_id uuid; result jsonb;
 BEGIN
   IF p_org IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object'
     OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k)
@@ -200,6 +205,10 @@ BEGIN
   v_expected := (p_input->>'expectedEntitlementVersion')::integer;
   -- HQ owner only: operators, support, school owners, AI/delegated contexts and staff are refused here.
   actor := hon.require_saas_hq_actor(p_subject, true);
+  -- Authority holds through the mutation: the shared lock stops any user, principal, HQ grant or family grant change
+  -- until this transaction ends, and the rechecks after every wait refuse an owner whose grant lapsed by the clock.
+  LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants IN SHARE MODE;
+  actor := hon.require_saas_hq_actor(p_subject, true);
   fp := hon.saas_fingerprint(ARRAY['access.exception.grant', p_org::text, v_school::text, p_input->>'purpose', p_input->>'reason',
     p_input->>'scopeTier', p_input->>'startsAt', p_input->>'expiresAt', v_expected::text]);
   replay := hon.saas_claim_request(actor, p_key, 'saas.access.exception_grant', fp, p_request_id, p_correlation_id);
@@ -211,6 +220,8 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
   SELECT * INTO ent FROM hon.organization_entitlements WHERE organization_id = p_org FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
+  PERFORM hon.require_saas_hq_actor(p_subject, true);
+  at := clock_timestamp();
   IF ent.version <> v_expected THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
   SELECT * INTO t FROM hon.saas_access_policy_terms ORDER BY policy_version DESC LIMIT 1;
   IF t.exception_authority IS DISTINCT FROM 'HQ_OWNER' OR t.exception_max_days IS NULL THEN RAISE EXCEPTION 'SAAS_POLICY_UNDECIDED' USING ERRCODE = '23514'; END IF;
@@ -247,22 +258,28 @@ BEGIN
     VALUES (p_org, v_school, p_input->>'purpose', p_input->>'reason', p_input->>'scopeTier', v_starts, v_expires, t.policy_version,
       t.exception_max_days, prior, nxt, ent.version + 1, actor, at, 'GRANTED')
     RETURNING id INTO v_id;
-  RETURN hon.saas_record(actor, p_key, 'saas.access.exception_grant', 'saas.access.exception_granted', 'ACCESS_EXCEPTION', v_id, p_org, prior, nxt,
+  result := hon.saas_record(actor, p_key, 'saas.access.exception_grant', 'saas.access.exception_granted', 'ACCESS_EXCEPTION', v_id, p_org, prior, nxt,
     jsonb_build_object('exception', (SELECT hon.saas_access_exception_json(x) FROM hon.saas_access_exceptions x WHERE x.id = v_id),
       'access', hon.saas_organization_access(p_org)), at);
+  PERFORM hon.require_saas_hq_actor(p_subject, true);
+  RETURN result;
 END $$;
 
 -- ---------- HQ owner: revoke ----------
 CREATE FUNCTION hon.revoke_saas_access_exception(p_subject text, p_exception uuid, p_input jsonb, p_key uuid, p_request_id uuid,
   p_correlation_id uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
-DECLARE actor uuid; fp text; replay jsonb; at timestamptz := clock_timestamp(); v_org uuid; x hon.saas_access_exceptions%ROWTYPE; prior jsonb; ended jsonb;
+DECLARE actor uuid; fp text; replay jsonb; at timestamptz; v_org uuid; x hon.saas_access_exceptions%ROWTYPE; prior jsonb; ended jsonb; result jsonb;
 BEGIN
   IF p_exception IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object'
     OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) <> ARRAY['reason']
     OR jsonb_typeof(p_input->'reason') <> 'string' OR (p_input->>'reason') <> btrim(p_input->>'reason') OR length(p_input->>'reason') NOT BETWEEN 10 AND 500 THEN
     RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
   END IF;
+  actor := hon.require_saas_hq_actor(p_subject, true);
+  -- Authority holds through the mutation: the shared lock stops any user, principal, HQ grant or family grant change
+  -- until this transaction ends, and the rechecks after every wait refuse an owner whose grant lapsed by the clock.
+  LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants IN SHARE MODE;
   actor := hon.require_saas_hq_actor(p_subject, true);
   fp := hon.saas_fingerprint(ARRAY['access.exception.revoke', p_exception::text, p_input->>'reason']);
   replay := hon.saas_claim_request(actor, p_key, 'saas.access.exception_revoke', fp, p_request_id, p_correlation_id);
@@ -271,35 +288,54 @@ BEGIN
   IF v_org IS NULL THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('saas.organization:' || v_org::text, 0));
   SELECT * INTO x FROM hon.saas_access_exceptions WHERE id = p_exception FOR UPDATE;
+  -- The organization and exception locks can wait behind another command: authority is checked again after them.
+  PERFORM hon.require_saas_hq_actor(p_subject, true);
   IF x.status <> 'GRANTED' THEN RAISE EXCEPTION 'SAAS_EXCEPTION_ENDED' USING ERRCODE = '23514'; END IF;
+  at := clock_timestamp();
   prior := hon.saas_entitlement_json(v_org);
   ended := hon.saas_end_access_exception(x.id, 'REVOKED', p_input->>'reason', actor, at);
-  RETURN hon.saas_record(actor, p_key, 'saas.access.exception_revoke', 'saas.access.exception_ended', 'ACCESS_EXCEPTION', x.id, v_org, prior,
+  result := hon.saas_record(actor, p_key, 'saas.access.exception_revoke', 'saas.access.exception_ended', 'ACCESS_EXCEPTION', x.id, v_org, prior,
     hon.saas_entitlement_json(v_org),
     jsonb_build_object('exception', (SELECT hon.saas_access_exception_json(e) FROM hon.saas_access_exceptions e WHERE e.id = x.id),
       'entitlementSuspended', ended->'entitlementSuspended', 'access', hon.saas_organization_access(v_org)), at);
+  PERFORM hon.require_saas_hq_actor(p_subject, true);
+  RETURN result;
 END $$;
 
 -- ---------- HQ (owner or billing operator): close lapsed exceptions ----------
 -- Removing access that already lapsed grants nothing, so a billing operator may run it too. At most 200 per call.
+-- Only exceptions that are no longer live (expired, or their entitlement was replaced) are candidates, filtered before
+-- the limit, so live exceptions never fill a batch and successive calls work through every closable record. Each
+-- candidate is rechecked under its organization lock: one that is live again (or ended meanwhile) is skipped.
 CREATE FUNCTION hon.close_expired_saas_access_exceptions(p_subject text, p_key uuid, p_request_id uuid, p_correlation_id uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
-DECLARE actor uuid; replay jsonb; at timestamptz := clock_timestamp(); r record; x hon.saas_access_exceptions%ROWTYPE; closed jsonb := '[]'::jsonb;
+DECLARE actor uuid; replay jsonb; at timestamptz; r record; x hon.saas_access_exceptions%ROWTYPE; closed jsonb := '[]'::jsonb; result jsonb;
 BEGIN
+  actor := hon.require_saas_hq_actor(p_subject, false);
+  -- Authority holds through the mutation: the shared lock stops any user, principal, HQ grant or family grant change
+  -- until this transaction ends, and the rechecks after every wait refuse an actor whose grant lapsed by the clock.
+  LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants IN SHARE MODE;
   actor := hon.require_saas_hq_actor(p_subject, false);
   replay := hon.saas_claim_request(actor, p_key, 'saas.access.exception_close', hon.saas_fingerprint(ARRAY['access.exception.close']),
     p_request_id, p_correlation_id);
   IF replay IS NOT NULL THEN RETURN replay; END IF;
-  FOR r IN SELECT id, organization_id FROM hon.saas_access_exceptions WHERE status = 'GRANTED' ORDER BY organization_id LIMIT 200 LOOP
+  at := clock_timestamp();
+  FOR r IN SELECT c.id, c.organization_id FROM hon.saas_access_exceptions c
+      WHERE c.status = 'GRANTED' AND (c.expires_at <= at OR NOT EXISTS (SELECT 1 FROM hon.organization_entitlements e
+        WHERE e.organization_id = c.organization_id AND e.version = c.granted_entitlement_version AND e.status = 'ACTIVE'))
+      ORDER BY c.expires_at, c.id LIMIT 200 LOOP
     PERFORM pg_advisory_xact_lock(hashtextextended('saas.organization:' || r.organization_id::text, 0));
     SELECT * INTO x FROM hon.saas_access_exceptions WHERE id = r.id AND status = 'GRANTED' FOR UPDATE;
     CONTINUE WHEN NOT FOUND OR hon.saas_access_exception_live(r.organization_id);
     PERFORM hon.saas_end_access_exception(x.id, 'EXPIRED', NULL, actor, at);
     closed := closed || jsonb_build_array((SELECT hon.saas_access_exception_json(e) FROM hon.saas_access_exceptions e WHERE e.id = x.id));
   END LOOP;
-  RETURN hon.saas_record(actor, p_key, 'saas.access.exception_close', 'saas.access.exceptions_closed', 'ACCESS_EXCEPTION',
+  PERFORM hon.require_saas_hq_actor(p_subject, false);
+  result := hon.saas_record(actor, p_key, 'saas.access.exception_close', 'saas.access.exceptions_closed', 'ACCESS_EXCEPTION',
     '00000000-0000-4000-8000-000000000185'::uuid, NULL, NULL, jsonb_build_object('closed', jsonb_array_length(closed)),
     jsonb_build_object('closed', closed, 'asOf', hon.saas_ts(at)), at);
+  PERFORM hon.require_saas_hq_actor(p_subject, false);
+  RETURN result;
 END $$;
 
 -- ---------- HQ read ----------
@@ -559,6 +595,100 @@ BEGIN
     'chargesEnabled',false);
 END $$;
 
+-- 0172 body + revoke-first pilot conversion (owner policy, 2026-10-24): an approved pilot, demonstration or testing
+-- exception must be revoked by an HQ owner or reach its expiry before the school enters awaiting-first-payment. While
+-- one is active or scheduled the transition is refused (SAAS_ACCESS_EXCEPTION_ACTIVE) and nothing changes. An open
+-- exception that already lapsed (or whose entitlement was replaced) is closed here first, so its record ends as EXPIRED
+-- (or SUPERSEDED) rather than staying open under the awaiting state. A seamless verified-payment conversion is a
+-- separate, unapproved milestone.
+CREATE OR REPLACE FUNCTION hon.place_saas_organization_awaiting_payment(p_subject text, p_org uuid, p_input jsonb, p_key uuid, p_request_id uuid,
+  p_correlation_id uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE actor uuid; fp text; replay jsonb; ent hon.organization_entitlements%ROWTYPE; prior jsonb; nxt jsonb; at timestamptz := clock_timestamp();
+  expected integer; lapsed hon.saas_access_exceptions%ROWTYPE;
+BEGIN
+  IF p_org IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object'
+    OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) <> ARRAY['expectedEntitlementVersion']
+    OR jsonb_typeof(p_input->'expectedEntitlementVersion') <> 'number' OR (p_input->>'expectedEntitlementVersion') !~ '^[1-9][0-9]{0,8}$' THEN
+    RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
+  END IF;
+  expected := (p_input->>'expectedEntitlementVersion')::integer;
+  actor := hon.require_saas_hq_actor(p_subject, true);
+  fp := hon.saas_fingerprint(ARRAY['access.await', p_org::text, expected::text]);
+  replay := hon.saas_claim_request(actor, p_key, 'saas.access.await', fp, p_request_id, p_correlation_id);
+  IF replay IS NOT NULL THEN RETURN replay; END IF;
+  IF NOT hon.saas_access_program_active() THEN RAISE EXCEPTION 'SAAS_ACCESS_NOT_ACTIVE' USING ERRCODE = '23514'; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('saas.organization:' || p_org::text, 0));
+  SELECT * INTO ent FROM hon.organization_entitlements WHERE organization_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
+  IF ent.version <> expected THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
+  IF hon.saas_access_exception_live(p_org) THEN RAISE EXCEPTION 'SAAS_ACCESS_EXCEPTION_ACTIVE' USING ERRCODE = '23514'; END IF;
+  IF EXISTS (SELECT 1 FROM hon.saas_access_states WHERE organization_id = p_org) THEN RAISE EXCEPTION 'SAAS_ACCESS_STATE_EXISTS' USING ERRCODE = '23514'; END IF;
+  IF EXISTS (SELECT 1 FROM hon.saas_subscriptions WHERE organization_id = p_org AND status <> 'VOIDED') THEN
+    RAISE EXCEPTION 'SAAS_SUBSCRIPTION_EXISTS' USING ERRCODE = '23514';
+  END IF;
+  IF EXISTS (SELECT 1 FROM hon.saas_checkout_sessions WHERE organization_id = p_org AND status IN ('CREATED','OPEN')) THEN
+    RAISE EXCEPTION 'SAAS_CHECKOUT_OPEN' USING ERRCODE = '23514';
+  END IF;
+  prior := hon.saas_entitlement_json(p_org);
+  SELECT * INTO lapsed FROM hon.saas_access_exceptions WHERE organization_id = p_org AND status = 'GRANTED' FOR UPDATE;
+  IF FOUND THEN PERFORM hon.saas_end_access_exception(lapsed.id, 'EXPIRED', NULL, actor, at); END IF;
+  -- No access before the first payment: the existing row is held SUSPENDED (every status-gated function refuses it).
+  UPDATE hon.organization_entitlements SET status = 'SUSPENDED', version = version + 1, updated_at = at WHERE organization_id = p_org;
+  nxt := hon.saas_entitlement_json(p_org);
+  INSERT INTO hon.saas_access_states(organization_id, state, reason, version, changed_by_principal_id, created_at, updated_at)
+    VALUES (p_org, 'AWAITING_FIRST_PAYMENT', 'AWAITING_INITIAL_PAYMENT', 1, actor, at, at);
+  INSERT INTO hon.saas_access_transitions(organization_id, kind, outcome, reason, prior_entitlement, next_entitlement, actor_principal_id, occurred_at)
+    VALUES (p_org, 'AWAITING_FIRST_PAYMENT', 'APPLIED', 'AWAITING_INITIAL_PAYMENT', prior, nxt, actor, at);
+  RETURN hon.saas_record(actor, p_key, 'saas.access.await', 'saas.access.awaiting', 'ACCESS_STATE', p_org, p_org, prior, nxt,
+    jsonb_build_object('access', hon.saas_organization_access(p_org)), at);
+END $$;
+
+-- Database backstop for the same rule on every path: no access state (awaiting or paid) is created for an
+-- organization holding an open, unexpired exception.
+CREATE FUNCTION hon.guard_saas_access_state_exception() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, hon AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM hon.saas_access_exceptions x WHERE x.organization_id = NEW.organization_id AND x.status = 'GRANTED'
+    AND x.expires_at > clock_timestamp()) THEN
+    RAISE EXCEPTION 'SAAS_ACCESS_EXCEPTION_ACTIVE' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER saas_exception_await BEFORE INSERT ON hon.saas_access_states FOR EACH ROW EXECUTE FUNCTION hon.guard_saas_access_state_exception();
+
+-- 0152 body + the entitlement window: Champions contest eligibility (live standings and the frozen results that
+-- winner proposals read) requires the referrer's entitlement to be in effect at the evaluation time (p_cutoff: now
+-- for live standings, the END time for the freeze), not only ACTIVE at an eligible tier. A scheduled (future-start)
+-- or lapsed window, such as an expired HQ-owner exception that nobody closed yet, is TIER_NOT_ELIGIBLE. Results
+-- already frozen are evidence and are not recalculated.
+CREATE OR REPLACE FUNCTION hon.champions_contest_counts(p_contest uuid, p_cutoff timestamptz)
+RETURNS TABLE (school_id uuid, organization_id uuid, qualified integer, reached_at timestamptz, ineligible_reason text)
+LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
+  WITH c AS (SELECT * FROM hon.champions_contests WHERE id = p_contest),
+  counted AS (
+    SELECT a.referrer_school_id, a.referrer_organization_id, count(*)::integer qualified, max(a.qualified_at) reached_at
+    FROM hon.champions_attributions a, c
+    WHERE a.state = 'QUALIFIED' AND a.qualified_at >= c.starts_at AND a.qualified_at < least(c.ends_at, p_cutoff)
+      AND (c.count_basis = 'QUALIFIED_IN_WINDOW' OR (a.captured_at >= c.starts_at AND a.captured_at < c.ends_at))
+      AND NOT EXISTS (SELECT 1 FROM hon.champions_contest_pauses pz WHERE pz.contest_id = c.id
+        AND a.qualified_at >= pz.paused_at AND a.qualified_at < coalesce(pz.resumed_at, 'infinity'::timestamptz))
+    GROUP BY a.referrer_school_id, a.referrer_organization_id)
+  SELECT k.referrer_school_id, k.referrer_organization_id, k.qualified, k.reached_at,
+    CASE
+      WHEN c.eligibility_scope = 'SELECTED_SCHOOLS' AND NOT EXISTS (SELECT 1 FROM hon.champions_contest_schools cs
+        WHERE cs.contest_id = c.id AND cs.school_id = k.referrer_school_id) THEN 'NOT_SELECTED'
+      WHEN NOT EXISTS (SELECT 1 FROM hon.schools s JOIN hon.organizations o ON o.id = s.organization_id
+        WHERE s.id = k.referrer_school_id AND s.status = 'ACTIVE' AND o.status = 'ACTIVE') THEN 'SCHOOL_INACTIVE'
+      WHEN NOT EXISTS (SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id = k.referrer_organization_id
+        AND e.status = 'ACTIVE' AND e.tier::text = ANY(c.eligible_tiers)
+        AND e.effective_from <= p_cutoff AND (e.effective_until IS NULL OR e.effective_until > p_cutoff)) THEN 'TIER_NOT_ELIGIBLE'
+      WHEN EXISTS (SELECT 1 FROM hon.champions_leaderboard_holds h WHERE h.school_id = k.referrer_school_id AND h.status = 'ACTIVE') THEN 'LEADERBOARD_HOLD'
+      WHEN k.qualified < c.minimum_qualified THEN 'BELOW_MINIMUM'
+    END
+  FROM counted k, c
+$$;
+
 -- ---------- grants ----------
 DO $$ DECLARE r text; col text; f text; BEGIN
   ALTER TABLE hon.saas_access_exceptions ENABLE ROW LEVEL SECURITY;
@@ -573,7 +703,8 @@ DO $$ DECLARE r text; col text; f text; BEGIN
       EXECUTE format('REVOKE ALL (%I) ON hon.saas_access_exceptions FROM %I',col,r);
     END LOOP;
   END LOOP;
-  FOREACH f IN ARRAY ARRAY['hon.guard_saas_access_exceptions()','hon.guard_saas_access_exception_grant()','hon.saas_access_exception_live(uuid)',
+  FOREACH f IN ARRAY ARRAY['hon.guard_saas_access_exceptions()','hon.guard_saas_access_exception_grant()','hon.guard_saas_access_state_exception()',
+    'hon.saas_access_exception_live(uuid)',
     'hon.saas_access_exception_json(hon.saas_access_exceptions)','hon.saas_end_access_exception(uuid,text,text,uuid,timestamp with time zone)',
     'hon.grant_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)','hon.revoke_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',
     'hon.close_expired_saas_access_exceptions(text,uuid,uuid,uuid)','hon.read_saas_access_exceptions_from_hq(text,uuid)'] LOOP

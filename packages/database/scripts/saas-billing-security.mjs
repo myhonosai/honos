@@ -206,6 +206,7 @@ export const saasBillingFunctions = [
  // 0185 secure HQ provisioning (D9): HQ-owner access exceptions
  ['hon.guard_saas_access_exceptions()',false,false],
  ['hon.guard_saas_access_exception_grant()',false,false],
+ ['hon.guard_saas_access_state_exception()',false,false],
  ['hon.saas_access_exception_live(uuid)',false,false],
  ['hon.saas_access_exception_json(hon.saas_access_exceptions)',false,false],
  ['hon.saas_end_access_exception(uuid,text,text,uuid,timestamp with time zone)',false,false],
@@ -225,6 +226,8 @@ const crossTriggers = [
  ['saas_founder_reservations','saas_legacy_new_sale',7,'guard_saas_legacy_new_sale'],
  // 0185: a new exception must name a current HQ owner and describe the entitlement exactly.
  ['saas_access_exceptions','saas_exception_authority',7,'guard_saas_access_exception_grant'],
+ // 0185: no access state (awaiting or paid) while an exception is open and unexpired (revoke-first pilot conversion).
+ ['saas_access_states','saas_exception_await',7,'guard_saas_access_state_exception'],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');

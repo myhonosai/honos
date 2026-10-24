@@ -1808,7 +1808,8 @@ END $$;
 
 -- Secure HQ school provisioning (0185, owner decision D9) exact reconciliation: the HQ-owner access exception table is a
 -- private deny-all table; its guards and helpers are private; only the four HQ commands and read are runtime-callable.
--- Replaced functions (provisioning, the HQ tier transition, HON OS refusal and offers read) keep their existing grants.
+-- Replaced functions (provisioning, the HQ tier transition, HON OS refusal and offers read, B6A place-awaiting and the
+-- Champions contest counts) keep their existing grants; the awaiting-state exception guard is private.
 DO $$ DECLARE r text; col text; f text; BEGIN
   ALTER TABLE hon.saas_access_exceptions ENABLE ROW LEVEL SECURITY;
   ALTER TABLE hon.saas_access_exceptions FORCE ROW LEVEL SECURITY;
@@ -1822,7 +1823,8 @@ DO $$ DECLARE r text; col text; f text; BEGIN
       EXECUTE format('REVOKE ALL (%I) ON hon.saas_access_exceptions FROM %I',col,r);
     END LOOP;
   END LOOP;
-  FOREACH f IN ARRAY ARRAY['hon.guard_saas_access_exceptions()','hon.guard_saas_access_exception_grant()','hon.saas_access_exception_live(uuid)',
+  FOREACH f IN ARRAY ARRAY['hon.guard_saas_access_exceptions()','hon.guard_saas_access_exception_grant()','hon.guard_saas_access_state_exception()',
+    'hon.saas_access_exception_live(uuid)',
     'hon.saas_access_exception_json(hon.saas_access_exceptions)','hon.saas_end_access_exception(uuid,text,text,uuid,timestamp with time zone)',
     'hon.grant_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)','hon.revoke_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',
     'hon.close_expired_saas_access_exceptions(text,uuid,uuid,uuid)','hon.read_saas_access_exceptions_from_hq(text,uuid)'] LOOP

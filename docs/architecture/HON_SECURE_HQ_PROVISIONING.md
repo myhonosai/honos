@@ -71,7 +71,7 @@ The table `hon.saas_access_exceptions` is private, deny-all and forced RLS. Each
 | `GET hq/saas/organizations/:organizationId/access-exceptions` | HQ owner or billing operator | Current access and the last 50 exceptions, with a derived lifecycle. |
 | `POST hq/saas/organizations/:organizationId/access-exceptions` | **HQ owner only** | Grants one exception. Human command `saas-access-exception-grant` with an idempotency key. |
 | `POST hq/saas/access-exceptions/:exceptionId/revoke` | **HQ owner only** | Revokes with a reason. Command `saas-access-exception-revoke`. |
-| `POST hq/saas/access-exceptions/close-expired` | HQ owner or billing operator | Closes lapsed or superseded exceptions (at most 200). It removes only access that already ended. Command `saas-access-exception-close`. |
+| `POST hq/saas/access-exceptions/close-expired` | HQ owner or billing operator | Closes lapsed or superseded exceptions, at most 200 per call. Only records that are no longer live are selected before the limit, so live exceptions never fill a batch and repeated calls work through every closable record. It removes only access that already ended. Command `saas-access-exception-close`. |
 
 **Grant input:** exactly `schoolId`, `purpose`, `reason`, `scopeTier`, `startsAt`, `expiresAt` and `expectedEntitlementVersion`. Nothing the client sends names the grantor.
 
@@ -99,10 +99,25 @@ The table `hon.saas_access_exceptions` is private, deny-all and forced RLS. Each
 | `SCHEDULED` | Before the start. |
 | `IN_EFFECT` | |
 | `EXPIRED` | At the expiry, with **no job needed**. Every status-gated function also checks the entitlement window, and the coverage proof now checks this for every runtime function. |
-| `SUPERSEDED` | Anything else changed the entitlement, for example B6A placed the school awaiting payment. |
+| `SUPERSEDED` | Something outside these commands changed the entitlement while the exception was open. Every command path refuses to change a live exception's entitlement, so this is a defensive state. |
 | `REVOKED` | |
 
 **Ending an exception.** Revoking, or closing a lapsed one, suspends the entitlement **only if it is still the one the exception granted** (same version, still ACTIVE). A later payment or HQ change is never undone.
+
+### 3. Converting a pilot to paid (revoke-first)
+
+Owner policy, confirmed 2026-10-24: an approved pilot or demonstration exception must be revoked by an HQ owner, or reach its expiry, before the school enters awaiting-first-payment.
+- `hon.place_saas_organization_awaiting_payment` (B6A, replaced in `0185`) refuses while an exception is **active or scheduled** with 422 `SAAS_ACCESS_EXCEPTION_ACTIVE`. Nothing changes.
+- After a revocation, or once the exception has expired, the transition works. An expired exception that nobody closed is closed in the same transaction, so its record ends as `EXPIRED`. The school then buys HON OS through the D7 path.
+- A database trigger on `saas_access_states` (`saas_exception_await`) refuses any access state, on any path, while an open exception has not expired.
+- Subscriptions, entitlements, legacy and lifetime rights are not changed. A seamless verified-payment conversion would be a separate approved milestone.
+
+### 4. Champions contests use the entitlement window
+
+`hon.champions_contest_counts` (0152, replaced in `0185`) feeds both the live standings and the frozen results that winner proposals read. Eligibility now requires the referrer's entitlement to be **in effect at the evaluation time** (now for live standings, the END time for the freeze), not only ACTIVE at an eligible tier.
+- A scheduled (future-start) or lapsed window, such as an expired exception nobody closed yet, is `TIER_NOT_ELIGIBLE`. The existing reason code is reused, because the results table's reasons are fixed.
+- Paid and legacy customers (ACTIVE, no expiry) stay eligible.
+- Results frozen earlier are evidence and are not recalculated.
 
 ## Security boundary
 
@@ -124,6 +139,11 @@ A row written around the command, even by the migration owner, is refused (`SAAS
 - Legacy checkout stays closed (D8).
 
 **Scope cannot be widened.** The HQ tier transition (`0146`) refuses an organization with a live exception. It returns 404 `HQ_ENTITLEMENT_UNAVAILABLE`, its existing refusal.
+
+**Authority holds through the mutation.** Grant, revoke and close check the HQ actor, then share-lock `users`, `principals`, `hq_operator_grants` and `family_access_grants`, then check again. They check once more after the organization and row lock waits and again just before returning.
+- While a command runs, no grant, principal or family change can commit. A change that arrives later waits for the command.
+- An authority that runs out by the clock during a wait is refused. The whole transaction rolls back: no entitlement change, exception ending, audit, outbox or idempotency claim.
+- The lock order matches the existing SaaS and Champions commands (identity tables, then the request claim, then the organization), so it adds no deadlock.
 
 **Concurrency.** The organization advisory lock, the entitlement row lock, the version check and a unique open-exception index together allow one exception per organization under concurrent requests. Idempotency uses `saas_claim_request`.
 
@@ -164,17 +184,34 @@ Nothing in `0185` updates an existing entitlement, subscription, renewal, lifeti
 - a live exception refused as a purchase basis, and a tier change refused;
 - a five-way grant race;
 - direct runtime writes and forged rows written around the command;
-- revoke, expiry, scheduled, superseded, closing, renewal and auto-close;
+- revoke, expiry, scheduled, closing, renewal and auto-close;
+- revoke-first conversion: awaiting-first-payment refused while active or scheduled (command and trigger), and working after revocation or expiry, followed by the D7 purchase;
 - every other organization untouched.
+
+**Hardening proof:** `packages/database/scripts/test-saas-access-exception-hardening.mjs` covers the review corrections:
+- a revocation and a grant that wait while the owner's grant is ended, or runs out by the clock, commit nothing;
+- an authority change that arrives later waits for the command, with no deadlock;
+- an authorized retry under the same key is fresh, then replays;
+- closing works through 450 open exceptions, 215 of them live and sorted first, in batches of 200 and 35, never closing a live one;
+- Champions contest eligibility and the freeze with an in-effect, a scheduled and an expired exception and a legacy customer, winner proposals, and earlier frozen results.
+
+Mutation checks on the disposable database: restoring the earlier revoke, close, contest counts or awaiting-payment body (or dropping the rechecks, or the grant authority trigger together with the grant recheck) makes the matching proof fail.
 
 **Coverage proof:** `test-entitlement-enforcement-coverage.mjs` now also checks an expired-window and a future-window organization against every runtime function.
 
 ## Owner decisions and release risks
 
-1. **Exception policy terms.** `saas_access_policy_terms` v1 is still PROPOSED. Exceptions use its `exception_max_days = 90` and `exception_authority = HQ_OWNER` as the cap. Confirm both, or approve new terms, before exceptions are used for real schools.
+Source-design approvals (owner, 2026-10-24). These are not authorization to use the functionality with real schools:
+- only an authorized human HQ owner grants or revokes;
+- at most 90 days from the access start, scheduled at most 30 days ahead;
+- no open-ended exceptions;
+- no grants to schools already awaiting their first payment;
+- revoke-first pilot conversion.
+
+1. **Exception policy terms.** `saas_access_policy_terms` v1 still reads PROPOSED in the database. Its `exception_max_days = 90` and `exception_authority = HQ_OWNER` match the approved design. Recording the terms as approved is a separate step before exceptions are used for real schools.
 2. **Review requirement.** An exception must expire; it cannot be open-ended with a review date instead. Renewing means a new grant, with its own reason and evidence.
-3. **Converting a pilot to paid.** A live exception blocks purchase. HQ revokes it (or lets it end), places the school awaiting payment (needs paid access ACTIVE) and the school buys HON OS. Access lapses briefly between the revocation and the payment, by design.
-4. **Exceptions and awaiting schools.** An exception cannot be granted to a school already awaiting its first payment: the B6A access contract never shows access in effect while awaiting. If HQ wants a free trial window for such schools, that is a separate decision.
-5. **Expiry needs no job.** Closing exceptions only tidies the row; access already ended at the expiry. One static nuance: the Champions contest ranking reads `status = 'ACTIVE'` without the window, so a lapsed, unclosed exception school could still count in a contest ranking (not an operating privilege). Closing removes it.
+3. **Converting a pilot to paid.** Revoke-first (section 3). Access lapses between the revocation (or expiry) and the payment, by design.
+4. **Exceptions and awaiting schools.** No exception for a school already awaiting its first payment, and no awaiting state while an exception is open.
+5. **Expiry needs no job.** Closing exceptions only tidies the row; access, purchase eligibility and Champions contest eligibility already end at the expiry.
 6. **The provisioner's OWNER grant.** It is unchanged from 0019. Every staff scope resolver excludes HQ principals, so it gives HQ no school-staff access.
 7. **Deploy order.** Applying `0185` changes only future provisioning. Existing schools keep their entitlements. Paid access stays INACTIVE, so provisioned schools have no purchase path until the activation migration.
