@@ -52,7 +52,7 @@ export function HonMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }): React.R
   </span>;
 }
 
-export function AgentPortrait({ agent, size = 'md' }: { agent: HonCommandAgent; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
+export function AgentPortrait({ agent, size = 'md' }: { agent: Pick<HonCommandAgent, 'name' | 'color' | 'portrait'>; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
   const [failed, setFailed] = useState(false);
   const image = useRef<HTMLImageElement>(null);
   useEffect(() => {
@@ -127,8 +127,8 @@ function TeamGrid({ snapshot, variant, onSelectAgent }: { snapshot: HonCommandSn
 
 function TeachingAiCard(): React.ReactElement {
   const ai = HON_TEACHING_AI;
-  return <section className={styles.teachingAi} aria-labelledby="hon-teaching-ai">
-    <span className={styles.monogram} aria-hidden="true">{ai.name.charAt(0)}</span>
+  return <section className={styles.teachingAi} style={{ '--agent': ai.color } as React.CSSProperties} aria-labelledby="hon-teaching-ai">
+    <AgentPortrait agent={ai} size="lg" />
     <div>
       <p className={styles.kicker}>Separate instructional AI · not part of the management team</p>
       <h3 id="hon-teaching-ai">{ai.name} <small>(provisional name)</small></h3>

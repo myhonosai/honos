@@ -200,6 +200,9 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     const panelOverflow = await page.evaluate(() => { const panel = document.querySelector('[role="dialog"]'); const edge = panel.getBoundingClientRect().right; return [...panel.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > edge + 1).map((e) => `${e.tagName}.${e.className}`).slice(0, 4); });
     assert.deepEqual(panelOverflow, [], 'HON panel content overflows');
     await shot(page, `${mode_}-${name}-hon-panel-team`);
+    await dialog.getByRole('region', { name: /Kai/ }).scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => { const img = document.querySelector('[role="dialog"] img[src="/ai/kai.webp"]'); return img && img.complete && img.naturalWidth > 0; });
+    await shot(page, `${mode_}-${name}-hon-panel-kai`);
     await axe(page, `${mode_}-${name}-hon-panel`);
     await dialog.getByRole('button', { name: /^Chad,/ }).click();
     await dialog.getByRole('heading', { name: 'Chad' }).waitFor();
@@ -235,6 +238,7 @@ await check('modern desktop: every agent detail, Claire identity, suggested/work
   await kai.scrollIntoViewIfNeeded();
   assert.ok(await kai.getByText('Separate instructional AI · not part of the management team').isVisible(), 'Kai is separate from the seven');
   assert.ok(await kai.getByText(/never mark student proficiency/).isVisible(), 'Kai boundary shown');
+  assert.ok(await kai.locator('img[src="/ai/kai.webp"]').evaluate((img) => img.complete && img.naturalWidth > 0), 'Kai portrait loads');
   assert.equal(await kai.getByRole('link').count(), 5, 'Kai links only to existing teaching tools');
   await shot(page, 'modern-desktop-1440-teaching-ai-card');
   await dialog.getByRole('tab', { name: /^AI work/ }).click();

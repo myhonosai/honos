@@ -112,7 +112,7 @@ Owner decision (2026-10-24): the teaching assistant is assigned to neither Clair
 
 1. The reference routes (`/`, `/complete-mobile`, `/reference/classic-dashboard`): keep as labeled design references, move them under `/reference/`, or retire them.
 2. Whether the Action Center prefill ships as its own small PR before F3.
-3. Kai: an approved portrait and the final default name (currently a provisional "K" monogram).
+3. Kai: the final default name. The portrait was supplied by the owner on 2026-10-24; the realistic option is in use.
 4. Whether the HON launcher should be hidden on `/staff/*` pages for users without a verified management scope once T1 can tell them apart. Today it opens to a short notice only.
 
 ## Verification

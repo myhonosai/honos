@@ -89,6 +89,9 @@ describe('HON command roster', () => {
     expect(JSON.stringify(HON_DRAFT_WORK_SOURCES)).not.toContain(HON_TEACHING_AI.name);
     expect(approvalSourceLabel('teaching.draft.save')).not.toContain(HON_TEACHING_AI.name);
     expect(HON_TEACHING_AI.boundary).toMatch(/never mark student proficiency, promotions, testing results or curriculum completion/);
+    expect(HON_TEACHING_AI.portrait).toBe('/ai/kai.webp');
+    expect(existsSync(join('public', HON_TEACHING_AI.portrait))).toBe(true);
+    expect(HON_AI_TEAM.map((member) => member.portrait)).not.toContain(HON_TEACHING_AI.portrait);
     expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Curriculum library', 'Curriculum progress', 'Scheduled classes', 'Teaching draft assistant (legacy)']);
   });
 
@@ -209,6 +212,7 @@ describe('HON workspace presentation', () => {
     expect(html).toContain('Kai <small>(provisional name)</small>');
     expect(html).toContain('Teaching &amp; Curriculum AI');
     expect(html).toContain('never mark student proficiency');
+    expect(html).toContain('src="/ai/kai.webp"');
     for (const tool of HON_TEACHING_AI.tools) expect(html).toContain(`href="${tool.href}"`);
     expect(view((await loaded()).snapshot, 'work')).not.toContain('Kai');
   });

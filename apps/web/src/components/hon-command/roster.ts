@@ -222,13 +222,16 @@ export function safeHonReturnPath(value: unknown): string {
  * Owner decision 2026-10-24: teaching and curriculum support is a separate
  * instructional AI, not Claire or Jordan and not one of the seven management
  * employees. Deliberately NOT added to the protected HON_AI_TEAM catalog: the
- * name is provisional, there is no approved portrait, and its authorization,
+ * name is provisional, and its authorization,
  * catalog entry and contracts belong to the backend. Display only; the legacy
  * `claire` teaching records stay under their own historical label above.
  */
 export const HON_TEACHING_AI = {
   name: 'Kai',
   title: 'Teaching & Curriculum AI',
+  /** Owner-supplied portrait (2026-10-24), realistic style to match the approved roster. Provisional like the name. */
+  portrait: '/ai/kai.webp',
+  color: '#4f8dff',
   purpose: 'Planned instructional assistant for school owners and individually authorized instructors, with its own access separate from the management team.',
   boundary: 'Kai will never mark student proficiency, promotions, testing results or curriculum completion. Those stay instructor decisions recorded in the existing workflows.',
   tools: [
