@@ -7,7 +7,8 @@ import styles from './ai-draft-work-inbox.module.css';
 
 const AGENTS: Record<AiDraftWorkAgentKey, { name: string; destination: string; destinationLabel: string; role: string }> = {
   marcus: { name: 'Marcus', role: 'Growth planning', destination: '/staff/marketing/assistant', destinationLabel: 'Open marketing draft guide' },
-  claire: { name: 'Claire', role: 'Curriculum support', destination: '/staff/teaching-assistant', destinationLabel: 'Open teaching draft guide' },
+  // Legacy record key: these are curriculum teaching drafts, not Claire's Business Performance work.
+  claire: { name: 'Teaching drafts', role: 'Legacy curriculum drafts', destination: '/staff/teaching-assistant', destinationLabel: 'Open teaching draft guide' },
   chad: { name: 'Chad', role: 'CRM follow-up drafts', destination: '/staff/leads/assistant', destinationLabel: 'Open follow-up draft guide' },
 };
 
@@ -80,7 +81,7 @@ export function AiDraftWorkInbox() {
 
     {error ? <section className={styles.error} role="alert"><strong>Workspace unavailable.</strong><p>{error}</p></section> : null}
     {unavailable.length ? <section className={styles.notice}><strong>Limited access</strong><p>Current permissions do not include {unavailable.map((agent) => AGENTS[agent]?.name ?? agent).join(', ')} draft work in this school. No missing work is assumed.</p></section> : null}
-    {!loading && !error && !items.length ? <section className={styles.empty}><h2>No current durable draft work</h2><p>There are no Marcus, Claire, or Chad draft requests available to your current direct-human scope. Create a bounded request from an established draft guide when authorized.</p></section> : null}
+    {!loading && !error && !items.length ? <section className={styles.empty}><h2>No current durable draft work</h2><p>There are no Marcus, Chad, or legacy teaching draft requests available to your current direct-human scope. Create a bounded request from an established draft guide when authorized.</p></section> : null}
 
     <section className={styles.list} aria-live="polite" aria-busy={loading} aria-label="Recorded governed AI work">
       {loading ? <p className={styles.loading}>Loading only the durable work available to your current direct-human scope…</p> : null}
