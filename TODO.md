@@ -1,5 +1,12 @@
 # HON Delivery Backlog
 
+## Commercial A2 — immutable pricing and customer acceptance (Codex)
+
+- [x] From verified main `121653ee81d85a3ff893a209e635db2efaefff08`, implement additive 0188, private immutable schedule/acceptance records, same-set published-offer price recomputation, exact disclosure and school-bound digest confirmation. Historical accepted offers, all A1 tests and D11-A 0187 remain unchanged. No seeded prices, approvals or purchasing enablement.
+- [x] Add direct-human HQ/school APIs, independent exact-school authorization, revision/idempotency/audit/inert-outbox enforcement and deferred evidence/authority checks. Block legacy checkout for schedule-bound offers until Commercial B; refuse founder acknowledgement until Commercial C supplies authoritative allocation/promotion-history evidence.
+- [ ] Final exact-head tests/typecheck/build, all disposable PostgreSQL proofs, real signed-session API/database evidence and guarded staging rehearsals in one focused draft PR. Local HTTP sockets are restricted; do not substitute source inspection for CI. See `docs/architecture/HON_COMMERCIAL_A2_PRICING_ACCEPTANCE.md`; final measured results belong in the PR.
+- [ ] Independent security review and explicit owner merge approval. Commercial B/C/D/E, real provider schedules, paid access, trial runtime/policy approval, credits and deployment remain gated; no automatic continuation.
+
 ## D11-A customer trial governance — Codex
 
 - [ ] From `67a060b37d753a3e202462a99874d9a9df708cb7`, implement isolated customer-trial policy proposals/decisions, immutable campaign versions, bounded digest-confirmed publication, authorized HQ reads and additive 0187. No seeded approval, enrollment, links, entitlement or promotional-credit grants; keep every activation gate closed.
