@@ -6,6 +6,7 @@ import {
   validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
   validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
+  validateSaasExceptionPolicyDecisionInput, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
@@ -54,6 +55,13 @@ export class SaasSchoolBillingService {
       validateSaasAccessRetryReceipt);
   }
   // D9: HQ-owner access exceptions. The database enforces the HQ-owner authority, eligibility and window cap.
+  async readExceptionPolicy(subject: string) {
+    return this.billing.call('readExceptionPolicy', [subject], validateSaasExceptionPolicyView);
+  }
+  async decideExceptionPolicy(subject: string, body: unknown, key: unknown) {
+    const [input,idempotencyKey] = parse(() => [validateSaasExceptionPolicyDecisionInput(body),saasUuid(key)] as const);
+    return this.billing.call('decideExceptionPolicy', [subject,JSON.stringify(input),idempotencyKey,randomUUID(),randomUUID()],validateSaasExceptionPolicyReceipt);
+  }
   async readAccessExceptions(subject: string, organizationId: unknown) {
     const organization = parse(() => saasUuid(organizationId));
     return this.billing.call('readAccessExceptions', [subject, organization], validateSaasAccessExceptionsView);

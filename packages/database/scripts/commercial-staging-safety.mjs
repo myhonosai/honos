@@ -9,6 +9,7 @@ export const proofs = Object.freeze([
   ['test-saas-hon-os-new-school-onboarding.mjs', '0183 D7 onboarding', 'temporary paid-access and credit-program ACTIVE; zero AI grants; simulated provider', true],
   ['test-saas-hon-os-only-new-sales.mjs', '0184 D8 legacy continuity/closure', 'temporary legacy fixture and paid-access ACTIVE; simulated provider'],
   ['test-saas-secure-hq-provisioning.mjs', '0185 suspended provisioning and revoke-first conversion', 'temporary paid-access ACTIVE; simulated provider'],
+  ['test-saas-exception-policy-integrity.mjs', '0186 D10 policy authority, validity, binding and concurrency', 'synthetic exception-only decisions; full paid access INACTIVE'],
   ['test-saas-access-exception-hardening.mjs', '0185 authority/concurrency, cleanup and contest windows', 'shipped INACTIVE'],
   ['test-entitlement-enforcement-coverage.mjs', 'runtime entitlement windows and tenant isolation', 'shipped INACTIVE'],
   ['test-champions-club-contests-integrity.mjs', 'contest lifecycle and frozen evidence regression', 'shipped INACTIVE'],
@@ -51,9 +52,9 @@ export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export function validateMigrationEvidence(entries, expected) {
   assert(entries.length && new Set(entries.map(x => x.file.slice(0, 4))).size === entries.length, 'Duplicate migration number.');
   assert(!entries.some(x => /^(0179|0180)_/.test(x.file)), 'Reserved migrations must remain absent.');
-  assert(entries.at(-1).file.startsWith('0185_'), 'Unreviewed migration ceiling.');
+  assert(entries.at(-1).file.startsWith('0186_'), 'Unreviewed migration ceiling.');
   assert.equal(sha256(JSON.stringify(entries)), expected.chainSha256, 'Migration chain differs from the reviewed baseline.');
-  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0185 checksum mismatch.');
+  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0186 checksum mismatch.');
   return { count: entries.length, chainSha256: expected.chainSha256, targets: expected.targets, entries };
 }
 export async function readMigrationEvidence() {
