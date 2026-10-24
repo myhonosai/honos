@@ -1893,3 +1893,31 @@ DO $$ DECLARE r text;t text;c text;f text;BEGIN
  GRANT EXECUTE ON FUNCTION hon.preview_saas_trial_publication(text,uuid) TO hon_runtime;
  END IF;
 END $$;
+
+-- Commercial A2 exact private-table/function reconciliation (0188). No provider or activation authority.
+DO $$ DECLARE r text;t text;c text;f text;BEGIN
+ FOREACH t IN ARRAY ARRAY['saas_price_schedules','saas_price_acceptances'] LOOP
+  EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+  EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['hon.saas_price_usd(integer)','hon.saas_price_content(uuid,uuid)',
+  'hon.saas_price_schedule_json(hon.saas_price_schedules)','hon.saas_price_acceptance_json(hon.saas_price_acceptances)',
+  'hon.saas_price_lock_authority()','hon.record_saas_price_schedule(text,jsonb,uuid,uuid,uuid)',
+  'hon.saas_price_acceptance_preview(uuid,uuid,uuid)','hon.preview_saas_price_acceptance(text,uuid,uuid)',
+  'hon.accept_saas_price_schedule(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_saas_price_schedule(text,uuid)',
+  'hon.read_saas_price_acceptance(text,uuid,uuid)','hon.guard_saas_price_insert()','hon.verify_saas_price_evidence()',
+  'hon.guard_saas_price_provider_boundary()'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+  GRANT EXECUTE ON FUNCTION hon.record_saas_price_schedule(text,jsonb,uuid,uuid,uuid),hon.preview_saas_price_acceptance(text,uuid,uuid),
+   hon.accept_saas_price_schedule(text,uuid,jsonb,uuid,uuid,uuid),hon.read_saas_price_schedule(text,uuid),hon.read_saas_price_acceptance(text,uuid,uuid) TO hon_runtime;
+ END IF;
+END $$;

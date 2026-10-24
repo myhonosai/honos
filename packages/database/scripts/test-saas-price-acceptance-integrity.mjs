@@ -81,7 +81,7 @@ try{
   const d=await billing.createOfferSetDraft(H('hq'),{basedOnSetId:null,termsReference:'SYNTHETIC_A2_TERMS_V1',founderTotalLimit:50,offers},K());
   return (await billing.publishOfferSet(H('hq'),d.set.setId,{expectedRevision:d.set.revision,previewDigest:d.preview.previewDigest,approval:c.SAAS_HON_OS_OFFER_PUBLISH_APPROVAL},K())).set;
  }
- const life={...pricingOffers()[0],offerCode:'LIFETIME',offerKind:'LIFETIME',displayName:'Synthetic historical shape only',priceMinor:357600,cancellationTiming:null};
+ const life={...pricingOffers()[0],offerCode:'LIFETIME',offerKind:'LIFETIME',displayName:'Synthetic historical shape only',priceMinor:357600,saleLimit:1,cancellationTiming:null};
  const set=await publish([...pricingOffers(),life]),offers=Object.fromEntries(set.offers.map(o=>[o.offerKind,o])),schedules={};
  for(const kind of c.SAAS_SCHEDULED_OFFER_KINDS){
   const renewal=offers[kind.endsWith('MONTHLY')?'REGULAR_MONTHLY':'REGULAR_ANNUAL'];
