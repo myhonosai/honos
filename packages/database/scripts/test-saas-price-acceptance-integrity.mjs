@@ -140,9 +140,9 @@ try{
  assert.deepEqual((await accept(p,key)).acceptance,accepted);assert.deepEqual(await pricing.acceptance(H('school'),org.school,accepted.acceptanceId),accepted);passed('new immutable schedule versions stale old previews but never alter original accepted terms or replay');
  // IAM changes that commit while command waits must be observed, and clock expiry is checked after waits/at commit.
  const pr=await preview(revised);let pid;
- await admin.query('BEGIN');await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp() WHERE principal_id=$1',[humans.staff.id]);pid=(await row('SELECT pg_backend_pid() p')).p;
+ await admin.query('BEGIN');await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1',[humans.staff.id]);pid=(await row('SELECT pg_backend_pid() p')).p;
  let pending=settled(accept(pr,K(),'staff'));await waitFor(pid);await admin.query('COMMIT');assert.equal((await pending).error.getStatus(),403);
- await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,effective_until=clock_timestamp()+interval \'1 second\' WHERE principal_id=$1',[humans.staff.id]);
+ await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL,effective_until=clock_timestamp()+interval \'1 second\' WHERE principal_id=$1',[humans.staff.id]);
  await admin.query('BEGIN');await admin.query("SELECT pg_advisory_xact_lock(hashtextextended('saas.offer_sets',0))");pid=(await row('SELECT pg_backend_pid() p')).p;
  const expiryBefore=await footprint();pending=settled(accept(pr,K(),'staff'));await waitFor(pid);await sleep(1100);await admin.query('COMMIT');assert.equal((await pending).error.getStatus(),403);assert.deepEqual(await footprint(),expiryBefore);
  await admin.query('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1',[humans.staff.id]);passed('permission revocation during IAM lock wait and clock expiry during offer lock wait commit no evidence');
@@ -200,8 +200,8 @@ try{
    // Node fetch overrides sec-fetch-mode; use node:http for exact production same-origin marker.
    const {request}=apiRequire('node:http');const send=()=>new Promise((yes,nope)=>{const req=request(base+'/schools/'+org.school+'/hon-os-price-acceptances',{method:'POST',headers},res=>{let text='';res.on('data',x=>text+=x);res.on('end',()=>yes({status:res.statusCode,data:JSON.parse(text)}));});req.on('error',nope);req.end(JSON.stringify(acceptanceInput(pp)));});
    const httpReceipt=await send();assert.equal(httpReceipt.status,200,JSON.stringify(httpReceipt));assert.equal(httpReceipt.data.data.acceptance.paymentStatus,'NOT_AUTHORIZED');assert.equal((await send()).data.data.replayed,true);
-   await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp() WHERE principal_id=$1',[humans.school.id]);assert.equal((await send()).status,403);
-   await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL WHERE principal_id=$1',[humans.school.id]);
+   await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1',[humans.school.id]);assert.equal((await send()).status,403);
+   await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE principal_id=$1',[humans.school.id]);
    passed('actual signed-session HTTP/API/restricted PostgreSQL acceptance, exact replay, missing/invalid session, cross-school denial and revoked permission');
   }finally{await app.close();process.env=saved;}
  }
