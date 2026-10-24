@@ -14,7 +14,14 @@ const {RuntimeDatabaseService}=await import('../../../apps/api/dist/foundation/r
 const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saas-billing.service.js');
 const {SaasTrialsService}=await import('../../../apps/api/dist/saas-trials/saas-trials.service.js');
 const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-billing/saas-school-billing.service.js');
-const billing=new SaasBillingService(new RuntimeDatabaseService()),trials=new SaasTrialsService(billing),exceptions=new SaasSchoolBillingService(billing);
+const database=new RuntimeDatabaseService();
+const callDatabase=database.callSaasBilling.bind(database);
+// Disposable fixture diagnostics only: production continues to redact database errors.
+database.callSaasBilling=async(...args)=>{try{return await callDatabase(...args);}catch(error){
+ if(!['42501','40001','23514','23505','55P03','P0002','22023'].includes(error.code))console.error('D11-A fixture SQL failure',JSON.stringify({operation:args[0],code:error.code,message:error.message,where:error.where}));
+ throw error;
+}};
+const billing=new SaasBillingService(database),trials=new SaasTrialsService(billing),exceptions=new SaasSchoolBillingService(billing);
 const client=url=>new pg.Client({connectionString:url.toString(),ssl:false});
 const admin=client(owner),a=client(runtime),b=client(runtime);
 const tables=['saas_trial_publications','saas_trial_campaign_versions','saas_trial_policy_decisions','saas_trial_policy_versions'];
