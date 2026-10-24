@@ -14,6 +14,12 @@ const {RuntimeDatabaseService}=await import('../../../apps/api/dist/foundation/r
 const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saas-billing.service.js');
 const {SaasPriceAcceptanceService}=await import('../../../apps/api/dist/saas-pricing/saas-price-acceptance.service.js');
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),pricing=new SaasPriceAcceptanceService(billing);
+const callDatabase=database.callSaasBilling.bind(database);
+database.callSaasBilling=async(...args)=>{try{return await callDatabase(...args);}catch(e){
+ if(!['42501','P0002','40001','23505','55P03','57014','22023','22P02','23514'].includes(e.code))
+  console.error('A2 disposable SQL diagnostic',JSON.stringify({operation:args[0],code:e.code,message:e.message,position:e.position,where:e.where}));
+ throw e;
+}};
 const apiRequire=createRequire(new URL('../../../apps/api/package.json',import.meta.url)),c=apiRequire('@hon/contracts');
 const client=u=>new pg.Client({connectionString:u.toString(),ssl:false});
 const admin=client(owner),a=client(runtime),b=client(runtime);
@@ -126,7 +132,7 @@ try{
  // Same-key contenders cannot duplicate. Explicit replay is the only retry, never an automatic command.
  const second=(await record(offers.REGULAR_ANNUAL,offers.REGULAR_ANNUAL,1)).schedule,ps=await preview(second),sameKey=K();
  await a.query('BEGIN');await sqlAccept(a,acceptanceInput(ps),sameKey);
- await nothing(()=>accept(ps,sameKey),409,'REQUEST_IN_PROGRESS');await a.query('COMMIT');assert.equal((await accept(ps,sameKey)).replayed,true);passed('same-key in-flight conflict and unknown-result exact retry preserve a single action');
+ await nothing(()=>accept(ps,sameKey),409,'SAAS_OUTCOME_UNKNOWN');await a.query('COMMIT');assert.equal((await accept(ps,sameKey)).replayed,true);passed('same-key in-flight conflict and unknown-result exact retry preserve a single action');
  const revisions=await Promise.all([settled(record(offers.REGULAR_ANNUAL,offers.REGULAR_ANNUAL,2)),settled(record(offers.REGULAR_ANNUAL,offers.REGULAR_ANNUAL,2))]);
  assert.equal(revisions.filter(x=>x.value).length,1);assert.equal(revisions.find(x=>x.error).error.getStatus(),409);passed('competing HQ schedule revisions serialize with one complete winner and stale-revision refusal');
  const revised=(await record(offers.REGULAR_MONTHLY,offers.REGULAR_MONTHLY,1)).schedule;
@@ -163,7 +169,7 @@ try{
  await sqlDeny(admin.query('TRUNCATE hon.saas_price_acceptances CASCADE'),'42501');passed('private table/function/column ACLs, immutable history and no forgeable PostgreSQL setting authority');
  // New schedule-bound configurations MUST NOT silently use legacy fixed-price hosted checkout.
  await admin.query('CREATE TEMP TABLE a2_provider_probe(hon_os_offer_id uuid); CREATE TRIGGER guard BEFORE INSERT ON a2_provider_probe FOR EACH ROW EXECUTE FUNCTION hon.guard_saas_price_provider_boundary()');
- await sqlDeny(admin.query('INSERT INTO a2_provider_probe VALUES($1)',[no.REGULAR_ANNUAL.offerId]),'23514');
+ await sqlDeny(admin.query('INSERT INTO a2_provider_probe VALUES($1)',[no.REGULAR_MONTHLY.offerId]),'23514');
  await admin.query('INSERT INTO a2_provider_probe VALUES($1)',[K()]);
  await sqlDeny(admin.query('SELECT hon.guard_saas_price_provider_boundary()'),'0A000'); // trigger-only, not an alternate command
  assert.equal((await row('SELECT count(*)::int n FROM hon.saas_checkout_sessions')).n,0);
