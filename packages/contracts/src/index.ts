@@ -1013,3 +1013,5 @@ export * from './saas-paid-access.js';
 export * from './saas-exception-policy.js';
 export * from './saas-offers.js';
 export * from './language-preferences.js';
+
+export * from './saas-trials.js';

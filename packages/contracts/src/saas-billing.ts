@@ -47,6 +47,11 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 
 /** Human-command header values, one per command route. */
 export const SAAS_COMMANDS = {
+  proposeTrialPolicy: 'saas-trial-policy-propose',
+  decideTrialPolicy: 'saas-trial-policy-decide',
+  draftTrialCampaign: 'saas-trial-campaign-draft',
+  publishTrialCampaign: 'saas-trial-campaign-publish',
+  withdrawTrialCampaign: 'saas-trial-campaign-withdraw',
   createCatalogDraft: 'saas-catalog-draft',
   publishCatalog: 'saas-catalog-publish',
   reserveFounder: 'saas-founder-reserve',

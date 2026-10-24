@@ -55,6 +55,13 @@ export async function shippedPosture(client, migrationEvidence) {
   }
   const decisions = (await client.query('SELECT count(*)::int n FROM hon.saas_exception_policy_decisions')).rows[0].n;
   assert.equal(decisions,0,'Shipped posture must contain no synthetic policy decision.');
-  return { programs, records, terms, constraints, counts, decisions,
+  const trialProgram=(await client.query("SELECT status,signup_enabled,enrollment_enabled,promotional_issuance_enabled FROM hon.saas_trial_program")).rows[0];
+  assert.deepEqual(trialProgram,{status:'INACTIVE',signup_enabled:false,enrollment_enabled:false,promotional_issuance_enabled:false});
+  const trialRecords={};
+  for(const table of ['saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications']){
+    trialRecords[table]=(await client.query('SELECT count(*)::int n FROM hon.'+table)).rows[0].n;
+    assert.equal(trialRecords[table],0,'Shipped posture must contain no synthetic trial proposal, approval or publication.');
+  }
+  return { programs, records, terms, constraints, counts, decisions, trialProgram, trialRecords,
     policyGap: 'PAID_ACCESS_PROPOSED; TERMS_V1_IMMUTABLE_PROPOSED_ONLY; EXCEPTION_APPROVAL_GATE_ENFORCED; NO_EXCEPTION_POLICY_APPROVED' };
 }
