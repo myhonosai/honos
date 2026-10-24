@@ -303,24 +303,24 @@ END $$;
 -- Structural backstop, even for inserts attempted around the command. Runtime has no direct table privileges.
 CREATE FUNCTION hon.guard_saas_trial_insert() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE subject text; operation text; latest integer; preview jsonb; prior hon.saas_trial_publications%ROWTYPE; d hon.saas_trial_policy_decisions%ROWTYPE;
+DECLARE subject text; v_operation text; latest integer; preview jsonb; prior hon.saas_trial_publications%ROWTYPE; d hon.saas_trial_policy_decisions%ROWTYPE;
 BEGIN
  SELECT u.external_subject INTO subject FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE p.id=NEW.actor_principal_id;
  PERFORM hon.require_saas_hq_actor(subject,true);
  PERFORM pg_advisory_xact_lock(hashtextextended('saas.customer_trials.governance',0));
  PERFORM hon.require_saas_hq_actor(subject,true);
  IF TG_TABLE_NAME='saas_trial_policy_versions' THEN
-  operation:='saas.trials.policy_propose';SELECT coalesce(max(version),0) INTO latest FROM hon.saas_trial_policy_versions;
+  v_operation:='saas.trials.policy_propose';SELECT coalesce(max(version),0) INTO latest FROM hon.saas_trial_policy_versions;
   IF NEW.version<>latest+1 THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE='40001';END IF;
  ELSIF TG_TABLE_NAME='saas_trial_policy_decisions' THEN
-  operation:='saas.trials.policy_decide';SELECT coalesce(max(revision),0) INTO latest FROM hon.saas_trial_policy_decisions;
+  v_operation:='saas.trials.policy_decide';SELECT coalesce(max(revision),0) INTO latest FROM hon.saas_trial_policy_decisions;
   IF NEW.revision<>latest+1 THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE='40001';END IF;
   IF NEW.decision='APPROVED' AND (NEW.valid_until<=clock_timestamp() OR NEW.policy_id IS DISTINCT FROM (SELECT id FROM hon.saas_trial_policy_versions ORDER BY version DESC LIMIT 1)) THEN RAISE EXCEPTION 'SAAS_TRIAL_POLICY_REQUIRED' USING ERRCODE='23514';END IF;
  ELSIF TG_TABLE_NAME='saas_trial_campaign_versions' THEN
-  operation:='saas.trials.campaign_draft';SELECT coalesce(max(version),0) INTO latest FROM hon.saas_trial_campaign_versions WHERE campaign_id=NEW.campaign_id;
+  v_operation:='saas.trials.campaign_draft';SELECT coalesce(max(version),0) INTO latest FROM hon.saas_trial_campaign_versions WHERE campaign_id=NEW.campaign_id;
   IF NEW.version<>latest+1 THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE='40001';END IF;
  ELSE
-  operation:=CASE WHEN NEW.kind='PUBLISHED' THEN 'saas.trials.campaign_publish' ELSE 'saas.trials.campaign_withdraw' END;
+  v_operation:=CASE WHEN NEW.kind='PUBLISHED' THEN 'saas.trials.campaign_publish' ELSE 'saas.trials.campaign_withdraw' END;
   SELECT * INTO prior FROM hon.saas_trial_publications WHERE campaign_id=NEW.campaign_id ORDER BY revision DESC LIMIT 1;
   IF NEW.revision<>coalesce(prior.revision,0)+1 THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE='40001';END IF;
   IF NEW.kind='PUBLISHED' THEN
@@ -329,22 +329,22 @@ BEGIN
     OR NEW.campaign_id IS DISTINCT FROM (preview->>'campaignId')::uuid THEN RAISE EXCEPTION 'SAAS_TRIAL_PUBLICATION_BLOCKED' USING ERRCODE='23514';END IF;
   ELSIF prior.id IS NULL OR prior.kind<>'PUBLISHED' OR NEW.version_id<>prior.version_id OR NEW.policy_decision_id<>prior.policy_decision_id THEN RAISE EXCEPTION 'SAAS_TRIAL_PUBLICATION_BLOCKED' USING ERRCODE='23514';END IF;
  END IF;
- IF NOT EXISTS(SELECT 1 FROM hon.saas_requests r WHERE r.actor_principal_id=NEW.actor_principal_id AND r.idempotency_key=NEW.idempotency_key AND r.operation=operation AND r.status='IN_PROGRESS') THEN RAISE EXCEPTION 'SAAS_TRIAL_EVIDENCE_REQUIRED' USING ERRCODE='23514';END IF;
+ IF NOT EXISTS(SELECT 1 FROM hon.saas_requests r WHERE r.actor_principal_id=NEW.actor_principal_id AND r.idempotency_key=NEW.idempotency_key AND r.operation=v_operation AND r.status='IN_PROGRESS') THEN RAISE EXCEPTION 'SAAS_TRIAL_EVIDENCE_REQUIRED' USING ERRCODE='23514';END IF;
  RETURN NEW;
 END $$;
 CREATE FUNCTION hon.verify_saas_trial_evidence() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE subject text; operation text; event text; entity text; field text; data jsonb; d hon.saas_trial_policy_decisions%ROWTYPE;
+DECLARE subject text; v_operation text; event text; entity text; field text; data jsonb; d hon.saas_trial_policy_decisions%ROWTYPE;
 BEGIN
  SELECT u.external_subject INTO subject FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE p.id=NEW.actor_principal_id;
  PERFORM hon.require_saas_hq_actor(subject,true);
- IF TG_TABLE_NAME='saas_trial_policy_versions' THEN operation:='saas.trials.policy_propose';event:='saas.trials.policy_proposed';entity:='TRIAL_POLICY';field:='policyVersion';data:=hon.saas_trial_policy_json(NEW);
+ IF TG_TABLE_NAME='saas_trial_policy_versions' THEN v_operation:='saas.trials.policy_propose';event:='saas.trials.policy_proposed';entity:='TRIAL_POLICY';field:='policyVersion';data:=hon.saas_trial_policy_json(NEW);
  ELSIF TG_TABLE_NAME='saas_trial_policy_decisions' THEN
-  operation:='saas.trials.policy_decide';event:='saas.trials.policy_decided';entity:='TRIAL_POLICY_DECISION';field:='decision';data:=hon.saas_trial_decision_json(NEW);
+  v_operation:='saas.trials.policy_decide';event:='saas.trials.policy_decided';entity:='TRIAL_POLICY_DECISION';field:='decision';data:=hon.saas_trial_decision_json(NEW);
   IF NEW.decision='APPROVED' AND NEW.valid_until<=clock_timestamp() THEN RAISE EXCEPTION 'SAAS_TRIAL_POLICY_WINDOW_INVALID' USING ERRCODE='23514';END IF;
- ELSIF TG_TABLE_NAME='saas_trial_campaign_versions' THEN operation:='saas.trials.campaign_draft';event:='saas.trials.campaign_drafted';entity:='TRIAL_CAMPAIGN_VERSION';field:='campaignVersion';data:=hon.saas_trial_campaign_json(NEW);
+ ELSIF TG_TABLE_NAME='saas_trial_campaign_versions' THEN v_operation:='saas.trials.campaign_draft';event:='saas.trials.campaign_drafted';entity:='TRIAL_CAMPAIGN_VERSION';field:='campaignVersion';data:=hon.saas_trial_campaign_json(NEW);
  ELSE
-  operation:=CASE WHEN NEW.kind='PUBLISHED' THEN 'saas.trials.campaign_publish' ELSE 'saas.trials.campaign_withdraw' END;
+  v_operation:=CASE WHEN NEW.kind='PUBLISHED' THEN 'saas.trials.campaign_publish' ELSE 'saas.trials.campaign_withdraw' END;
   event:=CASE WHEN NEW.kind='PUBLISHED' THEN 'saas.trials.campaign_published' ELSE 'saas.trials.campaign_withdrawn' END;entity:='TRIAL_PUBLICATION';field:='publication';data:=hon.saas_trial_publication_json(NEW);
   IF NEW.kind='PUBLISHED' THEN
    SELECT * INTO d FROM hon.saas_trial_policy_decisions ORDER BY revision DESC LIMIT 1;
@@ -353,8 +353,8 @@ BEGIN
   END IF;
  END IF;
  IF NOT EXISTS(SELECT 1 FROM hon.saas_requests r JOIN hon.saas_audit a USING(actor_principal_id,idempotency_key) JOIN hon.saas_outbox o ON o.audit_id=a.id
-  WHERE r.actor_principal_id=NEW.actor_principal_id AND r.idempotency_key=NEW.idempotency_key AND r.status='COMPLETED' AND r.operation=operation
-   AND r.response_body->field=data AND a.action_code=operation AND a.entity_type=entity AND a.entity_id=NEW.id AND a.organization_id IS NULL AND a.next_state=data AND o.event_type=event)
+  WHERE r.actor_principal_id=NEW.actor_principal_id AND r.idempotency_key=NEW.idempotency_key AND r.status='COMPLETED' AND r.operation=v_operation
+   AND r.response_body->field=data AND a.action_code=v_operation AND a.entity_type=entity AND a.entity_id=NEW.id AND a.organization_id IS NULL AND a.next_state=data AND o.event_type=event)
  THEN RAISE EXCEPTION 'SAAS_TRIAL_EVIDENCE_REQUIRED' USING ERRCODE='23514';END IF;
  RETURN NULL;
 END $$;
