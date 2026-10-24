@@ -24,18 +24,38 @@ export const HQ_GROWTH = [
   { path: '/hq/growth/rewards', title: 'Reward Management', icon: 'gift' },
   { path: '/hq/growth/founder-campaigns', title: 'Founder Campaigns', icon: 'target' },
 ] as const;
+export const HQ_REVENUE = [
+  { path: '/hq/revenue', title: 'Subscriptions', icon: 'chart' },
+  { path: '/hq/revenue/invoices', title: 'Invoices', icon: 'database' },
+  { path: '/hq/pricing-offers', title: 'Pricing & Offers', icon: 'settings' },
+] as const;
+export const HQ_AI = [
+  { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
+  { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
+  { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
+] as const;
+/** Top-level HQ entries. A grouped entry's path is a route inside that group; grouped children keep their existing URLs. */
 export const HQ_NAV = [
   { path: '/hq', title: 'Overview', icon: 'home' },
-  { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/schools', title: 'Schools', icon: 'school' },
   { path: '/hq/revenue', title: 'Revenue', icon: 'chart' },
-  { path: '/hq/pricing-offers', title: 'Pricing & Offers', icon: 'settings' },
-  { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
+  { path: '/hq/executives', title: 'AI', icon: 'team' },
   { path: '/hq/growth', title: 'Growth & Referrals', icon: 'growth' },
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },
   { path: '/hq/support', title: 'Support', icon: 'support' },
-  { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
 ] as const;
+type HqNavLink = { readonly path: string; readonly title: string; readonly icon: string };
+export type HqNavGroup = { readonly key: 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };
+/** Desktop rail and mobile drawer share this one structure. */
+export const HQ_NAV_GROUPS: Readonly<Record<string, HqNavGroup>> = {
+  '/hq/revenue': { key: 'revenue', title: 'Revenue', icon: 'chart', children: HQ_REVENUE },
+  '/hq/executives': { key: 'ai', title: 'AI', icon: 'team', children: HQ_AI },
+  '/hq/growth': { key: 'growth', title: 'Growth & Referrals', icon: 'growth', overview: { path: '/hq/growth', title: 'Growth overview', icon: 'growth' }, children: HQ_GROWTH },
+};
+/** True when a path belongs to a group, so the group opens for the current page. */
+export function hqGroupContains(group: HqNavGroup, path: string): boolean {
+  return [...(group.overview ? [group.overview] : []), ...group.children].some((item) => path === item.path || path.startsWith(`${item.path}/`));
+}
 
 export const HQ_PLANNED: Readonly<Record<string, { title: string; description: string; areas: readonly string[] }>> = {
   '/hq/revenue': { title: 'Revenue', description: 'Company revenue reporting requires an authoritative HQ financial projection.', areas: ['MRR & ARR', 'Cash & refunds', 'Gross margin'] },
@@ -54,7 +74,8 @@ export function hqPageLabel(path: string): string {
   if (path === '/hq/revenue/invoices') return 'Invoices';
   if (/^\/hq\/revenue\/invoices\/[0-9a-f-]{36}$/i.test(path)) return 'Invoice detail';
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
-  const fixed = [...HQ_NAV, ...HQ_GROWTH].find((item) => item.path === path);
+  if (path === '/hq/revenue') return 'Revenue';
+  const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV].find((item) => item.path === path);
   if (fixed) return fixed.title;
   const executive = HQ_EXECUTIVES.find((entry) => path === `/hq/executives/${entry.executiveKey}`);
   return executive ? `${executive.displayName} workspace` : 'HQ workspace';

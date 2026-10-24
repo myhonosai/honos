@@ -131,9 +131,9 @@ BEGIN
     OR length(p_input->>'reason') NOT BETWEEN 10 AND 500 THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
   decision:=p_input->>'decision'; expected:=(p_input->>'expectedRevision')::integer;
   IF decision IN ('PROPOSED','APPROVED') THEN
-    IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) <> CASE WHEN decision='APPROVED'
+    IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) <> (CASE WHEN decision='APPROVED'
       THEN ARRAY['confirmation','decision','expectedRevision','maxDays','reason','termsVersion','validFrom','validUntil']
-      ELSE ARRAY['decision','expectedRevision','maxDays','reason','termsVersion','validFrom','validUntil'] END
+      ELSE ARRAY['decision','expectedRevision','maxDays','reason','termsVersion','validFrom','validUntil'] END)
       OR jsonb_typeof(p_input->'termsVersion') IS DISTINCT FROM 'number' OR (p_input->>'termsVersion') !~ '^[1-9][0-9]{0,5}$'
       OR jsonb_typeof(p_input->'maxDays') IS DISTINCT FROM 'number' OR (p_input->>'maxDays') !~ '^([1-9]|[1-8][0-9]|90)$'
       OR jsonb_typeof(p_input->'validFrom') IS DISTINCT FROM 'string' OR (p_input->>'validFrom') !~ ts

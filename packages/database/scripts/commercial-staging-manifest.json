@@ -1,6 +1,6 @@
 {
   "baseline": "b54ea12565b38e44ae0227c1acc8cd3090302a13",
-  "chainSha256": "3ce6d6e0179603c67d82833e7d9a9e805fd5ac211a74fd653bac6f5526d337fe",
+  "chainSha256": "f1abf71496ebbd98d558467b0c0afd968c15b44120cfb77e809f7c296225d29c",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -24,7 +24,7 @@
     },
     {
       "file": "0186_saas_exception_policy_approval.sql",
-      "sha256": "38783468b41795321f9e22cf422ea848087acea2d43881782093eea96316b71b"
+      "sha256": "03b5f331cb982e28e3b704e86e249422ddeaea54caef6bc414390ea279d0ac43"
     }
   ]
 }
