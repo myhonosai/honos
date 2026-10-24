@@ -8,6 +8,9 @@ on:
       - '.github/workflows/commercial-staging-validation.yml'
       - 'packages/database/migrations/0186_*'
       - 'packages/database/scripts/*exception-policy*'
+      - 'packages/contracts/src/saas-introductory-pricing.ts'
+      - 'packages/domain/src/saas-introductory-pricing*'
+      - 'apps/api/test/saas-introductory-pricing.test.cjs'
 permissions:
   contents: read
 concurrency:
