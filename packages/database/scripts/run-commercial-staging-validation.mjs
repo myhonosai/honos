@@ -17,13 +17,14 @@ async function command(program, args, { env = safeEnv, input, timeout = 300_000 
   assert(!interrupted, 'Validation interrupted.');
   return new Promise((yes, no) => {
     const child = spawn(program, args, { cwd: root, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
-    activeChild = child; let output = '', timedOut = false;
+    activeChild = child; let stdout = '', stderr = '', timedOut = false;
     const timer = setTimeout(() => { timedOut = true; try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, timeout);
-    for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { output = (output + data).slice(-4_000_000); });
+    child.stdout.on('data', data => { stdout = (stdout + data).slice(-4_000_000); });
+    child.stderr.on('data', data => { stderr = (stderr + data).slice(-4_000_000); });
     child.on('error', () => { clearTimeout(timer); activeChild = undefined; no(Error('Required local executable unavailable.')); });
     child.on('close', code => { clearTimeout(timer); activeChild = undefined;
-      if (code !== 0 || timedOut) no(Error(redact(output.slice(-5000)) || 'Local validation command failed.'));
-      else yes(redact(output)); });
+      if (code !== 0 || timedOut) no(Error(redact((stdout + '\n' + stderr).slice(-5000)) || 'Local validation command failed.'));
+      else yes(redact(stdout)); });
     child.stdin.end(input);
   });
 }

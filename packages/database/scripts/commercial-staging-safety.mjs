@@ -16,7 +16,8 @@ export const proofs = Object.freeze([
 ]);
 export function validateEnvironment(env) {
   const forbidden = /^(?:DATABASE_URL|HON_RUNTIME_DATABASE_URL|PG[A-Z_]*|NODE_OPTIONS|OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|AZURE|GOOGLE_APPLICATION_CREDENTIALS|HEYGEN|HIGGSFIELD|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i;
-  assert(!Object.keys(env).some(k => forbidden.test(k)), 'Refusing inherited database/provider credentials or execution/preload switches.');
+  const refused = Object.keys(env).filter(k => forbidden.test(k));
+  assert(refused.length === 0, 'Refusing inherited database/provider credentials or execution/preload switches (names only): ' + refused.join(', '));
   if (env.GITHUB_ACTIONS === 'true') assert.equal(env.RUNNER_ENVIRONMENT, 'github-hosted', 'Only ephemeral GitHub-hosted runners supported in CI.');
 }
 export function parseArguments(args) {
@@ -25,8 +26,8 @@ export function parseArguments(args) {
   return args[2];
 }
 export function assertEmptyInstance({ databases, roles, honSchema, applicationObjects, listen }) {
-  assert.deepEqual(databases, [], 'Refusing an existing application/validation database; use a fresh dedicated local PostgreSQL instance.');
-  assert.deepEqual(roles, [], 'Refusing existing HON roles, including stale fixtures.');
+  assert(Array.isArray(databases) && databases.length === 0, 'Refusing an existing application/validation database; use a fresh dedicated local PostgreSQL instance.');
+  assert(Array.isArray(roles) && roles.length === 0, 'Refusing existing custom roles, including stale fixtures.');
   assert.equal(honSchema, false, 'Refusing HON objects in the maintenance database.');
   assert.equal(applicationObjects, false, 'Refusing application objects in the maintenance database.');
   assert(['localhost', '127.0.0.1', '::1'].includes(listen), 'PostgreSQL must listen only on loopback.');

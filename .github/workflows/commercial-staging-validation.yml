@@ -64,7 +64,16 @@ jobs:
           chmod 700 /home/ubuntu/jobs
           mkdir -m 700 "$RUNNER_TEMP/hon-commercial-staging"
       - name: Rehearse migrations and synthetic proofs without provider access
-        run: node packages/database/scripts/run-commercial-staging-validation.mjs --confirm-disposable-local --report "$RUNNER_TEMP/hon-commercial-staging/report.json"
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -z "${DATABASE_URL+x}"
+          test -z "${HON_RUNTIME_DATABASE_URL+x}"
+          # Like the existing database-proof workflow, pass only fixed local prerequisites.
+          # Parent CI metadata/credentials/preloads never enter the rehearsal process.
+          env -i "PATH=$PATH" "HOME=$HOME" LANG=C.UTF-8 GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+            node packages/database/scripts/run-commercial-staging-validation.mjs --confirm-disposable-local --report "$RUNNER_TEMP/hon-commercial-staging/report.json"
       - name: Retain sanitized evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

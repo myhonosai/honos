@@ -20,6 +20,7 @@ test('even marked old fixtures and existing application databases/roles are refu
   assertEmptyInstance({ databases: [], roles: [], honSchema: false, applicationObjects: false, listen: 'localhost' });
   for (const state of [{ databases: ['real_school'], roles: [], honSchema: false }, { databases: ['hon_champions_validation'], roles: [], honSchema: false }, { databases: [], roles: ['hon_champions_owner'], honSchema: false }, { databases: [], roles: [], honSchema: true }]) assert.throws(() => assertEmptyInstance(state));
   for (const patch of [{applicationObjects:true},{listen:'*'}]) assert.throws(() => assertEmptyInstance({databases:[],roles:[],honSchema:false,applicationObjects:false,listen:'localhost',...patch}));
+  assert.throws(() => assertEmptyInstance({databases:['private_customer_name'],roles:[],honSchema:false}), error => !error.message.includes('private_customer_name'));
 });
 const descriptor = "export DATABASE_URL='postgresql://hon_champions_owner:synthetic@localhost:5432/hon_champions_validation'\nexport HON_RUNTIME_DATABASE_URL='postgresql://hon_champions_runtime:synthetic@localhost:5432/hon_champions_validation'\n";
 test('fixture descriptors are parsed as data, with exact identity/host/port/database and no shell', () => {
