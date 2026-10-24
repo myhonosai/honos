@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import type { HqSchoolDirectory } from '@hon/contracts';
 import { HqSchoolDirectoryAccessError, loadHqSchoolDirectory } from './hq-school-directory-http';
+import { useHqModern } from './hq-modern/shell';
 import styles from './hq-school-directory.module.css';
 
 type ViewState =
@@ -11,13 +12,6 @@ type ViewState =
   | { kind: 'forbidden' }
   | { kind: 'unavailable' }
   | { kind: 'ready'; directory: HqSchoolDirectory };
-
-type PresentationMode = 'big-button' | 'modern' | 'classic';
-const PRESENTATION_MODES: readonly { id: PresentationMode; label: string; detail: string }[] = [
-  { id: 'big-button', label: 'Touch-first', detail: 'Larger controls' },
-  { id: 'modern', label: 'Modern', detail: 'Balanced density' },
-  { id: 'classic', label: 'High density', detail: 'Compact view' },
-];
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('en-US', {
@@ -49,7 +43,8 @@ function DirectoryTable({ directory }: { directory: HqSchoolDirectory }): React.
 
 export function HqSchoolDirectory(): React.ReactElement {
   const [state, setState] = useState<ViewState>({ kind: 'loading' });
-  const [presentation, setPresentation] = useState<PresentationMode>('modern');
+  // Density follows the shared HQ View control; it never changes the directory, access or data fields.
+  const { view } = useHqModern();
 
   useEffect(() => {
     let current = true;
@@ -64,17 +59,13 @@ export function HqSchoolDirectory(): React.ReactElement {
     return () => { current = false; };
   }, []);
 
-  return <main className={`${styles.page} ${styles[`presentation_${presentation}`]}`}>
-    <nav className={styles.navigation} aria-label="HON HQ navigation"><a href="/hq">Overview</a><a href="/hq/executives">Executive Team</a><a href="/hq/schools" aria-current="page">Schools</a><a href="/hq/ai-providers">AI provider configuration</a><a href="/auth/login">Account</a></nav>
-    <header className={styles.header}><p className={styles.eyebrow}>HON HQ / SCHOOL MANAGEMENT</p><h1>School directory</h1><p>A fixed, read-only customer-account projection. Only verified current platform HQ owners and operators may view it; school staff, families, AI, automation, delegated contexts, and support roles do not gain access.</p></header>
-    <section className={styles.presentation} aria-label="Presentation mode">
-      <strong>Presentation</strong><div>{PRESENTATION_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={presentation === mode.id} onClick={() => setPresentation(mode.id)}><span>{mode.label}</span><small>{mode.detail}</small></button>)}</div><p>Modes change content density only. They do not change the directory, access, scope, authority, or data fields.</p>
-    </section>
+  return <div className={`${styles.page} ${styles[`presentation_${view}`]}`}>
+    <header className={styles.header}><p className={styles.eyebrow}>HON HQ / SCHOOL MANAGEMENT</p><h2>School directory</h2><p>A fixed, read-only customer-account projection. Only verified current platform HQ owners and operators may view it; school staff, families, AI, automation, delegated contexts, and support roles do not gain access.</p></header>
     <aside className={styles.notice}><strong>Customer-account facts only.</strong><p>No contacts, owners, users, students, families, schedules, attendance, curriculum, billing, payments, invoices, provider or credential data, AI usage or cost, support session, impersonation, audit/outbox evidence, action payload, query, search, or mutation is available here.</p></aside>
     {state.kind === 'loading' && <section className={styles.state} role="status"><p className={styles.eyebrow}>VERIFYING HQ ACCESS</p><h2>Loading the minimized school directory…</h2><p>No customer-account data is shown until both HQ scope checks and the fixed read-only projection succeed.</p></section>}
     {state.kind === 'unauthorized' && <section className={styles.state}><p className={styles.eyebrow}>ACCOUNT REQUIRED</p><h2>Sign in to verify HQ access.</h2><p>HON returns no directory until an authenticated application identity is present.</p><a className={styles.primaryLink} href="/auth/login">Sign in to HON</a></section>}
     {state.kind === 'forbidden' && <section className={styles.state}><p className={styles.eyebrow}>HQ ACCESS DENIED</p><h2>This account has no current platform HQ school-directory authority.</h2><p>School, organization, family, AI, automation, delegated, and support authority never bridge into HQ access.</p></section>}
     {state.kind === 'unavailable' && <section className={styles.state}><p className={styles.eyebrow}>DIRECTORY UNAVAILABLE</p><h2>HQ access or the read-only directory could not be verified.</h2><p>HON fails closed. No sample, cached, or inferred customer-account state is displayed.</p></section>}
     {state.kind === 'ready' && <DirectoryTable directory={state.directory} />}
-  </main>;
+  </div>;
 }

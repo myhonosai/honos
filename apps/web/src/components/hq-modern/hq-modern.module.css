@@ -615,3 +615,41 @@
   /* The persistent, labeled HON bottom-navigation control opens the same assistant. */
   .assistantLauncher{display:none}
 }
+
+/* Operational hierarchy: verified facts first, HON core centered, executive roster compact until durable work exists. */
+.commandLineup.coreOnly{grid-template-columns:minmax(0,1fr);justify-items:center;padding:4px 0 12px}
+.coreOnly>.commandCore{grid-column:1;grid-row:1}
+.coreOnly .orbFrame>.core,.withAssistant .coreOnly .orbFrame>.core{width:clamp(108px,8.6vw,138px)}
+.commercialStatus{padding:15px 16px}
+.commercialStatus .sectionHeader{margin-bottom:10px}
+.commercialStatus h2{display:flex;align-items:center;gap:8px;font-size:16px}
+.commercialList{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0}
+.commercialList>div{display:grid;gap:5px;align-content:start;min-width:0;padding:11px 12px;border:1px solid #437a904d;border-radius:12px;background:#061622a6}
+.commercialList dt{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#a9c7d6}
+.commercialList dd{display:grid;gap:4px;margin:0}
+.commercialList strong{font-size:18px;font-weight:600;color:#fff}
+.commercialList small{font-size:10px;line-height:1.5;color:#b6ccd9}
+.executiveStrip{padding:14px 16px}
+.executiveStrip .sectionHeader{margin-bottom:10px}
+.executiveStrip h2{font-size:15px}
+.executiveStrip .sectionHeader p{font-size:10px;color:#b6ccd9}
+.executiveStrip .sectionHeader>a{display:flex;align-items:center;gap:4px;min-height:36px;font-size:11px;color:#a3edff}
+.executiveStripList{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.executiveChip{display:flex;align-items:center;gap:9px;min-width:0;min-height:52px;padding:6px 8px;border:1px solid #437a9040;border-radius:12px;background:#0617228f;color:#e0eff7}
+.executiveChip:hover{border-color:#80d8de9c}
+.executiveChip>.portrait,.executiveChip>.portraitFallback{width:38px;height:38px;min-height:38px;border-radius:50%;font-size:16px}
+.executiveChip>span{display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
+.executiveChip strong{overflow:hidden;font-size:12px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+.executiveChip small{overflow:hidden;font-size:9px;line-height:1.4;color:#b6ccd9;text-overflow:ellipsis;white-space:nowrap}
+.shell[data-view=big-button] .executiveChip{min-height:60px}
+.withAssistant .executiveStripList{grid-template-columns:repeat(3,minmax(0,1fr))}
+.withAssistant .commercialList{grid-template-columns:minmax(0,1fr)}
+@media(max-width:1250px){.executiveStripList{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){
+  .performanceStrip{order:-2}
+  .commercialStatus{order:-1}
+  .commercialList{grid-template-columns:minmax(0,1fr)}
+  .executiveStrip{order:8}
+  .executiveStripList{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .executiveChip{min-height:48px}
+}
