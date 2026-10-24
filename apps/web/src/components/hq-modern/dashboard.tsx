@@ -71,16 +71,22 @@ export function GrowthLinks(): React.ReactElement {
 function CommandStage(): React.ReactElement {
   const { t,text,number,money,date,formattingLocale } = useLocale();
   const { openAssistant } = useHqModern();
-  return <section className={styles.commandStage} aria-labelledby="hq-hon-title">
-    <div className={`${styles.commandLineup} ${styles.coreOnly}`}>
+  return <section className={styles.commandStage} aria-labelledby="hq-team-title">
+    <div className={styles.stageHeader}><div><h2 id="hq-team-title">{t("Your executive team")}</h2><p>{t("Six specialists. One company command center.")}</p></div><Link href="/hq/executives">{t("View team")}{" "}<HqIcon name="chevron" size={15}/></Link></div>
+    <div className={styles.commandLineup}>
       <div className={styles.commandCore}>
         <div className={styles.orbFrame}><span className={styles.coreOrbits} data-hq-orbits aria-hidden="true"><i/><i/><i/></span><HonCore/><strong aria-hidden="true">{t("HON")}</strong></div>
         <div className={styles.honDock} data-hq-conversation-dock>
-          <div className={styles.coreCaption}><h2 id="hq-hon-title">{t("HON")}</h2><p>{t("Executive AI Coordinator")}</p></div>
+          <div className={styles.coreCaption}><h2>{t("HON")}</h2><p>{t("Executive AI Coordinator")}</p></div>
           <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label={t("Expand HON conversation")}><HqIcon name="mic" size={22}/><span>{t("Ask HON anything")}</span><HqIcon name="expand" size={15}/></button>
           <small className={styles.coreState}>{t("Conversation unavailable · Microphone off")}</small>
         </div>
       </div>
+      <div className={styles.stageTeam}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.stageExecutive} style={{ '--stage-column': index < 3 ? index + 1 : index + 2 } as CSSProperties} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={t("View {name}'s {role} workspace",{name:executive.displayName,role:text(executive.domain.replaceAll('_',' ').toLowerCase().replace(/\b\w/g,l=>l.toUpperCase()))})}>
+        <ExecutivePortrait index={index} name={executive.displayName}/>
+        <div className={styles.stageIdentity}><h3>{executive.displayName}</h3><p>{text(executive.domain.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()))}</p><small>{text(HQ_RESPONSIBILITIES[executive.executiveKey] ?? '')}</small></div>
+        <span className={styles.workspaceEntry}>{t("Workspace")}{" "}<HqIcon name="arrow" size={14}/></span>
+      </Link>)}</div>
     </div>
     <div className={styles.commandBar}><div className={styles.commandPrompt}><HqIcon name="mic" size={22}/><h2>{t("How can HON help today?")}</h2><span>{t("No recorded work · Executive task services are not active")}</span></div><HonComposer context="Overview"/><div className={styles.commandShortcuts}><Link href="/hq/schools">{t("Review schools")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/revenue">{t("Revenue overview")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/ai-costs">{t("Review AI costs")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/growth">{t("Growth & Referrals")}{" "}<HqIcon name="chevron" size={13}/></Link></div></div>
   </section>;
@@ -101,30 +107,18 @@ function PerformanceStrip(): React.ReactElement {
   </section>;
 }
 
-/** Compact roster: identities and workspace links only, kept below verified operational facts until durable work exists. */
-function ExecutiveStrip(): React.ReactElement {
-  const { t,text } = useLocale();
-  return <section className={`${styles.panel} ${styles.executiveStrip}`} aria-labelledby="hq-team-title">
-    <div className={styles.sectionHeader}><div><h2 id="hq-team-title">{t("Your executive team")}</h2><p>{t("No recorded work. Executive task services are not active.")}</p></div><Link href="/hq/executives">{t("View team")}{" "}<HqIcon name="chevron" size={16}/></Link></div>
-    <div className={styles.executiveStripList}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.executiveChip} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={t("View {name}'s {role} workspace",{name:executive.displayName,role:text(executive.domain.replaceAll('_',' ').toLowerCase().replace(/\b\w/g,l=>l.toUpperCase()))})}>
-      <ExecutivePortrait index={index} name={executive.displayName}/><span><strong>{executive.displayName}</strong><small>{text(executive.domain.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()))}</small></span>
-    </Link>)}</div>
-  </section>;
-}
-
 export function HqModernDashboard(): React.ReactElement {
   const { t,text,number,money,date,formattingLocale } = useLocale();
   return <>
     <div className={styles.dashboard}>
+      <CommandStage/>
       <PerformanceStrip/>
       <CommercialStatus/>
-      <CommandStage/>
       <div className={styles.managementGrid}>
         <div className={styles.attentionSlot}><NeedsAttention/></div>
         <div className={styles.snapshotSlot}><CompanySnapshot/></div>
         <div className={styles.growthSlot}><GrowthLinks/></div>
       </div>
-      <ExecutiveStrip/>
     </div>
     <div className={styles.governance}><HqIcon name="shield" size={28}/><div><strong>{t("You retain final approval.")}</strong><p>{t("Owner → HON → Executives → Shared Action Engine")}</p></div><span>{t("Permissions · Policy · Approval · Audit")}</span></div>
   </>;
