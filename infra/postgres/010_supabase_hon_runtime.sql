@@ -1839,3 +1839,29 @@ DO $$ DECLARE r text; col text; f text; BEGIN
   GRANT EXECUTE ON FUNCTION hon.read_saas_access_exceptions_from_hq(text,uuid) TO hon_runtime;
 END $$;
 -- End secure HQ school provisioning exact reconciliation.
+
+-- D10 exception-only policy: exact private-table/function privilege reconciliation.
+DO $$ DECLARE r text; c text; f text; BEGIN
+  ALTER TABLE hon.saas_exception_policy_decisions ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE hon.saas_exception_policy_decisions FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON TABLE hon.saas_exception_policy_decisions FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.saas_exception_policy_decisions FROM %I',r);
+  END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid='hon.saas_exception_policy_decisions'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.saas_exception_policy_decisions FROM PUBLIC',c);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.saas_exception_policy_decisions FROM %I',c,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_saas_exception_policy_decision()','hon.verify_saas_exception_policy_evidence()','hon.verify_saas_exception_policy_binding()','hon.saas_exception_policy_json(hon.saas_exception_policy_decisions)','hon.saas_require_exception_policy()','hon.decide_saas_exception_policy(text,jsonb,uuid,uuid,uuid)','hon.read_saas_exception_policy(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.decide_saas_exception_policy(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_saas_exception_policy(text) TO hon_runtime;
+  END IF;
+END $$;

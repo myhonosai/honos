@@ -12,11 +12,11 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
  'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
- 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions'];
+ 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy'];
+ 'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
@@ -214,9 +214,21 @@ export const saasBillingFunctions = [
  ['hon.revoke_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.close_expired_saas_access_exceptions(text,uuid,uuid,uuid)',true,true],
  ['hon.read_saas_access_exceptions_from_hq(text,uuid)',true,true],
+ // 0186 D10: immutable policy ledger, command/read and private enforcement.
+ ['hon.saas_exception_policy_json(hon.saas_exception_policy_decisions)',false,false],
+ ['hon.saas_require_exception_policy()',false,false],
+ ['hon.guard_saas_exception_policy_decision()',false,false],
+ ['hon.verify_saas_exception_policy_evidence()',false,true],
+ ['hon.verify_saas_exception_policy_binding()',false,true],
+ ['hon.decide_saas_exception_policy(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_exception_policy(text)',true,true],
+
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
+ ['saas_exception_policy_decisions','saas_exception_policy_authority',7,'guard_saas_exception_policy_decision'],
+ ['saas_exception_policy_decisions','saas_exception_policy_evidence',5,'verify_saas_exception_policy_evidence'],
+ ['saas_access_exceptions','saas_exception_policy_binding',5,'verify_saas_exception_policy_binding'],
  ['saas_payment_evidence','saas_referral_alert',5,'saas_evidence_referral_alert'],
  ['saas_invoices','saas_free_period_check',7,'saas_invoice_free_period_check'],
  ['saas_credit_allowances','saas_champions_basis',7,'saas_allowance_free_month_basis'],

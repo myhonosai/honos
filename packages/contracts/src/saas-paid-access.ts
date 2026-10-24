@@ -120,6 +120,8 @@ export interface SaasAccessException {
   grantedByPrincipalId: string; grantedAt: string; priorEntitlement: SaasEntitlementView | null; grantedEntitlement: SaasEntitlementView;
   endReason: 'REVOKED' | 'EXPIRED' | 'SUPERSEDED' | null; endNote: string | null; endEntitlement: SaasEntitlementView | null;
   endedByPrincipalId: string | null; endedAt: string | null;
+  // Absent only on exact pre-D10 receipts; null identifies an unapproved historical row.
+  governingPolicy?: { approvalId: string; revision: number; termsVersion: number; maxDays: number } | null;
 }
 export interface SaasAccessExceptionsView { organizationId: string; access: SaasOrganizationAccess; exceptions: SaasAccessException[]; asOf: string }
 export interface SaasAccessExceptionGrantReceipt { exception: SaasAccessException; access: SaasOrganizationAccess; replayed: boolean }
@@ -152,7 +154,11 @@ function exception(value: unknown): SaasAccessException {
   const x = record(value, drift);
   exactKeys(x, ['exceptionId','organizationId','schoolId','purpose','reason','scopeTier','capabilities','aiCredits','startsAt','expiresAt',
     'policyVersion','maxDays','status','lifecycle','grantedByPrincipalId','grantedAt','priorEntitlement','grantedEntitlement','endReason','endNote',
-    'endEntitlement','endedByPrincipalId','endedAt'], drift);
+    'endEntitlement','endedByPrincipalId','endedAt', ...(Object.hasOwn(x,'governingPolicy') ? ['governingPolicy'] : [])], drift);
+  if (x.governingPolicy !== undefined && x.governingPolicy !== null) {
+    const p = record(x.governingPolicy, drift); exactKeys(p,['approvalId','revision','termsVersion','maxDays'],drift);
+    if (!isUuid(p.approvalId) || !isInt(p.revision,1,999_999_999) || p.termsVersion !== x.policyVersion || p.maxDays !== x.maxDays) drift();
+  }
   validateSaasEntitlementView(x.priorEntitlement); validateSaasEntitlementView(x.grantedEntitlement); validateSaasEntitlementView(x.endEntitlement);
   const granted = x.grantedEntitlement as SaasEntitlementView | null;
   const ended = x.status === 'ENDED';
