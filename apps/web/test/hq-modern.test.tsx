@@ -44,8 +44,8 @@ describe('HQ Modern foundation', () => {
     for (const executive of HQ_EXECUTIVES) expect(html).toContain(`href="/hq/executives/${executive.executiveKey}"`);
     for (const text of ['HON', 'Needs Your Attention', 'Company at a glance', 'Growth &amp; Referrals', 'No recorded work', 'Conversation unavailable']) expect(html).toContain(text);
     expect(html).not.toMatch(/\$[\d,]+|Working|Your AI team is on it|Ideal Martial Arts/);
-    // Verified facts lead; the executive roster is a compact strip after the operational panels.
-    const order = ['aria-label="Company performance overview"', 'id="hq-commercial-title"', 'id="hq-hon-title"', 'id="hq-attention-title"', 'id="hq-team-title"'].map((marker) => html.indexOf(marker));
+    // The original command stage leads: HON with the six executives around it, then verified counts and program status.
+    const order = ['id="hq-team-title"', 'aria-label="Company performance overview"', 'id="hq-commercial-title"', 'id="hq-attention-title"'].map((marker) => html.indexOf(marker));
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
