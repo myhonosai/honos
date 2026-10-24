@@ -33,7 +33,7 @@ const row=async(q,p)=>(await admin.query(q,p)).rows[0];
 const footprint=async()=>{const result={};for(const t of [...tables,'saas_requests','saas_audit','saas_outbox','saas_exception_policy_decisions'])result[t]=(await row('SELECT count(*)::int n FROM hon.'+t)).n;return result;};
 const deny=(p,status,code)=>assert.rejects(p,e=>{assert.equal(e.getStatus?.(),status,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;});
 const sqlDeny=(p,code,message)=>assert.rejects(p,e=>{assert.equal(e.code,code,e.stack);if(message)assert.equal(e.message,message);return true;});
-async function nothing(command,status,code){const before=await footprint();await deny(command(),status,code);assert.deepEqual(await footprint(),before,'denial leaves no row, claim, audit or outbox');}
+async function nothing(command,status,code){const before=await footprint();await deny(Promise.resolve().then(command),status,code);assert.deepEqual(await footprint(),before,'denial leaves no row, claim, audit or outbox');}
 const propose=(terms=trialTerms(),expectedVersion=0,key=K(),who='owner')=>trials.propose(H(who),{expectedVersion,terms,reason},key);
 const draft=(definition=trialDefinition(),campaignId=null,expectedVersion=0,key=K(),who='owner')=>trials.draft(H(who),{campaignId,expectedVersion,definition,reason},key);
 const decisionRevision=async()=>(await trials.read(H('owner'))).policyDecisions[0]?.revision??0;
