@@ -84,8 +84,8 @@ async function run() {
     report.emptyInstanceBefore = await emptyInstance();
     const { default: pg } = await import('pg');
     const { installEffectTripwires, shippedPosture } = await import('./commercial-staging-fixtures.mjs');
-    for (const [script, coverage, simulation] of proofs) {
-      const item = { script, coverage, simulation, success: false, postureRestored: false, cleanup: false }; report.proofs.push(item);
+    for (const [script, coverage, simulation, creditProgramSimulation = false] of proofs) {
+      const item = { script, coverage, simulation, creditProgramSimulation, success: false, postureRestored: false, cleanup: false }; report.proofs.push(item);
       console.log('START ' + script);
       directory = await mkdtemp(jobs + '/commercial-staging-'); await privateDirectory(directory);
       fixtureCreated = true; // permits safe cleanup after a partially completed canonical setup
@@ -93,7 +93,7 @@ async function run() {
       const client = new pg.Client({ connectionString: credentials.DATABASE_URL, ssl: false });
       await client.connect();
       try {
-        await installEffectTripwires(client);
+        await installEffectTripwires(client, { creditProgramSimulation });
         const before = await shippedPosture(client, report.migrations);
         const auditPath = directory + '/network.jsonl'; await writeFile(auditPath, '', { flag: 'wx', mode: 0o600 });
         let output;

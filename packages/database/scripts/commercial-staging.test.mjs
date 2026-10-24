@@ -5,7 +5,12 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateEnvironment, parseArguments, assertEmptyInstance, parseFixtureCredentials, postgresTarget, readMigrationEvidence, validateMigrationEvidence } from './commercial-staging-safety.mjs';
+import { proofs, validateEnvironment, parseArguments, assertEmptyInstance, parseFixtureCredentials, postgresTarget, readMigrationEvidence, validateMigrationEvidence } from './commercial-staging-safety.mjs';
+
+test('credit-program simulation is restricted to the existing D7 zero-grant proof', () => {
+  assert.deepEqual(proofs.filter(p => p[3] === true).map(p => p[0]), ['test-saas-hon-os-new-school-onboarding.mjs']);
+  assert(proofs.find(p => p[3])?.[2].includes('zero AI grants'));
+});
 
 test('closed CLI requires explicit disposable acknowledgement and a report, never a target URL', () => {
   assert.equal(parseArguments(['--confirm-disposable-local', '--report', '/tmp/private/report.json']), '/tmp/private/report.json');

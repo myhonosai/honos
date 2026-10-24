@@ -3,7 +3,7 @@
 ## Isolated commercial staging rehearsal — Codex
 
 - [ ] From `b49cfc33b32def303bc05c41c17dd92c46d448a2`, add a guarded disposable-local rehearsal for 0181–0185, reusing canonical fixtures, proofs and security registries. Record migration checksums, shipped/simulated posture, denied external traffic/AI grants, cleanup and actual CI evidence in one draft PR.
-- [ ] Document the PROPOSED policy-recording gap and propose a separate exception-only approval record for owner review; implement no approval, activation, customer checkout or production change. Reserved 0179/0180 remain unused.
+- [x] Document the PROPOSED policy-recording gap and propose a separate exception-only approval record for owner review; implement no approval, activation, customer checkout or production change. Reserved 0179/0180 remain unused.
 
 ## E1a two-step membership activation frontend — Codex
 

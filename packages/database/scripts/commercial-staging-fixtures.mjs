@@ -7,12 +7,12 @@ import { fixture } from './commercial-staging-safety.mjs';
 export const noAiTables = ['saas_credit_allowances', 'saas_credit_reservations', 'saas_credit_ledger', 'saas_credit_threshold_events', 'ai_usage_ledger'];
 
 /** Additional test-only tripwires. Never included in a migration or runtime deployment. */
-export async function installEffectTripwires(client) {
+export async function installEffectTripwires(client, { creditProgramSimulation = false } = {}) {
   await client.query(`CREATE SCHEMA hon_validation; REVOKE ALL ON SCHEMA hon_validation FROM PUBLIC;
     CREATE FUNCTION hon_validation.no_ai_grants() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN RAISE EXCEPTION 'VALIDATION_NO_AI_GRANTS'; END $$;
-    REVOKE ALL ON FUNCTION hon_validation.no_ai_grants() FROM PUBLIC;
-    ALTER TABLE hon.saas_credit_program ADD CONSTRAINT hon_staging_credit_inactive CHECK (status = 'INACTIVE');`);
+    REVOKE ALL ON FUNCTION hon_validation.no_ai_grants() FROM PUBLIC;`);
+  if (!creditProgramSimulation) await client.query("ALTER TABLE hon.saas_credit_program ADD CONSTRAINT hon_staging_credit_inactive CHECK (status = 'INACTIVE')");
   for (const table of noAiTables) await client.query(`CREATE TRIGGER hon_staging_no_ai_grants BEFORE INSERT OR UPDATE ON hon.${table}
     FOR EACH STATEMENT EXECUTE FUNCTION hon_validation.no_ai_grants()`);
   // An empty INSERT still fires the statement trigger: prove the tripwire works without granting anything.

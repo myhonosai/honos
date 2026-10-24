@@ -6,7 +6,7 @@ export const fixture = Object.freeze({ database: 'hon_champions_validation', own
 export const proofs = Object.freeze([
   ['test-saas-hon-os-offers-integrity.mjs', '0181 whole-set offers', 'temporary legacy fixture'],
   ['test-saas-hon-os-purchase-integrity.mjs', '0182 accepted-price binding and D6 stop', 'temporary legacy fixture; simulated provider'],
-  ['test-saas-hon-os-new-school-onboarding.mjs', '0183 D7 onboarding', 'temporary paid-access ACTIVE; simulated provider'],
+  ['test-saas-hon-os-new-school-onboarding.mjs', '0183 D7 onboarding', 'temporary paid-access and credit-program ACTIVE; zero AI grants; simulated provider', true],
   ['test-saas-hon-os-only-new-sales.mjs', '0184 D8 legacy continuity/closure', 'temporary legacy fixture and paid-access ACTIVE; simulated provider'],
   ['test-saas-secure-hq-provisioning.mjs', '0185 suspended provisioning and revoke-first conversion', 'temporary paid-access ACTIVE; simulated provider'],
   ['test-saas-access-exception-hardening.mjs', '0185 authority/concurrency, cleanup and contest windows', 'shipped INACTIVE'],
