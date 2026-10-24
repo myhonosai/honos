@@ -7,6 +7,8 @@ import {syntheticExceptionPolicy} from './exception-policy-fixture.mjs';
 import {verifySaasBillingSecurity} from './saas-billing-security.mjs';
 // D11-A approvals/publications below are SYNTHETIC fixtures only, never seeds or operational decisions.
 const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
+for(const target of [owner,runtime])assert(target.protocol==='postgresql:'&&target.search===''&&target.hash===''&&target.password,'Canonical disposable credentials only; query/connection overrides are forbidden');
+assert(!Object.keys(process.env).some(k=>/^PG[A-Z_]*$/.test(k)),'Inherited PostgreSQL overrides are forbidden');
 assert(owner.hostname==='localhost'&&owner.port==='5432'&&owner.pathname==='/hon_champions_validation'&&owner.username==='hon_champions_owner');
 assert(runtime.hostname===owner.hostname&&runtime.port===owner.port&&runtime.pathname===owner.pathname&&runtime.username==='hon_champions_runtime');
 assert(!Object.keys(process.env).some(k=>/^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HEYGEN|HIGGSFIELD|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(k)));
