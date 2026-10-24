@@ -1,5 +1,10 @@
 # HON Delivery Backlog
 
+## D11-A customer trial governance — Codex
+
+- [ ] From `67a060b37d753a3e202462a99874d9a9df708cb7`, implement isolated customer-trial policy proposals/decisions, immutable campaign versions, bounded digest-confirmed publication, authorized HQ reads and additive 0187. No seeded approval, enrollment, links, entitlement or promotional-credit grants; keep every activation gate closed.
+- [ ] Verify authorization, rollback, idempotency, stale revisions, policy/publication lock races, D9/D10 separation and full PostgreSQL/commercial regressions in one draft PR. Record actual evidence; independent security review and owner decisions remain required.
+
 ## HON OS launch pricing — Commercial A1 (Codex)
 
 - [x] Audit exact main `9c1e0ca6021aff86749a9f56ca212356e1d1b1c0` and read-only #72; implement closed internal introductory-price contracts and hypothetical exact-cent previews, preserving all operational paths. No migration, approval, purchasing, trial or spending authority added. See `docs/architecture/HON_LAUNCH_PRICING_AND_TRIAL_CONVERSION.md` for the source gap map, dependency graph, founder recommendation and unresolved owner decisions.

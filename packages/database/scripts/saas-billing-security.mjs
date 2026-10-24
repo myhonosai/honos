@@ -12,8 +12,8 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
  'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
- 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions'];
-const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
+ 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications'];
+const evidenceTables = ['saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
  'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy'];
@@ -223,9 +223,41 @@ export const saasBillingFunctions = [
  ['hon.decide_saas_exception_policy(text,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.read_saas_exception_policy(text)',true,true],
 
+ // D11-A governance only.
+ ['hon.saas_trial_keys(jsonb,text[])',false,false],
+ ['hon.saas_trial_uint(jsonb,bigint,bigint)',false,false],
+ ['hon.saas_trial_choices(jsonb,jsonb)',false,false],
+ ['hon.saas_trial_timestamp(jsonb)',false,false],
+ ['hon.saas_trial_policy_valid(jsonb)',false,false],
+ ['hon.saas_trial_campaign_valid(jsonb)',false,false],
+ ['hon.saas_trial_policy_json(hon.saas_trial_policy_versions)',false,false],
+ ['hon.saas_trial_decision_json(hon.saas_trial_policy_decisions)',false,false],
+ ['hon.saas_trial_campaign_json(hon.saas_trial_campaign_versions)',false,false],
+ ['hon.saas_trial_publication_json(hon.saas_trial_publications)',false,false],
+ ['hon.saas_trial_begin(text,uuid,text,jsonb,uuid,uuid)',false,false],
+ ['hon.saas_trial_preview(uuid)',false,false],
+ ['hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.withdraw_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.guard_saas_trial_insert()',false,true],
+ ['hon.verify_saas_trial_evidence()',false,true],
+ ['hon.read_saas_trial_governance(text)',true,true],
+ ['hon.read_saas_trial_campaign(text,uuid)',true,true],
+ ['hon.preview_saas_trial_publication(text,uuid)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
+ ['saas_trial_policy_versions','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_policy_versions','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+ ['saas_trial_policy_decisions','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_policy_decisions','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+ ['saas_trial_campaign_versions','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_campaign_versions','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+ ['saas_trial_publications','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_publications','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+
  ['saas_exception_policy_decisions','saas_exception_policy_authority',7,'guard_saas_exception_policy_decision'],
  ['saas_exception_policy_decisions','saas_exception_policy_evidence',5,'verify_saas_exception_policy_evidence'],
  ['saas_access_exceptions','saas_exception_policy_binding',5,'verify_saas_exception_policy_binding'],

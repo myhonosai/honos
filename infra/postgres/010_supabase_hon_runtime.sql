@@ -1865,3 +1865,31 @@ DO $$ DECLARE r text; c text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_saas_exception_policy(text) TO hon_runtime;
   END IF;
 END $$;
+
+-- D11-A customer trial governance: metadata only; no activation endpoint.
+
+-- Exact private table/column/function ACLs. No public/signup/activation or issuance function exists.
+DO $$ DECLARE r text;t text;c text;f text;BEGIN
+ FOREACH t IN ARRAY ARRAY['saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications'] LOOP
+  EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r);END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['hon.saas_trial_keys(jsonb,text[])','hon.saas_trial_uint(jsonb,bigint,bigint)','hon.saas_trial_choices(jsonb,jsonb)','hon.saas_trial_timestamp(jsonb)','hon.saas_trial_policy_valid(jsonb)','hon.saas_trial_campaign_valid(jsonb)','hon.saas_trial_policy_json(hon.saas_trial_policy_versions)','hon.saas_trial_decision_json(hon.saas_trial_policy_decisions)','hon.saas_trial_campaign_json(hon.saas_trial_campaign_versions)','hon.saas_trial_publication_json(hon.saas_trial_publications)','hon.saas_trial_begin(text,uuid,text,jsonb,uuid,uuid)','hon.saas_trial_preview(uuid)','hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid)','hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid)','hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid)','hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)','hon.withdraw_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)','hon.guard_saas_trial_insert()','hon.verify_saas_trial_evidence()','hon.read_saas_trial_governance(text)','hon.read_saas_trial_campaign(text,uuid)','hon.preview_saas_trial_publication(text,uuid)'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);END LOOP;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+ GRANT EXECUTE ON FUNCTION hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.withdraw_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.read_saas_trial_governance(text) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.read_saas_trial_campaign(text,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.preview_saas_trial_publication(text,uuid) TO hon_runtime;
+ END IF;
+END $$;

@@ -69,8 +69,8 @@ async function run() {
   const reportPath = parseArguments(process.argv.slice(2));
   await privateDirectory(dirname(reportPath));
   const reportHandle = await open(reportPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  const report = { sourceSha: null, baseline: 'b54ea12565b38e44ae0227c1acc8cd3090302a13', purpose: 'DISPOSABLE_LOCAL_ONLY',
-    policyApprovalRecorded: false, syntheticExceptionPolicyDecisionsOnly: true, deployment: false, realProviderVerification: false, proofs: [], cleanup: false, success: false };
+  const report = { sourceSha: null, baseline: '9c1e0ca6021aff86749a9f56ca212356e1d1b1c0', purpose: 'DISPOSABLE_LOCAL_ONLY',
+    policyApprovalRecorded: false, syntheticExceptionPolicyDecisionsOnly: true, syntheticTrialGovernanceOnly: true, deployment: false, realProviderVerification: false, proofs: [], cleanup: false, success: false };
   let lock, lockStat, fixtureCreated = false, directory, failure;
   const signal = () => { interrupted = true; if (activeChild?.pid) try { process.kill(-activeChild.pid, 'SIGKILL'); } catch {} };
   for (const s of ['SIGTERM', 'SIGINT']) process.on(s, signal);
