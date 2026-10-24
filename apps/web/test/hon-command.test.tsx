@@ -8,7 +8,7 @@ import { HON_AI_TEAM } from '@hon/design-system';
 import { CommandCenterAccessError } from '../src/components/command-center-http';
 import { ActionReviewAccessError } from '../src/components/action-approvals-http';
 import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
-import { HON_CONVERSATION_BOUNDARY } from '../src/components/hon-command/hon-conversation';
+import { HON_CONVERSATION_BOUNDARY, HON_TURN_STATUSES, honComposerEnabled, honTurnStatusPresentation } from '../src/components/hon-command/hon-conversation';
 import { HonLauncher, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
 import { HonWorkspaceView, type HonTab } from '../src/components/hon-command/hon-workspace-view';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_TEACHING_AI, approvalSourceLabel, safeHonReturnPath } from '../src/components/hon-command/roster';
@@ -90,6 +90,16 @@ describe('HON command roster', () => {
     expect(approvalSourceLabel('teaching.draft.save')).not.toContain(HON_TEACHING_AI.name);
     expect(HON_TEACHING_AI.boundary).toMatch(/never mark student proficiency, promotions, testing results or curriculum completion/);
     expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Curriculum library', 'Curriculum progress', 'Scheduled classes', 'Teaching draft assistant (legacy)']);
+  });
+
+  it('maps only server-reported conversation states and keeps the composer off without full readiness', () => {
+    expect(HON_TURN_STATUSES).toEqual(['READY', 'PROCESSING', 'DELEGATING', 'AWAITING_APPROVAL', 'COMPLETED', 'FAILED', 'UNKNOWN']);
+    expect(honTurnStatusPresentation('AWAITING_APPROVAL')).toEqual(expect.objectContaining({ status: 'AWAITING_APPROVAL', label: 'Awaiting approval' }));
+    for (const odd of [undefined, null, 'DONE', 'completed', 42, { status: 'COMPLETED' }]) expect(honTurnStatusPresentation(odd).status).toBe('UNKNOWN');
+    expect(honComposerEnabled(null)).toBe(false);
+    const ready = { contract: true, providerRoute: true, entitlement: true, authorization: true };
+    expect(honComposerEnabled(ready)).toBe(true);
+    for (const key of Object.keys(ready)) expect(honComposerEnabled({ ...ready, [key]: false })).toBe(false);
   });
 
   it('accepts only bounded same-origin staff return paths', () => {
@@ -176,6 +186,7 @@ describe('HON workspace presentation', () => {
     expect(html).toMatch(/<button type="button" disabled="">Send<\/button>/);
     expect(html).toContain('href="/staff/voice"');
     expect(html).toContain('No conversation history exists to show.');
+    expect(html).not.toMatch(/Processing|Delegating|Completed/);
   });
 
   it('shows all seven employees with truthful availability and no fabricated activity in every mode', async () => {
@@ -187,7 +198,7 @@ describe('HON workspace presentation', () => {
       // Five planned management employees plus the separate provisional Teaching AI.
       expect(html.match(/Planned · not yet available/g)).toHaveLength(6);
       expect(html.match(/Drafts · approval required/g)).toHaveLength(2);
-      expect(html).toContain('1 recorded draft');
+      expect(html).toContain('1 recent draft');
       for (const fabricated of ['Working now', 'Thinking', 'Online', 'Completed today', 'is ready', 'READY']) expect(html).not.toContain(fabricated);
     }
   });
@@ -232,6 +243,13 @@ describe('HON workspace presentation', () => {
     expect(html).toContain(`/staff/leads/assistant#invocation=${id(31)}`);
     expect(html).not.toContain(id(34));
     expect(html).toContain('A different qualified human must approve the exact payload in Action Center');
+  });
+
+  it('never implies a complete AI work history', async () => {
+    const { snapshot } = await loaded();
+    expect(view(snapshot, 'work')).toContain('This is not a complete history.');
+    expect(view(snapshot, 'team', 'chad')).toContain('This is not a complete history.');
+    expect(view(snapshot, 'team', 'alex')).not.toContain('This is not a complete history.');
   });
 
   it('labels legacy claire-keyed work as teaching drafts and approvals by their source workflow', async () => {

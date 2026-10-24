@@ -37,26 +37,27 @@ Shared code: `apps/web/src/components/hon-command/`
 
 ## Functionality matrix
 
+States: **Fully working** means it runs on existing authorized contracts. **Partially working** means it works, with a stated limit. **Backend required** means no contract exists yet. **Design-only** means it is shown as planned or as a frozen shape, with no runtime behaviour. Opening an existing tool is navigation. It is never presented as an AI employee doing the work.
+
 | Capability | State | Evidence / limitation |
 | --- | --- | --- |
-| Open HON from any supported school dashboard mode | **Working** | Band on `/staff/dashboard` in all three modes; launcher on every other staff page |
-| See all seven employees with approved portrait, name and role | **Working** | Roster test pins order, titles and portraits to `HON_AI_TEAM` |
-| Agent detail: capabilities, related CRM workflows, approval requirement, availability | **Working** | Static truthful registry; every link resolves to an existing staff page (unit-tested) |
-| Chad / Marcus governed draft workspaces | **Working** | Links to existing workbenches; drafts still need a different human's Action Center approval |
-| Verified work history per agent | **Working** for Chad and Marcus | Requester's own durable records only, at most 20 per source, status only |
-| Recorded AI work list | **Working** | Same limits; legacy teaching records labeled as such |
-| Approvals awaiting review | **Working** (read) | Listed with source workflow; decision happens in Action Center |
-| Approval decision from HON | **Partially working** | Navigates to the existing Action Center, which still asks for the school UUID (frontend follow-up below) |
-| Suggested actions | **Working** | Command Center deterministic rules; navigation only; Core tier note shown from the Command Center's reported tier |
-| Loading / empty / denied / error / selection-required states | **Working** | Unit + browser tests |
-| Return to the dashboard with context | **Working** | Panel keeps the page underneath; full workspace returns to the originating staff page |
-| HON conversation (ask, answer, delegate) | **Backend required** | Composer is rendered disabled and labeled "Not connected" |
-| Conversation history | **Backend required** | No list contract exists for HON conversations or voice/text handoff sessions |
+| Open HON from every supported school dashboard mode (band, launcher, panel, full workspace) | **Fully working** | Band on `/staff/dashboard` in all three modes; launcher on other `/staff/*` pages; never on reference, parent, HQ or auth routes |
+| Management content only for a server-verified management scope | **Fully working** (presentation) | HON body renders only after the operations report or the `reporting.view` resolver; every API still authorizes on its own |
+| Seven employees with approved portrait, name and role | **Fully working** | Roster test pins order, titles and portraits to `HON_AI_TEAM` |
+| Agent detail: capabilities, CRM workflow links, approval rules, availability label | **Partially working** | Truthful but static frontend registry; server-evaluated availability is backend required |
+| Chad / Marcus governed draft workspaces | **Fully working** | Existing workbenches; drafts still need a different human's Action Center approval |
+| Recent verified work per agent and the AI work tab | **Partially working** | The requester's own records only, at most 20 per source across all schools, then filtered to this school. The UI says it is not a complete history |
+| Approvals awaiting review | **Fully working** (read) | Listed with the source workflow; decisions happen in Action Center |
+| Approval decision from HON | **Partially working** | Opens Action Center, which still asks for the school UUID (prefill proposed below) |
+| Suggested actions | **Fully working** | Command Center deterministic rules; navigation only |
+| Loading / empty / denied / error / selection-required states | **Fully working** | Unit and browser tests |
+| Return to the originating page | **Fully working** | Panel keeps the page; full workspace uses a sanitized `return` |
+| Conversation turn states (Ready, Processing, Delegating, Awaiting approval, Completed, Failed, Unknown) | **Design-only** | Closed mapping in `hon-conversation.ts`; anything unrecognized shows as Unknown; nothing renders a state until the server reports one |
+| HON conversation, history, delegation, results | **Backend required** | Composer is disabled and labeled "Not connected"; `honComposerEnabled` needs contract, provider route, entitlement and authorization all confirmed |
 | Alex, Maya, Jordan, Claire, Lena capabilities | **Backend required** | Shown as "Planned · not yet available"; no activity is displayed |
-| Server-evaluated agent availability | **Backend required** | Availability is a static frontend registry today |
+| Separate Teaching AI (Kai) | **Design-only** | Display-only planned card; access, catalog, name configuration and execution are backend required (T1–T6) |
+| Teaching-only navigation and menus | **Backend required** | Not claimed as operational; needs T1 (`managementAccess` and Teaching AI grant) |
 | Voice | **Backend required** | Existing handoff page states no provider is connected |
-| Management team hidden until a management scope is verified | **Working** | HON body renders only for a server-verified scope (dashboard report or `reporting.view` resolver); teaching-only users see no agents, work or approvals |
-| Separate Teaching AI (Kai) entry | **Partially working** | Display-only planned card linking to existing teaching pages; access, catalog and execution are backend required (T1–T6) |
 
 ## Claire discrepancy (investigated)
 
@@ -80,25 +81,43 @@ Owner decision (2026-10-24): the teaching assistant is assigned to neither Clair
 1. **HON conversation orchestration** (school-scoped, requester-scoped, Complete-gated, routed through the Action Engine):
    - `GET /v1/organizations/:org/schools/:school/hon/conversations` — the requester's threads (id, title, updatedAt, status), paginated.
    - `GET /v1/organizations/:org/schools/:school/hon/conversations/:id` — turns with role (`HUMAN` / `HON` / agent key), text, and typed references (`workItemId`, `actionRequestId`) only.
-   - `POST /v1/organizations/:org/schools/:school/hon/conversations/:id/turns` with `Idempotency-Key` — returns a receipt (`turnId`, `status: PENDING | ANSWERED | NEEDS_APPROVAL | FAILED | UNKNOWN`, `delegatedAgentKeys`, `actionRequestIds`). Any consequential step must surface as an Action Engine `CONFIRM` proposal, never execute directly.
+   - `POST /v1/organizations/:org/schools/:school/hon/conversations/:id/turns` with `Idempotency-Key` — returns a receipt (`turnId`, `status: READY | PROCESSING | DELEGATING | AWAITING_APPROVAL | COMPLETED | FAILED | UNKNOWN`, `delegatedAgentKeys`, `actionRequestIds`, `workItemIds`). The frontend already maps exactly these states, and treats anything else as `UNKNOWN`. Any consequential step must surface as an Action Engine `CONFIRM` proposal, never execute directly.
+   - `GET /v1/organizations/:org/schools/:school/hon/readiness` — server-confirmed `contract`, `providerRoute`, `entitlement` and `authorization` booleans for this requester. The composer is enabled only when all four are true. Provider calls must go through the existing AI spending protections; the frontend never chooses a provider or model.
+   - Verified school context, for example operations counts and Command Center aggregates, must be assembled on the server from existing authorized reads, never from text supplied by the browser.
 2. **Handoff/session history:** `GET /v1/staff/voice/:schoolId/mine` — the requester's own voice/text handoff sessions (id, agentCatalogId, state, expiresAt, updatedAt), so history can be shown without typing session UUIDs.
 3. **Server-evaluated team availability:** `GET /v1/organizations/:org/schools/:school/ai/team/capabilities` — per agent key, the capabilities the current human can use now (entitlement, permission, configured route), so the frontend stops relying on a static registry. Also correct `AI_TEAM_CATALOG` titles in `packages/config` to the approved roles (the directory API currently returns legacy titles such as "Curriculum support guide").
 4. **School-scoped AI work feed:** a single paginated `GET /v1/organizations/:org/schools/:school/ai/work` (requester-scoped, with a neutral `sourceKey` such as `teaching` for the legacy `claire` records, preserving history) instead of three cross-school `/mine` calls capped at 20.
 5. **Approval source attribution:** add a closed `sourceWorkflow` (or `agentKey`) to `ActionReviewItem` so approvals need not be inferred from `actionCode`.
 6. **Governed workspaces for Alex, Maya, Jordan, Claire, Lena** — one bounded draft slice per role (for Claire, a business-performance draft over the existing operations report and Command Center aggregates).
 
-## Next frontend steps
+## Known issues and how they are handled
 
-1. Prefill Action Center from the verified current school (resolver) so "Review in Action Center" opens the queue directly.
-2. Bind the conversation boundary to contract 1 once it exists; enable the composer only on a verified `READY` route.
-3. Replace the static availability registry with contract 3.
-4. Use contract 4 for paging and full history; add per-agent filters.
-5. Apply the same HON band to the verified Command Center page.
-6. Owner decision: retire or relabel the design-reference routes (`/`, `/complete-mobile`, `/reference/classic-dashboard`), which still show representative sample activity and are not connected to a school. They were not changed here.
+| Issue | Handling in this PR | Follow-up |
+| --- | --- | --- |
+| AI work history capped at 20 per source | Labeled "recent" with an explicit "not a complete history" note | Contract 4 (paginated, school-scoped feed) |
+| Action Center asks for a school UUID | Not changed here (unrelated page) | Proposed separate PR: prefill Action Center from the same signed-subject resolver HON uses (`GET /v1/staff/current-reporting-school`) only when it returns `RESOLVED`. Never prefill from the URL, storage or theme. Keep manual entry for multi-school users; the queue API still enforces `action.approve` |
+| Sample/reference dashboards (`/`, `/complete-mobile`, `/reference/classic-dashboard`) | Already labeled "Design reference · representative sample state only" / "labeled sample data"; HON's launcher never appears there (tested) | Owner decision: retire, move under `/reference/`, or keep |
+| Teaching-only navigation | Not claimed; HON hides management content without a verified management scope | T1 |
+| Conversation composer not connected | Disabled and labeled; readiness gate tested | Contract 1 |
+| Kai identity and availability are frontend constants | Labeled provisional and planned | T1 |
+
+## Next frontend PRs (none started; each needs owner approval)
+
+1. **F2 — HON conversation integration:** bind `HON_CONVERSATION_BOUNDARY` to contract 1. Enable the composer only through `honComposerEnabled` with server-confirmed readiness. Render turn states with `honTurnStatusPresentation`. Use idempotent sends. Approvals stay in Action Center. Depends on Codex contract 1 and the provider/entitlement route.
+2. **F3 — Agent delegation and work history:** server-evaluated availability (contract 3), a paginated school AI work feed with per-agent filters (contract 4), approval attribution (contract 5), and delegation progress from contract 1 receipts. Includes the small Action Center verified-school prefill, unless the owner wants that sooner as its own PR.
+3. **F4 — Kai Teaching Workspace:** `/staff/teaching`, per `HON_TEACHING_WORKSPACE_PROPOSAL.md`, after Codex T1–T3 are reviewed.
+4. **F5 — Premium polish:** fix the pre-existing Platform View picker contrast and overflow in Classic at 390px; consistent staff navigation across modes; onboarding; the approved HON mark served locally instead of from the Manus host.
+
+## Owner decisions open
+
+1. The reference routes (`/`, `/complete-mobile`, `/reference/classic-dashboard`): keep as labeled design references, move them under `/reference/`, or retire them.
+2. Whether the Action Center prefill ships as its own small PR before F3.
+3. Kai: an approved portrait and the final default name (currently a provisional "K" monogram).
+4. Whether the HON launcher should be hidden on `/staff/*` pages for users without a verified management scope once T1 can tell them apart. Today it opens to a short notice only.
 
 ## Verification
 
-- `pnpm --filter @hon/web test` — 133 files, 947 tests pass (27 new in `test/hon-command.test.tsx`).
+- `pnpm --filter @hon/web test` — 133 files, 949 tests pass (29 in `test/hon-command.test.tsx`).
 - `pnpm --filter @hon/web check` and `pnpm --filter @hon/web build` pass.
 - `apps/web/scripts/hon-command-browser.mjs` (local, synthetic fixtures, `HON_COMMAND_BROWSER_LOCAL=1`) — 17 checks on the production build: all three modes at desktop 1440, phone 390 and tablet 834; panel, every agent detail, tabs, keyboard (open, arrow keys, focus trap, Escape focus return), launcher on another staff page, full-workspace round trip, unsafe `return`/`agent` values, empty / denied / error / loading / multi-school states, and no operational claim for unsupported capabilities. axe (WCAG 2 A/AA) reports no violations on HON surfaces.
 - Pre-existing, not changed here: whole-page axe findings on the dashboard's Platform View picker (contrast) and an operations card `dl`; the Platform View picker overflows horizontally in Classic at 390px.

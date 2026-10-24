@@ -5,9 +5,12 @@ import type { ActionReviewItem, AiDraftWorkItem, CommandCenterRecommendation } f
 import type { HonInterfaceTheme } from '@hon/design-system';
 import { HON_MARK_SOURCE } from '../classic-dashboard/portraits';
 import type { HonCommandSnapshot, HonSection } from './hon-command-data';
-import { HON_CONVERSATION_BOUNDARY } from './hon-conversation';
+import { HON_CONVERSATION_BOUNDARY, honComposerEnabled } from './hon-conversation';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
 import styles from './hon-command.module.css';
+
+/** The existing requester-scoped reads return at most 20 records per source across all schools. */
+export const HON_PARTIAL_HISTORY = 'Shows up to your 20 most recent drafts per source, across all your schools, so older drafts may not appear. This is not a complete history.';
 
 export type HonTab = 'team' | 'suggested' | 'work' | 'approvals';
 export const HON_TABS: readonly { id: HonTab; label: string }[] = [
@@ -78,6 +81,8 @@ function SectionState<T>({ section, label }: { section: HonSection<T>; label: st
 }
 
 function Conversation({ presentation }: { presentation: 'panel' | 'full' }): React.ReactElement {
+  // No server-confirmed readiness exists yet, so the composer stays disabled.
+  const enabled = honComposerEnabled(null);
   return <section className={styles.conversation} aria-labelledby={`hon-conversation-${presentation}`}>
     <div className={styles.conversationHead}>
       <h3 id={`hon-conversation-${presentation}`}>Ask HON</h3>
@@ -86,8 +91,8 @@ function Conversation({ presentation }: { presentation: 'panel' | 'full' }): Rea
     <p className={styles.conversationNote}><strong>{HON_CONVERSATION_BOUNDARY.headline}.</strong> {HON_CONVERSATION_BOUNDARY.detail}</p>
     <div className={styles.composer}>
       <label htmlFor={`hon-composer-${presentation}`} className={styles.visuallyHidden}>Message HON (not connected)</label>
-      <textarea id={`hon-composer-${presentation}`} rows={presentation === 'full' ? 3 : 2} disabled placeholder="Conversation is not connected yet" aria-describedby={`hon-composer-help-${presentation}`} />
-      <button type="button" disabled>Send</button>
+      <textarea id={`hon-composer-${presentation}`} rows={presentation === 'full' ? 3 : 2} disabled={!enabled} placeholder="Conversation is not connected yet" aria-describedby={`hon-composer-help-${presentation}`} />
+      <button type="button" disabled={!enabled}>Send</button>
     </div>
     <p id={`hon-composer-help-${presentation}`} className={styles.meta}>{HON_CONVERSATION_BOUNDARY.history}</p>
     <a className={styles.inlineLink} href={HON_CONVERSATION_BOUNDARY.handoff.href}>{HON_CONVERSATION_BOUNDARY.handoff.label} →</a>
@@ -112,7 +117,7 @@ function TeamGrid({ snapshot, variant, onSelectAgent }: { snapshot: HonCommandSn
             <strong>{agent.name}</strong>
             <small>{agent.title}</small>
             <AvailabilityBadge agent={agent} />
-            {count !== null ? <span className={styles.meta}>{count === 0 ? 'No recorded drafts here' : `${count} recorded ${count === 1 ? 'draft' : 'drafts'}`}</span> : null}
+            {count !== null ? <span className={styles.meta}>{count === 0 ? 'No recent drafts here' : `${count} recent ${count === 1 ? 'draft' : 'drafts'}`}</span> : null}
           </span>
         </button>
       </li>;
@@ -182,14 +187,15 @@ function AgentDetail({ agent, snapshot, onBack }: { agent: HonCommandAgent; snap
     <ul className={styles.links}>{agent.workflows.map((workflow) => <li key={workflow.href}><a href={workflow.href}>{workflow.label} →</a></li>)}</ul>
     <h4>Approval and review</h4>
     <p>{agent.approval}</p>
-    <h4>Verified work history</h4>
+    <h4>Recent verified work</h4>
     {!agent.draftWorkKey
       ? <p className={styles.state} data-state="EMPTY">{agent.name} has no AI work contract yet, so there is no recorded work to show. Nothing is assumed.</p>
       : accessDenied
         ? <p className={styles.state} data-state="DENIED">Your current access does not include {agent.name}’s draft work in this school.</p>
         : work.state === 'READY' || work.state === 'EMPTY'
-          ? items.length ? <ul className={styles.rows}>{items.map((item) => <WorkItem key={item.id} item={item} />)}</ul> : <p className={styles.state} data-state="EMPTY">No recorded {agent.name} drafts for this school yet.</p>
+          ? items.length ? <ul className={styles.rows}>{items.map((item) => <WorkItem key={item.id} item={item} />)}</ul> : <p className={styles.state} data-state="EMPTY">No recent {agent.name} drafts for this school.</p>
           : <SectionState section={work} label="Recorded AI work" />}
+    {agent.draftWorkKey ? <p className={styles.meta}>{HON_PARTIAL_HISTORY}</p> : null}
     {agent.id === 'claire' ? <p className={styles.note}>Older teaching drafts were stored under a legacy “claire” key before the roster was approved. They stay labeled as teaching drafts in AI work and are not shown as Claire’s business performance work.</p> : null}
   </article>;
 }
@@ -241,6 +247,7 @@ function TabPanel({ tab, snapshot, variant, selectedAgentId, onSelectAgent }: Pi
     const section = snapshot.draftWork;
     return <>
       <p className={styles.lede}>Durable AI draft work you requested in this school. Status only: no draft text, prompts, provider details or delivery.</p>
+      <p className={styles.meta}>{HON_PARTIAL_HISTORY}</p>
       {section.data?.unavailable.length ? <p className={styles.note}>Your access does not include some draft sources here: {section.data.unavailable.map((key) => HON_DRAFT_WORK_SOURCES[key].label).join(', ')}. No missing work is assumed.</p> : null}
       <SectionState section={section} label="Recorded AI work" />
       {section.state === 'READY' && section.data ? <ul className={styles.rows}>{section.data.items.map((item) => <WorkItem key={item.id} item={item} />)}</ul> : null}

@@ -26,3 +26,41 @@ export interface HonConversationContractNeeded {
   readThread: 'GET /v1/organizations/:organizationId/schools/:schoolId/hon/conversations/:conversationId';
   sendTurn: 'POST /v1/organizations/:organizationId/schools/:schoolId/hon/conversations/:conversationId/turns';
 }
+
+/**
+ * Closed turn states the frontend will accept from the future conversation
+ * contract. Presentation only: nothing here creates, polls or advances a turn,
+ * and a state is shown only when the server reports it.
+ */
+export const HON_TURN_STATUSES = ['READY', 'PROCESSING', 'DELEGATING', 'AWAITING_APPROVAL', 'COMPLETED', 'FAILED', 'UNKNOWN'] as const;
+export type HonTurnStatus = typeof HON_TURN_STATUSES[number];
+
+const TURN_PRESENTATION: Readonly<Record<HonTurnStatus, { label: string; tone: 'ready' | 'neutral' | 'waiting' | 'blocked' | 'planned'; detail: string }>> = {
+  READY: { label: 'Ready', tone: 'ready', detail: 'The server reports HON can accept a message.' },
+  PROCESSING: { label: 'Processing', tone: 'neutral', detail: 'The server reports this message is being handled.' },
+  DELEGATING: { label: 'Delegating', tone: 'neutral', detail: 'The server reports a bounded task was handed to a named specialist.' },
+  AWAITING_APPROVAL: { label: 'Awaiting approval', tone: 'waiting', detail: 'A proposal needs a qualified human decision in Action Center. Nothing has run.' },
+  COMPLETED: { label: 'Completed', tone: 'ready', detail: 'The server recorded a verified result.' },
+  FAILED: { label: 'Failed', tone: 'blocked', detail: 'The server recorded a failure. Nothing is assumed to have happened.' },
+  UNKNOWN: { label: 'Unknown', tone: 'planned', detail: 'The outcome could not be confirmed. Check the record before acting again.' },
+};
+
+/** Any value the server did not explicitly report as a known state is shown as UNKNOWN, never as success. */
+export function honTurnStatusPresentation(value: unknown): { status: HonTurnStatus } & (typeof TURN_PRESENTATION)[HonTurnStatus] {
+  const status = (HON_TURN_STATUSES as readonly unknown[]).includes(value) ? value as HonTurnStatus : 'UNKNOWN';
+  return { status, ...TURN_PRESENTATION[status] };
+}
+
+/**
+ * The composer may be enabled only when every prerequisite is confirmed by the
+ * server for this requester and school. Today none exists, so this is false.
+ */
+export interface HonConversationReadiness {
+  contract: boolean;
+  providerRoute: boolean;
+  entitlement: boolean;
+  authorization: boolean;
+}
+export function honComposerEnabled(readiness: HonConversationReadiness | null): boolean {
+  return readiness !== null && readiness.contract && readiness.providerRoute && readiness.entitlement && readiness.authorization;
+}

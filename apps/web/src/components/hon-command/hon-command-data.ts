@@ -160,7 +160,7 @@ export class HonCommandController {
         const allDenied = result.unavailable.length === AI_DRAFT_WORK_AGENT_KEYS.length;
         this.set({ draftWork: allDenied
           ? { state: 'DENIED', data: null, message: 'Your current access does not include governed AI draft work (HON Complete and the drafting permission are checked by the server).' }
-          : { state: items.length ? 'READY' : 'EMPTY', data: { items, unavailable: result.unavailable }, message: items.length ? 'Your own recorded AI draft work for this school.' : 'No recorded AI draft work for this school yet.' } }, generation);
+          : { state: items.length ? 'READY' : 'EMPTY', data: { items, unavailable: result.unavailable }, message: items.length ? 'Your most recent recorded AI draft work for this school.' : 'No recent recorded AI draft work for this school.' } }, generation);
       }, (error) => this.set({ draftWork: failure(error, 'Recorded AI work is not available for your current access.', 'Recorded AI work is unavailable.') }, generation)),
       this.api.approvals(scope).then((data) => {
         this.set({ approvals: { state: data.items.length ? 'READY' : 'EMPTY', data, message: data.items.length ? 'Proposals awaiting a qualified human review.' : 'No proposals are awaiting review for this school.' } }, generation);
