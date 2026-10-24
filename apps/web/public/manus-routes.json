@@ -169,6 +169,10 @@
       "title": "HON | My AI Draft Work"
     },
     {
+      "path": "/staff/hon",
+      "title": "HON | AI Command Workspace"
+    },
+    {
       "path": "/community/marketplace",
       "title": "HON | Private human marketplace"
     },
@@ -198,7 +202,7 @@
     },
     {
       "path": "/staff/teaching-assistant",
-      "title": "HON Claire | Curriculum support guide"
+      "title": "HON | Teaching draft assistant (legacy)"
     },
     {
       "path": "/staff/retention/review",

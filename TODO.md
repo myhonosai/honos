@@ -898,3 +898,11 @@ HON billing schools; separate from school-to-family billing. Plan: [handoff](doc
 - [ ] Owner review of revision 3. Only after approval: wire the same presentation to the authorized live reads inside `/staff/*` (coordinate with Manus) and consider design-system extraction.
 
 Details: [Classic dashboard experiment README](docs/visuals/experiments/claude/classic-dashboard/README.md) · tracking issue #2.
+
+## Unified HON AI Command Experience — Claude Code (owner-assigned frontend, draft PR)
+- [x] Shared HON workspace for verified school staff: dashboard band in Modern/Big-Button/Classic, persistent "Ask HON" launcher on other `/staff/*` pages, expandable modal panel and `/staff/hon` full workspace. Reuses only existing reads (current-reporting-school, interface theme, Command Center, the three requester-scoped AI draft `/mine` reads, Action Center queue). No API, contract, migration, entitlement, billing, credit, provider or protected-asset change.
+- [x] Seven approved identities from `HON_AI_TEAM`; only Chad and Marcus shown with governed draft workspaces; others "Planned · not yet available"; conversation composer disabled and labeled "Not connected".
+- [x] Legacy `claire` teaching-draft key presented as "Teaching draft assistant (legacy)", never as Claire's Business Performance work; `/staff/ai-work` and `/staff/teaching-assistant` labels corrected. Data/contract keys unchanged.
+- [x] Evidence: web tests 133 files / 944 tests pass (24 new); typecheck and build pass; local synthetic browser proof 17/17 checks on the production build with no axe violations on HON surfaces.
+- [ ] Codex backend contracts (conversation orchestration, handoff history, server-evaluated team availability, school-scoped AI work feed, approval source attribution, governed workspaces for Alex/Maya/Jordan/Claire/Lena). Details: [HON_COMMAND_EXPERIENCE.md](docs/architecture/HON_COMMAND_EXPERIENCE.md).
+- [ ] Owner decisions: teaching-assistant ownership; future of the design-reference routes that still show sample activity.
