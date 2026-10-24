@@ -76,6 +76,16 @@ jobs:
           # Parent CI metadata/credentials/preloads never enter the rehearsal process.
           env -i "PATH=$PATH" "HOME=$HOME" LANG=C.UTF-8 GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
             node packages/database/scripts/run-commercial-staging-validation.mjs --confirm-disposable-local --report "$RUNNER_TEMP/hon-commercial-staging/report.json"
+      - name: Show sanitized failure summary
+        if: failure()
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, pathlib
+          report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'hon-commercial-staging/report.json'
+          if report.exists():
+              data = json.loads(report.read_text())
+              print(data.get('failure', 'No failure detail recorded'))
+          PYTHON
       - name: Retain sanitized evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

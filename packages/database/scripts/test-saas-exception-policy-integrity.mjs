@@ -59,7 +59,7 @@ try{
  await admin.query('BEGIN');
  for(const[k,h]of Object.entries(humans)){
   await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'Synthetic D10')",[h.user,h.subject,h.id+'@example.test']);
-  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,$3,'Synthetic D10',true)",[h.id,h.user,k==='ai'?'AI_EMPLOYEE':'HUMAN_USER']);
+  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,$3,'Synthetic D10',true)",[h.id,k==='ai'?null:h.user,k==='ai'?'AI_EMPLOYEE':'HUMAN_USER']);
  }
  for(const[k,role,perms]of [['owner','HON_HQ_OWNER',[]],['operator','HON_HQ_OPERATOR',['hq.billing.manage']],['expired','HON_HQ_OWNER',[]],['ai','HON_HQ_OWNER',[]],['delegated','HON_HQ_OWNER',[]]])
   await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,$2,$3,clock_timestamp()-interval '2 days',CASE WHEN $4 THEN clock_timestamp()-interval '1 day' ELSE NULL END)",[humans[k].id,role,perms,k==='expired']);
@@ -87,6 +87,25 @@ try{
   await nothing(()=>grant(orgs[0],input(orgs[0]),K(),who),orgs[0],403,'SAAS_FORBIDDEN');
  }
  passed('operator, school, expired, AI and ambiguous human cannot approve or grant; no writes');
+ // A policy decision waiting on IAM must observe a concurrent authority revocation before writing.
+ const policyAttempt={expectedRevision:approved.revision,decision:'APPROVED',termsVersion:1,maxDays:3,
+  validFrom:iso(Date.now()-1000),validUntil:iso(Date.now()+DAY),reason:'Synthetic approval authority lock regression',confirmation:'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY'};
+ const waitBehindAdmin=async()=>{const pid=(await row('SELECT pg_backend_pid() p')).p;
+  for(const end=Date.now()+5000;Date.now()<end;await sleep(10))if((await row('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) b',[pid])).b)return;
+  throw Error('Expected policy command to wait behind the actual authority/policy lock');};
+ await admin.query('UPDATE hon.hq_operator_grants SET effective_until=NULL WHERE principal_id=$1',[humans.expired.id]);
+ let beforeDenied=await footprint(),beforeDeniedEnt=await Promise.all(orgs.map(ent));
+ await admin.query('BEGIN');await admin.query('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1',[humans.expired.id]);
+ let pending=settled(decide(policyAttempt,K(),'expired'));await waitBehindAdmin();await admin.query('COMMIT');
+ let denied=await pending;assert(denied.error);assert.equal(denied.error.getStatus(),403);assert.deepEqual(await footprint(),beforeDenied);assert.deepEqual(await Promise.all(orgs.map(ent)),beforeDeniedEnt);
+ passed('policy approval waiting on IAM loses revoked authority and commits no claim/evidence/access');
+ // Authority can also lapse by the clock while waiting on policy serialization.
+ await admin.query("UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp()+interval '1800 milliseconds' WHERE principal_id=$1",[humans.expired.id]);
+ beforeDenied=await footprint();await admin.query('BEGIN');await admin.query("SELECT pg_advisory_xact_lock(hashtextextended('saas.access.exception.policy',0))");
+ pending=settled(decide(policyAttempt,K(),'expired'));await waitBehindAdmin();await sleep(2000);await admin.query('COMMIT');
+ denied=await pending;assert(denied.error);assert.equal(denied.error.getStatus(),403);assert.deepEqual(await footprint(),beforeDenied);assert.deepEqual(await Promise.all(orgs.map(ent)),beforeDeniedEnt);
+ passed('policy approval rechecks owner clock expiry after a real policy-lock wait');
+
  await nothing(()=>grant(orgs[0],input(orgs[0],{schoolId:orgs[1].school})),orgs[0],404,'SAAS_UNAVAILABLE');
  await nothing(()=>grant(orgs[0],input(orgs[0],{expiresAt:iso(Date.now()+4*DAY)})),orgs[0],422,'SAAS_EXCEPTION_TOO_LONG');passed('exact school and approved duration enforced by database');
  const body=input(orgs[0]),key=K(),receipt=await grant(orgs[0],body,key);
@@ -147,7 +166,7 @@ try{
  for(const setting of ['hon.exception_policy_approved','hon.saas_owner_override'])await b.query('SELECT set_config($1,$2,false)',[setting,'true']);
  await sqlDeny(b.query('DELETE FROM hon.saas_exception_policy_decisions'),'42501');
  await sqlDeny(admin.query('UPDATE hon.saas_exception_policy_decisions SET max_days=1'),'42501');
- await sqlDeny(admin.query('TRUNCATE hon.saas_exception_policy_decisions'),'42501');passed('forced RLS, private helpers, immutable history and no setting-based authority bypass');
+ await sqlDeny(admin.query('TRUNCATE hon.saas_exception_policy_decisions CASCADE'),'42501');passed('forced RLS, private helpers, immutable history and no setting-based authority bypass');
  // Cleanup remains allowed with no valid policy. It closes only lapsed exceptions, not a still-live one.
  await approval({maxDays:1});const short=await grant(orgs[5],input(orgs[5],{expiresAt:iso(Date.now()+1200)}));
  await decide({expectedRevision:(await service.readExceptionPolicy(H('owner'))).current.revision,decision:'WITHDRAWN',reason:'Synthetic cleanup without valid approval'});await sleep(1400);
