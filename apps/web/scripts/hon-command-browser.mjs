@@ -230,8 +230,16 @@ await check('modern desktop: every agent detail, Claire identity, suggested/work
     await dialog.getByRole('tab', { name: new RegExp(`^${tab}`) }).click();
     await shot(page, `modern-desktop-1440-${file}`);
   }
+  await dialog.getByRole('tab', { name: /^AI team/ }).click();
+  const kai = dialog.getByRole('region', { name: /Kai/ });
+  await kai.scrollIntoViewIfNeeded();
+  assert.ok(await kai.getByText('Separate instructional AI · not part of the management team').isVisible(), 'Kai is separate from the seven');
+  assert.ok(await kai.getByText(/never mark student proficiency/).isVisible(), 'Kai boundary shown');
+  assert.equal(await kai.getByRole('link').count(), 5, 'Kai links only to existing teaching tools');
+  await shot(page, 'modern-desktop-1440-teaching-ai-card');
   await dialog.getByRole('tab', { name: /^AI work/ }).click();
   assert.ok(await dialog.getByText('Teaching draft assistant (legacy)').first().isVisible(), 'legacy teaching label');
+  assert.equal(await dialog.getByText(/Kai/).count(), 0, 'legacy records are never attributed to Kai');
   assert.equal(await dialog.getByText(/Claire ·/).count(), 0, 'legacy records are never attributed to Claire');
   await ctx.close();
 });
@@ -302,6 +310,9 @@ for (const state of ['empty', 'denied', 'error', 'slow', 'multi']) {
       await page.goto(`${origin}/staff/crm/leads`);
       await page.getByRole('button', { name: 'Ask HON' }).click();
       await page.getByText('Choose a school first').waitFor();
+      const dialog = page.getByRole('dialog');
+      assert.equal(await dialog.getByRole('tablist').count(), 0, 'no workspace sections before a verified management scope');
+      for (const name of ['Alex', 'Chad', 'Kai']) assert.equal(await dialog.getByText(name, { exact: true }).count(), 0, `${name} hidden before verification`);
     } else {
       await page.goto(`${origin}/staff/dashboard`);
       await page.getByRole('button', { name: 'Open HON' }).click();
@@ -328,7 +339,7 @@ await check('no unsupported capability presented as operational', async () => {
   assert.equal(await dialog.getByRole('button', { name: 'Send' }).isDisabled(), true);
   const text = await dialog.innerText();
   for (const forbidden of ['Working now', 'Thinking', 'Online', 'Completed today', 'Alex is ready']) assert.ok(!text.includes(forbidden), forbidden);
-  assert.equal(await dialog.getByText('Planned · not yet available').count(), 5);
+  assert.equal(await dialog.getByText('Planned · not yet available').count(), 6, 'five planned management employees plus the separate provisional Teaching AI');
   assert.equal(await dialog.getByText('Drafts · approval required').count(), 2);
   await ctx.close();
 });

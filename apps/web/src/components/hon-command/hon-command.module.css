@@ -100,6 +100,12 @@
 .rowStatus { display: grid; justify-items: end; }
 
 .detail { display: grid; gap: 6px; min-width: 0; }
+.teachingAi { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; margin-top: 16px; padding: 16px; border: 1px dashed #3c4c66; border-radius: 14px; background: #0f1826; min-width: 0; }
+.teachingAi h3 { margin: 4px 0 2px; font-size: 18px; }
+.teachingAi h3 small { color: #c3cee0; font-size: 12px; font-weight: 600; }
+.teachingAi h4 { margin: 12px 0 4px; color: var(--hon-accent); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.teachingAi p { margin: 6px 0; line-height: 1.5; }
+.monogram { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #1b2536; color: #c3cee0; font-size: 22px; font-weight: 800; box-shadow: inset 0 0 0 1px #3c4c66; }
 .detail h4 { margin: 14px 0 4px; color: var(--hon-accent); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
 .detail p { margin: 0; line-height: 1.55; }
 .back { width: fit-content; }
@@ -185,6 +191,8 @@
 .workspace[data-variant="classic"] .agentText .meta { grid-column: 2 / -1; margin: 0; font-size: 12px; }
 .workspace[data-variant="classic"] .portrait { width: 30px; height: 30px; }
 .workspace[data-variant="classic"] .row, .workspace[data-variant="classic"] .conversation, .workspace[data-variant="classic"] .state { padding: 9px 11px; border-radius: 6px; }
+.workspace[data-variant="classic"] .teachingAi { padding: 10px 11px; border-radius: 6px; gap: 10px; }
+.workspace[data-variant="classic"] .monogram { width: 30px; height: 30px; font-size: 14px; }
 .workspace[data-variant="classic"] .headerActions a, .workspace[data-variant="classic"] .headerActions button { border-radius: 5px; padding: 5px 10px; font-size: 13px; }
 .band[data-variant="classic"] { margin: 16px 0; padding: 12px 14px; border-radius: 6px; background: #0a1a2b; }
 .band[data-variant="classic"] .bandLead h2 { font-size: 18px; }

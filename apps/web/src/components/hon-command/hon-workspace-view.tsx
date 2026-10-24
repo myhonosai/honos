@@ -6,7 +6,7 @@ import type { HonInterfaceTheme } from '@hon/design-system';
 import { HON_MARK_SOURCE } from '../classic-dashboard/portraits';
 import type { HonCommandSnapshot, HonSection } from './hon-command-data';
 import { HON_CONVERSATION_BOUNDARY } from './hon-conversation';
-import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
+import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
 import styles from './hon-command.module.css';
 
 export type HonTab = 'team' | 'suggested' | 'work' | 'approvals';
@@ -120,6 +120,23 @@ function TeamGrid({ snapshot, variant, onSelectAgent }: { snapshot: HonCommandSn
   </ul>;
 }
 
+function TeachingAiCard(): React.ReactElement {
+  const ai = HON_TEACHING_AI;
+  return <section className={styles.teachingAi} aria-labelledby="hon-teaching-ai">
+    <span className={styles.monogram} aria-hidden="true">{ai.name.charAt(0)}</span>
+    <div>
+      <p className={styles.kicker}>Separate instructional AI · not part of the management team</p>
+      <h3 id="hon-teaching-ai">{ai.name} <small>(provisional name)</small></h3>
+      <p className={styles.role}>{ai.title}</p>
+      <span className={styles.badge} data-tone="planned">Planned · not yet available</span>
+      <p>{ai.purpose}</p>
+      <p className={styles.note}>{ai.boundary}</p>
+      <h4>Existing teaching tools you run yourself</h4>
+      <ul className={styles.links}>{ai.tools.map((tool) => <li key={tool.href}><a href={tool.href}>{tool.label} →</a></li>)}</ul>
+    </div>
+  </section>;
+}
+
 function WorkItem({ item }: { item: AiDraftWorkItem }): React.ReactElement {
   const source = HON_DRAFT_WORK_SOURCES[item.agentKey];
   return <li className={styles.row} data-legacy={source.agentId === null ? 'true' : undefined}>
@@ -206,6 +223,7 @@ function TabPanel({ tab, snapshot, variant, selectedAgentId, onSelectAgent }: Pi
     return <>
       <p className={styles.lede}>Seven specialists coordinated by HON. Chad and Marcus can prepare governed drafts today; the others are planned and show no activity until a real contract exists.</p>
       <TeamGrid snapshot={snapshot} variant={variant} onSelectAgent={(id) => onSelectAgent?.(id)} />
+      <TeachingAiCard />
     </>;
   }
   if (tab === 'suggested') {
@@ -298,11 +316,13 @@ export function HonWorkspaceView(props: HonWorkspaceViewProps): React.ReactEleme
       ? <div className={styles.state} role={scope.state === 'ERROR' ? 'alert' : 'status'} data-state={scope.state}>
         <strong>{scope.state === 'SELECTION_REQUIRED' ? 'Choose a school first' : scope.state === 'DENIED' ? 'School access unavailable' : 'School check failed'}</strong>
         <p>{scope.message}</p>
+        <p className={styles.meta}>HON’s management team appears only after the server confirms school management access. Teaching-only access does not include it.</p>
         <a className={styles.inlineLink} href="/staff/dashboard">Open the operations dashboard →</a>
       </div>
       : null}
     {scope.state === 'RESOLVING' ? <p className={styles.state} role="status" data-state="LOADING">{scope.message}</p> : null}
-    <div className={styles.body}>
+    {/* Management agents, suggestions, AI work and approvals render only for a server-verified management scope. */}
+    {verified ? <div className={styles.body}>
       <Conversation presentation={presentation} />
       <section className={styles.sections} aria-label="HON workspace">
         <HonTabs tab={tab} snapshot={snapshot} onTab={props.onTab} idPrefix={idPrefix} />
@@ -310,6 +330,6 @@ export function HonWorkspaceView(props: HonWorkspaceViewProps): React.ReactEleme
           <TabPanel tab={tab} snapshot={snapshot} variant={variant} selectedAgentId={props.selectedAgentId} onSelectAgent={props.onSelectAgent} />
         </div>
       </section>
-    </div>
+    </div> : null}
   </div>;
 }

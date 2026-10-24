@@ -11,7 +11,7 @@ import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, ty
 import { HON_CONVERSATION_BOUNDARY } from '../src/components/hon-command/hon-conversation';
 import { HonLauncher, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
 import { HonWorkspaceView, type HonTab } from '../src/components/hon-command/hon-workspace-view';
-import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, approvalSourceLabel, safeHonReturnPath } from '../src/components/hon-command/roster';
+import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_TEACHING_AI, approvalSourceLabel, safeHonReturnPath } from '../src/components/hon-command/roster';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { organizationId: id(1), schoolId: id(2) };
@@ -78,8 +78,18 @@ describe('HON command roster', () => {
 
   it('links only to existing staff routes', () => {
     const hrefs = HON_COMMAND_ROSTER.flatMap((agent) => [...agent.workflows.map((w) => w.href), ...agent.capabilities.flatMap((c) => c.href ? [c.href] : []), ...(agent.workspace ? [agent.workspace.href] : [])]);
-    hrefs.push(...Object.values(HON_DRAFT_WORK_SOURCES).map((source) => source.destination), HON_CONVERSATION_BOUNDARY.handoff.href);
+    hrefs.push(...Object.values(HON_DRAFT_WORK_SOURCES).map((source) => source.destination), HON_CONVERSATION_BOUNDARY.handoff.href, ...HON_TEACHING_AI.tools.map((tool) => tool.href));
     for (const href of new Set(hrefs)) expect(existsSync(join('src/app', href, 'page.tsx')), href).toBe(true);
+  });
+
+  it('keeps the provisional Teaching AI separate from the seven and from legacy claire records', () => {
+    expect(HON_AI_TEAM.map((member) => member.name)).not.toContain(HON_TEACHING_AI.name);
+    expect(HON_COMMAND_ROSTER.map((agent) => agent.name)).not.toContain(HON_TEACHING_AI.name);
+    expect(HON_COMMAND_ROSTER).toHaveLength(7);
+    expect(JSON.stringify(HON_DRAFT_WORK_SOURCES)).not.toContain(HON_TEACHING_AI.name);
+    expect(approvalSourceLabel('teaching.draft.save')).not.toContain(HON_TEACHING_AI.name);
+    expect(HON_TEACHING_AI.boundary).toMatch(/never mark student proficiency, promotions, testing results or curriculum completion/);
+    expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Curriculum library', 'Curriculum progress', 'Scheduled classes', 'Teaching draft assistant (legacy)']);
   });
 
   it('accepts only bounded same-origin staff return paths', () => {
@@ -174,11 +184,38 @@ describe('HON workspace presentation', () => {
       const html = view(snapshot, 'team', null, variant);
       expect(html).toContain(`data-variant="${variant}"`);
       for (const agent of HON_COMMAND_ROSTER) { expect(html).toContain(`>${agent.name}<`); expect(html).toContain(agent.title.replace('&', '&amp;')); }
-      expect(html.match(/Planned · not yet available/g)).toHaveLength(5);
+      // Five planned management employees plus the separate provisional Teaching AI.
+      expect(html.match(/Planned · not yet available/g)).toHaveLength(6);
       expect(html.match(/Drafts · approval required/g)).toHaveLength(2);
       expect(html).toContain('1 recorded draft');
       for (const fabricated of ['Working now', 'Thinking', 'Online', 'Completed today', 'is ready', 'READY']) expect(html).not.toContain(fabricated);
     }
+  });
+
+  it('shows Kai only as a separate, provisional, planned Teaching AI with existing human tools', async () => {
+    const html = view((await loaded()).snapshot, 'team');
+    expect(html).toContain('Separate instructional AI · not part of the management team');
+    expect(html).toContain('Kai <small>(provisional name)</small>');
+    expect(html).toContain('Teaching &amp; Curriculum AI');
+    expect(html).toContain('never mark student proficiency');
+    for (const tool of HON_TEACHING_AI.tools) expect(html).toContain(`href="${tool.href}"`);
+    expect(view((await loaded()).snapshot, 'work')).not.toContain('Kai');
+  });
+
+  it('shows no management team, work, approvals or Kai until the server verifies a management scope', async () => {
+    const unresolved = (await loaded({ resolveScope: vi.fn(async () => ({ state: 'MANUAL_ENTRY_REQUIRED' as const })) }, null)).snapshot;
+    const denied = (await loaded({ resolveScope: vi.fn(async () => { throw new CommandCenterAccessError('no', 403); }) }, null)).snapshot;
+    const idle = initialHonCommandSnapshot();
+    for (const snapshot of [unresolved, denied, idle]) {
+      for (const tab of ['team', 'work', 'approvals', 'suggested'] as const) {
+        const html = view(snapshot, tab);
+        for (const agent of HON_COMMAND_ROSTER) expect(html).not.toContain(`>${agent.name}<`);
+        expect(html).not.toContain('role="tablist"');
+        expect(html).not.toContain('Kai');
+        expect(html).not.toContain('Teaching draft assistant');
+      }
+    }
+    expect(view(unresolved)).toContain('Teaching-only access does not include it.');
   });
 
   it('presents Claire as Business Performance Manager with no recorded work and no teaching link', async () => {

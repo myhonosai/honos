@@ -55,6 +55,8 @@ Shared code: `apps/web/src/components/hon-command/`
 | Alex, Maya, Jordan, Claire, Lena capabilities | **Backend required** | Shown as "Planned · not yet available"; no activity is displayed |
 | Server-evaluated agent availability | **Backend required** | Availability is a static frontend registry today |
 | Voice | **Backend required** | Existing handoff page states no provider is connected |
+| Management team hidden until a management scope is verified | **Working** | HON body renders only for a server-verified scope (dashboard report or `reporting.view` resolver); teaching-only users see no agents, work or approvals |
+| Separate Teaching AI (Kai) entry | **Partially working** | Display-only planned card linking to existing teaching pages; access, catalog and execution are backend required (T1–T6) |
 
 ## Claire discrepancy (investigated)
 
@@ -71,7 +73,7 @@ Frontend handling in this change (historical meaning preserved, nothing renamed 
 - `/staff/ai-work` labels those records "Teaching drafts · Legacy curriculum drafts" instead of "Claire · Curriculum support".
 - `/staff/teaching-assistant` no longer calls itself Claire; it explains the legacy key. Its route title is now "HON | Teaching draft assistant (legacy)".
 
-Owner decision still open: which employee (if any) should own the teaching assistant.
+Owner decision (2026-10-24): the teaching assistant is assigned to neither Claire nor Jordan. It becomes a separate Teaching & Curriculum AI, provisionally named **Kai**, with access separate from the seven management employees. HON shows Kai only as a separate, planned display entry. Legacy `claire` records keep their historical label and are not shown as Kai's work. See `HON_TEACHING_WORKSPACE_PROPOSAL.md` for the UI proposal, the capability-dependency matrix and backend contracts T1–T6.
 
 ## Exact backend contracts needed from Codex
 
@@ -96,7 +98,7 @@ Owner decision still open: which employee (if any) should own the teaching assis
 
 ## Verification
 
-- `pnpm --filter @hon/web test` — 133 files, 944 tests pass (24 new in `test/hon-command.test.tsx`).
+- `pnpm --filter @hon/web test` — 133 files, 947 tests pass (27 new in `test/hon-command.test.tsx`).
 - `pnpm --filter @hon/web check` and `pnpm --filter @hon/web build` pass.
 - `apps/web/scripts/hon-command-browser.mjs` (local, synthetic fixtures, `HON_COMMAND_BROWSER_LOCAL=1`) — 17 checks on the production build: all three modes at desktop 1440, phone 390 and tablet 834; panel, every agent detail, tabs, keyboard (open, arrow keys, focus trap, Escape focus return), launcher on another staff page, full-workspace round trip, unsafe `return`/`agent` values, empty / denied / error / loading / multi-school states, and no operational claim for unsupported capabilities. axe (WCAG 2 A/AA) reports no violations on HON surfaces.
 - Pre-existing, not changed here: whole-page axe findings on the dashboard's Platform View picker (contrast) and an operations card `dl`; the Platform View picker overflows horizontally in Classic at 390px.
