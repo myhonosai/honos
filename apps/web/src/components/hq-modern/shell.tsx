@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { HqPlatformOverview } from '@hon/contracts';
 import { HqOverviewAccessError, loadHqOverview } from '../hq-overview-http';
-import { HQ_ART, HQ_GROWTH, HQ_NAV, HQ_VIEWS, hqPageLabel, type HqArt, type HqView } from './catalog';
+import { HQ_ART, HQ_NAV, HQ_NAV_GROUPS, HQ_VIEWS, hqGroupContains, hqPageLabel, type HqArt, type HqView } from './catalog';
 import { HqIcon } from './icon';
 import { HonAssistant } from './assistant';
 import styles from './hq-modern.module.css';
@@ -44,8 +44,6 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
   const drawer = useRef<HTMLDialogElement>(null);
   const assistantButton = useRef<HTMLButtonElement>(null);
   const assistantOpener = useRef<HTMLElement | null>(null);
-  // Existing independently authorized pages already own their main landmark.
-  const ContentElement = path === '/hq/schools' || path === '/hq/ai-providers' ? 'div' : 'main';
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -90,11 +88,15 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
   const nav = <>
     <Link href="/hq" className={styles.brand}><strong>{t("HON HQ")}</strong><span>{t("Company control plane")}</span></Link>
     <nav className={styles.navigation} aria-label={t("HQ navigation")}>
-      {HQ_NAV.map((item) => item.path === '/hq/growth' ? <details className={styles.growthNav} key={item.path} open>
-        <summary><HqIcon name="growth" /><span>{t("Growth & Referrals")}</span></summary>
-        <Link href={item.path} onClick={() => setMenu(false)} aria-current={path === item.path ? 'page' : undefined}>{t("Growth overview")}</Link>
-        {HQ_GROWTH.map((child) => <Link key={child.path} href={child.path} onClick={() => setMenu(false)} aria-current={path === child.path ? 'page' : undefined}><HqIcon name={child.icon} size={17}/>{text(child.title)}</Link>)}
-      </details> : <Link key={item.path} href={item.path} onClick={() => setMenu(false)} aria-current={(item.path === '/hq' ? path === item.path : path === item.path || path.startsWith(`${item.path}/`)) ? 'page' : undefined}><HqIcon name={item.icon}/>{text(item.title)}</Link>)}
+      {HQ_NAV.map((item) => {
+        const group = HQ_NAV_GROUPS[item.path];
+        if (!group) return <Link key={item.path} href={item.path} onClick={() => setMenu(false)} aria-current={(item.path === '/hq' ? path === item.path : path === item.path || path.startsWith(`${item.path}/`)) ? 'page' : undefined}><HqIcon name={item.icon}/>{text(item.title)}</Link>;
+        const links = [...(group.overview ? [group.overview] : []), ...group.children];
+        return <details className={styles.growthNav} key={`${group.key}:${hqGroupContains(group, path)}`} open={hqGroupContains(group, path)} data-hq-nav-group={group.key}>
+          <summary><HqIcon name={group.icon}/><span>{text(group.title)}</span></summary>
+          {links.map((child) => <Link key={child.path} href={child.path} onClick={() => setMenu(false)} aria-current={path === child.path || (child !== group.overview && child.path !== '/hq/revenue' && path.startsWith(`${child.path}/`)) ? 'page' : undefined}>{child === group.overview ? null : <HqIcon name={child.icon} size={17}/>}{text(child.title)}</Link>)}
+        </details>;
+      })}
     </nav>
     <footer className={styles.railFooter}><span className={styles.ownerAvatar} aria-hidden="true">{t("HQ")}</span><span>{t("HQ workspace")}</span><Link href="/auth/login">{t("Account")}</Link></footer>
   </>;
@@ -120,7 +122,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
       {art === 'anime' && <p className={styles.artNotice} role="status">{t("Anime portraits are awaiting approved artwork. Executive identities remain unchanged.")}</p>}
       {access.kind === 'ready' ? <HqContext.Provider value={{ overview: access.overview, art, view, draft, setDraft, openAssistant }}>
         <div className={`${styles.contentLayout} ${assistant ? styles.withAssistant : ''}`}>
-          <ContentElement id="hq-main" tabIndex={-1} className={styles.main}>{children}</ContentElement>
+          <main id="hq-main" tabIndex={-1} className={styles.main}>{children}</main>
           {assistant && <div className={styles.assistantBackdrop} aria-hidden="true" onClick={closeAssistant}/>}
           {assistant && <HonAssistant context={text(hqPageLabel(path))} onMinimize={closeAssistant}/>}
         </div>

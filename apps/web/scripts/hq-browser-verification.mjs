@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, appendFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
-import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateChampionsLeaderboardQuery, validateChampionsHqLeaderboard, validateChampionsOverview, validateChampionsProgram, validateChampionsHqSchoolStatistics, validateChampionsRewardLedger, validateChampionsRewardProgram, validateChampionsRewardStatusFilter } from '@hon/contracts';
+import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateSaasPaymentsView, validateChampionsLeaderboardQuery, validateChampionsHqLeaderboard, validateChampionsOverview, validateChampionsProgram, validateChampionsHqSchoolStatistics, validateChampionsRewardLedger, validateChampionsRewardProgram, validateChampionsRewardStatusFilter } from '@hon/contracts';
 import { leaderboardFixture } from './fixtures/hq-champions-leaderboard.mjs';
 import { championsManagementFixture } from './fixtures/hq-champions-management.mjs';
 import { fixtureId, schoolDirectoryFixture, schoolReferralFixture, rewardLedgerFixture, rewardProgramFixture } from './fixtures/hq-school-rewards.mjs';
@@ -75,6 +75,19 @@ const api = createServer((request, response) => {
     response.writeHead(403); response.end('{}'); return;
   }
   const url = new URL(path, 'http://127.0.0.1');
+  if (url.pathname === '/v1/hq/ai-providers/configuration' || url.pathname === '/v1/hq/saas/offers' || url.pathname === '/v1/identity/me') {
+    // Not modeled here; these pages must fail closed while the shell navigation stays usable.
+    response.writeHead(503); response.end('{}'); return;
+  }
+  if (url.pathname === '/v1/hq/saas/payments') {
+    // Synthetic program row matching the shipped default: payments DISABLED, live mode unavailable.
+    if (url.search) { response.writeHead(400); response.end('{}'); return; }
+    response.end(JSON.stringify({ data: validateSaasPaymentsView({
+      program: { status: 'DISABLED', provider: null, mode: null, liveMode: 'UNAVAILABLE', testTaxReference: null, authorizationReference: null, version: 1, changedAt: '2026-10-19T00:00:00.000Z', cardDataStored: false, refundExecution: 'UNAVAILABLE' },
+      checkouts: [], events: [], reconciliation: { openPastExpiry: 0, createdWithoutProviderSession: 0, paidNeedsReview: 0, eventsNeedingReview: 0, awaitingAsyncPayment: 0 },
+      asOf: '2026-10-24T00:00:00.000Z',
+    }) })); return;
+  }
   const schoolPath = [1, 2].map((id) => `/v1/hq/champions/schools/${fixtureId(id)}/statistics`).includes(url.pathname);
   const rewardPath = ['/v1/hq/champions/rewards/program', '/v1/hq/champions/rewards/ledger'].includes(url.pathname);
   const saasPath = isSaasFixturePath(url.pathname);
@@ -351,13 +364,21 @@ try {
         await menu.click();
         const drawer = page.getByRole('dialog', { name: 'HQ navigation menu', exact: true });
         await drawer.waitFor();
+        // Groups open for the current page only; Growth is expanded explicitly from the shared menu.
+        await drawer.getByText('Growth & Referrals', { exact: true }).click();
         for (const name of ['Champions Club', 'Referral Leaderboard', 'Referral Contests', 'Reward Management', 'Founder Campaigns']) assert(await drawer.getByRole('link', { name, exact: true }).isVisible());
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Open HQ navigation');
         assert(await menu.evaluate((node) => document.activeElement === node), 'Menu did not restore opener focus');
         await menu.click();
+        if (!await drawer.getByRole('link', { name: 'Referral Contests', exact: true }).isVisible()) await drawer.getByText('Growth & Referrals', { exact: true }).click();
         await drawer.getByRole('link', { name: 'Referral Contests', exact: true }).click();
-      } else await page.getByRole('navigation', { name: 'HQ navigation', exact: true }).getByRole('link', { name: 'Referral Contests', exact: true }).click();
+      } else {
+        const rail = page.getByRole('navigation', { name: 'HQ navigation', exact: true });
+        assert(await rail.getByRole('link', { name: 'Executive Team', exact: true }).isVisible(), 'The AI group must be open on an executive workspace');
+        await rail.getByText('Growth & Referrals', { exact: true }).click();
+        await rail.getByRole('link', { name: 'Referral Contests', exact: true }).click();
+      }
       await page.waitForURL('**/hq/growth/contests');
       await page.getByRole('group', { name: 'Contest lifecycle preview' }).getByRole('button', { name: 'Launch', exact: true }).click();
       await page.getByRole('heading', { name: 'Launch — planned', exact: true }).waitFor();
@@ -495,6 +516,25 @@ try {
       await page.getByRole('heading', { name: 'Recent global reward records', exact: true }).waitFor();
       assert.equal(await page.locator('ol > li').count(), 1);
       await noOverflow(page, `${label} rewards filtered`);
+    });
+    await check(`${label}: one shared HQ navigation on Schools, AI Providers and Pricing & Offers`, async () => {
+      for (const [route, group, current] of [['/hq/schools', null, 'Schools'], ['/hq/ai-providers', 'ai', 'AI Providers'], ['/hq/pricing-offers', 'revenue', 'Pricing & Offers']]) {
+        await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
+        await page.locator('#hq-main').waitFor();
+        // The shell owns the only main landmark, page heading and View control; pages add none of their own.
+        assert.equal(await page.locator('main').count(), 1, `${label} ${route}: one main landmark`);
+        assert.equal(await page.locator('h1').count(), 1, `${label} ${route}: one page heading`);
+        assert.equal(await page.getByRole('group', { name: 'Platform view', exact: true }).count(), 1, `${label} ${route}: one View control`);
+        assert.equal(await page.getByRole('navigation', { name: 'HON HQ navigation', exact: true }).count(), 0, `${label} ${route}: no page-level HQ navigation`);
+        assert.equal(await page.getByRole('link', { name: '← HQ command center', exact: true }).count(), 0, `${label} ${route}: no duplicate back link`);
+        if (width >= 1100) {
+          const rail = page.getByRole('navigation', { name: 'HQ navigation', exact: true });
+          assert.equal(await rail.locator('[aria-current="page"]').innerText(), current);
+          if (group) assert(await rail.locator(`details[data-hq-nav-group="${group}"]`).evaluate((node) => node.open), `${route}: ${group} group open`);
+        }
+        await noOverflow(page, `${label} ${route}`);
+        if (label === 'desktop' || label === 'mobile') await screenshot(page, `${label}-nav${route.replaceAll('/', '-')}`, false);
+      }
     });
     await verifySaasViewport({ page, origin, label, check, screenshot, noOverflow, accessibility });
     await verifyInvoiceViewport({ page, origin, label, check, screenshot, noOverflow, accessibility });
@@ -773,7 +813,7 @@ try {
   await check('No mutation, provider or arbitrary API request', async () => {
     assert(report.apiRequests.every((request) => {
       const url = new URL(request.path, 'http://127.0.0.1');
-      return request.method === 'GET' && (['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(request.path)
+      return request.method === 'GET' && (['/v1/hq/overview', '/v1/hq/schools', '/v1/hq/champions/overview', '/v1/hq/champions/program', '/v1/hq/saas/payments', '/v1/hq/ai-providers/configuration', '/v1/hq/saas/offers', '/v1/identity/me'].includes(request.path)
         || (isSaasFixturePath(url.pathname) && (url.pathname.endsWith('/subscriptions') ? [...url.searchParams.keys()].every((key) => key === 'status') : !url.search))
         || (isInvoiceFixturePath(url.pathname) && (url.pathname.endsWith('/invoices') ? [...url.searchParams.keys()].every((key) => key === 'status') : !url.search))
         || [1, 2].some((id) => request.path === `/v1/hq/champions/schools/${fixtureId(id)}/statistics`)
