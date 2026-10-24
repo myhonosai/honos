@@ -1,5 +1,10 @@
 # HON Delivery Backlog
 
+## D10 exception-policy approval enforcement — Codex
+
+- [ ] Baseline `b54ea12565b38e44ae0227c1acc8cd3090302a13`: additive 0186, empty exception-only policy decision ledger, explicit owner commands, grant/insert enforcement, immutable policy binding and audit/outbox/idempotency. No previous migration or full paid-access terms approval.
+- [ ] Verify denied/proposed/expired/revoked/superseded policy, direct writes, authority/lock races, unchanged revoke/cleanup/conversion/Champions behavior through disposable proofs and staging. Synthetic decisions only; paid access and AI credits ship INACTIVE. Draft PR and independent owner review required.
+
 ## Isolated commercial staging rehearsal — Codex
 
 - [ ] From `b49cfc33b32def303bc05c41c17dd92c46d448a2`, add a guarded disposable-local rehearsal for 0181–0185, reusing canonical fixtures, proofs and security registries. Record migration checksums, shipped/simulated posture, denied external traffic/AI grants, cleanup and actual CI evidence in one draft PR.

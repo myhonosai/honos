@@ -53,6 +53,8 @@ export async function shippedPosture(client, migrationEvidence) {
     assert.equal(counts[table], 0, 'AI grants/ledger activity must stay absent.');
     assert.equal((await client.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname='hon_staging_no_ai_grants' AND tgenabled='O'", ['hon.' + table])).rows[0].n, 1);
   }
-  return { programs, records, terms, constraints, counts,
-    policyGap: 'PAID_ACCESS_PROPOSED; TERMS_V1_IMMUTABLE_PROPOSED_ONLY; EXCEPTION_GRANTS_HAVE_NO_APPROVED_STATUS_GATE' };
+  const decisions = (await client.query('SELECT count(*)::int n FROM hon.saas_exception_policy_decisions')).rows[0].n;
+  assert.equal(decisions,0,'Shipped posture must contain no synthetic policy decision.');
+  return { programs, records, terms, constraints, counts, decisions,
+    policyGap: 'PAID_ACCESS_PROPOSED; TERMS_V1_IMMUTABLE_PROPOSED_ONLY; EXCEPTION_APPROVAL_GATE_ENFORCED; NO_EXCEPTION_POLICY_APPROVED' };
 }

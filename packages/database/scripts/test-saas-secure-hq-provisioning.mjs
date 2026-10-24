@@ -1,3 +1,4 @@
+import { syntheticExceptionPolicy } from './exception-policy-fixture.mjs';
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -33,7 +34,7 @@ const database=new RuntimeDatabaseService(),billing=new SaasBillingService(datab
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
 const onboarding=new HqOnboardingService(database),hqEntitlement=new HqEntitlementService(database);
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
-const saasTables=['saas_access_exceptions','saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
+const saasTables=['saas_access_exceptions','saas_exception_policy_decisions','saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
  'saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions',
  'saas_provider_cost_evidence','saas_payment_evidence','saas_invoice_lines','saas_invoices','saas_invoice_sequences','saas_outbox','saas_audit','saas_requests',
@@ -168,6 +169,7 @@ try{
  assert.deepEqual(legacyOffer,[],'D8: no legacy offer is listed');
  const before=await untouched();
 
+ await syntheticExceptionPolicy(admin,access,H('owner'));
  // ---------- 1. provisioning grants no operating access ----------
  const slug=k=>`d9-${k.toLowerCase()}-${randomUUID().slice(0,8)}`;
  const kP1=K(),slugP1=slug('P1');

@@ -43,6 +43,19 @@ export class SaasAccessReadinessHqController {
   }
 }
 
+/** Independent exception-only decision; never a payment, entitlement or credit activation. */
+@Controller('hq/saas/access-exception-policy')
+@UseGuards(HonIdentityGuard)
+export class SaasExceptionPolicyHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async read(@Req() req: HonRequest) { return { data: await this.reads.readExceptionPolicy(subject(req)) }; }
+  @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.decideExceptionPolicy)
+  async decide(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.reads.decideExceptionPolicy(subject(req),body,key) };
+  }
+}
+
 /**
  * B6A central access authority (HQ) and the inactive first-payment pathway. Placing an organization awaiting
  * its first payment and retrying a held activation are HQ-owner commands the database refuses while the

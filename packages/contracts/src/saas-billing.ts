@@ -84,6 +84,7 @@ export const SAAS_COMMANDS = {
   grantAccessException: 'saas-access-exception-grant',
   revokeAccessException: 'saas-access-exception-revoke',
   closeExpiredAccessExceptions: 'saas-access-exception-close',
+  decideExceptionPolicy: 'saas-access-exception-policy-decision',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

@@ -1,3 +1,4 @@
+import { syntheticExceptionPolicy } from './exception-policy-fixture.mjs';
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -23,7 +24,7 @@ const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-bil
 const database=new RuntimeDatabaseService(),access=new SaasSchoolBillingService(new SaasBillingService(database));
 const client=url=>new pg.Client({connectionString:url.toString(),ssl:false});
 const admin=client(owner),blocker=client(owner),changer=client(owner),restricted=client(runtime);
-const saasTables=['saas_access_exceptions','saas_access_transitions','saas_access_states','saas_outbox','saas_audit','saas_requests'];
+const saasTables=['saas_access_exceptions','saas_exception_policy_decisions','saas_access_transitions','saas_access_states','saas_outbox','saas_audit','saas_requests'];
 const championsTables=['champions_outbox','champions_audit','champions_contest_history','champions_contest_winners','champions_contest_results','champions_contest_pauses',
  'champions_contest_schools','champions_contest_prizes','champions_contests','champions_leaderboard_holds','champions_leaderboard_preferences','champions_reward_history',
  'champions_reward_entries','champions_reward_policies','champions_attribution_history','champions_attributions','champions_requests','champions_referral_codes','champions_policies'];
@@ -95,6 +96,7 @@ try{
  for(const[who,role,perms]of [['owner','HON_HQ_OWNER',[]],['operator','HON_HQ_OPERATOR',['hq.billing.manage']],['ownerR','HON_HQ_OWNER',[]],['ownerT','HON_HQ_OWNER',[]],['ownerS','HON_HQ_OWNER',[]],['ownerG','HON_HQ_OWNER',[]]])
   await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,$2,$3,clock_timestamp()-interval '1 hour')",[humans[who].id,role,perms]);
  await admin.query('COMMIT');
+ await syntheticExceptionPolicy(admin,access,H('owner'));
  for(const k of ['R','T','S','G'])newOrg(k);
  await insertOrgs(['R','T','S','G'].map(k=>orgs[k]));
  const beforeOthers=(await admin.query('SELECT to_jsonb(e)::text r FROM hon.organization_entitlements e ORDER BY 1')).rows.map(r=>r.r);
