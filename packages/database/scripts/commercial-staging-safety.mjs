@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 
 export const fixture = Object.freeze({ database: 'hon_champions_validation', owner: 'hon_champions_owner', runtime: 'hon_champions_runtime', marker: 'HON disposable Champions Club validation' });
 export const proofs = Object.freeze([
+  ['test-saas-trial-governance-integrity.mjs','0187 D11-A trial policy/campaign governance and separation','synthetic approvals/publications only; trial activation INACTIVE; zero access/credits'],
   ['test-saas-hon-os-offers-integrity.mjs', '0181 whole-set offers', 'temporary legacy fixture'],
   ['test-saas-hon-os-purchase-integrity.mjs', '0182 accepted-price binding and D6 stop', 'temporary legacy fixture; simulated provider'],
   ['test-saas-hon-os-new-school-onboarding.mjs', '0183 D7 onboarding', 'temporary paid-access and credit-program ACTIVE; zero AI grants; simulated provider', true],
@@ -52,9 +53,9 @@ export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export function validateMigrationEvidence(entries, expected) {
   assert(entries.length && new Set(entries.map(x => x.file.slice(0, 4))).size === entries.length, 'Duplicate migration number.');
   assert(!entries.some(x => /^(0179|0180)_/.test(x.file)), 'Reserved migrations must remain absent.');
-  assert(entries.at(-1).file.startsWith('0186_'), 'Unreviewed migration ceiling.');
+  assert(entries.at(-1).file.startsWith('0187_'), 'Unreviewed migration ceiling.');
   assert.equal(sha256(JSON.stringify(entries)), expected.chainSha256, 'Migration chain differs from the reviewed baseline.');
-  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0186 checksum mismatch.');
+  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0187 checksum mismatch.');
   return { count: entries.length, chainSha256: expected.chainSha256, targets: expected.targets, entries };
 }
 export async function readMigrationEvidence() {

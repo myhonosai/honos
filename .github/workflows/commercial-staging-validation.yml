@@ -7,7 +7,15 @@ on:
       - 'packages/database/scripts/*commercial-staging*'
       - '.github/workflows/commercial-staging-validation.yml'
       - 'packages/database/migrations/0186_*'
+      - 'packages/database/migrations/0187_*'
+      - 'packages/database/scripts/*trial-governance*'
+      - 'apps/api/src/saas-trials/**'
+      - 'apps/api/test/saas-trials.test.cjs'
+      - 'packages/contracts/src/saas-trials.ts'
       - 'packages/database/scripts/*exception-policy*'
+      - 'packages/contracts/src/saas-introductory-pricing.ts'
+      - 'packages/domain/src/saas-introductory-pricing*'
+      - 'apps/api/test/saas-introductory-pricing.test.cjs'
 permissions:
   contents: read
 concurrency:
