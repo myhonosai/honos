@@ -149,3 +149,11 @@
 @media (max-width: 680px) { .scopeSection form fieldset.schoolChooser { grid-template-columns: 1fr; } }
 @media (max-width: 980px) { .cards { grid-template-columns: 1fr; } .cardIntro { min-height: auto; } .queueGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .page { padding: 25px 16px 58px; } .scopeSection { padding: 17px; } .scopeSection form fieldset { grid-template-columns: 1fr; } .scopeSection button { width: 100%; } .queueSection { padding: 18px; } .queueGrid { grid-template-columns: 1fr; } .verified { display: grid; } .savedConfirmation, .workflowProgress { padding: 18px; } .savedList dl, .progressSteps { grid-template-columns: 1fr; } }
+
+/* Classic CRM: compact left sidebar on wide screens; same links and order as every other mode. */
+@media (min-width: 1100px) {
+  .classic { display: grid; grid-template-columns: 200px minmax(0, 1fr); column-gap: 28px; align-content: start; padding-left: 24px; padding-right: 24px; }
+  .classic > nav { grid-column: 1; grid-row: 1 / span 30; position: sticky; top: 20px; align-self: start; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 4px; margin: 0; padding: 12px; border: 1px solid #22384f; border-radius: 6px; background: #081626; }
+  .classic > nav a { display: block; padding: 7px 9px; }
+  .classic > :not(nav) { grid-column: 2; min-width: 0; }
+}
