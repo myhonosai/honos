@@ -1,6 +1,6 @@
 {
   "baseline": "121653ee81d85a3ff893a209e635db2efaefff08",
-  "chainSha256": "c088fa2c09dc448c1a47ab23a62d8bd8963d344ea9912542f69fd1ff0564a44f",
+  "chainSha256": "5332ea370c63f5103fd5ece96182f856f8ad31f1c00d7b18aa5cf45dfe6106a2",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -32,7 +32,7 @@
     },
     {
       "file": "0188_immutable_pricing_acceptance.sql",
-      "sha256": "3ee59ec2b9e95f0de7db79b68c97a1615e329843971d052c6180a7d6680a2745"
+      "sha256": "fb7bd8bbb78f9fc92a45e3a6645fd435073b092a594e870ba84422c5eb396c8b"
     }
   ]
 }

@@ -55,7 +55,7 @@ BEGIN
   THEN RAISE EXCEPTION 'SAAS_PRICE_TERMS_UNSUPPORTED' USING ERRCODE='23514'; END IF;
  annual:=o.billing_interval='ANNUAL'; founder:=o.founder;
  SELECT count(*),min(price_minor) INTO n,monthly FROM hon.saas_offer_set_offers WHERE set_id=s.id AND offer_kind='REGULAR_MONTHLY';
- IF n<>1 OR r.offer_kind IS DISTINCT FROM CASE WHEN annual THEN 'REGULAR_ANNUAL' ELSE 'REGULAR_MONTHLY' END
+ IF n<>1 OR r.offer_kind IS DISTINCT FROM (CASE WHEN annual THEN 'REGULAR_ANNUAL' ELSE 'REGULAR_MONTHLY' END)
   OR (NOT founder AND r.id<>o.id) OR o.price_lock<>'NONE' OR r.price_lock<>'NONE'
   OR o.refund_window_days IS NULL OR o.cancellation_timing IS DISTINCT FROM 'END_OF_PAID_PERIOD'
   OR (annual AND o.annual_renewal IS DISTINCT FROM CASE WHEN founder THEN 'AUTO_RENEW_AT_CURRENT_PRICE' ELSE 'AUTO_RENEW_AT_LOCKED_PRICE' END)
