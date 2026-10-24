@@ -1,0 +1,26 @@
+{
+  "baseline": "b49cfc33b32def303bc05c41c17dd92c46d448a2",
+  "chainSha256": "7a9b2df9c4b3830514801ddac9d1c1a446bc4cb0c4c308961923cb7208c494ed",
+  "targets": [
+    {
+      "file": "0181_hon_os_commercial_offers.sql",
+      "sha256": "b7f642044940d6badcf38d208844f270b4fb4a4bc2524cbe20c10db7c8553cdf"
+    },
+    {
+      "file": "0182_hon_os_purchase_binding.sql",
+      "sha256": "7682715818dd9297a9e2ee79abd59c5329fc94b5c17c7b4ad58c80cf59569173"
+    },
+    {
+      "file": "0183_hon_os_new_school_onboarding.sql",
+      "sha256": "3f7442a8899f7acabd25e393ba7fd82ab174255e33f859366038e2bb78890cfb"
+    },
+    {
+      "file": "0184_hon_os_only_new_sales.sql",
+      "sha256": "5ab955b068e5ef0bdddb93b43097ff488a6e0a6905cf9a56afb422ce0cf6e412"
+    },
+    {
+      "file": "0185_secure_hq_school_provisioning.sql",
+      "sha256": "1c47d29a62f28710b9d5907c695abc0236997a49f1af646ac6b8c680d04e12d7"
+    }
+  ]
+}
