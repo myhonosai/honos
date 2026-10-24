@@ -54,7 +54,7 @@ HQ reviews and refunds held payments. Replays of the same event change nothing.
 
 ## New customers: HON OS only
 
-- **A provisioned Complete school with no subscription** buys HON OS through the 0182 path. Its entitlement is unchanged.
+- **A provisioned Complete school with no subscription** (provisioned before D9) buys HON OS through the 0182 path. Its entitlement is unchanged. Since D9 (`0185`), a newly provisioned school has no access and buys through the D7 path.
 - **A school awaiting its first payment** (registered through D7, or placed awaiting by the HQ owner) buys HON OS through the D7 path. The verified payment activates HON OS (Complete).
 - **A provisioned Core or Essential school** cannot buy HON OS on its current entitlement (`SAAS_ENTITLEMENT_MISMATCH`), and it has no legacy option any more. While paid access is ACTIVE, the HQ owner places it awaiting its first payment (B6A T1) and it buys HON OS through the D7 path.
 
@@ -113,7 +113,7 @@ There is no new route and no new response shape.
 ## Owner decisions and launch blockers
 
 1. **Recording existing pilot schools as legacy (`LEGACY_ENTITLEMENT`)** is closed with everything else. If HQ needs to record a pre-D8 provisioned school as a legacy customer, that is a reviewed reopening for that path only.
-2. **HQ provisioning** (`provision_school_from_hq`) still creates a school with an ACTIVE Essential/Core/Complete entitlement and no payment. It is a free HQ grant, not a sale, and it can no longer lead to a legacy purchase. Before paid access is switched on, decide whether provisioning is restricted to D12 exceptions or creates schools awaiting payment.
+2. **HQ provisioning:** done in `0185` ([HON_SECURE_HQ_PROVISIONING.md](HON_SECURE_HQ_PROVISIONING.md)). Provisioning now creates a school with no access, and free access is only an HQ-owner exception.
 3. **Legacy catalog publishing** still works for HQ, but nothing it publishes can be sold.
 4. **Before deploying 0184**, HQ cancels any open legacy checkout and expires its Stripe session. Any that is paid anyway is held as `LEGACY_SALES_CLOSED` for refund.
 5. **Still open from D7:** the public sign-up caller (Manus), the paid-access activation migration, and the HON OS credit policy (including lifetime).

@@ -81,6 +81,9 @@ export const SAAS_COMMANDS = {
   publishOfferSet: 'saas-offer-set-publish',
   stopOfferSales: 'saas-offer-sales-stop',
   startHonOsCheckout: 'saas-hon-os-checkout-start',
+  grantAccessException: 'saas-access-exception-grant',
+  revokeAccessException: 'saas-access-exception-revoke',
+  closeExpiredAccessExceptions: 'saas-access-exception-close',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

@@ -12,7 +12,7 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
  'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
- 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy'];
+ 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions'];
 const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
@@ -203,6 +203,17 @@ export const saasBillingFunctions = [
  // 0184 HON OS-only new sales (D8): the pinned policy read and the legacy new-sale guard
  ['hon.saas_legacy_new_sales_open()',false,false],
  ['hon.guard_saas_legacy_new_sale()',false,false],
+ // 0185 secure HQ provisioning (D9): HQ-owner access exceptions
+ ['hon.guard_saas_access_exceptions()',false,false],
+ ['hon.guard_saas_access_exception_grant()',false,false],
+ ['hon.guard_saas_access_state_exception()',false,false],
+ ['hon.saas_access_exception_live(uuid)',false,false],
+ ['hon.saas_access_exception_json(hon.saas_access_exceptions)',false,false],
+ ['hon.saas_end_access_exception(uuid,text,text,uuid,timestamp with time zone)',false,false],
+ ['hon.grant_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.revoke_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.close_expired_saas_access_exceptions(text,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_access_exceptions_from_hq(text,uuid)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
@@ -213,6 +224,10 @@ const crossTriggers = [
  ['saas_subscriptions','saas_legacy_new_sale',7,'guard_saas_legacy_new_sale'],
  ['saas_checkout_sessions','saas_legacy_new_sale',23,'guard_saas_legacy_new_sale'],
  ['saas_founder_reservations','saas_legacy_new_sale',7,'guard_saas_legacy_new_sale'],
+ // 0185: a new exception must name a current HQ owner and describe the entitlement exactly.
+ ['saas_access_exceptions','saas_exception_authority',7,'guard_saas_access_exception_grant'],
+ // 0185: no access state (awaiting or paid) while an exception is open and unexpired (revoke-first pilot conversion).
+ ['saas_access_states','saas_exception_await',7,'guard_saas_access_state_exception'],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');
@@ -229,6 +244,7 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
    : paymentTables.includes(table) ? ['guard_saas_payments','saas_guarded',27]
    : table === 'saas_access_states' ? ['guard_saas_access','saas_guarded',27]
+   : table === 'saas_access_exceptions' ? ['guard_saas_access_exceptions','saas_guarded',27]
    : table === 'saas_offer_sets' ? ['guard_saas_offer_sets','saas_guarded',27]
    : table === 'saas_offer_set_offers' ? ['guard_saas_offer_set_offers','saas_offer_rows',31]
    : refundRewardTables.includes(table) ? ['guard_saas_refunds_rewards','saas_guarded',27]
