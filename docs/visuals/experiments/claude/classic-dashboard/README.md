@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | **Revision 2: needs owner final review** (direction approved 2026-10-18; not merged) |
+| **Status** | **Revision 3: needs owner review** (direction approved 2026-10-18; AI-visibility revision 2026-10-24; not merged) |
 | **Source branch** | `ccr-c2933356-uza21g` |
 | **Route** | `/reference/classic-dashboard` (no-index, public reference like `/` and `/core`) |
 | **Tracking** | GitHub issue #2 "HON OS — Claude Code Development Status" |
@@ -62,7 +62,7 @@ Protected shared files untouched: `app.config.ts`, `layout.tsx`, `globals.css`, 
 | AI cards "Running / Engaged / Optimizing" | "No recorded work" | No durable AI activity source; never invent agent work |
 | "Retention AI", "Command Center" agents | Locked roster Alex, Chad, Maya, Marcus, Jordan, Claire, Lena | Owner-locked identities |
 | Pricing / tier price in top bar | Tier label only ("HON Complete · Sample entitlement"), no price | Owner rule: no pricing in the school command bar |
-| Platform View switch in top bar | Compact inline `<details>` directly below School/Location | Manus visual protocol; Big-Button and Modern link to their existing reference views |
+| Platform View switch in top bar | Revision 3: inert **View** selector beside the page title (Classic selected; Big-Button and Modern disabled). Portrait style stays in the inline `<details>` below School/Location | The isolated proof is Classic only and does not implement cross-mode navigation; the separate Modern and Big-Button concept pages are linked from the About popover, clearly labeled as separate pages |
 
 ## Revision 2 (owner feedback, 2026-10-18)
 
@@ -74,15 +74,40 @@ Protected shared files untouched: `app.config.ts`, `layout.tsx`, `globals.css`, 
 | Preserve originals / branding | Unchanged: no new image assets; original portraits and the hosted HON mark referenced read-only |
 | Consistent with the developing HQ design, Classic distinct | Shared patterns: dark navy shell, left sidebar with grouped navigation, persistent HON button bottom-right. Classic stays denser and flatter (tables, tinted active state, no hero imagery). No HQ file touched; Codex leads HQ |
 
+## Revision 3 (owner feedback, 2026-10-24): AI team visibility
+
+Baseline: merged current `main` (272e92e, includes PR #69) into this branch; only `TODO.md` and `manus-routes.json` conflicted and both sides were kept. Draft PR #71 (HQ hero restore) is not touched.
+
+| Owner request | Change |
+| --- | --- |
+| HON and the full school AI team prominent near the top | New **HON & your AI team** band directly under the page header, above the key figures (desktop, tablet and phone) |
+| All seven, existing names, portraits and roles | Alex, Chad, Maya, Marcus, Jordan, Claire, Lena from `HON_AI_TEAM` (names, titles, colors, `/ai/*.webp` portraits; Anime/Chibi switch unchanged) |
+| Compact premium portrait cards | 56px rounded portrait with the agent's color accent, name, full role, and a capability chip. No hero art |
+| Keep sidebar, density, workflows | Sidebar, quick actions, KPIs, tables and collapsible phone sections unchanged |
+| Persistent HON access | HON lead card with **Ask HON** (same not-connected panel) and a link to the `/staff/voice` text handoff workspace, plus the existing floating HON button and phone **Ask HON** slot |
+| Mobile | HON card compacts to one row; the seven agents form a horizontally scrollable row of 92px cards |
+| View selector as a visual reference | Inert Big-Button / Modern / Classic selector labeled "Visual reference · switching not wired in this proof" |
+| Real vs planned AI | **Drafts · approval**: Chad (`/staff/leads/assistant`) and Marcus (`/staff/marketing/assistant`) have built, governed draft workspaces; the chip legend says plan, provider and credit setup are not checked in this preview. **Planned**: Alex, Maya, Jordan, Claire, Lena (open the shared AI draft inbox). HON: **Preview · not connected**. No activity, status or work counts are shown for any agent |
+| Preserve auth and data boundaries | No API, auth, permission, entitlement, database or HQ change. All links are plain navigation to existing pages that authorize themselves |
+
+### Comparison with the AI-centered concepts
+
+| | Modern HON (`/`) | Big-Button (`/complete-mobile`) | Classic revision 3 |
+| --- | --- | --- | --- |
+| AI placement | Hero headline + large selected-agent stage, seven tall portrait cards | Phone frame: four agent avatars, greeting, big prompt buttons | Compact HON + seven-card band above dense CRM data |
+| Operational density | Low (three glance numbers) | Lowest (prompt buttons) | High (KPIs, tables, breakdowns) |
+| Agent status | Shows Ready/Working and "AI work in motion" items as representative sample state | Shows "Chad is organizing 5 lead follow-ups · Working" as sample state | Shows only what exists: draft workspace vs planned; no activity |
+| Cross-mode switch | Appearance dock changes presentation in-page | Same dock | Inert visual reference only |
+
 ## Claire role correction (owner decision, 2026-10-18)
 
 Claire is officially HON's **Business Performance Manager** (business analytics, performance reporting, KPIs, financial insights and recommendations). Her card no longer opens the existing curriculum/teaching assistant; it opens the shared AI draft inbox with an explicit "dedicated workspace not yet available" label. The teaching assistant (`/staff/teaching-assistant`, `apps/api/src/teaching-assistant`) is unchanged and not deleted; any reassignment of that functionality is a separate, owner-approved task.
 
 ## Responsive behavior
 
-- **Desktop (≥1100px):** fixed 248px sidebar, 12-column panel grid, six KPIs (three per row below 1360px), AI team in one row of seven.
-- **Tablet (700–1099px):** sidebar becomes a drawer opened from the top-bar menu button; paired panels go full-width where a half-width panel would be orphaned.
-- **Phone (<700px):** drawer plus a five-item bottom bar (Home, Leads, **Ask HON**, Schedule, More), 2×2 quick actions, three-column compact KPIs, priority ordering with collapsible detail sections, swipeable AI avatar row, tables rendered as compact records when expanded.
+- **Desktop (≥1100px):** fixed 248px sidebar, 12-column panel grid, HON card plus seven agent cards in one row above six KPIs (three per row below 1360px).
+- **Tablet (700–1099px):** sidebar becomes a drawer opened from the top-bar menu button; the HON card spans the width and the agents scroll horizontally; paired panels go full-width where a half-width panel would be orphaned.
+- **Phone (<700px):** drawer plus a five-item bottom bar (Home, Leads, **Ask HON**, Schedule, More), 2×2 quick actions, three-column compact KPIs, priority ordering (quick actions, HON and AI team, key figures, today, alerts) with collapsible detail sections, horizontally scrollable agent cards, tables rendered as compact records when expanded.
 - No horizontal page overflow at 1440, 834, or 390px. Escape closes the drawer and menus, and focus returns to the menu button. Visible focus rings; `prefers-reduced-motion` respected.
 
 ## Screenshots
@@ -91,11 +116,12 @@ Claire is officially HON's **Business Performance Manager** (business analytics,
 | --- | --- |
 | Desktop 1440 (above the fold) | `desktop-1440-fold.jpg` |
 | Desktop 1440 (full page) | `desktop-1440-full.jpg` |
-| Desktop: appearance expanded (Anime) + notifications | `desktop-1440-appearance-notifications.jpg` |
+| Desktop: inert view selector + About popover (links to the separate concept pages) | `desktop-1440-view-selector-about.jpg` |
 | Desktop: HON assistant panel | `desktop-1440-hon-assistant.jpg` |
 | Tablet 834 (full page) | `tablet-834-full.jpg` |
 | Phone 390 (above the fold) | `phone-390-fold.jpg` |
 | Phone 390 (full page) | `phone-390-full.jpg` |
+| Phone 390: agent row scrolled to Jordan, Claire, Lena | `phone-390-agents-scrolled.jpg` |
 | Phone 390: HON assistant panel | `phone-390-hon-assistant.jpg` |
 | Phone 390: a detail section expanded | `phone-390-section-expanded.jpg` |
 | Phone 390: navigation drawer | `phone-390-navigation-drawer.jpg` |

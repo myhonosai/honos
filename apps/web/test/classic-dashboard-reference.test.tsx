@@ -26,7 +26,7 @@ describe('Classic school dashboard reference', () => {
     const hrefs = [...new Set([...markup.matchAll(/<a [^>]*href="([^"]+)"/g)].map((match) => match[1] as string))];
     expect(hrefs.length).toBeGreaterThan(15);
     for (const href of hrefs) {
-      if (href === '#dashboard-main' || href === '/' || href === '/complete-mobile' || href === '/reference/classic-dashboard') continue;
+      if (href === '#dashboard-main' || href === '/reference/classic-dashboard') continue;
       expect(href, href).toMatch(/^\/staff\//);
       expect(existsSync(join('src/app', href, 'page.tsx')), href).toBe(true);
     }
@@ -53,12 +53,12 @@ describe('Classic school dashboard reference', () => {
   it('shows the locked school AI roster with presentation-only portrait styles and no invented activity', () => {
     for (const member of HON_AI_TEAM) expect(markup).toContain(`>${member.name}<`);
     expect(markup).toContain('no work recorded in this sample');
-    expect(markup).not.toMatch(/Running|Engaged|Optimizing|In progress/);
-    for (const member of HON_AI_TEAM) expect(markup).toMatch(new RegExp(`aria-label="${member.name}, [^"]+\\. Open [^"]+"`));
+    expect(markup).not.toMatch(/Running|Engaged|Optimizing|In progress|Working|Thinking/);
+    for (const member of HON_AI_TEAM) expect(markup).toMatch(new RegExp(`aria-label="${member.name}, [^"]+\\. (Drafts · approval|Planned)\\. Open [^"]+"`));
     expect(markup).toContain('href="/staff/leads/assistant"');
     expect(markup).toContain('href="/staff/marketing/assistant"');
     expect(markup).not.toContain('/staff/teaching-assistant');
-    expect(markup).toContain('aria-label="Claire, Business Performance Manager. Open AI draft inbox (dedicated workspace not yet available)"');
+    expect(markup).toContain('aria-label="Claire, Business Performance Manager. Planned. Open AI draft inbox (dedicated workspace not yet available)"');
     expect(markup).toMatch(/<a [^>]*href="\/staff\/ai-work"[^>]*aria-label="Claire, /);
     expect(PORTRAIT_STYLES.map((style) => style.label)).toEqual(['Realistic', 'Anime', 'Chibi']);
     for (const member of HON_AI_TEAM) {
@@ -70,8 +70,25 @@ describe('Classic school dashboard reference', () => {
     expect(markup).toContain('Presentation only. Never changes data, permissions, or AI authority.');
   });
 
-  it('keeps all three platform views reachable and the appearance control inline under the school selector', () => {
-    for (const label of ['Big-Button', 'Modern', 'Classic']) expect(markup).toContain(`>${label}</a>`);
+  it('puts HON and all seven employees above the key figures and labels real versus planned capability', () => {
+    const team = markup.indexOf('id="team-heading"');
+    expect(team).toBeGreaterThan(-1);
+    expect(team).toBeLessThan(markup.indexOf('aria-label="Key figures"'));
+    expect(markup).toContain('HON &amp; your AI team');
+    expect(markup.match(/data-availability="DRAFTS"/g)).toHaveLength(2);
+    expect(markup.match(/data-availability="PLANNED"/g)).toHaveLength(5);
+    for (const name of ['Chad', 'Marcus']) expect(markup).toMatch(new RegExp(`aria-label="${name}, [^"]+\\. Drafts · approval\\.`));
+    for (const name of ['Alex', 'Maya', 'Jordan', 'Claire', 'Lena']) expect(markup).toMatch(new RegExp(`aria-label="${name}, [^"]+\\. Planned\\.`));
+    expect(markup).toContain('plan, provider and credit setup are not checked in this preview');
+    expect(markup.match(/data-hon-trigger/g)).toHaveLength(3);
+    expect(markup.indexOf('data-hon-trigger')).toBeLessThan(markup.indexOf('aria-label="Key figures"'));
+  });
+
+  it('shows the three-mode view selector as an inert visual reference, with the appearance control inline under the school selector', () => {
+    expect(markup).toContain('<span aria-current="page">Classic</span>');
+    for (const label of ['Big-Button', 'Modern']) expect(markup).toMatch(new RegExp(`<button type="button" aria-disabled="true" title="Visual reference only: switching views is not implemented in this proof">${label}</button>`));
+    expect(markup).toContain('Visual reference · switching not wired in this proof');
+    expect(markup).not.toMatch(/<a [^>]*href="(\/|\/complete-mobile)"/);
     expect(markup).toMatch(/<details[^>]*>/);
     const school = markup.indexOf('aria-controls="school-menu"');
     const appearance = markup.indexOf('<details');

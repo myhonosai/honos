@@ -70,14 +70,26 @@ const BOTTOM_NAV_END: { label: string; href: string; icon: IconName }[] = [
   { label: 'Schedule', href: '/staff/schedule/sessions', icon: 'schedule' },
 ];
 
-// Existing governed workspaces that match an employee's approved role. Everyone else (including Claire,
-// Business Performance Manager) opens the shared AI draft inbox until a dedicated workspace exists.
-// The curriculum/teaching assistant is a separate capability and is deliberately not linked as Claire's role.
-const AGENT_WORKSPACES: Record<string, { href: string; label: string }> = {
-  chad: { href: '/staff/leads/assistant', label: 'follow-up draft workspace' },
-  marcus: { href: '/staff/marketing/assistant', label: 'marketing draft workspace' },
+// What each employee can truthfully do today. Only Chad and Marcus have a built, governed draft workspace
+// (every draft needs human approval; availability still depends on the school's plan, the HQ provider
+// setup and the credit program, none of which this preview checks). Everyone else (including Claire,
+// Business Performance Manager) is planned and opens the shared AI draft inbox until a dedicated workspace
+// exists. The curriculum/teaching assistant is a separate capability and is deliberately not linked as Claire's role.
+type AgentAvailability = 'DRAFTS' | 'PLANNED';
+const AGENT_WORKSPACES: Record<string, { href: string; label: string; availability: AgentAvailability; capability: string }> = {
+  chad: { href: '/staff/leads/assistant', label: 'follow-up draft workspace', availability: 'DRAFTS', capability: 'Follow-up drafts' },
+  marcus: { href: '/staff/marketing/assistant', label: 'marketing draft workspace', availability: 'DRAFTS', capability: 'Marketing drafts' },
 };
-const DEFAULT_AGENT_WORKSPACE = { href: '/staff/ai-work', label: 'AI draft inbox (dedicated workspace not yet available)' };
+const DEFAULT_AGENT_WORKSPACE = { href: '/staff/ai-work', label: 'AI draft inbox (dedicated workspace not yet available)', availability: 'PLANNED' as AgentAvailability, capability: 'Workspace planned' };
+const AVAILABILITY_CHIPS: Record<AgentAvailability, { label: string; tone: Tone }> = {
+  DRAFTS: { label: 'Drafts · approval', tone: 'green' },
+  PLANNED: { label: 'Planned', tone: 'slate' },
+};
+
+// Visual reference of the three-mode selector. This isolated proof is the Classic mode only; the other two
+// options are deliberately inert because cross-mode switching is not implemented here.
+const PLATFORM_VIEWS = ['Big-Button', 'Modern', 'Classic'] as const;
+const CURRENT_VIEW: (typeof PLATFORM_VIEWS)[number] = 'Classic';
 
 const HON_JUMP_LINKS: { label: string; href: string; icon: IconName }[] = [
   { label: "Today's classes", href: '/staff/schedule/sessions', icon: 'schedule' },
@@ -299,12 +311,6 @@ export function ClassicDashboard(): React.ReactElement {
           <Icon name="chevronDown" size={14} className={styles.appearanceChevron} />
         </summary>
         <div className={styles.appearanceBody}>
-          <p className={styles.appearanceLabel} id="platform-view-label">Platform view</p>
-          <div className={styles.segmented} role="group" aria-labelledby="platform-view-label">
-            <a href="/complete-mobile">Big-Button</a>
-            <a href="/">Modern</a>
-            <a href={SELF} aria-current="page">Classic</a>
-          </div>
           <p className={styles.appearanceLabel} id="portrait-style-label">AI portraits</p>
           <div className={styles.segmented} role="radiogroup" aria-labelledby="portrait-style-label">
             {PORTRAIT_STYLES.map((option) => (
@@ -380,6 +386,11 @@ export function ClassicDashboard(): React.ReactElement {
                   <div className={styles.popover} id="about-popover">
                     <p className={styles.popoverTitle}>About this preview</p>
                     <p className={styles.popoverText}>Values are sample data shaped exactly like the Operations Report, Command Center, class-session, lead and follow-up reads. Revenue, conversion and trends stay unavailable until an authoritative source exists. Links open the real staff workbenches, which verify your session, school and permissions.</p>
+                    <p className={styles.popoverText}>The view selector is a visual reference: this proof is Classic only. The other concepts are separate reference pages:</p>
+                    <ul>
+                      <li><a href="/"><strong>Modern HON concept</strong><span>Separate reference page · not linked to this view</span></a></li>
+                      <li><a href="/complete-mobile"><strong>Big-Button concept</strong><span>Separate reference page · not linked to this view</span></a></li>
+                    </ul>
                   </div>
                 ) : null}
               </div>
@@ -394,10 +405,63 @@ export function ClassicDashboard(): React.ReactElement {
                 <h1>Dashboard</h1>
                 <p className={styles.subtle}>Snapshot {timeFormat.format(new Date(SAMPLE_GENERATED_AT))} · 30-day window ending {dayFormat.format(new Date(SAMPLE_SNAPSHOT.to))}</p>
               </div>
+              <div className={styles.viewSelect}>
+                <span className={styles.viewLabel} id="platform-view-label">View</span>
+                <div className={styles.segmented} role="group" aria-labelledby="platform-view-label" aria-describedby="platform-view-note">
+                  {PLATFORM_VIEWS.map((view) => view === CURRENT_VIEW
+                    ? <span key={view} aria-current="page">{view}</span>
+                    : <button key={view} type="button" aria-disabled="true" title="Visual reference only: switching views is not implemented in this proof">{view}</button>)}
+                </div>
+                <small id="platform-view-note">Visual reference · switching not wired in this proof</small>
+              </div>
               <div className={styles.quickActions} aria-label="Quick actions">
                 {QUICK_ACTIONS.map((action) => <a key={action.label} href={action.href}><Icon name={action.icon} size={16} />{action.label}</a>)}
               </div>
             </div>
+
+            <section className={styles.team} aria-labelledby="team-heading">
+              <header className={styles.panelHeader}>
+                <h2 id="team-heading">HON &amp; your AI team <Chip tone="violet">Complete</Chip></h2>
+                <span className={styles.teamNote}>Governed · every draft needs human approval · no work recorded in this sample</span>
+                <a className={styles.panelLink} href="/staff/ai-work">AI work<Icon name="arrowRight" size={14} /></a>
+              </header>
+              <div className={styles.teamBody}>
+                <div className={styles.honCard}>
+                  <span className={styles.honCardMark}><HonMark /></span>
+                  <div className={styles.honCardText}>
+                    <strong>HON</strong>
+                    <span className={styles.honCardRole}>School AI front door</span>
+                    <Chip tone="amber">Preview · not connected</Chip>
+                  </div>
+                  <div className={styles.honCardActions}>
+                    <button type="button" data-hon-trigger className={styles.honAsk} aria-expanded={honOpen} aria-controls={honOpen ? 'hon-panel' : undefined} onClick={() => setHonOpen((open) => !open)}>Ask HON</button>
+                    <a className={styles.honCardLink} href="/staff/voice">Text handoff workspace</a>
+                  </div>
+                </div>
+                <ul className={styles.teamList} aria-label="AI employees">
+                  {HON_AI_TEAM.map((member) => {
+                    const workspace = AGENT_WORKSPACES[member.id] ?? DEFAULT_AGENT_WORKSPACE;
+                    const chip = AVAILABILITY_CHIPS[workspace.availability];
+                    return (
+                      <li key={member.id}>
+                        <a className={styles.agent} href={workspace.href} data-availability={workspace.availability} style={{ '--agent-color': member.color } as React.CSSProperties} title={`${member.title} · ${workspace.capability}`} aria-label={`${member.name}, ${member.title}. ${chip.label}. Open ${workspace.label}`}>
+                          <Portrait id={member.id} name={member.name} style={portraitStyle} />
+                          <span className={styles.agentText}>
+                            <strong>{member.name}</strong>
+                            <span>{member.title}</span>
+                            <span className={styles.agentStatus}><Chip tone={chip.tone}>{chip.label}</Chip></span>
+                          </span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+              <p className={styles.teamLegend}>
+                <span><Chip tone="green">Drafts · approval</Chip> Governed draft workspace exists; plan, provider and credit setup are not checked in this preview.</span>
+                <span><Chip tone="slate">Planned</Chip> No dedicated workspace yet; opens the shared AI draft inbox.</span>
+              </p>
+            </section>
 
             <ul className={styles.kpis} aria-label="Key figures">
               {kpis.map((kpi) => (
@@ -409,27 +473,6 @@ export function ClassicDashboard(): React.ReactElement {
                 </li>
               ))}
             </ul>
-
-            <section className={styles.team} aria-labelledby="team-heading">
-              <header className={styles.panelHeader}>
-                <h2 id="team-heading">HON AI team <Chip tone="violet">Complete</Chip></h2>
-                <span className={styles.teamNote}>Governed · approval required · no work recorded in this sample</span>
-                <a className={styles.panelLink} href="/staff/ai-work">AI work<Icon name="arrowRight" size={14} /></a>
-              </header>
-              <ul className={styles.teamList}>
-                {HON_AI_TEAM.map((member) => {
-                  const workspace = AGENT_WORKSPACES[member.id] ?? DEFAULT_AGENT_WORKSPACE;
-                  return (
-                    <li key={member.id}>
-                      <a className={styles.agent} href={workspace.href} title={`${member.title} · ${workspace.label}`} aria-label={`${member.name}, ${member.title}. Open ${workspace.label}`}>
-                        <Portrait id={member.id} name={member.name} style={portraitStyle} />
-                        <span className={styles.agentText}><strong>{member.name}</strong><span>{member.title}</span></span>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
 
             <div className={styles.grid}>
               <h2 className={styles.moreHeading}>More details</h2>
