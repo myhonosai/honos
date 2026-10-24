@@ -1,4 +1,5 @@
 import { loadOwnerLaunchValidationEnv } from './owner-launch-env.mjs';
+import { activatePreD9ProvisionedSchool } from './pre-d9-provisioning-simulation.mjs';
 loadOwnerLaunchValidationEnv();
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -61,6 +62,8 @@ try {
  await owner.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role) VALUES($1,'HON_HQ_OWNER')",[ids.hqPrincipal]);
  const provision=async(name,tier)=>hq.provisionInitialSchool({externalSubject:hqSubject},{legalName:'Local '+name,displayName:'Local '+name,schoolName:'Local '+name,schoolSlug:'local-'+randomUUID(),timezone:'UTC',initialTier:tier,idempotencyKey:randomUUID()});
  const a=await provision('launch','ESSENTIAL'),b=await provision('other','CORE');
+ // Both stand in for schools provisioned before D9 (0185 holds new provisioning SUSPENDED).
+ for(const school of [a,b])await activatePreD9ProvisionedSchool(owner,school.organizationId);
  for(const [school,p,g]of [[a,ids.principal,ids.grant],[b,ids.otherPrincipal,ids.otherGrant]])await owner.query('INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$5,$4)',[g,school.organizationId,school.schoolId,p,school.ownerRoleId]);
  scope={organizationId:a.organizationId,schoolId:a.schoolId,principalId:ids.principal};other={organizationId:b.organizationId,schoolId:b.schoolId,principalId:ids.otherPrincipal,externalSubject:otherSubject};
  tables=(await owner.query("SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='hon' AND relkind='r' ORDER BY relname")).rows.map(r=>r.relname);

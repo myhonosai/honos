@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
-  saasUuid, validateSaasAccessAwaitInput, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
+  saasUuid, validateSaasAccessAwaitInput, validateSaasAccessExceptionCloseInput, validateSaasAccessExceptionCloseReceipt,
+  validateSaasAccessExceptionGrantInput, validateSaasAccessExceptionGrantReceipt, validateSaasAccessExceptionRevokeInput,
+  validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
   validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
 } from '@hon/contracts';
@@ -50,5 +52,25 @@ export class SaasSchoolBillingService {
     const [checkout, input, idempotencyKey] = parse(() => [saasUuid(checkoutId), validateSaasAccessRetryInput(body), saasUuid(key)] as const);
     return this.billing.call('retryFirstPaymentActivation', [subject, checkout, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
       validateSaasAccessRetryReceipt);
+  }
+  // D9: HQ-owner access exceptions. The database enforces the HQ-owner authority, eligibility and window cap.
+  async readAccessExceptions(subject: string, organizationId: unknown) {
+    const organization = parse(() => saasUuid(organizationId));
+    return this.billing.call('readAccessExceptions', [subject, organization], validateSaasAccessExceptionsView);
+  }
+  async grantAccessException(subject: string, organizationId: unknown, body: unknown, key: unknown) {
+    const [organization, input, idempotencyKey] = parse(() => [saasUuid(organizationId), validateSaasAccessExceptionGrantInput(body), saasUuid(key)] as const);
+    return this.billing.call('grantAccessException', [subject, organization, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
+      validateSaasAccessExceptionGrantReceipt);
+  }
+  async revokeAccessException(subject: string, exceptionId: unknown, body: unknown, key: unknown) {
+    const [exception, input, idempotencyKey] = parse(() => [saasUuid(exceptionId), validateSaasAccessExceptionRevokeInput(body), saasUuid(key)] as const);
+    return this.billing.call('revokeAccessException', [subject, exception, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
+      validateSaasAccessExceptionRevokeReceipt);
+  }
+  async closeExpiredAccessExceptions(subject: string, body: unknown, key: unknown) {
+    const idempotencyKey = parse(() => { validateSaasAccessExceptionCloseInput(body); return saasUuid(key); });
+    return this.billing.call('closeExpiredAccessExceptions', [subject, idempotencyKey, randomUUID(), randomUUID()],
+      validateSaasAccessExceptionCloseReceipt);
   }
 }

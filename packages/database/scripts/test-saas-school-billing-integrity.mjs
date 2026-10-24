@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
+import { activatePreD9ProvisionedSchool } from './pre-d9-provisioning-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B5.1 (0170) integrity proof: school-owner billing reads and the INACTIVE B6 paid-access
@@ -143,6 +144,8 @@ try{
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Billing Reads Martial Arts LLC',
   displayName:'Billing Reads Martial Arts',schoolName:'Billing Reads Main',schoolSlug:`b51-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
  A={id:provisioned.organizationId,school:provisioned.schoolId,school2:randomUUID(),clerkRole:randomUUID()};
+ // This fixture stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED).
+ await activatePreD9ProvisionedSchool(admin,provisioned.organizationId);
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.role_permissions WHERE role_id=$1 AND permission_code='billing.hon.view'",[provisioned.ownerRoleId])).rows[0].n,1,
   'A newly registered school owner can view their own billing.');
  await admin.query('BEGIN');

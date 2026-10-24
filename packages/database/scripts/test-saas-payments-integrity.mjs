@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
+import { activatePreD9ProvisionedSchool } from './pre-d9-provisioning-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B5 (0158) integrity proof, TEST MODE, SIMULATED PROVIDER. The real API
@@ -152,6 +153,8 @@ try{
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Journey Martial Arts LLC',
   displayName:'Journey Martial Arts',schoolName:'Journey Martial Arts Main',schoolSlug:`journey-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
  const A={id:provisioned.organizationId,school:provisioned.schoolId};
+ // This fixture stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED).
+ await activatePreD9ProvisionedSchool(admin,provisioned.organizationId);
  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')",
   [A.id,A.school,humans.ownerA.id,provisioned.ownerRoleId,humans.owner.id]);
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.role_permissions WHERE role_id=$1 AND permission_code='billing.hon.purchase'",[provisioned.ownerRoleId])).rows[0].n,1,

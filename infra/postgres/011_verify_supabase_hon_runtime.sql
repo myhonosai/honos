@@ -2332,7 +2332,7 @@ DO $$ DECLARE f record; p record; t text; runtime_oid oid := (SELECT oid FROM pg
   FOR f IN SELECT * FROM (VALUES
     ('hon.guard_hq_entitlement_evidence()','918eb49dd64a752e408f32dfe38da61f',false,false,'trigger'),
     ('hon.require_hq_entitlement_actor(text)','39a28e82a9f0168ea33e82731d761289',false,true,'uuid'),
-    ('hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)','773d89c5cb55b57addaf50640ff21717',true,true,'jsonb')
+    ('hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)','b3245db9dfde9617ddacef299242c960',true,true,'jsonb')
   ) expected(signature,source_md5,runtime_allowed,definer,return_type) LOOP
     SELECT proc.*,owner.rolsuper,owner.rolbypassrls,owner.rolname owner_name INTO p FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
     IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.provolatile<>'v' OR p.prokind<>'f' OR p.proretset

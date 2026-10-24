@@ -2,6 +2,7 @@ import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { setLegacySales, assertLegacySalesClosed } from './saas-legacy-sales-simulation.mjs';
+import { activatePreD9ProvisionedSchool } from './pre-d9-provisioning-simulation.mjs';
 // HON OS-only new-customer sales (0184, owner decision D8) integrity proof, TEST MODE, SIMULATED PROVIDER, disposable
 // database only. Legacy Core/Complete new sales ship CLOSED (CHECK legacy_new_sales = 'CLOSED'); this proof reopens them
 // only to build the pre-closure world (legacy customers, stale checkout links, a payment held while paid access was
@@ -209,6 +210,8 @@ try{
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'D8 Provisioned Dojo LLC',
   displayName:'D8 Provisioned Dojo',schoolName:'D8 Provisioned Dojo Main',schoolSlug:`d8-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
  Object.assign(N,{id:provisioned.organizationId,school:provisioned.schoolId});
+ // N stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED; the D9 proof covers that case).
+ await activatePreD9ProvisionedSchool(admin,N.id);
  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')",
   [N.id,N.school,humans.ownerN.id,provisioned.ownerRoleId,humans.owner.id]);
  const optsN=await payments.readPlanOptions(H('ownerN'),N.school);
