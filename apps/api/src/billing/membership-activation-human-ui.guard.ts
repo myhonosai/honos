@@ -18,3 +18,32 @@ export class MembershipActivationHumanUiGuard extends CurriculumHumanUiGuard {
     return super.canActivate(context);
   }
 }
+
+/** The read-only preview is its own browser command, so a preview can never be replayed as a confirmation. */
+@Injectable()
+export class MembershipActivationPreviewHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.activation.preview';
+}
+
+/** E1b-1 (0178): each date-management call is its own browser command, so no call can be replayed as another. */
+@Injectable()
+export class MembershipDatePreviewHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.dates.preview';
+}
+@Injectable()
+export class MembershipDateRevisionHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.dates.revise';
+}
+@Injectable()
+export class MembershipDateHistoryHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.dates.history';
+}
+@Injectable()
+export class MembershipDateQueueHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.dates.queue';
+}
+/** The status summary is a GET: the base guard admits it, and the source/delegation headers stay refused. */
+@Injectable()
+export class MembershipStatusSummaryHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'reporting.membership-status';
+}

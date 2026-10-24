@@ -46,6 +46,8 @@ try {
   const organizationId = randomUUID();
   const schools = [randomUUID(), randomUUID()];
   await client.query('INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,$2,$2)', [organizationId, 'Local proof']);
+  // 0172: the default scope also requires the organization's entitlement to be ACTIVE and in effect.
+  await client.query("INSERT INTO hon.organization_entitlements(organization_id,tier,effective_from) VALUES($1,'CORE',statement_timestamp()-interval '1 day')", [organizationId]);
   for (let index = 0; index < schools.length; index++) await client.query('INSERT INTO hon.schools(id,organization_id,name,slug) VALUES($1,$2,$3,$3)', [schools[index], organizationId, `school-${index}`]);
   const roles = new Map();
   async function role(code, permissions = ['reporting.view'], managementSchool = null) {
@@ -93,6 +95,19 @@ try {
     // Multiple compatible roles/grants at the same school are one candidate.
     await grant(person.principalId, noReportRole); await expectScope(subject, scope);
   }
+  // A SUSPENDED entitlement resolves no default scope; restoring it resolves the same scope again.
+  const setEntitlement = async (status) => {
+    await client.query('ALTER TABLE hon.organization_entitlements DISABLE TRIGGER USER');
+    try { await client.query('UPDATE hon.organization_entitlements SET status=$2 WHERE organization_id=$1', [organizationId, status]); }
+    finally { await client.query('ALTER TABLE hon.organization_entitlements ENABLE TRIGGER USER'); }
+  };
+  await client.query('SET ROLE hon_runtime');
+  try { assert.equal((await client.query('SELECT * FROM hon.resolve_current_staff_reporting_scope($1)', ['single-staff'])).rows.length, 1); } finally { await client.query('RESET ROLE'); }
+  await setEntitlement('SUSPENDED');
+  await client.query('SET ROLE hon_runtime');
+  try { assert.deepEqual((await client.query('SELECT * FROM hon.resolve_current_staff_reporting_scope($1)', ['single-staff'])).rows, [], 'suspended entitlement'); proofs++; }
+  finally { await client.query('RESET ROLE'); }
+  await setEntitlement('ACTIVE');
   await expectScope('unknown-subject');
   await expectScope(null);
   for (const [subject, options] of [['zero', { none: true }], ['unauthorized', { noReport: true }], ['inactive-human', { active: false }], ['revoked', { revoked: true }], ['expired', { until: '-1 minute', from: '-2 hours' }], ['future', { from: '1 hour' }]]) {

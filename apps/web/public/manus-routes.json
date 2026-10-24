@@ -281,6 +281,82 @@
       "title": "Owner launch"
     },
     {
+      "path": "/hq/ai-costs",
+      "title": "HON HQ | Ai Costs"
+    },
+    {
+      "path": "/hq/approvals",
+      "title": "HON HQ | Approvals"
+    },
+    {
+      "path": "/hq/executives/:executive",
+      "title": "HON HQ | :Executive"
+    },
+    {
+      "path": "/hq/growth/champions-club",
+      "title": "HON HQ | Champions Club"
+    },
+    {
+      "path": "/hq/growth/contests",
+      "title": "HON HQ | Contests"
+    },
+    {
+      "path": "/hq/growth/founder-campaigns",
+      "title": "HON HQ | Founder Campaigns"
+    },
+    {
+      "path": "/hq/growth/leaderboard",
+      "title": "HON HQ | Leaderboard"
+    },
+    {
+      "path": "/hq/growth",
+      "title": "HON HQ | Growth"
+    },
+    {
+      "path": "/hq/growth/rewards",
+      "title": "HON HQ | Rewards"
+    },
+    {
+      "path": "/hq/revenue",
+      "title": "HON HQ | Revenue"
+    },
+    {
+      "path": "/hq/support",
+      "title": "HON HQ | Support"
+    },
+    {
+      "path": "/hq/growth/champions-club/schools",
+      "title": "HON HQ | School referrals"
+    },
+    {
+      "path": "/hq/revenue/invoices",
+      "title": "HON HQ | Invoices"
+    },
+    {
+      "path": "/hq/revenue/invoices/:invoiceId",
+      "title": "HON HQ | Invoice detail"
+    },
+    {
+      "path": "/staff/subscription",
+      "title": "HON OS | School subscription"
+    },
+    {
+      "path": "/schools/:schoolId/hon-plan",
+      "title": "HON OS | Verify school checkout"
+    },
+    {
+      "path": "/settings/language-region",
+      "title": "HON OS | Language & Region"
+    },
+    {
+      "path": "/staff/billing/membership-plans",
+      "title": "HON OS | School membership plans"
+    },
+    {
+      "path": "/hq/pricing-offers",
+      "title": "HON HQ | Pricing & Offers · Design review"
+    },
+    {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
     }

@@ -1,0 +1,22 @@
+.flow { border: 1px solid #389cc2 !important; border-radius: 16px; padding: clamp(16px, 3vw, 28px); background: #f5fbff; color: #142d48; overflow-wrap: anywhere; min-width: 0; scroll-margin-top: 18px; }
+.flow header p:first-child { font-size: .8rem; letter-spacing: .12em; font-weight: 700; color: #075777; }
+.flow h2 { margin-top: 8px; }
+.flow section { margin-block: 24px; min-width: 0; }
+.flow fieldset { border: 0; padding: 0; min-width: 0; }
+.actions, .fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.flow label { display: flex; flex-direction: column; gap: 8px; margin-block: 16px; max-width: 560px; }
+.fields label { flex: 1 1 170px; }
+.flow input { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.flow .check { flex-direction: row; align-items: flex-start; }
+.check input { flex: 0 0 20px; width: 20px; height: 20px; margin: 2px 6px 0 0; }
+.flow button { min-height: 44px; white-space: normal; }
+.flow button:focus-visible, .flow input:focus-visible, .flow select:focus-visible { outline: 3px solid #0987b1; outline-offset: 3px; }
+.children { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; }
+.children button { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; background: white; color: #142d48; border: 1px solid #86aeba; border-radius: 10px; padding: 16px; text-align: start; }
+.children button[aria-pressed=true] { border: 2px solid #087898; background: #e2f4fa; }
+.children span { font-size: .85rem; }
+.child { border-top: 1px solid #86aeba; padding-top: 20px; }
+.notice, .error { padding: 16px; border-radius: 10px; margin-block: 16px; }
+.notice { background: #e6f3f8; color: #14394d; }
+.error { background: #fff0ed; color: #872c20; border: 1px solid #c4796f; }
+@media (max-width: 640px) { .actions { flex-direction: column; } .flow button { width: 100%; } .fields { display: block; } }

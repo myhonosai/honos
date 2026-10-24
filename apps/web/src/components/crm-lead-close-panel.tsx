@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useRef, useState, type FormEvent } from 'react';
+import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
 import type { LeadListItem } from '@hon/contracts';
 import { CrmLeadCloseUncertainError, prepareCrmLeadClose, submitCrmLeadClose, type CrmLeadCloseResult, type PreparedCrmLeadClose } from './crm-lead-close-http';
 
 /** Mounted only by an independently loaded live OPEN row, never by query selectors. */
-export function CrmLeadClosePanel({ row, organizationId, schoolId, onStarted, onBusy, onCancel }: {
-  row: LeadListItem; organizationId: string; schoolId: string;
+export function CrmLeadClosePanel({ row, currentRow = row, organizationId, schoolId, onStarted, onBusy, onCancel }: {
+  row: LeadListItem; currentRow?: LeadListItem; organizationId: string; schoolId: string;
   onStarted: () => void; onBusy: (busy: boolean) => void; onCancel: () => void;
 }): React.ReactElement {
   const [choice, setChoice] = useState<'' | 'WON' | 'LOST'>('');
@@ -26,27 +27,30 @@ export function CrmLeadClosePanel({ row, organizationId, schoolId, onStarted, on
     catch (e) { setError(e instanceof Error ? e.message : 'No verified close receipt.'); if (e instanceof CrmLeadCloseUncertainError) setRetry(request); }
     finally { active.current = false; setBusy(false); onBusy(false); }
   }
+  const snapshotCurrent = currentRow.id === row.id && currentRow.primaryPersonId === row.primaryPersonId && currentRow.status === 'OPEN' && currentRow.version === row.version;
   function submit(event: FormEvent): void {
     event.preventDefault();
-    if (busy || attempted || !confirmed || !choice || row.status !== 'OPEN') return;
+    if (active.current || !snapshotCurrent || busy || attempted || !confirmed || !choice || row.status !== 'OPEN') return;
     try {
       const request = prepareCrmLeadClose(organizationId,schoolId,row,{ status: choice, expectedVersion: row.version, ...(note.trim() ? { closeNote: note.trim() } : {}) },crypto.randomUUID());
       void send(request);
     } catch (e) { setError(e instanceof Error ? e.message : 'Invalid close command.'); }
   }
   return <section aria-label="Close selected CRM lead">
-    <h2>Close CRM lead only</h2><p>Selected lead <code>{row.id}</code> · authorized OPEN row v{row.version}. The server independently rechecks current staff authority, OPEN state and version.</p>
+    <h2 id="crm-close-title" tabIndex={-1}>Close CRM lead only</h2><p>Originally selected lead <code>{row.id}</code> · independently authorized OPEN snapshot v{row.version}. The server independently rechecks current staff authority, OPEN state and version.</p>
     <p>WON and LOST are internal CRM terminal states only, not enrollment, membership, payment, revenue or conversion facts. Nothing is sent and no trial conclusion is recorded.</p>
-    <form onSubmit={submit}><fieldset disabled={busy || attempted}>
+    <p>Latest authorized list read: {currentRow.status} · v{currentRow.version}. This is separate from a historical close receipt or an uncertain command. Close permission is rechecked by the server on every explicit submission, including replay.</p>
+    {!snapshotCurrent && !attempted && <p role="alert">This lead changed. Cancel this draft and explicitly reload the authorized list before preparing a new close.</p>}
+    <form onSubmit={submit}><fieldset disabled={busy || attempted || !snapshotCurrent}>
       <label>CRM close choice<select required value={choice} onChange={e => { setChoice(e.target.value as '' | 'WON' | 'LOST'); setConfirmed(false); setError(''); }}><option value="">Choose exactly WON or LOST</option><option value="WON">WON — CRM-only</option><option value="LOST">LOST — CRM-only</option></select></label>
       <label>Optional internal close note<textarea maxLength={2000} value={note} onChange={e => { setNote(e.target.value); setConfirmed(false); setError(''); }} /></label>
       <label><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />I explicitly confirm this selected lead/version and {choice || 'my choice'} as CRM-only recordkeeping, not enrollment or payment.</label>
-      <button disabled={!choice || !confirmed}>Confirm CRM-only close</button><button type="button" onClick={onCancel}>Cancel close draft</button>
-    </fieldset></form>
+      <button disabled={!choice || !confirmed}>Confirm CRM-only close</button>
+    </fieldset></form><button type="button" disabled={busy || retry !== null} onClick={onCancel}>Cancel close draft</button>
     {busy && <p role="status">Verifying the exact close command…</p>}
     {error && <p role="alert">{error}</p>}
-    {retry && <button disabled={busy} type="button" onClick={() => void send(retry)}>Retry exact retained close request</button>}
+    {retry && <div><button disabled={busy} type="button" onClick={() => void send(retry)}>Retry exact retained close request</button><CrmEnrollmentDiscard label="Discard close retry" disabled={busy} onDiscard={() => { if (active.current) return; setRetry(null); onCancel(); }} /></div>}
     {result && <section aria-label="CRM-only close receipt"><h3>Returned CRM-only close receipt</h3><p>Lead <code>{result.receipt.leadId}</code> · {result.receipt.status} · v{result.receipt.priorVersion} → v{result.receipt.version} · {result.receipt.closedAt} · {result.replayed ? 'replayed receipt' : 'recorded receipt'}</p><p>Internal close note: {result.receipt.closeNote ?? 'Not recorded'}</p></section>}
-    {attempted && <p>The loaded list has not been rewritten or refreshed. Explicitly use Load CRM leads to reauthorize and reload before any new close; reloading discards this in-memory retry/receipt.</p>}
+    {attempted && <p>The loaded list has not been rewritten or refreshed. Resolve the exact retry or deliberately discard it first, then close this panel. Explicitly use Load CRM leads to reauthorize before any new close. Discard or a page reload cannot cancel or undo a server action; a page reload destroys in-memory retry information.</p>}
   </section>;
 }

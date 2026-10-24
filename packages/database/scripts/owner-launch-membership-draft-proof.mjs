@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { membershipFixtureQuery } from './membership-activation-test-support.mjs';
 
 /** Runs only inside the marked localhost-only, rejecting-transport owner proof. */
 export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,memberships,scope,other,context,checked,raw,drift,ids,ownerRoleId,program,classSession}) {
@@ -16,7 +17,7 @@ export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,me
  const draft=(r,c=context(),patch={})=>checked(()=>service.draftMembership(c,input(r,patch)),effects);
  const callRaw=(c,value)=>checked(()=>raw(c,'SELECT hon.draft_owner_launch_membership($1,$2::jsonb,$3,$4,$5)',[c.externalSubject,JSON.stringify(value),c.idempotencyKey,c.requestId,c.correlationId]));
  const person=async r=>(await owner.query('SELECT person_id FROM hon.student_profiles WHERE id=$1',[r.receipt.studentProfileId])).rows[0].person_id;
- const account=async(r,currency='USD')=>owner.query('INSERT INTO hon.billing_accounts(organization_id,school_id,responsible_person_id,currency) VALUES($1,$2,$3,$4) RETURNING id',[scope.organizationId,scope.schoolId,await person(r),currency]);
+ const account=async(r,currency='USD',classification='CANONICAL')=>owner.query('INSERT INTO hon.billing_accounts(organization_id,school_id,responsible_person_id,currency,account_classification) VALUES($1,$2,$3,$4,$5) RETURNING id',[scope.organizationId,scope.schoolId,await person(r),currency,classification]);
  const firstContext=context(),first=await draft(registrations[0],firstContext);
  assert.equal(first.receipt.state,'DRAFT');assert.equal(first.receipt.billingAccountCreated,true);assert.equal(first.replayed,false);
  assert(!/payer|participant|personId|familyId|billingAccountId|PII_CANARY|paymentSchedule|activation|invoice/i.test(JSON.stringify(first)));
@@ -42,7 +43,7 @@ export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,me
  const guardianReused=await draft(guardianReuse,context(),{currency:'EUR'});assert.equal(guardianReused.receipt.billingAccountCreated,false);
  assert.equal((await owner.query('SELECT billing_account_id FROM hon.memberships WHERE id=$1',[guardianReused.receipt.membershipId])).rows[0].billing_account_id,guardianAccount.account.id);check();
  await account(registrations[2],'CAD');await assert.rejects(()=>draft(registrations[2]),e=>status(400)(e)&&e.getResponse().code==='MEMBERSHIP_DRAFT_NEEDS_STAFF');
- await account(registrations[3]);await account(registrations[3]);await assert.rejects(()=>draft(registrations[3]),e=>status(400)(e)&&e.getResponse().code==='MEMBERSHIP_DRAFT_NEEDS_STAFF');check();
+ await account(registrations[3]);await account(registrations[3],'USD','ADDITIONAL');await assert.rejects(()=>draft(registrations[3]),e=>status(400)(e)&&e.getResponse().code==='MEMBERSHIP_DRAFT_NEEDS_STAFF');check();
  // Identical concurrent same-key and different-key commands create one account,
  // one membership and one pair of canonical creation facts, never double draft.
  for(const [r,sameKey]of [[registrations[4],true],[registrations[5],false]]){
@@ -102,8 +103,9 @@ export async function proveOwnerLaunchMembershipDraft({owner,service,accounts,me
   try{await assert.rejects(()=>draft(registrations[7+i]),status(503));}finally{await owner.query(`DROP TRIGGER fixture_owner_launch_draft ON hon.${target}; DROP FUNCTION hon.fixture_fail_owner_launch_draft()`);}
  }check();
  // Prove current changed draft state cannot masquerade as a new DRAFT command.
- await owner.query("UPDATE hon.memberships SET state='ACTIVE' WHERE id=$1",[first.receipt.membershipId]);
- try{await assert.rejects(()=>checked(()=>service.draftMembership(firstContext,input(registrations[0]))),status(400));}finally{await owner.query("UPDATE hon.memberships SET state='DRAFT' WHERE id=$1",[first.receipt.membershipId]);}
+ // 0177: lifecycle transitions are trigger-guarded; the disposable owner seeds and restores this state directly.
+ await membershipFixtureQuery(owner,"UPDATE hon.memberships SET state='ACTIVE' WHERE id=$1",[first.receipt.membershipId]);
+ try{await assert.rejects(()=>checked(()=>service.draftMembership(firstContext,input(registrations[0]))),status(400));}finally{await membershipFixtureQuery(owner,"UPDATE hon.memberships SET state='DRAFT' WHERE id=$1",[first.receipt.membershipId]);}
  await drift("ALTER FUNCTION hon.draft_owner_launch_membership(text,jsonb,text,uuid,uuid) SET statement_timeout TO '1s'");check();
  // Whole-table checked() proves zero effects outside the five canonical tables
  // on every command, explicitly including schedules/methods/processors/invoices/

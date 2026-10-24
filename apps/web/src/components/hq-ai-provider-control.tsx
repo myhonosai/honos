@@ -428,10 +428,8 @@ export function HqAiProviderControl(): React.ReactElement {
       : access === 'forbidden' ? 'This account does not have the separate HQ AI-provider read permission.'
         : 'The HQ provider-control gate is temporarily unavailable. HON remains fail-closed.';
 
-  return <main className={styles.page}>
-    <aside className={styles.rail}>
-      <a className={styles.backLink} href="/hq">← HQ command center</a>
-      <div className={styles.brand}><span>HON</span><strong>Provider<br />Control</strong><small>HQ registry · human operated</small></div>
+  return <div className={styles.page}>
+    <aside className={styles.rail} aria-label="Provider control gate and sections">
       <div className={styles.gateCard}><span>AUTHORIZATION GATE</span><strong>Separate from school access</strong><p>Only the existing verified human HQ scope can read or change this control plane.</p></div>
       <nav aria-label="AI provider control sections">
         <a href="#registry"><i>01</i>Registry</a>
@@ -445,7 +443,7 @@ export function HqAiProviderControl(): React.ReactElement {
 
     <section className={styles.workspace}>
       <header className={styles.header}>
-        <div><p>HON HQ / GOVERNED AI REGISTRY</p><h1>Control the route.<br /><em>Never run the provider.</em></h1></div>
+        <div><p>HON HQ / GOVERNED AI REGISTRY</p><h2>Control the route.<br /><em>Never run the provider.</em></h2></div>
         <div className={styles.sessionCard}><span>HQ SESSION</span><strong>{access === 'available' ? 'Provider registry available' : access === 'checking' ? 'Verifying session…' : 'Access not granted'}</strong><small>API origin: <code>/api/v1</code></small></div>
       </header>
 
@@ -595,5 +593,5 @@ export function HqAiProviderControl(): React.ReactElement {
         </section>
       </>}
     </section>
-  </main>;
+  </div>;
 }

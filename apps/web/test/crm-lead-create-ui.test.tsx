@@ -5,7 +5,10 @@ import { CrmLeadCreatePanel } from '../src/components/crm-lead-create-panel';
 import { CrmLeadClosePanel } from '../src/components/crm-lead-close-panel';
 import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 import LeadPage from '../src/app/staff/crm/leads/page';
+import { issueSession } from '@hon/auth';
+const signedConfig = {mode:'OIDC' as const,audience:'crm-privacy-test',secret:'synthetic-only-crm-session-secret-123456789'};
 
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (v: string) => `Localized ${v}` }) }));
 // Deterministic hook/effect lifecycle runner exercises actual event handlers,
 // including delayed promises and cleanup, without a new DOM dependency.
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
@@ -35,10 +38,10 @@ function fill(view: () => ReactElement): Element {
 }
 function confirm(tree: Element, view: () => ReactElement): Element { elements(tree).find(e => e.type === 'input' && e.props.type === 'checkbox')!.props.onChange({ target: { checked: true } }); return render(view); }
 beforeEach(() => {
- hooks.values = []; hooks.cursor = 0; hooks.effects = []; session.token = 'first-test-session';
+ hooks.values = []; hooks.cursor = 0; hooks.effects = []; vi.stubEnv('HON_AUTH_MODE',signedConfig.mode);vi.stubEnv('HON_SESSION_AUDIENCE',signedConfig.audience);vi.stubEnv('HON_SESSION_JWT_SECRET',signedConfig.secret);session.token=issueSession({externalSubject:'first-fixture-staff'},signedConfig);
  vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
 });
-afterEach(() => { unmount(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { unmount(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe('idle direct-human CRM intake', () => {
  it('allocates no key/request on mount, prefill, invalid submit, editing or confirmation; requires explicit valid submit', async () => {
   const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response()), key = vi.spyOn(crypto, 'randomUUID');
@@ -97,7 +100,7 @@ describe('idle direct-human CRM intake', () => {
   release(new Response(JSON.stringify({ data: [row], meta: {} }), { status: 200 })); await settle(); tree = render(view); expect(text(tree)).toContain('No verified school list is loaded.'); expect(text(tree)).not.toContain('Ari Stone'); expect(f).toHaveBeenCalledTimes(1);
   const afterHidden = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key; windowEvents.dispatchEvent(new Event('pagehide')); tree = render(view); expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(afterHidden);
   const beforeBlur = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key; windowEvents.dispatchEvent(new Event('blur')); tree = render(view); expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(beforeBlur);
-  const first = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school, pipelineId: stage } as any) }); session.token = 'second-test-session'; const second = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school }) });
+  const first = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school, pipelineId: stage } as any) }); session.token=issueSession({externalSubject:'second-fixture-staff'},signedConfig); const second = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school }) });
   expect(first.key).not.toBe(second.key); expect(first.props.initialScope).toEqual({ organizationId: org, schoolId: school }); expect(JSON.stringify(first)).not.toContain('first-test-session');
  });
  it('statically has no persistence, request effects, polling, directory, campaign or other-domain command', () => {

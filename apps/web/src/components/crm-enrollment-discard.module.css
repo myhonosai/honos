@@ -1,0 +1,2 @@
+.confirm { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 8px; margin-block: 16px; }
+.confirm input { flex: 0 0 20px; width: 20px !important; min-width: 20px !important; height: 20px; min-height: 20px !important; padding: 0 !important; margin: 2px 0 0; }

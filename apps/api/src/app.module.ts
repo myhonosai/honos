@@ -1,3 +1,12 @@
+import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
+import { CrmAdultMembershipDraftService } from './billing/crm-adult-membership-draft.service.js';
+import { CrmAdultMembershipDraftFromPlanController, MembershipPlanController } from './billing/membership-plan.controller.js';
+import { MembershipPlanService } from './billing/membership-plan.service.js';
+import { GuardianChildEnrollmentController, GuardianChildMembershipDraftController } from './crm/guardian-child-enrollment.controller.js';
+import { GuardianChildEnrollmentService } from './crm/guardian-child-enrollment.service.js';
+import { CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard } from './crm/guardian-child-enrollment.dto.js';
+import { CrmAdultMembershipDraftFromPlanHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard } from './billing/membership-plan.dto.js';
+import { CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
 import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
@@ -55,6 +64,12 @@ import { LeadCreateHumanUiGuard } from './crm/lead-create-human-ui.guard.js';
 import { LeadCloseController } from './crm/lead-close.controller.js';
 import { LeadCloseService } from './crm/lead-close.service.js';
 import { LeadCloseHumanUiGuard } from './crm/lead-close.dto.js';
+import { LeadRegistrationController } from './crm/lead-registration.controller.js';
+import { LeadRegistrationService } from './crm/lead-registration.service.js';
+import { LeadRegistrationHumanUiGuard } from './crm/lead-registration.dto.js';
+import { LeadRegistrationRecoveryController } from './crm/lead-registration-recovery.controller.js';
+import { LeadRegistrationRecoveryService } from './crm/lead-registration-recovery.service.js';
+import { LeadRegistrationRecoveryHumanUiGuard } from './crm/lead-registration-recovery.dto.js';
 import { TrialAppointmentController } from './crm/trial-appointment.controller.js';
 import { TrialAppointmentService } from './crm/trial-appointment.service.js';
 import { TrialAppointmentOutcomeController } from './crm/trial-appointment-outcome.controller.js';
@@ -64,9 +79,13 @@ import { InterfaceThemeController } from './preferences/interface-theme.controll
 import { InterfaceThemeService } from './preferences/interface-theme.service.js';
 import { MembershipController } from './billing/membership.controller.js';
 import { MembershipService } from './billing/membership.service.js';
+import { MembershipDateRevisionController } from './billing/membership-date-revision.controller.js';
+import { MembershipDateRevisionService } from './billing/membership-date-revision.service.js';
+import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
+import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
 import { InvoiceController } from './billing/invoice.controller.js';
 import { InvoiceService } from './billing/invoice.service.js';
 import { InvoiceHumanUiGuard } from './billing/invoice-human-ui.guard.js';
@@ -172,6 +191,20 @@ import { HqOverviewService } from './hq/hq-overview.service.js';
 import { HqEntitlementController } from './hq/hq-entitlement.controller.js';
 import { HqEntitlementService } from './hq/hq-entitlement.service.js';
 import { HqEntitlementHumanUiGuard } from './hq/hq-entitlement.dto.js';
+import { ChampionsHqController, ChampionsSchoolController } from './champions/champions-club.controller.js';
+import { ChampionsClubService } from './champions/champions-club.service.js';
+import { ChampionsCommandGuard, ChampionsReadGuard } from './champions/champions-club.guards.js';
+import { SaasBillingHqController, SaasCreditsSchoolController } from './saas-billing/saas-billing.controller.js';
+import { SaasBillingService } from './saas-billing/saas-billing.service.js';
+import { SaasOffersHqController, SaasOffersSchoolController } from './saas-billing/saas-offers.controller.js';
+import { PaymentWebhookController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
+import { SaasPaymentsService } from './payments/saas-payments.service.js';
+import { SaasAccessExceptionCommandsHqController, SaasAccessExceptionsHqController, SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
+import { SaasSchoolBillingService } from './school-billing/saas-school-billing.service.js';
+import { LanguageCommandGuard, LanguagePreferencesService, LanguageReadGuard, MyLanguagePreferenceController, SchoolLanguageDefaultController } from './preferences/language-preferences.controller.js';
+import { PAYMENT_PROVIDER_ADAPTER, UnconfiguredPaymentProvider } from './payments/payment-provider.js';
+import { paymentProviderFromEnvironment } from './payments/stripe-test-mode-adapter.js';
+import { SaasCommandGuard, SaasReadGuard } from './saas-billing/saas-billing.guards.js';
 import { HqSchoolDirectoryService } from './hq/hq-school-directory.service.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
@@ -255,6 +288,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentMessageHistoryController,
     LeadController,
     LeadCloseController,
+    LeadRegistrationController,
+    LeadRegistrationRecoveryController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
     PipelineController,
@@ -292,12 +327,21 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
+    MembershipDateRevisionController,
+    MembershipStatusReportController,
+    CrmAdultMembershipDraftController,
+    CrmAdultMembershipDraftFromPlanController,
+    MembershipPlanController,
+    GuardianChildEnrollmentController,
+    GuardianChildMembershipDraftController,
     BillingAccountController,
     InvoiceController,
     HqController,
     HqOnboardingController,
     HqAiProviderController,
     HqEntitlementController,
+    ChampionsSchoolController, ChampionsHqController,
+    SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
@@ -353,6 +397,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadCreateHumanUiGuard,
     LeadCloseService,
     LeadCloseHumanUiGuard,
+    LeadRegistrationService,
+    LeadRegistrationHumanUiGuard,
+    LeadRegistrationRecoveryService,
+    LeadRegistrationRecoveryHumanUiGuard,
     TrialAppointmentService,
     TrialAppointmentOutcomeService,
     CrmLeadActionTool,
@@ -399,14 +447,23 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    MembershipDateRevisionService,
+    CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
+    MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
+    GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
     BillingAccountService,
+    BillingAccountHumanUiGuard,
     InvoiceService,
     InvoiceHumanUiGuard,
     HqOnboardingService,
     HqAiProviderService,
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
+    ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
+    SaasBillingService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
+    // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
+    { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },
     HqOverviewService,
     HqSchoolDirectoryService,
   ],

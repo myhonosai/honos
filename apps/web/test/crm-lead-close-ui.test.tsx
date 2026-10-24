@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { CrmLeadClosePanel } from '../src/components/crm-lead-close-panel';
 import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ date: (v: string) => `Localized ${v}` }) }));
 // Tiny deterministic hook runner: invoke the actual components and their event
 // handlers without adding a DOM/testing dependency or an application capability.
 const hooks=vi.hoisted(()=>({values:[] as unknown[],cursor:0}));
@@ -33,6 +34,7 @@ describe('explicit direct-human row close UI',()=>{
   button(tree,'Prepare CRM-only close').props.onClick();tree=render(view);
   const panel=elements(tree).find(e=>e.type===CrmLeadClosePanel)!;expect(panel.props.row.id).toBe(row.id);expect(panel.props.row.version).toBe(3);expect(f).toHaveBeenCalledTimes(1);
   const originalList=hooks.values[3];panel.props.onStarted();tree=render(view);expect(hooks.values[3]).toBe(originalList);expect(text(tree)).toContain('Status: OPEN');expect(text(tree)).toContain('2 verified CRM leads');expect(text(tree)).toContain('Loaded list snapshot only');expect(button(tree,'Prepare CRM-only close').props.disabled).toBe(true);
+  expect(button(tree,'Load CRM leads').props.disabled).toBe(true);panel.props.onCancel();tree=render(view);
   elements(tree).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();tree=render(view);expect(elements(tree).some(e=>e.type===CrmLeadClosePanel)).toBe(false);expect(f).toHaveBeenCalledTimes(2);
   elements(tree).find(e=>e.type==='input')!.props.onChange({target:{value:school}});tree=render(view);expect(text(tree)).toContain('No verified school list is loaded.');expect(button(tree,'Prepare CRM-only close')).toBeUndefined();
  });

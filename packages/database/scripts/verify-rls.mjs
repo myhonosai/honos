@@ -28,6 +28,9 @@ import { requireOwnerLaunchLocalUrls } from './owner-launch-local-guard.mjs';
 import pg from 'pg';
 import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
+import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
+import { saasBillingTables, verifySaasBillingSecurity } from './saas-billing-security.mjs';
+import { languagePreferenceTables, verifyLanguagePreferenceSecurity } from './language-preferences-security.mjs';
 import { readFile } from 'node:fs/promises';
 
 const { Client } = pg;
@@ -76,6 +79,9 @@ const expectedRlsTables = [
   ...humanWorkTables,
   ...voiceTables,
   ...communityTables,
+  ...championsClubTables,
+  ...saasBillingTables,
+  ...languagePreferenceTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
   'crm_follow_ups', 'crm_follow_up_versions', 'crm_follow_up_requests',
   'crm_lead_close_requests',
@@ -106,6 +112,19 @@ const expectedRlsTables = [
   'communication_messages',
   'crm_activities',
   'crm_appointments',
+  'crm_lead_registration_conversions',
+  'crm_adult_membership_draft_sources',
+  'membership_plans',
+  'membership_plan_versions',
+  'membership_plan_selections',
+  'crm_guardian_child_enrolled_children',
+  'crm_guardian_child_payer_designations',
+  'crm_guardian_child_membership_draft_sources',
+  'membership_activation_decisions',
+  'membership_effective_periods',
+  'membership_activation_follow_ups',
+  'membership_date_revisions',
+  'membership_date_revision_follow_ups',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',
@@ -268,6 +287,9 @@ try {
 	await verifyKioskHandoffSecurity(client, runtimeRoleName);
 	await verifyMarketplaceSecurity(client, runtimeRoleName);
   await verifyCommunitySecurity(client, runtimeRoleName);
+  await verifyChampionsClubSecurity(client, runtimeRoleName);
+  await verifySaasBillingSecurity(client, runtimeRoleName);
+  await verifyLanguagePreferenceSecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
   await verifyHumanWorkSecurity(client,runtimeRoleName);
   await verifyActionApprovalSecurity(client,runtimeRoleName);
@@ -756,18 +778,24 @@ try {
       throw new Error('hon_runtime billing privileges are not exact invoice SELECT/INSERT/UPDATE and payment SELECT-only minima.');
     }
 
+    // 0177 (D41 option C): SELECT plus a DRAFT-only column INSERT; no UPDATE, DELETE or TRUNCATE at any level.
     const runtimeMembershipPrivileges = (await client.query(`
       SELECT
         has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'SELECT') AS can_select,
-        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'INSERT') AS can_insert,
-        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'UPDATE') AS can_update,
-        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'DELETE') AS can_delete
+        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'INSERT') AS can_insert_table,
+        has_any_column_privilege('${runtimeRoleName}', 'hon.memberships', 'UPDATE') AS can_update,
+        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'DELETE') AS can_delete,
+        has_table_privilege('${runtimeRoleName}', 'hon.memberships', 'TRUNCATE') AS can_truncate,
+        ARRAY(SELECT a.attname::text FROM pg_attribute a WHERE a.attrelid = 'hon.memberships'::regclass AND a.attnum > 0 AND NOT a.attisdropped
+          AND has_column_privilege('${runtimeRoleName}', 'hon.memberships', a.attname, 'INSERT') ORDER BY a.attname) AS insert_columns
     `)).rows[0];
     if (!runtimeMembershipPrivileges?.can_select
-      || !runtimeMembershipPrivileges.can_insert
-      || !runtimeMembershipPrivileges.can_update
-      || runtimeMembershipPrivileges.can_delete) {
-      throw new Error('hon_runtime membership privileges are not the required SELECT/INSERT/UPDATE and no-DELETE minimum.');
+      || runtimeMembershipPrivileges.can_insert_table
+      || runtimeMembershipPrivileges.can_update
+      || runtimeMembershipPrivileges.can_delete
+      || runtimeMembershipPrivileges.can_truncate
+      || runtimeMembershipPrivileges.insert_columns.join(',') !== 'billing_account_id,organization_id,participant_person_id,plan_code,school_id,term_ends_at,term_started_at') {
+      throw new Error('hon_runtime membership privileges are not SELECT plus the 0177 DRAFT-only column INSERT, with no UPDATE/DELETE/TRUNCATE.');
     }
 
     const runtimeAiTeamPreferencesPrivileges = (await client.query(`

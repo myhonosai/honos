@@ -1,0 +1,860 @@
+{
+  "sourceSha": "af5a0c135f6b37ac37f53d063758126e619caaa7",
+  "syntheticFixturesOnly": true,
+  "realStripeSandboxVerified": false,
+  "productionDataUsed": false,
+  "checks": [
+    "desktop: actual authenticated offers and informational plan distinction",
+    "desktop: all offer prices and presentation modes",
+    "desktop: explicit confirmation, one POST on duplicate activation and simulator truth",
+    "desktop: authoritative verified payment/allowance and pending activation after return",
+    "desktop: HON keyboard controls and full capability comparison",
+    "tablet: actual authenticated offers and informational plan distinction",
+    "tablet: all offer prices and presentation modes",
+    "tablet: explicit confirmation, one POST on duplicate activation and simulator truth",
+    "tablet: authoritative verified payment/allowance and pending activation after return",
+    "tablet: HON keyboard controls and full capability comparison",
+    "mobile: actual authenticated offers and informational plan distinction",
+    "mobile: all offer prices and presentation modes",
+    "mobile: explicit confirmation, one POST on duplicate activation and simulator truth",
+    "mobile: authoritative verified payment/allowance and pending activation after return",
+    "mobile: HON keyboard controls and full capability comparison",
+    "narrow: actual authenticated offers and informational plan distinction",
+    "narrow: all offer prices and presentation modes",
+    "narrow: explicit confirmation, one POST on duplicate activation and simulator truth",
+    "narrow: authoritative verified payment/allowance and pending activation after return",
+    "narrow: HON keyboard controls and full capability comparison",
+    "Stripe test link hands off and returns through real authenticated page; hosted provider is a deterministic stand-in",
+    "Unknown outcome preserves identical offer and retry key, without automatic resubmission",
+    "Unavailable provider is honest and creates no paid/access claim",
+    "Repriced offer requires new human review and never submits old terms",
+    "Revoked authorization before command clears facts and refuses checkout",
+    "Independent POST denial clears prior billing facts",
+    "Late credit response cannot restore stale subscription/balance after refresh",
+    "disabled: unavailable purchasing",
+    "empty: unavailable purchasing",
+    "Sold-out founder offer cannot start checkout",
+    "Disabled program suppresses a previously opened Stripe hosted link",
+    "failed: backend status, no invented verified payment or activation",
+    "expired: backend status, no invented verified payment or activation",
+    "canceled: backend status, no invented verified payment or activation",
+    "review: backend status, no invented verified payment or activation",
+    "disputed: backend status, no invented verified payment or activation",
+    "past-due: backend status, no invented verified payment or activation",
+    "refunded: backend status, no invented verified payment or activation",
+    "attested: backend status, no invented verified payment or activation",
+    "401: unavailable/denied/invalid read clears private facts",
+    "403: unavailable/denied/invalid read clears private facts",
+    "503: unavailable/denied/invalid read clears private facts",
+    "scope: unavailable/denied/invalid read clears private facts",
+    "malformed: unavailable/denied/invalid read clears private facts",
+    "denied: independent allowance permission/scope cannot replace billing facts",
+    "scope: independent allowance permission/scope cannot replace billing facts",
+    "Ambiguous current school fails closed without caller-supplied selectors",
+    "Independent purchaser denial despite resolved reporting scope",
+    "family-synthetic: no authorized billing facts or checkout",
+    "hq-synthetic: no authorized billing facts or checkout",
+    "support-synthetic: no authorized billing facts or checkout",
+    "foreign-school-synthetic: no authorized billing facts or checkout",
+    "Forged success return is not payment/cancel confirmation",
+    "Forged cancelled return is not payment/cancel confirmation",
+    "unsigned: both subscription and provider-return routes preserve the real session gate",
+    "tampered: both subscription and provider-return routes preserve the real session gate",
+    "expired: both subscription and provider-return routes preserve the real session gate",
+    "No unexpected API path, direct HQ/database/provider request or JavaScript error"
+  ],
+  "failures": [],
+  "screenshots": [
+    "desktop-offers.png",
+    "desktop-review.png",
+    "desktop-open.png",
+    "desktop-paid.png",
+    "desktop-paid-viewport.png",
+    "desktop-guide.png",
+    "mobile-offers.png",
+    "mobile-review.png",
+    "mobile-open.png",
+    "mobile-paid.png",
+    "mobile-paid-viewport.png",
+    "mobile-guide.png"
+  ],
+  "accessibility": [
+    {
+      "label": "desktop-offers",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "desktop-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "desktop-open",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "desktop-paid",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "desktop-guide",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-offers",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-open",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-paid",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "tablet-guide",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-offers",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-open",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-paid",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-guide",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-offers",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-review",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-open",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-paid",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "narrow-guide",
+      "violations": [],
+      "incompleteCount": 1
+    }
+  ],
+  "apiRequests": [
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/staff/current-reporting-school"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/hon-plan"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/schools/20000000-0000-4000-8000-000000000002/ai-credits"
+    }
+  ],
+  "commandCount": 9,
+  "externalHostsBlocked": [
+    "fonts.googleapis.com",
+    "checkout.stripe.com"
+  ],
+  "pageErrors": [],
+  "unexpectedRequests": []
+}

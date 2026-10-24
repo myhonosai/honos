@@ -1,6 +1,155 @@
 # HON Delivery Backlog
 
+## Isolated commercial staging rehearsal — Codex
+
+- [ ] From `b49cfc33b32def303bc05c41c17dd92c46d448a2`, add a guarded disposable-local rehearsal for 0181–0185, reusing canonical fixtures, proofs and security registries. Record migration checksums, shipped/simulated posture, denied external traffic/AI grants, cleanup and actual CI evidence in one draft PR.
+- [x] Document the PROPOSED policy-recording gap and propose a separate exception-only approval record for owner review; implement no approval, activation, customer checkout or production change. Reserved 0179/0180 remain unused.
+
+## E1a two-step membership activation frontend — Codex
+
+- [x] Replace the obsolete one-step caller with server preview, inclusive school-local dates, explicit warning/override acknowledgements and exact digest-bound confirmation in PR #53. Preserve cancellation, delegated authority, CRM adult/family workflows and appearance preferences.
+- [ ] Final verification and independent review for PR #53: in-memory immutable retries, focus-loss concealment and explicit signed-session/exact-school restoration; frontend, signed-session/disposable PostgreSQL, desktop/mobile/accessibility and full CI checks. Evidence belongs in the PR; no deployment, persistent database changes, payments or E1b/E1c work.
+
+## Membership activation gate E1a backend — Claude (2026-10-22)
+
+- [x] Migration 0177: two-step direct-human activation (read-only server preview with digest → exact confirmation), runtime UPDATE/DELETE revoked on memberships with a seven-column DRAFT INSERT (D41 option C), settings-free transition trigger, immutable decision/effective-period/follow-up evidence, school-scoped `billing.membership.activation.override` (plus reserved `rules.manage` and `change.approve`), D29a identity-review override, D3 birth-date reminder and attestation, D40/D40a school-local inclusive dates, cancellation moved to a protected function with an unchanged contract. See `docs/architecture/MEMBERSHIP_ACTIVATION_GATE.md`.
+- [x] Owner-approved PR #52 squash-merged as `2beb7f5fd4307a64c0ae3790795e45270c4f35ae`; no deployment (see `docs/architecture/MEMBERSHIP_ACTIVATION_GATE_DEPLOYMENT_AND_RISKS.md`).
+- [ ] Codex: two-step activation frontend implemented in PR #53; final verification and independent review remain pending (`docs/architecture/MEMBERSHIP_ACTIVATION_FRONTEND.md`).
+- [ ] Owner decision: should adult CRM registration refuse known minors (currently blocked only at activation)?
+- [ ] E1b: align lifecycle-state readers (operations report, parent billing view, command center, health, retention, renewal, revenue planning) with the derived effective status; date revisions for pre-0177 ACTIVE rows.
+- [ ] Update the nine non-CI manual billing/reporting proofs that seed ACTIVE rows directly to use `membershipFixtureQuery`.
+
+## CRM final safety and reliability — Codex
+
+- [ ] PR #50 independent-review correction: separate WON/LOST close-instance ownership from read invalidation, preserve unknown close retries through concealment/restoration, and verify targeted lifecycle, signed-session API/disposable PostgreSQL, desktop/mobile/accessibility and all security proofs before another review. No automatic retry, reload workaround or backend change.
+
+- [x] Fail closed to sign-in when the CRM page session expires; guard Discard while commands are unsettled and require deliberate abandonment of unknown retries.
+- [x] Add adult retry Discard, preserve unexpected retry requests with visible fail-closed errors, avoid shielding an empty view, and preserve explicit verification for concealed facts. No grace period, backend, migration or financial changes.
+- [ ] Verify adult/family regressions, exact retries, desktop/mobile and accessibility, full CI and existing disposable PostgreSQL proofs in one focused frontend PR.
+
+## CRM enrollment privacy and usability — Codex
+
+- [x] Hide the entire sensitive CRM view on focus loss, retain immutable uncertain enrollment requests only in mounted memory, and require explicit session/exact-school recovery verification before revealing it. Never resend a command on focus restoration.
+- [x] Correct family account errors, colocate current-DRAFT refresh, format timestamps with Language & Region, and reduce enrollment-panel scrolling. Preserve adult/family recovery, creator privacy and financial boundaries.
+- [ ] Verify focused interactions, actual desktop/mobile browser behavior, full CI and existing disposable PostgreSQL proofs; complete the exact-head evidence in focused frontend-only PR #49 for independent review.
+
+## Guardian/child CRM frontend — Codex (2026-10-21)
+
+- [x] Connect merged 0176 family recovery, explicit canonical guardian payer designation, sibling addition (10 children total) and per-child published-plan DRAFTs to the existing staff CRM. Preserve adult setup, all six adult recovery states, creator-only DRAFT details and historical terms.
+- [ ] Final independent review of retry, scope/session, family/child, mobile/accessibility and CI evidence in PR #48. Signed-session API/disposable PostgreSQL integration passed; final exact-head checks and screenshots are recorded in the PR. Browser fixtures are synthetic; no production/payment/activation claim.
+- [x] Published focused frontend PR #48 for independent review; no automatic merge, deployment, backend/migration changes or PR #27/#17/#3 changes.
+
+## CRM Resume Setup frontend — Codex (2026-10-20)
+
+- [x] Connect explicit Resume setup to merged 0174 recovery using the shared closed validator; support all six states in the existing adult panel, without automatic reads/commands or invented account identifiers.
+- [x] Add frontend interaction, desktop/mobile browser and real signed-session API/disposable-database verification for all six states, creator/noncreator visibility, exact uncertain-command retries, stale/access/session clearing and errors. Actual final CI/results/artifacts are recorded in [PR #44](https://github.com/myhonosai/honos/pull/44); no production verification claim. Preserve all backend/migration files and PRs #27/#17/#3.
+- [ ] Owner independent review and merge approval for PR #44. No automatic merge/deployment.
+
+## CRM registration recovery backend — Claude (2026-10-20)
+
+- [x] Read-only `POST …/crm/leads/:leadId/registration-recovery` (migration 0174) recovers an adult CRM lead's workflow state after navigation, refresh or session loss: `NOT_REGISTERED`, `NEEDS_STAFF_REVIEW`, `BILLING_ACCOUNT_REQUIRED`, `READY_FOR_DRAFT`, `CURRENT_DRAFT`, `CURRENT_DRAFT_BY_OTHER_STAFF`. Reuses the 0160/0162 authorities and the 0163 creator-owned current-DRAFT confirmation; historical registration receipt kept distinct from current DRAFT; no DML, audit, outbox or idempotency. See `docs/architecture/CRM_LEAD_REGISTRATION_RECOVERY.md`.
+- [x] Codex: explicit **Resume setup** frontend integration in PR #44; final verification evidence is recorded in that PR. No deployment.
+- [x] Owner decision (2026-10-20): other authorized staff see `CURRENT_DRAFT_BY_OTHER_STAFF` (yes/no only); 0163 confirmation, DRAFT command and activation permissions unchanged.
+
+## Connected adult CRM frontend — Codex (2026-10-20)
+
+- [x] Connect a freshly authorized CRM lead row to explicit adult registration, canonical self-payer account create/reuse, adult membership preparation/DRAFT, and separate current-DRAFT confirmation. Reuse merged #41 APIs only; no backend, migration, activation, payment or guardian/child changes. Verify duplicate protection, exact uncertain retries, stale/access clearing, keyboard/mobile behavior and CI.
+- [x] Correct #41 error-status documentation: CRM deadlock/conflict 409 versus Owner Launch recoverable 503; no handler behavior changes.
+- [ ] Backend follow-up from #41: strengthen same-key cross-command concurrency assertions for every loser-side membership/account/source/audit/outbox effect and actual error status. No backend correction is included in this frontend task.
+
+
+## Codex school checkout — merged B5 TEST_MODE integration (2026-10-19)
+
+- [x] Synchronize exact merged main `d823edc` (tree `35f5126`), preserve #28 foundation and Claude's B5 backend verbatim; isolate `codex/school-checkout-test-mode`. Coordinate #30/#27 and preserve #29 B6/invoice/multi-school dependencies. No Manus migration reconciliation by Codex.
+- [x] In [PR #31](https://github.com/myhonosai/honos/pull/31), connect verified current-school context, independently authorized B5 plan/checkout and B3 credit reads; backend-returned prices/inventory, explicit human confirmation, idempotent duplicate-protected test checkout and authoritative refresh. No URL payment proof or browser entitlement activation; verified test payment shows Pending Account Activation. Current-tier-only purchase, separate simulator/Stripe handoff and unavailable school invoice detail remain truthful.
+- [x] Capture source `af5a0c1`: [CI 39206062051](https://github.com/myhonosai/honos/actions/runs/39206062051) both jobs passed (641 web / 419 API / 188 domain / 91 auth tests, check/build, 157 migrations, all 15 proofs / 238 forced-RLS tables); [browser 39206062025](https://github.com/myhonosai/honos/actions/runs/39206062025) 58 checks / 12 captures / 20 axe scans, zero failures/reported violations/JS errors/unexpected API paths. [Actual desktop/mobile gallery](docs/visuals/codex/school-checkout-test-mode/README.md) inspected; payment/activation status fits the initial mobile return viewport. Final-head results in #31/#4; manual device/screen-reader/zoom/contrast QA remains. Real Stripe sandbox, B6 paid-access policy/contract, dedicated purchaser/multi-school context and school invoice details remain backend/provider gaps. No merge/deploy/live payments or provider activation.
+
+## Codex school subscription — plan-selection foundation (2026-10-19)
+
+- [x] Inspect canonical main `ce93685`, merged B1/public catalog and active #26/#27/#3 ownership. Create isolated `codex/school-subscription-foundation`; coordinate only one appended route registry entry and new TODO section.
+- [x] Deliver interactive Core/Complete comparison, regular/founder monthly/lifetime selection and local review/confirmation using merged display metadata in [PR #28](https://github.com/myhonosai/honos/pull/28), with no simulated current-school facts or checkout. Big Button/Modern/Classic and deterministic expandable HON guidance; reset acknowledgement after changed terms. No school/HQ/provider API calls, private account facts or financial commands.
+- [x] Verify capture source `5f12f26`: [CI 39193167223](https://github.com/myhonosai/honos/actions/runs/39193167223) both jobs passed (635 web / 412 API / 188 domain / 91 auth tests, check/build, 156 migrations, all 14 disposable proofs / 234 forced-RLS tables); [browser 39193167219](https://github.com/myhonosai/honos/actions/runs/39193167219) 37 checks / 10 captures / 16 axe scans, zero failures/JS errors/reported violations/billing requests/mutations. [Actual desktop/mobile gallery](docs/visuals/codex/school-subscription/README.md) inspected. Focus restoration and compact mobile layout corrected. Final-head results in #28/#4; manual physical-device/screen-reader/zoom/contrast review remains. No merge/deployment.
+- [ ] After owner-approved B5 #26 merges, independently verify school-purchaser identity/permission, merged contracts and real test-mode provider configuration before integrating checkout. Current subscription, founder availability, eligibility, invoices and credit balance remain unavailable in this foundation. No merge/deployment/financial activation.
+
+## Codex HQ — invoice detail and payment history (2026-10-19)
+
+- [x] Synchronize owner-approved #22 with merged B4, preserving backend blobs/modes; merge as `890daf2a39116894d987457edc75ced0d17279ac` after CI 39184141728 (613 web / 412 API / 188 domain / 91 auth, check/build, 156 migrations, 14 database proofs / 234 forced-RLS tables) and browser 39184141725 (81 checks / 51 captures / 32 axe scans, zero failures/JS errors/reported violations). No deployment or activation.
+- [x] In [PR #25](https://github.com/myhonosai/honos/pull/25) on `codex/hq-invoice-payment-history`, deliver real fixed-GET invoice status/list review and explicitly loaded detail/payment evidence, authoritative amounts/adjustments/settlement, organization subscription-status history and read-only B4 eligibility/refund-request records. No commands, independent invoice calculations, invented school identities or financial claims.
+- [x] Coordinate backend dependency [#24](https://github.com/myhonosai/honos/issues/24): verified school-to-billing-organization identity and complete paginated invoice/refund history. Current directory omits organization IDs; never match names or reuse staff/Champions authority. Global newest-200 invoice/refund windows are not full school histories. Existing reward-history #21 stays unchanged.
+- [x] Preserve backend/contracts/migrations/permissions/CRM/Classic/artwork; reuse approved HQ shell/HON/executives/appearance/mobile behavior. Shared route manifest receives only two appended HQ entries, coordinated on #3. Language & Region stays future documentation only.
+- [x] Verify capture source `8018997`: CI 39185861362 passed both jobs (625 web / 412 API / 188 domain / 91 auth, typecheck/build, 156 migrations, 14 disposable proofs / 234 forced-RLS tables); browser 39185861384 passed 95 checks / 60 captures / 40 axe scans, zero failures/JS errors/reported violations. Actual [desktop/mobile gallery](docs/visuals/codex/hq-invoice-history/README.md) inspected; manifest convention, unnumbered void states and mobile amount/expandable IDs refined. Final evidence-head checks tracked in #25 / #4. Manual device/screen-reader/contrast review remains. No #25 merge, financial activation, provider calls, production mutations or deployment without owner approval.
+- [ ] Complete school-to-organization selection and paginated invoice/refund history await Claude's verified #24 contract; global bounded windows are not complete school history. No speculative endpoints, name matching or staff/Champions permission bridge.
+
+## Codex HQ — read-only subscription account review (2026-10-19)
+
+- [x] Merge owner-approved PR #20 after exact-head green CI/browser, clean-current-main and source/security boundary checks: `40a896806dce778dd301ab68abd348bb3c586f74`. Issue #21 remains open and unchanged. No deployment or financial/provider activation.
+- [x] Deliver one coherent B1–B3 account-review slice in [PR #22](https://github.com/myhonosai/honos/pull/22) on `codex/hq-subscription-review`: catalog/founder inventory, status-filtered newest-200 subscription records, explicit organization selection, live entitlement/alignment, B2 recorded-versus-verified payment standing, B3 period balances/reservations/ordinary usage and returned HQ-verified provider-cost evidence. Only merged HQ GETs/shared validators; never infer revenue, payments, official totals, grants, costs or authority from lists/appearance/URLs.
+- [x] Preserve HQ command-center styling, HON/six executives, appearance, Champions pages and issue #21. No backend/contracts/DB/RLS/CRM/family-billing/artwork/lockfile edits, commands, financial activation, purchases, charges, fulfillment or providers. Invoice list/detail/evidence history stays a clearly identified next slice; existing B2 services are available, not missing.
+- [x] Verify source `14f000f`: full CI 39180875031 passed (613 web / 408 API / 188 domain / 91 auth tests, check/build, 155 migrations, 13 disposable proofs / 227 forced-RLS tables). Browser 39180875046 passed 81 checks / 51 captures / 32 axe scans, zero failures/JS errors/reported violations; actual [desktop/mobile gallery](docs/visuals/codex/hq-subscription-review/README.md) inspected. Mobile account focus/scroll/restore and stale/denied/mixed-scope states verified. Handoff and #4 / #22 track final evidence-head checks. Manual device/screen-reader/contrast review remains. No #22 merge or deployment without owner approval; Language & Region remains future documentation-only PR #17 scope.
+- [ ] Next reviewed slice: B2 invoice list/detail and individual payment-evidence history with exact organization/subscription binding and recorded-versus-provider-verified distinctions. `/hq/ai-costs` remains planned; no complete company-spend/revenue aggregates or financial commands are claimed.
+
+## Codex HQ — school referrals and reward management (2026-10-18)
+
+- [x] Owner-authorized PR #19 merged after final green CI/browser and clean-main checks: `ececf75d8e300f957fb99416babb95c1064688fb`. No deployment or financial activation.
+- [x] On `codex/hq-school-reward-management`, deliver explicit authenticated school-directory search/selection, independently authorized statistics, official rank, bounded referral history and server milestone progress in [PR #20](https://github.com/myhonosai/honos/pull/20). Approved HQ shell/art/assistant/appearance preserved. No CRM/backend/shared security changes or inferred awards; only one coordinated append-only new HQ manifest entry.
+- [x] Connect the existing global reward ledger/program, exact status filters, authoritative liability groups and bounded recent records. Recorded/approved/review/voided remain distinct from fulfillment; no sums of limited entries or purported complete school history.
+- [x] Coordinate the complete school reward-history contract with Claude in [dependency #21](https://github.com/myhonosai/honos/issues/21), PR #13 and issue #6; review merged contest GETs for a future read-only milestone only. No staff fallback, hypothetical API, commands, rewards, spending, publication or production data mutations.
+- [ ] Complete school reward history remains unavailable until that authorized paginated HQ contract is merged and verified; this is not claimed implemented in #20.
+- [x] Deliver the tested supported frontend slice for owner review: first corrected full CI 39163004850 passed (602 web / 408 API / 188 domain / 91 auth tests, check/build, 155 migrations, 13 disposable-local proofs / 227 forced-RLS tables). Final capture source `2067347`: browser 39163831003 passed 68 checks / 42 captures / 24 axe scans, zero failures/JS errors/reported violations; [actual gallery](docs/visuals/codex/hq-school-rewards/README.md) inspected. Mobile selection visibility and keyboard access verified, including 320px. Final evidence-head CI tracked in #20 / #4. Manual physical-device/screen-reader/contrast review remains. No merge/deployment; English/Korean/Spanish remains future documentation-only PR #17 scope.
+
+## Codex HQ Phase 3 — read-only Champions management
+
+- [x] Connect `/hq/growth` and `/hq/growth/champions-club` to real M5 overview/M1 program reads in [PR #19](https://github.com/myhonosai/honos/pull/19), source `14e02b3`, based on accepted B3 main `512eddb`. Verified configuration, all five referral states, exact aggregate totals and non-voided liabilities; no paid/fulfilled claims. [CI 39158351246](https://github.com/myhonosai/honos/actions/runs/39158351246) passed both jobs: 590 web / 408 API / 188 domain / 91 auth tests, typecheck/build, 155 migration checks and 13 disposable-local proofs (227 forced-RLS tables). [Browser 39158351200](https://github.com/myhonosai/honos/actions/runs/39158351200): 53 checks passed, 33 captures, 16 axe scans / zero violations. Actual [desktop/mobile gallery](docs/visuals/codex/hq-champions-management/README.md) inspected; mobile totals/refresh and assistant clearance verified. No backend/CRM/original-art changes, production mutations, reward activation, merge or deployment of #19.
+- [ ] Subsequent slices: authorized school search/statistics/history/milestones and reward ledger/status filters. These APIs exist; their frontend integration is not implemented by the first overview slice. Do not infer awards from the 5/10/20/30 roadmap, calculate totals from truncated lists, issue rewards, mutate backend/CRM, implement contest commands, or activate providers. Language & Region remains an approved documentation-only roadmap in PR #17.
+
+## Codex HQ Champions Club integration — owner-authorized follow-up
+
+- [x] Deliver the real HQ all-time/UTC-month leaderboard from merged M1–M3 APIs on `codex/hq-champions-integration`, stacked [PR #11](https://github.com/myhonosai/honos/pull/11) on visual PR #8. Source `9a53fba`: official server order/ranks/positions, closed contracts, filters/refresh, stale/empty/error/access states and separate confidential HQ holds; View and AI Style have distinct rounded groups. [Verification 39111391462](https://github.com/myhonosai/honos/actions/runs/39111391462): all three jobs passed, 581 web tests (nine new), 390 API / 188 domain / 91 auth tests, eight disposable-local database proofs, 45 browser checks / zero failures, 12 axe scans / zero reported violations, 25 PNG captures. [Actual desktop/mobile evidence](docs/visuals/codex/hq-champions-integration/README.md) inspected. Owner/manual device review pending. No backend/CRM changes, production mutations, financial issuance, M4, merge or deployment.
+- [ ] Follow up with Phase 3 read-only program status, attribution state lists, school statistics/milestones and reward-liability page integration using only merged contracts. Existing liabilities are not paid rewards. Contest M4 remains Claude-owned; financial activation/issuance stays disabled.
+
+## Codex HQ Modern frontend — owner-authorized 2026-10-18
+
+- [x] Apply the latest owner clarification: restored the existing command-center background, made executive cards see-through and overlapped the speaking dock with HON's lower front as confirmed. Source `21ab801`: 37 browser checks passed, zero failures; eight axe scans, zero reported violations; both normal CI jobs passed including the application build and disposable-local security proofs. Real [desktop/mobile evidence](docs/visuals/codex/hq-glass-command/README.md) visually inspected. Prior variants/original art/HQ boundaries preserved; owner visual and manual device review remain pending. No merge/deployment.
+
+- [x] Implement and verify the Jarvis-inspired abstract variant, then preserve it after the owner's latest restored-background clarification. Source `bad9f7a`: 37 browser checks passed, zero failures; eight axe scans, zero violations; [archived desktop/mobile evidence](docs/visuals/codex/hq-holographic/README.md). Original assets, six executive workspaces and all HQ/security boundaries retained.
+
+- [x] Refine the HQ frontend toward the owner's supplied `9075.jpg` reference: immersive command-room setting, six portrait-led executives around HON, glass/cyan panels and denser verified operational cards. Preserve previous assets/review evidence and HQ/security boundaries. Revised source `c9fe94f`: 36 browser checks passed, zero failures; eight axe scans, zero violations; real [desktop/mobile gallery](docs/visuals/codex/hq-reference-refinement/README.md). Owner visual, physical-device keyboard and screen-reader review remain pending; no merge/deployment.
+
+- [x] Implement approved responsive HQ dashboard and navigation on `codex/hq-modern-implementation`, tracking issue #4 / PR #8; preserve PR #3 and existing HQ authorization/data contracts. Owner visual acceptance remains pending.
+- [x] Add persistent non-executing HON interface, catalog-based executive workspace entries, appearance controls, and honest planned/unavailable management interfaces. No operational AI, voice, financial or referral action is claimed.
+- [x] Record real browser interaction/responsive/accessibility evidence: source `c71b6fb`, 36 checks passed, 0 failed; eight axe scans with zero violations at four viewport sizes. [Desktop/mobile review gallery](docs/visuals/codex/hq-modern/README.md). [Normal CI 39103263609](https://github.com/myhonosai/honos/actions/runs/39103263609) on that same source passed both jobs: tests/check/build/migration contract and disposable-local security proofs. Physical-device keyboard, screen-reader and owner review remain pending. No merge/deployment or backend/provider activation. Details: `docs/CODEX_HQ_IMPLEMENTATION.md`.
+
 **Product authority:** `docs/HON_MASTER_DIRECTIVE.md` remains authoritative. The items below are dependency-aware delivery outcomes, not permission gates or isolated sequential phases. Independent work begins in parallel after its required shared contracts are stable.
+
+## Claude — B6A first-payment activation, INACTIVE (2026-10-19)
+
+- [x] Migration `0172`: central access authority (provisioned vs awaiting vs payment-activated), HQ-owner awaiting-first-payment placement, activation on a verified payment inside B5's transaction (server-decided tier, capabilities and full allowance), recoverable HQ review and HQ-owner retry. Program stays INACTIVE by CHECK; every command refused. [Contract](docs/architecture/HON_PAID_ACCESS_B6A.md).
+- [x] Behavioural entitlement coverage proof (ACTIVE vs SUSPENDED for every runtime-callable function) and regenerated inventory.
+- [x] Gate the 6 scope resolvers that ignored entitlement status (achievements, staff reporting, follow-ups, human work, teaching studio, testing registration review) in 0172; coverage proof now has 0 recorded gaps.
+- [x] Synchronize with main after PR #40 (0173): the early-invoice assertion now expects safe redelivery, then attributed replay.
+- [ ] Owner: approve D1, D2, D12; then self-serve registration (with Manus), real Stripe sandbox run, and a reviewed migration that flips the program. B6B not started.
+- [ ] Codex: HQ access view and retry (`/v1/hq/saas/organizations/:organizationId/access`, `.../access-retry`); school billing `access.state`.
+
+## Claude — interface language persistence (2026-10-19)
+
+- [x] Migration `0171`: personal language preference (en/ko/es) bound to the verified user; school default with `settings.language.manage` at the exact school, audited; precedence personal > named school default > English; idempotent, version-checked updates. [Contract and Codex integration](docs/architecture/HON_LANGUAGE_PREFERENCES.md).
+- [ ] Codex: connect `GET/POST /v1/me/language-preference` and `GET/POST /v1/schools/:schoolId/language-default` (contracts in `@hon/contracts` `language-preferences`).
+
+## Claude — B5.1 school billing reads and inactive B6 foundation (2026-10-19)
+
+- [x] Migration `0170`: `billing.hon.view` (exact school, never HQ permissions); school reads of organization-level invoices (stable keyset pagination), invoice detail (lines, settlement, provider-verified vs HQ-recorded evidence, refunds), and account readiness (entitlement, activation never from payment, payment standing, B3 allowance). [Design](docs/architecture/HON_SCHOOL_BILLING_READS_B5_1.md).
+- [x] Inert B6 foundation: access program INACTIVE by CHECK, versioned PROPOSED terms, `PAID_ACCESS` policy PROPOSED, HQ dry run with enforcement NONE, generated entitlement enforcement inventory. `PAYMENT_PROVIDER` recorded DECIDED (Stripe, test mode only).
+- [ ] Codex: connect `/v1/schools/:schoolId/hon-billing` reads (contracts in `@hon/contracts` `saas-school-billing`).
+- [ ] Owner decisions D1–D15 before any payment-driven access change; then B6a.
+
+## Claude — Stripe sandbox readiness and paid-access proposal (2026-10-19)
+
+- [x] Stripe approved by the owner for TEST MODE ONLY. Setup checklist, minimal restricted-key permissions, API/webhook version findings (current `2026-09-30.endive`; HON pins `2024-06-20`), the 8 events, webhook URL options, egress and the real-sandbox validation plan: [HON_STRIPE_SANDBOX_READINESS.md](docs/architecture/HON_STRIPE_SANDBOX_READINESS.md).
+- [x] Normalizer refuses Stripe event payload versions it cannot read (`UNSUPPORTED_API_VERSION`); pinned and basil-or-later shapes only.
+- [ ] Owner: create the sandbox, store `STRIPE_TEST_SECRET_KEY` / `STRIPE_TEST_WEBHOOK_SECRET` in the secret manager, allow `api.stripe.com`, choose the webhook path (CLI forwarding or an approved staging host).
+- [ ] Real sandbox harness and run of scenarios 1–14; evidence recorded separately from simulator results. Nothing real has been tested yet.
+- [ ] Owner decisions D1–D15 for paid access (B6): [HON_PAID_ACCESS_B6_PROPOSAL.md](docs/architecture/HON_PAID_ACCESS_B6_PROPOSAL.md). No entitlement change from payment until approved. Answers #29 Gate 2.
+- [ ] Migration sequencing with Manus #27 (both used 0158): B5 keeps 0158; #27 renumbers on sync. Record `PAYMENT_PROVIDER` DECIDED (Stripe, test mode only) in the next billing migration.
 
 ## Claire AI Teaching Assistant — scoped validation TODO
 
@@ -648,6 +797,92 @@ Details: [Human Testing Scorecard Foundation](docs/architecture/HUMAN_TESTING_SC
 - [x] Exclude testing scorecard/evaluator/evaluation IDs/comments/criteria, identifiers, readiness/eligibility claims, grading/pass/fail changes, promotion/rank/belt, certificate issuance/download, payment/registration mutation, messaging/provider/AI/Action Engine/voice/automation/external calls. Add strict contracts, API/UI tests, canonical Supabase ACL verifier, a guarded disposable-local proof and [architecture documentation](docs/architecture/PARENT_TESTING_STATUS.md).
 - [x] Expose the existing bounded parent testing-interest and staff-review foundation through a separately authenticated/no-index `/parent/testing/interest` route, discoverable only after the status route's own verified read. The request route independently rechecks the fixed family scope and returned child/open-event selectors; `ACCEPTED` remains only a recorded human review, never a place, candidate, eligibility, payment, grade or promotion.
 - [ ] Keep real candidate/roster lifecycle, eligibility/readiness, grades/defer/promotion, rank/belt, certificate issuance/delivery/download, payment, notifications, providers, AI, Action Engine, voice, and automation as separately reviewed capabilities.
+
+## Automated GitHub testing and progress visibility — Claude Code (owner review)
+- [x] Add GitHub Actions CI on pull requests to `main` and manual dispatch (no schedule, no deployment, no secrets, `contents: read`, bounded timeouts, superseded-run cancellation, draft PRs skipped): `pnpm test`, `pnpm check`, `pnpm build`, `pnpm db:check`, plus a tracked-file cleanliness check.
+- [x] Run 5 security/integrity proofs (tenant security boundaries, outbox leases, Class Sessions read, forced RLS on all 185 tracked tables, CRM lead close) against the runner's disposable localhost PostgreSQL, reusing the existing guarded fixture scripts unchanged under a stripped environment. Verified locally on a throwaway PostgreSQL 16, including the failure path.
+- [x] Add the maintained development status report separating implementation progress from commercial launch readiness.
+- [ ] Owner decisions: merge, push-to-main trigger after confirming the plan's Actions minutes, and whether to make CI a required check (affects direct pushes to `main`).
+- [ ] Add the remaining database proofs to CI fixture by fixture, measuring minutes as you go.
+
+Details: [CI](docs/CI.md) · [Development status](docs/DEVELOPMENT_STATUS.md).
+
+## HON Champions Club backend — Claude Code (owner review; tracking issue #6)
+- [x] M1: migration 0148 adds school-owned referral codes, HQ-recorded attribution (one per referred organization) with versioned PENDING/QUALIFIED/REJECTED/REFUNDED/REVERSED states and closed reasons, a versioned program policy, immutable history, idempotency, audit and inert outbox. Forced deny-all RLS, function-only runtime access, direct-human subject resolution only.
+- [x] M1: self-referral (same org or shared user), duplicate, retroactive, revoked-code and inactive-org denial; qualification gated on a published complete policy, attribution window, refund window/minimum paid period/invoices, active referred entitlement, and an available payment-verification source (`HON_BILLING` fails closed). Financial rewards pinned `DISABLED` by constraint.
+- [x] M1: typed contracts (`packages/contracts/src/champions-club.ts`), school and HQ API under `/v1/schools/:schoolId/champions/*` and `/v1/hq/champions/*`, API tests, guarded disposable-localhost integrity proof (also in CI), `verify-rls` now 192 tables.
+- [ ] Owner decisions before any financial activation: program term values, payment-verification source, clawbacks and caps, founder/annual/paid-lifetime substitute rewards, rewards between milestones, prize taxes, contest terms, Essential participation.
+- [x] M1 merged to `main` with owner approval (PR #7, merge commit `75f3a81`); final review added a qualification-time self-referral recheck.
+- [x] M2 (PR pending, not merged): migration 0149 records earned rewards as liabilities only. Versioned reward terms (owner ladder: $100 at 1–4, $100 welcome per referral, 6 then 12 total free months with full AI allowance, prize at 20, lifetime at 30), ledger kept separately by kind, idempotent reconciliation, reversal review, owner-only approve/void/retain with per-plan substitution, prize budget and clawback rules configurable and `UNDECIDED`. No FULFILLED state; `financial_activation` pinned false; proof asserts no billing/entitlement/membership/invoice effect. Details: [reward accounting](docs/architecture/CHAMPIONS_CLUB_REWARD_ACCOUNTING.md).
+- [x] M2 merged to `main` with owner approval (PR #9, merge commit `13d98c9`).
+- [x] M3 (PR pending, not merged): migration 0150 adds QUALIFIED-only all-time and UTC monthly standings (shared tie ranks, reached-first order; active schools only; HQ fraud-review holds that change nothing else), anonymous-by-default school display preference with self-service opt-in, and per-school statistics (state counts, 12-month series, milestone progress, identity-free history). Details: [leaderboards](docs/architecture/CHAMPIONS_CLUB_LEADERBOARD.md).
+- [x] M3 merged to `main` with owner approval (PR #10, merge commit `ba1866a`).
+- [x] M4 (PR pending, not merged): migration 0152 adds HQ-managed referral contests: closed draft configuration, owner-only scheduling with completeness/budget/gift-card gates, duplicate, manual activate/pause/resume/end with truthful START_DUE/END_DUE (no scheduler exists), window- and pause-exact QUALIFIED-only contest standings separate from the permanent leaderboard, frozen results, winner proposal with owner tie resolution/dispute/reject/reassign/approve, and budgeted prize liabilities. Public listing, financial activation and owner approval pinned. Details: [contests](docs/architecture/CHAMPIONS_CLUB_CONTESTS.md).
+- [x] M4 merged to `main` with owner approval (PR #12, merge commit `77fd2bd`; contest migration renumbered 0152 to leave 0151 to Manus).
+- [x] M5 (merged `50d44d9` with owner approval): migration 0153 runs the unchanged M2 reconciliation inside every attribution decision (rewards follow QUALIFY/REJECT/REFUND/REVERSE atomically), adds the HQ overview read, an end-to-end journey proof, the M1–M4 integration audit, stable API contracts for Codex, a readiness matrix and the HON billing handoff. Details: [readiness](docs/architecture/CHAMPIONS_CLUB_READINESS.md) · [API contracts](docs/architecture/CHAMPIONS_CLUB_API_CONTRACTS.md) · [billing handoff](docs/handoff/HON_SUBSCRIPTION_BILLING_HANDOFF.md).
+- [ ] Owner decisions and dependencies for commercial activation: see the readiness document (program terms, clawback, substitutes, prizes/taxes, gift-card legality, scheduler, HON billing, signup capture).
+
+Details: [Champions Club backend](docs/architecture/CHAMPIONS_CLUB_BACKEND.md).
+
+## HON Subscription Billing — Claude Code (owner review)
+
+HON billing schools; separate from school-to-family billing. Plan: [handoff](docs/handoff/HON_SUBSCRIPTION_BILLING_HANDOFF.md).
+
+- [x] B1 (merged `7afa0b5` with owner approval): migration 0154 adds a versioned Core/Complete catalog (regular, founder monthly, founder lifetime; Essential legacy only), canonical Core vs Complete capabilities, owner-configurable atomic founder inventory, per-organization subscription records linked to (never writing) `organization_entitlements`, and explicit UNDECIDED policies that refuse annual offers, plan changes and cancellation. Charges, credit grants and payment claims are pinned off. Details: [B1 design and contracts](docs/architecture/HON_SUBSCRIPTION_CATALOG_B1.md).
+- [x] B2 (merged `3d6e818` with owner approval): migration 0155 records the owner's 2026-10-18 commercial direction as append-only policy records (none enables an action), and adds HON-to-school invoices (gapless `HON-<year>-NNNNNN` numbering, adjustments, owner-verified tax required before issue, no delivery or collection) and append-only HQ-attested payment evidence (payments, refunds, chargebacks; never provider-verified) with verified-vs-recorded payment standing for future Champions qualification. Details: [B2 design and contracts](docs/architecture/HON_SUBSCRIPTION_INVOICING_B2.md).
+- [x] B3 (merged `512eddb` with owner approval): migration 0156 adds owner-gated premium AI credit accounting: HQ-owner-verified provider cost evidence, versioned operation pricing linked to it (no default prices), one full allowance per subscription period (Core 5,000 / Complete 12,000; founder, lifetime and legacy keep the full amount; no rollover), an append-only RESERVE/FINALIZE/RELEASE/EXPIRE ledger with idempotent retries, unknown-outcome holds resolved by the HQ owner, concurrency-safe balances, 75/90/100% thresholds with a hard stop, plan-capability limits and suspension rules. Program ships INACTIVE; no top-ups, overage or purchases. Details: [B3 design and contracts](docs/architecture/HON_PREMIUM_CREDITS_B3.md).
+- [x] B4 (merged `9c85871` with owner approval): migration 0157 adds 30-day first-purchase refund guarantee records (eligibility, windows, approve/deny/evidence, history, duplicate prevention, refund reserve; execution unavailable) and owner-gated application of approved Champions rewards to HON subscriptions (account credit capped at the invoice, free billing periods never invoiced and still opening the full B3 allowance, lifetime recorded with conversion blocked, prizes manual), with referral payment alerts that block fulfillment without reversing anything. Details: [B4 design and contracts](docs/architecture/HON_REFUNDS_CHAMPIONS_REWARDS_B4.md).
+- [x] B5 (PR pending, not merged): migration 0158 adds TEST-MODE-ONLY hosted checkout through a provider adapter (Stripe test mode; a deterministic simulator for tests), signature-verified idempotent order-tolerant webhooks that record the B1 subscription, issue the B2 invoice and record PROVIDER_VERIFIED evidence in one transaction, founder holds tied to checkout expiry, renewals, failed renewals, provider refund/dispute reconciliation, missed-webhook recovery and derived subscription payment status. Live mode impossible; no card data; HON never charges or refunds; entitlements untouched. Details and launch blockers: [B5 design](docs/architecture/HON_PAYMENTS_TEST_MODE_B5.md).
+- [ ] Connect a real Stripe test account (credentials in the secret manager, webhook endpoint at API version 2024-06-20, egress to api.stripe.com) and repeat the journey provider-verified.
+
+
+## Codex — School account readiness follow-up (owner review; PR #32)
+
+- Owner approved #31 merged as `ceee55b76f6b37c63d5481e9a78a8db041cc65e8`; new isolated `codex/school-account-readiness` follows its exact tree.
+- Outcome: clearly distinguish backend-reported payment, provisioned tier, recorded service status and B3 allowance/suspension; no inferred paid access or reactivation. School invoices/history, dedicated multi-school purchaser context and B6 effective-access policy remain unavailable pending Claude-owned merged contracts (#29 / #30). No speculative endpoints, backend/migration/CRM edits or provider activation.
+- [x] Implemented/tested against latest main `c08091a` (#30 preserved): [CI 39208364938](https://github.com/myhonosai/honos/actions/runs/39208364938) tests/typecheck/build, 157 migrations and all 15 database security proofs / 238 forced-RLS tables pass; [browser 39208364925](https://github.com/myhonosai/honos/actions/runs/39208364925) 66 checks, 14 captures, 22 axe scans, zero failures/reported violations/JS errors/unexpected API paths. [Actual desktop/mobile screenshots](docs/visuals/codex/school-account-readiness/README.md) and [handoff/remaining B5.1/B6 dependencies](docs/CODEX_SCHOOL_ACCOUNT_READINESS.md). Deterministic fixtures only, real Stripe sandbox unverified. Final exact-head checks tracked #32/#4. No merge/deployment of this follow-up authorized.
+
+
+## Codex — Language & Region implementation (PR #34; verification in progress)
+
+- Approved #32 merged as `67bc6a8da6184164ae57e6d092aba6cb6dd8dbf1`; isolated `codex/language-region-implementation` preserves its work.
+- Shared 534-key en/ko/es catalogs/formatters; Settings and school subscription translation, common/HQ navigation and all modes. Original art, appearance/portrait state and billing/entitlement behavior preserved; other CRM/Classic/family and dedicated HQ modules remain English or partial.
+- Main now includes Claude #36 language persistence and docs-only #37 B6 proposal (`d168224`), preserved unchanged. Connect exact self-language and independently authorized current-school default GET/POSTs, canonical effective precedence, expected versions/idempotency, truthful conflict/unknown/denied states and server-after-save reads. Formatting remains account-separated browser-only; no shared theme/database repurposing.
+- [Handoff/coverage](docs/CODEX_LANGUAGE_REGION_IMPLEMENTATION.md), dependency/coordination [#35](https://github.com/myhonosai/honos/issues/35). Final post-integration CI, database proof, browser and screenshot evidence pending. No merge/deployment/provider activation or financial/entitlement change.
+
+## School membership plan catalog backend — Claude (2026-10-21)
+
+- [x] Migration 0175: per-school versioned student membership plans (`membership_plans`, immutable `membership_plan_versions`, immutable `membership_plan_selections`), new permission `billing.membership_plan.manage` (system OWNER only), catalog read/create/revise, AVAILABLE-only staff plan options and the plan-bound adult DRAFT `POST …/billing/crm-adult-membership-drafts/from-plan`. Unrelated to the HON SaaS catalog. No schedule, invoice, payment, discount, agreement or activation. Spec: `docs/architecture/SCHOOL_MEMBERSHIP_PLAN_CATALOG.md`.
+- [ ] Codex: catalog management screen and the adult DRAFT plan picker per `docs/CODEX_SCHOOL_MEMBERSHIP_PLANS.md`.
+- [ ] Owner decisions: discounts, one-time fees, agreements, payment start, fixed-term renewal, repricing, retiring the free-text DRAFT route, other cadences, catalog permission holders, tax/eligibility/class limits, multi-location catalogs (listed in the spec).
+- [ ] Follow-up: read the bound plan terms of an existing membership for current-DRAFT confirmation, recovery and activation review.
+
+## CRM guardian/child enrollment backend — Claude (2026-10-21)
+
+- [x] Migration 0176 (branch `claude/project-thread-xsrj9t`, not merged or deployed): immutable child snapshot captured at GUARDIAN_CHILD registration (no backfill), explicit per-family guardian payer designation through the guardian's existing canonical account, up to 10 additional children with lead attribution and non-writing staff review for possible existing records, one plan-bound DRAFT per child (0175 version binding), and a family/child Resume Setup read. Adult 0174 recovery, 0163 confirmation and B6A unchanged. No schedule, invoice, payment, agreement, consent or activation. Spec: `docs/architecture/CRM_GUARDIAN_CHILD_ENROLLMENT.md`.
+- [ ] Codex: family enrollment screen per `docs/CODEX_CRM_GUARDIAN_CHILD_ENROLLMENT.md`.
+- [ ] Owner decisions: co-guardians/other payers, staff-review resolution path (incl. twins), backfill of pre-0176 registrations, 10-child limit, activation/schedules/sibling discounts/agreements/consent, free-text child DRAFT.
+
+
+### School membership catalog frontend — review branch `codex/school-membership-plans`
+
+- Frontend integration with merged PR #45 / migration 0175: school-scoped catalog, version publication and adult enrollment plan picker; awaiting PR verification and owner review, not merged or deployed.
+- Preserve the legacy free-text DRAFT path, all Resume Setup states and existing membership terms. No activation/payment behavior or backend/migration changes.
+- Follow-ups: authorized historical membership-plan terms read after recovery; broader Korean/Spanish catalog copy; backend coordination if a plan-management-only role cannot use the existing reporting-school selectors. Original policy decisions remain in `docs/architecture/SCHOOL_MEMBERSHIP_PLAN_CATALOG.md`.
+## Codex — HQ Pricing & Offers UX priority (issues #58–#60)
+
+- [ ] Owner-directed isolated design foundation: one HON OS product with six payment layouts, local owner-only editor, founder/annual/lifetime/AI terms, internal customer preview and permanently unavailable publication/history pending merged #59 contracts. Preserve public pricing, all historical billing and security. No API invention, financial operations or provider activation.
+- [ ] Run presentation/interaction/localization tests, full CI/security proofs and authenticated synthetic desktop/mobile browser verification; publish one focused unmerged PR with exact source/evidence and stop for review.
+- E1b-1 #56 paused safely at remote `codex/membership-date-management` / `fb767a874469bb82bf242d474f42fe3c8c09351b`. Work and unexecuted tests preserved; resume at verification, not from scratch. See `docs/CODEX_HQ_PRICING_OFFERS_UX.md` for sequencing and backend coordination.
+
+
+## Codex — operational HQ Pricing & Offers frontend (review branch)
+
+- Baseline: merged #61 backend / migration 0181 and owner-approved #62 UX foundation, main `409134dd88061d6016a3d716fb8779588efdd6de`.
+- [ ] Source review/merge: whole-set create/revise/save, server quote/digest review, explicit protected publication, bounded history, stop-sales/discard, localization and immutable retry/identity/privacy handling. Implementation and test sources are on the isolated frontend branch; exact execution evidence and final commit are reported on its PR. This is not a production deployment.
+- [ ] Separate gates: complete audit/history contracts, real Stripe sandbox verification, B6 first-payment onboarding and customer checkout checkpoint. PR #63 merged during verification at `33adbfe6bb5fbe507ee28e104ce6c3386d91f464`; preserve its backend and use the expanded authorized HQ founder-pool/sale-state projection. Customer checkout/financial activation stay disabled in this frontend scope. Latest-head verification remains required; see the PR for exact runner/proxy blockers rather than treating earlier checks as current proof.
+- Issue #56 stays paused at `fb767a874469bb82bf242d474f42fe3c8c09351b`. No automatic resume. See `docs/CODEX_HQ_PRICING_OFFERS_INTEGRATION.md`.
+- PR #64 D6 review correction: preserve merged #65 / migration 0183 unchanged; expose retired offers with server-reported live checkouts, warn about the approximately 24-hour accepted-price window, and require a fresh-authorized, explicitly confirmed emergency stop. Preserve exact retries after a stop/expiry and disable unsupported retired actions. Focused frontend tests/typecheck passed locally; final-head CI, disposable API/DB and updated en/ko/es browser artifacts must be verified on the PR before independent review. Customer checkout stays disabled; D8 and #56 are not started here.
 
 ## Classic School Dashboard proof — Claude Code (owner review)
 - [x] Build the isolated no-index `/reference/classic-dashboard` Classic CRM school dashboard: sidebar, top bar, school/location selector with the inline appearance control below it, KPIs, the locked school AI roster with presentation-only Realistic/Anime/Chibi portraits from the protected originals, schedule, leads, memberships, billing, attendance, tasks, follow-ups, and quick actions to existing staff workbenches. Desktop, tablet drawer, and phone bottom-bar layouts with no horizontal overflow.

@@ -11,6 +11,7 @@ import https from 'node:https';
 import { proveRetentionAttention } from './retention-attention-integrity.mjs';
 import { retentionAcknowledgementTables as privateTables, retentionAcknowledgementFunctions as functions, verifyRetentionAcknowledgementSecurity } from './retention-review-acknowledgement-security.mjs';
 import { verifyRetentionReviewSecurity } from './retention-review-security.mjs';
+import { membershipFixtureQuery, membershipFixtureStatement } from './membership-activation-test-support.mjs';
 const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 const { RetentionReviewService } = await import('../../../apps/api/dist/retention-review/retention-review.service.js');
 let groups=0,operations=0,aclProbes=0,externalCalls=0;
@@ -89,7 +90,7 @@ try{
 		  await owner.query('INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$5,$4)',[g,o,s,p,r]);
 		  await owner.query("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'PII_CANARY_CONTACT','PII_CANARY_PERSON')",[person,o,s]);
 		  await owner.query('INSERT INTO hon.billing_accounts(id,organization_id,school_id,responsible_person_id) VALUES($1,$2,$3,$4)',[billing,o,s,person]);
-	  await owner.query("INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at) VALUES($1,$2,$3,$4,$5,'PII_CANARY_PLAN','ACTIVE',now()-interval '30 days',now()+interval '60 days')",[membership,o,s,billing,person]);
+	  await membershipFixtureStatement(owner,"INSERT INTO hon.memberships(id,organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at) VALUES($1,$2,$3,$4,$5,'PII_CANARY_PLAN','ACTIVE',now()-interval '30 days',now()+interval '60 days')",[membership,o,s,billing,person]);
 	 }
 	 const fixtureRenewalRequestId=randomUUID();await fixtureOwnerContext(fixtureRenewalRequestId);
 	 await owner.query('INSERT INTO hon.student_profiles(id,organization_id,school_id,person_id) VALUES($1,$2,$3,$4)',[ids.student,ids.org,ids.school,ids.person]);
@@ -161,7 +162,7 @@ try{
  const fresh=input(await evidence());await assert.rejects(()=>ack({...fresh,evidenceFingerprint:'0'.repeat(64)}),status(409));await assert.rejects(()=>ack({...fresh,observedAt:new Date(Date.now()-6*60_000).toISOString()}),status(409));await assert.rejects(()=>ack({...fresh,observedAt:new Date(Date.now()+60_000).toISOString()}),status(409));
  for(const patch of [{evidenceVersion:'V2'},{evidenceFingerprint:'private-note'},{note:'private'},{idempotencyKey:'text-note'},{observedAt:'not-a-time'}])await assert.rejects(()=>ack({...fresh,...patch}),status(400));check();
  // Live source changed: stale initial read AND its already successful receipt fail closed.
-	 await owner.query("UPDATE hon.memberships SET term_ends_at=term_ends_at-interval '1 day',version=version+1 WHERE id=$1",[ids.membership]);
+	 await membershipFixtureQuery(owner,"UPDATE hon.memberships SET term_ends_at=term_ends_at-interval '1 day',version=version+1 WHERE id=$1",[ids.membership]);
 	 await assert.rejects(()=>ack(fresh),status(409));await assert.rejects(()=>ack(value),status(409));
 	 const changed=input(await evidence());await assert.rejects(()=>ack({...changed,idempotencyKey:value.idempotencyKey}),status(409));await ack(changed);check();
 	 // Every other observed-facts category is recomputed from its real, scoped source

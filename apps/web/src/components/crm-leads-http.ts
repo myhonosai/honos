@@ -28,8 +28,8 @@ function verifyLead(value: unknown): LeadListItem {
   return { id: value.id as string, status: value.status as LeadListItem['status'], pipelineStageId: value.pipelineStageId as string, primaryPersonId: value.primaryPersonId as string, version: value.version as number, createdAt: value.createdAt as string, givenName: value.givenName as string, familyName: value.familyName as string, ...(typeof value.email === 'string' ? { email: value.email } : {}), ...(typeof value.phoneE164 === 'string' ? { phoneE164: value.phoneE164 } : {}), ...(typeof value.nextFollowUpAt === 'string' ? { nextFollowUpAt: value.nextFollowUpAt } : {}) };
 }
 
-export async function loadCrmLeads(organizationId: string, schoolId: string, status?: CrmLeadStatus): Promise<LeadListItem[]> {
-  const response = await fetch(crmLeadListPath(organizationId, schoolId, status), { method: 'GET', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' } });
+export async function loadCrmLeads(organizationId: string, schoolId: string, status?: CrmLeadStatus, signal?: AbortSignal): Promise<LeadListItem[]> {
+  const response = await fetch(crmLeadListPath(organizationId, schoolId, status), { method: 'GET', credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, ...(signal ? { signal } : {}) });
   if (!response.ok) {
     const message = response.status === 401 ? 'Sign in with a verified human school session.' : response.status === 403 ? 'Current CRM lead permission or exact school scope is unavailable.' : 'CRM lead list is unavailable. No list result is assumed.';
     throw new (response.status === 401 || response.status === 403 ? CrmLeadAccessError : Error)(message);

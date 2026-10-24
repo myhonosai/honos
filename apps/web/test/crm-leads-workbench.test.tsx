@@ -28,7 +28,10 @@ describe('bounded conventional CRM lead list', () => {
 
   it('exposes dedicated trigger-only automation tabs without a CRM fact handoff', () => {
     const source = readFileSync('src/components/crm-leads-workbench.tsx', 'utf8');
-    const automationTabs = source.slice(source.indexOf('crm-lead-automation'), source.indexOf('crm-lead-scope'));
+    const start = source.indexOf('<section aria-labelledby="crm-lead-automation"');
+    const end = source.indexOf('<section aria-labelledby="crm-lead-scope"', start);
+    expect(start).toBeGreaterThanOrEqual(0); expect(end).toBeGreaterThan(start);
+    const automationTabs = source.slice(start, end);
     expect(automationTabs).toContain('CRM automation tabs');
     expect(automationTabs).toContain('href="/staff/automation/rules?trigger=LEAD_CREATED"');
     expect(automationTabs).toContain('href="/staff/automation/rules?trigger=TRIAL_NO_SHOW"');

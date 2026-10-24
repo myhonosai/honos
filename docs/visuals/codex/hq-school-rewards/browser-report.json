@@ -1,0 +1,1548 @@
+{
+  "sourceSha": "2067347b2f9ba29a916076c11a125895f00d494f",
+  "fixtureOnly": true,
+  "productionDataUsed": false,
+  "checks": [
+    "desktop: dashboard, responsive layout and screenshots",
+    "desktop: appearance choices preserve the six HQ identities",
+    "desktop: dashboard accessibility",
+    "desktop: expanded assistant accessibility",
+    "desktop: assistant expand, draft continuity, disabled services and keyboard restore",
+    "desktop: executive workspace, unavailable tabs and persistent subpage assistant",
+    "desktop: navigation, menu focus and non-executing contest lifecycle",
+    "desktop: official leaderboard periods, confidential reviews and responsive bounds",
+    "desktop: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "desktop: explicit authorized school selection, official milestones and responsive history",
+    "desktop: global reward records, liability scope, filters and responsive accessibility",
+    "tablet: dashboard, responsive layout and screenshots",
+    "tablet: appearance choices preserve the six HQ identities",
+    "tablet: dashboard accessibility",
+    "tablet: expanded assistant accessibility",
+    "tablet: assistant expand, draft continuity, disabled services and keyboard restore",
+    "tablet: executive workspace, unavailable tabs and persistent subpage assistant",
+    "tablet: navigation, menu focus and non-executing contest lifecycle",
+    "tablet: official leaderboard periods, confidential reviews and responsive bounds",
+    "tablet: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "tablet: explicit authorized school selection, official milestones and responsive history",
+    "tablet: global reward records, liability scope, filters and responsive accessibility",
+    "mobile: dashboard, responsive layout and screenshots",
+    "mobile: appearance choices preserve the six HQ identities",
+    "mobile: dashboard accessibility",
+    "mobile: expanded assistant accessibility",
+    "mobile: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile: navigation, menu focus and non-executing contest lifecycle",
+    "mobile: official leaderboard periods, confidential reviews and responsive bounds",
+    "mobile: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "mobile: explicit authorized school selection, official milestones and responsive history",
+    "mobile: global reward records, liability scope, filters and responsive accessibility",
+    "mobile-narrow: dashboard, responsive layout and screenshots",
+    "mobile-narrow: appearance choices preserve the six HQ identities",
+    "mobile-narrow: dashboard accessibility",
+    "mobile-narrow: expanded assistant accessibility",
+    "mobile-narrow: assistant expand, draft continuity, disabled services and keyboard restore",
+    "mobile-narrow: executive workspace, unavailable tabs and persistent subpage assistant",
+    "mobile-narrow: navigation, menu focus and non-executing contest lifecycle",
+    "mobile-narrow: official leaderboard periods, confidential reviews and responsive bounds",
+    "mobile-narrow: Champions overview aggregates, configuration, liabilities, views and assistant",
+    "mobile-narrow: explicit authorized school selection, official milestones and responsive history",
+    "mobile-narrow: global reward records, liability scope, filters and responsive accessibility",
+    "School refresh, selection and directory changes clear facts and ignore obsolete responses",
+    "School denied, malformed, wrong-school and policy-race responses expose no prior records",
+    "Authorized zero school counts, no history and undecided milestone policy are distinct from failures",
+    "Directory denial removes identities and school details without granting another context",
+    "Reward refresh/filter clears facts, retains official aggregate scope and ignores delayed windows",
+    "Reward empty, denied and invalid states never retain old liabilities or imply payment",
+    "School and reward APIs independently deny school, family, support and unsigned identities",
+    "Champions refresh clears old facts, retrieves updated aggregates and restores keyboard control",
+    "Champions empty, unpublished, denied and malformed responses never retain old referral or liability facts",
+    "Champions obsolete delayed refresh cannot restore facts after overview navigation",
+    "Champions overview and program independently deny non-HQ identities and reject selectors",
+    "Leaderboard refresh clears facts, shows loading and retrieves changed official data",
+    "Leaderboard discards an obsolete delayed response after a filter change",
+    "Leaderboard empty, denied, unavailable and invalid responses reveal no stale rankings or holds",
+    "HQ leaderboard independently denies school, family, support and unsigned identities",
+    "HQ command backdrop and decorative motion pause, keyboard restore and preference change",
+    "Existing independent school directory transport",
+    "Fail-closed HQ overview 403",
+    "Fail-closed HQ overview 401",
+    "Fail-closed HQ overview 503",
+    "Fail-closed HQ overview malformed",
+    "Unsigned browser session cannot render HQ content",
+    "No browser JavaScript errors",
+    "No mutation, provider or arbitrary API request"
+  ],
+  "failures": [],
+  "screenshots": [
+    "desktop-dashboard-full.png",
+    "desktop-dashboard-viewport.png",
+    "desktop-chibi.png",
+    "desktop-assistant-expanded.png",
+    "desktop-workspace-assistant.png",
+    "desktop-growth-contests.png",
+    "desktop-leaderboard-all-time.png",
+    "desktop-leaderboard-monthly.png",
+    "desktop-champions-overview.png",
+    "desktop-school-referrals.png",
+    "desktop-reward-management.png",
+    "tablet-dashboard-full.png",
+    "tablet-dashboard-viewport.png",
+    "tablet-assistant-expanded.png",
+    "tablet-leaderboard-all-time.png",
+    "tablet-champions-overview.png",
+    "tablet-school-referrals.png",
+    "tablet-reward-management.png",
+    "mobile-dashboard-full.png",
+    "mobile-dashboard-viewport.png",
+    "mobile-assistant-expanded.png",
+    "mobile-workspace-assistant.png",
+    "mobile-growth-contests.png",
+    "mobile-leaderboard-all-time.png",
+    "mobile-leaderboard-viewport.png",
+    "mobile-leaderboard-monthly.png",
+    "mobile-champions-overview.png",
+    "mobile-champions-viewport.png",
+    "mobile-school-referrals.png",
+    "mobile-school-viewport.png",
+    "mobile-reward-management.png",
+    "mobile-narrow-dashboard-full.png",
+    "mobile-narrow-dashboard-viewport.png",
+    "mobile-narrow-assistant-expanded.png",
+    "mobile-narrow-leaderboard-all-time.png",
+    "mobile-narrow-champions-overview.png",
+    "mobile-narrow-school-referrals.png",
+    "mobile-narrow-reward-management.png",
+    "mobile-champions-empty.png",
+    "mobile-champions-program-denied.png",
+    "mobile-champions-503.png",
+    "desktop-hq-access-denied.png"
+  ],
+  "accessibility": [
+    {
+      "label": "desktop-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "desktop-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-assistant",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "tablet-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-dashboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-assistant",
+      "violations": [],
+      "incompleteCount": 1
+    },
+    {
+      "label": "mobile-narrow-leaderboard",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-champions-overview",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-school-referrals",
+      "violations": [],
+      "incompleteCount": 2
+    },
+    {
+      "label": "mobile-narrow-reward-management",
+      "violations": [],
+      "incompleteCount": 2
+    }
+  ],
+  "blockedExternalHosts": [
+    "fonts.googleapis.com"
+  ],
+  "pageErrors": [],
+  "apiRequests": [
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-01"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=APPROVED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000002/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger?status=VOIDED"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/schools/00000000-0000-4000-8000-000000000001/statistics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/rewards/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/overview?schoolId=untrusted"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/program?schoolId=untrusted"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=MONTH&month=2026-10"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/champions/leaderboard?period=ALL_TIME"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/schools"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/hq/overview"
+    }
+  ]
+}

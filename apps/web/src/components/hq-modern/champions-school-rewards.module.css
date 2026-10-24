@@ -1,0 +1,20 @@
+.selection{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+.selection label{display:grid;gap:8px;font-size:13px;color:#d6edf5;min-width:0}
+.selection>div{display:grid;gap:8px;min-width:0;align-content:start}
+.selection input,.selection select{width:100%;min-width:0;min-height:44px;background:#0a2635;color:#effaff;border:1px solid #5b879a;border-radius:9px;padding:10px;font:inherit}
+.refresh{justify-self:start;background:#0c3446!important;border-color:#4f8eaa!important}
+.directoryRefresh{margin-top:16px}
+.capitalize{text-transform:capitalize}
+.ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.ladder>section{border:1px solid #3c6477;border-radius:12px;padding:14px;background:#0b2a3bd9;overflow-wrap:anywhere}
+.ladder h3{font-size:19px;color:#c3f8ff}.ladder p{font-size:12px;margin:8px 0}.ladder strong{font-size:12px;line-height:1.6;color:#a7eef5}
+.disclosure summary{cursor:pointer;min-height:44px;align-content:center;color:#d9f7fc;font-size:14px}.disclosure p,.disclosure li{font-size:12px;line-height:1.8}
+.months{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.months>div{border-top:1px solid #36576a;padding:12px 0}.months dt{color:#c7deea;font-size:12px}.months dd{margin:6px 0;font-size:20px;color:#baf5ff}
+.records{list-style:none;display:grid;gap:12px;margin:14px 0 0;padding:0}
+.records>li{border:1px solid #3c6174;border-radius:12px;padding:16px;background:#081f2bba;overflow-wrap:anywhere;min-width:0}
+.records h3{font-size:15px;color:#e2f5ff}.records p{font-size:12px;line-height:1.8}.records>li>div{flex-wrap:wrap;gap:8px}
+.aggregates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.aggregates>section{border:1px solid #3c6174;border-radius:12px;padding:16px;background:#0a2635bb;min-width:0}.aggregates h3{font-size:14px;line-height:1.6;color:#cbf7ff}
+.empty{font-size:13px;color:#d6edf5;line-height:1.8}
+@media(max-width:1100px){.ladder{grid-template-columns:repeat(2,minmax(0,1fr))}.months{grid-template-columns:repeat(4,minmax(0,1fr))}.aggregates{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.selection{grid-template-columns:minmax(0,1fr)}.selection input,.selection select{font-size:16px}.ladder{gap:8px}.ladder>section{padding:12px}.ladder h3{font-size:17px}.months{grid-template-columns:repeat(3,minmax(0,1fr))}.refresh{width:100%}.records>li{padding:12px}}

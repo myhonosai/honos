@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+const shell = vi.hoisted(() => ({ view: 'modern' as 'big-button' | 'modern' | 'classic' }));
+vi.mock('../src/components/hq-modern/shell', () => ({ useHqModern: () => ({ view: shell.view }) }));
 import { HqSchoolDirectory } from '../src/components/hq-school-directory';
 import { HqSchoolDirectoryAccessError, loadHqSchoolDirectory, verifyHqSchoolDirectorySnapshot } from '../src/components/hq-school-directory-http';
 
@@ -41,13 +43,19 @@ describe('HQ school directory UI', () => {
     try { await expect(loadHqSchoolDirectory()).rejects.toThrow('No result is shown'); } finally { fetchSpy.mockRestore(); }
   });
 
-  it('renders the loading state only until the fixed projection verifies, with three presentation modes and no fixture rows', () => {
+  it('renders the loading state only until the fixed projection verifies, follows the shared HQ view and shows no fixture rows', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     try {
       const html = renderToStaticMarkup(<HqSchoolDirectory />);
       expect(fetchSpy).not.toHaveBeenCalled();
       for (const text of ['School directory', 'VERIFYING HQ ACCESS', 'Customer-account facts only.']) expect(html).toContain(text);
-      expect(html.match(/aria-pressed=/g)).toHaveLength(3);
+      // The HQ shell owns navigation, the page heading and the View control; the directory repeats none of them.
+      expect(html).not.toMatch(/aria-pressed=|<nav|<main|<h1/);
+      for (const view of ['big-button', 'classic'] as const) {
+        shell.view = view;
+        expect(renderToStaticMarkup(<HqSchoolDirectory />)).toMatch(new RegExp(`class="[^"]*presentation_${view}`));
+      }
+      shell.view = 'modern';
       expect(html).not.toMatch(/Harbor Organization|Harbor School|private@example|Working|Your AI team/i);
     } finally { fetchSpy.mockRestore(); }
   });
@@ -57,7 +65,7 @@ describe('HQ school directory UI', () => {
     const component = readFileSync('src/components/hq-school-directory.tsx', 'utf8');
     const http = readFileSync('src/components/hq-school-directory-http.ts', 'utf8');
     expect(route).toContain('HqSchoolDirectory'); expect(route).toContain('force-dynamic'); expect(route).toContain('index: false');
-    expect(component).toContain("'big-button' | 'modern' | 'classic'");
+    expect(component).toContain('const { view } = useHqModern();');
     expect(http).toContain("const PATH = '/api/v1/hq/schools'");
     expect(http).not.toMatch(/method:\s*'POST'|Idempotency-Key|invokeLLM|executeAction|sendMessage|provider-runtime|payment/i);
   });

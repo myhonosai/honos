@@ -88,13 +88,15 @@ SELECT
   has_table_privilege('hon_runtime', 'hon.payment_attempts', 'UPDATE') AS can_update_payment_attempts,
   has_table_privilege('hon_runtime', 'hon.payment_attempts', 'DELETE') AS can_delete_payment_attempts;
 
--- Human membership creation, activation, and direct ACTIVE-to-CANCELLED
--- cancellation use the reviewed RLS-bound SELECT/INSERT/UPDATE subset. DELETE,
--- payment-attempt writes, and every payment-provider action remain unavailable.
+-- Human membership creation uses an RLS-bound SELECT plus a DRAFT-only column
+-- INSERT (0177). Activation and direct ACTIVE-to-CANCELLED cancellation run only
+-- inside protected definer functions: expected true, false, true, false, false.
+-- DELETE, payment-attempt writes, and every payment-provider action remain unavailable.
 SELECT
   has_table_privilege('hon_runtime', 'hon.memberships', 'SELECT') AS can_read_memberships,
-  has_table_privilege('hon_runtime', 'hon.memberships', 'INSERT') AS can_insert_memberships,
-  has_table_privilege('hon_runtime', 'hon.memberships', 'UPDATE') AS can_update_memberships,
+  has_table_privilege('hon_runtime', 'hon.memberships', 'INSERT') AS can_insert_any_membership_column,
+  has_column_privilege('hon_runtime', 'hon.memberships', 'plan_code', 'INSERT') AS can_insert_draft_columns,
+  has_any_column_privilege('hon_runtime', 'hon.memberships', 'UPDATE') AS can_update_memberships,
   has_table_privilege('hon_runtime', 'hon.memberships', 'DELETE') AS can_delete_memberships;
 
 -- 4) RLS is enabled and forced on every operational table.
@@ -2166,7 +2168,8 @@ DO $$ DECLARE f record; BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.guardian_child_registration_receipts'::regclass AND contype='u' AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_digest)') THEN RAISE EXCEPTION 'Child registration scoped replay key required'; END IF;
 END $$;
 DO $$ BEGIN
- IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_membership_draft(text)'::regprocedure) IS DISTINCT FROM '77fe22668845ad87ce3005affb7c2113' THEN RAISE EXCEPTION 'Owner launch DRAFT confirmation body drift'; END IF;
+ -- read_owner_launch_membership_draft: 0169 body (same tables and mode as 0139, canonical lock order).
+ IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_membership_draft(text)'::regprocedure) IS DISTINCT FROM '1f3b2c97a98d71b279e38db7e39f646b' THEN RAISE EXCEPTION 'Owner launch DRAFT confirmation body drift'; END IF;
  IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='hon.read_owner_launch_first_class_booking_context(text)'::regprocedure) IS DISTINCT FROM 'aa3867a643ba61d184acccfeab21e179' THEN RAISE EXCEPTION 'Owner launch booking context body drift'; END IF;
  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang WHERE p.oid='hon.read_owner_launch_first_class_booking_context(text)'::regprocedure AND p.prorettype='jsonb'::regtype AND NOT p.proretset AND p.prokind='f' AND p.proargnames=ARRAY['p_subject']::text[] AND p.proargmodes IS NULL AND l.lanname='plpgsql'
   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantor<>p.proowner OR a.is_grantable OR a.privilege_type<>'EXECUTE' OR a.grantee NOT IN(p.proowner,(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))
@@ -2329,7 +2332,7 @@ DO $$ DECLARE f record; p record; t text; runtime_oid oid := (SELECT oid FROM pg
   FOR f IN SELECT * FROM (VALUES
     ('hon.guard_hq_entitlement_evidence()','918eb49dd64a752e408f32dfe38da61f',false,false,'trigger'),
     ('hon.require_hq_entitlement_actor(text)','39a28e82a9f0168ea33e82731d761289',false,true,'uuid'),
-    ('hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)','773d89c5cb55b57addaf50640ff21717',true,true,'jsonb')
+    ('hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)','b3245db9dfde9617ddacef299242c960',true,true,'jsonb')
   ) expected(signature,source_md5,runtime_allowed,definer,return_type) LOOP
     SELECT proc.*,owner.rolsuper,owner.rolbypassrls,owner.rolname owner_name INTO p FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
     IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.provolatile<>'v' OR p.prokind<>'f' OR p.proretset
@@ -2358,3 +2361,321 @@ DO $$ DECLARE f record; p record; t text; runtime_oid oid := (SELECT oid FROM pg
     OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.hq_entitlement_outbox'::regclass AND convalidated AND NOT condeferrable AND contype='u' AND pg_get_constraintdef(oid)='UNIQUE (audit_id)') THEN RAISE EXCEPTION 'HQ entitlement version/receipt/outbox invariants required'; END IF;
 END $$;
 -- End HQ entitlement transition exact verification.
+
+-- CRM lead registration exact verification:
+DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
+  IF runtime_oid IS NULL
+    OR EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication))
+    OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid)
+    OR has_schema_privilege('hon_runtime','hon','CREATE') THEN RAISE EXCEPTION 'Restricted CRM registration runtime required'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.guard_crm_lead_registration_history()','8673d8b711519a75d2d727276ebdd5a7',false,false,'trigger',false),
+    ('hon.crm_lead_registration_has_permission(uuid,uuid,uuid,text)','e3b71364e299c4be376b83b3e4daa41a',false,true,'boolean',false),
+    ('hon.resolve_crm_lead_registration_scope(text,uuid)','97012048ddae1177aadeba233454afcf',true,true,'record',true),
+    ('hon.require_crm_lead_registration_actor(text,text)','b1473f5d95b499f8c1d9c10907b34e08',false,true,'uuid',false),
+    -- register_crm_lead_person: 0169 body (IAM tables in SHARE, CRM domain tables in SHARE ROW EXCLUSIVE).
+    ('hon.register_crm_lead_person(text,uuid,jsonb,uuid,uuid,uuid)','539030f1832cdf3f320e356bf57e7c41',true,true,'jsonb',false)
+  ) expected(signature,source_md5,runtime_allowed,definer,return_type,return_set) LOOP
+    SELECT proc.*,owner.rolsuper,owner.rolbypassrls,owner.rolname owner_name INTO p
+      FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
+    IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.provolatile<>'v' OR p.prokind<>'f'
+      OR p.prorettype<>f.return_type::regtype OR p.proretset IS DISTINCT FROM f.return_set
+      OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      OR NOT(p.rolsuper OR p.rolbypassrls) OR p.owner_name IN ('hon_runtime','anon','authenticated','service_role')
+      OR md5(p.prosrc)<>f.source_md5
+      OR (SELECT count(*) FROM pg_proc other WHERE other.pronamespace=p.pronamespace AND other.proname=p.proname)<>1 THEN
+      RAISE EXCEPTION 'Canonical CRM registration function required: %',f.signature;
+    END IF;
+    IF EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+      WHERE acl.grantor<>p.proowner OR acl.privilege_type<>'EXECUTE' OR acl.is_grantable
+        OR (acl.grantee<>p.proowner AND (acl.grantee<>runtime_oid OR NOT f.runtime_allowed)))
+      OR has_function_privilege('hon_runtime',p.oid,'EXECUTE') IS DISTINCT FROM f.runtime_allowed
+      OR (SELECT count(*) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))))<>(CASE WHEN f.runtime_allowed THEN 2 ELSE 1 END) THEN
+      RAISE EXCEPTION 'Exact CRM registration function ACL required: %',f.signature;
+    END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_roles owner ON owner.oid=c.relowner
+      WHERE c.oid='hon.crm_lead_registration_conversions'::regclass AND c.relrowsecurity AND c.relforcerowsecurity
+        AND (owner.rolsuper OR owner.rolbypassrls) AND owner.rolname NOT IN ('hon_runtime','anon','authenticated','service_role'))
+    OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='crm_lead_registration_conversions')
+    OR EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+      WHERE c.oid='hon.crm_lead_registration_conversions'::regclass AND acl.grantee<>c.relowner)
+    OR EXISTS(SELECT 1 FROM pg_attribute col JOIN pg_class c ON c.oid=col.attrelid,LATERAL aclexplode(col.attacl) acl
+      WHERE c.oid='hon.crm_lead_registration_conversions'::regclass AND acl.grantee<>c.relowner)
+    OR has_table_privilege('hon_runtime','hon.crm_lead_registration_conversions','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.crm_lead_registration_conversions','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Private CRM registration FORCE-RLS evidence required';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_lead_registration_conversions'::regclass AND tgname='crm_lead_registration_immutable'
+      AND tgfoid='hon.guard_crm_lead_registration_history()'::regprocedure AND tgenabled='O' AND tgtype=27)
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_lead_registration_conversions'::regclass AND tgname='crm_lead_registration_no_truncate'
+      AND tgfoid='hon.guard_crm_lead_registration_history()'::regprocedure AND tgenabled='O' AND tgtype=34) THEN
+    RAISE EXCEPTION 'Canonical CRM registration immutable triggers required';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_lead_registration_conversions'::regclass AND convalidated AND NOT condeferrable AND contype='u'
+      AND pg_get_constraintdef(oid)='UNIQUE (organization_id, school_id, actor_principal_id, idempotency_key)')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_lead_registration_conversions'::regclass AND convalidated AND NOT condeferrable AND contype='u'
+      AND pg_get_constraintdef(oid)='UNIQUE (source_lead_id)')
+    OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='crm.lead.register' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'Canonical CRM registration idempotency/source and permission invariants required';
+  END IF;
+END $$;
+-- End CRM lead registration exact verification.
+
+-- Adult CRM membership draft exact verification, including immutable source and function drift.
+-- draft_crm_adult_membership is verified against its 0169 definition (canonical lock order: key reservation, IAM SHARE, domain SHARE ROW EXCLUSIVE).
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['people','student_profiles','crm_lead_registration_conversions','crm_leads','family_members','billing_accounts','memberships','crm_adult_membership_draft_sources'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=('hon.'||t)::regclass AND relrowsecurity AND relforcerowsecurity) THEN RAISE EXCEPTION 'Adult CRM draft FORCE RLS required: %',t; END IF;
+  END LOOP;
+  SELECT NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+    AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+  INTO safe FROM pg_class c WHERE c.oid='hon.crm_adult_membership_draft_sources'::regclass;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Adult CRM membership source must be private'; END IF;
+  FOR f IN SELECT * FROM (VALUES ('hon.guard_crm_adult_membership_draft_source()',false,false,'a525769ae5e582d7958994cb52b7b522929c43663ace7290e9ce9654d5e2c64d'),
+('hon.require_crm_adult_membership_actor(text)',true,false,'f5d9345e3a9fb7abf4c2686d8566cd4f21f60afdc8bd089164dcf9dabd6e30b0'),
+('hon.crm_adult_membership_relation(uuid)',true,false,'71d39ddcd35a15c7baf094045aaf1979c5d61516dab7818d3cee0bb009c81457'),
+('hon.read_crm_adult_membership_preparation(text,uuid)',true,true,'909adac7587840fbcd7e464e7b2b2c6b920d44b2d6264822fbcbffe1cc43243f'),
+('hon.read_crm_adult_membership_draft_confirmation(text,uuid)',true,true,'1c28232bde9839acda9d7e38724a711842827dd17cf871a81c2770a67f211c05'),
+('hon.draft_crm_adult_membership(text,jsonb,uuid,uuid,uuid)',true,true,'c106968a870a801571fbb6d0031dc419cc0bf0a6e9375966a1931bee25493ab4')) e(signature,definer,runtime_allowed,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe adult CRM membership draft function: %',f.signature; END IF;
+  END LOOP;
+  SELECT p.prorettype='jsonb'::regtype AND NOT p.proretset AND p.prokind='f' AND p.prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
+    AND p.pronargs=2 AND oidvectortypes(p.proargtypes)='text, uuid' AND p.proargnames=ARRAY['subject','selected_student']
+    AND p.proargmodes IS NULL AND p.proargdefaults IS NULL
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname='read_crm_adult_membership_draft_confirmation')=1
+  INTO safe FROM pg_proc p WHERE p.oid='hon.read_crm_adult_membership_draft_confirmation(text,uuid)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe adult CRM membership confirmation signature'; END IF;
+  FOR expected IN SELECT * FROM (VALUES ('crm_adult_membership_source_immutable',27),('crm_adult_membership_source_no_truncate',34)) e(name,kind) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_adult_membership_draft_sources'::regclass AND tgname=expected.name AND tgtype=expected.kind AND tgfoid='hon.guard_crm_adult_membership_draft_source()'::regprocedure AND tgenabled='O' AND NOT tgisinternal AND NOT tgdeferrable AND NOT tginitdeferred) THEN RAISE EXCEPTION 'Unsafe adult CRM membership source trigger'; END IF;
+  END LOOP;
+  FOR t IN SELECT unnest(ARRAY['PRIMARY KEY (conversion_id)','UNIQUE (membership_id)','UNIQUE (organization_id, school_id, actor_principal_id, idempotency_key)']) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_adult_membership_draft_sources'::regclass AND convalidated AND NOT condeferrable AND pg_get_constraintdef(oid)=t) THEN RAISE EXCEPTION 'Missing adult CRM draft source uniqueness'; END IF;
+  END LOOP;
+  FOR t IN SELECT unnest(ARRAY['schools','crm_lead_registration_conversions','memberships']) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.crm_adult_membership_draft_sources'::regclass AND confrelid=('hon.'||t)::regclass AND contype='f' AND convalidated AND NOT condeferrable AND array_length(conkey,1)>=2 AND confdeltype='r') THEN RAISE EXCEPTION 'Missing adult CRM draft source scoped FK'; END IF;
+  END LOOP;
+END $$;
+-- End adult CRM membership draft exact verification.
+
+-- CRM lead registration recovery exact verification (0174): one read-only definer, runtime EXECUTE only, no overload.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+    AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='87b01d2fe2307aff23b2ea9fdd021d386b965e71cad1cb308d0f7e3b7b9ac33a'
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    AND p.prorettype='jsonb'::regtype AND NOT p.proretset AND p.prokind='f' AND p.prolang=(SELECT oid FROM pg_language WHERE lanname='plpgsql')
+    AND p.pronargs=2 AND oidvectortypes(p.proargtypes)='text, uuid' AND p.proargnames=ARRAY['subject','selected_lead']
+    AND p.proargmodes IS NULL AND p.proargdefaults IS NULL
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname='read_crm_lead_registration_recovery')=1
+  INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.read_crm_lead_registration_recovery(text,uuid)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM lead registration recovery function'; END IF;
+  -- Private actor-independent current-DRAFT check: never callable by the runtime or anyone but its owner.
+  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+    AND (owner.rolsuper OR owner.rolbypassrls) AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='3f44ad99d0b571e6cc052370017b2b475bc6b5f1b018da51f2816eddd4173845'
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)
+    AND p.prorettype='boolean'::regtype AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname='crm_adult_membership_draft_is_current')=1
+  INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.crm_adult_membership_draft_is_current(uuid)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM adult membership current-DRAFT check'; END IF;
+END $$;
+-- End CRM lead registration recovery exact verification.
+
+-- School membership plan catalog exact verification (0175): private immutable tables, five runtime entry points, private helpers and guards, no overloads.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_plans','membership_plan_versions','membership_plan_selections'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'School membership plan table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_membership_plan()',false,false,'6b25106590748dffc6e8c3250cf6ca7e5f14eae80d2506d7c8d7201da432a3c3'),
+('hon.guard_membership_plan_version()',false,false,'2977003ee266b7d2967f4f5155ffa646c1b6925a9aec55f554eb80e706062c98'),
+('hon.guard_membership_plan_selection()',false,false,'31cc7aaabb6ec7e731a343f261d55dcb540877e3a6ee6553fe4b97c68d7343e4'),
+('hon.require_membership_plan_manager(text)',true,false,'55b5a9821f0a106e18d89b443ec3b7d4e480e968c6918f2c9738227d2c5ff63c'),
+('hon.membership_plan_validated_terms(jsonb)',true,false,'b108ba63c4c2da714d076a085895bfb2cadbb0b97b7db06d74901693472d3874'),
+('hon.membership_plan_version_summary(uuid,integer)',true,false,'a0af232d46adc9230ea2c5df1db23c9e9ca4029edfaaa1507b1aba20e24eb92c'),
+('hon.read_school_membership_plan_catalog(text)',true,true,'5cc7728519fdd3e0ad77d0c0186037557a7213e31724e03c8bfa3978ec1fbc35'),
+('hon.create_school_membership_plan(text,jsonb,uuid,uuid,uuid)',true,true,'31ecdbf8ff1323a7984d0058cd84aa9a52d12caa7ae73a4e07c9f8d3433e907f'),
+('hon.revise_school_membership_plan(text,uuid,jsonb,uuid,uuid,uuid)',true,true,'9f7aec2b0ddc75389a31de58c236839f7a3f03ce0eb805c89ae23727d78cf90b'),
+('hon.read_crm_adult_membership_plan_options(text)',true,true,'8575e3f29e4789bee79392277fdce335983f7d7a10db6943a387bbc12a0b6d12'),
+('hon.draft_crm_adult_membership_from_plan(text,jsonb,uuid,uuid,uuid)',true,true,'d4a22f1dbcdaac65d4f0a7032df761ae02ee944b5a0367d158e2e1c69c231458')) e(signature,definer,runtime_allowed,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school membership plan function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('membership_plans','membership_plan_guard','hon.guard_membership_plan()'),('membership_plans','membership_plan_no_truncate','hon.guard_membership_plan()'),
+    ('membership_plan_versions','membership_plan_version_guard','hon.guard_membership_plan_version()'),('membership_plan_versions','membership_plan_version_no_truncate','hon.guard_membership_plan_version()'),
+    ('membership_plan_selections','membership_plan_selection_immutable','hon.guard_membership_plan_selection()'),('membership_plan_selections','membership_plan_selection_no_truncate','hon.guard_membership_plan_selection()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing school membership plan guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='billing.membership_plan.manage' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'School membership plan permission invariant required'; END IF;
+END $$;
+-- End school membership plan catalog exact verification.
+
+-- CRM guardian/child enrollment exact verification (0176): private immutable tables, four runtime entry points, private helpers and guards, no overloads.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['crm_guardian_child_enrolled_children','crm_guardian_child_payer_designations','crm_guardian_child_membership_draft_sources'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'CRM guardian/child enrollment table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_crm_guardian_child_enrollment_history()',false,false,'4d5bb4bfc08f5167e20e5b458766502bbe6039d00e610aefbaa8ea77f0085d71'),
+('hon.capture_crm_guardian_child_registration_child()',true,false,'98c12236c3ea0f866e39aab5707affd1a4ff44b885c2828abf6b797bb742f9aa'),
+('hon.require_crm_guardian_child_enrollment_actor(text)',true,false,'1ce782ebcd4e6b15183acaa39434c7a7ef5342e875d694dd01dded3d2f2a63e2'),
+('hon.crm_guardian_child_family_relation(uuid)',true,false,'c28275b6efad28d071aca09a170eb15dd942d586ca22146a856e836419c44232'),
+('hon.crm_guardian_child_child_relation(uuid)',true,false,'182be545c237b678aab241dde1171199f737509672928396f11047f56ac4e3f9'),
+('hon.crm_guardian_child_current_designation(uuid,uuid,uuid,uuid,uuid)',true,false,'c5f51fa97aeaa2901d3515ed42cf9f8c0c31de64cdc1afc1ace7ef0aeb7cf90e'),
+('hon.crm_guardian_child_membership_draft_current(uuid)',true,false,'0eb5c4cca23e5cda775be4225cbf0259502bfdd9c9883dd2e65953e52ffc07f6'),
+('hon.read_crm_guardian_child_enrollment(text,uuid)',true,true,'d450e56b692dac4e2369245f61257e30c106fa550a2da03c30ab26d1910d3db0'),
+('hon.designate_crm_guardian_child_payer(text,uuid,jsonb,uuid,uuid,uuid)',true,true,'95d672e03d52b5905d289e2ddc373ac2671c2ea8eb3524edfd25858ab65ed3f9'),
+('hon.add_crm_guardian_child_additional_child(text,uuid,jsonb,uuid,uuid,uuid)',true,true,'0a97e309a147cb531ce874ce806c09c87d43bf01047f70fee84940d51559535a'),
+('hon.draft_crm_guardian_child_membership_from_plan(text,jsonb,uuid,uuid,uuid)',true,true,'9e0a95a431a80c3f3af5f24c0d99aea0558f9141efe24d3239f3a87d90c0635f')) e(signature,definer,runtime_allowed,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM guardian/child enrollment function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('crm_guardian_child_enrolled_children','crm_guardian_child_enrolled_children_immutable','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_guardian_child_enrolled_children','crm_guardian_child_enrolled_children_no_truncate','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_guardian_child_payer_designations','crm_guardian_child_payer_designation_immutable','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_guardian_child_payer_designations','crm_guardian_child_payer_designation_no_truncate','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_guardian_child_membership_draft_sources','crm_guardian_child_membership_source_immutable','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_guardian_child_membership_draft_sources','crm_guardian_child_membership_source_no_truncate','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_lead_registration_conversions','crm_guardian_child_registration_child_capture','hon.capture_crm_guardian_child_registration_child()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing CRM guardian/child enrollment guard: %',expected.name; END IF;
+  END LOOP;
+END $$;
+-- End CRM guardian/child enrollment exact verification.
+-- Membership activation gate exact verification (0177): private immutable evidence, three runtime entry points,
+-- private helpers, the settings-free transition trigger, D41 option C membership privileges and the D30a permissions.
+DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_activation_decisions','membership_effective_periods','membership_activation_follow_ups'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Membership activation evidence table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_membership_activation_evidence()',false,false,'search_path=pg_catalog, hon','c60a35d8df72884601abcd51d9f032a18f10f626662601d9d609e6aab56b06af'),
+('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','fa56ec9b289b8cdba2d8700db672666afacb2d9a0a5294c60474384dbdaa06f2'),
+('hon.membership_local_date(timestamptz,text)',false,false,'search_path=pg_catalog','60fb21bff4757c407e3acddc061c304629f0f035145d633924461e75090ad465'),
+('hon.membership_local_day_start(date,text)',false,false,'search_path=pg_catalog, hon','7d311eb5b3ec550b13b360c747cc628fc8d13369e2984c01a12cbd2c3794e4ec'),
+('hon.membership_effective_status_at(hon.membership_state,timestamptz,timestamptz,timestamptz)',false,false,'search_path=pg_catalog, hon','1430f67da4c27d157e9d520ac4b50e04c750391b22680ca21553fb7dfc33d613'),
+('hon.membership_activation_text_ok(text,integer)',false,false,'search_path=pg_catalog','da4065773ea5ed7bf34267f0ff311863463c5d168d8ec8c0ad97a506677dbfe3'),
+('hon.membership_activation_date(jsonb)',false,false,'search_path=pg_catalog','70dfaa487da94917b5204642ac4dd5685870f65062c9026e979e5919289b4963'),
+('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','877c7aac877d73b1efa3aecb9f11c102042c1daa6f065cf62a204055d0029704'),
+('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','8d7b4d4019d4fa4679148f0f9a53af9ed347d08f545c60fb8761240c3e3cf4a2'),
+('hon.evaluate_membership_activation(uuid,boolean,date,date)',true,false,'search_path=pg_catalog, hon','9b2679af3efeb30175e068eeec49fa05e36190e6ad82eefa94f642f506601462'),
+('hon.preview_school_membership_activation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','19a4444b60c5c644f49be3da77ca2b5bbe52ff4d8aba4d8c94ce402b1bb7e271'),
+('hon.activate_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','81781b22ed586bfd90813c494446cfe7c61ac1631713829c63b443e7809323b0'),
+('hon.cancel_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','084582d01a38c7f8f5a9876bc338230eb07958c64342aa6d426a5b8b47861629')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe membership activation function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('membership_activation_decisions','membership_activation_decisions_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_activation_decisions','membership_activation_decisions_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('membership_effective_periods','membership_effective_periods_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_effective_periods','membership_effective_periods_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('membership_activation_follow_ups','membership_activation_follow_ups_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_activation_follow_ups','membership_activation_follow_ups_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('memberships','membership_state_transition_guard','hon.guard_membership_state_transition()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing membership activation guard: %',expected.name; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal)<>1 THEN
+    RAISE EXCEPTION 'hon.memberships must carry exactly the 0177 transition guard (body replaced by 0178)'; END IF;
+  -- D41 option C: SELECT; no table INSERT, no UPDATE at any level, no DELETE/TRUNCATE; INSERT on exactly the seven DRAFT columns.
+  SELECT array_agg(attname::text ORDER BY attname) INTO cols FROM pg_attribute
+    WHERE attrelid='hon.memberships'::regclass AND attnum>0 AND NOT attisdropped AND has_column_privilege('hon_runtime',attrelid,attnum,'INSERT');
+  IF NOT has_table_privilege('hon_runtime','hon.memberships','SELECT') OR has_table_privilege('hon_runtime','hon.memberships','INSERT')
+    OR has_any_column_privilege('hon_runtime','hon.memberships','UPDATE') OR has_table_privilege('hon_runtime','hon.memberships','DELETE')
+    OR has_table_privilege('hon_runtime','hon.memberships','TRUNCATE')
+    OR cols IS DISTINCT FROM ARRAY['billing_account_id','organization_id','participant_person_id','plan_code','school_id','term_ends_at','term_started_at'] THEN
+    RAISE EXCEPTION 'hon_runtime membership privileges must be exactly D41 option C'; END IF;
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('billing.membership.activation.override','billing.membership.rules.manage','billing.membership.change.approve')
+      AND is_sensitive AND is_staff_assignable)<>3 THEN
+    RAISE EXCEPTION 'Membership activation permissions must exist as sensitive staff-assignable permissions'; END IF;
+END $$;
+-- End membership activation gate exact verification.
+-- Membership date revisions exact verification (0178): private immutable revision evidence with a settings-free insert
+-- guard, five runtime entry points, private helpers, the E1b-D1 permissions mapped to system owners only, and no new
+-- runtime privilege on hon.memberships. The three 0177 functions 0178 replaces are pinned in the 0177 section above.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['membership_date_revisions','membership_date_revision_follow_ups'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Membership date revision evidence table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_membership_date_revision_insert()',false,false,'search_path=pg_catalog, hon','307aee8273bb3a18e677e8ac26561c1cd64fc0286fbbd18aa16dc5202240dfbc'),
+('hon.membership_instant_text(timestamptz)',false,false,'search_path=pg_catalog','8008e27252c49128b17c779d789a2d75c66632e8c1444104cce0caa2f3d063ef'),
+('hon.membership_next_anchored_term_end(date,integer,date)',false,false,'search_path=pg_catalog','8fce7468323ed9826804fc67f4598e2adb5836a51bae1861edb571c88592cb9c'),
+('hon.membership_date_revision_retroactive_days(date,date,date,date,date)',false,false,'search_path=pg_catalog','505e045f8c94792404a1501fffa9c2060102a8953344a0900f929288bbc1181e'),
+('hon.membership_current_period(uuid)',false,false,'search_path=pg_catalog, hon','3e64412fb06e4d4cc987bea9999c49e0ef83128090f96847c3ec641d5b677d42'),
+('hon.membership_reporting_status(hon.membership_state,timestamptz,timestamptz,boolean,timestamptz)',false,false,'search_path=pg_catalog, hon','262b9d5dd9b24f21ed2c221b13d107078071f55daa6f06dd93b32072cc72ba11'),
+('hon.evaluate_membership_date_revision(uuid,text,boolean,date,date)',true,false,'search_path=pg_catalog, hon','2d72aaae85518d66eb6a55d3e56457e3171fee1642e9c4fb03e3c66f156727a3'),
+('hon.preview_membership_date_revision(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','3d7a20a9140cb2d11cc2d1aa1fc5336e6240a53cbb72ec7a09e69ff994865bf6'),
+('hon.revise_membership_dates(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','630627c13a9defd707c6615d43787512101d3c5c2a33172a7d544fb231e292ed'),
+('hon.read_membership_date_history(text,uuid)',true,true,'search_path=pg_catalog, hon','d943418c1f02b86a303f71ef42df0f456621ce77f5eb29347182de387ff1da1f'),
+('hon.read_membership_date_confirmation_queue(text,jsonb)',true,true,'search_path=pg_catalog, hon','f200b7dcfe7eecf66b643a2ea78eef6ffb0b2671eac2830223fbb233b488f538'),
+('hon.read_school_membership_status_summary(text)',true,true,'search_path=pg_catalog, hon','cf87534888d223dda57d31a24272c78c29474711154146048357d16411662cad')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe membership date revision function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('membership_date_revisions','membership_date_revisions_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_date_revisions','membership_date_revisions_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('membership_date_revisions','membership_date_revision_insert_guard','hon.guard_membership_date_revision_insert()'),
+    ('membership_date_revision_follow_ups','membership_date_revision_follow_ups_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_date_revision_follow_ups','membership_date_revision_follow_ups_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing membership date revision guard: %',expected.name; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.membership_date_revisions'::regclass AND NOT tgisinternal)<>3
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.membership_date_revision_follow_ups'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'Membership date revision evidence must carry exactly its reviewed triggers'; END IF;
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('billing.membership.dates.revise','billing.membership.dates.retroactive')
+      AND is_sensitive AND is_staff_assignable)<>2 THEN
+    RAISE EXCEPTION 'Membership date permissions must exist as sensitive staff-assignable permissions'; END IF;
+END $$;
+-- End membership date revisions exact verification.

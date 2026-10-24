@@ -62,7 +62,7 @@ describe('HQ overview UI', () => {
     const route = readFileSync('src/app/hq/page.tsx', 'utf8');
     const component = readFileSync('src/components/hq-overview.tsx', 'utf8');
     const http = readFileSync('src/components/hq-overview-http.ts', 'utf8');
-    expect(route).toContain('HqOverview'); expect(route).not.toContain('HonReferenceSuite'); expect(route).toContain('index: false');
+    expect(route).toContain('HqModernDashboard'); expect(route).not.toContain('HonReferenceSuite'); expect(route).toContain('index: false');
     expect(component).toContain("'big-button' | 'modern' | 'classic'");
     expect(component).not.toMatch(/invokeLLM|executeAction|sendMessage|provider-runtime|payment|method:\s*'POST'|working/i);
     expect(http).toContain("const PATH = '/api/v1/hq/overview'");

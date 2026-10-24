@@ -1,0 +1,12 @@
+.page { composes: page from './billing-renewals-workbench.module.css'; }
+.row { composes: row from './billing-renewals-workbench.module.css'; }
+.actions { composes: actions from './billing-renewals-workbench.module.css'; margin-top: 20px; }
+.error { composes: error from './billing-renewals-workbench.module.css'; }
+.notice { composes: notice from './billing-renewals-workbench.module.css'; }
+.page .check { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; margin: 18px 0; line-height: 1.6; font-size: 14px; }
+.page .check input { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; margin-top: 2px; }
+.page textarea { min-height: 88px; }
+.override { padding: 18px; border: 1px solid #b9c6da; border-radius: 8px; }
+.page h2:focus, .page h3:focus { outline: 3px solid #76a5ff; outline-offset: 6px; }
+.page section > a { display: inline-block; padding: 12px; }
+@media (max-width: 640px) { .page h1 { font-size: 30px; } .page button { max-width: 100%; overflow-wrap: anywhere; } .row { padding: 0; border: 0; background: transparent; } }
