@@ -11,7 +11,7 @@ import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, ty
 import { HON_CONVERSATION_BOUNDARY, HON_TURN_STATUSES, honComposerEnabled, honTurnStatusPresentation } from '../src/components/hon-command/hon-conversation';
 import { HonLauncher, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
 import { HonWorkspaceView, type HonTab } from '../src/components/hon-command/hon-workspace-view';
-import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_TEACHING_AI, approvalSourceLabel, safeHonReturnPath } from '../src/components/hon-command/roster';
+import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_TEACHING_AI, HON_TEACHING_AI_PORTRAITS, approvalSourceLabel, safeHonReturnPath, teachingAiPortrait } from '../src/components/hon-command/roster';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { organizationId: id(1), schoolId: id(2) };
@@ -103,6 +103,17 @@ describe('HON command roster', () => {
     const ready = { contract: true, providerRoute: true, entitlement: true, authorization: true };
     expect(honComposerEnabled(ready)).toBe(true);
     for (const key of Object.keys(ready)) expect(honComposerEnabled({ ...ready, [key]: false })).toBe(false);
+  });
+
+  it('maps each presentation mode to its owner-approved Kai style without touching the seven', () => {
+    expect(HON_TEACHING_AI_PORTRAITS).toEqual({ modern: '/ai/kai.webp', classic: '/ai/kai-illustrated.webp', 'big-button': '/ai/kai-chibi.webp' });
+    for (const src of Object.values(HON_TEACHING_AI_PORTRAITS)) {
+      expect(existsSync(join('public', src)), src).toBe(true);
+      expect(HON_AI_TEAM.map((member) => member.portrait)).not.toContain(src);
+    }
+    expect(teachingAiPortrait('classic')).toBe('/ai/kai-illustrated.webp');
+    for (const odd of ['retro', '', undefined, null, 'toString', '__proto__']) expect(teachingAiPortrait(odd)).toBe('/ai/kai.webp');
+    expect(HON_COMMAND_ROSTER.map((agent) => agent.portrait)).toEqual(['/ai/alex.webp', '/ai/chad.webp', '/ai/maya.webp', '/ai/marcus.webp', '/ai/jordan.webp', '/ai/claire.webp', '/ai/lena.webp']);
   });
 
   it('accepts only bounded same-origin staff return paths', () => {
@@ -213,6 +224,14 @@ describe('HON workspace presentation', () => {
     expect(html).toContain('Teaching &amp; Curriculum AI');
     expect(html).toContain('never mark student proficiency');
     expect(html).toContain('src="/ai/kai.webp"');
+    const { snapshot } = await loaded();
+    for (const [variant, src] of Object.entries(HON_TEACHING_AI_PORTRAITS)) {
+      const html = view(snapshot, 'team', null, variant as 'modern' | 'big-button' | 'classic');
+      expect(html).toContain(`data-kai-style="${variant}"`);
+      expect(html).toContain(`src="${src}"`);
+      for (const other of Object.values(HON_TEACHING_AI_PORTRAITS).filter((value) => value !== src)) expect(html).not.toContain(`src="${other}"`);
+      expect(html).toContain('never mark student proficiency');
+    }
     for (const tool of HON_TEACHING_AI.tools) expect(html).toContain(`href="${tool.href}"`);
     expect(view((await loaded()).snapshot, 'work')).not.toContain('Kai');
   });

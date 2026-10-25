@@ -6,7 +6,7 @@
 
 ## What PR #73 contains (display only)
 
-- `HON_TEACHING_AI` in `apps/web/src/components/hon-command/roster.ts`: a frontend display constant with the provisional name, role, boundary sentence and links to five existing teaching pages. It is **not** added to the protected `HON_AI_TEAM` catalog. It uses the owner-supplied portrait `apps/web/public/ai/kai.webp` (2026-10-24; the realistic option, cropped to the same 208×262 format as the seven, and falling back to a "K" initial if it fails to load). It has no permission, no tool grant and no record key.
+- `HON_TEACHING_AI` in `apps/web/src/components/hon-command/roster.ts`: a frontend display constant with the provisional name, role, boundary sentence and links to five existing teaching pages. It is **not** added to the protected `HON_AI_TEAM` catalog. It uses three owner-approved portraits of the same character, chosen by the verified presentation mode through `teachingAiPortrait()`: realistic `kai.webp` for Modern, illustrated `kai-illustrated.webp` for Classic and chibi `kai-chibi.webp` for Big-Button (in `apps/web/public/ai/`, all cropped to the same 208×262 format as the seven). Any image that fails to load falls back to a "K" initial. The mode is presentation only and never an authorization input. It has no permission, no tool grant and no record key.
 - A separate "Separate instructional AI · not part of the management team" card under the seven in the HON **AI team** tab, labeled "Planned · not yet available" and "(provisional name)".
 - HON's workspace body (management team, suggestions, AI work, approvals, Kai card) now renders **only** after the server verifies a school-management scope. That is the dashboard's operations-report check, or the current-school resolver, which requires `reporting.view`. A teaching-only instructor who opens "Ask HON" sees only a short notice and no management agents, work or approvals.
 - Legacy `claire`-keyed teaching drafts stay labeled "Teaching draft assistant (legacy)". They are never shown as Kai's work.
@@ -38,7 +38,7 @@
 - A calm, instructor-first canvas: class cards with the time, program and level up front.
 - Large touch targets for mat-side tablet use in Big-Button mode.
 - A dense list in Classic mode.
-- One accent colour reserved for Kai (`#4f8dff`) and the owner-supplied realistic portrait. The owner also supplied anime and chibi options, which are kept for future portrait-style variants and not used yet.
+- One accent colour reserved for Kai (`#4f8dff`). The workspace reuses `HON_TEACHING_AI_PORTRAITS` / `teachingAiPortrait()` so each mode shows its approved Kai style: realistic in Modern, illustrated in Classic, chibi in Big-Button.
 
 ## Capability-dependency matrix
 

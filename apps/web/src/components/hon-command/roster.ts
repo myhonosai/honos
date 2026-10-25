@@ -1,5 +1,5 @@
 import type { AiDraftWorkAgentKey } from '@hon/contracts';
-import { HON_AI_TEAM, type HonAiTeamId } from '@hon/design-system';
+import { HON_AI_TEAM, type HonAiTeamId, type HonInterfaceTheme } from '@hon/design-system';
 
 /**
  * Frontend capability registry for the unified HON command experience.
@@ -229,7 +229,7 @@ export function safeHonReturnPath(value: unknown): string {
 export const HON_TEACHING_AI = {
   name: 'Kai',
   title: 'Teaching & Curriculum AI',
-  /** Owner-supplied portrait (2026-10-24), realistic style to match the approved roster. Provisional like the name. */
+  /** Default (realistic) portrait; see HON_TEACHING_AI_PORTRAITS for the per-mode styles. */
   portrait: '/ai/kai.webp',
   color: '#4f8dff',
   purpose: 'Planned instructional assistant for school owners and individually authorized instructors, with its own access separate from the management team.',
@@ -242,3 +242,21 @@ export const HON_TEACHING_AI = {
     { label: 'Teaching draft assistant (legacy)', href: '/staff/teaching-assistant' },
   ],
 } as const;
+
+/**
+ * Owner-approved Kai styles (2026-10-25), one per presentation mode: realistic
+ * for Modern, illustrated for Classic, chibi for Big-Button. Same character in
+ * each. Presentation only: the mode never grants or limits anything.
+ */
+export const HON_TEACHING_AI_PORTRAITS: Readonly<Record<HonInterfaceTheme, string>> = {
+  modern: '/ai/kai.webp',
+  classic: '/ai/kai-illustrated.webp',
+  'big-button': '/ai/kai-chibi.webp',
+};
+
+/** Kai's portrait for a presentation mode; anything unrecognized falls back to the default style. */
+export function teachingAiPortrait(theme: unknown): string {
+  return typeof theme === 'string' && Object.hasOwn(HON_TEACHING_AI_PORTRAITS, theme)
+    ? HON_TEACHING_AI_PORTRAITS[theme as HonInterfaceTheme]
+    : HON_TEACHING_AI.portrait;
+}
