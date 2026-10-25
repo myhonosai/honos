@@ -1,5 +1,10 @@
 # HON Delivery Backlog
 
+## Zernio secure integration foundation — Codex
+
+- [x] Add API-server-only secret configuration, hidden local key entry, HQ-owner configuration status and explicitly gated read-only credential verification using official Zernio contracts. No browser key store, live calls, posting, messaging, ads, OAuth connection, workers or changes to paid/trial/AI activation.
+- [ ] Verify closed contracts, live owner checks, same-origin confirmation, response minimization, concurrency/focus-loss safety and local secret-file permissions; publish one focused draft PR with actual tests. See `docs/architecture/ZERNIO_INTEGRATION.md`. Preserve PRs #78/#79 and issue #56. School profile bindings and a reviewed encrypted vault remain future work.
+
 ## Commercial B1 — provider subscription schedule foundation (Codex)
 
 - [x] Baseline `f2c040a12a1447f723a182fe21e73bcf545c6698`: additive 0189, immutable exact-school A2 generation intent, closed human-authorized APIs, independent HQ read, private/RLS/least-privilege and idempotency/audit/inert-outbox protections. No provider binding or billing activation.

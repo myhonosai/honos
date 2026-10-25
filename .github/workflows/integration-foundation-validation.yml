@@ -1,0 +1,46 @@
+name: Integration foundation verification (no providers)
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'apps/api/src/integrations/**'
+      - 'apps/api/test/zernio-integration.test.cjs'
+      - 'apps/web/src/app/hq/integrations/**'
+      - 'apps/web/src/components/zernio-integration/**'
+      - 'apps/web/test/zernio-integration.test.tsx'
+      - 'packages/contracts/src/zernio-integration.ts'
+      - 'packages/design-system/src/localization/zernio.ts'
+      - 'scripts/configure-zernio*'
+      - '.github/workflows/integration-foundation-validation.yml'
+permissions:
+  contents: read
+concurrency:
+  group: integration-foundation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
+      - run: node --test .github/scripts/verify-node-runtime.test.mjs scripts/configure-zernio.test.mjs
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm check
+      - run: pnpm build
+      - run: pnpm db:check
+      - run: git diff --exit-code
