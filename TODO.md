@@ -1,5 +1,11 @@
 # HON Delivery Backlog
 
+## Meta integration — META-1 connection contracts (Codex)
+
+- [x] Audit main `5e110057612b4846a73e4be7a45ead5212c1ffc2`; preserve the full Meta publishing, inbox, comments, ads/leads and AI scope in `docs/architecture/META_INTEGRATION_ARCHITECTURE.md`. Existing campaign plans, internal Marcus drafts and SMS/EMAIL/PUSH queues do not represent provider execution.
+- [x] Implement closed intent/capability contracts, immutable normalization and unavailable health; 91 focused tests pass locally. These do not implement OAuth, token custody, webhook verification or authenticated connection APIs. Exact-head broader verification belongs in the focused draft PR; independent review and owner approval remain required.
+- [ ] Next reviewed META-1 slice: exact-school private persistence, secret-reference custody boundary, independent permissions, revocation and authorized read-only health. Verify current official Meta contracts/App Review first (direct docs returned HTTP 429); no live connections, workers, publishing, messages, ad spend or deployment. META-2 through META-5, organization template distribution and automated actions remain separately gated. Preserve issue #56 and all commercial activation restrictions.
+
 ## Commercial B1 — provider subscription schedule foundation (Codex)
 
 - [x] Baseline `f2c040a12a1447f723a182fe21e73bcf545c6698`: additive 0189, immutable exact-school A2 generation intent, closed human-authorized APIs, independent HQ read, private/RLS/least-privilege and idempotency/audit/inert-outbox protections. No provider binding or billing activation.
