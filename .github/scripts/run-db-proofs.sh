@@ -76,6 +76,7 @@ proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational tab
 proof crm-lead-close test-crm-lead-close-integrity.mjs "CRM lead close authority, atomicity and replay"
 
 setup champions-club HON_CHAMPIONS_VALIDATION_TARGET hon_champions_validation HON_CHAMPIONS_ENV_FILE
+proof champions-club test-a2p-preparation-integrity.mjs "A2P-1: read-only exact-school owner-confirmed registration preparation, live IAM/entitlement checks, signed-session API/database, no public fetching or provider/consent/message effects"
 proof champions-club test-champions-club-integrity.mjs "Champions Club authority, attribution, qualification gates and evidence"
 proof champions-club test-champions-club-rewards-integrity.mjs "Champions Club reward accounting: liabilities, approvals, reversals, no billing effect"
 proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Club leaderboards: qualified-only standings, privacy, holds, statistics"

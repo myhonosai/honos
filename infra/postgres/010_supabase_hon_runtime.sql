@@ -1942,3 +1942,14 @@ DO $$ DECLARE r text;c text;f text; BEGIN
    hon.read_saas_subscription_generation(text,uuid,uuid),hon.read_saas_subscription_generation_from_hq(text,uuid) TO hon_runtime;
  END IF;
 END $$;
+
+
+-- A2P-1 read-only preparation scope (0190): no new table or provider grants.
+DO $$ DECLARE r text; BEGIN
+ IF to_regprocedure('hon.read_a2p_preparation_scope(text)') IS NULL THEN RAISE EXCEPTION 'Apply A2P-1 migration 0190 first'; END IF;
+ FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role','hon_outbox_worker','hon_runtime'] LOOP
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION hon.read_a2p_preparation_scope(text) FROM %I',r); END IF;
+ END LOOP;
+ REVOKE ALL ON FUNCTION hon.read_a2p_preparation_scope(text) FROM PUBLIC;
+ GRANT EXECUTE ON FUNCTION hon.read_a2p_preparation_scope(text) TO hon_runtime;
+END $$;

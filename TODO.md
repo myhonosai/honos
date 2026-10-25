@@ -1,5 +1,10 @@
 # HON Delivery Backlog
 
+## A2P-1 registration preparation backend — Codex
+
+- [x] Implement source-backed structured website checks, fixture-only inspection policy and deterministic martial-arts campaign/sample preparation with narrow exact-school read-only APIs. No public fetcher, legal/approval guarantee, saved consent, registration submission, provider call or SMS delivery.
+- [ ] Add the dedicated preparation permission and additive 0190 scope boundary; preserve historical migrations, RLS and all commercial gates. Verify API/contract/security tests and disposable database proofs; publish one focused draft PR with frontend handoff. PRs #78/#79/#80 and Claude's frontend remain untouched. Contract: `docs/architecture/A2P_REGISTRATION_ASSISTANT.md`.
+
 ## Commercial B1 — provider subscription schedule foundation (Codex)
 
 - [x] Baseline `f2c040a12a1447f723a182fe21e73bcf545c6698`: additive 0189, immutable exact-school A2 generation intent, closed human-authorized APIs, independent HQ read, private/RLS/least-privilege and idempotency/audit/inert-outbox protections. No provider binding or billing activation.
