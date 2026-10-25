@@ -1,6 +1,7 @@
-import { validatePublicFormConfig, validatePublicFormSubmission, validatePublishedLeadForm, validateStaffLeadForm, type StaffLeadForm, type PublishedLeadForm, type PublicFormResult } from '@hon/contracts';
+import { validateLeadIntakeMonitorForm, validatePublicFormConfig, validatePublicFormSubmission, validatePublishedLeadForm, validateStaffLeadForm, type LeadIntakeMonitorForm, type StaffLeadForm, type PublishedLeadForm, type PublicFormResult } from '@hon/contracts';
 
 const staffBase = '/api/v1/marketing/forms';
+const monitorPath = `${staffBase}/intake-monitor`;
 const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 const staffPath = new RegExp(`^${staffBase}(?:/${uuid}/(?:configuration|publish|disable))?$`);
 const validKey = (key: unknown): key is string => typeof key === 'string' && key.trim() === key && /^[A-Za-z0-9_-]{16,100}$/.test(key);
@@ -73,6 +74,17 @@ export async function formStaffRequest(path: string, input?: object, key?: strin
     if (path !== staffBase && !path.startsWith(`${staffBase}/${result.body.data.id}/`)) throw new Error('INVALID');
     return { form: result.body.data, replayed: result.body.meta.replayed };
   } catch { throw new FormUiError('No verified form state. Reload current authority.'); }
+}
+
+/** Browser-safe monitor read. Never call the full form-configuration list here. */
+export async function loadLeadIntakeMonitor(): Promise<LeadIntakeMonitorForm[]> {
+  const result = await requestJson(monitorPath, { method: 'GET', credentials: 'same-origin' }, 65536);
+  if (result.status !== 200) throw new FormUiError('No verified intake-monitor response.');
+  try {
+    if (!exactObject(result.body, ['data']) || !Array.isArray(result.body.data) || result.body.data.length > 100) throw new Error('INVALID');
+    result.body.data.forEach(validateLeadIntakeMonitorForm);
+    return result.body.data;
+  } catch { throw new FormUiError('No verified intake-monitor response.'); }
 }
 export async function loadPublicLeadForm(publicId: string, signal?: AbortSignal): Promise<PublishedLeadForm> {
   if (publicId.length !== 48 || !/^[a-f0-9]{48}$/.test(publicId)) throw new FormUiError('This form is unavailable.');
