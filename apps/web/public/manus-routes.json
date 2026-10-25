@@ -363,6 +363,14 @@
     {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/settings/communications/business-texting/a2p-registration",
+      "title": "HON OS | Business Texting Registration"
+    },
+    {
+      "path": "/reference/a2p-registration",
+      "title": "HON | A2P Registration (synthetic reference)"
     }
   ]
 }
