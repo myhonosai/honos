@@ -3,7 +3,7 @@
 // HON-bills-schools records,
 // separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
-export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
+export const saasBillingTables = ['saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
  'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
  'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence',
  'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
@@ -13,7 +13,7 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
  'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
  'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications'];
-const evidenceTables = ['saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
+const evidenceTables = ['saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
  'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy'];
@@ -24,6 +24,20 @@ const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
 const invoicingTables = ['saas_invoice_sequences','saas_invoices'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const saasBillingFunctions = [
+ ['hon.saas_price_usd(integer)',false,false],
+ ['hon.saas_price_content(uuid,uuid)',false,false],
+ ['hon.saas_price_schedule_json(hon.saas_price_schedules)',false,false],
+ ['hon.saas_price_acceptance_json(hon.saas_price_acceptances)',false,false],
+ ['hon.saas_price_lock_authority()',false,false],
+ ['hon.record_saas_price_schedule(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.saas_price_acceptance_preview(uuid,uuid,uuid)',false,false],
+ ['hon.preview_saas_price_acceptance(text,uuid,uuid)',true,true],
+ ['hon.accept_saas_price_schedule(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_price_schedule(text,uuid)',true,true],
+ ['hon.read_saas_price_acceptance(text,uuid,uuid)',true,true],
+ ['hon.guard_saas_price_insert()',false,true],
+ ['hon.verify_saas_price_evidence()',false,true],
+ ['hon.guard_saas_price_provider_boundary()',false,false],
  ['hon.saas_plan_capabilities(text)',false,false],
  ['hon.guard_saas_evidence()',false,false],
  ['hon.guard_saas_records()',false,false],
@@ -249,6 +263,11 @@ export const saasBillingFunctions = [
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
+ ['saas_price_schedules','saas_price_authority',7,'guard_saas_price_insert'],
+ ['saas_price_schedules','saas_price_evidence',5,'verify_saas_price_evidence'],
+ ['saas_price_acceptances','saas_price_authority',7,'guard_saas_price_insert'],
+ ['saas_price_acceptances','saas_price_evidence',5,'verify_saas_price_evidence'],
+ ['saas_checkout_sessions','saas_price_provider_boundary',7,'guard_saas_price_provider_boundary'],
  ['saas_trial_policy_versions','saas_trial_authority',7,'guard_saas_trial_insert'],
  ['saas_trial_policy_versions','saas_trial_evidence',5,'verify_saas_trial_evidence'],
  ['saas_trial_policy_decisions','saas_trial_authority',7,'guard_saas_trial_insert'],

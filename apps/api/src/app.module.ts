@@ -1,3 +1,5 @@
+import { SaasPriceAcceptanceService } from './saas-pricing/saas-price-acceptance.service.js';
+import { SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController } from './saas-pricing/saas-price-acceptance.controller.js';
 import { SaasTrialsService } from './saas-trials/saas-trials.service.js';
 import { SaasTrialsHqController } from './saas-trials/saas-trials.controller.js';
 import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
@@ -343,11 +345,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [
-    SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
+    SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
     AchievementsService, AchievementHumanUiGuard,

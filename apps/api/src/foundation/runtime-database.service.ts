@@ -90,6 +90,11 @@ export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 
 // HON subscription catalog (B1): HON billing schools. Separate from school-to-family billing.
 const SAAS_BILLING_CALLS = {
+  recordPriceSchedule: { sql: 'SELECT hon.record_saas_price_schedule($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readPriceSchedule: { sql: 'SELECT hon.read_saas_price_schedule($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  previewPriceAcceptance: { sql: 'SELECT hon.preview_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  acceptPriceSchedule: { sql: 'SELECT hon.accept_saas_price_schedule($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readPriceAcceptance: { sql: 'SELECT hon.read_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   readCatalog: { sql: 'SELECT hon.read_saas_catalog_from_hq($1) AS data', arity: 1, readOnly: true },
   createCatalogDraft: { sql: 'SELECT hon.create_saas_catalog_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   publishCatalog: { sql: 'SELECT hon.publish_saas_catalog($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
