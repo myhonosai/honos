@@ -90,6 +90,9 @@ export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 
 // HON subscription catalog (B1): HON billing schools. Separate from school-to-family billing.
 const SAAS_BILLING_CALLS = {
+  recordSubscriptionGeneration: { sql: 'SELECT hon.record_saas_subscription_generation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSubscriptionGeneration: { sql: 'SELECT hon.read_saas_subscription_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  readSubscriptionGenerationHq: { sql: 'SELECT hon.read_saas_subscription_generation_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   recordPriceSchedule: { sql: 'SELECT hon.record_saas_price_schedule($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   readPriceSchedule: { sql: 'SELECT hon.read_saas_price_schedule($1,$2::uuid) AS data', arity: 2, readOnly: true },
   previewPriceAcceptance: { sql: 'SELECT hon.preview_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },

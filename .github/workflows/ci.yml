@@ -60,7 +60,8 @@ jobs:
     name: Disposable PostgreSQL security proofs
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Full canonical suite includes the exhaustive lock-order audit plus B1.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
