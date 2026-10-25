@@ -1921,3 +1921,24 @@ DO $$ DECLARE r text;t text;c text;f text;BEGIN
    hon.accept_saas_price_schedule(text,uuid,jsonb,uuid,uuid,uuid),hon.read_saas_price_schedule(text,uuid),hon.read_saas_price_acceptance(text,uuid,uuid) TO hon_runtime;
  END IF;
 END $$;
+
+-- Commercial B1 0189 private intent only. Never provider or payment authority.
+DO $$ DECLARE r text;c text;f text; BEGIN
+ REVOKE ALL ON TABLE hon.saas_subscription_generations FROM PUBLIC;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.saas_subscription_generations FROM %I',r); END LOOP;
+ FOR c IN SELECT attname FROM pg_attribute WHERE attrelid='hon.saas_subscription_generations'::regclass AND attnum>0 AND NOT attisdropped LOOP
+  EXECUTE format('REVOKE ALL (%I) ON hon.saas_subscription_generations FROM PUBLIC',c);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.saas_subscription_generations FROM %I',c,r); END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['hon.saas_generation_content(uuid,uuid)','hon.saas_generation_json(hon.saas_subscription_generations)',
+  'hon.saas_generation_available(uuid)','hon.record_saas_subscription_generation(text,uuid,jsonb,uuid,uuid,uuid)',
+  'hon.read_saas_subscription_generation(text,uuid,uuid)','hon.read_saas_subscription_generation_from_hq(text,uuid)',
+  'hon.guard_saas_generation_insert()','hon.verify_saas_generation_evidence()'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+  GRANT EXECUTE ON FUNCTION hon.record_saas_subscription_generation(text,uuid,jsonb,uuid,uuid,uuid),
+   hon.read_saas_subscription_generation(text,uuid,uuid),hon.read_saas_subscription_generation_from_hq(text,uuid) TO hon_runtime;
+ END IF;
+END $$;

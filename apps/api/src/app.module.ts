@@ -1,3 +1,5 @@
+import { SaasSubscriptionGenerationService } from './saas-pricing/saas-subscription-generation.service.js';
+import { SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController } from './saas-pricing/saas-subscription-generation.controller.js';
 import { SaasPriceAcceptanceService } from './saas-pricing/saas-price-acceptance.service.js';
 import { SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController } from './saas-pricing/saas-price-acceptance.controller.js';
 import { SaasTrialsService } from './saas-trials/saas-trials.service.js';
@@ -345,11 +347,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqAiProviderController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [
-    SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
+    SaasSubscriptionGenerationService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
     AchievementsService, AchievementHumanUiGuard,
