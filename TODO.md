@@ -2,8 +2,8 @@
 
 ## Commercial B1 — provider subscription schedule foundation (Codex)
 
-- [ ] Baseline `f2c040a12a1447f723a182fe21e73bcf545c6698`: additive 0189, immutable exact-school A2 generation intent, closed human-authorized APIs, independent HQ read, private/RLS/least-privilege and idempotency/audit/inert-outbox protections. No provider binding or billing activation.
-- [ ] Strict provider-independent parity contract, deterministic TEST-ONLY fake, paid-period versus calendar refusal, B2 evidence interfaces and authorization/concurrency/rollback/regression proofs. Preserve 180 historical migrations, A1/A2/D11-A, founder refusal and schedule-bound checkout guard.
+- [x] Baseline `f2c040a12a1447f723a182fe21e73bcf545c6698`: additive 0189, immutable exact-school A2 generation intent, closed human-authorized APIs, independent HQ read, private/RLS/least-privilege and idempotency/audit/inert-outbox protections. No provider binding or billing activation.
+- [x] Strict provider-independent parity contract, deterministic TEST-ONLY fake, paid-period versus calendar refusal, B2 evidence interfaces and authorization/concurrency/rollback/regression proofs. Preserve 180 historical migrations, A1/A2/D11-A, founder refusal and schedule-bound checkout guard.
 - [ ] Run focused/full checks and disposable CI; publish one focused draft PR with exact source/checksums/evidence, then stop for independent security review. No B2/C, provider calls, checkout, policy approval, paid/trial/AI activation or PR #76 changes. Design: `docs/architecture/HON_COMMERCIAL_B1_PROVIDER_SCHEDULES.md`.
 
 ## Commercial A2 — immutable pricing and customer acceptance (Codex)
