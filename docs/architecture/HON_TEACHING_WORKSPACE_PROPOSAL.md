@@ -6,7 +6,7 @@
 
 ## What PR #73 contains (display only)
 
-- `HON_TEACHING_AI` in `apps/web/src/components/hon-command/roster.ts`: a frontend display constant with the provisional name, role, boundary sentence and links to five existing teaching pages. It is **not** added to the protected `HON_AI_TEAM` catalog. It has no portrait (a neutral "K" monogram is drawn in CSS), no permission, no tool grant and no record key.
+- `HON_TEACHING_AI` in `apps/web/src/components/hon-command/roster.ts`: a frontend display constant with the provisional name, role, boundary sentence and links to five existing teaching pages. It is **not** added to the protected `HON_AI_TEAM` catalog. It uses three owner-approved portraits of the same character, chosen by the verified presentation mode through `teachingAiPortrait()`: realistic `kai.webp` for Modern, illustrated `kai-illustrated.webp` for Classic and chibi `kai-chibi.webp` for Big-Button (in `apps/web/public/ai/`, all cropped to the same 208×262 format as the seven). Any image that fails to load falls back to a "K" initial. The mode is presentation only and never an authorization input. It has no permission, no tool grant and no record key.
 - A separate "Separate instructional AI · not part of the management team" card under the seven in the HON **AI team** tab, labeled "Planned · not yet available" and "(provisional name)".
 - HON's workspace body (management team, suggestions, AI work, approvals, Kai card) now renders **only** after the server verifies a school-management scope. That is the dashboard's operations-report check, or the current-school resolver, which requires `reporting.view`. A teaching-only instructor who opens "Ask HON" sees only a short notice and no management agents, work or approvals.
 - Legacy `claire`-keyed teaching drafts stay labeled "Teaching draft assistant (legacy)". They are never shown as Kai's work.
@@ -38,13 +38,13 @@
 - A calm, instructor-first canvas: class cards with the time, program and level up front.
 - Large touch targets for mat-side tablet use in Big-Button mode.
 - A dense list in Classic mode.
-- One accent colour reserved for Kai. No invented portrait until an approved asset exists, so the "K" monogram stays meanwhile.
+- One accent colour reserved for Kai (`#4f8dff`). The workspace reuses `HON_TEACHING_AI_PORTRAITS` / `teachingAiPortrait()` so each mode shows its approved Kai style: realistic in Modern, illustrated in Classic, chibi in Big-Button.
 
 ## Capability-dependency matrix
 
 | # | Capability | Existing contract today | State today | Needs (owner: Codex unless noted) |
 | --- | --- | --- | --- | --- |
-| 1 | Teaching AI identity and entry point | `HON_TEACHING_AI` display constant (this PR) | **Partially working** (display only, inside verified HON) | T1 catalog entry and server access; approved portrait (owner) |
+| 1 | Teaching AI identity and entry point | `HON_TEACHING_AI` display constant (this PR) | **Partially working** (display only, inside verified HON) | T1 catalog entry and server access; server-backed name and portrait configuration |
 | 2 | Access for owners and individually authorized instructors only | None for Teaching AI. Teaching Studio has `teaching.studio.read`, `teaching.lesson.manage`, `teaching.resource.manage`, `teaching.assessment.record` and `GET /v1/staff/teaching-studio/access`. The legacy assistant has `teaching.assistant.use` | **Backend required** | T1 separate Teaching AI grant, not implied by management roles or `reporting.view` |
 | 3 | Hide management agents and data from teaching-only users | Server-verified management scope gates the HON body (this PR) | **Working** for HON surfaces | T1 server-filtered navigation for the rest of `/staff` |
 | 4 | Teaching Studio lesson plans and resources | `GET/POST /v1/staff/teaching-studio/lessons`, `…/resources` (human-authored only) | **Working** (human workflow) | T6 Kai read access to them via T1 scope |

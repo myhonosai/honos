@@ -185,6 +185,9 @@ async function openPanel(page) {
   return dialog;
 }
 
+const KAI_STYLE = { modern: '/ai/kai.webp', classic: '/ai/kai-illustrated.webp', 'big-button': '/ai/kai-chibi.webp' };
+const SEVEN_PORTRAITS = ['alex', 'chad', 'maya', 'marcus', 'jordan', 'claire', 'lena'].map((agent) => `/ai/${agent}.webp`);
+
 // ---------- scenarios ----------
 for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['desktop-1440', { width: 1440, height: 900 }, 'big-button'], ['desktop-1440', { width: 1440, height: 900 }, 'classic'], ['phone-390', { width: 390, height: 844 }, 'modern'], ['phone-390', { width: 390, height: 844 }, 'big-button'], ['phone-390', { width: 390, height: 844 }, 'classic'], ['tablet-834', { width: 834, height: 1112 }, 'big-button']]) {
   await check(`${mode_} ${name} dashboard, panel and agents`, async () => {
@@ -200,6 +203,10 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     const panelOverflow = await page.evaluate(() => { const panel = document.querySelector('[role="dialog"]'); const edge = panel.getBoundingClientRect().right; return [...panel.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > edge + 1).map((e) => `${e.tagName}.${e.className}`).slice(0, 4); });
     assert.deepEqual(panelOverflow, [], 'HON panel content overflows');
     await shot(page, `${mode_}-${name}-hon-panel-team`);
+    await dialog.getByRole('region', { name: /Kai/ }).scrollIntoViewIfNeeded();
+    await page.waitForFunction((src) => { const img = document.querySelector(`[role="dialog"] img[src="${src}"]`); return img && img.complete && img.naturalWidth > 0; }, KAI_STYLE[mode_]);
+    assert.equal(await dialog.locator('img[src^="/ai/kai"]').count(), 1, `${mode_} shows exactly one Kai style`);
+    await shot(page, `${mode_}-${name}-hon-panel-kai`);
     await axe(page, `${mode_}-${name}-hon-panel`);
     await dialog.getByRole('button', { name: /^Chad,/ }).click();
     await dialog.getByRole('heading', { name: 'Chad' }).waitFor();
@@ -235,6 +242,7 @@ await check('modern desktop: every agent detail, Claire identity, suggested/work
   await kai.scrollIntoViewIfNeeded();
   assert.ok(await kai.getByText('Separate instructional AI · not part of the management team').isVisible(), 'Kai is separate from the seven');
   assert.ok(await kai.getByText(/never mark student proficiency/).isVisible(), 'Kai boundary shown');
+  assert.ok(await kai.locator('img[src="/ai/kai.webp"]').evaluate((img) => img.complete && img.naturalWidth > 0), 'Kai portrait loads');
   assert.equal(await kai.getByRole('link').count(), 5, 'Kai links only to existing teaching tools');
   await shot(page, 'modern-desktop-1440-teaching-ai-card');
   await dialog.getByRole('tab', { name: /^AI work/ }).click();
@@ -330,6 +338,38 @@ for (const state of ['empty', 'denied', 'error', 'slow', 'multi']) {
     await ctx.close();
   });
 }
+
+await check('Kai style follows the Platform View switch; seven portraits unchanged; K fallback', async () => {
+  const { ctx, page } = await dashboard({ width: 1440, height: 900 }, 'modern');
+  let dialog = await openPanel(page);
+  await dialog.locator(`img[src="${KAI_STYLE.modern}"]`).waitFor({ state: 'attached' });
+  const seven = await dialog.locator('ul[aria-label="HON AI management team"] img').evaluateAll((images) => images.map((img) => img.getAttribute('src')));
+  assert.deepEqual(seven, SEVEN_PORTRAITS, 'seven management portraits unchanged');
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'detached' });
+  for (const next of ['classic', 'big-button']) {
+    await page.getByRole('button', { name: new RegExp(`^Select ${next === 'classic' ? 'Classic' : 'Big-Button'}`) }).first().click();
+    await page.waitForFunction((value) => document.querySelector('main')?.getAttribute('data-interface-theme') === value, next);
+    dialog = await openPanel(page);
+    await page.waitForFunction((src) => { const img = document.querySelector(`[role="dialog"] img[src="${src}"]`); return img && img.complete && img.naturalWidth > 0; }, KAI_STYLE[next]);
+    assert.equal(await dialog.locator('img[src^="/ai/kai"]').count(), 1);
+    assert.deepEqual(await dialog.locator('ul[aria-label="HON AI management team"] img').evaluateAll((images) => images.map((img) => img.getAttribute('src'))), SEVEN_PORTRAITS);
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({ state: 'detached' });
+  }
+  await ctx.close();
+  // Missing image: the card keeps Kai's identity with the K initial.
+  const failing = await dashboard({ width: 834, height: 1112 }, 'big-button');
+  await failing.ctx.route('**/ai/kai-chibi.webp', (route) => route.fulfill({ status: 404, body: '' }));
+  const failingDialog = await openPanel(failing.page);
+  const kai = failingDialog.getByRole('region', { name: /Kai/ });
+  await kai.scrollIntoViewIfNeeded();
+  await kai.locator('span[aria-hidden="true"] > span', { hasText: 'K' }).waitFor();
+  assert.equal(await kai.locator('img').count(), 0, 'failed Kai image replaced by the initial');
+  assert.ok(await kai.getByText('Teaching & Curriculum AI').isVisible());
+  await shot(failing.page, 'big-button-tablet-834-kai-fallback');
+  await failing.ctx.close();
+});
 
 await check('no unsupported capability presented as operational', async () => {
   const { ctx, page } = await dashboard({ width: 1440, height: 900 }, 'modern');
