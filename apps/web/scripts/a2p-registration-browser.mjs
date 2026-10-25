@@ -73,14 +73,14 @@ async function check(name, work) {
 async function shot(page, name, fullPage = false) { await page.screenshot({ path: join(results, `${name}.png`), fullPage }); report.screenshots.push(`${name}.png`); }
 async function axe(page, name) {
   await page.addScriptTag({ content: axeSource });
-  const violations = await page.evaluate(async () => (await window.axe.run({ include: [['main[data-interface-theme]']], exclude: [['[aria-label="Reference preview controls"]']] }, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })));
+  const violations = await page.evaluate(async () => (await window.axe.run({ include: [['main[data-interface-theme]']] }, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })));
   report.accessibility.push({ name, violations });
   const serious = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
   assert.equal(serious.length, 0, `${name}: ${JSON.stringify(serious)}`);
 }
 async function noOverflow(page) {
   const offenders = await page.evaluate(() => [...document.querySelectorAll('main *')]
-    .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed' && !e.closest('[aria-label="Registration steps"] ol') && !e.closest('[aria-label="Reference preview controls"]'))
+    .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed' && !e.closest('[aria-label="Registration steps"] ol'))
     .map((e) => `${e.tagName}.${e.className}`));
   assert.deepEqual(offenders, [], 'horizontal overflow');
 }
@@ -142,6 +142,8 @@ await check('modern desktop synthetic flow', async () => {
   await page.getByText(/Checking your website|Waiting to start|Starting the check/).first().waitFor();
   await shot(page, 'modern-desktop-1440-website-checking');
   await page.getByText('Check finished').waitFor({ timeout: 15000 });
+  await page.getByTestId('a2p-inspection-sample').waitFor();
+  assert.equal(await page.getByText(/^Seen /).count(), 0, 'no fixture finding claims a real observation time');
   await shot(page, 'modern-desktop-1440-website-check-results');
   await axe(page, 'modern website check');
   await page.getByRole('button', { name: /See what to fix/ }).click();
@@ -165,6 +167,8 @@ await check('modern desktop synthetic flow', async () => {
   await page.getByRole('button', { name: 'Draft my answers' }).click();
   await page.getByRole('textbox', { name: 'Campaign description' }).waitFor();
   await page.waitForFunction(() => (document.querySelector('#a2p-answer-CAMPAIGN_DESCRIPTION')?.value ?? '').length > 20);
+  assert.equal(await page.getByText('Verified from website', { exact: true }).count(), 0, 'fixture answers are never labeled verified from a real website');
+  await page.getByText('Matches sample evidence (synthetic)').first().waitFor();
   await shot(page, 'modern-desktop-1440-sms-answers', true);
   await axe(page, 'modern answers');
   await page.getByRole('textbox', { name: 'STOP reply' }).fill('Sample Dojo: You are unsubscribed. No more texts will be sent.');
@@ -239,6 +243,19 @@ await check('big-button phone flow with HON prompts', async () => {
   await page.getByRole('heading', { name: 'Ask HON' }).scrollIntoViewIfNeeded();
   await shot(page, 'big-button-phone-390-hon-assistant');
   await ctx.close();
+});
+
+await check('preview theme picker fits phone width in every theme', async () => {
+  for (const value of ['modern', 'classic', 'big-button']) {
+    const ctx = await context(VIEWPORTS.phone); const page = await ctx.newPage();
+    await page.goto(preview({ theme: value }));
+    await page.getByTestId('a2p-synthetic').waitFor();
+    await noOverflow(page);
+    await axe(page, `preview controls ${value} phone`);
+    await page.getByRole('group', { name: 'Preview interface theme' }).scrollIntoViewIfNeeded();
+    await shot(page, `${value}-phone-390-preview-controls`);
+    await ctx.close();
+  }
 });
 
 await check('tablet modern layout', async () => {

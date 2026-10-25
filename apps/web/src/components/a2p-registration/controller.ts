@@ -1,5 +1,5 @@
 import {
-  A2P_ANSWER_KEYS, NO_A2P_CAPABILITIES, blankAnswerSet, normalizeWebsiteInput, parseAnswerSet, parseFinding, parseStatusView, parseWebsiteCheck,
+  A2P_ANSWER_KEYS, NO_A2P_CAPABILITIES, blankAnswerSet, findingForInspection, normalizeWebsiteInput, parseAnswerSet, parseFinding, parseStatusView, parseWebsiteCheck,
   type A2pAnswerKey, type A2pAnswerSet, type A2pAvailability, type A2pCapabilities, type A2pConfirmationKey, type A2pFinding, type A2pReviewMark,
   type A2pStatusView, type A2pWebsiteCheck,
 } from './contract';
@@ -73,6 +73,8 @@ export class A2pController {
   }
 
   get source() { return this.adapter.source; }
+  /** Fixture evidence is accepted only from the synthetic preview adapter. */
+  private get parseOptions() { return { allowSynthetic: this.adapter.source === 'SYNTHETIC_FIXTURE' }; }
   snapshot(): A2pSnapshot { return this.current; }
   subscribe(listener: (snapshot: A2pSnapshot) => void): () => void {
     this.listeners.add(listener);
@@ -98,7 +100,7 @@ export class A2pController {
     const reads: Promise<void>[] = [];
     if (availability.capabilities.websiteCheck) reads.push(this.adapter.latestWebsiteCheck().then((raw) => {
       if (raw === null || raw === undefined) return;
-      const check = parseWebsiteCheck(raw);
+      const check = parseWebsiteCheck(raw, this.parseOptions);
       this.set({ websiteInput: check.websiteUrl ?? '' }, generation);
       if (check.state === 'NOT_STARTED') return;
       // An unfinished check is resumed, so its progress is shown rather than guessed.
@@ -120,7 +122,7 @@ export class A2pController {
     const generation = this.generation;
     this.set({ websiteInput: input.url, inputError: null, checkPhase: 'STARTING', check: null }, generation);
     let check: A2pWebsiteCheck;
-    try { check = parseWebsiteCheck(await this.adapter.startWebsiteCheck(input.url, this.newKey())); }
+    try { check = parseWebsiteCheck(await this.adapter.startWebsiteCheck(input.url, this.newKey()), this.parseOptions); }
     catch { this.set({ checkPhase: 'FAILED', check: null }, generation); return; }
     await this.follow(check, generation);
   }
@@ -134,7 +136,7 @@ export class A2pController {
       if (check.state === 'UNKNOWN' || check.state === 'NOT_STARTED' || !check.checkId || poll >= this.maxPolls) { this.set({ check, checkPhase: 'TIMED_OUT' }, generation); return; }
       await this.sleep(this.pollIntervalMs);
       if (generation !== this.generation) return;
-      try { check = parseWebsiteCheck(await this.adapter.readWebsiteCheck(check.checkId)); }
+      try { check = parseWebsiteCheck(await this.adapter.readWebsiteCheck(check.checkId), this.parseOptions); }
       catch { this.set({ check: { ...check, state: 'UNKNOWN' }, checkPhase: 'TIMED_OUT' }, generation); return; }
       this.set({ check }, generation);
     }
@@ -160,7 +162,8 @@ export class A2pController {
   private replaceFinding(updated: A2pFinding, generation: number): void {
     const check = this.current.check;
     if (!check) return;
-    this.set({ check: { ...check, findings: check.findings.map((item) => item.id === updated.id ? updated : item) } }, generation);
+    const finding = findingForInspection(updated, check.inspection);
+    this.set({ check: { ...check, findings: check.findings.map((item) => item.id === finding.id ? finding : item) } }, generation);
   }
 
   async draftAnswers(): Promise<void> {
@@ -185,7 +188,10 @@ export class A2pController {
     const payload = A2P_ANSWER_KEYS.map((key) => ({ key, value: answerValue(this.current, key) }));
     this.set({ savePhase: 'SAVING' }, generation);
     try {
-      const saved = parseAnswerSet(await this.adapter.saveAnswers(payload, this.current.answers.revision, this.newKey()));
+      const previous = this.current.answers.revision;
+      const saved = parseAnswerSet(await this.adapter.saveAnswers(payload, previous, this.newKey()));
+      // "Saved" needs server evidence: a recorded revision newer than the one edited.
+      if (saved.revision === null || (previous !== null && saved.revision <= previous)) throw new Error('unconfirmed');
       this.set({ answers: saved, edits: {}, savePhase: 'SAVED' }, generation);
     } catch {
       // The outcome is unknown: keep the owner's edits and never assume the save happened.
@@ -212,6 +218,25 @@ export class A2pController {
 
 export function answerValue(snapshot: Pick<A2pSnapshot, 'answers' | 'edits'>, key: A2pAnswerKey): string {
   return snapshot.edits[key] ?? snapshot.answers.answers.find((answer) => answer.key === key)?.value ?? '';
+}
+
+export type A2pDisplayProvenance = 'VERIFIED' | 'VERIFIED_SAMPLE' | 'OWNER_CONFIRMED' | 'UNVERIFIED_DRAFT' | 'EDITED' | 'EMPTY';
+
+/**
+ * The label an answer may show right now. VERIFIED also needs every evidence
+ * id to match an observed finding in the current completed check; fixture
+ * evidence is shown as VERIFIED_SAMPLE, never as a real website verification.
+ */
+export function answerProvenance(snapshot: Pick<A2pSnapshot, 'answers' | 'edits' | 'check'>, key: A2pAnswerKey): A2pDisplayProvenance {
+  if (snapshot.edits[key] !== undefined) return 'EDITED';
+  const answer = snapshot.answers.answers.find((item) => item.key === key);
+  if (!answer || !answer.value.trim()) return 'EMPTY';
+  if (answer.provenance !== 'VERIFIED') return answer.provenance;
+  const check = snapshot.check;
+  const observed = check?.state === 'COMPLETED' && (check.inspection === 'LIVE' || check.inspection === 'SYNTHETIC_FIXTURE')
+    && answer.evidenceIds.every((id) => check.findings.some((finding) => finding.id === id && finding.observedAt !== null));
+  if (!observed) return 'UNVERIFIED_DRAFT';
+  return check.inspection === 'LIVE' ? 'VERIFIED' : 'VERIFIED_SAMPLE';
 }
 
 export type A2pReadinessLabel = 'NOT_CHECKED' | 'OPEN_ITEMS' | 'NO_OPEN_ITEMS';
@@ -245,7 +270,7 @@ export function a2pReadiness(snapshot: Pick<A2pSnapshot, 'check' | 'answers' | '
     markedForReview: findings.filter((finding) => finding.review === 'MARKED_FOR_REVIEW').length,
     missingConfirmations: snapshot.answers.confirmations.filter((item) => !item.confirmed).length,
     emptyAnswers: values.filter((value) => !value.trim()).length,
-    unverifiedAnswers: snapshot.answers.answers.filter((answer) => answer.provenance === 'UNVERIFIED_DRAFT' && answer.value.trim() && snapshot.edits[answer.key] === undefined).length,
+    unverifiedAnswers: A2P_ANSWER_KEYS.filter((key) => answerProvenance(snapshot, key) === 'UNVERIFIED_DRAFT').length,
     unsavedEdits: Object.keys(snapshot.edits).length,
     contradictions: snapshot.answers.contradictions.length,
   };

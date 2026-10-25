@@ -8,7 +8,7 @@ import {
   A2P_ANSWER_KEYS, A2P_CONFIRMATION_KEYS, A2P_FINDING_OUTCOMES, A2P_REGISTRATION_STATUSES, A2P_STEPS,
   type A2pAnswerKey, type A2pFinding, type A2pFindingOutcome, type A2pSource, type A2pStep,
 } from './contract';
-import { a2pCapabilities, a2pReadiness, answerValue, type A2pController, type A2pSnapshot } from './controller';
+import { a2pCapabilities, a2pReadiness, answerProvenance, answerValue, type A2pController, type A2pSnapshot } from './controller';
 import styles from './a2p-registration.module.css';
 
 type T = (key: TranslationKey, params?: Readonly<Record<string, string | number>>) => string;
@@ -226,7 +226,11 @@ function CheckProgress({ snapshot, t, date }: { snapshot: A2pSnapshot; t: T; dat
   if (phase === 'IDLE') return null;
   if (phase === 'FAILED') return <p className={styles.notice} data-tone="blocked" role="alert">{t('a2p.check.failed')}</p>;
   if (phase === 'TIMED_OUT') return <p className={styles.notice} data-tone="waiting" role="alert">{t('a2p.check.timedOut')}</p>;
-  if (phase === 'DONE') return <p className={styles.notice} data-tone="ready" role="status">✓ {t('a2p.check.done')}{check?.completedAt ? ` · ${t('a2p.check.doneAt', { time: date(check.completedAt) })}` : ''}</p>;
+  if (phase === 'DONE') {
+    if (check?.inspection === 'SYNTHETIC_FIXTURE') return <p className={styles.notice} data-tone="synthetic" role="status" data-testid="a2p-inspection-sample">{t('a2p.check.doneSample')}</p>;
+    if (check?.inspection !== 'LIVE') return <p className={styles.notice} data-tone="waiting" role="status" data-testid="a2p-inspection-off">{t('a2p.check.noInspection')}</p>;
+    return <p className={styles.notice} data-tone="ready" role="status">✓ {t('a2p.check.done')}{check.completedAt ? ` · ${t('a2p.check.doneAt', { time: date(check.completedAt) })}` : ''}</p>;
+  }
   const done = check?.pagesChecked ?? 0, total = check?.pagesPlanned ?? null;
   const label = phase === 'STARTING' ? t('a2p.check.starting') : check?.state === 'QUEUED' ? t('a2p.check.queued') : t('a2p.check.checking');
   return (
@@ -308,19 +312,15 @@ function FindingCard({ finding, controller, snapshot, t, date }: StepProps & { f
         )}
         {!reviewable && finding.outcome !== 'PASSED' && <span className={styles.meta}>{t('a2p.fix.markUnavailable')}</span>}
         {failed && <span className={styles.error} role="alert">{t('a2p.fix.markFailed')}</span>}
-        {finding.observedAt && <span className={styles.meta}>{t('a2p.fix.observed', { time: date(finding.observedAt) })}</span>}
+        {snapshot.check?.inspection === 'SYNTHETIC_FIXTURE' ? <span className={styles.badge} data-tone="synthetic">{t('a2p.fix.observedSample')}</span>
+          : finding.observedAt ? <span className={styles.meta}>{t('a2p.fix.observed', { time: date(finding.observedAt) })}</span>
+            : <span className={styles.meta}>{t('a2p.fix.notObserved')}</span>}
       </footer>
     </article>
   );
 }
 
-function provenanceOf(snapshot: A2pSnapshot, key: A2pAnswerKey): 'VERIFIED' | 'OWNER_CONFIRMED' | 'UNVERIFIED_DRAFT' | 'EDITED' | 'EMPTY' {
-  if (snapshot.edits[key] !== undefined) return 'EDITED';
-  const answer = snapshot.answers.answers.find((item) => item.key === key);
-  if (!answer || !answer.value.trim()) return 'EMPTY';
-  return answer.provenance;
-}
-const PROVENANCE_TONE = { VERIFIED: 'ready', OWNER_CONFIRMED: 'neutral', UNVERIFIED_DRAFT: 'waiting', EDITED: 'edited', EMPTY: 'planned' } as const;
+const PROVENANCE_TONE = { VERIFIED: 'ready', VERIFIED_SAMPLE: 'synthetic', OWNER_CONFIRMED: 'neutral', UNVERIFIED_DRAFT: 'waiting', EDITED: 'edited', EMPTY: 'planned' } as const;
 
 function AnswersStep({ controller, snapshot, t, date }: StepProps): React.ReactElement {
   const capabilities = a2pCapabilities(snapshot);
@@ -339,7 +339,7 @@ function AnswersStep({ controller, snapshot, t, date }: StepProps): React.ReactE
       {snapshot.answerPhase === 'FAILED' && <p className={styles.error} role="alert">{t('a2p.answers.draftFailed')}</p>}
       <div className={styles.legend}>
         <span className={styles.meta}>{t('a2p.answers.legend')}</span>
-        {(['VERIFIED', 'OWNER_CONFIRMED', 'UNVERIFIED_DRAFT', 'EDITED'] as const).map((value) => <span key={value} className={styles.badge} data-tone={PROVENANCE_TONE[value]}>{t(k(`a2p.provenance.${value}`))}</span>)}
+        {([controller.source === 'SYNTHETIC_FIXTURE' ? 'VERIFIED_SAMPLE' : 'VERIFIED', 'OWNER_CONFIRMED', 'UNVERIFIED_DRAFT', 'EDITED'] as const).map((value) => <span key={value} className={styles.badge} data-tone={PROVENANCE_TONE[value]}>{t(k(`a2p.provenance.${value}`))}</span>)}
       </div>
       {ANSWER_GROUPS.map((group) => (
         <fieldset key={group.id} className={styles.group}>
@@ -366,7 +366,7 @@ function AnswersStep({ controller, snapshot, t, date }: StepProps): React.ReactE
 function AnswerField({ answerKey, controller, snapshot, t }: { answerKey: A2pAnswerKey; controller: A2pController; snapshot: A2pSnapshot; t: T }): React.ReactElement {
   const id = `a2p-answer-${answerKey}`, tipId = `${id}-tip`;
   const value = answerValue(snapshot, answerKey);
-  const provenance = provenanceOf(snapshot, answerKey);
+  const provenance = answerProvenance(snapshot, answerKey);
   const notes = snapshot.answers.answers.find((answer) => answer.key === answerKey)?.notes ?? [];
   const label = t(k(`a2p.field.${answerKey}`));
   const url = URL_KEYS.includes(answerKey);
@@ -458,7 +458,7 @@ function ReviewStep({ controller, snapshot, t, date, onGo }: StepProps & { onGo:
         <div className={styles.rowBetween}><h3 id="a2p-review-answers">{t('a2p.review.answers')}</h3><button type="button" className={styles.secondary} onClick={() => onGo('ANSWERS')}>{t('a2p.review.edit')}</button></div>
         <dl className={styles.answerList}>
           {A2P_ANSWER_KEYS.map((key) => {
-            const value = answerValue(snapshot, key), provenance = provenanceOf(snapshot, key), label = t(k(`a2p.field.${key}`));
+            const value = answerValue(snapshot, key), provenance = answerProvenance(snapshot, key), label = t(k(`a2p.field.${key}`));
             return (
               <div key={key}>
                 <dt>{label} <span className={styles.badge} data-tone={PROVENANCE_TONE[provenance]}>{t(k(`a2p.provenance.${provenance}`))}</span></dt>
@@ -488,7 +488,7 @@ export function buildA2pExport(snapshot: A2pSnapshot, t: T, date: (value: string
   lines.push(t('a2p.review.labelNote'), '', `## ${t('a2p.review.answers')}`);
   for (const key of A2P_ANSWER_KEYS) {
     const value = answerValue(snapshot, key);
-    lines.push('', `### ${t(k(`a2p.field.${key}`))} [${t(k(`a2p.provenance.${provenanceOf(snapshot, key)}`))}]`, value.trim() || `(${t('a2p.review.empty')})`);
+    lines.push('', `### ${t(k(`a2p.field.${key}`))} [${t(k(`a2p.provenance.${answerProvenance(snapshot, key)}`))}]`, value.trim() || `(${t('a2p.review.empty')})`);
   }
   if (snapshot.check?.state === 'COMPLETED') {
     lines.push('', `## ${t('a2p.review.problems')}`);

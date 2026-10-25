@@ -19,6 +19,15 @@ export type A2pCheckState = typeof A2P_CHECK_STATES[number];
 export const A2P_FINDING_OUTCOMES = ['PASSED', 'NEEDS_FIXING', 'REVIEW_REQUIRED', 'UNABLE_TO_VERIFY'] as const;
 export type A2pFindingOutcome = typeof A2P_FINDING_OUTCOMES[number];
 
+/**
+ * How the findings were obtained. Only LIVE is a real inspection of the
+ * owner's website; SYNTHETIC_FIXTURE is invented preview evidence. With live
+ * inspection disabled (Codex A2P-1 backend) or an unknown mode, nothing was
+ * observed, so no finding may pass and no website wording is shown as seen.
+ */
+export const A2P_INSPECTION_MODES = ['LIVE', 'LIVE_INSPECTION_DISABLED', 'SYNTHETIC_FIXTURE', 'UNKNOWN'] as const;
+export type A2pInspectionMode = typeof A2P_INSPECTION_MODES[number];
+
 export const A2P_FINDING_AREAS = ['PRIVACY_POLICY', 'SMS_TERMS', 'OPT_IN', 'BUSINESS_IDENTITY', 'MESSAGE_CONTENT', 'HELP_STOP', 'OTHER'] as const;
 export type A2pFindingArea = typeof A2P_FINDING_AREAS[number];
 
@@ -90,6 +99,7 @@ export interface A2pFinding {
 export interface A2pWebsiteCheck {
   checkId: string | null;
   state: A2pCheckState;
+  inspection: A2pInspectionMode;
   websiteUrl: string | null;
   pagesChecked: number | null;
   pagesPlanned: number | null;
@@ -103,6 +113,10 @@ export interface A2pAnswer {
   provenance: A2pProvenance;
   /** Short evidence or caveat lines supplied by the server. */
   notes: string[];
+  /** Finding ids backing a VERIFIED answer; without them it is an unverified draft. */
+  evidenceIds: string[];
+  /** Server-recorded time of the owner's confirmation; required for OWNER_CONFIRMED. */
+  confirmedAt: string | null;
 }
 
 export interface A2pConfirmation { key: A2pConfirmationKey; confirmed: boolean; confirmedAt: string | null }
@@ -165,18 +179,27 @@ export function parseFinding(value: unknown): A2pFinding | null {
   };
 }
 
-export function parseWebsiteCheck(value: unknown): A2pWebsiteCheck {
+/** Without an observation, nothing passes and no website wording is presented as seen. */
+export function findingForInspection(finding: A2pFinding, inspection: A2pInspectionMode): A2pFinding {
+  return inspection === 'LIVE' || inspection === 'SYNTHETIC_FIXTURE' ? finding : { ...finding, outcome: 'UNABLE_TO_VERIFY', observedAt: null, originalText: null };
+}
+
+export function parseWebsiteCheck(value: unknown, options: { allowSynthetic?: boolean } = {}): A2pWebsiteCheck {
   const row = record(value);
   const state = parseCheckState(row.state);
+  let inspection = oneOf(A2P_INSPECTION_MODES, row.inspection, 'UNKNOWN');
+  if (inspection === 'SYNTHETIC_FIXTURE' && !options.allowSynthetic) inspection = 'UNKNOWN';
+  const findings = state === 'COMPLETED' ? list(row.findings).map(parseFinding).filter((finding): finding is A2pFinding => finding !== null) : [];
   return {
     checkId: nullableText(row.checkId, 120),
     state,
+    inspection,
     websiteUrl: safeExternalUrl(row.websiteUrl),
     pagesChecked: count(row.pagesChecked),
     pagesPlanned: count(row.pagesPlanned),
     completedAt: state === 'COMPLETED' ? timestamp(row.completedAt) : null,
     // Findings are shown only for a completed check; partial results are never presented as an evaluation.
-    findings: state === 'COMPLETED' ? list(row.findings).map(parseFinding).filter((finding): finding is A2pFinding => finding !== null) : [],
+    findings: findings.map((finding) => findingForInspection(finding, inspection)),
   };
 }
 
@@ -187,7 +210,12 @@ export function parseAnswerSet(value: unknown): A2pAnswerSet {
     const answer = record(item);
     const key = oneOf<A2pAnswerKey | 'INVALID'>([...A2P_ANSWER_KEYS], answer.key, 'INVALID');
     if (key === 'INVALID' || answers.has(key)) continue;
-    answers.set(key, { key, value: text(answer.value, 2000), provenance: parseProvenance(answer.provenance), notes: list(answer.notes, 6).map((note) => text(note, 400)).filter(Boolean) });
+    const evidenceIds = list(answer.evidenceIds, 20).map((entry) => text(entry, 120)).filter(Boolean);
+    const confirmedAt = timestamp(answer.confirmedAt);
+    let provenance = parseProvenance(answer.provenance);
+    // A label is only as good as its evidence: no evidence ids, no VERIFIED; no recorded time, no OWNER_CONFIRMED.
+    if ((provenance === 'VERIFIED' && !evidenceIds.length) || (provenance === 'OWNER_CONFIRMED' && !confirmedAt)) provenance = 'UNVERIFIED_DRAFT';
+    answers.set(key, { key, value: text(answer.value, 2000), provenance, notes: list(answer.notes, 6).map((note) => text(note, 400)).filter(Boolean), evidenceIds, confirmedAt });
   }
   const confirmations = A2P_CONFIRMATION_KEYS.map((key) => {
     const match = list(row.confirmations).map(record).find((item) => item.key === key);
@@ -218,7 +246,7 @@ export function parseStatusView(value: unknown): A2pStatusView {
 }
 
 export function blankAnswer(key: A2pAnswerKey): A2pAnswer {
-  return { key, value: '', provenance: 'UNVERIFIED_DRAFT', notes: [] };
+  return { key, value: '', provenance: 'UNVERIFIED_DRAFT', notes: [], evidenceIds: [], confirmedAt: null };
 }
 export function blankAnswerSet(): A2pAnswerSet {
   return {

@@ -87,6 +87,7 @@
 .notice[data-tone="ready"] { background: var(--ready-bg); color: var(--ready-fg); }
 .notice[data-tone="waiting"] { background: var(--wait-bg); color: var(--wait-fg); }
 .notice[data-tone="blocked"] { background: var(--block-bg); color: var(--block-fg); }
+.notice[data-tone="synthetic"] { background: var(--syn-bg); color: var(--syn-fg); }
 .progress { display: grid; gap: 8px; margin-top: 16px; padding: 14px; border: 1px dashed var(--line); border-radius: 12px; }
 .progress progress { width: 100%; height: 10px; accent-color: var(--teal); }
 .spinner { display: inline-block; width: .9em; height: .9em; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--line); border-top-color: var(--teal); border-radius: 50%; animation: spin .9s linear infinite; }
@@ -229,3 +230,11 @@
   .stepNav > * { flex: 1 1 140px; }
   .exportBar > button { flex: 1 1 100%; }
 }
+
+/* Reviewer-only preview controls: the shared picker wraps and keeps readable contrast at phone width. */
+.previewPicker { margin-top: 10px; }
+.previewPicker :global(.view-picker) { flex-wrap: wrap; width: 100%; max-width: 100%; border-color: #d6cdf5; background: #ffffff; box-shadow: none; }
+.previewPicker :global(.view-picker button) { flex: 1 1 150px; max-width: none; min-width: 0; min-height: 44px; color: #1f2a3d; background: transparent; }
+.previewPicker :global(.view-picker button.selected) { color: #0a1020; background: #ddf7f5; box-shadow: inset 0 0 0 1px #007c83; }
+.previewPicker :global(.view-picker strong) { font-size: 12px; color: #0f1a2c; }
+.previewPicker :global(.view-picker span) { font-size: 11px; color: #3d4a60; }

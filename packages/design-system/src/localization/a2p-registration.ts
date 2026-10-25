@@ -1,5 +1,10 @@
 /** School-owner A2P registration assistant copy. Server and customer-entered text is never translated here. */
 export const a2pEn = {
+  'a2p.check.doneSample': 'Sample check finished. This is synthetic preview evidence; no real website was inspected.',
+  'a2p.check.noInspection': 'Live website inspection is turned off. Nothing on your website was inspected, so no item can pass and no website wording is shown as seen.',
+  'a2p.fix.observedSample': 'Synthetic sample evidence · not a live scan',
+  'a2p.fix.notObserved': 'Not inspected',
+  'a2p.provenance.VERIFIED_SAMPLE': 'Matches sample evidence (synthetic)',
   'a2p.title': 'Business texting registration',
   'a2p.crumb.settings': 'Settings',
   'a2p.crumb.communications': 'Communications',
@@ -234,6 +239,11 @@ export const a2pEn = {
 type A2pCopy = Record<keyof typeof a2pEn, string>;
 
 export const a2pKo: A2pCopy = {
+  'a2p.check.doneSample': '샘플 점검이 끝났습니다. 합성 미리보기 증거이며 실제 웹사이트는 점검하지 않았습니다.',
+  'a2p.check.noInspection': '실시간 웹사이트 점검이 꺼져 있습니다. 웹사이트를 점검하지 않았으므로 어떤 항목도 통과로 표시되지 않으며 웹사이트 문구도 확인된 것으로 표시되지 않습니다.',
+  'a2p.fix.observedSample': '합성 샘플 증거 · 실시간 점검 아님',
+  'a2p.fix.notObserved': '점검하지 않음',
+  'a2p.provenance.VERIFIED_SAMPLE': '샘플 증거와 일치(합성)',
   'a2p.title': '비즈니스 문자 등록',
   'a2p.crumb.settings': '설정',
   'a2p.crumb.communications': '커뮤니케이션',
@@ -466,6 +476,11 @@ export const a2pKo: A2pCopy = {
 };
 
 export const a2pEs: A2pCopy = {
+  'a2p.check.doneSample': 'Revisión de ejemplo terminada. Son pruebas sintéticas de vista previa; no se inspeccionó ningún sitio web real.',
+  'a2p.check.noInspection': 'La inspección en vivo del sitio web está desactivada. No se inspeccionó nada de su sitio, así que ningún elemento puede aprobarse ni se muestra ningún texto como visto.',
+  'a2p.fix.observedSample': 'Prueba de ejemplo sintética · no es una revisión en vivo',
+  'a2p.fix.notObserved': 'No inspeccionado',
+  'a2p.provenance.VERIFIED_SAMPLE': 'Coincide con la prueba de ejemplo (sintética)',
   'a2p.title': 'Registro de mensajes de texto comerciales',
   'a2p.crumb.settings': 'Configuración',
   'a2p.crumb.communications': 'Comunicaciones',

@@ -8,7 +8,7 @@ import {
   A2P_ANSWER_KEYS, A2P_REGISTRATION_STATUSES, normalizeWebsiteInput, type A2pStep, parseAnswerSet, parseFinding, parseStatusView, parseWebsiteCheck, safeExternalUrl,
 } from '../src/components/a2p-registration/contract';
 import { A2P_NOT_CONNECTED_ADAPTER, A2pNotConnectedError, type A2pRegistrationAdapter } from '../src/components/a2p-registration/adapter';
-import { A2pController, a2pReadiness, answerValue } from '../src/components/a2p-registration/controller';
+import { A2pController, a2pReadiness, answerProvenance, answerValue } from '../src/components/a2p-registration/controller';
 import { createSyntheticA2pAdapter } from '../src/components/a2p-registration/synthetic-fixtures';
 import { A2pRegistrationView, buildA2pExport } from '../src/components/a2p-registration/a2p-registration-view';
 
@@ -166,6 +166,67 @@ describe('synthetic preview flow through the controller', () => {
   });
 });
 
+const READY_ALL = { state: 'READY' as const, source: 'SERVER' as const, capabilities: { websiteCheck: true, findingReview: true, answerDrafts: true, saveAnswers: true, ownerConfirmations: true, registrationStatus: false, assistant: false } };
+const observedFinding = (id: string, outcome = 'PASSED') => ({ id, area: 'PRIVACY_POLICY', outcome, title: id, explanation: 'x', whyItMatters: 'y', location: { pageUrl: 'https://school.example.com/privacy', sectionLabel: 'Footer' }, originalText: 'We may share data.', suggestedText: 'We never share numbers.', observedAt: '2026-10-25T09:00:00Z', review: 'NONE' });
+function serverAdapter(inspection: unknown, overrides: Partial<A2pRegistrationAdapter> = {}): A2pRegistrationAdapter {
+  return { ...A2P_NOT_CONNECTED_ADAPTER, source: 'SERVER', availability: async () => READY_ALL, latestWebsiteCheck: async () => null,
+    startWebsiteCheck: async () => ({ checkId: 'c1', state: 'COMPLETED', inspection, websiteUrl: 'https://school.example.com/', completedAt: '2026-10-25T09:00:00Z', findings: [observedFinding('f-pass'), observedFinding('f-fix', 'NEEDS_FIXING')] }),
+    markFinding: async () => observedFinding('f-fix', 'PASSED'),
+    draftAnswers: async () => ({ revision: 3, answers: [{ key: 'WEBSITE_URL', value: 'https://school.example.com/', provenance: 'VERIFIED', evidenceIds: ['f-pass'] }, { key: 'PRIVACY_POLICY_URL', value: 'https://school.example.com/privacy', provenance: 'VERIFIED' }, { key: 'HELP_RESPONSE', value: 'Help', provenance: 'OWNER_CONFIRMED' }] }),
+    ...overrides };
+}
+async function serverFlow(inspection: unknown, overrides: Partial<A2pRegistrationAdapter> = {}) {
+  const controller = new A2pController(serverAdapter(inspection, overrides), { sleep: noSleep, newKey: keys });
+  await controller.load();
+  controller.setWebsiteInput('school.example.com');
+  await controller.startWebsiteCheck();
+  await controller.draftAnswers();
+  return controller;
+}
+
+describe('final review: no claimed scan, save or verification without server evidence', () => {
+  it('treats disabled, missing or unknown inspection as "nothing inspected": no pass, no seen wording', async () => {
+    for (const inspection of ['LIVE_INSPECTION_DISABLED', undefined, 'LIVE?', 'SYNTHETIC_FIXTURE']) {
+      const controller = await serverFlow(inspection);
+      const check = controller.snapshot().check!;
+      expect(check.inspection).toBe(inspection === 'LIVE_INSPECTION_DISABLED' ? 'LIVE_INSPECTION_DISABLED' : 'UNKNOWN');
+      expect(check.findings.every((finding) => finding.outcome === 'UNABLE_TO_VERIFY' && finding.observedAt === null && finding.originalText === null)).toBe(true);
+      expect(answerProvenance(controller.snapshot(), 'WEBSITE_URL')).toBe('UNVERIFIED_DRAFT');
+      await controller.toggleReview('f-fix');
+      expect(controller.snapshot().check!.findings.find((finding) => finding.id === 'f-fix')!.outcome).toBe('UNABLE_TO_VERIFY');
+      const html = renderToStaticMarkup(<A2pRegistrationView controller={controller} snapshot={controller.snapshot()} theme="modern" initialStep="CHECK_WEBSITE" />);
+      expect(html).toContain('data-testid="a2p-inspection-off"');
+      expect(html).not.toContain('Check finished');
+      const fix = renderToStaticMarkup(<A2pRegistrationView controller={controller} snapshot={controller.snapshot()} theme="modern" initialStep="FIX_WEBSITE" />);
+      expect(fix).not.toContain('data-outcome="PASSED"');
+      expect(fix).not.toContain('We may share data.');
+      expect(fix).not.toContain('Verified from website');
+    }
+  });
+  it('shows VERIFIED only for a live check whose observed findings back the answer', async () => {
+    const controller = await serverFlow('LIVE');
+    expect(controller.snapshot().check!.findings.find((finding) => finding.id === 'f-pass')!.outcome).toBe('PASSED');
+    expect(answerProvenance(controller.snapshot(), 'WEBSITE_URL')).toBe('VERIFIED');
+    expect(answerProvenance(controller.snapshot(), 'PRIVACY_POLICY_URL')).toBe('UNVERIFIED_DRAFT');
+    expect(answerProvenance(controller.snapshot(), 'HELP_RESPONSE')).toBe('UNVERIFIED_DRAFT');
+  });
+  it('never reports Saved unless the server returns a newer recorded revision', async () => {
+    for (const revision of [3, 2, null, undefined]) {
+      const controller = await serverFlow('LIVE', { saveAnswers: async () => ({ revision, answers: [] }) });
+      controller.editAnswer('CAMPAIGN_DESCRIPTION', 'Mine');
+      await controller.saveAnswers();
+      expect(controller.snapshot().savePhase).toBe('UNKNOWN');
+      expect(controller.snapshot().edits.CAMPAIGN_DESCRIPTION).toBe('Mine');
+      const html = renderToStaticMarkup(<A2pRegistrationView controller={controller} snapshot={controller.snapshot()} theme="modern" initialStep="ANSWERS" />);
+      expect(html).not.toContain(en['a2p.answers.saved']);
+    }
+    const ok = await serverFlow('LIVE', { saveAnswers: async () => ({ revision: 4, answers: [] }) });
+    ok.editAnswer('CAMPAIGN_DESCRIPTION', 'Mine');
+    await ok.saveAnswers();
+    expect(ok.snapshot().savePhase).toBe('SAVED');
+  });
+});
+
 describe('rendered experience', () => {
   it('production markup says not connected, shows no synthetic data, no live composer and no approval claim', async () => {
     const controller = new A2pController(A2P_NOT_CONNECTED_ADAPTER);
@@ -192,8 +253,12 @@ describe('rendered experience', () => {
     for (const label of ['Needs fixing', 'Review required', 'Unable to verify', 'Passed', 'Your current wording', 'Suggested wording', 'Mark for review', 'Why it matters']) expect(fix).toContain(label);
     expect(fix).toContain('rel="noopener noreferrer"');
     const answers = render('ANSWERS', 'classic');
-    for (const label of ['Verified from website', 'Confirmed by you', 'Unverified draft', 'Campaign description', 'HELP reply', 'STOP reply', 'Sample message 3']) expect(answers).toContain(label);
+    expect(answers).not.toContain('>Verified from website<');
+    for (const label of ['Matches sample evidence (synthetic)', 'Confirmed by you', 'Unverified draft', 'Campaign description', 'HELP reply', 'STOP reply', 'Sample message 3']) expect(answers).toContain(label);
     expect(answers).toContain('data-interface-theme="classic"');
+    const fixHtml = render('FIX_WEBSITE');
+    expect(fixHtml).toContain('Synthetic sample evidence · not a live scan');
+    expect(render('CHECK_WEBSITE')).toContain('data-testid="a2p-inspection-sample"');
     const review = render('REVIEW', 'big-button');
     expect(review).toContain('Items still open');
     expect(review).toContain(en['a2p.review.labelNote']);

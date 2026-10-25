@@ -29,7 +29,7 @@ export function A2pRegistrationPreview({ scenario, theme: initialTheme, step }: 
     <section className={styles.banner} data-tone="synthetic" aria-label="Reference preview controls">
       <strong>Reference preview controls · not part of the product</strong>
       <p>Theme changes here are not saved. Scenario: {scenario}.</p>
-      <InterfaceThemePicker current={theme} onChange={setTheme} ariaLabel="Preview interface theme" />
+      <div className={styles.previewPicker}><InterfaceThemePicker current={theme} onChange={setTheme} ariaLabel="Preview interface theme" /></div>
     </section>
   );
   return <A2pRegistrationView controller={current} snapshot={snapshot} theme={theme} initialStep={step} previewControls={controls} />;

@@ -1,6 +1,6 @@
 # A2P-1 — Registration assistant frontend contract (proposed)
 
-Status: **proposed presentation contract for Codex's A2P backend. No API implements it.** Production is wired only to `A2P_NOT_CONNECTED_ADAPTER` and makes no A2P, provider, AI or messaging request.
+Status: **frontend presentation contract. No merged API implements it.** Production is wired only to `A2P_NOT_CONNECTED_ADAPTER` and makes no A2P, provider, AI or messaging request. Codex's backend is draft PR #82 (`codex/a2p-1-backend`, head `c1ce12c`, unmerged); it was read for the comparison below and is **not imported**. The real HTTP adapter is a separate step after #82 merges.
 
 ## Where it lives
 
@@ -24,7 +24,38 @@ Status: **proposed presentation contract for Codex's A2P backend. No API impleme
 - No submission control is enabled. The HON composer is always disabled in A2P-1; suggested prompts only navigate to the matching step.
 - The readiness label counts open items on screen; it is never a compliance verdict or approval prediction.
 
-## Endpoints the frontend needs (suggested shapes)
+- Inspection mode: a website check carries `inspection` (`LIVE`, `LIVE_INSPECTION_DISABLED`, `SYNTHETIC_FIXTURE`, `UNKNOWN`). Unless it is `LIVE` (or `SYNTHETIC_FIXTURE` from the synthetic preview adapter only), every finding is forced to `UNABLE_TO_VERIFY` with no observation time and no "current wording", and Step 1 says live inspection is off. Fixture evidence is labeled "Synthetic sample evidence · not a live scan".
+- Answer labels: `VERIFIED` needs evidence ids that match observed findings of the current completed check, and shows as "Verified from website" only for a `LIVE` check (fixtures show "Matches sample evidence (synthetic)"). `OWNER_CONFIRMED` needs a server `confirmedAt`. Otherwise the label is "Unverified draft".
+- "Your edits were saved" appears only when the save response carries a recorded revision newer than the edited one; anything else is `UNKNOWN` and the edits stay on the page.
+
+## Differences from Codex PR #82 (head `c1ce12c`)
+
+PR #82 is a **stateless, read-only preparation engine**: five POST routes under `/v1/organizations/:organizationId/schools/:schoolId/a2p/`, no persistence, no history, live inspection always `UNAVAILABLE`. The frontend's proposed contract assumed a stateful service. The differences, and what the adapter must do with each:
+
+| Area | This frontend (proposed) | PR #82 (actual) | Consequence for the adapter |
+|---|---|---|---|
+| Availability | `GET …/a2p/readiness` with capability flags | No readiness route; 403 `A2P_PREPARATION_FORBIDDEN` / 503 `A2P_PREPARATION_UNAVAILABLE`; `scope.canConfirmOwnerFacts` on every response | Derive capabilities: websiteCheck/answerDrafts on, findingReview/saveAnswers/ownerConfirmations/registrationStatus/assistant **off** |
+| Transport | GET/PUT, `Idempotency-Key` on commands | All POST, read-only; `X-HON-Human-Command: a2p-prepare`, same-origin Origin + Fetch Metadata, JSON body; no idempotency key | New HTTP adapter with these headers; no business facts in URLs |
+| Website check | Async: start → poll `QUEUED/CHECKING` → `COMPLETED`; latest-check resume | Synchronous `website-review`; no check id, polling or latest/history | Map one response straight to `COMPLETED`; no resume after reload |
+| Inspection | `inspection` mode on the check | `review.inspection: LIVE_INSPECTION_DISABLED \| SYNTHETIC_FIXTURE`; production always disabled | Already handled: production findings will all show "Unable to verify" |
+| Review input | Website URL only | `websiteUrl, businessName, privacyUrl, termsUrl, optInUrl, messageFlow` (explicit nulls); `.example`/`.test`/`.local` hosts and query/fragment rejected | Step 1 needs five more optional fields |
+| Outcomes | `PASSED / NEEDS_FIXING / REVIEW_REQUIRED / UNABLE_TO_VERIFY` | `PASS / NEEDS_FIX / REVIEW_REQUIRED / UNAVAILABLE` | 1:1 mapping |
+| Finding shape | `id, area, title, explanation, whyItMatters, location{pageUrl, sectionLabel}, originalText, suggestedText, observedAt` | `code` (13 codes), `status, reason, remediation, sourceIds, evidence[]{url, provenance: SYNTHETIC_FIXTURE, observedAt, excerpt}` plus `sources[]` (Twilio docs, reviewed 2026-10-25); `finding-details` route | id = code; title/area from frontend copy per code (13 × EN/KO/ES needed); reason → explanation; remediation → suggestion; evidence url/excerpt → location/original; sources → "why it matters" links. No section label |
+| Finding review marks | `markFinding` persisted | None | Mark-for-review stays disabled |
+| Draft input | No input (server knows school) | `facts{businessName, websiteUrl, privacyUrl, termsUrl, optInUrl, supportContact, messageFlow, messageFrequency}`, `purpose` (SERVICE_NOTIFICATIONS/MARKETING/MIXED), `templates` (1–5 of 7), `marketingConsent`, `ownerConfirmation` token | Step 3 needs a facts + purpose + template form before drafting |
+| Draft output | 10 fixed keys incl. 3 samples | `state NEEDS_INPUT \| DRAFT_FOR_OWNER_REVIEW`, `missingFields`, `warnings`, `answers{campaignUseCase, campaignDescription, messageFlow, websiteUrl, privacyPolicyUrl, termsAndConditionsUrl, optInUrl}`, 2–5 `sampleMessages{template, content}`, help/stop samples; English only | Add `CAMPAIGN_USE_CASE`, `OPT_IN_URL`, variable sample count; show `missingFields`/`warnings`; label samples English |
+| Provenance | Per-answer `VERIFIED / OWNER_CONFIRMED / UNVERIFIED_DRAFT` | `factsProvenance: OWNER_STATEMENTS_NOT_INDEPENDENTLY_VERIFIED`; no per-answer evidence | Every #82 answer shows "Unverified draft"; nothing will show "Verified" |
+| Owner confirmations | Five statements, saved one by one with `confirmedAt` | One request-scoped token `OWNER_CONFIRMED_FACTS_FOR_DRAFT_ONLY`, only if `canConfirmOwnerFacts`; plus separate `marketingConsent`; nothing saved | Replace the five saved confirmations with one per-request owner attestation; never show "confirmed at" |
+| Save | Explicit save with revision | None (`saved:false`, `persistence: NONE`) | Save stays hidden; the "not saved, lost on reload" notice remains |
+| Contradictions | `contradictions[]` | `FLOW_CONSISTENCY` finding + draft `warnings` | Show warnings in Final review |
+| Readiness | Local counts | `draft-validation`: `readyForCopyPreparation`, `missingFields`, `warnings`, `providerEligibility: NOT_VERIFIED`, `approval: NOT_REQUESTED` | Use server validation for the readiness block |
+| Export | Local `.txt` builder | `copy-preparation` with `expectedDigest` + `COPY_DRAFT_FOR_EXTERNAL_OWNER_REVIEW`, only when `copyPreparationAvailable` | Use the server text; disable export for incomplete drafts |
+| Registration status | `GET …/registration-status` | None | Step 5 stays "Status unavailable" |
+| Permission | Unspecified | `communication.a2p.prepare` + active entitlement + exact-school direct human | Map 403 codes to the denied banner |
+
+Until an adapter implementing the right-hand column is merged, production stays on `A2P_NOT_CONNECTED_ADAPTER`.
+
+## Original proposed endpoints (superseded by the table above)
 
 Scope is `organizationId` / `schoolId` from the verified current-school resolver, never URL/form input. Every command carries `Idempotency-Key`. Responses are `{ data, meta }` with `Cache-Control: no-store`.
 

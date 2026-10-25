@@ -90,10 +90,10 @@ function answers() {
       { key: 'SAMPLE_MESSAGE_1', provenance: 'UNVERIFIED_DRAFT', value: 'Sample Dojo: Hi Alex, your free trial class is tomorrow at 5:30 PM. Reply HELP for help, STOP to opt out.', notes: [] },
       { key: 'SAMPLE_MESSAGE_2', provenance: 'UNVERIFIED_DRAFT', value: 'Sample Dojo: Saturday classes are cancelled this week for the holiday. See the schedule in the app. Reply STOP to opt out.', notes: [] },
       { key: 'SAMPLE_MESSAGE_3', provenance: 'UNVERIFIED_DRAFT', value: 'Sample Dojo: Your belt testing is on Nov 14 at 10 AM. Reply HELP for help, STOP to opt out.', notes: [] },
-      { key: 'HELP_RESPONSE', provenance: 'OWNER_CONFIRMED', value: 'Sample Dojo: For help, call (555) 010-0000 or email help@sample-dojo.example. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out.', notes: ['Confirmed by the owner (synthetic).'] },
+      { key: 'HELP_RESPONSE', provenance: 'OWNER_CONFIRMED', confirmedAt: OBSERVED, value: 'Sample Dojo: For help, call (555) 010-0000 or email help@sample-dojo.example. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out.', notes: ['Confirmed by the owner (synthetic).'] },
       { key: 'STOP_RESPONSE', provenance: 'UNVERIFIED_DRAFT', value: 'Sample Dojo: You are unsubscribed and will receive no more messages. Reply START to resubscribe.', notes: [] },
-      { key: 'WEBSITE_URL', provenance: 'VERIFIED', value: 'https://sample-dojo.example/', notes: ['Seen during the website check.'] },
-      { key: 'PRIVACY_POLICY_URL', provenance: 'VERIFIED', value: 'https://sample-dojo.example/privacy', notes: ['Seen during the website check. The wording still needs a fix.'] },
+      { key: 'WEBSITE_URL', provenance: 'VERIFIED', evidenceIds: ['syn-content-ok'], value: 'https://sample-dojo.example/', notes: ['Matches the synthetic sample evidence.'] },
+      { key: 'PRIVACY_POLICY_URL', provenance: 'VERIFIED', evidenceIds: ['syn-privacy-found'], value: 'https://sample-dojo.example/privacy', notes: ['Matches the synthetic sample evidence. The wording still needs a fix.'] },
       { key: 'TERMS_URL', provenance: 'UNVERIFIED_DRAFT', value: '', notes: ['No text-message terms page was found. Add one, then enter its address.'] },
     ],
     confirmations: [
@@ -114,9 +114,9 @@ export function createSyntheticA2pAdapter(scenario: A2pSyntheticScenario = 'read
   const wait = () => new Promise<void>((done) => { setTimeout(done, delay); });
   const state = { findings: findings(), answers: null as Answers | null, polls: 0, checkUrl: A2P_SYNTHETIC_SCHOOL.website as string, started: scenario === 'checking' };
   const check = () => {
-    if (scenario === 'checking') return { checkId: 'syn-check-1', state: 'CHECKING', websiteUrl: state.checkUrl, pagesChecked: 2, pagesPlanned: 6 };
-    if (state.polls < 2) return { checkId: 'syn-check-1', state: state.polls === 0 ? 'QUEUED' : 'CHECKING', websiteUrl: state.checkUrl, pagesChecked: state.polls * 3, pagesPlanned: 6 };
-    return { checkId: 'syn-check-1', state: 'COMPLETED', websiteUrl: state.checkUrl, pagesChecked: 6, pagesPlanned: 6, completedAt: OBSERVED, findings: state.findings };
+    if (scenario === 'checking') return { checkId: 'syn-check-1', inspection: 'SYNTHETIC_FIXTURE', state: 'CHECKING', websiteUrl: state.checkUrl, pagesChecked: 2, pagesPlanned: 6 };
+    if (state.polls < 2) return { checkId: 'syn-check-1', inspection: 'SYNTHETIC_FIXTURE', state: state.polls === 0 ? 'QUEUED' : 'CHECKING', websiteUrl: state.checkUrl, pagesChecked: state.polls * 3, pagesPlanned: 6 };
+    return { checkId: 'syn-check-1', inspection: 'SYNTHETIC_FIXTURE', state: 'COMPLETED', websiteUrl: state.checkUrl, pagesChecked: 6, pagesPlanned: 6, completedAt: OBSERVED, findings: state.findings };
   };
   return {
     source: 'SYNTHETIC_FIXTURE',
@@ -129,7 +129,7 @@ export function createSyntheticA2pAdapter(scenario: A2pSyntheticScenario = 'read
     async startWebsiteCheck(websiteUrl: string) {
       await wait();
       state.started = true; state.polls = 0; state.checkUrl = websiteUrl; state.findings = findings();
-      if (scenario === 'check-failed') return { checkId: 'syn-check-1', state: 'FAILED', websiteUrl, pagesChecked: 0, pagesPlanned: null };
+      if (scenario === 'check-failed') return { checkId: 'syn-check-1', inspection: 'SYNTHETIC_FIXTURE', state: 'FAILED', websiteUrl, pagesChecked: 0, pagesPlanned: null };
       return check();
     },
     async readWebsiteCheck() { await wait(); state.polls += 1; return check(); },
