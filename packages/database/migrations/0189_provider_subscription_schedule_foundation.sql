@@ -17,6 +17,18 @@ CREATE TABLE hon.saas_subscription_generations (
  UNIQUE(actor_principal_id,idempotency_key)
 );
 
+-- Use the established IAM order, but never wait holding a partial table-lock prefix.
+-- Provisioning writes organization -> school -> role -> grants; a waiting broad SHARE
+-- acquisition in the opposite direction could otherwise create an inherited A2/D9 cycle.
+-- NOWAIT aborts the complete command before its request claim; explicit exact retry only.
+CREATE FUNCTION hon.saas_generation_lock_authority() RETURNS void
+LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,hon AS $$
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
+ LOCK TABLE hon.users,hon.principals,hon.principal_role_grants,hon.family_access_grants,hon.hq_operator_grants,
+  hon.roles,hon.role_permissions,hon.permissions,hon.organizations,hon.schools IN SHARE MODE NOWAIT;
+END $$;
+
 CREATE FUNCTION hon.saas_generation_content(p_id uuid,p_acceptance uuid) RETURNS jsonb
 LANGUAGE plpgsql STABLE SET search_path=pg_catalog,hon AS $$
 DECLARE a hon.saas_price_acceptances%ROWTYPE; s hon.saas_price_schedules%ROWTYPE;
@@ -65,7 +77,7 @@ BEGIN
   OR p->>'confirmation' IS DISTINCT FROM 'RECORD_SUBSCRIPTION_GENERATION_ONLY_NO_BILLING'
   THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
  SELECT * INTO actor FROM hon.require_saas_school_purchaser(p_subject,p_school);
- PERFORM hon.saas_price_lock_authority(); SELECT * INTO actor FROM hon.require_saas_school_purchaser(p_subject,p_school);
+ PERFORM hon.saas_generation_lock_authority(); SELECT * INTO actor FROM hon.require_saas_school_purchaser(p_subject,p_school);
  replay:=hon.saas_claim_request(actor.principal_id,p_key,'saas.subscription_generation.record',
   hon.saas_fingerprint(ARRAY['saas.subscription_generation.record',p_school::text,p::text]),p_request,p_correlation);
  IF replay IS NOT NULL THEN PERFORM hon.require_saas_school_purchaser(p_subject,p_school); RETURN replay; END IF;
@@ -168,7 +180,7 @@ DO $$ DECLARE r text;c text;f text; BEGIN
   EXECUTE format('REVOKE ALL (%I) ON hon.saas_subscription_generations FROM PUBLIC',c);
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.saas_subscription_generations FROM %I',c,r); END LOOP;
  END LOOP;
- FOREACH f IN ARRAY ARRAY['hon.saas_generation_content(uuid,uuid)','hon.saas_generation_json(hon.saas_subscription_generations)',
+ FOREACH f IN ARRAY ARRAY['hon.saas_generation_lock_authority()','hon.saas_generation_content(uuid,uuid)','hon.saas_generation_json(hon.saas_subscription_generations)',
   'hon.saas_generation_available(uuid)','hon.record_saas_subscription_generation(text,uuid,jsonb,uuid,uuid,uuid)',
   'hon.read_saas_subscription_generation(text,uuid,uuid)','hon.read_saas_subscription_generation_from_hq(text,uuid)',
   'hon.guard_saas_generation_insert()','hon.verify_saas_generation_evidence()'] LOOP

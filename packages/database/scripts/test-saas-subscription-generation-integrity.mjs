@@ -140,19 +140,36 @@ try{
  passed('uncertain in-flight duplicate refuses; explicit exact-key retry after settlement recovers one immutable generation');
  const authAcceptance=await fresh();
  await admin.query('BEGIN');await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1',[humans.staff.id]);
- let pid=(await row('SELECT pg_backend_pid() p')).p,pending=settled(generation(authAcceptance,K(),'staff'));await waitFor(pid);await admin.query('COMMIT');assert.equal((await pending).error.getStatus(),403);
+ let pid,pending;await nothing(()=>generation(authAcceptance,K(),'staff'),409,'SAAS_OUTCOME_UNKNOWN');
+ await admin.query('COMMIT');await nothing(()=>generation(authAcceptance,K(),'staff'),403,'SAAS_FORBIDDEN');
  await nothing(()=>generation(accepted,key,'staff'),403,'SAAS_FORBIDDEN');
  await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL,effective_until=clock_timestamp()+interval \'1 second\' WHERE principal_id=$1',[humans.staff.id]);
  await admin.query('BEGIN');await admin.query("SELECT pg_advisory_xact_lock(hashtextextended('saas.offer_sets',0))");pid=(await row('SELECT pg_backend_pid() p')).p;
  const expiryBefore=await footprint();pending=settled(generation(authAcceptance,K(),'staff'));await waitFor(pid);await sleep(1100);await admin.query('COMMIT');assert.equal((await pending).error.getStatus(),403);assert.deepEqual(await footprint(),expiryBefore);
  await admin.query('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1',[humans.staff.id]);
- passed('live authority revoked during IAM waits or expired during offer lock wait refuses; replay independently reauthorizes');
+ passed('IAM contention fails immediately with explicit exact retry; committed revocation and expiry during offer lock wait refuse; replay independently reauthorizes');
  await admin.query('UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()+interval \'1 second\' WHERE principal_id=$1',[humans.staff.id]);
  const beforeAbort=await footprint();await a.query('BEGIN');await sqlGeneration(a,authAcceptance,K(),'staff');await sleep(1100);await sqlDeny(a.query('COMMIT'),'42501');assert.deepEqual(await footprint(),beforeAbort);
  await admin.query('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1',[humans.staff.id]);
  passed('deferred authority expiry rolls back generation, canonical request, audit and inert outbox together');
  for(const isolation of ['REPEATABLE READ','SERIALIZABLE']){await a.query('BEGIN ISOLATION LEVEL '+isolation);await sqlDeny(sqlGeneration(a,authAcceptance),'22023');await a.query('ROLLBACK');}
  passed('unsupported snapshot transaction isolation cannot retain stale authorization');
+ // Reproduce the opposing D9 table-lock stages without creating a school. This MUST be NOWAIT,
+ // not merely a short timeout: removing NOWAIT changes the exact PostgreSQL error and fails this test.
+ const lockBefore=await footprint();await admin.query('BEGIN');await admin.query('LOCK TABLE hon.organizations IN ROW EXCLUSIVE MODE');
+ await a.query('BEGIN');await a.query("SET LOCAL lock_timeout='100ms'");
+ await assert.rejects(sqlGeneration(a,authAcceptance),e=>e.code==='55P03'&&e.message==='could not obtain lock on relation "organizations"');
+ await a.query('ROLLBACK');
+ await admin.query('LOCK TABLE hon.principal_role_grants IN ROW EXCLUSIVE MODE NOWAIT');await admin.query('ROLLBACK');
+ assert.deepEqual(await footprint(),lockBefore);
+ // Reverse arrival order: B1 holds its complete IAM set; the opposing provision-stage lock refuses,
+ // then succeeds after B1 rollback. Neither loser can retain a partial grant-table prefix.
+ await a.query('BEGIN');await sqlGeneration(a,authAcceptance);
+ await admin.query('BEGIN');await sqlDeny(admin.query('LOCK TABLE hon.organizations IN ROW EXCLUSIVE MODE NOWAIT'),'55P03');
+ await admin.query('ROLLBACK');await a.query('ROLLBACK');
+ await admin.query('BEGIN');await admin.query('LOCK TABLE hon.organizations,hon.principal_role_grants IN ROW EXCLUSIVE MODE NOWAIT');await admin.query('ROLLBACK');
+ assert.deepEqual(await footprint(),lockBefore);
+ passed('both D9/B1 table-lock arrival orders release partial locks; NOWAIT ablation cannot pass via lock timeout; no provisioning or generation effects');
  // A privileged incomplete insert cannot commit even with an otherwise genuine request and snapshot.
  await a.query('BEGIN');const noAuditKey=K();await sqlGeneration(a,authAcceptance,noAuditKey);await a.query('ROLLBACK');
  assert.deepEqual(await footprint(),beforeAbort);

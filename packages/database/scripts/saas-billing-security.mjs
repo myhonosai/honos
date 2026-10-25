@@ -24,6 +24,7 @@ const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
 const invoicingTables = ['saas_invoice_sequences','saas_invoices'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const saasBillingFunctions = [
+ ['hon.saas_generation_lock_authority()',false,false],
  ['hon.saas_generation_content(uuid,uuid)',false,false],
  ['hon.saas_generation_json(hon.saas_subscription_generations)',false,false],
  ['hon.saas_generation_available(uuid)',false,false],
