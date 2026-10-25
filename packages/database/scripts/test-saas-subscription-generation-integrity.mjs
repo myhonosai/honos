@@ -158,7 +158,7 @@ try{
  // not merely a short timeout: removing NOWAIT changes the exact PostgreSQL error and fails this test.
  const lockBefore=await footprint();await admin.query('BEGIN');await admin.query('LOCK TABLE hon.organizations IN ROW EXCLUSIVE MODE');
  await a.query('BEGIN');await a.query("SET LOCAL lock_timeout='100ms'");
- await assert.rejects(sqlGeneration(a,authAcceptance),e=>e.code==='55P03'&&e.message==='could not obtain lock on relation "organizations"');
+ await assert.rejects(sqlGeneration(a,authAcceptance),e=>e.code==='55P03'&&['could not obtain lock on relation "organizations"','could not obtain lock on relation "hon.organizations"'].includes(e.message));
  await a.query('ROLLBACK');
  await admin.query('LOCK TABLE hon.principal_role_grants IN ROW EXCLUSIVE MODE NOWAIT');await admin.query('ROLLBACK');
  assert.deepEqual(await footprint(),lockBefore);
