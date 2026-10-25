@@ -204,6 +204,8 @@ function validateOfferBody(o: Record<string, unknown>): void {
     || !(o.cancellationTiming === null || o.cancellationTiming === 'END_OF_PAID_PERIOD')
     || !offerTermsConsistent({ ...o, salesOpensAt: o.salesOpensAt ?? null })) drift();
 }
+/** Shared closed offer-row validator; does not authorize sale, stop-sales or publication. */
+export function validateSaasHonOsOffer(value: unknown): void { validateOffer(value); }
 function validateOffer(value: unknown): void {
   const o = record(value, drift);
   exactKeys(o, ['offerId','position',...OFFER_KEYS,'billingInterval','founder','currency','premiumCreditsStatus','salesStop'], drift);
