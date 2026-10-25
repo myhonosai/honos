@@ -23,7 +23,7 @@ export function ZernioIntegrationView({ view, refresh, verify }: { view: ZernioV
   const { t, date } = useLocale();
   const [confirmed, setConfirmed] = useState(false);
   useEffect(() => { setConfirmed(false); }, [view.concealed, view.busy, view.configuration]);
-  return <main className={styles.page}>
+  return <div className={styles.page}>
     <header><h1>{t('zernio.title')}</h1><p>{t('zernio.intro')}</p></header>
     {view.concealed ? <section aria-labelledby="zernio-privacy"><h2 id="zernio-privacy">{t('zernio.concealed')}</h2>
       <p>{t('zernio.privacy')}</p><button disabled={view.busy} onClick={refresh}>{t('zernio.restore')}</button></section> : <>
@@ -45,5 +45,5 @@ export function ZernioIntegrationView({ view, refresh, verify }: { view: ZernioV
     </>}
     {view.busy && <p role="status">{t('zernio.working')}</p>}
     {view.error && <p role="alert">{t('zernio.error')} <a href="/auth/login">{t('zernio.signin')}</a></p>}
-  </main>;
+  </div>;
 }

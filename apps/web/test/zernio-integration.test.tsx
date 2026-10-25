@@ -88,6 +88,7 @@ describe('Zernio accessible translated presentation', () => {
     const html=renderToStaticMarkup(<ZernioIntegrationView view={{configuration,receipt:null,busy:false,concealed:false,error:false}} refresh={()=>{}} verify={()=>{}}/>);
     expect(html).toContain('node scripts/configure-zernio.mjs');expect(html).toContain('ZERNIO_API_KEY');
     expect(html).not.toContain('type="password"');expect(html).toContain('type="checkbox"');expect(html).toContain('aria-labelledby');
+    expect(html).not.toContain('<main'); // The authenticated HQ shell owns the single main landmark.
     expect(html).toContain('Posting, messaging, advertising');expect(html).not.toContain('Publish now');
   });
   it('conceals configuration and receipts and supplies an explicit restoration action', () => {
