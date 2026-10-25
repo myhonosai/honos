@@ -363,6 +363,10 @@
     {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/reference/hon-conversation",
+      "title": "HON Conversation | Design preview (synthetic)"
     }
   ]
 }

@@ -52,8 +52,9 @@ States: **Fully working** means it runs on existing authorized contracts. **Part
 | Suggested actions | **Fully working** | Command Center deterministic rules; navigation only |
 | Loading / empty / denied / error / selection-required states | **Fully working** | Unit and browser tests |
 | Return to the originating page | **Fully working** | Panel keeps the page; full workspace uses a sanitized `return` |
-| Conversation turn states (Ready, Processing, Delegating, Awaiting approval, Completed, Failed, Unknown) | **Design-only** | Closed mapping in `hon-conversation.ts`; anything unrecognized shows as Unknown; nothing renders a state until the server reports one |
-| HON conversation, history, delegation, results | **Backend required** | Composer is disabled and labeled "Not connected"; `honComposerEnabled` needs contract, provider route, entitlement and authorization all confirmed |
+| Conversation turn states (Proposed, Processing, Delegating, Awaiting approval, Completed, Failed, Unknown) | **Built, server-gated** (F3) | Closed mapping in `hon-conversation.ts`; anything unrecognized shows as Unknown; a state renders only from a verified server body. Proven against synthetic fixtures only |
+| Conversation interface: thread layout, history list, new conversation, transcript, delegation cards, approval notices, linked results, send/failed/unknown recovery | **Built, server-gated** (F3) | `hon-conversation-view.tsx` in all three modes and both presentations. In production no conversation source exists, so it shows "Not connected" with the composer, Send and New conversation disabled |
+| HON conversation answers, real history, real delegation and results | **Backend required** | Needs contract 1 below. Nothing is sent, stored or answered today |
 | Alex, Maya, Jordan, Claire, Lena capabilities | **Backend required** | Shown as "Planned · not yet available"; no activity is displayed |
 | Separate Teaching AI (Kai) | **Design-only** | Display-only planned card; access, catalog, name configuration and execution are backend required (T1–T6) |
 | Teaching-only navigation and menus | **Backend required** | Not claimed as operational; needs T1 (`managementAccess` and Teaching AI grant) |
@@ -81,7 +82,7 @@ Owner decision (2026-10-24): the teaching assistant is assigned to neither Clair
 1. **HON conversation orchestration** (school-scoped, requester-scoped, Complete-gated, routed through the Action Engine):
    - `GET /v1/organizations/:org/schools/:school/hon/conversations` — the requester's threads (id, title, updatedAt, status), paginated.
    - `GET /v1/organizations/:org/schools/:school/hon/conversations/:id` — turns with role (`HUMAN` / `HON` / agent key), text, and typed references (`workItemId`, `actionRequestId`) only.
-   - `POST /v1/organizations/:org/schools/:school/hon/conversations/:id/turns` with `Idempotency-Key` — returns a receipt (`turnId`, `status: READY | PROCESSING | DELEGATING | AWAITING_APPROVAL | COMPLETED | FAILED | UNKNOWN`, `delegatedAgentKeys`, `actionRequestIds`, `workItemIds`). The frontend already maps exactly these states, and treats anything else as `UNKNOWN`. Any consequential step must surface as an Action Engine `CONFIRM` proposal, never execute directly.
+   - `POST /v1/organizations/:org/schools/:school/hon/conversations/:id/turns` with `Idempotency-Key` — returns a receipt (`turnId`, `status: PROPOSED | PROCESSING | DELEGATING | AWAITING_APPROVAL | COMPLETED | FAILED | UNKNOWN`, `delegatedAgentKeys`, `actionRequestIds`, `workItemIds`). The frontend already maps exactly these states, and treats anything else as `UNKNOWN`. Any consequential step must surface as an Action Engine `CONFIRM` proposal, never execute directly.
    - `GET /v1/organizations/:org/schools/:school/hon/readiness` — server-confirmed `contract`, `providerRoute`, `entitlement` and `authorization` booleans for this requester. The composer is enabled only when all four are true. Provider calls must go through the existing AI spending protections; the frontend never chooses a provider or model.
    - Verified school context, for example operations counts and Command Center aggregates, must be assembled on the server from existing authorized reads, never from text supplied by the browser.
 2. **Handoff/session history:** `GET /v1/staff/voice/:schoolId/mine` — the requester's own voice/text handoff sessions (id, agentCatalogId, state, expiresAt, updatedAt), so history can be shown without typing session UUIDs.
@@ -89,6 +90,28 @@ Owner decision (2026-10-24): the teaching assistant is assigned to neither Clair
 4. **School-scoped AI work feed:** a single paginated `GET /v1/organizations/:org/schools/:school/ai/work` (requester-scoped, with a neutral `sourceKey` such as `teaching` for the legacy `claire` records, preserving history) instead of three cross-school `/mine` calls capped at 20.
 5. **Approval source attribution:** add a closed `sourceWorkflow` (or `agentKey`) to `ActionReviewItem` so approvals need not be inferred from `actionCode`.
 6. **Governed workspaces for Alex, Maya, Jordan, Claire, Lena** — one bounded draft slice per role (for Claire, a business-performance draft over the existing operations report and Command Center aggregates).
+
+## F3 conversational interface (frontend, server-gated)
+
+**What is built.** Reusable components in `apps/web/src/components/hon-command/`:
+- `hon-conversation-contract.ts`: typed shapes of contract 1 and strict closed-key verifiers. A thread whose `schoolId` differs from the verified school is rejected. Delegation targets are limited to the seven management keys, so Kai and unknown names are rejected. Unknown status strings show as Unknown. Limits: 50 threads per page, 200 turns per thread, 7 delegations and 10 references per turn, 2,000 characters per message.
+- `hon-conversation-data.ts`: `HonConversationController`. Without an injected source (production today) it never leaves `NOT_CONNECTED` and makes no request. With a source it checks readiness first. History is loaded only when all four readiness booleans are true. A send is allowed only while READY. Outcomes:
+  - A definitive refusal becomes Failed.
+  - Any other error, or a receipt for another thread, becomes Unknown. Unknown keeps the text and the request key, so a retry of the same message is deduplicated by the server; editing the text drops the key.
+  - A success shows only the server's re-read of the thread, never the receipt or a local echo.
+- `hon-conversation-view.tsx`: the conversation surface for the panel and the full workspace in Modern, Big-Button and Classic. Approval-required turns always say "Approval required. Nothing has run." and link to Action Center. Proposed turns say nothing has run. Linked results only open existing routes, and each says access is checked again there.
+- Synthetic fixtures and a design preview live in `preview/`. They are served only at `/reference/hon-conversation`, which returns 404 unless the server runs with `HON_REFERENCE_PREVIEW=1`, and is never indexed. A test proves that no production module imports them.
+
+**Backend dependency checklist (owner: Codex). The composer stays disabled until every item exists.**
+- [ ] `GET …/hon/readiness` with exactly `contract`, `providerRoute`, `entitlement` and `authorization`, evaluated for the signed-in human and the exact school.
+- [ ] `GET …/hon/conversations`: the requester's own threads at this school only, as `{ items: [{ id, title, status, updatedAt }], more }`, at most 50 per page.
+- [ ] `GET …/hon/conversations/:id`: `{ id, schoolId, title, turns }`. Each turn is `{ id, role: HUMAN | HON | AGENT, agentKey (AGENT only, one of the seven), text, status, createdAt, delegations: [{ agentKey, status, summary }], references: [{ kind: WORK_ITEM | ACTION_REQUEST, id }] }`, in ascending time order. The thread is private to its requester and 404s for anyone else.
+- [ ] `POST …/hon/conversations` (new thread with its first message) and `POST …/hon/conversations/:id/turns`: `Idempotency-Key` deduplication, returning `{ turnId, threadId, status, delegatedAgentKeys, actionRequestIds, workItemIds }`. A definitive refusal must be a distinguishable 4xx; anything else is shown as an unknown outcome.
+- [ ] Consequential steps become Action Engine `CONFIRM` proposals. `COMPLETED` is reported only for verified read-only results or executed approved actions.
+- [ ] Provider calls only through the existing AI spending protections and Complete entitlement. The frontend never picks a provider, model or agent.
+- [ ] School context assembled on the server from existing authorized reads; browser-supplied agent names, themes or URL values are never authority.
+- [ ] Management versus teaching separation: readiness `authorization` is false for teaching-only staff. Kai's conversation is the separate T4 contract.
+- [ ] Then a small frontend PR adds the HTTP source (`HonConversationSource`) and passes it to the workspace. No other UI change should be needed.
 
 ## Known issues and how they are handled
 
@@ -98,20 +121,21 @@ Owner decision (2026-10-24): the teaching assistant is assigned to neither Clair
 | Action Center asks for a school UUID | Not changed here (unrelated page) | Proposed separate PR: prefill Action Center from the same signed-subject resolver HON uses (`GET /v1/staff/current-reporting-school`) only when it returns `RESOLVED`. Never prefill from the URL, storage or theme. Keep manual entry for multi-school users; the queue API still enforces `action.approve` |
 | Sample/reference dashboards (`/`, `/complete-mobile`, `/reference/classic-dashboard`) | Already labeled "Design reference · representative sample state only" / "labeled sample data"; HON's launcher never appears there (tested) | Owner decision: retire, move under `/reference/`, or keep |
 | Teaching-only navigation | Not claimed; HON hides management content without a verified management scope | T1 |
-| Conversation composer not connected | Disabled and labeled; readiness gate tested | Contract 1 |
+| Conversation composer not connected | Disabled and labeled "Not connected" in production; full interaction states proven only on synthetic fixtures (F3) | Contract 1, then a small source-binding PR |
 | Kai identity and availability are frontend constants | Labeled provisional and planned | T1 |
 
 ## Next frontend PRs (none started; each needs owner approval)
 
-1. **F2 — HON conversation integration:** bind `HON_CONVERSATION_BOUNDARY` to contract 1. Enable the composer only through `honComposerEnabled` with server-confirmed readiness. Render turn states with `honTurnStatusPresentation`. Use idempotent sends. Approvals stay in Action Center. Depends on Codex contract 1 and the provider/entitlement route.
-2. **F3 — Agent delegation and work history:** server-evaluated availability (contract 3), a paginated school AI work feed with per-agent filters (contract 4), approval attribution (contract 5), and delegation progress from contract 1 receipts. Includes the small Action Center verified-school prefill, unless the owner wants that sooner as its own PR.
+1. **F3 — Server-gated conversational interface:** built in this PR (see above). Production stays "Not connected".
+   **Source binding (was F2):** add the HTTP `HonConversationSource` for contract 1 and pass it to the workspace. Depends on Codex contract 1 and the provider/entitlement route.
+2. **Delegation feed and work history:** server-evaluated availability (contract 3), a paginated school AI work feed with per-agent filters (contract 4), approval attribution (contract 5), and delegation progress from contract 1 receipts. Includes the small Action Center verified-school prefill, unless the owner wants that sooner as its own PR.
 3. **F4 — Kai Teaching Workspace:** `/staff/teaching`, per `HON_TEACHING_WORKSPACE_PROPOSAL.md`, after Codex T1–T3 are reviewed.
 4. **F5 — Premium polish:** fix the pre-existing Platform View picker contrast and overflow in Classic at 390px; consistent staff navigation across modes; onboarding; the approved HON mark served locally instead of from the Manus host.
 
 ## Owner decisions open
 
 1. The reference routes (`/`, `/complete-mobile`, `/reference/classic-dashboard`): keep as labeled design references, move them under `/reference/`, or retire them.
-2. Whether the Action Center prefill ships as its own small PR before F3.
+2. Whether the Action Center prefill ships as its own small PR.
 3. Kai: the final default name. The owner approved three portrait styles: realistic for Modern, illustrated for Classic and chibi for Big-Button. All three are in use.
 4. Whether the HON launcher should be hidden on `/staff/*` pages for users without a verified management scope once T1 can tell them apart. Today it opens to a short notice only.
 

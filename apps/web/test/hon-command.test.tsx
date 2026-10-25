@@ -96,7 +96,7 @@ describe('HON command roster', () => {
   });
 
   it('maps only server-reported conversation states and keeps the composer off without full readiness', () => {
-    expect(HON_TURN_STATUSES).toEqual(['READY', 'PROCESSING', 'DELEGATING', 'AWAITING_APPROVAL', 'COMPLETED', 'FAILED', 'UNKNOWN']);
+    expect(HON_TURN_STATUSES).toEqual(['PROPOSED', 'PROCESSING', 'DELEGATING', 'AWAITING_APPROVAL', 'COMPLETED', 'FAILED', 'UNKNOWN']);
     expect(honTurnStatusPresentation('AWAITING_APPROVAL')).toEqual(expect.objectContaining({ status: 'AWAITING_APPROVAL', label: 'Awaiting approval' }));
     for (const odd of [undefined, null, 'DONE', 'completed', 42, { status: 'COMPLETED' }]) expect(honTurnStatusPresentation(odd).status).toBe('UNKNOWN');
     expect(honComposerEnabled(null)).toBe(false);
@@ -351,7 +351,7 @@ describe('HON integration boundaries', () => {
   });
 
   it('adds no endpoint, write, storage or provider path of its own', () => {
-    const source = ['roster.ts', 'hon-command-data.ts', 'hon-conversation.ts', 'hon-workspace-view.tsx', 'hon-command.tsx', 'hon-launcher-slot.tsx']
+    const source = ['roster.ts', 'hon-command-data.ts', 'hon-conversation.ts', 'hon-conversation-contract.ts', 'hon-conversation-data.ts', 'hon-conversation-view.tsx', 'hon-portraits.tsx', 'hon-workspace-view.tsx', 'hon-command.tsx', 'hon-launcher-slot.tsx']
       .map((file) => readFileSync(join('src/components/hon-command', file), 'utf8')).join('\n');
     expect(source).not.toMatch(/fetch\(|localStorage|sessionStorage|method:\s*'(POST|PUT|PATCH|DELETE)'|openrouter|invokeLLM|Idempotency-Key/i);
     expect(source).not.toMatch(/Curriculum support/);

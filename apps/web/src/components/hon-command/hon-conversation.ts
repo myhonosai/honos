@@ -24,6 +24,8 @@ export const HON_CONVERSATION_BOUNDARY = Object.freeze({
 export interface HonConversationContractNeeded {
   listThreads: 'GET /v1/organizations/:organizationId/schools/:schoolId/hon/conversations';
   readThread: 'GET /v1/organizations/:organizationId/schools/:schoolId/hon/conversations/:conversationId';
+  readiness: 'GET /v1/organizations/:organizationId/schools/:schoolId/hon/readiness';
+  startThread: 'POST /v1/organizations/:organizationId/schools/:schoolId/hon/conversations';
   sendTurn: 'POST /v1/organizations/:organizationId/schools/:schoolId/hon/conversations/:conversationId/turns';
 }
 
@@ -32,11 +34,11 @@ export interface HonConversationContractNeeded {
  * contract. Presentation only: nothing here creates, polls or advances a turn,
  * and a state is shown only when the server reports it.
  */
-export const HON_TURN_STATUSES = ['READY', 'PROCESSING', 'DELEGATING', 'AWAITING_APPROVAL', 'COMPLETED', 'FAILED', 'UNKNOWN'] as const;
+export const HON_TURN_STATUSES = ['PROPOSED', 'PROCESSING', 'DELEGATING', 'AWAITING_APPROVAL', 'COMPLETED', 'FAILED', 'UNKNOWN'] as const;
 export type HonTurnStatus = typeof HON_TURN_STATUSES[number];
 
 const TURN_PRESENTATION: Readonly<Record<HonTurnStatus, { label: string; tone: 'ready' | 'neutral' | 'waiting' | 'blocked' | 'planned'; detail: string }>> = {
-  READY: { label: 'Ready', tone: 'ready', detail: 'The server reports HON can accept a message.' },
+  PROPOSED: { label: 'Proposed', tone: 'neutral', detail: 'HON proposed a next step. Nothing has run.' },
   PROCESSING: { label: 'Processing', tone: 'neutral', detail: 'The server reports this message is being handled.' },
   DELEGATING: { label: 'Delegating', tone: 'neutral', detail: 'The server reports a bounded task was handed to a named specialist.' },
   AWAITING_APPROVAL: { label: 'Awaiting approval', tone: 'waiting', detail: 'A proposal needs a qualified human decision in Action Center. Nothing has run.' },

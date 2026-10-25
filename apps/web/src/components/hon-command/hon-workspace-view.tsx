@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import type { ActionReviewItem, AiDraftWorkItem, CommandCenterRecommendation } from '@hon/contracts';
 import type { HonInterfaceTheme } from '@hon/design-system';
-import { HON_MARK_SOURCE } from '../classic-dashboard/portraits';
 import type { HonCommandSnapshot, HonSection } from './hon-command-data';
-import { HON_CONVERSATION_BOUNDARY, honComposerEnabled } from './hon-conversation';
+import { notConnectedConversationSnapshot, type HonConversationSnapshot } from './hon-conversation-data';
+import { HonConversationView, type HonConversationActions } from './hon-conversation-view';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, teachingAiPortrait, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
+import { AgentPortrait, HonMark } from './hon-portraits';
 import styles from './hon-command.module.css';
+
+export { AgentPortrait, HonMark };
 
 /** The existing requester-scoped reads return at most 20 records per source across all schools. */
 export const HON_PARTIAL_HISTORY = 'Shows up to your 20 most recent drafts per source, across all your schools, so older drafts may not appear. This is not a complete history.';
@@ -33,35 +36,15 @@ export interface HonWorkspaceViewProps {
   onClose?: (() => void) | undefined;
   expandHref?: string | undefined;
   returnHref?: string | undefined;
+  /** Omitted in production: no conversation contract exists, so HON shows "Not connected". */
+  conversation?: (HonConversationActions & { snapshot: HonConversationSnapshot }) | undefined;
 }
+
+const NOT_CONNECTED = notConnectedConversationSnapshot();
 
 const STATUS_WORDS = (value: string): string => value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 function when(value: string): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
-}
-
-export function HonMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
-  const [failed, setFailed] = useState(false);
-  const image = useRef<HTMLImageElement>(null);
-  useEffect(() => {
-    const element = image.current;
-    if (element?.complete && element.naturalWidth === 0) setFailed(true);
-  }, []);
-  return <span className={styles.mark} data-size={size} aria-hidden="true">
-    {failed ? <span className={styles.markFallback}>H</span> : <img ref={image} src={HON_MARK_SOURCE} alt="" onError={() => setFailed(true)} />}
-  </span>;
-}
-
-export function AgentPortrait({ agent, size = 'md' }: { agent: Pick<HonCommandAgent, 'name' | 'color' | 'portrait'>; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
-  const [failed, setFailed] = useState(false);
-  const image = useRef<HTMLImageElement>(null);
-  useEffect(() => {
-    const element = image.current;
-    if (element?.complete && element.naturalWidth === 0) setFailed(true);
-  }, []);
-  return <span className={styles.portrait} data-size={size} style={{ '--agent': agent.color } as React.CSSProperties} aria-hidden="true">
-    {failed ? <span>{agent.name.charAt(0)}</span> : <img ref={image} src={agent.portrait} alt="" onError={() => setFailed(true)} />}
-  </span>;
 }
 
 export function AvailabilityBadge({ agent, compact = false }: { agent: HonCommandAgent; compact?: boolean }): React.ReactElement {
@@ -78,26 +61,6 @@ function SectionState<T>({ section, label }: { section: HonSection<T>; label: st
     <strong>{section.state === 'DENIED' ? `${label}: not available for your access` : `${label}: unavailable`}</strong>
     <p>{section.message}</p>
   </div>;
-}
-
-function Conversation({ presentation }: { presentation: 'panel' | 'full' }): React.ReactElement {
-  // No server-confirmed readiness exists yet, so the composer stays disabled.
-  const enabled = honComposerEnabled(null);
-  return <section className={styles.conversation} aria-labelledby={`hon-conversation-${presentation}`}>
-    <div className={styles.conversationHead}>
-      <h3 id={`hon-conversation-${presentation}`}>Ask HON</h3>
-      <span className={styles.badge} data-tone="blocked">Not connected</span>
-    </div>
-    <p className={styles.conversationNote}><strong>{HON_CONVERSATION_BOUNDARY.headline}.</strong> {HON_CONVERSATION_BOUNDARY.detail}</p>
-    <div className={styles.composer}>
-      <label htmlFor={`hon-composer-${presentation}`} className={styles.visuallyHidden}>Message HON (not connected)</label>
-      <textarea id={`hon-composer-${presentation}`} rows={presentation === 'full' ? 3 : 2} disabled={!enabled} placeholder="Conversation is not connected yet" aria-describedby={`hon-composer-help-${presentation}`} />
-      <button type="button" disabled={!enabled}>Send</button>
-    </div>
-    <p id={`hon-composer-help-${presentation}`} className={styles.meta}>{HON_CONVERSATION_BOUNDARY.history}</p>
-    <a className={styles.inlineLink} href={HON_CONVERSATION_BOUNDARY.handoff.href}>{HON_CONVERSATION_BOUNDARY.handoff.label} →</a>
-    <p className={styles.meta}>{HON_CONVERSATION_BOUNDARY.handoff.detail}</p>
-  </section>;
 }
 
 function draftCount(snapshot: HonCommandSnapshot, agent: HonCommandAgent): number | null {
@@ -332,7 +295,7 @@ export function HonWorkspaceView(props: HonWorkspaceViewProps): React.ReactEleme
     {scope.state === 'RESOLVING' ? <p className={styles.state} role="status" data-state="LOADING">{scope.message}</p> : null}
     {/* Management agents, suggestions, AI work and approvals render only for a server-verified management scope. */}
     {verified ? <div className={styles.body}>
-      <Conversation presentation={presentation} />
+      <HonConversationView {...props.conversation} snapshot={props.conversation?.snapshot ?? NOT_CONNECTED} presentation={presentation} />
       <section className={styles.sections} aria-label="HON workspace">
         <HonTabs tab={tab} snapshot={snapshot} onTab={props.onTab} idPrefix={idPrefix} />
         <div className={styles.tabPanel} role="tabpanel" id={`${idPrefix}-panel`} aria-labelledby={`${idPrefix}-tab-${tab}`} tabIndex={0}>
