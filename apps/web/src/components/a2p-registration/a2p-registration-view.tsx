@@ -27,7 +27,8 @@ const tipKey = (key: A2pAnswerKey) => k(`a2p.tip.${key.startsWith('SAMPLE_MESSAG
 
 type FindingFilter = 'ALL' | A2pFindingOutcome;
 type HonPrompt = 'website' | 'checkbox' | 'samples' | 'reject' | 'final';
-const HON_PROMPTS: ReadonlyArray<{ id: HonPrompt; step: A2pStep; filter?: FindingFilter; focus?: string }> = [
+export interface A2pHonPrompt { id: HonPrompt; step: A2pStep; filter?: FindingFilter; focus?: string }
+const HON_PROMPTS: readonly A2pHonPrompt[] = [
   { id: 'website', step: 'FIX_WEBSITE', filter: 'NEEDS_FIXING' },
   { id: 'checkbox', step: 'FIX_WEBSITE', filter: 'ALL', focus: 'area-OPT_IN' },
   { id: 'samples', step: 'ANSWERS', focus: 'a2p-answer-SAMPLE_MESSAGE_1' },
@@ -153,7 +154,7 @@ function SyntheticChip({ source, t }: { source: A2pSource; t: T }): React.ReactE
   return source === 'SYNTHETIC_FIXTURE' ? <span className={styles.badge} data-tone="synthetic">{t('a2p.synthetic.chip')}</span> : null;
 }
 
-function CopyButton({ text, label, t }: { text: string; label: string; t: T }): React.ReactElement {
+export function CopyButton({ text, label, t }: { text: string; label: string; t: T }): React.ReactElement {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -547,13 +548,14 @@ function StatusStep({ snapshot, source, t, date }: { snapshot: A2pSnapshot; sour
   );
 }
 
-function HonAssistant({ t, onPrompt }: { t: T; onPrompt: (prompt: typeof HON_PROMPTS[number]) => void }): React.ReactElement {
+/** Suggested prompts only navigate; the composer stays disabled until a governed HON conversation exists. */
+export function HonAssistant({ t, onPrompt, prompts = HON_PROMPTS }: { t: T; onPrompt: (prompt: A2pHonPrompt) => void; prompts?: readonly A2pHonPrompt[] }): React.ReactElement {
   const composerId = useId(), noteId = useId();
   return (
     <aside id="a2p-hon" className={styles.hon} aria-labelledby="a2p-hon-title">
       <div className={styles.honHead}><HonMark size="md" /><div><h2 id="a2p-hon-title">{t('a2p.hon.title')}</h2><p className={styles.meta}>{t('a2p.hon.lede')}</p></div></div>
       <ul className={styles.prompts}>
-        {HON_PROMPTS.map((prompt) => (
+        {prompts.map((prompt) => (
           <li key={prompt.id}>
             <button type="button" onClick={() => onPrompt(prompt)}>
               <span>“{t(k(`a2p.hon.prompt.${prompt.id}`))}”</span>

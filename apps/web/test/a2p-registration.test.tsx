@@ -294,7 +294,8 @@ describe('localization and source boundaries', () => {
   it('keeps synthetic fixtures out of the production route and gates the reference route', async () => {
     const production = source('src/components/a2p-registration/production-entry.tsx') + source('src/app/settings/communications/business-texting/a2p-registration/page.tsx') + source('src/components/a2p-registration/a2p-registration-view.tsx') + source('src/components/a2p-registration/controller.ts');
     expect(production).not.toMatch(/synthetic-fixtures|createSyntheticA2pAdapter/);
-    expect(source('src/components/a2p-registration/production-entry.tsx')).toContain('A2P_NOT_CONNECTED_ADAPTER');
+    // A2P-2 integration: production uses the HTTP preparation adapter (see a2p-preparation.test.tsx).
+    expect(source('src/components/a2p-registration/production-entry.tsx')).toContain('A2P_HTTP_PREPARATION_CLIENT');
     expect(source('src/app/settings/communications/business-texting/a2p-registration/page.tsx')).toContain('await requireVerifiedWebSession()');
     const all = ['adapter.ts', 'contract.ts', 'controller.ts', 'synthetic-fixtures.ts', 'a2p-registration-view.tsx', 'production-entry.tsx', 'preview-entry.tsx'].map((file) => source(`src/components/a2p-registration/${file}`)).join('\n');
     expect(all).not.toMatch(/twilio\.com|api\.|fetch\(|sendSms|localStorage|sessionStorage/i);

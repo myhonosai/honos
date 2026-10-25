@@ -82,3 +82,31 @@ Closed enums are the `A2P_*` constants in `contract.ts`.
 3. Website-check network safety (SSRF, robots, rate limits) is backend-owned; the client check is usability only.
 4. Whether `VERIFIED` provenance must reference a finding/evidence id.
 5. Registration status must come from the provider integration only; HON-local `DRAFT` should be distinguishable from a provider-reported state (`reportedAt` null today).
+
+## A2P-2 integration rehearsal (dependent on #81 and #82, not merge-ready)
+
+Branch `claude/a2p-2-integration-rehearsal` = `32d40ad` (#81) + `c1ce12c` (#82), merged without edits to either. On this branch the production route uses the HTTP adapter instead of `A2P_NOT_CONNECTED_ADAPTER`; the synthetic reference route is unchanged.
+
+| Piece | Path |
+|---|---|
+| Strict response readers | `apps/web/src/components/a2p-registration/preparation-contract.ts` |
+| HTTP adapter (five POST routes) | `apps/web/src/components/a2p-registration/preparation-http.ts` |
+| Controller | `apps/web/src/components/a2p-registration/preparation-controller.ts` |
+| View | `apps/web/src/components/a2p-registration/preparation-view.tsx` |
+| Copy (EN/KO/ES) | `packages/design-system/src/localization/a2p-preparation.ts` |
+| Browser + API + PostgreSQL rehearsal | `apps/web/scripts/a2p-preparation-integration-browser.mjs` |
+
+Behaviour:
+- Scope comes only from `/api/v1/staff/current-reporting-school`, re-verified before every command; facts travel only in JSON bodies; `X-HON-Human-Command: a2p-prepare`, `mode: same-origin`, no idempotency key.
+- Responses are rejected unless they match the exact closed shape, the expected school, `readOnly`/`persistence: NONE`, all 13 checks in engine order, and the honesty invariants (no outcome or evidence while inspection is disabled, no overall PASS, no saved/submitted/sent/consent flags, English drafts, copy-ready exactly when nothing is missing, copy digest equal to the request).
+- The owner attestation is sent only when the last response granted `canConfirmOwnerFacts`; it is cleared whenever a fact changes, when authority is lost, or on `A2P_OWNER_FACT_CONFIRMATION_REQUIRED`.
+- Copy preparation uses the digest of the latest successful `draft-validation` of the current input plus `COPY_DRAFT_FOR_EXTERNAL_OWNER_REVIEW`; any input change drops it.
+- Results are dropped when the page is hidden (typed facts stay), and everything including facts is dropped on school change, 401, 403 or a lost current school.
+- Disabled: saved drafts, review marks, provider status, submission, live HON chat.
+
+### Contract changes requested from Codex
+1. A read-only authority route (e.g. `POST …/a2p/readiness` returning `scope`). Today the UI learns `canConfirmOwnerFacts` from a fact-free `draft-validation` probe.
+2. Export closed enums for `missingFields`, `warnings` and finding `reason` from `@hon/contracts`; the UI localizes the current values and labels unknown ones generically.
+3. Return remediation as a code (or localized text); it is English-only server text today, shown with an "English" label.
+4. `website-review` returns a `computationDigest` no route consumes; document its purpose or drop it.
+5. Consider per-principal rate limits on the five routes (each call performs two scope reads).
