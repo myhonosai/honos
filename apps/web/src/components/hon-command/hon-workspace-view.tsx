@@ -6,7 +6,7 @@ import type { HonInterfaceTheme } from '@hon/design-system';
 import { HON_MARK_SOURCE } from '../classic-dashboard/portraits';
 import type { HonCommandSnapshot, HonSection } from './hon-command-data';
 import { HON_CONVERSATION_BOUNDARY, honComposerEnabled } from './hon-conversation';
-import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
+import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, teachingAiPortrait, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
 import styles from './hon-command.module.css';
 
 /** The existing requester-scoped reads return at most 20 records per source across all schools. */
@@ -52,7 +52,7 @@ export function HonMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }): React.R
   </span>;
 }
 
-export function AgentPortrait({ agent, size = 'md' }: { agent: HonCommandAgent; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
+export function AgentPortrait({ agent, size = 'md' }: { agent: Pick<HonCommandAgent, 'name' | 'color' | 'portrait'>; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
   const [failed, setFailed] = useState(false);
   const image = useRef<HTMLImageElement>(null);
   useEffect(() => {
@@ -125,10 +125,12 @@ function TeamGrid({ snapshot, variant, onSelectAgent }: { snapshot: HonCommandSn
   </ul>;
 }
 
-function TeachingAiCard(): React.ReactElement {
+function TeachingAiCard({ variant }: { variant: HonInterfaceTheme }): React.ReactElement {
   const ai = HON_TEACHING_AI;
-  return <section className={styles.teachingAi} aria-labelledby="hon-teaching-ai">
-    <span className={styles.monogram} aria-hidden="true">{ai.name.charAt(0)}</span>
+  const portrait = teachingAiPortrait(variant);
+  return <section className={styles.teachingAi} style={{ '--agent': ai.color } as React.CSSProperties} aria-labelledby="hon-teaching-ai" data-kai-style={variant}>
+    {/* Keyed by source so a mode switch retries the image instead of keeping an earlier fallback. */}
+    <AgentPortrait key={portrait} agent={{ ...ai, portrait }} size="lg" />
     <div>
       <p className={styles.kicker}>Separate instructional AI · not part of the management team</p>
       <h3 id="hon-teaching-ai">{ai.name} <small>(provisional name)</small></h3>
@@ -229,7 +231,7 @@ function TabPanel({ tab, snapshot, variant, selectedAgentId, onSelectAgent }: Pi
     return <>
       <p className={styles.lede}>Seven specialists coordinated by HON. Chad and Marcus can prepare governed drafts today; the others are planned and show no activity until a real contract exists.</p>
       <TeamGrid snapshot={snapshot} variant={variant} onSelectAgent={(id) => onSelectAgent?.(id)} />
-      <TeachingAiCard />
+      <TeachingAiCard variant={variant} />
     </>;
   }
   if (tab === 'suggested') {
