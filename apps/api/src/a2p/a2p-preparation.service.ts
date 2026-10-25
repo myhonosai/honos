@@ -47,7 +47,7 @@ export class A2pPreparationService {
     try { review=evaluateA2pWebsite(inspection); } catch { review=evaluateA2pWebsite({kind:'UNAVAILABLE',reason:'INSPECTION_FAILED'}); }
     const current=await this.scope(subject,org,school);
     if (current.schoolName!==scope.schoolName) throw new ConflictException({code:'A2P_SCHOOL_CHANGED'});
-    return Object.freeze({scope,review,computationDigest:digest(scope,input),readOnly:true as const,persistence:'NONE' as const});
+    return Object.freeze({scope:current,review,computationDigest:digest(current,input),readOnly:true as const,persistence:'NONE' as const});
   }
   async finding(subject:string,org:string,school:string,value:unknown):Promise<A2pFindingResponse> {
     const input=this.input(()=>validateA2pFindingInput(value));
@@ -60,7 +60,7 @@ export class A2pPreparationService {
     const draft=generateA2pDraft(input,scope.schoolName),current=await this.scope(subject,org,school);
     if(input.ownerConfirmation===A2P_FACT_CONFIRMATION&&!current.canConfirmOwnerFacts)throw new ForbiddenException({code:'A2P_OWNER_FACT_CONFIRMATION_REQUIRED'});
     if (current.schoolName!==scope.schoolName) throw new ConflictException({code:'A2P_SCHOOL_CHANGED'});
-    return Object.freeze({scope,draft,computationDigest:digest(scope,input),readOnly:true as const,persistence:'NONE' as const});
+    return Object.freeze({scope:current,draft,computationDigest:digest(current,input),readOnly:true as const,persistence:'NONE' as const});
   }
   async validate(subject:string,org:string,school:string,value:unknown):Promise<A2pValidationResponse> {
     const result=await this.draft(subject,org,school,value);

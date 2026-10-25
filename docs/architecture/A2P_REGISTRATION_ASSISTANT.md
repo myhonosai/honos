@@ -11,6 +11,10 @@ A2P-1 is a **stateless, read-only preparation engine**. No assessment/draft hist
 customer consent, approval, audit mutation, idempotency claim or outbox job is
 created. Each call independently resolves the exact school and a live authorized
 human; entitlement/permission loss is checked again before returning results.
+Responses and computation digests use the final reauthorized scope, including
+the latest owner-confirmation capability. Losing OWNER while retaining the
+preparation permission allows unconfirmed preparation with that capability
+false; owner-confirmed drafts, validation and copy remain forbidden.
 Outputs identify their scope, engine/source version, owner-confirmed versus
 synthetic evidence and missing facts. Digests detect changed draft inputs; they
 are not signatures, authority or durable acceptance evidence.

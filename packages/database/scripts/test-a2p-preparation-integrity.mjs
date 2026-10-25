@@ -1,6 +1,6 @@
 import pg from 'pg';
 import assert from 'node:assert/strict';
-import {randomUUID as K} from 'node:crypto';
+import {randomUUID as K,createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {request} from 'node:http';
 import {verifyA2pPreparationSecurity} from './a2p-preparation-security.mjs';
@@ -18,13 +18,35 @@ const {HonIdentityService}=api('./dist/foundation/hon-identity.service.js');
 const {draft,review}=api('./test/fixtures/a2p-fixtures.cjs');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
 const db=new RuntimeDatabaseService(),service=new A2pPreparationService(db,new UnavailableA2pWebsiteInspector());
-const ids=Object.fromEntries(['org','school','second','foreignOrg','foreignSchool','user','principal','role','grant'].map(k=>[k,K()]));
+const ids=Object.fromEntries(['org','school','second','foreignOrg','foreignSchool','user','principal','role','grant','preparationRole','preparationGrant'].map(k=>[k,K()]));
 const subject='a2p-proof-'+K();let groups=0,app;
 const pass=label=>console.log('PASS A2P '+(++groups)+': '+label);
 const deny=(promise,status,code)=>assert.rejects(promise,e=>{assert.equal(e.getStatus?.(),status,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;});
 const ctx=(patch={})=>({organizationId:ids.org,schoolId:ids.school,principalId:ids.principal,principalType:'HUMAN_USER',externalSubject:subject,requestId:K(),...patch});
 async function counts(){return(await admin.query("SELECT jsonb_object_agg(table_name,n) value FROM (SELECT table_name,(xpath('/row/n/text()',query_to_xml(format('SELECT count(*) n FROM hon.%I',table_name),false,true,'')))[1]::text::bigint n FROM information_schema.tables WHERE table_schema='hon' AND table_type='BASE TABLE') t")).rows[0].value;}
 async function gates(){return(await admin.query("SELECT (SELECT status FROM hon.saas_access_program) paid,(SELECT status FROM hon.saas_credit_program) credits,(SELECT status FROM hon.saas_payment_program) payment")).rows[0];}
+async function fingerprints(){
+ const result={};
+ for(const {table_name}of(await admin.query("SELECT table_name FROM information_schema.tables WHERE table_schema='hon' AND table_type='BASE TABLE' ORDER BY table_name")).rows){
+  const rows=await admin.query('SELECT to_jsonb(t)::text value FROM hon."'+table_name.replaceAll('"','""')+'" t');
+  result[table_name]=createHash('sha256').update(JSON.stringify(rows.rows.map(r=>r.value).sort())).digest('hex');
+ }
+ return result;
+}
+const revokeOwner=()=>admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE id=$1',[ids.grant,ids.principal]);
+const restoreOwner=()=>admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE id=$1',[ids.grant]);
+// Test-only scheduling barrier. Every authorization query and result is real PostgreSQL;
+// the first read-only transaction is closed before this pause, with no lock held.
+async function prepareAcrossChange(run,change){
+ let enter,release,reads=0;const reached=new Promise(r=>enter=r),pending=new Promise(r=>release=r);
+ const boundary={resolveAuthorizedScope:(...args)=>db.resolveAuthorizedScope(...args),
+  async readA2pPreparationScope(...args){const result=await db.readA2pPreparationScope(...args);if(++reads===1){enter(result);await pending;}return result;}};
+ const outcome=run(new A2pPreparationService(boundary,new UnavailableA2pWebsiteInspector())).then(value=>({value}),error=>({error}));
+ try{
+  const initial=await Promise.race([reached,outcome.then(r=>{throw r.error??Error('Preparation ended before the initial-scope barrier');})]);
+  assert.equal(initial.canConfirmOwnerFacts,true);await change();release();return await outcome;
+ }finally{release();}
+}
 async function direct(patch={},subjectOverride=subject){
  const x={...ctx(),source:'HUMAN_UI',action:'',delegation:'',...patch};await restricted.query('BEGIN READ ONLY');
  try{await restricted.query("SELECT set_config('app.hon_organization_id',$1,true),set_config('app.hon_school_id',$2,true),set_config('app.hon_principal_id',$3,true),set_config('app.hon_principal_type',$4,true),set_config('app.hon_external_subject',$5,true),set_config('app.hon_source',$6,true),set_config('app.hon_action_request_id',$7,true),set_config('app.hon_delegated_by_principal_id',$8,true),set_config('app.hon_request_id',$9,true)",
@@ -42,9 +64,9 @@ try{
  await admin.query("INSERT INTO hon.organization_entitlements(organization_id,tier,effective_from) VALUES($1,'CORE',clock_timestamp()-interval '1 day')",[ids.org]);
  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'A2P Synthetic Owner')",[ids.user,subject,ids.user+'@example.test']);
  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','A2P Synthetic Owner')",[ids.principal,ids.user]);
- await admin.query("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,'OWNER','A2P Synthetic Owner')",[ids.role,ids.org]);
- await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'communication.a2p.prepare')",[ids.role,ids.org]);
- await admin.query("INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,$4,clock_timestamp()-interval '1 hour')",[ids.grant,ids.org,ids.school,ids.principal,ids.role]);
+ await admin.query("INSERT INTO hon.roles(id,organization_id,code,name) VALUES($1,$2,'OWNER','A2P Synthetic Owner'),($3,$2,'A2P_PREPARER','A2P Synthetic Preparer')",[ids.role,ids.org,ids.preparationRole]);
+ await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'communication.a2p.prepare'),($3,$2,'communication.a2p.prepare')",[ids.role,ids.org,ids.preparationRole]);
+ await admin.query("INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,$4,clock_timestamp()-interval '1 hour'),($6,$2,$3,$4,$7,$4,clock_timestamp()-interval '1 hour')",[ids.grant,ids.org,ids.school,ids.principal,ids.role,ids.preparationGrant,ids.preparationRole]);
  await admin.query('COMMIT');
  const footprint=await counts(),posture=await gates();
  assert.deepEqual(posture,{paid:'INACTIVE',credits:'INACTIVE',payment:'DISABLED'});
@@ -77,10 +99,40 @@ try{
  let settle;const pending=new Promise(r=>settle=r);
  let inspected;const reached=new Promise(r=>inspected=r);const waitingInspector={async inspect(){inspected();return pending;}};
  const waiting=new A2pPreparationService(db,waitingInspector).website(subject,ids.org,ids.school,review());await reached;
- await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE id=$1',[ids.grant,ids.principal]);settle({kind:'UNAVAILABLE',reason:'LIVE_INSPECTION_DISABLED'});
+ await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE id=ANY($1::uuid[])',[[ids.grant,ids.preparationGrant],ids.principal]);settle({kind:'UNAVAILABLE',reason:'LIVE_INSPECTION_DISABLED'});
  await deny(waiting,403);await deny(service.copy(subject,ids.org,ids.school,{input:draft(),expectedDigest:rows[0].computationDigest,acknowledgement:c.A2P_COPY_CONFIRMATION}),403);
- await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE id=$1',[ids.grant]);
+ await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE id=ANY($1::uuid[])',[[ids.grant,ids.preparationGrant]]);
  pass('revocation while inspection is pending hides results and refuses repeated copy; no lock held across waits');
+ let expected;const beforeDowngrade=await fingerprints();
+ const downgraded=await prepareAcrossChange(s=>s.website(subject,ids.org,ids.school,review()),async()=>{
+  await revokeOwner();assert.equal((await direct()).canConfirmOwnerFacts,false);expected=await fingerprints();
+ });
+ assert.equal(downgraded.error,undefined);assert.equal(downgraded.value.scope.canConfirmOwnerFacts,false);
+ assert.deepEqual(downgraded.value,await service.website(subject,ids.org,ids.school,review()));
+ assert.notEqual(downgraded.value.computationDigest,website.computationDigest);
+ assert.deepEqual({...beforeDowngrade,principal_role_grants:expected.principal_role_grants},expected);
+ assert.deepEqual(await fingerprints(),expected);await restoreOwner();
+ pass('OWNER revoked between actual scope reads while separate preparation grant remains; final metadata and digest match stable staff scope; row fingerprints unchanged by preparation');
+ for(const method of ['draft','validate','copy']){
+  const before=await fingerprints();
+  const input=method==='copy'?{input:draft(),expectedDigest:rows[0].computationDigest,acknowledgement:c.A2P_COPY_CONFIRMATION}:draft();
+  const result=await prepareAcrossChange(s=>s[method](subject,ids.org,ids.school,input),async()=>{await revokeOwner();expected=await fingerprints();});
+  assert.equal(result.value,undefined);assert.equal(result.error?.getStatus(),403);assert.equal(result.error.getResponse().code,'A2P_OWNER_FACT_CONFIRMATION_REQUIRED');
+  assert.deepEqual({...before,principal_role_grants:expected.principal_role_grants},expected);
+  assert.deepEqual(await fingerprints(),expected);await restoreOwner();
+ }
+ pass('draft, validation and copy all refuse OWNER loss at the final real DB check; no insert, update, delete, audit, outbox or idempotency side effects');
+ await admin.query("UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()+interval '10 seconds' WHERE organization_id=$1",[ids.org]);
+ const beforeExpiry=await fingerprints();
+ const expired=await prepareAcrossChange(s=>s.website(subject,ids.org,ids.school,review()),async()=>{
+  // Bounded wait for the real database clock to cross the initially valid deadline;
+  // no entitlement mutation, fake clock or application lock occurs during the wait.
+  await admin.query('SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM(effective_until-clock_timestamp())))+0.02) FROM hon.organization_entitlements WHERE organization_id=$1',[ids.org]);
+ });
+ assert.equal(expired.value,undefined);assert.equal(expired.error?.getStatus(),403);assert.equal(expired.error.getResponse().code,'A2P_PREPARATION_FORBIDDEN');
+ assert.deepEqual(await fingerprints(),beforeExpiry);
+ await admin.query('UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1',[ids.org]);
+ pass('initially valid entitlement expires on the real DB clock during preparation; final access denied and all row fingerprints unchanged');
  process.env.HON_AUTH_MODE='OIDC';process.env.HON_SESSION_JWT_SECRET='synthetic-a2p-disposable-signed-session-secret';process.env.HON_SESSION_AUDIENCE='hon-a2p-disposable';process.env.HON_PUBLIC_ORIGIN='https://hon.example';
  const mod=await Test.createTestingModule({controllers:[A2pPreparationController],providers:[A2pPreparationService,A2pPreparationHumanGuard,HonIdentityService,
   {provide:RuntimeDatabaseService,useValue:db},{provide:A2P_WEBSITE_INSPECTOR,useValue:new UnavailableA2pWebsiteInspector()}]}).compile();

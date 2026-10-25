@@ -9,11 +9,11 @@ const {HonIdentityService}=require('../dist/foundation/hon-identity.service.js')
 const {RuntimeDatabaseService}=require('../dist/foundation/runtime-database.service.js');
 const {draft,review,LocalWebsiteFixtureInspector}=require('./fixtures/a2p-fixtures.cjs');
 const scope={organizationId:K(),schoolId:K(),principalId:K(),schoolName:'Synthetic Dojo',canConfirmOwnerFacts:true};
-function setup(inspector=new UnavailableA2pWebsiteInspector()){
- let allowed=true,owner=true,reads=0;
+function setup(inspector=new UnavailableA2pWebsiteInspector(),onRead=()=>{}){
+ let allowed=true,owner=true,entitled=true,reads=0;
  const database={async resolveAuthorizedScope(subject,school,permission){assert.equal(permission,c.A2P_PERMISSION);return allowed&&subject==='owner'&&school===scope.schoolId?scope:undefined;},
-  async readA2pPreparationScope(context){++reads;assert.equal(context.principalType,'HUMAN_USER');return allowed?{...scope,canConfirmOwnerFacts:owner}:null;}};
- return {database,service:new A2pPreparationService(database,inspector),revoke:()=>{allowed=false;},staff:()=>{owner=false;},reads:()=>reads};
+  async readA2pPreparationScope(context){++reads;assert.equal(context.principalType,'HUMAN_USER');onRead(reads);return allowed&&entitled?{...scope,canConfirmOwnerFacts:owner}:null;}};
+ return {database,service:new A2pPreparationService(database,inspector),revoke:()=>{allowed=false;},staff:()=>{owner=false;},expire:()=>{entitled=false;},reads:()=>reads};
 }
 const deny=(promise,status,code)=>assert.rejects(promise,e=>e.getStatus?.()===status&&(!code||e.getResponse().code===code));
 test('A2P production website inspection is unconditionally unavailable, even with provider-shaped environment switches',async()=>{
@@ -45,12 +45,42 @@ test('A2P cross-school and cross-organization calls fail before an inspection or
  }assert.equal(inspector.calls,0);s.revoke();await deny(s.service.draft('owner',scope.organizationId,scope.schoolId,draft()),403);
 });
 test('A2P rechecks revoked permission after the inspector settles; unknown outcome never reveals old results',async()=>{
- let finish;const waiting=new Promise(r=>finish=r),s=setup({inspect:()=>waiting});
- const p=s.service.website('owner',scope.organizationId,scope.schoolId,review());await Promise.resolve();await Promise.resolve();s.revoke();finish({kind:'UNAVAILABLE',reason:'LIVE_INSPECTION_DISABLED'});await deny(p,403);
+ let finish,reached;const entered=new Promise(r=>reached=r),waiting=new Promise(r=>finish=r),s=setup({inspect:()=>{reached();return waiting;}});
+ const p=s.service.website('owner',scope.organizationId,scope.schoolId,review());await entered;s.revoke();finish({kind:'UNAVAILABLE',reason:'LIVE_INSPECTION_DISABLED'});await deny(p,403);
 });
 test('A2P explicit owner fact confirmation cannot be asserted by delegated preparation staff',async()=>{
  const s=setup();s.staff();await deny(s.service.draft('owner',scope.organizationId,scope.schoolId,draft()),403,'A2P_OWNER_FACT_CONFIRMATION_REQUIRED');
  const r=await s.service.draft('owner',scope.organizationId,scope.schoolId,{...draft(),ownerConfirmation:'NOT_CONFIRMED'});assert.equal(r.draft.state,'NEEDS_INPUT');assert.equal(r.scope.canConfirmOwnerFacts,false);
+});
+const unconfirmedDraft=()=>({...draft(),ownerConfirmation:'NOT_CONFIRMED'});
+const prepare=(service,method)=>service[method]('owner',scope.organizationId,scope.schoolId,
+ method==='finding'?{review:review(),findingCode:'HELP'}:method==='website'?review():unconfirmedDraft());
+for(const method of ['website','finding','draft','validate'])test('A2P '+method+' returns final OWNER capability and final-scope digest after downgrade',async()=>{
+ const changing=setup(undefined,n=>{if(n===2)changing.staff();});
+ const result=await prepare(changing.service,method);
+ assert.equal(changing.reads(),2);assert.equal(result.scope.canConfirmOwnerFacts,false);
+ const stationary=setup();stationary.staff();
+ assert.deepEqual(result,await prepare(stationary.service,method));
+ if('computationDigest' in result){
+  const before=await prepare(setup().service,method);
+  assert.notEqual(result.computationDigest,before.computationDigest);
+ }
+ assert.equal(result.persistence,'NONE');assert.equal(result.readOnly,true);
+});
+for(const method of ['draft','validate','copy'])test('A2P '+method+' refuses owner-confirmed output when OWNER is lost at final authorization',async()=>{
+ const accepted=await setup().service.draft('owner',scope.organizationId,scope.schoolId,draft());
+ const changing=setup(undefined,n=>{if(n===2)changing.staff();});
+ const input=method==='copy'?{input:draft(),expectedDigest:accepted.computationDigest,acknowledgement:c.A2P_COPY_CONFIRMATION}:draft();
+ await deny(changing.service[method]('owner',scope.organizationId,scope.schoolId,input),403,'A2P_OWNER_FACT_CONFIRMATION_REQUIRED');
+ assert.equal(changing.reads(),2);
+});
+test('A2P entitlement expiration during pending inspection hides the result even while IAM still resolves',async()=>{
+ let reached,finish;const entered=new Promise(r=>reached=r),pending=new Promise(r=>finish=r);
+ const s=setup({async inspect(){reached();return pending;}});
+ const request=s.service.website('owner',scope.organizationId,scope.schoolId,review());
+ await entered;s.expire();finish({kind:'UNAVAILABLE',reason:'LIVE_INSPECTION_DISABLED'});
+ await deny(request,403,'A2P_PREPARATION_FORBIDDEN');assert.equal(s.reads(),2);
+ assert(await s.database.resolveAuthorizedScope('owner',scope.schoolId,c.A2P_PERMISSION));
 });
 test('A2P deterministic concurrent draft/copy calls have stable scope-bound digests and zero saved or sent state',async()=>{
  const s=setup(),args=['owner',scope.organizationId,scope.schoolId,draft()];
