@@ -77,9 +77,9 @@ try{
  let settle;const pending=new Promise(r=>settle=r);
  let inspected;const reached=new Promise(r=>inspected=r);const waitingInspector={async inspect(){inspected();return pending;}};
  const waiting=new A2pPreparationService(db,waitingInspector).website(subject,ids.org,ids.school,review());await reached;
- await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp() WHERE id=$1',[ids.grant]);settle({kind:'UNAVAILABLE',reason:'LIVE_INSPECTION_DISABLED'});
+ await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE id=$1',[ids.grant,ids.principal]);settle({kind:'UNAVAILABLE',reason:'LIVE_INSPECTION_DISABLED'});
  await deny(waiting,403);await deny(service.copy(subject,ids.org,ids.school,{input:draft(),expectedDigest:rows[0].computationDigest,acknowledgement:c.A2P_COPY_CONFIRMATION}),403);
- await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL WHERE id=$1',[ids.grant]);
+ await admin.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE id=$1',[ids.grant]);
  pass('revocation while inspection is pending hides results and refuses repeated copy; no lock held across waits');
  process.env.HON_AUTH_MODE='OIDC';process.env.HON_SESSION_JWT_SECRET='synthetic-a2p-disposable-signed-session-secret';process.env.HON_SESSION_AUDIENCE='hon-a2p-disposable';process.env.HON_PUBLIC_ORIGIN='https://hon.example';
  const mod=await Test.createTestingModule({controllers:[A2pPreparationController],providers:[A2pPreparationService,A2pPreparationHumanGuard,HonIdentityService,
