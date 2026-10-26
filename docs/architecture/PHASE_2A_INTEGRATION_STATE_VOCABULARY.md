@@ -18,6 +18,8 @@ Connection configuration, inbound receipt handling, human review, CRM execution,
 
 `ABSENT` is a projection-only condition when no connection row exists. It is not a persisted lifecycle. Capabilities are independent grants, not lifecycle states.
 
+Credential-binding purpose is immutable and does not create another lifecycle enum. A signing-verification binding may be resolved before tenant routing only for the fixed server-registered endpoint/installation context and only for eligible current or approved-overlap signing generations; it verifies raw bytes before any body context is trusted and grants no school authority. A provider API/data-operation binding is distinct and may resolve only after verified routing plus the current school-connection, exact-grant/capability, authorization, purpose, and lifecycle checks. `ROTATING` is limited to the owner-approved generation cutover; `REVOKED` or `DISABLED` blocks the dependent purpose. A signing key is never an API/data-operation key, and an API/data-operation key is never a signing key.
+
 ### Derived UI projections
 
 | Projection | Derivation | Must not imply |
@@ -51,6 +53,8 @@ They are durable outcome/reason contracts with response, visibility, retry, and 
 
 A `REPLAY` is a new delivery observation linked to its canonical event and original result. It is not a new case, CRM work item, or deduplication namespace.
 
+**Boundary A diagram annotation — not a state:** `RECEIPT_RESERVED` means that the stable `event_id` is locked and delivery-attempt evidence is appended. It is not a `ReceiptState`, `ReceiptDisposition`, or a seventh fail-closed outcome. For an eligible authenticated envelope, the only order is reservation → `NEW`/`REPLAY`/`CONFLICT` deduplication classification → historical-binding routing and, only when permitted, source occurrence/candidate/case → complete durable outcome → adapter-specific response. A `2xx` may occur only after that commit and never states CRM creation. `REPLAY_RECORDED` is the diagram label for the durable outcome associated with `ReceiptDisposition.REPLAY`, not another `ReceiptState`; acknowledgement is a transport action, not a state.
+
 ## 3. Review-case plane
 
 | Concept | Proposed values | Boundary |
@@ -74,6 +78,10 @@ A `REPLAY` is a new delivery observation linked to its canonical event and origi
 - `RECONCILIATION_REQUIRED`
 
 `CREATED_BY_SEPARATE_HUMAN_COMMAND` is display/audit wording for `SUCCEEDED`, not an enum. Exact idempotent replay returns the same effect/result. Outbox event names and versions are independent contracts and cannot be inferred from execution state.
+
+**Boundary B diagram annotation — not a state:** for `CREATE_DISTINCT_NEW_LEAD`, one tenant transaction records the immutable review decision and `DECISION_RECORDED`/`CLOSED` case result, reserves the unique CRM effect, invokes canonical CRM creation, and writes scoped private provenance/result, redacted audit, inert evidence, and the original disposition receipt. These facts commit together or roll back together; a create-path case cannot successfully be `CLOSED` without its effect/result. A non-create disposition records its decision/closure result with no CRM effect. `RESERVED` and `IN_PROGRESS` remain CRM-execution-plane values; they do not independently authorize or prove a closed review case.
+
+**Historical result reconciliation and fresh execution are operations, not lifecycle values.** A mounted command K may have a browser `UNKNOWN_OUTCOME` without changing `CrmExecutionState`. After same-subject, frozen-school, current result-read reauthorization, historical reconciliation returns only K’s existing result and is not inbound `ReceiptDisposition.REPLAY`. Only when no durable K result exists may fresh execution reapply current version/mutation gates. K-caused case version advance never alone destroys its recovery identity; unrelated drift still blocks fresh execution.
 
 ## 5. Browser-controller plane — explicitly nondurable
 

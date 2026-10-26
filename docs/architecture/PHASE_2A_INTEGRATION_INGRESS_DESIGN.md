@@ -44,7 +44,12 @@ For Phase 2A, the only relevant proposed #79 capability is **`LEAD_RETRIEVAL`**.
 
 Only an opaque `credentialBindingId` and version may appear outside the private credential facility. The vault locator, raw secret, refresh token, OAuth code, signature key, expiry, provider inventory, and raw provider errors must never appear in ordinary connection/mapping/receipt/audit/outbox rows, URLs, browser state, telemetry, logs, or staff projections.
 
-Only named, allowlisted server operations may resolve secret material, after rechecking the current installation, credential-binding, exact school connection, asset grant, capability, lifecycle, and operation purpose. Resolution returns secret material only in process memory to that fixed operation and records redacted operation/version audit evidence. It is never browser-callable, a generic provider client, or a `PUBLIC`/runtime SQL helper.
+Only named, allowlisted server operations may resolve secret material under one of two future purpose-scoped contracts:
+
+1. **Pre-tenant webhook-signature verification.** For a fixed server-registered endpoint and installation/subscription context—not a body-supplied school, profile, asset, or other body context—the verifier may recheck the installation plus signing-binding purpose/lifecycle and resolve only the bounded server-recorded signing-key generation(s) eligible under the current or owner-approved overlap/cutover rule. It verifies bounded raw bytes before parsing or trusting body context. Unknown installation/key context, a revoked or disabled binding, a generation outside the permitted cutover set, or an invalid signature fails closed as `SIGNATURE_REJECTED`. This contract confers no school, candidate, asset, CRM, or provider API/data authority and must neither enumerate nor try tenant secrets.
+2. **Post-routing provider/data operation.** A separate non-signing credential may resolve only after a verified route to exactly one school and a live recheck of the verified school connection, exact asset grant and capability, current authorization, credential-binding lifecycle, and operation purpose. A historical routing result alone is not current provider/data authority.
+
+Webhook signing keys and provider API/data-operation credentials are distinct and may never substitute for one another. In either contract, material returns only in process memory to the fixed operation and records only redacted operation/version audit evidence. It is never browser-callable, a generic provider client, or a `PUBLIC`/runtime SQL helper. This is a future authorization contract only: it authorizes no resolver implementation, secret configuration, provider call, or webhook route.
 
 A future owner-approved **Credential Custody Policy** decides platform-managed versus school-supplied custody for each purpose, permitted sharing/exclusivity, secret facility, issuer/scope, stewards, emergency revocation, rotation, and overlap/cutover rules. #80’s local `0700` directory and `0600` plaintext file are useful local setup hygiene only; they are not an encrypted multi-tenant vault.
 
@@ -149,7 +154,7 @@ FORCE RLS, a provider signature, a digest, or #80 local key handling are not sub
 | `source_occurrence_id` | Provider lead occurrence: provider + historical verified asset lineage + `leadgenId` | A UI selection or mapping revision |
 | `mapping_revision_id` / resolution | Append-only historical routing evidence | CRM dedup namespace |
 | `review_case_id` / `review_decision_id` | Case lineage and append-only human evidence | CRM effect |
-| `disposition_request_id` | Original human request keyed by reviewer and original idempotency key/fingerprint | A new browser retry key |
+| `disposition_request_id` | Immutable original human command K, keyed by reviewer, frozen organization/school, original idempotency key, and canonical fingerprint | A new browser retry key or current case version |
 | `crm_effect_id` | Reserved canonical CRM result; must be unique for `source_occurrence_id` | An arbitrary provider event |
 | `replay_id` / `event_conflict_id` | Immutable same-digest replay or different-digest conflict observation | New candidate/case/CRM work |
 
@@ -170,15 +175,19 @@ It commits the complete outcome before a `2xx`. It creates no CRM person/lead, C
 
 ### 5.3 Boundary B — human disposition and canonical CRM effect
 
-A later direct-human command has one tenant transaction, with a deterministic reviewed lock order. It rechecks time, signed human identity, exact school, roles/grants, entitlement, case/evidence/mapping/policy versions, source occurrence, original disposition request, reserved CRM effect, and target pipeline/stage after lock waits. In one atomic outcome it:
+A later direct-human command has one tenant transaction, with a deterministic reviewed lock order. Command K is the immutable `disposition_request_id` plus its original idempotency key/fingerprint, signed-human binding, and frozen organization/school.
+
+**Historical result reconciliation comes first.** Before treating a mounted capsule as a fresh execution, the server may reauthorize the same signed human, frozen school, and current result-read authority to inspect K’s own durable result. If K already committed, it returns only K’s original scoped/redacted disposition/effect result—even when K itself closed or advanced the case version. This historical reconciliation is mutation-free: it creates no new decision, CRM effect, lead, audit, outbox item, inert evidence event, browser key, or action. Changed subject/school, missing or revoked result-read authority, unavailable scoped receipt, controller unmount, or full-document loss deny recovery. Historical result reconciliation is not inbound `ReceiptDisposition.REPLAY`.
+
+**Fresh execution is allowed only after no durable result is proven.** It then rechecks time, signed human identity, exact school, roles/grants, entitlement, case/evidence/mapping/policy versions, source occurrence, original disposition request, reserved CRM effect, and target pipeline/stage after lock waits. Unrelated drift blocks fresh execution without minting a key/action/effect. In one atomic outcome a permitted `CREATE_DISTINCT_NEW_LEAD` command K:
 
 1. appends an immutable review decision;
 2. reserves the unique source-occurrence CRM effect;
 3. invokes a transaction-aware canonical CRM creation primitive;
-4. writes private scoped provenance/result, redacted audit, and inert evidence;
-5. completes the original disposition receipt and terminally transitions the case.
+4. writes private scoped provenance/result, redacted audit, and inert evidence; and
+5. completes K’s original disposition receipt and terminally transitions the case.
 
-Any failure rolls all of this back. Unknown HTTP outcomes reconcile from the original disposition request/effect/case evidence and never retry under a new browser identity.
+Any failure rolls all of this back. Unknown HTTP outcomes reconcile from K’s original disposition request/effect/case evidence and never retry under a new browser identity.
 
 The current public `LeadService.create` opens its own tenant transaction. Future work must **not** call it inside the disposition transaction or duplicate its CRM logic. Instead, a separately reviewed internal `createInExistingTenantTransaction` primitive may be extracted: the public direct-human path continues to wrap it with the existing standard policy and retains ordinary `crm.lead.created` v1 behavior unchanged.
 
@@ -212,6 +221,6 @@ This correction does not authorize:
 
 ## 9. Source and evidence limits
 
-Zernio material remains feasibility/background evidence only; it does not validate a live integration. See the canonical source record proposed in PR [#85](https://github.com/myhonosai/honos/pull/85). This PR does not rerun provider verification, provision credentials, call an API, or establish operational readiness.
+Zernio material remains feasibility/background evidence only; it does not validate a live integration. See the canonical source record proposed in PR [#85](https://github.com/myhonosai/honos/pull/85). This design-only PR did not independently execute or rerun application tests, database proofs, migration checks, provider verification, or connector checks; it does not provision credentials, call an API, or establish operational readiness.
 
 The exact Codex reconciliation is tracked in [PR #86 correction record](PHASE_2A_PR86_CODEX_CORRECTIONS.md) and the proposed proof/rollout sequence in [Phase 2A verification and rollout](PHASE_2A_INTEGRATION_VERIFICATION_AND_ROLLOUT.md).

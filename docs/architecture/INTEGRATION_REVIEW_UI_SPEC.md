@@ -107,31 +107,32 @@ It is never rendered while shielded, placed in React-visible queue/detail state,
 
 Read generation and request ownership are separate. A privacy boundary invalidates reads and presentation facts, but it does not cancel a consequential request already sent. Only the currently mounted command instance may settle its own busy/unknown/result state behind the shield. A `finally` handler may clear busy only when its command-instance ID still owns the mounted capsule. Stale callbacks from an earlier case, prior capsule, discarded controller, changed scope, or unmounted controller are ignored.
 
-### 5.3 Session, authorization, and exact retry
+### 5.3 Session, authorization, historical result reconciliation, and fresh execution
 
 A confirmed `401` from an authenticated same-origin Integration Review read, command, or associated authenticated staff transport dispatches `hon:session-invalidated`; every co-mounted Integration Review surface conceals immediately. A `403` is a local current-resource authorization denial: it conceals and blocks this surface but does not assert that the whole session ended or dispatch session invalidation.
 
-Neither status automatically resends a command. While the controller remains mounted, `Verify access and resume` may consider a capsule only after it proves:
+Neither status automatically resends a command. While the controller remains mounted, `Verify access and resume` first performs an explicit, mutation-free reconciliation of the original immutable command K. It may return K’s original durable scoped/redacted result only after proving:
 
 1. the same signed human subject;
 2. the exact frozen school;
-3. fresh `crm.integration_review.read` authority for any reveal;
-4. current `crm.integration_review.decide` and normal CRM-create authority for a retry; and
-5. still-matching case/evidence/mapping/policy versions.
+3. fresh `crm.integration_review.read` authority for the original result; and
+4. that K’s original idempotency key/fingerprint and private receipt are still available to that subject/school.
 
-The server independently repeats authorization. A changed subject, changed school, missing/revoked relevant permission, unavailable/mismatched case, or controller unmount destroys the capsule; it must never be revealed or replayed for another principal or school.
+If K already committed, a case/evidence/mapping/policy version advance caused by K does **not** destroy K or require current decide/create authority just to return that original result. This historical result replay creates no new decision, lead, CRM effect, audit, outbox effect, inert evidence event, key, request body, or action.
+
+Only when reconciliation proves that K has **no** durable result may the UI offer fresh execution of the unchanged capsule. Fresh execution requires current `crm.integration_review.decide` and normal CRM-create authority, still-matching case/evidence/mapping/policy versions, and every current mutation eligibility check. Unrelated drift blocks fresh execution without allocating a new key/action/effect. The server independently repeats every authorization and mutation check. A changed subject, changed school, missing/revoked relevant permission, unavailable scoped receipt, controller unmount, reload, or full-document loss destroys the capsule; it must never be revealed or replayed for another principal or school.
 
 ### 5.4 Unknown outcome and abandonment
 
 Network loss, timeout, redirect, unexpected status, malformed/unverifiable success, and any response that cannot prove the exact durable decision/CRM result are `UNKNOWN_OUTCOME`. The UI assumes neither success nor failure.
 
-After settlement, the shield may offer only an explicit **Retry exact unchanged decision** using the unchanged capsule and original idempotency key, after the reauthorization gate. It never allocates a fresh key or silently rebuilds the command.
+After an unknown outcome, the shield may offer only explicit **Reconcile original decision**. If that proves a committed result, it displays the result behind the authorized shield and stops. If it proves no durable result, it may offer **Retry exact unchanged decision** using the unchanged capsule and original idempotency key after the fresh-execution gate. It never allocates a fresh key, silently rebuilds the command, or uses a version mismatch to discard K before reconciliation.
 
 Discard, close, navigation, case switch, and reset controls that could drop a capsule are disabled while the command is unsettled. After an unknown outcome is settled, deliberate abandonment requires a separate acknowledgement:
 
 > This removes browser-only recovery. It cannot cancel, reverse, or prove the result of a server action that may already have completed.
 
-Abandonment destroys only the local capsule. A later durable-result lookup is a separate server design; it is not created by this UI.
+Abandonment destroys only the local capsule. A later durable-result lookup after capsule abandonment is a separate server design; it is not created by this UI.
 
 ### 5.5 Full-document limit
 

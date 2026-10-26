@@ -1,40 +1,62 @@
-stateDiagram-v2
-  [*] --> RAW_BYTES
-  RAW_BYTES --> SIGNATURE_REJECTED: invalid / missing / misbound signature
-  RAW_BYTES --> VERIFIED_INSTALLATION: valid bounded signature
-  VERIFIED_INSTALLATION --> MALFORMED_REJECTED: envelope or schema cannot parse
-  VERIFIED_INSTALLATION --> UNSUPPORTED_VERSION_QUARANTINED: adapter/schema not allowlisted
-  VERIFIED_INSTALLATION --> BINDING_RESOLUTION: signed context only
+flowchart TB
+  RAW[RAW_BYTES]
+  SIGN[SIGNING_KEY_VERIFICATION]
+  INST[VERIFIED_INSTALLATION]
 
-  BINDING_RESOLUTION --> UNKNOWN_BINDING_QUARANTINED: no unique verified historical binding
-  BINDING_RESOLUTION --> AMBIGUOUS_BINDING_QUARANTINED: multiple bindings or unprovable cutover
-  BINDING_RESOLUTION --> RECEIPT_RESERVED: exactly one historical school binding
+  RAW -->|fixed endpoint / installation\nno body trust| SIGN
+  SIGN -->|unknown, revoked, disabled, invalid,\nor cutover-ineligible key context| SIG_REJECT[SIGNATURE_REJECTED]
+  SIGN -->|eligible signing key\nverifies raw bytes| INST
+  INST -->|envelope/schema cannot parse| MALFORMED[MALFORMED_REJECTED]
+  INST -->|adapter/schema not allowlisted| UNSUPPORTED[UNSUPPORTED_VERSION_QUARANTINED]
 
-  RECEIPT_RESERVED --> REPLAY_RECORDED: same stable identity and verified digest
-  RECEIPT_RESERVED --> IDENTITY_CONFLICT: same identity, different verified digest
-  RECEIPT_RESERVED --> ROUTED_TO_REVIEW: new eligible resolved occurrence
-  RECEIPT_RESERVED --> RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED: durable prior outcome cannot be proven
+  subgraph boundaryA[Boundary A — ingress reservation, deduplication, and routing]
+    RESERVE[RECEIPT_RESERVED\nstable event identity locked\ndelivery attempt appended]
+    BIND[BINDING_RESOLUTION\nresolve and pin historical binding]
+    REPLAY[REPLAY_RECORDED]
+    CONFLICT[IDENTITY_CONFLICT]
+    RETRY_AMBIG[RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED]
+    UNKNOWN[UNKNOWN_BINDING_QUARANTINED]
+    AMBIG[AMBIGUOUS_BINDING_QUARANTINED]
+    ROUTED[ROUTED_TO_REVIEW]
+  end
 
-  UNSUPPORTED_VERSION_QUARANTINED --> [*]
-  UNKNOWN_BINDING_QUARANTINED --> [*]
-  AMBIGUOUS_BINDING_QUARANTINED --> [*]
-  RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED --> [*]
-  REPLAY_RECORDED --> [*]
-  IDENTITY_CONFLICT --> [*]
-  ROUTED_TO_REVIEW --> [*]
+  INST -->|eligible authenticated envelope| RESERVE
+  RESERVE -->|same identity + verified digest| REPLAY
+  RESERVE -->|same identity + different verified digest| CONFLICT
+  RESERVE -->|durable prior outcome cannot be proven| RETRY_AMBIG
+  RESERVE -->|new identity| BIND
+  BIND -->|no unique historical binding| UNKNOWN
+  BIND -->|multiple bindings or unprovable cutover| AMBIG
+  BIND -->|new eligible resolved occurrence| ROUTED
 
-  note right of UNKNOWN_BINDING_QUARANTINED
-    No school queue or candidate unless
-    independent stored evidence proves one school.
-    Default without approved operator plane: reject.
-  end note
+  ACK[Adapter response gate\nonly after the applicable durable outcome commits\n2xx only where provider policy permits\nnever CRM creation]
+  REPLAY --> ACK
+  CONFLICT --> ACK
+  RETRY_AMBIG --> ACK
+  UNSUPPORTED --> ACK
+  UNKNOWN --> ACK
+  AMBIG --> ACK
+  ROUTED --> ACK
 
-  note right of AMBIGUOUS_BINDING_QUARANTINED
-    Never route by current mapping, label,
-    externalId, default account, or selector.
-  end note
+  PRENOTE[Pre-tenant signing purpose only:\nserver-recorded current or approved-overlap signing generations.\nNever resolve API/data credentials, enumerate tenant keys,\nor confer school authority.]
+  SIGN -. applies .-> PRENOTE
 
-  note right of ROUTED_TO_REVIEW
-    2xx only after this bounded durable outcome
-    is committed. It is not CRM creation.
-  end note
+  ORDERNOTE[Reservation is a Boundary A annotation, not a lifecycle enum:\n1 reserve + append delivery; 2 classify replay/conflict;\n3 only new identity resolves/pins historical binding;\n4 commit applicable durable outcome before response.]
+  RESERVE -. required order .-> ORDERNOTE
+
+  POSTNOTE[A later separately approved provider/data operation needs a distinct credential\nand a current verified school connection, exact asset grant/capability,\nauthorization, purpose, and lifecycle check.]
+  BIND -. separate future operation .-> POSTNOTE
+
+  UNKNOWNNOTE[No school queue or candidate unless independent stored evidence proves one school.\nDefault without approved operator plane: reject.]
+  UNKNOWN -. boundary .-> UNKNOWNNOTE
+  AMBIGNOTE[Never route by current mapping, label, externalId, default account, or selector.]
+  AMBIG -. boundary .-> AMBIGNOTE
+
+  classDef receipt fill:#eaf7ff,stroke:#126782,color:#082a39
+  classDef reject fill:#fff0f1,stroke:#a51c30,color:#4a0610
+  classDef durable fill:#eefbf4,stroke:#197345,color:#092b18
+  classDef note fill:#fff9e8,stroke:#886500,color:#332600
+  class RAW,SIGN,INST,RESERVE,BIND receipt
+  class SIG_REJECT,MALFORMED,UNSUPPORTED,UNKNOWN,AMBIG,RETRY_AMBIG,CONFLICT reject
+  class REPLAY,ROUTED,ACK durable
+  class PRENOTE,ORDERNOTE,POSTNOTE,UNKNOWNNOTE,AMBIGNOTE note
