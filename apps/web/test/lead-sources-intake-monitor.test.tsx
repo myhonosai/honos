@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LeadSourcesIntakeMonitor } from '../src/components/lead-sources-intake-monitor';
 import { leadIntakeCopy } from '../src/components/lead-sources-intake-copy';
-import { loadLeadIntakeMonitor } from '../src/components/public-form-client';
+import { loadLeadIntakeMonitor, loadPublicLeadForm } from '../src/components/public-form-client';
+import { loadMyLanguage, updateMyLanguage } from '../src/components/localization/http';
 
 const hooks = vi.hoisted(() => ({ slots: [] as any[], cursor: 0, pending: [] as (() => void)[] }));
 const locale = vi.hoisted(() => ({ language: 'en' as 'en' | 'ko' | 'es' }));
@@ -24,6 +25,11 @@ const other = '22222222-2222-4222-8222-222222222222';
 const monitorForm = { title: 'Website enquiries', status: 'PUBLISHED', acceptedCount: 7, hasCampaignAssociation: true } as const;
 const genericForm = { id, publicId: 'a'.repeat(48), version: 2, status: 'PUBLISHED', title: 'Website enquiries', description: 'PRIVATE_CONFIGURATION', pipelineId: other, pipelineStageId: id, campaignId: other, optionalFields: ['ageBand'], acceptedCount: 7, updatedAt: '2026-10-25T00:00:00.000Z' };
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+const languagePreference = { language: 'ko', version: 2, updatedAt: '2026-10-19T07:00:00.000Z' } as const;
+const languageView = { preference: languagePreference, schoolDefault: null, effective: { language: 'ko', source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] } as const;
+const languageReceipt = { preference: languagePreference, replayed: false } as const;
+const languageResponse = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
+const languageKey = '33333333-3333-4333-8333-333333333333';
 const listeners = new Map<string, () => void>();
 const visibility = { state: 'visible' };
 function render(): any { hooks.cursor = 0; return LeadSourcesIntakeMonitor(); }
@@ -38,6 +44,7 @@ function main(tree: any): any { const value = all(tree).find(node => node.type =
 beforeEach(() => {
   hooks.slots = []; hooks.cursor = 0; hooks.pending = []; locale.language = 'en'; listeners.clear(); visibility.state = 'visible';
   vi.stubGlobal('window', { location: { origin: 'http://hon.invalid' }, addEventListener: (name: string, callback: () => void) => listeners.set(name, callback), removeEventListener: (name: string) => listeners.delete(name), dispatchEvent: (event: Event) => { listeners.get(event.type)?.(); return true; } });
+  vi.stubGlobal('location', { origin: 'http://hon.invalid' });
   vi.stubGlobal('document', { get visibilityState() { return visibility.state; }, addEventListener: (name: string, callback: () => void) => listeners.set(`document:${name}`, callback), removeEventListener: (name: string) => listeners.delete(`document:${name}`) });
 });
 afterEach(() => { for (const slot of hooks.slots) slot?.cleanup?.(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -115,6 +122,93 @@ describe('Lead Sources & Intake Monitor', () => {
     fetcher.mockResolvedValueOnce(response({ data: [monitorForm] }));
     button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
     expect(text(tree)).toContain('Website enquiries');
+  });
+
+  it('clears READY monitor facts on a real authenticated language GET 401 and does not restore them after language recovery', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response({ data: [monitorForm] }))
+      .mockResolvedValueOnce(languageResponse({ detail: 'PRIVATE_SESSION_DETAIL' }, 401))
+      .mockResolvedValueOnce(languageResponse({ data: languageView }));
+    let tree = render(); await effects();
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    expect(text(tree)).toContain('Website enquiries');
+    await expect(loadMyLanguage()).rejects.toMatchObject({ kind: 'DENIED' });
+    tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('SESSION_INVALID');
+    expect(text(tree)).not.toContain('Website enquiries');
+    await expect(loadMyLanguage()).resolves.toEqual(languageView);
+    tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('SESSION_INVALID');
+    expect(text(tree)).not.toContain('Website enquiries');
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    fetcher.mockResolvedValueOnce(response({ data: [monitorForm] }));
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('READY');
+    expect(text(tree)).toContain('Website enquiries');
+  });
+
+  it('invalidates a LOADING monitor on a real authenticated language GET 401 and rejects its late result', async () => {
+    let finish: (value: Response) => void = () => {};
+    vi.spyOn(globalThis, 'fetch').mockImplementation(path => {
+      if (String(path) === '/api/v1/marketing/forms/intake-monitor') return new Promise<Response>(resolve => { finish = resolve; });
+      return Promise.resolve(languageResponse({ detail: 'PRIVATE_SESSION_DETAIL' }, 401));
+    });
+    let tree = render(); await effects();
+    button(tree, 'Load authorized intake facts').props.onClick(); tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('LOADING');
+    await expect(loadMyLanguage()).rejects.toMatchObject({ kind: 'DENIED' });
+    finish(response({ data: [monitorForm] })); await settle(); tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('SESSION_INVALID');
+    expect(text(tree)).not.toContain('Website enquiries');
+  });
+
+  it('clears READY monitor facts on a real authenticated language save 401', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response({ data: [monitorForm] }))
+      .mockResolvedValueOnce(languageResponse({ detail: 'PRIVATE_SESSION_DETAIL' }, 401));
+    let tree = render(); await effects();
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    await expect(updateMyLanguage({ language: 'ko', expectedVersion: 1 }, languageKey)).rejects.toMatchObject({ kind: 'DENIED' });
+    tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('SESSION_INVALID');
+    expect(text(tree)).not.toContain('Website enquiries');
+  });
+
+  it('invalidates a LOADING monitor on a real authenticated language save 401 and rejects its late result', async () => {
+    let finish: (value: Response) => void = () => {};
+    vi.spyOn(globalThis, 'fetch').mockImplementation(path => {
+      if (String(path) === '/api/v1/marketing/forms/intake-monitor') return new Promise<Response>(resolve => { finish = resolve; });
+      return Promise.resolve(languageResponse({ detail: 'PRIVATE_SESSION_DETAIL' }, 401));
+    });
+    let tree = render(); await effects();
+    button(tree, 'Load authorized intake facts').props.onClick(); tree = render();
+    await expect(updateMyLanguage({ language: 'ko', expectedVersion: 1 }, languageKey)).rejects.toMatchObject({ kind: 'DENIED' });
+    finish(response({ data: [monitorForm] })); await settle(); tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('SESSION_INVALID');
+    expect(text(tree)).not.toContain('Website enquiries');
+  });
+
+  it('keeps language 403 local, ignores anonymous public 401, and never adds a monitor request after a normal language save', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response({ data: [monitorForm] }))
+      .mockResolvedValueOnce(languageResponse({ detail: 'PRIVATE_FORBIDDEN_DETAIL' }, 403))
+      .mockResolvedValueOnce(response({ detail: 'PUBLIC_UNAVAILABLE' }, 401))
+      .mockResolvedValueOnce(languageResponse({ data: languageReceipt }));
+    let tree = render(); await effects();
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    await expect(loadMyLanguage()).rejects.toMatchObject({ kind: 'DENIED' });
+    tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('READY');
+    expect(text(tree)).toContain('Website enquiries');
+    await expect(loadPublicLeadForm('a'.repeat(48))).rejects.toThrow('Exact current human school permission is required.');
+    tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('READY');
+    await expect(updateMyLanguage({ language: 'ko', expectedVersion: 1 }, languageKey)).resolves.toEqual(languageReceipt);
+    tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('READY');
+    expect(text(tree)).toContain('Website enquiries');
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher.mock.calls.filter(([path]) => path === '/api/v1/marketing/forms/intake-monitor')).toHaveLength(1);
   });
 
   it('clears and invalidates an in-flight read on browser privacy boundaries', async () => {
