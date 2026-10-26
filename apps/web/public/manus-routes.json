@@ -85,6 +85,10 @@
       "title": "Human Public Lead Forms"
     },
     {
+      "path": "/staff/marketing/intake",
+      "title": "HON | Lead Sources & Intake Monitor"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },

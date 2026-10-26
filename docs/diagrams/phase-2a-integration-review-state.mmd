@@ -1,0 +1,76 @@
+flowchart TB
+  subgraph receipt[Receipt and identity plane]
+    R0[VERIFIED]
+    R1[NORMALIZED]
+    R2[ROUTED_TO_REVIEW]
+    R3[QUARANTINED]
+    R4[DEAD_LETTER]
+    R5[IDENTITY_CONFLICT]
+    RP[ReceiptDisposition\nNEW / REPLAY / CONFLICT]
+  end
+
+  subgraph review[Review-case plane]
+    Q1[QUEUED]
+    Q2[ASSIGNED]
+    Q3[NEEDS_EVIDENCE]
+    Q4[READY_FOR_DECISION]
+    Q5[ESCALATED]
+    Q6[DECISION_RECORDED]
+    Q7[CLOSED]
+  end
+
+  subgraph crm[CRM-execution plane]
+    C0[NOT_REQUESTED]
+    C1[RESERVED]
+    C2[IN_PROGRESS]
+    C3[SUCCEEDED]
+    C4[FAILED_NO_EFFECT]
+    C5[UNKNOWN]
+    C6[RECONCILIATION_REQUIRED]
+  end
+
+  subgraph browser[Ephemeral browser-controller plane\nnever durable business state]
+    B1[PrivacyShield]
+    B2[Read epoch invalidated]
+    B3[Private request capsule\nunsettled or unknown]
+    B4[Explicit reconciliation\nof original immutable command K]
+    B5[Capsule destroyed on\nsubject/school/document loss]
+    B6[Historical result replay\noriginal result only; no mutation]
+    B7[Fresh unchanged execution\nonly after no-result proof + current gates]
+  end
+
+  B0[Boundary B — CREATE_DISTINCT_NEW_LEAD only\none atomic tenant transaction: immutable review decision + terminal case transition;\nunique CRM effect + canonical CRM creation; private provenance/result,\nredacted audit/inert evidence, and original disposition receipt.\nAll commit together or all roll back.]
+
+  R0 --> R1 --> R2
+  R1 --> R3
+  R0 --> R5
+  R2 -. creates metadata-only case .-> Q1
+  Q1 --> Q2 --> Q4
+  Q2 --> Q3 --> Q5
+  Q4 -->|non-create disposition only; no CRM effect| Q6 --> Q7
+  Q4 -. CREATE_DISTINCT_NEW_LEAD; same Boundary B .-> C0 --> C1 --> C2
+  C2 --> C3
+  C2 -->|no Boundary B success / no closed case| C4
+  C2 -->|unknown; no Boundary B success| C5 --> C6
+  C3 -. same Boundary B atomic commit .-> Q6
+  B0 -. applies to the same commit .-> C3
+  B0 -. applies to the same commit .-> Q7
+
+  B1 --> B2
+  B1 --> B3
+  B3 --> B4
+  B3 --> B5
+  B4 --> B6
+  B4 --> B7
+  B7 -. only if no durable K result and current gates pass .-> C0
+
+  classDef receipt fill:#eaf7ff,stroke:#126782,color:#082a39
+  classDef review fill:#fff9e8,stroke:#886500,color:#332600
+  classDef crm fill:#eefbf4,stroke:#197345,color:#092b18
+  classDef browser fill:#f4efff,stroke:#6746a3,color:#241143
+  classDef boundary fill:#f4f4f4,stroke:#333,stroke-width:2px,color:#111
+  class R0,R1,R2,R3,R4,R5,RP receipt
+  class Q1,Q2,Q3,Q4,Q5,Q6,Q7 review
+  class C0,C1,C2,C3,C4,C5,C6 crm
+  class B1,B2,B3,B4,B5,B6,B7 browser
+  class B0 boundary
