@@ -193,6 +193,9 @@ import { CommunicationMessageController } from './communication/communication-me
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
+import { A2pPreparationController, A2pPreparationHumanGuard } from './a2p/a2p-preparation.controller.js';
+import { A2pPreparationService } from './a2p/a2p-preparation.service.js';
+import { A2P_WEBSITE_INSPECTOR, UnavailableA2pWebsiteInspector } from './a2p/a2p-inspector.js';
 import { HqOverviewService } from './hq/hq-overview.service.js';
 import { HqEntitlementController } from './hq/hq-entitlement.controller.js';
 import { HqEntitlementService } from './hq/hq-entitlement.service.js';
@@ -345,6 +348,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqController,
     HqOnboardingController,
     HqAiProviderController,
+    A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
     SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
@@ -465,6 +469,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InvoiceHumanUiGuard,
     HqOnboardingService,
     HqAiProviderService,
+    A2pPreparationService, A2pPreparationHumanGuard,
+    {provide:A2P_WEBSITE_INSPECTOR,useFactory:()=>new UnavailableA2pWebsiteInspector()},
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,

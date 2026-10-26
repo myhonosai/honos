@@ -414,6 +414,14 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows[0];
   }
 
+  async readA2pPreparationScope(context: ResolvedPrincipalScope & {externalSubject:string;principalType:'HUMAN_USER';requestId:string}): Promise<(ResolvedPrincipalScope & {schoolName:string;canConfirmOwnerFacts:boolean}) | null> {
+    return this.withTenantReadOnlyTransaction(context, async client => {
+      await client.query("SET LOCAL statement_timeout='3s'; SET LOCAL lock_timeout='1s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)",[context.externalSubject]);
+      return (await client.query<{data:ResolvedPrincipalScope & {schoolName:string;canConfirmOwnerFacts:boolean}}>('SELECT hon.read_a2p_preparation_scope($1) data',[context.externalSubject])).rows[0]?.data ?? null;
+    });
+  }
+
   async resolvePlannedAbsenceReviewScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<ResolvedPrincipalScope>(

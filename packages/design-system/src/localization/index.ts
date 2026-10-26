@@ -30,6 +30,8 @@ export function translate(language:Language,key:TranslationKey,params:Readonly<R
   const template=catalog[key]??en[key];
   return template.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,(full,name:string)=>Object.hasOwn(params,name)?String(params[name]):full);
 }
+/** True only for keys in the catalog, so closed server codes can select copy without ever rendering a raw key. */
+export function isTranslationKey(value:string):value is TranslationKey{return Object.hasOwn(en,value);}
 /** Only for known application-owned metadata/error messages. Never translate customer-entered content. */
 export function translateUiText(language:Language,value:string,params:Readonly<Record<string,string|number>>={}):string {
   return Object.hasOwn(en,value)?translate(language,value as TranslationKey,params):value;
