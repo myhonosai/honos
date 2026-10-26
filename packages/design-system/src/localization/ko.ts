@@ -1,8 +1,10 @@
 import { pricingOperationsKo } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingKo } from './pricing-offers.js';
+import { a2pKo } from './a2p-registration.js';
 export const ko = {
   ...pricingKo,
+  ...a2pKo,
   ...pricingOperationsKo,
   " · Deterministic simulator, not Stripe sandbox": " · 결정적 시뮬레이터이며 Stripe 샌드박스가 아닙니다",
   " · Reservation recorded": " · 예약 기록됨",

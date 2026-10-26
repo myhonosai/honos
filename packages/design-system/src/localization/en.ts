@@ -1,7 +1,9 @@
 import { pricingOperationsEn } from './pricing-operations.js';
 import { pricingEn } from './pricing-offers.js';
+import { a2pEn } from './a2p-registration.js';
 export const en = {
   ...pricingEn,
+  ...a2pEn,
   ...pricingOperationsEn,
   " · Deterministic simulator, not Stripe sandbox": " · Deterministic simulator, not Stripe sandbox",
   " · Reservation recorded": " · Reservation recorded",

@@ -1,8 +1,10 @@
 import { pricingOperationsEs } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingEs } from './pricing-offers.js';
+import { a2pEs } from './a2p-registration.js';
 export const es = {
   ...pricingEs,
+  ...a2pEs,
   ...pricingOperationsEs,
   " · Deterministic simulator, not Stripe sandbox": " · Simulador determinista, no sandbox de Stripe",
   " · Reservation recorded": " · Reserva registrada",
