@@ -15,6 +15,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 
 | Fixture | Proof | What it demonstrates |
 | --- | --- | --- |
+| `public-lead-forms` | `db:test-public-forms` | Public form ingress and Lead Sources monitor: exact current-school human scope, one-school/same-subject transition, ambiguity/parent/HQ/limited/nonhuman denial, signed-session Nest loopback with absent/malformed/expired-session refusal, tier/permission revocation, minimal monitor response, no-effect snapshots, lock-serialized live revocation, RLS/ACL/verifier drift probes |
 | `class-sessions-read` | `test-security-boundaries.mjs` | Restricted runtime privileges, permission revocation, parent-family resolution, transaction-bound RLS isolation, composite tenant references |
 | `class-sessions-read` | `test-outbox-leases.mjs` | Expired/late outbox leases become UNKNOWN/DEAD_LETTER, never PUBLISHED or auto-retried |
 | `class-sessions-read` | `test-class-sessions-read-integrity.mjs` | Current-school Class Sessions read boundary |
@@ -87,7 +88,7 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 
 ## Known limitations
 
-- **25 of 89** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
+- **41 of 89** `db:test-*` proofs run in CI. Most of the others need their own fixture (25 setup scripts with different databases/roles, some on a separate port such as `localhost:55432`). Add them incrementally, measuring minutes as you go.
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.

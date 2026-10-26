@@ -20,6 +20,8 @@ export class StaffPublicFormController {
     const id = randomUUID();
     return { ...scope, externalSubject: req.honIdentity.externalSubject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: id, correlationId: id, idempotencyKey: key };
   }
+  @Get('intake-monitor') @Header('Cache-Control', 'private, no-store')
+  async intakeMonitor(@Req() req: HonRequest) { const c = await this.context(req, 'marketing.form.read'); return { data: await this.forms.intakeMonitor(c) }; }
   @Get() @Header('Cache-Control', 'private, no-store')
   async list(@Req() req: HonRequest) { const c = await this.context(req, 'marketing.form.read'); return { data: await this.forms.list(c) }; }
   @Post() @HttpCode(200) @Header('Cache-Control', 'private, no-store')

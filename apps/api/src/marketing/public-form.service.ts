@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { validatePublicFormConfig, validatePublicFormSubmission, validatePublishedLeadForm, type PublicFormContext, type StaffLeadForm, type PublishedLeadForm, type PublicFormResult } from '@hon/contracts';
+import { validateLeadIntakeMonitorForm, validatePublicFormConfig, validatePublicFormSubmission, validatePublishedLeadForm, validateStaffLeadForm, type LeadIntakeMonitorForm, type PublicFormContext, type StaffLeadForm, type PublishedLeadForm, type PublicFormResult } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { campaignUuid } from './campaign.dto.js';
 @Injectable()
@@ -25,6 +25,26 @@ export class PublicFormService {
   }
   list(c: PublicFormContext): Promise<StaffLeadForm[]> {
     return this.staff(c, 'SELECT hon.read_public_forms($1) data', [c.externalSubject]);
+  }
+  async intakeMonitor(c: PublicFormContext): Promise<LeadIntakeMonitorForm[]> {
+    const forms = await this.list(c);
+    try {
+      return forms.map(form => {
+        // Validate the internal fixed-function response before deliberately
+        // dropping all identifiers and private configuration from this route.
+        validateStaffLeadForm(form);
+        const projected: LeadIntakeMonitorForm = {
+          title: form.title,
+          status: form.status,
+          acceptedCount: form.acceptedCount,
+          hasCampaignAssociation: form.campaignId !== null,
+        };
+        validateLeadIntakeMonitorForm(projected);
+        return projected;
+      });
+    } catch {
+      throw new ServiceUnavailableException({ code: 'FORM_UNAVAILABLE' });
+    }
   }
   mutate(c: PublicFormContext, operation: 'configure'|'publish'|'disable', id: string|null, input: unknown): Promise<{ form: StaffLeadForm; replayed: boolean }> {
     if (id !== null) campaignUuid(id);
