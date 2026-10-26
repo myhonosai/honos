@@ -15,6 +15,7 @@ flowchart TB
     REPLAY[REPLAY_RECORDED]
     CONFLICT[IDENTITY_CONFLICT]
     RETRY_AMBIG[RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED]
+    RECOVER[RECONCILE_ORIGINAL_DURABLE_EVIDENCE\noriginal verified identity and digest only\nno new receipt, case, or CRM effect]
     UNKNOWN[UNKNOWN_BINDING_QUARANTINED]
     AMBIG[AMBIGUOUS_BINDING_QUARANTINED]
     ROUTED[ROUTED_TO_REVIEW]
@@ -24,15 +25,16 @@ flowchart TB
   RESERVE -->|same identity + verified digest| REPLAY
   RESERVE -->|same identity + different verified digest| CONFLICT
   RESERVE -->|durable prior outcome cannot be proven| RETRY_AMBIG
+  RETRY_AMBIG -->|must reconcile original evidence before response claim| RECOVER
   RESERVE -->|new identity| BIND
   BIND -->|no unique historical binding| UNKNOWN
   BIND -->|multiple bindings or unprovable cutover| AMBIG
   BIND -->|new eligible resolved occurrence| ROUTED
 
-  ACK[Adapter response gate\nonly after the applicable durable outcome commits\n2xx only where provider policy permits\nnever CRM creation]
+  ACK[Adapter response gate\nonly after the applicable durable outcome commits\nretry-ambiguous: only after original evidence reconciliation\n2xx only where provider policy permits\nnever CRM creation]
   REPLAY --> ACK
   CONFLICT --> ACK
-  RETRY_AMBIG --> ACK
+  RECOVER --> ACK
   UNSUPPORTED --> ACK
   UNKNOWN --> ACK
   AMBIG --> ACK
@@ -58,5 +60,5 @@ flowchart TB
   classDef note fill:#fff9e8,stroke:#886500,color:#332600
   class RAW,SIGN,INST,RESERVE,BIND receipt
   class SIG_REJECT,MALFORMED,UNSUPPORTED,UNKNOWN,AMBIG,RETRY_AMBIG,CONFLICT reject
-  class REPLAY,ROUTED,ACK durable
+  class REPLAY,ROUTED,RECOVER,ACK durable
   class PRENOTE,ORDERNOTE,POSTNOTE,UNKNOWNNOTE,AMBIGNOTE note

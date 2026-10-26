@@ -10,12 +10,12 @@ The design starts from canonical main `145d4cf00aa64d4b986ffd2b7a9de5462c7c6469`
 
 - PR [#79](https://github.com/myhonosai/honos/pull/79) remains an **unmerged draft**. Its closed asset/capability vocabulary and unavailable-health convention are reusable only after its own review and current-main reconciliation.
 - PR [#80](https://github.com/myhonosai/honos/pull/80) remains an **unmerged draft**. Its server-only configuration/status/check boundary is not a school authorization, provider client, encrypted tenant vault, or webhook verifier.
-- PR [#85](https://github.com/myhonosai/honos/pull/85) is the independent readiness-documentation lane. It must be approved first; this PR must then be rebased onto its accepted baseline and remove duplicate assessment/source records without dropping #85’s other corrections.
+- PR [#85](https://github.com/myhonosai/honos/pull/85) is now the accepted readiness-documentation baseline in canonical main through squash merge `6bb8d1788bb302beaec4d59f723c438f955764ab`. This PR is reconciled onto that baseline; its effective diff does not retain duplicate assessment/source records and must not regress the accepted CI/RLS, marketing, intake-ledger, source-bound, C1, or C2 documentation corrections.
 - This corrected PR [#86](https://github.com/myhonosai/honos/pull/86) is a design dependency, not an implementation authorization.
 
 The implementation order, if separately approved, is:
 
-1. #85 documentation baseline; then #79 and #80 reconciled independently with current main.
+1. #85 documentation baseline reconciliation is complete; #79 and #80 must still reconcile independently with current main.
 2. Corrected Phase 2A design approval and owner policy decisions.
 3. One joint versioned receipt/candidate/review/disposition/CRM-effect contract checkpoint with one migration reservation.
 4. Provider-free simulated ingress and security proofs.
@@ -207,7 +207,7 @@ This correction does not authorize:
 - raw-payload retention, protected candidate PII, detail access, candidate encryption, or data retention;
 - automatic or manual CRM lead creation, attach, merge, enrollment, payment, messaging, consent change, or AI/Action Engine execution;
 - an operational capacity, provider health, conversion, revenue, delivery, or ROI claim;
-- any change to #79, #80, #85, existing CRM behavior, or another agent’s source.
+- any change to #79, #80, the accepted #85 baseline, existing CRM behavior, or another agent’s source.
 
 ## 8. Owner decisions before implementation
 
@@ -221,6 +221,6 @@ This correction does not authorize:
 
 ## 9. Source and evidence limits
 
-Zernio material remains feasibility/background evidence only; it does not validate a live integration. See the canonical source record proposed in PR [#85](https://github.com/myhonosai/honos/pull/85). This design-only PR did not independently execute or rerun application tests, database proofs, migration checks, provider verification, or connector checks; it does not provision credentials, call an API, or establish operational readiness.
+Zernio material remains feasibility/background evidence only; it does not validate a live integration. See the [canonical source record](../research/PHASE_2_ZERNIO_SOURCES.md) accepted through PR #85’s merge. This design-only PR did not independently execute or rerun application tests, database proofs, migration checks, provider verification, or connector checks; it does not provision credentials, call an API, or establish operational readiness.
 
 The exact Codex reconciliation is tracked in [PR #86 correction record](PHASE_2A_PR86_CODEX_CORRECTIONS.md) and the proposed proof/rollout sequence in [Phase 2A verification and rollout](PHASE_2A_INTEGRATION_VERIFICATION_AND_ROLLOUT.md).

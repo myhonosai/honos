@@ -6,8 +6,8 @@
 
 | Order | Gate | Owner / outcome | Not authorized yet |
 | --- | --- | --- | --- |
-| 1 | Review PR #85 | Canonical readiness/source documentation, including its unique corrections | No integration design approval or implementation |
-| 2 | Rebase/reconcile PR #86 on accepted #85 | Remove duplicate records and retain links to canonical baseline | No provider foundation or code |
+| 1 | **Complete:** PR #85 merged to main `6bb8d1788bb302beaec4d59f723c438f955764ab` | Canonical readiness/source documentation, including its unique corrections | No integration design approval or implementation |
+| 2 | **Complete:** reconcile PR #86 on accepted #85 baseline | Duplicate assessment/source records removed from effective diff; links retain the canonical baseline | No provider foundation or code |
 | 3 | Reconcile #79 and #80 independently with current main | Codex-owned capability/asset and server-only configuration foundations | No school connector, webhook, PII, or CRM authority |
 | 4 | Joint contract checkpoint | Manus/Codex agree versioned receipt/candidate/review/disposition/effect contract, one migration reservation, lock order, and code ownership | No competing backend/UI implementation |
 | 5 | Provider-free simulation | Prove fail-closed ingress, custody, PII, identity, and transaction invariants | No real vendor call or credential |
@@ -15,7 +15,7 @@
 | 7 | UI proof | Prove privacy shield, exact recovery, scope/session safety, accessibility, localization, and three-mode equivalence | No live provider data |
 | 8 | Owner-approved sandbox/pilot | Explicit vendor, cost, PII, operational, and go/no-go approval | No automatic live expansion |
 
-Manus owns this corrected design, future CRM review/disposition/provenance contract, and the PR #85/86 documentation dependency. Codex owns #79/#80 provider connection, capability/asset grant, credential-custody, and ingress-security foundations. Shared frontend transport/privacy/localization and Integration Review UI start only after the backend contract is accepted.
+Manus owns this corrected design and the future CRM review/disposition/provenance contract. The PR #85/86 documentation dependency is complete. Codex owns #79/#80 provider connection, capability/asset grant, credential-custody, and ingress-security foundations. Shared frontend transport/privacy/localization and Integration Review UI start only after the backend contract is accepted.
 
 ## 2. Evidence terminology
 
