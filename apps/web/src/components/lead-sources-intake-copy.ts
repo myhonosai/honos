@@ -27,6 +27,7 @@ export type LeadIntakeCopy = {
   load: string;
   loading: string;
   idle: string;
+  sessionInvalid: string;
   denied: string;
   unavailable: string;
   viewLabel: string;
@@ -70,7 +71,7 @@ const copy: Record<Language, LeadIntakeCopy> = {
     eyebrow: 'SCHOOL GROWTH / VERIFIED FORM INTAKE', title: 'Lead Sources & Intake Monitor',
     introduction: 'A deliberate, read-only intake view. Load your current authorized form facts, then continue into the workflow that owns each next step.',
     guardrail: 'This monitor never reads provider accounts, contact submissions, consent, leads, trials, enrollment, payments, or revenue. A CRM WON state is not enrollment or payment.',
-    load: 'Load authorized intake facts', loading: 'Verifying current school form access…', idle: 'No verified intake facts are loaded.',
+    load: 'Load authorized intake facts', loading: 'Verifying current school form access…', idle: 'No verified intake facts are loaded.', sessionInvalid: 'Your signed session has ended. Returned intake facts were cleared. Sign in again, then make a new authorized read.',
     denied: 'Current human school permission is required. Returned intake facts were cleared.', unavailable: 'Current intake facts are unavailable. Returned facts were cleared; no outcome is assumed.',
     viewLabel: 'Presentation mode', viewNote: 'Presentation only for this open page. It does not save a preference or change data, scope, permissions, or actions.',
     modern: 'Modern HON', classic: 'Classic CRM', bigButton: 'Big-Button / Phone',
@@ -92,7 +93,7 @@ const copy: Record<Language, LeadIntakeCopy> = {
     eyebrow: '학교 성장 / 확인된 양식 유입', title: '리드 소스 및 유입 모니터',
     introduction: '의도적인 읽기 전용 유입 화면입니다. 현재 권한이 확인된 양식 정보를 불러온 뒤, 각 다음 단계를 담당하는 업무 화면으로 이동하세요.',
     guardrail: '이 모니터는 제공업체 계정, 문의 제출, 동의, 리드, 체험, 등록, 결제 또는 매출을 읽지 않습니다. CRM의 WON 상태는 등록이나 결제를 의미하지 않습니다.',
-    load: '권한이 확인된 유입 정보 불러오기', loading: '현재 학교의 양식 권한 확인 중…', idle: '확인된 유입 정보가 아직 없습니다.',
+    load: '권한이 확인된 유입 정보 불러오기', loading: '현재 학교의 양식 권한 확인 중…', idle: '확인된 유입 정보가 아직 없습니다.', sessionInvalid: '서명된 세션이 종료되었습니다. 반환된 유입 정보가 지워졌습니다. 다시 로그인한 뒤 새 권한 확인 조회를 실행하세요.',
     denied: '현재 사람 사용자에게 학교 권한이 필요합니다. 반환된 유입 정보가 지워졌습니다.', unavailable: '현재 유입 정보를 사용할 수 없습니다. 반환된 정보가 지워졌으며 결과를 추정하지 않습니다.',
     viewLabel: '표시 모드', viewNote: '현재 열린 페이지에만 적용되는 표시 방식입니다. 환경설정을 저장하거나 데이터, 범위, 권한 또는 작업을 변경하지 않습니다.',
     modern: '모던 HON', classic: '클래식 CRM', bigButton: '큰 버튼 / 휴대폰',
@@ -114,7 +115,7 @@ const copy: Record<Language, LeadIntakeCopy> = {
     eyebrow: 'CRECIMIENTO ESCOLAR / ENTRADA DE FORMULARIOS VERIFICADA', title: 'Monitor de fuentes y entrada de leads',
     introduction: 'Una vista de entrada deliberada y de solo lectura. Carga los datos actuales de formularios autorizados y continúa al flujo que gestiona cada paso siguiente.',
     guardrail: 'Este monitor nunca consulta cuentas de proveedores, envíos de contacto, consentimientos, leads, pruebas, inscripciones, pagos ni ingresos. Un estado CRM WON no es una inscripción ni un pago.',
-    load: 'Cargar datos de entrada autorizados', loading: 'Verificando acceso a formularios de la escuela actual…', idle: 'No hay datos de entrada verificados cargados.',
+    load: 'Cargar datos de entrada autorizados', loading: 'Verificando acceso a formularios de la escuela actual…', idle: 'No hay datos de entrada verificados cargados.', sessionInvalid: 'Tu sesión firmada terminó. Se borraron los datos de entrada devueltos. Inicia sesión de nuevo y realiza una nueva lectura autorizada.',
     denied: 'Se requiere permiso actual de usuario humano de la escuela. Se borraron los datos de entrada devueltos.', unavailable: 'Los datos actuales de entrada no están disponibles. Se borraron los datos devueltos; no se presupone ningún resultado.',
     viewLabel: 'Modo de presentación', viewNote: 'Solo presentación en esta página abierta. No guarda una preferencia ni cambia datos, ámbito, permisos o acciones.',
     modern: 'HON moderno', classic: 'CRM clásico', bigButton: 'Botones grandes / teléfono',

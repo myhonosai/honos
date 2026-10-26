@@ -32,6 +32,9 @@
 .controlPanel { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: clamp(1rem, 2.5vw, 1.45rem); margin-bottom: 1rem; }
 .controlPanel h2, .modeControls h2, .forms h2, .lane h2, .nextSteps h2 { margin: 0; font-size: 1.18rem; letter-spacing: -.018em; }
 .controlPanel p:not(.eyebrow), .modeControls p, .lane p:not(.laneStatus), .sectionHeading > p, .nextSteps p { color: var(--muted); line-height: 1.55; }
+.liveRegion { min-height: 2.75rem; margin-top: .65rem; }
+.statusNotice, .statusAlert { margin: 0; color: var(--muted); line-height: 1.55; }
+.statusAlert { color: var(--warn); font-weight: 650; }
 .primary { flex: 0 0 auto; min-height: 2.75rem; border: 1px solid rgba(64,230,255,.8); border-radius: .65rem; padding: .65rem 1rem; color: #04202c; background: var(--cyan); font: inherit; font-weight: 750; cursor: pointer; }
 .primary:disabled { opacity: .63; cursor: wait; }
 
@@ -50,7 +53,7 @@
 .unavailable { background: rgba(17, 27, 40, .77); }
 
 .forms { margin-bottom: 1rem; padding: clamp(1rem, 2.5vw, 1.45rem); }
-.sectionHeading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.sectionHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .sectionHeading > p { max-width: 38ch; margin: 0; text-align: right; }
 .formGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .75rem; }
 .formCard { min-height: 10rem; border: 1px solid rgba(125, 194, 219, .17); border-radius: .75rem; padding: 1rem; background: rgba(3, 16, 29, .45); }

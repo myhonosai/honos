@@ -13,6 +13,7 @@ vi.mock('react', async importOriginal => {
   return { ...actual,
     useState(initial: any) { const index = hooks.cursor++; if (!hooks.slots[index]) hooks.slots[index] = { value: typeof initial === 'function' ? initial() : initial }; return [hooks.slots[index].value, (next: any) => { hooks.slots[index].value = typeof next === 'function' ? next(hooks.slots[index].value) : next; }]; },
     useRef(initial: any) { const index = hooks.cursor++; return hooks.slots[index] ??= { current: initial }; },
+    useCallback(callback: any, deps: any[]) { const index = hooks.cursor++, old = hooks.slots[index]; if (!old || deps.some((value, i) => value !== old.deps[i])) hooks.slots[index] = { value: callback, deps }; return hooks.slots[index].value; },
     useEffect(effect: () => any, deps: any[]) { const index = hooks.cursor++, old = hooks.slots[index]; if (!old || deps.some((value, i) => value !== old.deps[i])) { old?.cleanup?.(); hooks.slots[index] = { deps }; hooks.pending.push(() => { hooks.slots[index].cleanup = effect(); }); } }
   };
 });
@@ -36,7 +37,7 @@ function main(tree: any): any { const value = all(tree).find(node => node.type =
 
 beforeEach(() => {
   hooks.slots = []; hooks.cursor = 0; hooks.pending = []; locale.language = 'en'; listeners.clear(); visibility.state = 'visible';
-  vi.stubGlobal('window', { location: { origin: 'http://hon.invalid' }, addEventListener: (name: string, callback: () => void) => listeners.set(name, callback), removeEventListener: (name: string) => listeners.delete(name) });
+  vi.stubGlobal('window', { location: { origin: 'http://hon.invalid' }, addEventListener: (name: string, callback: () => void) => listeners.set(name, callback), removeEventListener: (name: string) => listeners.delete(name), dispatchEvent: (event: Event) => { listeners.get(event.type)?.(); return true; } });
   vi.stubGlobal('document', { get visibilityState() { return visibility.state; }, addEventListener: (name: string, callback: () => void) => listeners.set(`document:${name}`, callback), removeEventListener: (name: string) => listeners.delete(`document:${name}`) });
 });
 afterEach(() => { for (const slot of hooks.slots) slot?.cleanup?.(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -93,6 +94,29 @@ describe('Lead Sources & Intake Monitor', () => {
     expect(html).not.toContain('PRIVATE_PROVIDER');
   });
 
+  it('treats only an authenticated monitor 401 as signed-session invalidation, while a 403 remains a local denial', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response({ data: [monitorForm] }));
+    let tree = render(); await effects();
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    expect(text(tree)).toContain('Website enquiries');
+    fetcher.mockResolvedValueOnce(response({ detail: 'PRIVATE_SESSION_DETAIL' }, 403));
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('DENIED');
+    expect(text(tree)).toContain('Current human school permission is required');
+    expect(text(tree)).not.toContain('Your signed session has ended');
+    fetcher.mockResolvedValueOnce(response({ detail: 'PRIVATE_SESSION_DETAIL' }, 401));
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    const html = renderToStaticMarkup(tree);
+    expect(main(tree).props['data-monitor-state']).toBe('SESSION_INVALID');
+    expect(html).toContain('Your signed session has ended');
+    expect(html).not.toContain('Website enquiries');
+    expect(html).not.toContain('PRIVATE_SESSION_DETAIL');
+    expect(all(tree).filter(node => node.props?.role === 'alert')).toHaveLength(1);
+    fetcher.mockResolvedValueOnce(response({ data: [monitorForm] }));
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    expect(text(tree)).toContain('Website enquiries');
+  });
+
   it('clears and invalidates an in-flight read on browser privacy boundaries', async () => {
     let resolve: (value: Response) => void = () => {};
     vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(new Promise<Response>(done => { resolve = done; }));
@@ -104,6 +128,35 @@ describe('Lead Sources & Intake Monitor', () => {
     expect(renderToStaticMarkup(tree)).not.toContain('Website enquiries');
     visibility.state = 'hidden'; listeners.get('document:visibilitychange')?.(); tree = render();
     expect(renderToStaticMarkup(tree)).toContain('No verified intake facts are loaded.');
+  });
+
+  it('clears ready facts on a same-user school-context transition and requires a new explicit server-authorized read', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response({ data: [monitorForm] }));
+    let tree = render(); await effects();
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    expect(text(tree)).toContain('Website enquiries');
+    listeners.get('hon:school-context-changed')?.(); tree = render();
+    expect(main(tree).props['data-monitor-state']).toBe('IDLE');
+    expect(text(tree)).not.toContain('Website enquiries');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    fetcher.mockResolvedValueOnce(response({ data: [{ ...monitorForm, title: 'Sibling school enquiries', acceptedCount: 3 }] }));
+    button(tree, 'Load authorized intake facts').props.onClick(); await settle(); tree = render();
+    expect(text(tree)).toContain('Sibling school enquiries');
+    expect(text(tree)).not.toContain('Website enquiries7 accepted');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps one persistent localized status region and appropriate status or alert semantics without changing focusable controls', async () => {
+    let tree = render();
+    expect(all(tree).filter(node => node.props?.['aria-live'] === 'polite')).toHaveLength(1);
+    expect(all(tree).filter(node => node.props?.role === 'status')).toHaveLength(1);
+    expect(all(tree).filter(node => node.props?.role === 'alert')).toHaveLength(0);
+    for (const language of ['en', 'ko', 'es'] as const) {
+      locale.language = language;
+      const html = renderToStaticMarkup(render());
+      expect(html).toContain(leadIntakeCopy(language).idle);
+      expect(html).toContain(`aria-label="${leadIntakeCopy(language).viewLabel}"`);
+    }
   });
 
   it('changes only local presentation density after an authorized read', async () => {
@@ -141,7 +194,9 @@ describe('Lead Sources & Intake Monitor', () => {
     const route = readFileSync('src/app/staff/marketing/intake/page.tsx', 'utf8');
     expect(manifest.routes.filter((entry: { path: string }) => entry.path === '/staff/marketing/intake')).toHaveLength(1);
     expect(route).toContain("dynamic = 'force-dynamic'");
+    expect(route).toContain('createHash'); expect(route).toContain('verifySession'); expect(route).not.toContain('token}');
     expect(component).toContain('loadLeadIntakeMonitor');
+    expect(component).toContain('HON_SESSION_INVALIDATED_EVENT'); expect(component).toContain('HON_SCHOOL_CONTEXT_CHANGED_EVENT');
     expect(component).not.toMatch(/StaffLeadForm|formStaffRequest|localStorage|sessionStorage|invokeLLM|ActionEngine|PaymentService|loadCrmLeads|fetch\(/);
     expect(css).toContain('.bigButton'); expect(css).toContain('.classic'); expect(css).toContain('.modern');
   });

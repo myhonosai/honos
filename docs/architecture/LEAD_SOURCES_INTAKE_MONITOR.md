@@ -2,7 +2,7 @@
 
 ## Status
 
-**Implementation boundary for review.** This document defines the first, provider-free staff monitor. It does not activate Zernio, Meta, Google Ads, webhooks, advertising, messaging, AI automation, or customer communication.
+**Corrected implementation boundary for review.** This document defines the first, provider-free staff monitor. It does not activate Zernio, Meta, Google Ads, webhooks, advertising, messaging, AI automation, or customer communication.
 
 ## Purpose
 
@@ -30,12 +30,13 @@ It is deliberately not a second CRM directory, a provider dashboard, a conversio
 - Its sole read is a dedicated bounded same-origin monitor projection. The server derives the current human/school context, enforces `marketing.form.read`, validates the internal form response, and drops all identifiers and private configuration before the browser response is created.
 - It displays and receives no form/public/pipeline/campaign ID, description, optional field, version, timestamp, source PII, raw receipt, contact data, import evidence, or private campaign metadata.
 - It has no mutation control, idempotency key, command header, raw SQL, provider credential, provider request, polling, browser storage, background retry, or AI invocation.
-- A denied, invalid, uncertain, blur, page-hide, or hidden-document state clears returned monitor facts from memory. Reload is an explicit human action.
+- A denied, invalid, uncertain, blur, page-hide, hidden-document, unmount, same-user school-context transition, or confirmed authenticated-session invalidation clears returned monitor facts from memory, cancels an in-flight request, and rejects a late response by generation. Reload is an explicit human action.
+- Only the monitor transport's same-origin `401` dispatches the narrow client session-invalidation event; a `403` remains a local authorization denial and never asserts that the whole session ended. The protected route also derives an opaque hash from the verified session server-side and keys the monitor to it; the cookie itself is never serialized.
 - All navigation is ordinary same-origin navigation. Links carry no record, authority, campaign, provider, contact, family, billing, or execution selector.
 
 ## Presentation and language
 
-The workbench is an isolated route/component and does not modify shared visual components, HON marks, portraits, or Claude/Codex experimental assets. Modern HON, Classic CRM, and Big-Button / Phone are local presentation modes only: they are available before an intake read and vary density/touch target sizing without changing requests, scope, data, authority, or links. The visible monitor copy resolves from the active English, Korean, or Spanish interface language; organization-specific data remains server-returned and is not translated or altered.
+The workbench is an isolated route/component and does not modify shared visual components, HON marks, portraits, or Claude/Codex experimental assets. Modern HON, Classic CRM, and Big-Button / Phone are local presentation modes only: they are available before an intake read and vary density/touch target sizing without changing requests, scope, data, authority, or links. The visible monitor copy resolves from the active English, Korean, or Spanish interface language; organization-specific data remains server-returned and is not translated or altered. One persistent, atomic live region reports idle/loading/verified states politely and denied/unavailable/session-invalid states as alerts; it never programmatically moves focus.
 
 ## Follow-on dependencies
 
@@ -50,6 +51,8 @@ The first slice is complete only when the isolated route returns no facts before
 
 ## Validation evidence
 
-The final review-branch run passed the dedicated API form suite (10 tests, including a real Nest loopback of the monitor endpoint), focused monitor/public-form UI suites (18 tests), and provider-free root workspace validation: `pnpm test` (509 passing), `pnpm check`, `pnpm build`, and `git diff --check`. The route manifest was parsed and contains exactly one `/staff/marketing/intake` declaration.
+The F1/F2 corrective run passed the dedicated API form suite (10 tests, including a real Nest loopback of the monitor endpoint), focused monitor/public-form UI suites (18 tests), and provider-free root workspace validation: `pnpm test` (509 passing), `pnpm check`, `pnpm build`, and `git diff --check`. The route manifest was parsed and contains exactly one `/staff/marketing/intake` declaration.
 
-Desktop and mobile captures in [the review-capture record](../review/LEAD_INTAKE_MONITOR_SCREENSHOTS.md) render the actual monitor’s idle state. They intentionally contain no protected form read or fabricated data. The protected staff route remains behind the verified web-session gate. No database migration, provider credential/call, advertising action, customer communication, AI execution, payment, deployment, or merge was performed.
+The guarded local PostgreSQL dispatcher passed all **41** disposable proofs over all 181 migrations. The public-form fixture now proves the real signed-session Nest endpoint against a restricted runtime database; one school then another for the same subject, two-scope ambiguity refusal, parent/HQ/limited/nonhuman refusal, absent/malformed/expired session refusal before scope/data access, suspended/expired entitlement refusal, current read-permission revocation, exact minimal response closure, no-effect snapshots, and both valid PostgreSQL lock serializations for a live permission revocation. It uses only a marked localhost fixture and deletes generated credentials on exit.
+
+[The review-capture record](../review/LEAD_INTAKE_MONITOR_SCREENSHOTS.md) contains genuine idle and explicitly labeled synthetic loaded-state layout captures. The latter use only a temporary local minimal projection and are not customer/school records or provider evidence. Browser inspection confirmed named landmarks and controls, keyboard presentation selection, a single status/alert region, no horizontal overflow, and no new monitor request from a presentation switch. The protected staff route remains behind the verified web-session gate. No database migration, provider credential/call, advertising action, customer communication, AI execution, payment, deployment, or merge was performed. GitHub Actions manual-dispatch evidence remains a required PR approval gate.

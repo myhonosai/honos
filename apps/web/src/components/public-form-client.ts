@@ -1,4 +1,5 @@
 import { validateLeadIntakeMonitorForm, validatePublicFormConfig, validatePublicFormSubmission, validatePublishedLeadForm, validateStaffLeadForm, type LeadIntakeMonitorForm, type StaffLeadForm, type PublishedLeadForm, type PublicFormResult } from '@hon/contracts';
+import { reportConfirmedSessionInvalidation } from './session-invalidation';
 
 const staffBase = '/api/v1/marketing/forms';
 const monitorPath = `${staffBase}/intake-monitor`;
@@ -6,7 +7,7 @@ const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 const staffPath = new RegExp(`^${staffBase}(?:/${uuid}/(?:configuration|publish|disable))?$`);
 const validKey = (key: unknown): key is string => typeof key === 'string' && key.trim() === key && /^[A-Za-z0-9_-]{16,100}$/.test(key);
 export class FormUiError extends Error {
-  constructor(message: string, readonly denied = false) { super(message); }
+  constructor(message: string, readonly denied = false, readonly sessionInvalid = false) { super(message); }
 }
 function exactObject(value: unknown, keys: string[]): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && Object.keys(value).every(k => keys.includes(k));
@@ -23,7 +24,11 @@ async function requestJson(path: string, options: RequestInit, cap: number): Pro
     if (response.redirected || (response.url && (new URL(response.url).origin !== origin || new URL(response.url).pathname !== path || new URL(response.url).search || new URL(response.url).hash))) { await response.body?.cancel(); throw new FormUiError('No verified form response.'); }
     if (response.status === 401 || response.status === 403) {
       await response.body?.cancel();
-      throw new FormUiError('Exact current human school permission is required.', true);
+      // A 401 from an authenticated staff path is a confirmed session-verifier result.
+      // A 403 is only current resource/school authorization and must stay local.
+      const sessionInvalid = response.status === 401 && path.startsWith(staffBase) && options.credentials === 'same-origin';
+      if (sessionInvalid) reportConfirmedSessionInvalidation();
+      throw new FormUiError(sessionInvalid ? 'Your signed session has ended.' : 'Exact current human school permission is required.', true, sessionInvalid);
     }
     if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(response.headers.get('content-type') ?? '') || Number(response.headers.get('content-length') ?? 0) > cap) { await response.body?.cancel(); throw new FormUiError('No verified form response.'); }
     if (!response.body) throw new FormUiError('No verified form response.');
@@ -77,8 +82,8 @@ export async function formStaffRequest(path: string, input?: object, key?: strin
 }
 
 /** Browser-safe monitor read. Never call the full form-configuration list here. */
-export async function loadLeadIntakeMonitor(): Promise<LeadIntakeMonitorForm[]> {
-  const result = await requestJson(monitorPath, { method: 'GET', credentials: 'same-origin' }, 65536);
+export async function loadLeadIntakeMonitor(signal?: AbortSignal): Promise<LeadIntakeMonitorForm[]> {
+  const result = await requestJson(monitorPath, { method: 'GET', credentials: 'same-origin', ...(signal ? { signal } : {}) }, 65536);
   if (result.status !== 200) throw new FormUiError('No verified intake-monitor response.');
   try {
     if (!exactObject(result.body, ['data']) || !Array.isArray(result.body.data) || result.body.data.length > 100) throw new Error('INVALID');
