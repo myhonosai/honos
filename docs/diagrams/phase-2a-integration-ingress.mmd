@@ -1,0 +1,32 @@
+flowchart TB
+  subgraph future[Future owner-approved provider edge]
+    P[Provider delivery\nfor example Zernio Meta lead event]
+  end
+
+  subgraph hon[HON private school-scoped boundary]
+    V[Bounded raw-body\nverification]
+    R[Immutable inbound receipt\nprovider event ID + digest]
+    M[Pinned connection, mapping,\nschema and policy versions]
+    Q[Human Integration Review case]
+    D[Qualified human\nclosed decision]
+    C[Separate normal CRM command\ncreate distinct lead only]
+    A[Audit + internal-only\noutbox evidence]
+    X[Quarantine / dead letter /\nreconciliation case]
+  end
+
+  P --> V
+  V -->|valid signed and mapped| R
+  V -->|invalid, unsupported, or unknown| X
+  R -->|same identity + same digest| R
+  R -->|same identity + different digest| X
+  R --> M --> Q --> D
+  Q -->|stale mapping, drift, or unknown outcome| X
+  D -->|CREATE_DISTINCT_NEW_LEAD after rechecks| C --> A
+  D -->|skip, reject, insufficient evidence, or escalate| A
+
+  classDef future fill:#fff5e6,stroke:#a35b00,color:#3d2600
+  classDef protected fill:#eaf7ff,stroke:#126782,color:#082a39
+  classDef exception fill:#fff0f1,stroke:#a51c30,color:#4a0610
+  class P future
+  class V,R,M,Q,D,C,A protected
+  class X exception

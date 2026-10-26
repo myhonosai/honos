@@ -1,0 +1,27 @@
+stateDiagram-v2
+  [*] --> RECEIVED
+  RECEIVED --> VERIFIED: raw transport checks pass
+  RECEIVED --> REJECTED_SECURITY: signature, size, route, or header failure
+  VERIFIED --> SCHEMA_VALIDATED: registered schema accepted
+  VERIFIED --> QUARANTINED_SCHEMA: unknown or malformed payload
+  SCHEMA_VALIDATED --> NORMALIZED: pinned adapter/mapping version
+  SCHEMA_VALIDATED --> STALE_MAPPING: no current eligible mapping
+  NORMALIZED --> QUEUED_FOR_HUMAN_REVIEW: immutable receipt committed
+  QUEUED_FOR_HUMAN_REVIEW --> ASSIGNED: qualified reviewer claims
+  ASSIGNED --> READY_FOR_DECISION: evidence sufficient
+  ASSIGNED --> NEEDS_EVIDENCE: human requests reconciliation
+  READY_FOR_DECISION --> CREATED_BY_SEPARATE_HUMAN_COMMAND: create distinct lead succeeds
+  READY_FOR_DECISION --> SKIPPED_BY_REVIEWER: human skips or rejects
+  READY_FOR_DECISION --> ESCALATED: reconciliation or authorized remap needed
+  NEEDS_EVIDENCE --> ESCALATED
+  STALE_MAPPING --> ESCALATED
+  ESCALATED --> QUEUED_FOR_HUMAN_REVIEW: authorized replay opens new attempt
+  QUEUED_FOR_HUMAN_REVIEW --> DEAD_LETTER: durable exception policy
+  RECEIVED --> DUPLICATE_REPLAY: same event identity and digest
+  RECEIVED --> IDENTITY_CONFLICT: same event identity, different digest
+
+  note right of CREATED_BY_SEPARATE_HUMAN_COMMAND
+    Not automatic.
+    No merge, consent, message, trial,
+    follow-up, enrollment, billing, or AI effect.
+  end note
