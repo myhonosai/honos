@@ -1,0 +1,40 @@
+stateDiagram-v2
+  [*] --> RAW_BYTES
+  RAW_BYTES --> SIGNATURE_REJECTED: invalid / missing / misbound signature
+  RAW_BYTES --> VERIFIED_INSTALLATION: valid bounded signature
+  VERIFIED_INSTALLATION --> MALFORMED_REJECTED: envelope or schema cannot parse
+  VERIFIED_INSTALLATION --> UNSUPPORTED_VERSION_QUARANTINED: adapter/schema not allowlisted
+  VERIFIED_INSTALLATION --> BINDING_RESOLUTION: signed context only
+
+  BINDING_RESOLUTION --> UNKNOWN_BINDING_QUARANTINED: no unique verified historical binding
+  BINDING_RESOLUTION --> AMBIGUOUS_BINDING_QUARANTINED: multiple bindings or unprovable cutover
+  BINDING_RESOLUTION --> RECEIPT_RESERVED: exactly one historical school binding
+
+  RECEIPT_RESERVED --> REPLAY_RECORDED: same stable identity and verified digest
+  RECEIPT_RESERVED --> IDENTITY_CONFLICT: same identity, different verified digest
+  RECEIPT_RESERVED --> ROUTED_TO_REVIEW: new eligible resolved occurrence
+  RECEIPT_RESERVED --> RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED: durable prior outcome cannot be proven
+
+  UNSUPPORTED_VERSION_QUARANTINED --> [*]
+  UNKNOWN_BINDING_QUARANTINED --> [*]
+  AMBIGUOUS_BINDING_QUARANTINED --> [*]
+  RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED --> [*]
+  REPLAY_RECORDED --> [*]
+  IDENTITY_CONFLICT --> [*]
+  ROUTED_TO_REVIEW --> [*]
+
+  note right of UNKNOWN_BINDING_QUARANTINED
+    No school queue or candidate unless
+    independent stored evidence proves one school.
+    Default without approved operator plane: reject.
+  end note
+
+  note right of AMBIGUOUS_BINDING_QUARANTINED
+    Never route by current mapping, label,
+    externalId, default account, or selector.
+  end note
+
+  note right of ROUTED_TO_REVIEW
+    2xx only after this bounded durable outcome
+    is committed. It is not CRM creation.
+  end note

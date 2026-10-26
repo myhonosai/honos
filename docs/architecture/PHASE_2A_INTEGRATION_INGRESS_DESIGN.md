@@ -1,216 +1,217 @@
-# Phase 2A — Human-Confirmed Integration Ingress Design
+# Phase 2A — Provider-Agnostic Integration Ingress Design
 
-**Status:** Design-only owner-review proposal. This document creates no schema, API, credential, provider connection, webhook endpoint, OAuth handoff, message, AI task, payment, deployment, or external effect.
+> **Status: corrected design-only proposal; final design approval remains NO-GO.**
+>
+> This document proposes a future evidence-first, human-confirmed inbound lead-ingress boundary. It creates **no** migration, endpoint, credential, OAuth flow, webhook, provider call, customer-data record, CRM mutation, action-engine work, message, payment, deployment, or provider activation.
 
-## Decision
+## 1. Reconciliation status and dependency order
 
-HON should prepare a **provider-agnostic, evidence-first inbound integration boundary**. Its safe future path is:
+The design starts from canonical main `145d4cf00aa64d4b986ffd2b7a9de5462c7c6469`.
 
-```text
-signed raw inbound delivery
-  → immutable tenant-scoped receipt and dedup evidence
-  → pinned connection/mapping/schema/policy versions
-  → private human Integration Review case
-  → separately authorized normal CRM command
-  → audit and internal-only outbox evidence
-```
+- PR [#79](https://github.com/myhonosai/honos/pull/79) remains an **unmerged draft**. Its closed asset/capability vocabulary and unavailable-health convention are reusable only after its own review and current-main reconciliation.
+- PR [#80](https://github.com/myhonosai/honos/pull/80) remains an **unmerged draft**. Its server-only configuration/status/check boundary is not a school authorization, provider client, encrypted tenant vault, or webhook verifier.
+- PR [#85](https://github.com/myhonosai/honos/pull/85) is the independent readiness-documentation lane. It must be approved first; this PR must then be rebased onto its accepted baseline and remove duplicate assessment/source records without dropping #85’s other corrections.
+- This corrected PR [#86](https://github.com/myhonosai/honos/pull/86) is a design dependency, not an implementation authorization.
 
-The boundary is deliberately not a shortcut into public-form intake, CSV import, payment webhook handling, direct CRM creation, Action Engine execution, communications, or AI. It must not auto-create a lead, merge a person, assign ownership, create consent, schedule a trial, create a follow-up, send a message, enroll a student, create a membership, bill, call a provider, or invoke an AI employee.
+The implementation order, if separately approved, is:
 
-The architecture follows the Phase 2 readiness assessment's recommendation that provider material first become durable, school-scoped evidence and then receive human review. Existing website forms, campaign attribution, Migration Center, trials, follow-ups, Chad, and the Lead Sources monitor keep their current boundaries unchanged.
+1. #85 documentation baseline; then #79 and #80 reconciled independently with current main.
+2. Corrected Phase 2A design approval and owner policy decisions.
+3. One joint versioned receipt/candidate/review/disposition/CRM-effect contract checkpoint with one migration reservation.
+4. Provider-free simulated ingress and security proofs.
+5. Transaction-safe human CRM disposition proof.
+6. Integration Review UI after its backend contract is reviewed.
+7. A separately owner-approved provider sandbox/pilot.
 
-## Diagrams
+No phase automatically authorizes the next one.
 
-![Proposed evidence-first inbound flow](../diagrams/phase-2a-integration-ingress.png)
+## 2. Non-negotiable authority separation
 
-[Mermaid source](../diagrams/phase-2a-integration-ingress.mmd) · [Rendered PNG](../diagrams/phase-2a-integration-ingress.png)
+A signature authenticates a **provider installation/key generation**. It never by itself authenticates a school, a CRM actor, a candidate’s identity, consent, contact ownership, guardian authority, or an executable instruction.
 
-![Proposed human-review state model](../diagrams/phase-2a-integration-review-state.png)
+| Authority plane | Proposed record/boundary | What it may establish | What it never establishes |
+| --- | --- | --- | --- |
+| Platform installation | `ZernioPlatformInstallation` | A centrally configured provider app/team/subscription, approved endpoint context, and installation lifecycle | A school connection, school asset ownership, candidate access, CRM authority, or a default provider account |
+| Private credential custody | `PrivateCredentialBinding` | A purpose-specific opaque binding to an owner-approved secret facility, version/lifecycle, stewardship, and dependency policy | A school grant, browser secret, ordinary table secret reference, or staff-visible vault locator |
+| School provider connection | `SchoolProviderConnection` | A historical organization-and-school-scoped relationship to one installation and opaque credential-binding ID | An asset/capability grant, raw credential, routing authority without a grant, or cross-school authorization |
+| Verified asset grant | `SchoolProviderAssetGrant` / historical binding | A versioned, evidenced authorization for one exact normalized profile/account/Page/form tuple and one #79 capability | Another asset, another capability, another school, a provider’s first/default account, or customer-PII authority |
+| Organization provider administration | Future `OrganizationProviderAdministration` | Explicit coordination of enumerated target-school drafts when separately approved | A wildcard, inherited school access, shared asset right, or operational authorization |
+| HQ configuration | Existing/proposed #80 HQ status surface | Safe platform configuration/verification status under HQ policy | School asset management, unresolved-payload access, CRM action, or candidate review |
 
-[Mermaid source](../diagrams/phase-2a-integration-review-state.mmd) · [Rendered PNG](../diagrams/phase-2a-integration-review-state.png)
+For Phase 2A, the only relevant proposed #79 capability is **`LEAD_RETRIEVAL`**. A Page grant does not imply lead retrieval, messaging, publishing, ad management, another Page, a related Instagram account, or another school.
 
-## What the evidence establishes
+### 2.1 Private credential-binding boundary
 
-Zernio documents a Meta `lead.received` webhook with a stable event ID, Meta `leadgenId`, form identifier, fields, and selected ad/account context. It also documents at-least-once delivery, five-second acknowledgement expectations, retry/dead-letter behavior, and an HMAC-SHA256 signature over the raw request body.[1] [2] This is useful feasibility evidence, not proof that HON has a connection, account authorization, Page/form mapping, signing secret, valid consent, working delivery, or operational health.
+Only an opaque `credentialBindingId` and version may appear outside the private credential facility. The vault locator, raw secret, refresh token, OAuth code, signature key, expiry, provider inventory, and raw provider errors must never appear in ordinary connection/mapping/receipt/audit/outbox rows, URLs, browser state, telemetry, logs, or staff projections.
 
-Zernio connection material describes a selected-Page step for Meta lead forms and notes that reconnect behavior and account identifiers may change. A lead payload carries a form ID but not a Page ID, so HON must not route a delivery to a school from a form name, account label, campaign, or source string alone.[3] [4] The future connector must resolve a stored, versioned mapping from private server-side evidence.
+Only named, allowlisted server operations may resolve secret material, after rechecking the current installation, credential-binding, exact school connection, asset grant, capability, lifecycle, and operation purpose. Resolution returns secret material only in process memory to that fixed operation and records redacted operation/version audit evidence. It is never browser-callable, a generic provider client, or a `PUBLIC`/runtime SQL helper.
 
-The current HON implementation has a strong provider-free CRM foundation, but it intentionally has no provider connection object, secret reference, signed webhook transport, provider event ledger, mapping model, reconciliation model, or human integration-review queue. [Phase 2 CRM Integration Readiness Assessment](../assessments/PHASE_2_CRM_INTEGRATION_READINESS.md) is the current baseline.
+A future owner-approved **Credential Custody Policy** decides platform-managed versus school-supplied custody for each purpose, permitted sharing/exclusivity, secret facility, issuer/scope, stewards, emergency revocation, rotation, and overlap/cutover rules. #80’s local `0700` directory and `0600` plaintext file are useful local setup hygiene only; they are not an encrypted multi-tenant vault.
 
-## Proposed private data model
+## 3. Evidence-based tenant routing
 
-The names below are design names, not approved migrations. Every durable row is organization-and-school scoped, uses a composite relation to the owning school, and is inaccessible by direct runtime/browser table access.
-
-### Connection and credential metadata
-
-`integration_connections` represents one historical binding to a provider. It contains an immutable HON connection identity, `organization_id`, `school_id`, normalized provider code, lifecycle state, credential rotation/revocation metadata, approved scope-set version, and timestamps. It stores **opaque secret-manager references only**. Refresh tokens, authorization codes, webhook secrets, raw secret references, provider inventory, and tokens do not appear in ordinary tables, audit payloads, outbox payloads, URLs, logs, receipts, or browser state.
-
-A redacted server projection may expose only whether a credential is configured and a response-backed lifecycle state. It may not expose the secret reference, token expiry value, account inventory, raw provider error, or an unverified health claim.
-
-Connection lifecycle is append-only/versioned. Proposed lifecycle facts are `PROPOSED`, `CONNECTING`, `CONFIGURED`, `PAUSED`, `REVOKED`, `DISCONNECTED`, and `ERROR`. Connect, reconnect, rotation, disablement, disconnect, and kill-switch operations need an expected-version check, actor-bound idempotency, current live authorization, audit evidence, and internal-only outbox evidence. Disconnect or revocation prevents new mapping resolution immediately while preserving history.
-
-### Versioned provider asset mapping
-
-`integration_mappings` binds exactly one current connection to one school and one normalized provider asset tuple. For Zernio/Meta that tuple is conceptually provider profile/external identifier, account context, selected Page, and form identifier. It also records the approved non-terminal CRM pipeline/stage, optional current ACTIVE campaign snapshot, policy/schema/adapter version, validity window, and mapping lifecycle.
-
-A current mapping must be unique across schools for the normalized asset tuple. A partial uniqueness rule or equivalent fixed-function guard prevents one provider account/Page/form from having two active school mappings at the same time. Mapping edits append a new version. They never rewrite an earlier receipt or silently reinterpret a retry under the newest mapping.
-
-Mapping a campaign uses current-school `marketing.campaign.attribute` authority and requires an ACTIVE campaign at the moment the mapping version is created. A campaign snapshot remains source provenance only. It never proves ad spend, delivery, conversion, enrollment, payment, revenue, or ROI.
-
-### Immutable inbound evidence
-
-`integration_inbound_receipts` is the first durable fact after a future signature-valid inbound request. It stores only bounded metadata: provider, connection/mapping identity and versions, external event ID, event type, provider timestamp, receipt timestamp, raw-byte digest, normalized-payload digest, schema/adapter version, verification key/version identifier, and a redacted resolution outcome.
-
-A unique identity is proposed as `(provider, connection_id, external_event_id)`. The same identity with the same verified digest is a replay and returns its recorded receipt outcome without new work. The same identity with a different digest becomes immutable `IDENTITY_CONFLICT`/quarantine evidence, never an overwrite or remap.
-
-`integration_payload_evidence` is optional and exists only if the owner later approves an explicit minimization, encryption, retention/deletion, regional-processing, and access policy. It is a separate forced-RLS private vault. Raw provider bodies, fields, contact values, consent text, form labels, and error blobs never enter normal CRM source facts, audit records, outbox events, browser responses, or routine queue lists.
-
-### Human review and decisions
-
-`integration_review_cases` refers to a specific receipt/evidence version and provides the private review lifecycle. Proposed states are `QUEUED`, `ASSIGNED`, `NEEDS_EVIDENCE`, `DUPLICATE_CANDIDATE`, `READY_FOR_DECISION`, `SKIPPED`, `REJECTED`, `ESCALATED`, `STALE_MAPPING`, `DEAD_LETTER`, and `RESOLVED`.
-
-`integration_review_decisions` is append-only. A qualified human binds an exact receipt, mapping version, normalized evidence version, candidate projection, policy version, expected case version, reviewer capability, rationale code, and expiry. A reviewer-owned short-lived capability is a control plane for review, not a general person/lead lookup.
-
-The conservative decision set is:
-
-- `CREATE_DISTINCT_NEW_LEAD`
-- `SKIP_OR_REJECT`
-- `INSUFFICIENT_EVIDENCE`
-- `ESCALATE_OR_RECONCILE`
-- `REMAP_WITH_SEPARATE_AUTHORIZATION`
-
-`ATTACH_TO_EXISTING_LEAD` is intentionally **not approved by this design**. It remains an owner/domain decision because it could blur the no-merge, no-source-rewrite, and no-ownership-mutation guarantees. Any future attach path requires a separate contract proving it is neither a merge nor a record mutation.
-
-## Authorization and RLS model
-
-The server resolves current scope from the verified human principal. It does not accept organization, school, provider, mapping, actor, role, or authority from a browser selector, URL, webhook claim, or GUC supplied by the caller.
-
-A proposed dedicated fixed resolver follows the existing exact-one public-form/campaign pattern:
+The only valid school-routing chain is:
 
 ```text
-verified HUMAN_USER/HUMAN_UI principal
-  → one active organization/school candidate
-  → live role + permission + entitlement check
-  → exact-one scope or no result
+verified signature/key generation
+  → one provider installation
+  → signed provider context correlated against server-held evidence
+  → one historical verified asset grant/binding
+  → exactly one organization + school
 ```
 
-Zero or multiple eligible schools fail closed. The generic resolver that accepts a caller-selected school ID is not suitable for provider lifecycle commands. A command locks and rechecks organization → school → user → principal → grants → roles → permissions → entitlement, with a live clock after lock/idempotency waits.
+`externalId`, a form/account/campaign/ad label, a browser selector, an API-key-present status, the provider’s default/first account, and today’s current mapping are correlation inputs only. They are never tenant authority.
 
-Proposed separate capabilities are:
+![Corrected inbound trust boundary](../diagrams/phase-2a-integration-ingress.png)
 
-- `marketing.integration.status.read`
-- `marketing.integration.connection.manage`
-- `marketing.integration.mapping.manage`
-- `marketing.integration.reconciliation.manage`
-- `crm.integration_review.read`
-- `crm.integration_review.decide`
-- existing normal CRM create authority for the separately invoked lead command
+The exact receipt-routing outcomes are separately shown in the [tenant-routing and quarantine state machine](../diagrams/phase-2a-integration-routing-quarantine.mmd).
 
-Connection lifecycle is for a school owner or an explicitly approved delegated role. Mapping, reconciliation, and review are separate sensitive permissions. Parent/family, public, HQ-derived, nonhuman, AI, Action Engine, generic service, and cross-school contexts are denied by default unless a future approved contract explicitly narrows an exception.
+### 3.1 Historical binding and remap cutover
 
-All proposed connection, mapping, receipt, payload-vault, review, decision, and reconciliation tables use `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY` with no direct runtime/client policies or grants. Only minimal named SECURITY DEFINER functions belong in the runtime allowlist. Helpers, triggers, history functions, secret references, and raw payload access remain uncallable by `hon_runtime`, `PUBLIC`, and browser-facing roles. The canonical runtime grant and verifier files must receive matching negative ACL/RLS/function/search-path checks when and only when a future implementation is approved.
+Every verified asset binding/mapping revision is append-only and records:
 
-## Future inbound transport contract
+- installation, school connection, exact normalized asset tuple, asset kind, and capability;
+- organization/school composite scope;
+- verification evidence, policy/schema version, approving authority, and timestamps;
+- validity interval, supersession/cutover reason, and owner-approved signed-event-time rule.
 
-The future endpoint is a provider-only transport boundary, not a browser API. Its exact route is deferred until an implementation PR because route registration is itself a security review decision.
+A receipt permanently pins the historical resolution selected at its first durable handling. A previously unseen delayed delivery after an A→B remap must be evaluated against historical verified evidence—not assigned to B because B is today’s mapping. If the signed event context, event-time/cutover rule, or stored historical evidence cannot prove exactly one school, it remains unresolved. It is never copied, attached, merged, reassigned, or made visible to either school.
 
-The intended behavior is:
+### 3.2 Fail-closed routing matrix
 
-1. Accept only a registered method, content type, content encoding, header allowlist, body limit, and event allowlist.
-2. Read bounded raw bytes before any JSON parsing.
-3. Validate the provider-specific signature in constant time against the server-side secret reference and validate timestamp/nonce/replay rules where the provider supplies them.
-4. Reject malformed, unsigned, misbound, oversized, unsupported, test, or unknown-mapping payloads into bounded security/quarantine handling. Invalid signatures create no CRM/audit/outbox business fact.
-5. Atomically reserve a receipt and dedup result before acknowledgement. A 2xx response occurs only after that durable result commits.
-6. Create only a private review case and redacted internal evidence after a valid, resolved receipt. No CRM mutation is part of acknowledgement.
+The provider adapter may acknowledge only after its applicable bounded durable outcome commits. A `2xx` means only that this outcome committed; it never means CRM creation, consent, verified identity, healthy delivery, or a school route. Exact status/body choices remain provider-adapter-specific and must be approved with the provider contract.
 
-For Zernio specifically, the implementation must verify the raw-body HMAC-SHA256 signature, honor at-least-once delivery, use the stable event ID for deduplication, retain `leadgenId` as a secondary reconciliation key, and keep any `formName`, ad, ad-set, campaign, or field value out of routing decisions.[1] [2] A healthy-looking connection is not delivery evidence: Zernio documents that a Page can lose lead-generation subscription while other traffic continues.[1]
+| Outcome code | Durable boundary | School visibility | Acknowledgement and retry rule |
+| --- | --- | --- | --- |
+| `SIGNATURE_REJECTED` | At most bounded non-PII security telemetry; no parse-dependent tenant record | None | Reject; never acknowledge a tenant outcome. Rate-limit and preserve no raw payload/contact data. |
+| `MALFORMED_REJECTED` | Bounded authenticated-envelope failure evidence only when safely available | None | Reject permanently under adapter policy; no school route, candidate, or CRM effect. |
+| `UNSUPPORTED_VERSION_QUARANTINED` | Bounded non-school metadata outcome, if the operator-plane policy exists | None | Acknowledge only after durable bounded quarantine commits; no school case or candidate. Without approved operator plane, reject. |
+| `UNKNOWN_BINDING_QUARANTINED` | A proved school-local exception only if independent stored binding evidence already proves that school; otherwise non-school metadata only | Only the uniquely proved school; never an inferred school | Acknowledge only after the allowed durable outcome commits. Unknown form on a known connection is not enough unless independent evidence already proves the school. |
+| `AMBIGUOUS_BINDING_QUARANTINED` | Non-school bounded metadata outcome | None | Acknowledge only after approved non-school quarantine commits; never choose a school or current mapping. |
+| `RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED` | Immutable reconciliation marker keyed to the original verified identity/digest | No new school fact | Do not create a fresh identity, case, or CRM effect. Reconcile against the original durable evidence before any response claim. |
 
-## Human Integration Review flow
+`IDENTITY_CONFLICT` is a separate immutable observation: the same stable verified event identity with a different verified digest. It never overwrites the original event, becomes a replay, or creates a new candidate/case/CRM effect.
 
-```text
-receipt is verified and mapped
-  → private case is queued
-  → qualified human explicitly loads bounded case detail
-  → system presents redacted candidate and advisory duplicate suggestions
-  → human chooses a closed decision
-  → separate normal CRM command rechecks case/evidence/authority/version
-  → either one distinct new lead is created, or no CRM change occurs
-```
+### 3.3 Unresolved operator-plane quarantine
 
-Duplicate matching is advisory and school scoped. It may consider normalized email/mobile and reviewed provider-native identifiers, but it may not auto-merge, suppress, alter an existing person/lead, change source facts, assign a lead owner, or advance lifecycle. A suggested match is not identity proof.
+The default before an owner decision is **reject without tenant business writes**. A non-school operator-plane quarantine is optional and requires a separate policy before implementation. If approved, it must have:
 
-The later CRM create command is separate from inbound receipt processing. It rechecks the review decision, mapping/evidence/case versions, current school authority, entitlement, non-terminal target stage, and idempotency. It atomically creates one distinct CRM lead with minimized immutable provenance, a redacted audit record, internal-only outbox evidence, and an idempotency receipt. It uses an inert integration-review event type—not a generic `crm.lead.created` event—until a future consumer policy is reviewed.
+- a narrow named permission distinct from school reconciliation and #80 HQ credential status;
+- metadata-only safe projections, with no raw body, contact field, form label, provider error blob, or reversible digest;
+- bounded installation/connection rate, bytes, event count, concurrency, unresolved backlog, dead-letter backlog, retention, expiry, and deletion;
+- immutable redacted audit for operator read/adjudication/release/deletion actions;
+- no school queue, browser URL, generic HQ view, credential-status page, or CRM creation path;
+- no automatic adjudication, re-routing, assignment, cross-school copy, or asset discovery.
 
-## Provenance, consent, and no-effect rules
+A future release from the operator plane to a school requires newly sufficient historical evidence and a separately authorized human adjudication. It cannot create a CRM lead.
 
-A lead source should be a closed short code such as `META_LEAD_FORM`, within the existing source bound. Private source facts can preserve provider, receipt, mapping, adapter/schema versions, provider asset identifiers, selected campaign snapshot, source digests, and receipt/provider timestamps. None of these source facts establishes customer identity, ownership, ad spend, consent, conversion, enrollment, payment, revenue, or ROI.
+## 4. Protected normalized candidate, not a raw payload
 
-A provider checkbox, acknowledgement, email, phone, or form field is an unverified provider claim. It cannot create HON SMS/email/push consent. Any later communication requires the existing separately governed consent and message queue/delivery path with live recipient/channel consent checks.
+Raw-body retention is **prohibited by default**. Bytes may be held only long enough to verify an approved signature and derive allowed evidence. A raw-body vault is a separate future decision; this proposal does not create one.
 
-The following effects are expressly absent from Phase 2A:
+After a unique school binding exists and only after PII custody approval, the proposed protected record is `IntegrationNormalizedCandidateV1`:
 
-- provider connection, OAuth, webhook registration, polling, lead retrieval, or API call
-- automatic CRM lead create, merge, attach, close, assignment, scoring, trial, follow-up, or automation
-- communication consent, message drafting, queueing, delivery, or customer contact
-- ad creation, spend, conversion, revenue, ROI, payment, credit, membership, enrollment, or billing effect
-- AI invocation, AI work creation, Action Engine request, approval, execution, or provider use
-- browser persistence of sensitive facts, credentials, candidate data, retry keys, or selected scope
+| Allowlisted field | Normalization / result |
+| --- | --- |
+| `givenName` | Required for future creation; existing direct-human CRM length/control validation. |
+| `familyName` | Required for future creation; existing direct-human CRM length/control validation. |
+| `email` | Optional; trim/lowercase and syntax validate when present. |
+| `phoneE164` | Optional; valid E.164 only when present. |
+| `programInterestCode` | Optional; retain only an owner-approved bounded HON code, otherwise mark `UNMAPPED` and omit. |
 
-## Closed contract overview
+Each field has one immutable status: `PRESENT_VALID`, `MISSING`, `INVALID`, `UNMAPPED`, or `OMITTED_BY_POLICY`. Rejected values are not retained. Free text, provider field labels, raw JSON, provider identifiers, address, age/birth data, guardian data, consent content, notes, executable instructions, and contact hashes are excluded.
 
-These are proposed closed schemas, not implemented endpoints. Their future route names, marker headers, function names, and permissions require a separate contract review. Every browser-facing read is same-origin, `no-store`, response-validated, server-scoped, and redacted. Unknown properties fail validation rather than widening a projection.
+The protected record also pins `candidateSchemaVersion`, `canonicalizationVersion`, `evidenceVersion`, receipt/mapping/policy references, field-status codes, and a tenant/receipt-bound HMAC-SHA-256 `candidateEvidenceDigest` with integrity-key version. This digest is integrity evidence, not a display, search, or contact identifier.
 
-### Staff status read
+### 4.1 Queue/detail split and PII custody
 
-`IntegrationStatusProjection` may contain only an opaque HON connection reference, provider code, stored connection lifecycle, boolean credential-configured state, mapping readiness state, bounded reconciliation state, and server-approved timestamps/version labels. It never carries a token, secret, account inventory, raw provider identifier, raw provider error, payload, lead data, spend, health claim, or delivery claim.
+`IntegrationReviewListItem` is metadata-only: opaque case reference, received time, provider display code, safe state/blocker codes, and version labels. It contains no name, email, phone, interest, raw/provider identifier, candidate preview, or digest.
 
-### Mapping review and command
+A separate no-store **protected detail** read may show only the allowed V1 fields/statuses to a current same-school `HUMAN_USER` with future `crm.integration_review.read` authority. It is not a contact directory and does not grant `crm.lead.read`. Any duplicate suggestion is an opaque same-school reference plus match-basis code; no existing-contact value is shown.
 
-`IntegrationMappingProjection` may contain opaque connection/mapping references, provider display label, lifecycle, destination pipeline/stage display labels, optional ACTIVE campaign display label, current mapping/schema/policy version, and permitted capability flags. The future `IntegrationMappingCommand` binds the opaque mapping reference, expected version, closed non-terminal destination selection, optional campaign reference, exact human confirmation literal, and an idempotency key. It accepts no school, organization, actor, provider credential, free-form field map, lead-owner, consent, provider-account browser, or authority selector.
+Before PII persistence or display, an owner must approve and implementation must prove:
 
-### Review list, detail, and decision
+- application-managed envelope encryption with a fresh per-record DEK, authenticated encryption, and AAD bound to organization, school, candidate, receipt, evidence, and schema context;
+- KMS/HSM custody, a narrow decrypting service identity, redacted read/decision audit, and no browser/database-role decrypt capability;
+- approved regions/processors, retention/expiry/deletion/hold policy, backup expiry and restore behavior, and key rotation/retirement;
+- deletion/cryptographic-erasure behavior that preserves only non-reconstructable receipt/decision/digest evidence.
 
-`IntegrationReviewListRequest` permits only closed provider/lifecycle/review-state/reason filters, a bounded UTC range, an opaque cursor, and a small page size. `IntegrationReviewDetailProjection` returns only a qualified reviewer's redacted candidate facts, immutable evidence/mapping/schema/policy version labels, bounded duplicate suggestions, safe blockers, and decision receipt—not raw payloads, contact directory data, secrets, audits, outbox internals, or provider blobs.
+FORCE RLS, a provider signature, a digest, or #80 local key handling are not substitutes for this custody model. Provider assertions establish neither identity, contact ownership, consent, opt-in, guardian authority, legal basis, nor permission to send/queue a message.
 
-`IntegrationReviewDecisionCommand` binds the opaque case reference, expected case/evidence version, closed decision enum, exact confirmation literal, reviewer-owned review capability, and idempotency key. The initial enum excludes `ATTACH_TO_EXISTING_LEAD`. `CREATE_DISTINCT_NEW_LEAD` invokes a separate canonical direct-human CRM command after a live reauthorization, never inside the inbound acknowledgement transaction.
+## 5. Identity graph, deduplication, and two transactions
 
-### Provider transport
+### 5.1 Proposed durable identities
 
-`InboundProviderEnvelope` is server-only and starts as bounded raw bytes plus an exact provider integration code, route/method/header/content metadata, and provider verification context. It is not a browser JSON contract. Its durable result is a minimal `InboundReceiptOutcome` with opaque receipt reference, replay/conflict/quarantine/review outcome, and safe retry/acknowledgement behavior. The raw body and signature material remain private transport evidence.
+| Identity | Purpose | Must not be used as |
+| --- | --- | --- |
+| `delivery_attempt_id` | One accepted physical transport attempt | Deduplication key |
+| `event_id` | Stable provider event: provider + verified installation/subscription lineage + event type + signed body/context event ID | Current connection/mapping identity |
+| `source_occurrence_id` | Provider lead occurrence: provider + historical verified asset lineage + `leadgenId` | A UI selection or mapping revision |
+| `mapping_revision_id` / resolution | Append-only historical routing evidence | CRM dedup namespace |
+| `review_case_id` / `review_decision_id` | Case lineage and append-only human evidence | CRM effect |
+| `disposition_request_id` | Original human request keyed by reviewer and original idempotency key/fingerprint | A new browser retry key |
+| `crm_effect_id` | Reserved canonical CRM result; must be unique for `source_occurrence_id` | An arbitrary provider event |
+| `replay_id` / `event_conflict_id` | Immutable same-digest replay or different-digest conflict observation | New candidate/case/CRM work |
 
-## Reconciliation, exceptions, and kill switch
+A reconnect or mapping revision must not produce a new provider-event or lead-occurrence namespace. The external event ID must be extracted from HMAC-protected body/context; an unsigned header cannot supply or override it.
 
-A later operational design must reconcile three planes: provider inventory/cursor against receipt evidence; receipts against normalized/review cases; and review decisions against CRM creation/audit/outbox evidence. It must surface redacted exception cases for missing, delayed, duplicate, reordered, dead-lettered, disconnected, needs-reconnect, schema-drift, mapping-drift, and unknown-outcome conditions.
+### 5.2 Boundary A — ingress acknowledgement
 
-A future `REPLAY_FROM_EVIDENCE` operation is human-authorized. It references the original immutable receipt, records a reason, binds either the original mapping or an explicitly authorized remap, and creates a new replay-attempt record. It may only reopen or create a review case. It may not directly create or merge CRM data.
+One ingress transaction, before any acknowledgement:
 
-A school-scoped kill switch pauses mapping resolution and downstream case creation. It does not delete evidence, silently reassign events, or pretend the provider is healthy. Reconnect requires a new current authorization and revalidation of scope, mapping, policy, and provider-side prerequisites.
+1. reserves/locks the stable event identity and appends delivery-attempt evidence;
+2. classifies same-digest replay or different-digest conflict;
+3. resolves and pins one historical binding or one fail-closed outcome;
+4. links/creates a source occurrence only when allowed;
+5. derives protected candidate evidence only when the custody and binding gates permit it;
+6. creates a review case only for a new, resolved, eligible occurrence.
 
-## Required proof gates before any implementation
+It commits the complete outcome before a `2xx`. It creates no CRM person/lead, CRM audit/outbox event, or human review decision.
 
-A future implementation must provide fresh disposable-local evidence for:
+### 5.3 Boundary B — human disposition and canonical CRM effect
 
-1. Forced RLS, ACL, helper/function, trigger, and secret-redaction drift across every private integration table.
-2. Exact-one human scope; two-school and cross-organization ambiguity; parent/HQ/nonhuman/service denial; entitlement/role/permission revocation during lock waits.
-3. Valid, missing, malformed, tampered, misbound, stale, compressed/oversized, unsupported-type, and unsupported-schema inbound transport cases.
-4. Same-ID/same-digest replay, same-ID/different-digest conflict, concurrent delivery, reordered delivery, mapping drift, disconnect/reconnect, and unknown-outcome cases.
-5. Review-token expiry, expected-version conflict, stale mapping/evidence, duplicate suggestion, never-merge, atomic rollback, idempotency, and reviewer reauthorization.
-6. Full no-effect snapshots across consent, messages, scheduling, trials, enrollment, membership, invoices, payments, attendance, AI usage/work, Action Engine, provider calls, browser storage, and external egress.
+A later direct-human command has one tenant transaction, with a deterministic reviewed lock order. It rechecks time, signed human identity, exact school, roles/grants, entitlement, case/evidence/mapping/policy versions, source occurrence, original disposition request, reserved CRM effect, and target pipeline/stage after lock waits. In one atomic outcome it:
 
-## Owner decisions required before any connector implementation
+1. appends an immutable review decision;
+2. reserves the unique source-occurrence CRM effect;
+3. invokes a transaction-aware canonical CRM creation primitive;
+4. writes private scoped provenance/result, redacted audit, and inert evidence;
+5. completes the original disposition receipt and terminally transitions the case.
 
-1. Whether provider raw payloads may be retained at all, and the approved minimization, encryption, retention/deletion, region/processor, and access policy.
-2. The delegated-role model for connection, mapping, reconciliation, review, and eventual CRM disposition.
-3. Mapping cardinality and remap policy for provider account/Page/form assets, reconnects, retired forms, and campaign snapshots.
-4. Whether `ATTACH_TO_EXISTING_LEAD` is ever allowed; the safe default is not to implement it.
-5. The inbound review policy for test events, invalid-signature telemetry, schema drift, delayed/replayed events, dead letters, reconciliation cadence, and kill switch.
-6. The evidence required before provider activation: authorized account/Page/form ownership, permitted scopes, selected-Page proof, secret custody, endpoint-limit clarification, and sandbox/cost approval.
-7. The fixed permission names, review states, audit/outbox event names, and explicit no-consumer policy for the first implementation slice.
+Any failure rolls all of this back. Unknown HTTP outcomes reconcile from the original disposition request/effect/case evidence and never retry under a new browser identity.
 
-## References
+The current public `LeadService.create` opens its own tenant transaction. Future work must **not** call it inside the disposition transaction or duplicate its CRM logic. Instead, a separately reviewed internal `createInExistingTenantTransaction` primitive may be extracted: the public direct-human path continues to wrap it with the existing standard policy and retains ordinary `crm.lead.created` v1 behavior unchanged.
 
-[1]: https://docs.zernio.com/webhooks "Zernio webhooks"
-[2]: https://docs.zernio.com/webhooks/ads "Zernio ads webhooks"
-[3]: https://docs.zernio.com/platforms/meta-ads/connect "Zernio Meta Ads connection"
-[4]: https://docs.zernio.com/platforms/meta-ads/lead-forms "Zernio Meta lead forms"
-[5]: https://docs.zernio.com/guides/error-handling "Zernio error handling"
+Integration provenance remains in scoped immutable integration relations, not a nested arbitrary provider object in the existing flat attribution contract. The proposed integration-only evidence event, `crm.integration_review.lead_created` v1, is minimal and non-PII and must be structurally excluded from outbox claiming, automation trigger registries, Action Engine catalogs, and all consumer allowlists. `internalOnly` in a payload alone is insufficient enforcement.
+
+## 6. State vocabulary and human review boundary
+
+The corrected design separates connection/mapping, receipt, review-case, CRM-execution, and browser-controller planes. See the canonical [state vocabulary](PHASE_2A_INTEGRATION_STATE_VOCABULARY.md) and [review-state diagram](../diagrams/phase-2a-integration-review-state.png). No derived UI label, advisory duplicate signal, mapping exception, event name, or browser epistemic state may become a lifecycle enum in another plane.
+
+A human disposition may eventually create only a distinct new lead. Initial attach/merge is absent. `Verified Auto-Create` is a named future extension but remains **disabled**: no policy seed, route, consumer, execution principal, or authority exists in this proposal.
+
+## 7. Explicit exclusions
+
+This correction does not authorize:
+
+- a provider connector, OAuth, credential edit, provider SDK/client, default-account selection, webhook, provider call, secret resolution, or hosted key vault;
+- raw-payload retention, protected candidate PII, detail access, candidate encryption, or data retention;
+- automatic or manual CRM lead creation, attach, merge, enrollment, payment, messaging, consent change, or AI/Action Engine execution;
+- an operational capacity, provider health, conversion, revenue, delivery, or ROI claim;
+- any change to #79, #80, #85, existing CRM behavior, or another agent’s source.
+
+## 8. Owner decisions before implementation
+
+1. Credential custody, purpose separation, approved secret facility, sharing/exclusivity, rotation/revocation/cutover, and emergency governance.
+2. Exact asset tuple/capability grants, organization administration policy, historical binding/cutover evidence, and delayed-event rules.
+3. Whether a non-school operator-plane quarantine exists; if so, its permission, metadata limit, retention, audit, capacity, and response policy.
+4. Candidate V1 allowlist, integration-specific at-least-one-contact policy, reviewer/decision roles, encryption/KMS, regions/processors, retention/deletion/hold, backups, and raw-body policy.
+5. Human review/disposition policy: pipeline/stage/source mapping, duplicate handling (initially no attach/merge), reconciliation, and inert-event retention/consumer policy.
+6. Vendor sandbox/live/cost, provider pilot, load/latency/backlog acceptance thresholds, and incident response.
+7. Any future Verified Auto-Create policy, separately and only after the human-review path is proved.
+
+## 9. Source and evidence limits
+
+Zernio material remains feasibility/background evidence only; it does not validate a live integration. See the canonical source record proposed in PR [#85](https://github.com/myhonosai/honos/pull/85). This PR does not rerun provider verification, provision credentials, call an API, or establish operational readiness.
+
+The exact Codex reconciliation is tracked in [PR #86 correction record](PHASE_2A_PR86_CODEX_CORRECTIONS.md) and the proposed proof/rollout sequence in [Phase 2A verification and rollout](PHASE_2A_INTEGRATION_VERIFICATION_AND_ROLLOUT.md).

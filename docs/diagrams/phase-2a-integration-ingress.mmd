@@ -1,32 +1,51 @@
 flowchart TB
-  subgraph future[Future owner-approved provider edge]
-    P[Provider delivery\nfor example Zernio Meta lead event]
+  P[Future provider delivery\nnot connected by this design]
+  V[Bounded raw-byte verification\nbefore parse]
+  I[Verified provider installation\nkey generation only]
+  B[Historical verified asset binding\ninstallation + connection + exact asset + capability]
+  S[Exactly one organization + school\nproven by binding]
+
+  subgraph noSchool[Fail-closed / non-school handling]
+    R1[SIGNATURE_REJECTED\nnon-PII security telemetry only]
+    R2[MALFORMED_REJECTED]
+    R3[UNSUPPORTED_VERSION_QUARANTINED\nonly if approved bounded operator plane]
+    R4[UNKNOWN_BINDING_QUARANTINED]
+    R5[AMBIGUOUS_BINDING_QUARANTINED]
+    R6[RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED]
+    C[IDENTITY_CONFLICT\nimmutable different-digest evidence]
   end
 
-  subgraph hon[HON private school-scoped boundary]
-    V[Bounded raw-body\nverification]
-    R[Immutable inbound receipt\nprovider event ID + digest]
-    M[Pinned connection, mapping,\nschema and policy versions]
-    Q[Human Integration Review case]
-    D[Qualified human\nclosed decision]
-    C[Separate normal CRM command\ncreate distinct lead only]
-    A[Audit + internal-only\noutbox evidence]
-    X[Quarantine / dead letter /\nreconciliation case]
+  subgraph school[Future school-scoped boundary after unique proof]
+    E[Stable event + delivery attempt\nsource occurrence + pinned resolution]
+    Y[REPLAY_RECORDED\nreturns original durable outcome]
+    N[Protected normalized candidate V1\nonly after PII-custody approval]
+    Q[Metadata-only review case]
+    D[Qualified direct-human disposition]
+    X[Unique CRM effect reservation\ntransaction-aware canonical create]
+    A[Redacted audit + non-dispatchable\nintegration evidence]
   end
 
   P --> V
-  V -->|valid signed and mapped| R
-  V -->|invalid, unsupported, or unknown| X
-  R -->|same identity + same digest| R
-  R -->|same identity + different digest| X
-  R --> M --> Q --> D
-  Q -->|stale mapping, drift, or unknown outcome| X
-  D -->|CREATE_DISTINCT_NEW_LEAD after rechecks| C --> A
-  D -->|skip, reject, insufficient evidence, or escalate| A
+  V -->|signature invalid / missing| R1
+  V -->|verified signature| I
+  I -->|authenticated envelope malformed| R2
+  I -->|unsupported adapter/schema| R3
+  I --> B
+  B -->|no unique historical proof| R4
+  B -->|two schools or unprovable cutover| R5
+  B -->|one proven school| S --> E
+  E -->|same identity + same digest| Y
+  E -->|prior durable outcome cannot be proven| R6
+  E -->|same identity + different digest| C
+  E --> N --> Q --> D
+  D -->|CREATE_DISTINCT_NEW_LEAD only after live rechecks| X --> A
+  D -->|SKIP / REJECT / EVIDENCE / ESCALATE| A
 
   classDef future fill:#fff5e6,stroke:#a35b00,color:#3d2600
-  classDef protected fill:#eaf7ff,stroke:#126782,color:#082a39
+  classDef trust fill:#eaf7ff,stroke:#126782,color:#082a39
   classDef exception fill:#fff0f1,stroke:#a51c30,color:#4a0610
+  classDef protected fill:#eefbf4,stroke:#197345,color:#092b18
   class P future
-  class V,R,M,Q,D,C,A protected
-  class X exception
+  class V,I,B,S trust
+  class R1,R2,R3,R4,R5,R6,C exception
+  class E,Y,N,Q,D,X,A protected

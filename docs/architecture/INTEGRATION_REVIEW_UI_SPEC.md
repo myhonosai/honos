@@ -1,198 +1,159 @@
-# Phase 2A — Integration Review UI Specification
+# Integration Review UI — Corrected Design Specification
 
-**Status:** Design-only proposal. No route, component, query, endpoint, provider action, connection, mapping, or review queue is implemented by this document.
+> **Status: design only; not implemented and not approval to expose provider or candidate data.**
+>
+> This specifies a future staff surface only after a reviewed backend contract exists. It creates no route, API, UI component, secret editor, browser persistence, provider request, review case, CRM effect, AI work, customer communication, or deployment.
 
-## Design rule
+## 1. Purpose and hard boundary
 
-The future Integration Review UI must display only response-backed, redacted facts from a server-authorized current-school projection. It begins with no integration facts. It must never present a generic provider console, a school selector, a token/account inventory, a health light, a sync claim, or an assumed connection.
+Integration Review lets an authorized human understand a **server-projected** inbound integration status and later make a closed, human-confirmed decision about one protected candidate. It is not a provider dashboard, CRM contact directory, generic payload browser, connector setup wizard, or automation console.
 
-The staff route family is proposed—not registered:
+The future surface may eventually show only response-backed facts from server-authoritative projections:
+
+- safe connection/mapping/attention projection for the current resolved school;
+- metadata-only review queue entries;
+- a separately authorized, minimum protected candidate detail; and
+- a redacted disposition receipt or generic shield state.
+
+It must never show tokens, vault locators, raw provider inventory/IDs/errors, raw payloads, raw or reversible contact digests, consent claims, customer history, alternate school data, campaign/ad spend, conversion/revenue/ROI, payment facts, provider health, or an AI-generated recommendation presented as a fact.
+
+## 2. Future route family and direct-human authority
+
+The proposed route family is intentionally illustrative until a separate API/UI contract review:
 
 ```text
 /staff/marketing/integrations
-/staff/marketing/integrations/mappings
 /staff/marketing/integrations/review
 ```
 
-A route or query reference is an untrusted selector. It cannot auto-load a connection, establish school scope, expose a provider event, or confer review authority. Detail navigation remains page-local until a separate opaque, authorized detail contract is approved.
+A browser supplies no organization, school, connection, credential, provider, mapping, asset, actor, authority, candidate, or policy truth. The server resolves exactly one current school from the verified signed human session. Zero or multiple eligible schools fail closed.
 
-## Navigation model
-
-The proposed navigation is within Staff → Marketing:
-
-```text
-Marketing
-  ├─ Lead Sources & Intake
-  ├─ Public Forms
-  ├─ Campaigns
-  ├─ Integration Review        proposed
-  ├─ Lead Migration Center
-  └─ Chad draft guide
-```
-
-These destinations remain separate because they have different authority and evidence models:
-
-- **Lead Sources & Intake** stays provider-free and read-only.
-- **Public Forms** remains the existing first-party form configuration and ingress path.
-- **Campaigns** remains human planning and aggregate attribution.
-- **Integration Review** is a future evidence/review workflow, not a campaign dashboard.
-- **Lead Migration Center** remains CSV migration and duplicate review; it is not a webhook queue.
-- **Chad** remains a governed private draft path; it is not a connection, delivery, or lead-creation tool.
-
-## Screen 1: Integration Status
-
-The landing screen is called **Integration Status**. It begins with one explicit button:
-
-> Load verified integration status
-
-Before this read, the only truthful state is: **No verified integration status loaded. No provider action is starting.**
-
-After a server-derived current-school response, the page has three independent lanes.
-
-### Connections lane
-
-Each card exposes only a safe redacted projection:
-
-- provider label
-- lifecycle label
-- safely reportable state timestamp, if approved
-- whether a credential is configured
-- mapping readiness state
-- whether reconciliation requires human attention
-
-It never exposes refresh tokens, webhook secrets, authorization codes, raw secret references, raw provider errors, provider account inventory, unbounded vendor identifiers, delivery percentages, spend, health, lead count, or sync claims.
-
-Status copy must distinguish stored configuration from operational evidence:
-
-| Status | Meaning | Must not imply |
+| Future capability | Purpose | Never implied by |
 | --- | --- | --- |
-| `NOT CONNECTED` | No response-backed current connection configuration exists. | That an account is available to connect. |
-| `CONNECTION SETUP REQUIRED` | A future allowed setup contract has not produced stored configuration. | That OAuth may start without a human confirmation. |
-| `MAPPING REQUIRED` | A configuration exists but no eligible mapping is confirmed. | Any school routing or lead delivery. |
-| `ACTIVE CONFIGURATION` | A server-confirmed current configuration and mapping state exists. | Healthy delivery, consent, lead acceptance, conversion, spend, or ROI. |
-| `MAPPING PAUSED` | A mapping is intentionally unavailable for new resolution. | Deletion of historic evidence. |
-| `DISCONNECTED`, `REVOKED`, `EXPIRED` | Stored state requires human attention. | A provider call, automatic reconnect, or retry. |
-| `RECONCILIATION REQUIRED` | Evidence needs human review. | A failed/successful provider delivery claim. |
+| `marketing.integration.status.read` | Read safe status for the resolved school | HQ credential status, a connection label, or a Page selector |
+| `marketing.integration.mapping.manage` | Draft/manage a future asset mapping | Read access or provider-key presence |
+| `marketing.integration.reconciliation.manage` | Handle school-proven reconciliation cases | Generic HQ access or cross-school context |
+| `crm.integration_review.read` | Read metadata queue and protected detail after live checks | `crm.lead.read`, family/parent access, or a provider signature |
+| `crm.integration_review.decide` | Submit a closed human review decision | Read access, AI identity, or a queued item |
+| Existing normal CRM create authority | Permit later distinct-lead effect after review | Review access or a provider claim |
 
-A status card uses an explicit unavailable label when no current reconciliation evidence exists. Green is never sufficient evidence of delivery.
+Parent/family, public, HQ-derived, delegated, nonhuman, AI, Action Engine, generic-service, ambiguous-scope, stale-session, cross-school, and cross-organization contexts deny by default.
 
-### Mapping readiness lane
+## 3. Information architecture
 
-This lane displays only a redacted current mapping summary: provider label, lifecycle, destination pipeline/stage label, optional active campaign label, and mapping/policy/schema version label if the server projection allows it.
+### 3.1 Status lane
 
-The proposed mapping form is a **closed binding review**, not a generic field mapper. It is capable of binding only an approved provider asset to exactly one verified school, non-terminal CRM pipeline/stage, and optional ACTIVE campaign snapshot. A future command requires server-validated confirmation, expected version, in-memory idempotency behavior, and a visible explanation that remapping preserves historical provenance.
+The initial status lane is explicit-load only and begins with no facts. It may show server-derived labels such as `NOT_CONNECTED`, `MAPPING_REQUIRED`, `ACTIVE_CONFIGURATION`, `MAPPING_PAUSED`, or `RECONCILIATION_REQUIRED` only as projections defined by the [state vocabulary](PHASE_2A_INTEGRATION_STATE_VOCABULARY.md). They are not provider-health claims or lifecycle enums.
 
-It never infers lead owner, communication consent, campaign performance, person identity, or assignment.
+The status lane never offers credential entry, provider-account browsing, OAuth, connection, verify, refresh, default-account selection, webhook registration, or an external link that carries scope/secret data.
 
-### Inbound review lane
+### 3.2 Mapping lane
 
-This lane reports a bounded review state only after an authorized server read. It may show redacted counts or case-state summaries only when the server contract proves their scope. It does not show raw lead data, provider events, contacts, or a false "new leads" feed.
+A future mapping lane is a direct-human administrative command surface, not an ingestion shortcut. It must:
 
-The empty state is:
+- display only bounded current-school projections;
+- use separately reviewed direct-human permission, exact human confirmation, idempotency, expected version, audit, and outbox rules;
+- make the exact asset/capability scope visible without exposing raw provider inventory or credential material;
+- keep `LEAD_RETRIEVAL` independent from messaging, publishing, ads, or other #79 capabilities;
+- use no client-selected school as authority and never select a provider’s default account.
 
-> No inbound candidates require review in this verified school.
+A mapping command is not part of this PR and must not be built before credential, asset-grant, historical-binding, and RLS contracts are approved.
 
-That sentence cannot be used without a successful review-read response.
+### 3.3 Review queue and protected detail
 
-## Screen 2: Integration Review queue
+The queue is metadata-only and filterable only with bounded, server-recognized values. A row may contain an opaque case reference, received time, provider display code, safe state/blocker code, and version labels. It contains no candidate name/contact/interest, raw provider identifier, digest, preview, or duplicate contact data.
 
-The queue is a separate explicit read. It starts empty and offers a bounded **Load review cases** action after server scope verification.
+A protected detail read is separate. It is `no-store`, same-origin, response-validated, server-resolved to the exact school, and current-authority checked. If policy approves candidate storage, it can reveal only `IntegrationNormalizedCandidateV1`’s minimum approved fields and field-status codes. The UI must make clear that these values are provider assertions, not verified identity/consent/contact ownership.
 
-Allowed proposed filters are closed and applied only after scope is verified:
+An advisory duplicate indicator, if separately approved, shows only an opaque same-school reference and a match-basis code. It never exposes existing contact values and offers no attach, merge, source rewrite, owner assignment, or automatic suppression.
 
-- provider
-- connection lifecycle
-- mapping state/version
-- review state/reason
-- bounded received-at UTC range
-- exact opaque HON review reference, if the future contract explicitly permits it
+## 4. Closed decision surface
 
-There is no global people search, contact directory, raw provider event-ID search, vendor account browser, cross-school filter, fetch-on-keystroke behavior, or search-by-form-name shortcut.
+The proposed initial decision set is:
 
-Each queue row is a redacted fact set: opaque HON review reference, received-at timestamp, provider label, review state, mapping/schema/policy version labels, and a bounded review blocker. It never lists raw payload, secrets, raw endpoint/provider errors, audit/outbox internals, or unreviewed contact data.
+- `CREATE_DISTINCT_NEW_LEAD`
+- `SKIP`
+- `REJECT`
+- `INSUFFICIENT_EVIDENCE`
+- `ESCALATE`
+- `REQUEST_AUTHORIZED_REMAP`
 
-## Screen 3: Review detail and decision
+There is no `ATTACH_TO_EXISTING_LEAD`, merge, update, assignment, trial scheduling, follow-up creation, enrollment, payment, communication, provider action, AI proposal, or auto-create choice.
 
-A qualified human can explicitly open one bounded case. The detail screen may display only the redacted candidate projection permitted by the future contract plus:
+A create decision remains unavailable unless a future server contract proves valid V1 names, at least one valid contact method under an owner-approved integration safety policy, current mapping/pipeline/stage/source, current case/evidence/policy versions, and live same-school review/decision/normal-CRM-create authority. Client-side validation is only usability feedback; server checks are decisive.
 
-- opaque HON review reference
-- provider/source label and receipt time
-- relevant mapping/schema/policy/adapter versions
-- validation and mapping blockers
-- advisory duplicate suggestions with their match basis
-- proposed CRM destination
-- immutable decision/audit receipt after a decision
+## 5. Concealment, reads, and private decision capsules
 
-The decision control uses a new explicit human intent—not implicit row selection—and requires a fresh confirmation. The proposed initial decision labels are:
+Sensitive rendered facts and consequential-request recovery have different lifetimes.
 
-- **Create distinct new lead**
-- **Skip or reject**
-- **Insufficient evidence**
-- **Escalate for reconciliation**
-- **Request authorized remap**
+### 5.1 Immediate privacy concealment
 
-The page must say what each decision does not do:
+On blur, hidden-document visibility, `pagehide`, route/detail unmount, current-school transition, `HON_SCHOOL_CONTEXT_CHANGED_EVENT`, confirmed authenticated-session invalidation, or a read-generation mismatch, the UI must synchronously remove every response-backed status, mapping, queue, detail, candidate, duplicate suggestion, capability, filter, error, and receipt fact from the visual **and accessibility** trees. The protected region becomes inert before asynchronous work continues.
 
-> This decision does not merge records, assign an owner, record consent, contact a customer, schedule a trial, create a follow-up, enroll a student, collect payment, or start AI work.
+Reads abort where possible, their read epoch advances, and late read/restoration results are discarded. There is no focus-return auto-reveal, automatic read, automatic command retry, browser storage, URL/query/hash value, telemetry value, or background recovery request.
 
-`Attach to existing lead` is absent from the initial UI because it is not approved in the current design.
+### 5.2 Mounted private request capsule
 
-## Roles and capability behavior
+A confirmed future decision creates at most one immutable private request capsule, only in the still-mounted Integration Review controller’s private memory. It contains only the exact transport identity needed for a later identical attempt:
 
-The interface may use server-returned capability flags for visibility and explanatory text, but flags never replace command authorization.
+- command-instance identifier;
+- opaque case reference;
+- frozen organization/school and authenticated-subject binding;
+- expected case/evidence/mapping/policy versions;
+- canonical serialized closed body; and
+- original idempotency key.
 
-| Proposed capability | UI allowance | Command-time rule |
-| --- | --- | --- |
-| Status read | Load redacted status. | Server derives exact current human/school permission. |
-| Connection manage | See a separately confirmed setup/reconnect/disconnect entry point. | Requires future sensitive lifecycle contract and owner/delegated role. |
-| Mapping manage | Open closed mapping review. | Requires expected version, live current-school authority, and optional campaign revalidation. |
-| Reconciliation manage | Read/acknowledge bounded exception work. | Requires separate sensitive authority. |
-| Review read | Load redacted review list/detail. | Requires current CRM review authority. |
-| Review decide | See decision choices. | Revalidates reviewer, target, version, and policy at execution. |
+It is never rendered while shielded, placed in React-visible queue/detail state, local/session storage, URL/history, logs, analytics, crash telemetry, or copied into another component. Retaining the capsule is not permission to retain or reveal candidate detail.
 
-Family, public, HQ-derived, nonhuman, AI, Action Engine, and cross-school contexts receive no integration fact or control by default.
+Read generation and request ownership are separate. A privacy boundary invalidates reads and presentation facts, but it does not cancel a consequential request already sent. Only the currently mounted command instance may settle its own busy/unknown/result state behind the shield. A `finally` handler may clear busy only when its command-instance ID still owns the mounted capsule. Stale callbacks from an earlier case, prior capsule, discarded controller, changed scope, or unmounted controller are ignored.
 
-## State and privacy behavior
+### 5.3 Session, authorization, and exact retry
 
-Every screen has explicit idle, loading, verified, empty, denied, unavailable, malformed-response, conflict, unknown-outcome, and session-invalid states.
+A confirmed `401` from an authenticated same-origin Integration Review read, command, or associated authenticated staff transport dispatches `hon:session-invalidated`; every co-mounted Integration Review surface conceals immediately. A `403` is a local current-resource authorization denial: it conceals and blocks this surface but does not assert that the whole session ended or dispatch session invalidation.
 
-A persistent atomic live region uses polite status for idle/loading/verified/empty and alert semantics for session-invalid, denied, unavailable, malformed-response, conflict, or unknown outcome. Example copy:
+Neither status automatically resends a command. While the controller remains mounted, `Verify access and resume` may consider a capsule only after it proves:
 
-- Loading: **Verifying current school authority and loading integration state; no provider action is starting.**
-- Denied: **Current human school permission is required; integration facts were cleared.**
-- Unknown outcome: **Outcome is unknown; no change is assumed. Re-read current status or retry the unchanged command only if the server contract permits it.**
-- Session invalid: **Your verified session ended. Integration facts were cleared. Sign in and load current status again.**
+1. the same signed human subject;
+2. the exact frozen school;
+3. fresh `crm.integration_review.read` authority for any reveal;
+4. current `crm.integration_review.decide` and normal CRM-create authority for a retry; and
+5. still-matching case/evidence/mapping/policy versions.
 
-The UI clears all returned status, mapping, candidate, filter, retry, and capability facts on confirmed `401`, access loss, current-school transition, blur, page hide, hidden document, unmount, or late response generation mismatch. Candidate detail uses the same privacy-shield principle as sensitive CRM views: it is removed from the accessible tree immediately on privacy loss and is not restored without an explicit fresh verified read.
+The server independently repeats authorization. A changed subject, changed school, missing/revoked relevant permission, unavailable/mismatched case, or controller unmount destroys the capsule; it must never be revealed or replayed for another principal or school.
 
-No polling, automatic retry, browser persistence, local/session storage, URL-carried evidence, or background provider request is allowed.
+### 5.4 Unknown outcome and abandonment
 
-## Presentation and accessibility
+Network loss, timeout, redirect, unexpected status, malformed/unverifiable success, and any response that cannot prove the exact durable decision/CRM result are `UNKNOWN_OUTCOME`. The UI assumes neither success nor failure.
 
-The current visual collaboration hold remains in force. A future Integration Review surface is isolated; it does not edit, restyle, or import protected shared visual-reference components, logos, portraits, hosted source mappings, global layout/CSS, or shared appearance controls.
+After settlement, the shield may offer only an explicit **Retry exact unchanged decision** using the unchanged capsule and original idempotency key, after the reauthorization gate. It never allocates a fresh key or silently rebuilds the command.
 
-It preserves equivalent facts and actions across the three presentation modes:
+Discard, close, navigation, case switch, and reset controls that could drop a capsule are disabled while the command is unsettled. After an unknown outcome is settled, deliberate abandonment requires a separate acknowledgement:
 
-- **Modern HON:** deep navy/black command surfaces, restrained panels, electric-cyan focus, and legible evidence-state hierarchy.
-- **Classic CRM:** compact rows, explicit filters, dense yet readable review detail, and no hidden decision binding.
-- **Big-Button / Phone:** one primary task per screen, single-column cards, explicit labels, no horizontal table dependency, and practical 44px+ targets.
+> This removes browser-only recovery. It cannot cancel, reverse, or prove the result of a server action that may already have completed.
 
-A local presentation change never loads data, changes scope, changes the selected case, changes authority, or makes a provider request. Persistent appearance behavior requires a separate verified-scope design and visual-collaboration approval.
+Abandonment destroys only the local capsule. A later durable-result lookup is a separate server design; it is not created by this UI.
 
-All static copy, visible labels, accessible names, errors, and state messages require route-specific English, Korean, and Spanish catalog entries. Server-returned provider labels and evidentiary values remain verbatim; the browser must not reinterpret or machine-translate them.
+### 5.5 Full-document limit
 
-Accessibility acceptance includes named landmarks/headings, native label/control associations, visible focus, keyboard-native controls, status text in addition to color/icon, contrast, zoom/reflow, reduced motion, no focus movement for ordinary status changes, and mobile no-overflow behavior. Focus moves only for a deliberate privacy shield or an intentionally opened review heading when required for coherent interaction.
+Mounted-memory recovery is intentionally not durable. Reload, hard navigation, tab/window close, process termination, full page/document destruction, or signing in through a new page destroys the capsule. The UI must not promise retry survival or compensate with browser storage. Staff must verify authorized current state before any new decision.
 
-## AI Assistant Drafts
+## 6. Presentation modes, localization, and accessibility
 
-The Integration Review UI does not show a live AI employee state. A later, separately approved assistant may prepare private draft analysis only through the existing governed Action Engine path and only after the inbound evidence has passed the human-review boundary.
+Modern HON, Classic CRM, and Big-Button / Phone must expose identical facts, controls, disabled/unsettled behavior, privacy shield, reauthorization prerequisite, exact retry, abandonment acknowledgement, and no-auto-retry semantics. A presentation switch is local styling only: it cannot load data, advance a read epoch, mutate/destroy/copy a capsule, change scope/authority, call a provider, or submit a command.
 
-Required wording:
+New fixed messages require English, Korean, and Spanish catalog entries. The design must support:
 
-> **AI Assistant Draft — review required.** This is private proposed content, not a sent, queued, scheduled, published, or delivered communication.
+- visible native keyboard focus and keyboard-operable controls;
+- a persistent atomic live region that announces generic loading, shield, denied, session-invalid, unsettled, and unknown state without candidate facts;
+- protected detail removed from both visual and accessibility trees before a generic shield is announced;
+- no hidden/inert focus targets, no sensitive label in an accessible name, and no automatic candidate focus restoration;
+- contrast, reflow, reduced motion, responsive mobile layout, and 44px minimum phone targets without horizontal overflow;
+- equivalent semantics and controls across all three modes.
 
-For lead-related content:
+No shared appearance component, HON asset, portrait, logo, or experimental visual source is changed by this specification.
 
-> **Delivery state: NOT_CREATED_OR_SENT.** Approval records review of this exact proposal only; it does not create a message, change the lead, or authorize outreach.
+## 7. Explicit exclusions
 
-The UI must never show AI-generated text as a lead decision, customer communication, provider action, or completed integration work.
+This design does not authorize any component, route, API, selector, database record, secret store, OAuth, provider webhook/call, candidate field storage, review list, CRM command, AI action, outbound communication, billing, or customer-visible feature. It is a corrective UI contract for a future approved backend only.
+
+See the [ingress design](PHASE_2A_INTEGRATION_INGRESS_DESIGN.md), [state vocabulary](PHASE_2A_INTEGRATION_STATE_VOCABULARY.md), and [verification/rollout plan](PHASE_2A_INTEGRATION_VERIFICATION_AND_ROLLOUT.md).

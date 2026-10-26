@@ -1,113 +1,79 @@
-# Phase 2A — Verification, Capacity, and Focused PR Plan
+# Phase 2A — Integration Verification and Rollout Plan
 
-**Status:** Design-only planning. No implementation, provider onboarding, webhook, OAuth, secret, external call, customer message, payment, advertisement, or deployment is authorized by this plan.
+> **Status: design-only verification plan.** Nothing in this document authorizes provider configuration, credentials, webhook delivery, customer-data persistence, CRM mutation, automation, sandbox use, spend, or deployment.
 
-## Verification model
+## 1. Dependency and ownership sequence
 
-The Phase 2A boundary is security-sensitive because an external delivery can be duplicated, delayed, malformed, misrouted, or contain private contact data. A green unit test is not enough. Each implementation increment needs focused contracts, disposable PostgreSQL integrity/security proof, API/browser checks where a surface exists, root regression, and a clear no-effect snapshot.
+| Order | Gate | Owner / outcome | Not authorized yet |
+| --- | --- | --- | --- |
+| 1 | Review PR #85 | Canonical readiness/source documentation, including its unique corrections | No integration design approval or implementation |
+| 2 | Rebase/reconcile PR #86 on accepted #85 | Remove duplicate records and retain links to canonical baseline | No provider foundation or code |
+| 3 | Reconcile #79 and #80 independently with current main | Codex-owned capability/asset and server-only configuration foundations | No school connector, webhook, PII, or CRM authority |
+| 4 | Joint contract checkpoint | Manus/Codex agree versioned receipt/candidate/review/disposition/effect contract, one migration reservation, lock order, and code ownership | No competing backend/UI implementation |
+| 5 | Provider-free simulation | Prove fail-closed ingress, custody, PII, identity, and transaction invariants | No real vendor call or credential |
+| 6 | Human disposition proof | Prove atomic canonical CRM effect and inert-event exclusion | No pilot or auto-create |
+| 7 | UI proof | Prove privacy shield, exact recovery, scope/session safety, accessibility, localization, and three-mode equivalence | No live provider data |
+| 8 | Owner-approved sandbox/pilot | Explicit vendor, cost, PII, operational, and go/no-go approval | No automatic live expansion |
 
-### Required proof categories
+Manus owns this corrected design, future CRM review/disposition/provenance contract, and the PR #85/86 documentation dependency. Codex owns #79/#80 provider connection, capability/asset grant, credential-custody, and ingress-security foundations. Shared frontend transport/privacy/localization and Integration Review UI start only after the backend contract is accepted.
 
-| Category | Required evidence |
+## 2. Evidence terminology
+
+Documentation must distinguish exact run facts from historical assertions. This documentation-only PR does not claim it reran tests, migrations, provider verification, or connector checks.
+
+- Canonical baseline cited by Codex: `145d4cf00aa64d4b986ffd2b7a9de5462c7c6469`.
+- Fresh isolated audit evidence received during this correction reports `pnpm test` at that SHA as **1,227** passing workspace tests: API 383, web 565, auth 91, domain 188; 181 migration files; highest migration label 0189.
+- The previously stated 1,818-workspace / 509-API figures are retained only as unverified historical claims until their exact SHA, command, date, and package scope are reproduced. They must not be presented as the current-main total or as proof of this design PR.
+
+A future implementation proof must report exact commit SHA, command, package scope, environment, run date, passed/skipped/blocked result, and cleanup result. A skipped/blocked/incomplete run is never reported as passing.
+
+## 3. Required proof matrix
+
+| Boundary | Required proof before implementation acceptance |
 | --- | --- |
-| Tenant isolation | Same-user two-school ambiguity denies; cross-school and cross-organization connection/mapping/case access deny; parent/HQ/nonhuman/public/service/AI contexts deny by default. |
-| RLS and ACL | Every private integration table has enabled and forced RLS; no direct runtime/browser access; no `PUBLIC` execute; no helper/grant-option drift; function owner/search path and trigger coherence are verified. |
-| Connection/mapping | Expected-version conflicts; active mapping cardinality; reconnect/disconnect/rotation; mapping/remap history; campaign ACTIVE/current-school revalidation; kill-switch behavior. |
-| Inbound transport | Raw-byte signature good/bad/tampered/missing cases; exact header/method/content/body bounds; event/schema allowlist; mapping mismatch; stale/replayed/delayed/test events; no JSON parse before verification. |
-| Idempotency | Same event ID + same digest replays safely; same ID + different digest quarantines; concurrent delivery; reordered delivery; provider-unknown outcome; separate human command idempotency. |
-| Review | Reviewer token expiry; case/evidence/mapping version drift; live permission/entitlement revocation during lock waits; duplicate suggestion is advisory; no auto-merge/attach/assignment. |
-| Transactionality | Fault injection at each receipt, case, decision, audit, outbox, and CRM-command boundary proves atomic rollback or a truthful UNKNOWN/reconciliation state. |
-| Privacy | Raw payload, token, credential reference, provider error body, event inventory, PII, consent claim, and target data stay out of browser responses, URL, storage, audit/outbox, logs, and ordinary CRM reads. |
-| No-effect boundary | Whole-table/observable snapshots prove zero consent, messages, communication queue/delivery, trial, follow-up, scheduling, enrollment, membership, invoice, payment, attendance, AI usage/work, Action Engine, provider call, ad spend, or browser persistence effects unless a separately approved human CRM command executes. |
-| UI and accessibility | Starts idle; explicit authorized reads; scoped/denied/stale clearing; three-mode equivalence; English/Korean/Spanish catalogs; keyboard, screen-reader, reflow, reduced motion, and mobile no-overflow coverage. |
+| Tenant resolution | Shared endpoint with unknown profile; valid signature/no tenant; ambiguous asset; forged tenant-like `externalId`; unknown form; two-school/cross-organization denial; no school queue/candidate/detail record until unique historical binding proves one school. |
+| Historical cutover | A first-seen delayed delivery across A→B remap; event-time/cutover boundary tests; stale current mapping cannot expose A data to B; no automatic reassignment/copy/attach/merge. |
+| Routing outcomes | Exact durable outcome, visibility, acknowledgement, retry, replay, conflict, and reconciliation behavior for all six fail-closed codes; `2xx` only after the bounded outcome commits. |
+| Capacity and operator plane | Installation/connection byte, rate, concurrency, unresolved and dead-letter limits; saturation fails closed with no PII spill; optional operator-plane quarantine permission/retention/audit/metadata-only projection. |
+| Credential custody | No secret/vault locator in ordinary rows/projections/logs; resolver ACL; platform/binding/connection/grant revoke and rotation propagation; no #80 HQ-status substitution for school authority. |
+| Candidate privacy | V1 field allowlist; invalid/unknown-field rejection without retained rejected value; queue/audit/outbox/error/URL/storage/telemetry redaction; encrypted detail access only after owner-approved KMS/retention/backup/rotation implementation. |
+| Receipt identities | Delivery attempt/event/source occurrence/mapping resolution/replay/conflict separation; same-digest replay; different-digest immutable conflict; reconnect/remap cannot form a new dedup namespace. |
+| Human disposition | Unique `source_occurrence_id` CRM effect across two reviewers and browser keys; original idempotency/fingerprint conflict; deterministic lock ordering; rollback injection; stage/permission/entitlement revocation during wait; unknown-result reconciliation. |
+| Canonical CRM behavior | Future transaction-aware reuse passes existing direct-human LeadService regressions unchanged; no nested transaction assumption; ordinary `crm.lead.created` v1 unchanged; integration evidence event structurally excluded from generic outbox claiming, automation, Action Engine, and consumers. |
+| UI privacy and recovery | Explicit load; no data before scope; visual/accessibility-tree concealment; pending blur/hidden settlement; post-commit response loss with original-key exact retry; 401 global invalidation versus local 403; changed user/school destruction; disabled discard while unsettled; acknowledged abandonment; document-loss non-survival. |
+| Presentation/accessibility | English/Korean/Spanish static catalog coverage; keyboard, screen reader, focus, contrast, reflow, reduced motion, 44px phone targets, no overflow; Modern/Classic/Big-Button switch creates no data/authority/request/capsule effect. |
 
-A real provider sandbox or recorded vendor contract fixture is a later approval gate. It is not a substitute for the provider-free test matrix and must not run until the owner approves credentials, cost, retention policy, and the provider onboarding plan.
+## 4. Focused implementation PR breakdown — after owner approval only
 
-## Capacity and operational assumptions
+1. **Contract checkpoint PR:** one migration reservation; closed provider-installation/credential-binding/connection/asset-grant/mapping-history/receipt identity vocabulary; no provider call, webhook, or PII.
+2. **Ingress simulation PR:** fixed signed simulated payload adapter; six fail-closed outcomes; receipt/replay/conflict/quotas; no external provider and no CRM mutation.
+3. **Protected candidate/custody PR:** only after owner PII policy; V1 contract, encryption/key custody/retention proof, metadata queue/detail boundary; no auto-create.
+4. **Human disposition PR:** transaction-aware canonical CRM primitive, unique effect reservation, direct-human review decision, inert non-dispatchable evidence event; no attach/merge/automation.
+5. **Integration Review UI PR:** after backend proof; isolated transport/state/controller/privacy/accessibility/localization/presentation work only.
+6. **Provider pilot PR:** only after all prior gates and separate owner approval of vendor credentials, sandbox/live environment, PII processing, cost, monitoring, kill switch, incident/reconciliation plan, and load thresholds.
 
-HON is designed to grow beyond a single school, but current source and disposable proofs do not certify production throughput. The following are gated hypotheses, not capacity claims.
+Each PR must include targeted tests, negative ACL/RLS checks, exact evidence update, and a fresh review of concurrent branches. None may silently broaden this scope.
 
-### Up to 20 beta schools
+## 5. Capacity and operating considerations
 
-The first provider-free beta cohort may be designed for up to 20 owner-approved schools after a separate deployment authorization. The existing exact-one reporting-school selector's 20-school ceiling remains an intentional per-user safety cap; no over-cap shortcut is allowed.
+The 20-, 100-, and 1,000-school figures are planning checkpoints, not supported throughput or price claims.
 
-Each school requires a documented current-scope review, staff operating guide, rollback/incident contact, and one observed conventional lifecycle path: first-party form or human lead, optional campaign association, human trial/outcome, and human follow-up. Daily review examines redacted rejected/invalid/rate-limited outcomes without exposing contact data.
+| Planning scale | What must be measured before advancing |
+| --- | --- |
+| 20 schools | Per-installation/connection ingress rate, bounded webhook acknowledgement time, database pool/lock behavior, review queue latency, failure/replay/rollback evidence, operator burden, and cost telemetry without PII. |
+| 100 schools | Shared-installation versus school binding isolation, mapping/cutover pressure, rate/byte/concurrency quotas, backlog drain, key rotation/revocation fan-out, reconciliation staffing, and representative failure injection. |
+| 1,000 schools | Partition/index/pool/capacity plan, tenant-noisy-neighbor limits, outage/dead-letter recovery, retention/crypto-erasure and backup behavior, regional/processor policy, incident drills, provider limit evidence, and owner-approved operating cost model. |
 
-Graduation requires no unresolved tenant-scope, provenance, privacy, or authorization defect and a clean repeat of the affected proof bundle on the exact release candidate.
+No table above is a provider SLA, operating forecast, billing quote, health measure, or approval to purchase/use a provider. The future pilot requires cost and operational approval separately.
 
-### 100-school readiness
+## 6. Disabled future extension: Verified Auto-Create
 
-Before accepting a 100-school cohort, build a synthetic 100-tenant load/soak and recovery harness. It must exercise form rate boundaries, campaign cohort reads, lead/trial/follow-up writes, aggregate reports, two-school/multi-organization isolation, and role revocation during lock waits.
+`Verified Auto-Create` remains `DISABLED`. This document creates no seed policy, approved checkbox, execution principal, tool, consumer, route, or automatic CRM action.
 
-Record p50/p95/p99 latency, error/lock-timeout rates, database CPU, connection/pool utilization, migration duration, backup/restore time, and relevant query plans. The measured environment—not the UI or an aspirational number—sets ceilings. No real provider, payment, or communication traffic is required or permitted for this stage.
+A later proposal requires its own owner approval for exact connection/asset/school binding, policy version/effective window, validation/duplicate rules, emergency stop, nonhuman execution principal, normal-domain CRM contract, audit, and revocation. It cannot impersonate a human or derive authority from a signature, API key, AI persona, or checkbox.
 
-### 1,000-school operational readiness
+## 7. Owner decisions required
 
-A 1,000-school posture needs a representative synthetic dataset and high-water workload, query-plan/index review, connection/job isolation, failure/restore rehearsal, supported-history migration rehearsal, redacted observability, capacity runbook, and an incident/revocation process. If evidence finds a bottleneck, address it in a focused remediation PR. Never solve scale by relaxing RLS, exposing a tenant directory, widening scope selection, or using client-selected school identifiers.
+Before any implementation, approve credential custody, asset/capability/organization administration policy, historical remap treatment, optional operator-plane quarantine, candidate PII/encryption/retention/backup/region policy, reviewer/disposition/duplicate policy, inert-event/consumer policy, vendor sandbox/live/cost, pilot scope, capacity acceptance thresholds, kill switch, and incident/reconciliation handling.
 
-## Cost and provider operating considerations
-
-The current commercial model contains planning assumptions only. It must not be used to activate prices, credits, entitlements, payments, or provider service.
-
-A later provider design must separately model:
-
-- connected-account economics, including the fact that Zernio documents shared team-level rate capacity and counts Facebook Page, Instagram account, and Meta Ads account as separate connected accounts for billing purposes.[1]
-- secret-manager storage and rotation cost
-- bounded raw-payload vault storage, encryption, retention/deletion, and access-review cost if the owner approves payload retention
-- reconciliation, dead-letter, retry, operational support, and incident response cost
-- rate-limit behavior based on current response headers and `Retry-After`, not fixed hard-coded RPM assumptions
-- vendor endpoint limits, whose published scope should be confirmed contractually before architecture depends on it
-
-The implementation must use a single bounded routing plane rather than an endpoint per school. Zernio documentation has inconsistent wording about its 50-webhook-endpoint limit and its REST rate capacity is shared across a team, so a per-school endpoint/polling design is not an approved scale assumption.[1]
-
-## Incremental rollout stages
-
-### Stage A — provider-free design and proof baseline
-
-Deliver the design documents, closed contracts, security test plan, no-effect matrix, and owner decision record only. Do not add a provider credential, OAuth, webhook route, migration, connection, or UI that claims a live integration.
-
-### Stage B — private integration evidence foundation
-
-After owner approval, introduce the smallest provider-agnostic private connection/mapping/receipt/review data boundary with FORCE RLS, fixed-function ACLs, immutable versions, secret-reference redaction, and disposable proof. No inbound endpoint, vendor SDK, external call, or CRM mutation is included.
-
-### Stage C — human Integration Review and canonical CRM command
-
-After Stage B review, add redacted status/review reads and direct-human review decisions. A separate normal CRM command may create one distinct lead only after the review decision, live reauthorization, and atomic audit/outbox/idempotency proof. There is no auto-merge, attach, messaging, consent, scheduling, enrollment, billing, AI, or provider effect.
-
-### Stage D — simulated signed payload adapter
-
-After Stage C review, use deterministic simulated signed payloads in disposable/local or contract-test environments. Demonstrate signature verification, replay/digest conflict, schema/mapping drift, quarantine, dead-letter/reconciliation, and no-effect proofs. Do not connect Zernio, Meta, Facebook, Instagram, or a provider sandbox.
-
-### Stage E — separately approved provider pilot
-
-Only after the owner approves the connection, retention, role, mapping, operational, vendor-cost, and sandbox decisions may a narrowly scoped sandbox/onboarding proposal be presented. It requires a new implementation review and must not automatically advance to live Facebook/Instagram/Meta activity.
-
-## Focused PR breakdown
-
-| PR | Scope | Explicitly excluded |
-| --- | --- | --- |
-| A — private ingress foundation | New private evidence model, closed contracts, fixed functions, RLS/ACL verifier, and disposable security proofs. | OAuth, webhook route, SDK, credential values, CRM mutation, UI, provider calls. |
-| B — review queue and direct-human disposition | Redacted review reads, reviewer capability/version/idempotency, exact human decision receipts, canonical distinct-lead command, audit/outbox/no-effect tests. | Attach/merge, auto-create, assignment, consent, messaging, trial/follow-up, AI, payment. |
-| C — Integration Review UI | Isolated staff route/components/transports/tests for response-backed status/review states and three presentation modes. | Protected visual components/assets, real connection/mapping command, provider data, browser persistence. |
-| D — simulated transport and reconciliation | Provider-agnostic raw-body adapter interface, simulated signature fixtures, dedup/conflict/quarantine/dead-letter/replay/reconciliation evidence. | Zernio/Meta credentials, webhook registration, external request, polling, live endpoint claim. |
-| E — sandbox/onboarding proposal | Owner-review runbook, approved secret custody, vendor contract mapping, egress, sandbox test plan, and kill switch. | Live customer leads, ad spend, customer messaging, production deployment, automatic rollout. |
-
-Each PR is independently reviewable. It begins with affected focused tests and ends with root validation appropriate to its changed boundary. No PR may include unrelated visual cleanup, shared visual source change, payment/commercial activation, or provider-side action.
-
-## Release evidence package
-
-Before any stage moves forward, record the exact source SHA, migration ledger/hash when applicable, disposable fixture target/role attestations, test/check/build/db-check outcomes, RLS/ACL negative probes, concurrency/replay/revocation result, redaction/no-effect result, no-egress/provider sentinel result, browser accessibility/session-clearing result, and manual review sign-off. A green CI badge proves only the jobs it executed; it never proves provider delivery, customer impact, or production readiness.
-
-## Owner decisions for Stage B approval
-
-1. Approve or reject any raw-payload vault, including minimization, retention/deletion, encryption, region/processor, and access policy.
-2. Approve the role/capability model for connection lifecycle, mapping, reconciliation, and human review.
-3. Approve mapping cardinality, remap semantics, disconnected/retired form behavior, and optional campaign linkage.
-4. Confirm that no attach-to-existing-lead flow is required in the first implementation.
-5. Approve the exception policy for invalid signatures, test events, schema drift, dead letters, delayed/replayed events, reconciliation cadence, and kill switch.
-6. Approve the focused PR sequence and independent security-review stop points.
-
-## References
-
-[1]: https://docs.zernio.com/webhooks "Zernio webhooks"
-[2]: https://docs.zernio.com/llms-full.txt "Zernio documentation corpus"
+See the [corrected ingress design](PHASE_2A_INTEGRATION_INGRESS_DESIGN.md), [UI specification](INTEGRATION_REVIEW_UI_SPEC.md), and [state vocabulary](PHASE_2A_INTEGRATION_STATE_VOCABULARY.md).
