@@ -17,6 +17,18 @@ export interface StaffLeadForm extends PublishedLeadForm {
   id: string; version: number; status: 'DRAFT' | 'PUBLISHED' | 'DISABLED';
   pipelineId: string; pipelineStageId: string; campaignId: string | null; acceptedCount: number; updatedAt: string;
 }
+
+/**
+ * Read-only school intake monitor projection. It intentionally excludes every
+ * form/public/pipeline/campaign identifier, description, optional-field set,
+ * version, timestamp, and raw submission fact from the browser response.
+ */
+export interface LeadIntakeMonitorForm {
+  title: string;
+  status: StaffLeadForm['status'];
+  acceptedCount: number;
+  hasCampaignAssociation: boolean;
+}
 export type PublicFormResult = 'accepted' | 'invalid' | 'rate-limited' | 'unavailable';
 export function validatePublicFormConfig(input: unknown): asserts input is PublicFormConfigInput {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('FORM_INVALID');
@@ -65,4 +77,14 @@ export function validateStaffLeadForm(input: unknown): asserts input is StaffLea
   if (Object.keys(p).length !== keys.length || Object.keys(p).some(k => !keys.includes(k)) || typeof p.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(p.id) || !Number.isInteger(p.version) || (p.version as number) < 1 || (p.version as number) > 999999999 || !['DRAFT','PUBLISHED','DISABLED'].includes(p.status as string) || !Number.isSafeInteger(p.acceptedCount) || (p.acceptedCount as number) < 0 || typeof p.updatedAt !== 'string' || p.updatedAt.length > 35 || !Number.isFinite(Date.parse(p.updatedAt))) throw new Error('FORM_INVALID');
   validatePublishedLeadForm({ publicId: p.publicId, title: p.title, description: p.description, optionalFields: p.optionalFields });
   validatePublicFormConfig({ expectedVersion: (p.version as number)-1, title: p.title, description: p.description, optionalFields: p.optionalFields, pipelineId: p.pipelineId, pipelineStageId: p.pipelineStageId, campaignId: p.campaignId });
+}
+
+/** Exact response closure for the browser-safe intake monitor projection. */
+export function validateLeadIntakeMonitorForm(input: unknown): asserts input is LeadIntakeMonitorForm {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('FORM_INVALID');
+  const p = input as Record<string, unknown>;
+  const keys = ['title', 'status', 'acceptedCount', 'hasCampaignAssociation'];
+  if (Object.keys(p).length !== keys.length || Object.keys(p).some(key => !keys.includes(key))) throw new Error('FORM_INVALID');
+  if (typeof p.title !== 'string' || p.title.length < 1 || p.title.length > 120 || p.title.trim() !== p.title || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/.test(p.title) || /^[=+@-]/.test(p.title)) throw new Error('FORM_INVALID');
+  if (!['DRAFT', 'PUBLISHED', 'DISABLED'].includes(p.status as string) || !Number.isSafeInteger(p.acceptedCount) || (p.acceptedCount as number) < 0 || typeof p.hasCampaignAssociation !== 'boolean') throw new Error('FORM_INVALID');
 }

@@ -20,7 +20,7 @@ Campaign code (uppercase closed syntax, at most 40 characters), name, goal, opti
 
 ## Storage, authorization and lock order
 
-Unreleased migrations **0073–0074** add four private forced-RLS tables: `marketing_campaigns`, `marketing_campaign_versions`, `marketing_campaign_requests`, `crm_lead_attributions`. They intentionally have **no client policies or direct runtime grants**. Fixed SECURITY DEFINER boundaries have a fixed search path and trusted migration ownership. History/request/attribution evidence rejects update, delete and truncate; insert coherence guards and deferred current-version checks prevent inconsistent evidence even in privileged fixture writes.
+Migrations **0073–0074** add four private forced-RLS tables: `marketing_campaigns`, `marketing_campaign_versions`, `marketing_campaign_requests`, `crm_lead_attributions`. They intentionally have **no client policies or direct runtime grants**. Fixed SECURITY DEFINER boundaries have a fixed search path and trusted migration ownership. History/request/attribution evidence rejects update, delete and truncate; insert coherence guards and deferred current-version checks prevent inconsistent evidence even in privileged fixture writes.
 
 Canonical runtime script `infra/postgres/010_supabase_hon_runtime.sql` reconciles the minimum ACLs, and `011_verify_supabase_hon_runtime.sql` plus `verify-rls.mjs` check them. The campaign runtime entry points are only `resolve_campaign_scope`, `authorize_campaign_lead`, `mutate_campaign`, `read_campaigns`; private validators, snapshot helpers and triggers are not runtime-executable.
 
@@ -49,11 +49,11 @@ No contacts, raw import rows, notes, payment data or source facts are returned. 
 
 ## Validation and rollout
 
-Validation uses only guarded `localhost:5432/hon_campaign_validation`, disposable `hon_campaign_owner` / restricted `hon_campaign_runtime`, and private job-directory environment credentials. `setup-marketing-validation.mjs` refuses other targets or unmarked existing databases/roles, resets from scratch, applies all 74 migrations and applies aliased canonical 010 twice. No package installation, remote database, Supabase rollout or provider invocation is required or claimed.
+Validation uses only guarded `localhost:5432/hon_campaign_validation`, disposable `hon_campaign_owner` / restricted `hon_campaign_runtime`, and private job-directory environment credentials. `setup-marketing-validation.mjs` refuses other targets or unmarked existing databases/roles, resets from scratch, applies the current full migration ledger (181 files in the 2026-10-26 assessment; the highest label is 0189), and applies aliased canonical 010 twice. No package installation, remote database, Supabase rollout or provider invocation is required or claimed.
 
 Focused tests are `test-marketing-campaign-integrity.mjs`, `test-marketing-campaign-verifier.mjs`, existing `test-lead-import-integrity.mjs`, API `marketing-campaigns.test.cjs` and UI `marketing-campaigns-ui.test.tsx`. They cover exact live human scope, revocation/post-wait expiry, immutable/coherent source evidence, legacy/canonical separation, cross-organization lock ordering, replay/version races, redaction, forced RLS/private helpers, atomic rollback and zero external side effects. The verifier suite rejects/restores seven deliberate ACL/RLS drifts and checks no fixture trigger remains disabled. Root checks/tests/migration checks/builds run with database URLs unset.
 
-**Final proof checkpoint:** pending the isolated fresh-reset validation; exact results will be recorded here and in `TODO.md` only after all gates pass. These new migrations have not been applied to a real database; edits are validated by disposable reset, never by asking a real database to reapply a changed migration.
+**Fresh assessment checkpoint (2026-10-26):** a new guarded reset of the current migration chain passed `db:test-marketing-campaigns` and its canonical verifier. It exercised the deterministic cross-organization actor lock barrier, exact live human authority, attribution/linkage coherence, revision/replay/revocation/post-wait expiry, aggregate redaction, atomic audit/outbox rollback, zero external effects, and seven negative ACL/RLS drifts. The test used only the marked local fixture; it did not apply or alter any real database, provider, or deployment.
 
 ## Remaining work
 
