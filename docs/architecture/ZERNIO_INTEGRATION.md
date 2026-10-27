@@ -1,7 +1,10 @@
 # Zernio: secure configuration and credential verification
 
-Baseline: `5e110057612b4846a73e4be7a45ead5212c1ffc2`. This is a separate
-integration slice; draft Meta PR #79 and Claude's conversation PR #78 are unchanged.
+Original audit baseline: `5e110057612b4846a73e4be7a45ead5212c1ffc2`.
+PR #80 reconciliation baseline: `780424c72f226123ad078b74b432d8dc9d8dbd5f`,
+including accepted Meta #79 and merged #84–#86. The original platform-only scope
+is unchanged. The Phase 2A documents below govern future integration development;
+their historical PR-status wording is not current implementation evidence.
 
 ## Implemented boundary
 
@@ -87,9 +90,48 @@ official HTML sources below were read instead:
 
 The read-only adapter fixes its origin/path/method, rejects redirects, bounds
 response bytes/time, drops raw provider errors and never lists customer records.
-Verification receipts remain in page memory and are concealed on focus loss;
-restoration rereads the owner-authorized API. No key or retry is stored in browser
-storage. No last-check state is presented as durable authorization.
+Verification receipts remain in page memory. Blur, hidden-document, pagehide,
+confirmed HON session invalidation and school-context signals immediately clear
+configuration, receipts and errors, abort pending reads and invalidate their read
+epochs. Request-instance settlement is independent of the read epoch, so a settled
+request does not strand the shield or let an old instance clear another request's
+busy state. Unmount destroys the local view and cancels reads. Restoration requires
+an explicit fresh owner-authorized configuration read; focus regain, language
+changes and successful reauthentication do not reveal cached facts or retry the
+provider check. Authenticated HON 401s broadcast the existing shared session signal;
+403s are local denials. A provider REJECTED/DENIED receipt within HON 200 is not a
+staff-session failure. No key or retry is stored in browser storage. No last-check
+state is presented as durable authorization.
+
+## Phase 2A precedence and joint checkpoint
+
+Read the approved [ingress architecture](PHASE_2A_INTEGRATION_INGRESS_DESIGN.md),
+[state vocabulary](PHASE_2A_INTEGRATION_STATE_VOCABULARY.md),
+[review/privacy contract](INTEGRATION_REVIEW_UI_SPEC.md),
+[verification gates](PHASE_2A_INTEGRATION_VERIFICATION_AND_ROLLOUT.md), and
+[Meta capability foundation](META_INTEGRATION_ARCHITECTURE.md) together. This PR
+does not implement those future contracts.
+
+- Platform installation, private credential custody, pre-tenant signing-key
+  verification, post-routing provider/data credentials, school connection, exact
+  asset/capability grants and HQ administration are separate authority planes.
+  This server environment key is not a webhook signing key or a school grant.
+  Future ordinary records may contain only opaque credential-binding IDs/versions,
+  never secret-manager/vault locators, credential contents or arbitrary resolvers.
+- Historical ownership evidence must route each signed source occurrence; unknown,
+  ambiguous or A-to-B delayed/remapped events fail closed. A valid signature,
+  provider profile, current mapping or browser-selected school is not tenant
+  authority. Event/source-occurrence identity remains stable across reconnects.
+- Ingress recording and authorized human CRM disposition are separate transaction
+  boundaries. Retry-ambiguous outcomes reconcile original durable evidence before
+  any acknowledgement claim and cannot create a new receipt, case or CRM effect.
+  Integration-only evidence is structurally non-dispatchable; it cannot enable a
+  background consumer, Action Engine, CRM mutation or automated communication.
+- Before persistence or API development, Manus/Codex must agree one versioned
+  installation/binding/connection/grant/mapping/receipt/candidate/review/disposition/
+  effect contract, authority and lock order, privacy/retry proof gates and a single
+  migration reservation. Custody, retention, remapping, review and provider-use
+  policies require separate owner decisions. No Phase 2B work is authorized here.
 
 ## Full Meta scope and future integration
 
@@ -116,10 +158,32 @@ without an endpoint-specific idempotency guarantee.
 
 ## Verification scope
 
-Run the credential-file tests, adapter/service/guard/API tests, translated view
-and transport tests, full repository CI, typecheck, build and migration-file
-validation. No migration or database mutation is introduced. API tests use
-synthetic signed sessions and a mocked existing HQ resolver; they do not claim
-new live-database authorization proofs. No actual Zernio key, live account or
-external call is used. Document local HTTP listener restrictions separately from
-supported GitHub CI results. No deployment or automatic merge.
+The existing API unit/HTTP tests use synthetic signed sessions and a mocked HQ
+resolver. They remain useful unit tests and are not database-authorization proof.
+PR #80 adds separate executable verification:
+
+- `apps/api/scripts/zernio-api-verification.cjs`: guarded, marked disposable
+  PostgreSQL only; actual least-privilege RuntimeDatabaseService and HQ resolver,
+  actual signed-session Nest guards/routes, minimized reads, denied actors,
+  post-wait revocation, concurrency and before/after business-table hashes. Only
+  the provider adapter/configuration is a deterministic injected fixture. No
+  external request, real key, schema change or persistent database is used.
+- `apps/web/scripts/zernio-browser.mjs`: production Next and mounted React with
+  signed synthetic API fixtures, real language transport/shared 401 signal,
+  READY/LOADING/late-response/privacy/unmount/explicit-restoration scenarios,
+  desktop/mobile English/Korean/Spanish screenshots and keyboard/axe checks.
+  This is browser-fixture evidence, distinct from the database-backed API proof.
+- `.github/workflows/integration-foundation-validation.yml`: same-repository,
+  exact-head, read-only draft-safe checks, complete unchanged canonical PostgreSQL
+  proof commands, the new API proof and browser proof. Regular draft-skipped jobs
+  must be reported as skipped. The complete existing regression suite is not
+  evidence of a future Zernio connection/ingress implementation.
+
+Run all workspace tests, runtime/setup guards, typecheck, production build and
+181-file migration validation. All historical migrations stay byte-for-byte
+unchanged; 0179/0180 remain reserved. Report exact executed counts, SHA, workflow
+and artifact links in the PR after checks finish, separating local limitations
+and historical results. No operational provider, school authorization, encrypted
+tenant vault, webhook, CRM mutation, deployment or activation is validated here.
+Keep `HON_ZERNIO_VERIFICATION_APPROVED` disabled outside synthetic injected tests.
+

@@ -3,8 +3,9 @@
 ## Zernio secure integration foundation — Codex
 
 - [x] Add API-server-only secret configuration, hidden local key entry, HQ-owner configuration status and explicitly gated read-only credential verification using official Zernio contracts. No browser key store, live calls, posting, messaging, ads, OAuth connection, workers or changes to paid/trial/AI activation.
-- [ ] Verify closed contracts, live owner checks, same-origin confirmation, response minimization, concurrency/focus-loss safety and local secret-file permissions; publish one focused draft PR with actual tests. See `docs/architecture/ZERNIO_INTEGRATION.md`. Preserve PRs #78/#79 and issue #56. School profile bindings and a reviewed encrypted vault remain future work.
-
+- [x] PR #80 correction: integrate accepted main `780424c72f226123ad078b74b432d8dc9d8dbd5f`; broadcast authenticated HON 401 through the shared session signal, preserve local 403 handling, conceal on session/pagehide/school/focus/visibility events, invalidate late reads and preserve independent request settlement. Explicit fresh HQ-authorized restoration only; no automatic provider verification. See `docs/architecture/ZERNIO_INTEGRATION.md`.
+- [ ] Fresh exact-head evidence: run workspace/typecheck/build/migration checks, complete canonical PostgreSQL regressions, actual signed-session API/live HQ resolver with fake-provider revocation tests, and mounted desktop/mobile language/privacy/accessibility checks. Report executed results and draft-skipped regular jobs separately in PR #80, then stop for independent review.
+- [ ] Future joint Phase 2A contract checkpoint before persistence/API work: separate installation/signing/data custody, opaque credential-binding IDs, historical mapping and stable identities, exact school/asset/capability grants, two transaction boundaries and non-dispatchable integration evidence. No tenant credential store, school connection, webhook, CRM mutation or external execution in this PR. Keep verification disabled; preserve issue #56.
 
 ## Meta integration — META-1 connection contracts (Codex)
 

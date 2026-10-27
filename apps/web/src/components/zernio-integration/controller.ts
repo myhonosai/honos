@@ -26,7 +26,7 @@ export class ZernioController {
   start() { if (this.alive) return; this.alive = true; void this.refresh(); }
   stop() { this.alive = false; ++this.epoch; this.active?.abort(); this.active = null; this.view = empty; }
   conceal() {
-    if (!this.alive || !this.view.configuration && !this.view.receipt && !this.active) return;
+    if (!this.alive || !this.view.configuration && !this.view.receipt && !this.view.error && !this.active) return;
     ++this.epoch; this.active?.abort();
     this.update({ ...empty, busy: Boolean(this.active), concealed: true });
   }
@@ -54,3 +54,4 @@ export class ZernioController {
     }
   }
 }
+

@@ -1,4 +1,5 @@
 import { validateZernioConfiguration, validateZernioVerification, ZERNIO_VERIFY_CONFIRMATION } from '@hon/contracts';
+import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 export class ZernioAccessError extends Error {
   constructor(readonly code: 'UNAUTHORIZED' | 'FORBIDDEN' | 'UNAVAILABLE' | 'INVALID_RESPONSE') { super(code); }
 }
@@ -9,7 +10,12 @@ async function request(verify: boolean, signal: AbortSignal) {
     headers: verify ? { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': 'zernio-credential-verify' } : { Accept: 'application/json' },
     ...(verify ? { body: JSON.stringify({ confirmation: ZERNIO_VERIFY_CONFIRMATION }) } : {}),
   });
-  if (!response.ok) throw new ZernioAccessError(response.status === 401 ? 'UNAUTHORIZED' : response.status === 403 ? 'FORBIDDEN' : 'UNAVAILABLE');
+  if (!response.ok) {
+    // This is an authenticated HON endpoint. Provider 401/403 results inside a
+    // successful verification receipt must never invalidate the staff session.
+    if (response.status === 401) reportConfirmedSessionInvalidation();
+    throw new ZernioAccessError(response.status === 401 ? 'UNAUTHORIZED' : response.status === 403 ? 'FORBIDDEN' : 'UNAVAILABLE');
+  }
   if (!/application\/json/i.test(response.headers.get('content-type') ?? '')) throw new ZernioAccessError('INVALID_RESPONSE');
   const root: unknown = await response.json();
   if (!root || typeof root !== 'object' || Array.isArray(root) || Object.keys(root).length !== 1 || !Object.hasOwn(root, 'data')) throw new ZernioAccessError('INVALID_RESPONSE');
@@ -17,3 +23,4 @@ async function request(verify: boolean, signal: AbortSignal) {
 }
 export async function loadZernioConfiguration(signal: AbortSignal) { return validateZernioConfiguration(await request(false, signal)); }
 export async function verifyZernioCredential(signal: AbortSignal) { return validateZernioVerification(await request(true, signal)); }
+

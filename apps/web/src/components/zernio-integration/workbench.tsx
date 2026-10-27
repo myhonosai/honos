@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { useLocale } from '../localization/provider';
+import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from '../session-invalidation';
 import { ZernioController, type ZernioViewState } from './controller';
 import styles from './zernio.module.css';
 
@@ -11,9 +12,17 @@ export function ZernioIntegrationWorkbench(): React.ReactElement {
     controller.start();
     const conceal = () => controller.conceal();
     const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('blur', conceal);
+    window.addEventListener('pagehide', conceal);
+    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
+    window.addEventListener(HON_SCHOOL_CONTEXT_CHANGED_EVENT, conceal);
+    document.addEventListener('visibilitychange', visibility);
     return () => { controller.stop();
-      window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener('blur', conceal);
+      window.removeEventListener('pagehide', conceal);
+      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
+      window.removeEventListener(HON_SCHOOL_CONTEXT_CHANGED_EVENT, conceal);
+      document.removeEventListener('visibilitychange', visibility); };
   }, [controller]);
   return <ZernioIntegrationView view={view} refresh={() => void controller.refresh()} verify={() => void controller.verify()} />;
 }
@@ -23,7 +32,7 @@ export function ZernioIntegrationView({ view, refresh, verify }: { view: ZernioV
   const { t, date } = useLocale();
   const [confirmed, setConfirmed] = useState(false);
   useEffect(() => { setConfirmed(false); }, [view.concealed, view.busy, view.configuration]);
-  return <div className={styles.page}>
+  return <div className={styles.page} data-zernio-workbench data-zernio-busy={view.busy}>
     <header><h1>{t('zernio.title')}</h1><p>{t('zernio.intro')}</p></header>
     {view.concealed ? <section aria-labelledby="zernio-privacy"><h2 id="zernio-privacy">{t('zernio.concealed')}</h2>
       <p>{t('zernio.privacy')}</p><button disabled={view.busy} onClick={refresh}>{t('zernio.restore')}</button></section> : <>
@@ -47,3 +56,4 @@ export function ZernioIntegrationView({ view, refresh, verify }: { view: ZernioV
     {view.error && <p role="alert">{t('zernio.error')} <a href="/auth/login">{t('zernio.signin')}</a></p>}
   </div>;
 }
+

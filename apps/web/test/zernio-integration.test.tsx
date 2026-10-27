@@ -6,6 +6,7 @@ import { translate } from '@hon/design-system';
 import { ZernioController } from '../src/components/zernio-integration/controller';
 import { ZernioIntegrationView } from '../src/components/zernio-integration/workbench';
 import { loadZernioConfiguration, verifyZernioCredential } from '../src/components/zernio-integration/http';
+import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 const configuration = validateZernioConfiguration({ provider: 'ZERNIO', credential: 'PRESENT', secretStorage: 'API_SERVER_ENVIRONMENT',
   verificationEnabled: true, externalActions: 'DISABLED', schoolConnections: 'NOT_CONFIGURED' });
 const receipt = validateZernioVerification({ provider: 'ZERNIO', status: 'VALID', checkedAt: '2026-10-25T08:00:00.000Z', externalActions: 'DISABLED' });
@@ -15,6 +16,22 @@ function pending<T>() { let resolve!: (value: T) => void, reject!: (error: Error
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Zernio explicit read-only transport', () => {
+  it.each([false,true])('broadcasts authenticated HON 401 for verify=%s, but keeps 403 local', async verify => {
+    const events = new EventTarget(), invalidated = vi.fn();
+    events.addEventListener(HON_SESSION_INVALIDATED_EVENT, invalidated);
+    vi.stubGlobal('window',events);
+    const run = verify ? verifyZernioCredential : loadZernioConfiguration;
+    for (const status of [403,401]) {
+      vi.stubGlobal('fetch',async()=>new Response('',{status}));
+      await expect(run(new AbortController().signal)).rejects.toMatchObject({code:status===401?'UNAUTHORIZED':'FORBIDDEN'});
+      expect(invalidated).toHaveBeenCalledTimes(status===401?1:0);
+    }
+  });
+  it.each(['REJECTED','DENIED'] as const)('provider %s inside a successful HON receipt does not invalidate the HON session',async status=>{
+    const events=new EventTarget(),invalidated=vi.fn();events.addEventListener(HON_SESSION_INVALIDATED_EVENT,invalidated);vi.stubGlobal('window',events);
+    vi.stubGlobal('fetch',async()=>new Response(JSON.stringify({data:{...receipt,status}}),{headers:{'content-type':'application/json'}}));
+    expect((await verifyZernioCredential(new AbortController().signal)).status).toBe(status);expect(invalidated).not.toHaveBeenCalled();
+  });
   it('uses fixed same-origin paths without keys, URL selectors, persistence or automatic retries', async () => {
     const calls: { url: string; options: RequestInit }[] = [];
     vi.stubGlobal('fetch', async (url: string, options: RequestInit) => { calls.push({ url, options });
@@ -39,6 +56,23 @@ describe('Zernio explicit read-only transport', () => {
 });
 
 describe('Zernio focus-loss and explicit restoration lifecycle', () => {
+  it('conceals an error-only view and invalidates a late rejection without restoring the error',async()=>{
+    const pendingRead=pending<typeof configuration>();let reads=0;
+    const c=new ZernioController({configuration:()=>++reads===1?Promise.reject(Error('denied')):pendingRead.promise,verify:async()=>receipt});
+    c.start();await flush();expect(c.snapshot().error).toBe(true);c.conceal();expect(c.snapshot()).toMatchObject({concealed:true,error:false});
+    const restore=c.refresh();c.conceal();pendingRead.reject(Error('late private error'));await restore;
+    expect(c.snapshot()).toMatchObject({concealed:true,error:false,busy:false,configuration:null,receipt:null});c.stop();
+  });
+  it('shared invalidation cancels a real transport read and late success cannot reveal facts',async()=>{
+    const events=new EventTarget(),waiting=pending<Response>();vi.stubGlobal('window',events);
+    let signal:AbortSignal|undefined;const fetch=vi.fn((_url:unknown,options:RequestInit)=>{signal=options.signal as AbortSignal;return waiting.promise;});vi.stubGlobal('fetch',fetch);
+    const c=new ZernioController();events.addEventListener(HON_SESSION_INVALIDATED_EVENT,()=>c.conceal());c.start();
+    events.dispatchEvent(new Event(HON_SESSION_INVALIDATED_EVENT));expect(signal?.aborted).toBe(true);
+    waiting.resolve(new Response(JSON.stringify({data:configuration}),{headers:{'content-type':'application/json'}}));
+    // Wait for response parsing as well as request settlement.
+    await new Promise(done=>setTimeout(done,0));expect(c.snapshot()).toMatchObject({concealed:true,busy:false,configuration:null,receipt:null,error:false});
+    expect(fetch).toHaveBeenCalledTimes(1);c.stop();
+  });
   it('loads configuration without ever automatically verifying the provider credential', async () => {
     const verify=vi.fn(async()=>receipt),c=new ZernioController({configuration:async()=>configuration,verify});
     c.start();await flush();expect(c.snapshot().configuration).toEqual(configuration);expect(verify).not.toHaveBeenCalled();
@@ -101,3 +135,4 @@ describe('Zernio accessible translated presentation', () => {
     }
   });
 });
+
