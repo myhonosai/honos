@@ -109,6 +109,16 @@ try {
   pass('all HON business tables including audit/outbox/idempotency/entitlements/credits remain unchanged; fixture-only grants excluded');
   console.log(`All ${checks.length} Zernio signed-session/disposable PostgreSQL scenario groups passed. Real provider calls: 0.`);
 } finally {
-  if(wait)wait.resolve();if(app)await app.close();await database.onModuleDestroy();await owner.end();
+  if(wait)wait.resolve();
+  try {
+    // Nest owns the injected RuntimeDatabaseService once the app exists and
+    // app.close() invokes its onModuleDestroy hook. Only close it directly if
+    // setup failed before that ownership transfer; never end its pool twice.
+    if(app)await app.close();
+    else await database.onModuleDestroy();
+  } finally {
+    // The fixture owner client is outside Nest and always belongs to this harness.
+    await owner.end();
+  }
 }
 })().catch(error=>{console.error(error);process.exitCode=1;});
