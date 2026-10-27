@@ -1,0 +1,40 @@
+flowchart TD
+  Owner[Owner policy bundle and G1 approval]
+  G0[G0: PR #80 fresh evidence and independent review]
+  C1[2B-1 joint V1 contract checkpoint\nreserve 0190 only]
+  C2[2B-2 private authority and receipt schema\nconsume 0190]
+  C3[2B-3 provider-free deterministic simulator]
+  C4[2B-4 protected candidate custody]
+  C5[2B-5 direct-human reviewed CRM effect]
+  C6[2B-6 Integration Review UI]
+  Pilot[Separate provider pilot gate]
+
+  Owner --> C1
+  G0 --> C1
+  C1 --> C2 --> C3 --> C4 --> C5 --> C6 --> Pilot
+
+  subgraph Ingress[Boundary A — no provider activation]
+    Verify[Fixed endpoint + signing verification\nraw bytes before parse]
+    Reserve[Reserve event identity + digest]
+    Route[Historical installation → connection → grant → mapping]
+    Outcome[Commit one bounded outcome]
+    Verify --> Reserve --> Route --> Outcome
+  end
+
+  subgraph Review[Boundary B — direct-human only]
+    Reauth[Current human/school/capability/entitlement reauthorization]
+    Recover[Original K result recovery\nor unchanged-K fresh check]
+    Atomic[One atomic decision + case close + unique effect\ncanonical CRM lead + provenance + audit + inert evidence]
+    Reauth --> Recover --> Atomic
+  end
+
+  C3 -. provider-free evidence only .-> Ingress
+  C5 -. approved future backend proof .-> Review
+  Outcome -. no candidate/CRM/provider effect .-> Hold[Fail closed until later gate]
+
+  classDef gate fill:#2b183f,stroke:#d9b7ff,color:#fff
+  classDef boundary fill:#0f2f3d,stroke:#7ee1ff,color:#fff
+  classDef stop fill:#3b2020,stroke:#ffaaa0,color:#fff
+  class Owner,G0,C1,C2,C3,C4,C5,C6,Pilot gate
+  class Verify,Reserve,Route,Outcome,Reauth,Recover,Atomic boundary
+  class Hold stop
