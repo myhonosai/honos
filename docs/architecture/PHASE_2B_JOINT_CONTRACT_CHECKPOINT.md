@@ -2,7 +2,7 @@
 
 **Status:** Documentation-only contract checkpoint; no implementation authorization.
 
-**Baseline:** Canonical `main` at `780424c72f226123ad078b74b432d8dc9d8dbd5f` (merged META-1 / PR #79 and merged Phase 2A documentation). This record does not claim fresh runtime verification.
+**Baseline:** Canonical `main` at `2877a2711c8831be8bff3fa4c37ad81905255c2f` (merged META-1 / PR #79, Phase 2A documents, and PR #80's narrowly retained Zernio source foundation). This record adds no runtime capability and does not reinterpret #80 evidence as an activation grant.
 
 **Version:** `HON-INTEGRATION-V1.0.0-proposed`
 
@@ -12,12 +12,12 @@
 
 This document is the joint Manus/Codex contract to review before any inbound integration, school connection, protected candidate, CRM effect, or Integration Review UI implementation. It is deliberately provider-neutral. It does not add a migration, runtime code, provider capability, credential, sandbox account, webhook, event route, browser route, customer data, or business effect.
 
-The owner approved a narrow exception to retain the existing HQ-only Zernio source foundation in PR #80. That source remains disabled and unused. `HON_ZERNIO_VERIFICATION_APPROVED` must remain absent or false; `ZERNIO_API_KEY` must not be configured or used; the verification path must not run. Retention is not approval for credential use, provider operation, connection, mapping, ingress, data custody, CRM mutation, AI work, or deployment.
+The owner approved a narrow exception to retain PR #80's HQ-only Zernio source foundation. Its exact head is now in the canonical baseline under server-only controls. The source remains disabled and unused in operational environments: `HON_ZERNIO_VERIFICATION_APPROVED` must remain absent or false; `ZERNIO_API_KEY` must not be configured or used; the verification path must not run. Retention is not approval for credential use, provider operation, connection, mapping, ingress, data custody, CRM mutation, AI work, or deployment.
 
-No Phase 2B runtime work is authorized until both gates are satisfied:
+No Phase 2B runtime work is authorized until **G1** is satisfied. The former G0 record is complete but intentionally narrow:
 
-- **G0 — #80 evidence/review:** Codex reconciles #80 against this baseline, records fresh exact-head evidence, and receives independent review. Regular draft CI skips must be reported as skips, not passes.
-- **G1 — joint authorization:** the owner approves the policy bundle in [Owner decisions](#owner-decisions), and Manus and Codex approve this version, the code-boundary map, transaction lock order, and the single migration reservation.
+- **G0 — #80 evidence/review, complete:** PR #80 head `2877a2711c8831be8bff3fa4c37ad81905255c2f` completed draft-safe run `40442381437`: 1,957 workspace tests, typecheck/build/181-migration validation, 41 disposable PostgreSQL proofs, nine signed-session API/real-HQ-resolver groups with a deterministic injected provider, and 16 mounted browser/12 scoped axe scenarios. Its regular draft CI companion `40442381433` was skipped with zero steps and is not counted as passing. This records source-foundation evidence only; it creates no provider authorization.
+- **G1 — joint authorization, still required:** the owner approves the policy bundle in [Owner decisions](#owner-decisions), and Manus and Codex approve this version, the code-boundary map, transaction lock order, and the single migration reservation.
 
 ## Contract planes
 
@@ -174,7 +174,7 @@ Post-wait lifecycle, grant, mapping, case-version, permission, and entitlement c
 
 | Work | Manus | Codex | Owner/security gate |
 | --- | --- | --- | --- |
-| G0 | Independent review of evidence | Reconcile and complete #80 evidence; keep source disabled | Exact-head review required |
+| G0 (complete) | Independent review of recorded evidence | Preserve #80 source unchanged and disabled | No activation implication |
 | 2B-1 | Contract/recovery/CRM boundary review | Installation/credential/ingress boundary review | Joint approval of V1 + lock ranks + reservation |
 | 2B-2 | Review RLS/provenance/no-effect tests | Implement private authority/receipt schema | Custody, mapping, role policy; consume only `0190` |
 | 2B-3 | Review simulator/no-effect proof | Implement provider-free deterministic simulator | Synthetic fixture/cutover policy |
@@ -197,17 +197,18 @@ Recommended defaults are conservative and remain decisions, not implementation.
 
 ## Codex coordination request
 
-Codex should review this exact contract checkpoint after completing G0, specifically: the retained #80 source remains disabled; credential-purpose separation; the pre-tenant signing limitation; historical mapping/routing; lock ranks; the `0190` reservation; and no provider-activation interpretation. Manus and Codex should publish one signed-off contract version before the owner is asked to authorize 2B-1.
+Codex should review this exact contract checkpoint now that G0 is recorded, specifically: the retained #80 source remains disabled; credential-purpose separation; the pre-tenant signing limitation; historical mapping/routing; lock ranks; the `0190` reservation; and no provider-activation interpretation. Manus and Codex should publish one signed-off contract version before the owner is asked to authorize 2B-1.
 
 ## Documentation validation
 
-The Mermaid source rendered successfully. Required contract terms and all relative internal links were checked, `git diff --check` passed, and an independent read-only audit found no blocker or material ambiguity in the no-go, authority, lock, migration, ownership, simulation, or payment-separation boundaries. This is not application, database, provider, payment, or deployment validation; no such run is claimed for this documentation-only branch.
+The Mermaid source rendered successfully. Required contract terms and all relative internal links were checked, `git diff --check` passed, and an independent read-only audit found no blocker or material ambiguity in the no-go, authority, lock, migration, ownership, simulation, or payment-separation boundaries. This documentation branch does not independently validate an application, database, provider, payment, or deployment; #80's distinct exact-head evidence is recorded above without broadening its source-only exception.
 
 ## Related records
 
 - [Phase 2A ingress design](PHASE_2A_INTEGRATION_INGRESS_DESIGN.md)
 - [Phase 2A state vocabulary](PHASE_2A_INTEGRATION_STATE_VOCABULARY.md)
 - [Phase 2A verification and rollout](PHASE_2A_INTEGRATION_VERIFICATION_AND_ROLLOUT.md)
+- [Merged PR #80 Zernio boundary](ZERNIO_INTEGRATION.md)
 - [Provider-free simulation plan](PHASE_2B_PROVIDER_FREE_SIMULATION_PLAN.md)
 - [Phase 2B PR sequence](PHASE_2B_IMPLEMENTATION_SEQUENCE.md)
 - [Pitbull Payments Adapter requirements](PITBULL_PAYMENTS_ADAPTER_REQUIREMENTS.md)

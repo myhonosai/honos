@@ -21,6 +21,10 @@
       "title": "HON HQ | AI Provider Control"
     },
     {
+      "path": "/hq/integrations/zernio",
+      "title": "HON HQ | Zernio"
+    },
+    {
       "path": "/core",
       "title": "HON Core | School Management"
     },

@@ -4,9 +4,9 @@
 
 ## Entry gates
 
-No PR below may begin before **G0** (#80 exact-head evidence and independent review) and **G1** (owner policy plus joint V1 contract/lock-order/reservation approval) from [the joint checkpoint](PHASE_2B_JOINT_CONTRACT_CHECKPOINT.md).
+**G0 is complete and source-only:** merged PR #80 exact-head evidence is recorded in [the joint checkpoint](PHASE_2B_JOINT_CONTRACT_CHECKPOINT.md). It does not authorize provider operation or Phase 2B code.
 
-The current decision is **NO-GO for runtime work**. The only potential first authorization is 2B-1, a joint contract-and-test PR with no migration or runtime capability.
+No PR below may begin before **G1**: owner policy plus joint V1 contract/lock-order/reservation approval. The current decision remains **NO-GO for runtime work**. The only potential first authorization is 2B-1, a joint contract-and-test PR with no migration or runtime capability.
 
 ## Prioritized PRs
 
@@ -27,7 +27,7 @@ The product direction remains glass-like, responsive, and smooth, but those are 
 
 ## Coordination checkpoint
 
-- **Codex:** G0/#80 reconciliation and source-retention safety evidence; 2B-2/2B-3 implementation after approval; co-sign 2B-1 contract/lock/reservation.
+- **Codex:** preserve the merged #80 source-only exception as disabled; 2B-2/2B-3 implementation after G1 approval; co-sign 2B-1 contract/lock/reservation.
 - **Manus:** integration review/disposition/provenance semantics; canonical CRM primitive extraction and no-effect proof design in 2B-5; co-sign 2B-1 and review 2B-2/2B-3.
 - **Owner:** policy decisions, 2B-1 authorization, every subsequent slice, and any provider/sandbox/pilot decision.
 
