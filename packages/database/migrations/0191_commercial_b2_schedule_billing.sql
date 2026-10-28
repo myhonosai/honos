@@ -64,6 +64,7 @@ CREATE TABLE hon.saas_schedule_provider_events (
   outcome text NOT NULL CHECK (outcome IN ('APPLIED','ALREADY_APPLIED','NEEDS_REVIEW')),
   outcome_reason text NOT NULL CHECK (outcome_reason ~ '^[A-Z_]{3,80}$'),
   request_key uuid NOT NULL,
+  provider_occurred_at timestamptz NOT NULL,
   received_at timestamptz NOT NULL,
   UNIQUE(provider,provider_event_id)
 );
@@ -294,7 +295,7 @@ END $$;
 
 CREATE FUNCTION hon.ingest_saas_schedule_evidence(p jsonb,p_digest text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE b hon.saas_schedule_bindings%ROWTYPE; e hon.saas_schedule_provider_events%ROWTYPE; req uuid:=gen_random_uuid(); at timestamptz:=clock_timestamp();
+DECLARE b hon.saas_schedule_bindings%ROWTYPE; e hon.saas_schedule_provider_events%ROWTYPE; req uuid:=gen_random_uuid(); at timestamptz:=clock_timestamp(); occurred_at timestamptz;
   count_paid integer; expected_amount integer; period_id uuid; outcome text:='NEEDS_REVIEW'; reason text:='RECONCILIATION_REQUIRED'; result jsonb;
 BEGIN
   IF p_digest !~ '^[0-9a-f]{64}$' OR p_digest<>hon.saas_hon_os_digest(p)
@@ -306,6 +307,9 @@ BEGIN
     OR p->>'currency'<>'USD' OR jsonb_typeof(p->'amountMinor')<>'number' OR coalesce(p->>'amountMinor','') !~ '^[1-9][0-9]*$'
     OR jsonb_typeof(p->'occurredAt')<>'string' OR coalesce(p->>'occurredAt','') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$'
   THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
+  BEGIN occurred_at:=(p->>'occurredAt')::timestamptz;
+  EXCEPTION WHEN datetime_field_overflow OR invalid_datetime_format THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END;
+  IF occurred_at>at+interval '5 minutes' THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
   -- Serialize same-event deliveries before reading the immutable event ledger; re-delivery returns its original receipt.
   PERFORM pg_advisory_xact_lock(hashtextextended('saas.schedule.provider-event:'||p->>'eventId',0));
   SELECT * INTO e FROM hon.saas_schedule_provider_events WHERE provider='STRIPE_SIMULATED' AND provider_event_id=p->>'eventId';
@@ -342,8 +346,8 @@ BEGIN
     'qualifyingPaidPeriodCount',(SELECT count(*)::integer FROM hon.saas_schedule_paid_periods WHERE binding_id=b.id),
     'checkoutAvailable',false,'billingEnabled',false,'accessGranted',false,'paidAccessProgram','INACTIVE');
   PERFORM hon.saas_claim_request(hon.saas_payment_actor(),req,'saas.schedule_evidence.ingest',hon.saas_fingerprint(ARRAY['saas.schedule_evidence.ingest',p->>'eventId',p_digest]),req,req);
-  INSERT INTO hon.saas_schedule_provider_events(provider,provider_mode,provider_event_id,payload_digest,binding_id,event_type,normalized,outcome,outcome_reason,request_key,received_at)
-    VALUES('STRIPE_SIMULATED','TEST',p->>'eventId',p_digest,b.id,p->>'eventType',p||jsonb_build_object('receipt',result),outcome,reason,req,at);
+  INSERT INTO hon.saas_schedule_provider_events(provider,provider_mode,provider_event_id,payload_digest,binding_id,event_type,normalized,outcome,outcome_reason,request_key,provider_occurred_at,received_at)
+    VALUES('STRIPE_SIMULATED','TEST',p->>'eventId',p_digest,b.id,p->>'eventType',p||jsonb_build_object('receipt',result),outcome,reason,req,occurred_at,at);
   IF outcome='NEEDS_REVIEW' THEN INSERT INTO hon.saas_schedule_reconciliations(binding_id,provider_event_id,related_period_id,outcome,reason,created_at)
     VALUES(b.id,p->>'eventId',period_id,'NEEDS_REVIEW',reason,at); END IF;
   PERFORM hon.saas_record(hon.saas_payment_actor(),req,'saas.schedule_evidence.ingest','saas.schedule_evidence.recorded','SCHEDULE_EVENT',

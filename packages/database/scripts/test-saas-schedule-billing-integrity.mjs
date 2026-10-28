@@ -38,7 +38,12 @@ async function cleanup(){
     if(t==='saas_outbox')await admin.query('DELETE FROM hon.saas_outbox WHERE audit_id IN (SELECT id FROM hon.saas_audit WHERE actor_principal_id=ANY($1::uuid[]))',[Object.values(humans).map(x=>x.id)]);
     else if(['saas_audit','saas_requests'].includes(t))await admin.query('DELETE FROM hon.'+t+' WHERE actor_principal_id=ANY($1::uuid[])',[Object.values(humans).map(x=>x.id)]);
     else await admin.query('DELETE FROM hon.'+t); await admin.query('ALTER TABLE hon.'+t+' ENABLE TRIGGER USER');
-  } await admin.query('COMMIT'); } catch(e){await admin.query('ROLLBACK');throw e;}
+  }
+    await admin.query('ALTER TABLE hon.saas_payment_program DISABLE TRIGGER USER');
+    await admin.query("UPDATE hon.saas_payment_program SET status='DISABLED',provider=NULL,live_mode=false,test_tax_reference=NULL,authorization_reference=NULL,version=1,changed_by_principal_id=NULL,changed_at=clock_timestamp() WHERE program_id=1");
+    await admin.query('ALTER TABLE hon.saas_payment_program ENABLE TRIGGER USER');
+    assert.deepEqual((await row('SELECT status,provider,live_mode,test_tax_reference,authorization_reference,changed_by_principal_id FROM hon.saas_payment_program WHERE program_id=1')),{status:'DISABLED',provider:null,live_mode:false,test_tax_reference:null,authorization_reference:null,changed_by_principal_id:null});
+    await admin.query('COMMIT'); } catch(e){await admin.query('ROLLBACK');throw e;}
 }
 await Promise.all([admin,restricted].map(x=>x.connect()));
 try {
@@ -86,18 +91,24 @@ try {
   passed('exact A2/B1 lineage, explicit founder refusal pending C, TEST simulated binding, malformed-observation refusal, durable recovery, school/HQ isolation, and no checkout/access effect');
   const baseEvent=(eventId,amountMinor=24900,startsAt='2031-01-01T00:00:00.000Z',endsAt='2031-02-01T00:00:00.000Z')=>({provider:'STRIPE_SIMULATED',mode:'TEST',eventId,eventType:'invoice.paid',bindingId:binding.bindingId,
     accountReference:binding.providerAccountReference,subscriptionReference:binding.providerSubscriptionReference,scheduleReference:binding.providerScheduleReference,
-    invoiceReference:'fake_invoice_'+eventId.slice(4),relatedInvoiceReference:null,coveredPeriod:{startsAt,endsAt},amountMinor,currency:'USD',occurredAt:'2031-02-01T00:00:01.000Z'});
+    invoiceReference:'fake_invoice_'+eventId.slice(4),relatedInvoiceReference:null,coveredPeriod:{startsAt,endsAt},amountMinor,currency:'USD',occurredAt:new Date().toISOString()});
+  const invalidOccurredAt=baseEvent('evt_'+K().replaceAll('-','_'));invalidOccurredAt.occurredAt='2031-02-30T00:00:00.000Z';
+  const invalidOccurredAtDigest=await digest(invalidOccurredAt);
+  await deny(()=>schedules.ingestVerifiedTestEvidence(invalidOccurredAt,invalidOccurredAtDigest),400,'INVALID_SAAS_INPUT');
+  const futureOccurredAt=baseEvent('evt_'+K().replaceAll('-','_'));futureOccurredAt.occurredAt=new Date(Date.now()+600_000).toISOString();
+  const futureOccurredAtDigest=await digest(futureOccurredAt);
+  await deny(()=>schedules.ingestVerifiedTestEvidence(futureOccurredAt,futureOccurredAtDigest),400,'INVALID_SAAS_INPUT');
   const paid=baseEvent('evt_'+K().replaceAll('-','_')),paidReceipt=await schedules.ingestVerifiedTestEvidence(paid,await digest(paid));
   assert.equal(paidReceipt.outcome,'APPLIED');assert.equal(paidReceipt.qualifyingPaidPeriodCount,1);assert.equal(paidReceipt.accessGranted,false);
   assert.deepEqual(await schedules.ingestVerifiedTestEvidence(paid,await digest(paid)),paidReceipt,'same event replays immutable original evidence');
-  const concurrent=baseEvent('evt_'+K().replaceAll('-','_'),24900,'2031-02-01T00:00:00.000Z','2031-03-01T00:00:00.000Z');concurrent.occurredAt='2031-03-01T00:00:01.000Z';
+  const concurrent=baseEvent('evt_'+K().replaceAll('-','_'),24900,'2031-02-01T00:00:00.000Z','2031-03-01T00:00:00.000Z');
   const concurrentDigest=await digest(concurrent),concurrentReceipts=await Promise.all([schedules.ingestVerifiedTestEvidence(concurrent,concurrentDigest),schedules.ingestVerifiedTestEvidence(concurrent,concurrentDigest)]);
   assert.deepEqual(concurrentReceipts[0],concurrentReceipts[1]);assert.equal(concurrentReceipts[0].outcome,'APPLIED');assert.equal(concurrentReceipts[0].qualifyingPaidPeriodCount,2);
-  const duplicate=baseEvent('evt_'+K().replaceAll('-','_'));duplicate.invoiceReference=paid.invoiceReference;duplicate.coveredPeriod={startsAt:'2031-02-01T00:00:00.000Z',endsAt:'2031-03-01T00:00:00.000Z'};duplicate.occurredAt='2031-03-01T00:00:01.000Z';
+  const duplicate=baseEvent('evt_'+K().replaceAll('-','_'));duplicate.invoiceReference=paid.invoiceReference;duplicate.coveredPeriod={startsAt:'2031-02-01T00:00:00.000Z',endsAt:'2031-03-01T00:00:00.000Z'};
   assert.equal((await schedules.ingestVerifiedTestEvidence(duplicate,await digest(duplicate))).outcome,'ALREADY_APPLIED');
-  const wrong=baseEvent('evt_'+K().replaceAll('-','_'),1,'2031-02-01T00:00:00.000Z','2031-03-01T00:00:00.000Z');wrong.invoiceReference='fake_invoice_wrong';wrong.occurredAt='2031-03-01T00:00:01.000Z';
+  const wrong=baseEvent('evt_'+K().replaceAll('-','_'),1,'2031-02-01T00:00:00.000Z','2031-03-01T00:00:00.000Z');wrong.invoiceReference='fake_invoice_wrong';
   assert.equal((await schedules.ingestVerifiedTestEvidence(wrong,await digest(wrong))).outcome,'NEEDS_REVIEW');
-  const reverse={...baseEvent('evt_'+K().replaceAll('-','_')),eventType:'charge.refunded',invoiceReference:null,relatedInvoiceReference:paid.invoiceReference,coveredPeriod:null,occurredAt:'2031-03-02T00:00:01.000Z'};
+  const reverse={...baseEvent('evt_'+K().replaceAll('-','_')),eventType:'charge.refunded',invoiceReference:null,relatedInvoiceReference:paid.invoiceReference,coveredPeriod:null};
   const reversal=await schedules.ingestVerifiedTestEvidence(reverse,await digest(reverse));assert.equal(reversal.outcome,'NEEDS_REVIEW');
   const after=await schedules.read(H('school'),org.school,binding.bindingId);assert.equal(after.qualifyingPaidPeriodCount,2);assert.equal(after.unresolvedReconciliation,true);
   assert.equal((await row('SELECT status FROM hon.saas_access_program')).status,'INACTIVE');assert.equal((await row('SELECT count(*)::int n FROM hon.saas_access_transitions')).n,0);

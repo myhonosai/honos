@@ -48,7 +48,7 @@ The draft `0191` migration will be additive and will leave migrations `0155`, `0
 It should add private, FORCE-RLS append-only records for:
 
 1. A one-to-one generation schedule binding, including the immutable accepted-term snapshot, TEST-only provider references, binding key/digest, lifecycle/review status, and organization-level live-lifecycle uniqueness.
-2. Signature-authenticated provider-event observations with provider/event identity and canonical digest uniqueness.
+2. Signature-authenticated provider-event observations with provider/event identity, canonical digest uniqueness, and a semantically parsed, bounded `provider_occurred_at` timestamp kept separately from local receipt time.
 3. Schedule invoice/covered-period evidence with exact amount, currency, phase, provider invoice reference, and canonical period uniqueness.
 4. Payment, refund, and dispute facts linked to the original bound schedule/invoice/payment evidence.
 5. Reconciliation decisions that are immutable and explicitly distinguish applied, retryable-not-ready, unknown, and review-required outcomes.
@@ -67,7 +67,7 @@ Refund/dispute/reversal impact on prior qualifying periods, cancellation timing,
 
 ## 6. Required proofs
 
-The B2 draft must add a dedicated disposable PostgreSQL integrity proof and preserve the complete legacy suite. The proof must cover exact initial/renewal amounts, regular monthly/annual behavior, founder refusal pending Commercial C, twelve qualifying monthly periods before a founder transition, annual founder gating, failed/pending/unknown outcomes, duplicate and out-of-order events, refund/dispute/reversal evidence, cancellation/renewal races, cross-organization authorization, restricted runtime direct-DML denial, rollback, exact-key recovery, RLS/ACL/trigger enforcement, and unchanged B6A INACTIVE posture.
+The B2 draft must add a dedicated disposable PostgreSQL integrity proof and preserve the complete legacy suite. The proof must cover exact initial/renewal amounts, regular monthly/annual behavior, founder refusal pending Commercial C, twelve qualifying monthly periods before a founder transition, annual founder gating, failed/pending/unknown outcomes, semantic invalid/future timestamp refusal, duplicate and out-of-order events, refund/dispute/reversal evidence, cancellation/renewal races, cross-organization authorization, restricted runtime direct-DML denial, rollback, exact-key recovery, RLS/ACL/trigger enforcement, and unchanged B6A INACTIVE posture.
 
 It must be registered in the SaaS security inventory, commercial staging fixture/safety/manifest chain, full database-proof runner, and PR CI path filters. No historical migration checksum may change. The isolated commercial fixture must finish with no B2 rows, provider program disabled, paid access inactive, no entitlement/capability/credit effects, and no network/provider operation.
 
