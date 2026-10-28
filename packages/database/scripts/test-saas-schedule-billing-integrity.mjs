@@ -100,6 +100,8 @@ try {
   await deny(()=>schedules.ingestVerifiedTestEvidence(futureOccurredAt,futureOccurredAtDigest),400,'INVALID_SAAS_INPUT');
   const paid=baseEvent('evt_'+K().replaceAll('-','_')),paidReceipt=await schedules.ingestVerifiedTestEvidence(paid,await digest(paid));
   assert.equal(paidReceipt.outcome,'APPLIED');assert.equal(paidReceipt.qualifyingPaidPeriodCount,1);assert.equal(paidReceipt.accessGranted,false);
+  const storedPaidEvent=await row('SELECT provider_occurred_at,received_at FROM hon.saas_schedule_provider_events WHERE provider_event_id=$1',[paid.eventId]);
+  assert.equal(storedPaidEvent.provider_occurred_at.toISOString(),paid.occurredAt);assert(storedPaidEvent.received_at instanceof Date);
   assert.deepEqual(await schedules.ingestVerifiedTestEvidence(paid,await digest(paid)),paidReceipt,'same event replays immutable original evidence');
   const concurrent=baseEvent('evt_'+K().replaceAll('-','_'),24900,'2031-02-01T00:00:00.000Z','2031-03-01T00:00:00.000Z');
   const concurrentDigest=await digest(concurrent),concurrentReceipts=await Promise.all([schedules.ingestVerifiedTestEvidence(concurrent,concurrentDigest),schedules.ingestVerifiedTestEvidence(concurrent,concurrentDigest)]);
