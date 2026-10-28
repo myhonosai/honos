@@ -1,40 +1,66 @@
 flowchart TD
-  Owner[Owner policy bundle and G1 approval]
-  G0[G0: PR #80 fresh evidence and independent review]
-  C1[2B-1 joint V1 contract checkpoint\nreserve 0190 only]
-  C2[2B-2 private authority and receipt schema\nconsume 0190]
+  Coord[Shared 0190 coordination record\nPR #82 existing claim\nno Phase 2B allocation]
+  G1A[G1-A: closed V1 vectors\nrecovery + lock + reservation]
+  G1B[G1-B: provider-free schema/synthetic gate]
+  G1C[G1-C: protected custody gate]
+  G1D[G1-D: human disposition gate]
+  G1E[G1-E: response-backed UI gate]
+  Pilot[G1-F: separate provider pilot gate]
+
+  C1[2B-1 documentation/vectors only\nrecords coordination — no DDL]
+  C2[2B-2 private authority/receipt schema\nrequires fresh approved allocation]
   C3[2B-3 provider-free deterministic simulator]
   C4[2B-4 protected candidate custody]
   C5[2B-5 direct-human reviewed CRM effect]
   C6[2B-6 Integration Review UI]
-  Pilot[Separate provider pilot gate]
 
-  Owner --> C1
-  G0 --> C1
-  C1 --> C2 --> C3 --> C4 --> C5 --> C6 --> Pilot
+  Coord --> C1
+  G1A --> C1
+  C1 --> C2
+  G1B --> C2
+  C2 --> C3
+  G1B --> C3
+  C3 --> C4
+  G1C --> C4
+  C4 --> C5
+  G1D --> C5
+  C5 --> C6
+  G1E --> C6
+  C6 --> Pilot
 
-  subgraph Ingress[Boundary A — no provider activation]
-    Verify[Fixed endpoint + signing verification\nraw bytes before parse]
-    Reserve[Reserve event identity + digest]
-    Route[Historical installation → connection → grant → mapping]
-    Outcome[Commit one bounded outcome]
-    Verify --> Reserve --> Route --> Outcome
+  subgraph Ingress[Boundary A — provider-neutral / no CRM effect]
+    Verify[Fixed endpoint + eligible signing generation\nraw bytes verified before parse]
+    Receipt[Reserve canonical event receipt\nidentity + versioned digest]
+    Classify[Replay / immutable conflict classification]
+    Route[Historical source asset → connection → grant → mapping]
+    Durable[Commit receipt state + bounded outcome\neligible route: ROUTED_TO_REVIEW]
+    Ack[Only then synthetic adapter acknowledgement]
+    Verify --> Receipt --> Classify --> Route --> Durable --> Ack
   end
 
   subgraph Review[Boundary B — direct-human only]
-    Reauth[Current human/school/capability/entitlement reauthorization]
-    Recover[Original K result recovery\nor unchanged-K fresh check]
-    Atomic[One atomic decision + case close + unique effect\ncanonical CRM lead + provenance + audit + inert evidence]
-    Reauth --> Recover --> Atomic
+    ReadAuth[Same human + frozen school\ncurrent result-read authorization]
+    Reconcile[Reconcile original durable K\nunchanged fingerprint/capsule]
+    ResultStop[Committed K: return scoped result\nSTOP — zero new writes]
+    Conceal[Read denied or scoped receipt unavailable\nconceal/deny — STOP]
+    FreshGate[Proven no durable K result\ncurrent decide/create/entitlement\nversion + effect + post-wait checks]
+    FreshStop[Fresh gate denied/drift\nSTOP — zero new writes]
+    Atomic[One atomic decision + case closure\nunique source-occurrence effect\ncanonical lead + provenance/result\naudit + structurally inert evidence]
+    ReadAuth --> Reconcile
+    Reconcile -->|committed durable result| ResultStop
+    Reconcile -->|read denied / unavailable| Conceal
+    Reconcile -->|proven no durable K result| FreshGate
+    FreshGate -->|approved| Atomic
+    FreshGate -->|denied / drift| FreshStop
   end
 
   C3 -. provider-free evidence only .-> Ingress
-  C5 -. approved future backend proof .-> Review
-  Outcome -. no candidate/CRM/provider effect .-> Hold[Fail closed until later gate]
+  C5 -. future approved backend proof .-> Review
+  Durable -. no candidate / provider / CRM effect .-> Hold[Fail closed until later approved slice]
 
   classDef gate fill:#2b183f,stroke:#d9b7ff,color:#fff
   classDef boundary fill:#0f2f3d,stroke:#7ee1ff,color:#fff
   classDef stop fill:#3b2020,stroke:#ffaaa0,color:#fff
-  class Owner,G0,C1,C2,C3,C4,C5,C6,Pilot gate
-  class Verify,Reserve,Route,Outcome,Reauth,Recover,Atomic boundary
-  class Hold stop
+  class Coord,G1A,G1B,G1C,G1D,G1E,Pilot,C1,C2,C3,C4,C5,C6 gate
+  class Verify,Receipt,Classify,Route,Durable,Ack,ReadAuth,Reconcile,FreshGate,Atomic boundary
+  class ResultStop,Conceal,FreshStop,Hold stop
