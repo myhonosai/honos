@@ -1,6 +1,8 @@
 /** Deterministic no-I/O fake. Test fixture only; never production DI or environment selected. */
+const {createHash}=require('node:crypto');
+const canonical=value=>Array.isArray(value)?'['+value.map(canonical).join(',')+']':value&&typeof value==='object'?'{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}':JSON.stringify(value);
 class DeterministicScheduleProvider {
-  identity='DETERMINISTIC_FAKE'; mode='TEST'; calls=0;
+  identity='DETERMINISTIC_FAKE'; mode='TEST'; calls=0; bindings=new Map();
   async inspectSchedule(requirements){
     this.calls++;
     return {identity:this.identity,mode:this.mode,evidenceKind:'DETERMINISTIC_FAKE',outcome:'OBSERVED',
@@ -8,6 +10,16 @@ class DeterministicScheduleProvider {
       scheduleReference:'fake_schedule_'+requirements.generationId,requirements:structuredClone(requirements),
       phaseControl:requirements.introductoryPaidPeriods?'VERIFIED_PAID_PERIOD_GATE':'FIXED_PRICE',
       automaticCalendarTransition:false,automaticCollectionEnabled:false};
+  }
+  async bindOrFindSchedule({bindingId,bindingKey,requirementsDigest,requirements}){
+    this.calls++;
+    const existing=this.bindings.get(bindingKey);
+    if(existing) return {...existing,outcome:'ALREADY_BOUND'};
+    const observation={identity:this.identity,mode:this.mode,outcome:'BOUND',bindingId,bindingKey,
+      requirementsDigest,
+      accountReference:'fake_account_'+bindingId,subscriptionReference:'fake_subscription_'+bindingId,
+      scheduleReference:'fake_schedule_'+bindingId,automaticCalendarTransition:false,automaticCollectionEnabled:false};
+    this.bindings.set(bindingKey,observation);return observation;
   }
 }
 module.exports={DeterministicScheduleProvider};

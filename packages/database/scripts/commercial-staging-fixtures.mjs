@@ -63,9 +63,9 @@ export async function shippedPosture(client, migrationEvidence) {
     assert.equal(trialRecords[table],0,'Shipped posture must contain no synthetic trial proposal, approval or publication.');
   }
   const pricingRecords={};
-  for(const table of ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances']){
+  for(const table of ['saas_subscription_generations','saas_schedule_bindings','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_price_schedules','saas_price_acceptances']){
     pricingRecords[table]=(await client.query('SELECT count(*)::int n FROM hon.'+table)).rows[0].n;
-    assert.equal(pricingRecords[table],0,'Shipped posture must contain no synthetic price schedules or acceptance.');
+    assert.equal(pricingRecords[table],0,'Shipped posture must contain no synthetic Commercial A2/B1/B2 record.');
   }
   return { programs, records, terms, constraints, counts, decisions, trialProgram, trialRecords, pricingRecords,
     policyGap: 'PAID_ACCESS_PROPOSED; TERMS_V1_IMMUTABLE_PROPOSED_ONLY; EXCEPTION_APPROVAL_GATE_ENFORCED; NO_EXCEPTION_POLICY_APPROVED' };

@@ -1,6 +1,6 @@
 {
   "baseline": "5e110057612b4846a73e4be7a45ead5212c1ffc2",
-  "chainSha256": "b7dce98118db15b7f0b23d68c7f7ea2d7390e7a417eea47da279e190df3a403e",
+  "chainSha256": "8811b1f3956bdc202b2bd58d07e4f4f9d7cc9276d5970b8fb6745637a1d00b67",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -41,6 +41,10 @@
     {
       "file": "0190_a2p_registration_preparation.sql",
       "sha256": "266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638"
+    },
+    {
+      "file": "0191_commercial_b2_schedule_billing.sql",
+      "sha256": "351e204bc1f60ec9587bb2951d9e07ea38c42eeb43c79e5424a35d548ab6c7b6"
     }
   ]
 }
