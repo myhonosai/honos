@@ -45,19 +45,22 @@ All ordinary rows remain organization/school composite-scoped where applicable, 
 
 ### 2.1 Installation and purpose-separated custody
 
+The following field shapes are **non-normative illustrations**, not frozen V1 DTOs, persisted types, or new lifecycle enums. Where a lifecycle is eventually persisted, it must use the Phase 2A canonical vocabulary rather than introduce a competing enum.
+
 ```text
 IntegrationInstallationV1
   installationId (server generated)
   providerKind (closed enum)
   endpointKind (closed enum)
   signingKeyGenerationId (opaque historical selector)
-  lifecycle (disabled | proposed | active-for-synthetic-test | revoked)
+  lifecycle (Phase 2A `PlatformInstallation`: CONFIGURED | DISABLED | ERROR)
+  syntheticTestEligibility (derived/test-only policy, not a lifecycle value)
 
 CredentialBindingReferenceV1
   bindingId (opaque)
   purpose (webhook-signature | provider-data-operation)
   keyVersion (opaque version, never material)
-  lifecycle (proposed | active | rotated | revoked | disabled)
+  lifecycle (Phase 2A `CredentialBinding`: PROPOSED | CONFIGURED | ROTATING | REVOKED | DISABLED | ERROR)
   custodyPolicyVersion
 ```
 
@@ -130,12 +133,27 @@ Ingress remains provider-neutral and has no CRM effect. Its fixed order is:
 1. fixed endpoint and eligible signing-key generation;
 2. bounded raw-byte signature verification **before** parsing or trusting body context;
 3. event-identity reservation;
-4. digest replay/conflict classification;
-5. historical source-asset/connection/grant/mapping resolution;
+4. digest replay/conflict classification with terminal reconciliation branches:
+   - same identity plus the same comparable digest returns the original durable result and **STOPs** without historical rerouting or a new outcome write;
+   - same identity plus a conflicting comparable digest records/returns immutable `IDENTITY_CONFLICT` and **STOPs** fail-closed without historical rerouting, a fresh identity, or CRM effect;
+   - unavailable or ambiguous durable evidence requires reconciliation and **STOPs** without a fresh identity or CRM effect; and
+   - only a new verified event proceeds;
+5. historical source-asset/connection/grant/mapping resolution for that new verified event;
 6. one durable receipt state plus bounded outcome; and only then
 7. adapter response.
 
 No acknowledgement may precede the durable outcome. An eligible uniquely routed receipt uses canonical `ReceiptState.ROUTED_TO_REVIEW`; this receipt state is distinct from the six fail-closed routing outcome/reason codes and is not a seventh outcome.
+
+### 3.1 Remaining G1-A V1 closure checklist — not implemented or approved
+
+G1-A remains open. Freezing V1 requires a jointly reviewed, closed artifact covering each item below; this documentation does not claim that any DTO, enum, field bound, test vector, SQL map, or code boundary exists yet.
+
+1. **Closed DTOs, enums, and field bounds** for installation, opaque binding reference, exact asset grant, mapping revision, receipt, source occurrence, review case, disposition request, CRM effect, and scoped result; illustrative shapes above are not the final types.
+2. **Source-occurrence and digest canonicalization vectors** for fixed identity inputs, versioned digest inputs, same-identity/same-digest replay, same-identity/conflicting-digest immutable conflict, and prohibited mutable/current-map/browser inputs.
+3. **Historical mapping and cutover vectors** for a contiguous `[effectiveFrom, effectiveUntil)` A→B boundary (`t < T → A`, `t = T → B`), delayed first-seen events, reconnect continuity, gaps, overlaps, and untrusted/ambiguous timestamps.
+4. **Retry, recovery, and revocation vectors** for original-K result read/reconcile/STOP, unavailable durable evidence, proven-no-result fresh mutation, post-wait rechecks, operation-plane revocation, response loss, rollback, and zero-new-write terminals.
+5. **Shared SQL lock and code-boundary map** for the authorization prefix, Boundary A reservation/classification/routing, Boundary B result-read versus fresh mutation, canonical CRM primitive, outer-transaction rollback, and inert-consumer exclusion.
+6. **Migration reservation status:** PR #82 retains the owner-approved physical `0190` priority; Phase 2B integration allocation remains unassigned, requires a later explicit shared allocation, and authorizes neither DDL nor a migration now.
 
 | Outcome | Durable handling | School visibility | Adapter behavior |
 | --- | --- | --- | --- |

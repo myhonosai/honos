@@ -31,12 +31,19 @@ flowchart TD
   subgraph Ingress[Boundary A — provider-neutral / no CRM effect]
     Verify[Fixed endpoint + eligible signing generation\nraw bytes verified before parse]
     Receipt[Reserve canonical event receipt\nidentity + versioned digest]
-    Classify[Replay / immutable conflict classification]
+    Classify[Classify reserved receipt\nidentity + versioned digest]
+    ReplayReturn[Same identity + same digest\nreturn original durable result\nSTOP — no reroute/new outcome]
+    ConflictStop[Same identity + conflicting digest\nimmutable IDENTITY_CONFLICT\nSTOP — fail closed]
+    EvidenceReconcile[Durable evidence unavailable/ambiguous\nreconciliation required\nSTOP — no fresh identity/CRM effect]
     Route[Historical source asset → connection → grant → mapping]
     Cutover[Trusted contiguous cutover:\nt less than T → A; t = T → B\ngaps / overlaps / untrusted time fail closed]
     Durable[Commit receipt state + bounded outcome\neligible route: ROUTED_TO_REVIEW]
     Ack[Only then synthetic adapter acknowledgement]
-    Verify --> Receipt --> Classify --> Route --> Cutover --> Durable --> Ack
+    Verify --> Receipt --> Classify
+    Classify -->|new verified event| Route --> Cutover --> Durable --> Ack
+    Classify -->|same identity + same digest| ReplayReturn
+    Classify -->|same identity + conflicting digest| ConflictStop
+    Classify -->|unavailable / ambiguous durable evidence| EvidenceReconcile
   end
 
   subgraph Review[Boundary B — direct-human only]
@@ -64,4 +71,4 @@ flowchart TD
   classDef stop fill:#3b2020,stroke:#ffaaa0,color:#fff
   class Coord,G1A,G1B,G1C,G1D,G1E,Pilot,C1,C2,C3,C4,C5,C6 gate
   class Verify,Receipt,Classify,Route,Cutover,Durable,Ack,ReadAuth,Reconcile,FreshGate,Atomic boundary
-  class ResultStop,Conceal,FreshStop,Hold stop
+  class ReplayReturn,ConflictStop,EvidenceReconcile,ResultStop,Conceal,FreshStop,Hold stop
