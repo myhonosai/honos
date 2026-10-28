@@ -26,6 +26,8 @@ import { verifyRetentionReviewSecurity } from './retention-review-security.mjs';
 import { ownerLaunchTables, verifyOwnerLaunchSecurity } from './owner-launch-security.mjs';
 import { requireOwnerLaunchLocalUrls } from './owner-launch-local-guard.mjs';
 import pg from 'pg';
+import { verifiedDatabaseConnection } from '../dist/index.js';
+import { verifyPlatformLeastPrivilege } from './platform-least-privilege-security.mjs';
 import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
 import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
@@ -233,10 +235,7 @@ const curriculumFunctions = [
   ['hon.guard_curriculum_structure_identity()', false, false],
 ];
 
-const client = new Client({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-});
+const client = new Client(verifiedDatabaseConnection(process.env.DATABASE_URL));
 await client.connect();
 try {
   await verifyOwnerLaunchSecurity(client,runtimeRoleName);
@@ -814,6 +813,7 @@ try {
   }
 
   await verifyCrmLeadCloseSecurity(client, runtimeRoleName);
+  await verifyPlatformLeastPrivilege(client);
   const context = await client.query("SELECT hon.current_organization_id() AS organization_id, hon.current_school_id() AS school_id");
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');
