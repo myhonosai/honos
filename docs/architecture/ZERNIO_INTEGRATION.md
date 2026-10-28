@@ -1,7 +1,8 @@
 # Zernio: secure configuration and credential verification
 
 Original audit baseline: `5e110057612b4846a73e4be7a45ead5212c1ffc2`.
-PR #80 reconciliation baseline: `780424c72f226123ad078b74b432d8dc9d8dbd5f`,
+PR #80 was reconciled against `780424c72f226123ad078b74b432d8dc9d8dbd5f` and is now
+merged into canonical `main` at `2877a2711c8831be8bff3fa4c37ad81905255c2f`,
 including accepted Meta #79 and merged #84–#86. The original platform-only scope
 is unchanged. The Phase 2A documents below govern future integration development;
 their historical PR-status wording is not current implementation evidence.
@@ -156,6 +157,18 @@ separate owner authorization. AI receives no raw key, provider tool access or
 automatic sending authority. Unknown writes must be reconciled, not replayed
 without an endpoint-specific idempotency guarantee.
 
+## Exact-head evidence and verification scope
+
+Draft-safe integration run `40442381437` completed on PR #80 head
+`2877a2711c8831be8bff3fa4c37ad81905255c2f`: 1,957 workspace tests, full typecheck,
+production build, 181-migration validation, 41 guarded disposable PostgreSQL proofs,
+nine signed-session API/actual-HQ-resolver groups with only a deterministic injected
+provider, and 16 mounted browser scenarios with 12 scoped axe scans. Its companion
+regular draft CI run `40442381433` was skipped with zero steps and is not passing
+evidence. This source-only evidence does not authorize configuring a real key,
+setting `HON_ZERNIO_VERIFICATION_APPROVED=true`, performing a provider request, or
+starting any connection, school grant, ingress, CRM, AI, payment, or external effect.
+
 ## Verification scope
 
 The existing API unit/HTTP tests use synthetic signed sessions and a mocked HQ
@@ -186,4 +199,3 @@ and artifact links in the PR after checks finish, separating local limitations
 and historical results. No operational provider, school authorization, encrypted
 tenant vault, webhook, CRM mutation, deployment or activation is validated here.
 Keep `HON_ZERNIO_VERIFICATION_APPROVED` disabled outside synthetic injected tests.
-
