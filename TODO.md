@@ -1,3 +1,10 @@
+## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
+
+- Reuse deployment-owned OIDC and HON IAM; invite an exact approved organization/school, bind verified email and issuer-scoped subject, expire/revoke/single-use accept with immutable retries and private evidence.
+- No billing/access/AI activation. School-owner login is separate from operating entitlements. Full self-service registration, staff/parent invitations and reviewed identity replacement remain launch-critical sequenced dependencies, not optional beta scope.
+- Preserve approved main HON design and all existing shared assets/modes. No old Manus PR #27 or unmerged visual replacement.
+- Verification pending. Migration 0191 avoids unmerged A2P #82's 0190; 0179/0180 stay reserved.
+
 # HON Delivery Backlog
 
 ## Zernio secure integration foundation — Codex

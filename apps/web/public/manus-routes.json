@@ -366,11 +366,19 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers · Design review"
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
     },
     {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/account/owner-invitation",
+      "title": "HON OS | Owner invitation"
+    },
+    {
+      "path": "/hq/school-owner-invitations",
+      "title": "HON HQ | Owner invitations"
     }
   ]
 }

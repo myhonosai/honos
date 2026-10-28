@@ -9,7 +9,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const config = sessionConfig();
     const token = cookieValue(request.headers.get('cookie'), HON_SESSION_COOKIE);
-    if (token) return NextResponse.json({ data: verifySession(token, config) }, { headers: NO_STORE });
+    if (token) {
+      const { emailVerified: _proof, ...identity } = verifySession(token, config);
+      return NextResponse.json({ data: identity }, { headers: NO_STORE });
+    }
     // Rolling development-session migration only. A present but invalid HON cookie never falls back.
     const legacy = config.mode === 'MANUS_DEVELOPMENT' ? cookieValue(request.headers.get('cookie'), MANUS_SESSION_COOKIE) : undefined;
     if (!legacy) return authError('UNAUTHENTICATED', 'HON requires an authenticated application session.', 401);
