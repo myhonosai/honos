@@ -44,7 +44,8 @@ Required deterministic cases:
 - First accept event E/source occurrence S under historical School A. Reconnect/change connection version and remap the source asset A→B. A repeated same installation/event identity and digest is the original A-scoped replay; it creates no B receipt/case/occurrence/effect.
 - Same stable event identity with changed comparable digest is immutable conflict, not a new event/case/effect.
 - A delayed first-seen A-time event resolves A from historical `[effectiveFrom, effectiveUntil)` evidence; a B-time new identity resolves B only.
-- Exact cutover, gap, overlap, missing/malformed/untrusted timestamp, and post-wait mapping change cases fail closed through existing bounded outcomes. None falls back to receipt time/current mapping/default account.
+- For one trusted contiguous A→B lineage where A ends at `T` and B begins at `T`, use the half-open rule exactly: a new identity at `t < T` routes A and a new identity at `t = T` routes B. This valid boundary vector is not ambiguous and is not a fail-closed case.
+- A gap, overlap, missing/malformed/untrusted timestamp, genuinely ambiguous evidence, or post-wait mapping change fails closed through an existing bounded outcome. None falls back to receipt time/current mapping/default account.
 - Source-asset lineage continuity and distinct-asset noncollision are explicit: reconnect does not mint a dedupe namespace, but unrelated proven lineages do not merge matching provider labels.
 
 ## 4. Review visibility and privacy
