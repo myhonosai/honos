@@ -216,14 +216,15 @@ Serialization/deadlock/unknown-response handling restarts at the shared authoriz
 
 | Field | Current coordination value |
 | --- | --- |
-| State | `PENDING_COORDINATOR_DECISION` |
-| Existing claim | PR #82, branch `codex/a2p-1-backend`, head `e35754188a618167305696a3e021fcc629f4fc3b` |
+| State | Owner-approved priority reservation: PR #82 holds the existing physical `0190` claim |
+| Owner decision evidence | [PR #87 owner priority decision](https://github.com/myhonosai/honos/pull/87#issuecomment-6460748455) |
+| Approved priority holder | PR #82, branch `codex/a2p-1-backend`, head `e35754188a618167305696a3e021fcc629f4fc3b` |
 | Existing file | `packages/database/migrations/0190_a2p_registration_preparation.sql` |
 | Recorded content checksum | SHA-256 `266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638` |
 | Main high-water mark at review | 181 files through `0189` |
-| Phase 2B status | 2B-1 records coordination only; 2B-2 has **no assigned migration number** |
+| Phase 2B status | 2B-1 records the resolved reservation only; 2B-2 has **no assigned migration number** and must obtain a later explicit shared allocation |
 
-The one authoritative future record must identify both claims, coordinator/owner decision and timestamp, approval evidence, one approved consumer, eventual merge commit, and post-merge validation. PR number, branch age, draft status, or mergeability never establishes priority. Recommended default: recognize PR #82's pre-existing physical claim, while keeping #82 subject to its own review/conflict/authorization gates. If no priority decision exists, both DDL paths remain blocked. Do not rename #82, silently select a replacement number, or add a migration in this documentation PR.
+The owner decision above resolves priority for the existing `0190` claim only. It is not permission to merge or advance PR #82 and does not authorize Phase 2B runtime work, DDL, or any migration. PR #82 remains subject to its independent review, conflict, security, CI, and owner-approval gates. The one authoritative **future allocation** record for a Phase 2B consumer must identify the approved consumer and newly available number, timestamp, review/approval evidence, eventual merge commit, and post-merge validation after rechecking canonical main and concurrent branches. Do not rename #82, silently select a replacement number, or add a migration in this documentation PR.
 
 ## 8. Ownership and required future evidence
 

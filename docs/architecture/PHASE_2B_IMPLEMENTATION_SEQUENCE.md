@@ -10,14 +10,14 @@ The current decision is **NO-GO for runtime work**. A potential 2B-1 documentati
 
 ### Shared migration coordination record
 
-`0179` and `0180` remain untouched. PR #82 is the known existing physical `0190` claim:
+`0179` and `0180` remain untouched. The owner-approved [PR #87 priority decision](https://github.com/myhonosai/honos/pull/87#issuecomment-6460748455) establishes PR #82 as the priority holder for the existing physical `0190` claim:
 
 - PR #82 / branch `codex/a2p-1-backend`, head `e35754188a618167305696a3e021fcc629f4fc3b`;
 - `packages/database/migrations/0190_a2p_registration_preparation.sql`;
 - recorded content checksum: SHA-256 `266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638`; and
 - reviewed main high-water mark: 181 migration files through `0189`.
 
-The status is **`PENDING_COORDINATOR_DECISION`**. 2B-1 records coordination only and creates no migration/DDL. 2B-2 has no allocated migration number. Before any DDL, one owner/coordinator record must name both claims, the one approved consumer, decision/timestamp/evidence, eventual merge commit, and post-merge validation. Recommended default: recognize #82's existing physical claim while retaining its independent review/conflict/authorization gates. If no priority exists, both DDL paths remain blocked. Never rename #82, silently allocate a replacement number, or infer priority from PR age/status.
+This resolves the priority reservation only. It neither permits PR #82 to merge nor authorizes Phase 2B runtime work, DDL, or a migration. 2B-1 records the resolved reservation only and creates no migration/DDL. 2B-2 has no allocated migration number. Before a later 2B-2 DDL proposal, a fresh shared allocation record must name the approved future consumer and available number, timestamp, review/approval evidence, eventual merge commit, and post-merge validation after rechecking canonical main and concurrent branches. Never rename #82, silently allocate a replacement number, or infer any future allocation from PR age/status.
 
 ## 2. Per-slice approval matrix
 
@@ -49,6 +49,6 @@ The established HON direction remains glass-like, responsive, and smooth. Those 
 
 - **Codex:** preserve PR #80 source-only disabled controls; co-sign 2B-1; lead later 2B-2/2B-3 only after their gate; cross-review all owner-boundary evidence.
 - **Manus:** own integration review/disposition/provenance semantics, later canonical CRM primitive/no-effect proof design, co-sign 2B-1, and review 2B-2/2B-3.
-- **Owner/coordinator:** record the #82/0190 priority decision; authorize each gate/slice; separately approve any provider/sandbox/pilot path.
+- **Owner/coordinator:** preserve the recorded owner-approved #82/0190 priority reservation; authorize each remaining gate/slice; separately approve any provider/sandbox/pilot path.
 
 No provider pilot, OAuth, account connection, webhook registration, paid call, credential use, deployment, customer messaging, ad spend, Verified Auto-Create, or Pitbull payment activity follows from this sequence.
