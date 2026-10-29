@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 
 export const fixture = Object.freeze({ database: 'hon_champions_validation', owner: 'hon_champions_owner', runtime: 'hon_champions_runtime', marker: 'HON disposable Champions Club validation' });
 export const proofs = Object.freeze([
+  ['test-saas-schedule-billing-integrity.mjs','0191 Commercial B2 TEST-only schedule binding and verified paid-period reconciliation','synthetic deterministic provider evidence only; no network, checkout, collection, access, trial, or credit activation'],
   ['test-saas-subscription-generation-integrity.mjs','0189 Commercial B1 immutable generation lineage and fail-closed provider boundary','synthetic generation intent only; no provider evidence/billing/activation'],
   ['test-saas-price-acceptance-integrity.mjs','0188 Commercial A2 immutable pricing and customer acceptance','synthetic offer publication/acceptance only; no checkout, grants or provider traffic'],
   ['test-saas-trial-governance-integrity.mjs','0187 D11-A trial policy/campaign governance and separation','synthetic approvals/publications only; trial activation INACTIVE; zero access/credits'],
@@ -55,9 +56,9 @@ export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export function validateMigrationEvidence(entries, expected) {
   assert(entries.length && new Set(entries.map(x => x.file.slice(0, 4))).size === entries.length, 'Duplicate migration number.');
   assert(!entries.some(x => /^(0179|0180)_/.test(x.file)), 'Reserved migrations must remain absent.');
-  assert(entries.at(-1).file.startsWith('0190_'), 'Unreviewed migration ceiling.');
+  assert(entries.at(-1).file.startsWith('0191_'), 'Commercial B2 migration ceiling.');
   assert.equal(sha256(JSON.stringify(entries)), expected.chainSha256, 'Migration chain differs from the reviewed baseline.');
-  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0190 checksum mismatch.');
+  for (const target of expected.targets) assert.deepEqual(entries.find(x => x.file === target.file), target, '0181–0191 checksum mismatch.');
   return { count: entries.length, chainSha256: expected.chainSha256, targets: expected.targets, entries };
 }
 export async function readMigrationEvidence() {

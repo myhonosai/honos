@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { validateSaasSubscriptionGeneration, type SaasSubscriptionGeneration } from '@hon/contracts';
 
 /** Server-only boundary. No production adapter is configured by B1; fake implementations are test-injected only. */
+export const SUBSCRIPTION_SCHEDULE_PROVIDER = Symbol('SUBSCRIPTION_SCHEDULE_PROVIDER');
 export interface ProviderSubscriptionScheduleAdapter {
   readonly identity: string;
   readonly mode: 'TEST';
   inspectSchedule(requirements: ProviderScheduleRequirements): Promise<ProviderScheduleObservation>;
+  /** A test-only binding key must be reused after an unknown outcome; never collect or calendar-advance. */
+  bindOrFindSchedule(request: ProviderScheduleBindingRequest): Promise<ProviderScheduleBindingObservation>;
 }
 export interface ProviderScheduleRequirements {
   readonly generationId: string; readonly generationDigest: string;
@@ -28,12 +31,23 @@ export interface ProviderScheduleObservation {
   readonly automaticCalendarTransition: boolean;
   readonly automaticCollectionEnabled: false;
 }
+export interface ProviderScheduleBindingRequest {
+  readonly bindingId: string; readonly bindingKey: string; readonly requirementsDigest: string; readonly requirements: ProviderScheduleRequirements;
+}
+export interface ProviderScheduleBindingObservation {
+  readonly identity: 'DETERMINISTIC_FAKE'; readonly mode: 'TEST'; readonly outcome: 'BOUND' | 'ALREADY_BOUND';
+  readonly bindingId: string; readonly bindingKey: string; readonly requirementsDigest: string;
+  readonly accountReference: string; readonly subscriptionReference: string; readonly scheduleReference: string;
+  readonly automaticCalendarTransition: false; readonly automaticCollectionEnabled: false;
+}
 const canonical = (value: unknown): string => {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value && typeof value === 'object') return '{' + Object.entries(value).sort(([a],[b]) => a.localeCompare(b))
     .map(([k,v]) => JSON.stringify(k) + ':' + canonical(v)).join(',') + '}';
   return JSON.stringify(value);
 };
+export const providerScheduleRequirementsDigest = (requirements: ProviderScheduleRequirements) =>
+  createHash('sha256').update(canonical(requirements)).digest('hex');
 export function subscriptionScheduleRequirements(value: SaasSubscriptionGeneration): ProviderScheduleRequirements {
   const g = validateSaasSubscriptionGeneration(value), a = g.acceptance, s = a.schedule, t = s.terms;
   const result: ProviderScheduleRequirements = { generationId:g.generationId, generationDigest:g.generationDigest,
@@ -69,4 +83,5 @@ export function verifyProviderScheduleParity(expected: ProviderScheduleRequireme
 export class UnconfiguredSubscriptionScheduleProvider implements ProviderSubscriptionScheduleAdapter {
   readonly identity = 'UNCONFIGURED'; readonly mode = 'TEST' as const;
   async inspectSchedule(): Promise<ProviderScheduleObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
+  async bindOrFindSchedule(): Promise<ProviderScheduleBindingObservation> { throw new Error('SAAS_SCHEDULE_PROVIDER_UNAVAILABLE'); }
 }

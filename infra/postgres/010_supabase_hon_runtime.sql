@@ -1953,3 +1953,18 @@ DO $$ DECLARE r text; BEGIN
  REVOKE ALL ON FUNCTION hon.read_a2p_preparation_scope(text) FROM PUBLIC;
  GRANT EXECUTE ON FUNCTION hon.read_a2p_preparation_scope(text) TO hon_runtime;
 END $$;
+
+-- Commercial B2 is optional while its dependent migration remains a draft. This
+-- final reconciliation runs after every broader SaaS revocation above. If the
+-- private TEST-only boundary exists, restore only its five fixed runtime procedures;
+-- helpers and tables remain unreachable.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)') IS NOT NULL THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION hon.start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid),'
+      || 'hon.record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid),'
+      || 'hon.read_saas_schedule_binding(text,uuid,uuid),'
+      || 'hon.read_saas_schedule_binding_from_hq(text,uuid),'
+      || 'hon.ingest_saas_schedule_evidence(jsonb,text) TO hon_runtime';
+  END IF;
+END $$;
