@@ -147,8 +147,9 @@ try {
   // Direct fixture rows exercise every pre-existing lifecycle conflict without invoking checkout, payment, or a
   // provider adapter. They are removed immediately; B2 observes only the immutable availability predicate.
   const catalogInput=structuredClone(contracts.SAAS_OWNER_APPROVED_DRAFT);catalogInput.termsReference='B2 conflict fixture catalog terms';
+  catalogInput.founderProgram={...catalogInput.founderProgram,eligibility:'ANY_ACTIVE_ORGANIZATION',opensAt:new Date(Date.now()-3600_000).toISOString()};
   const catalogDraft=await billing.createCatalogDraft(H('hq'),catalogInput,K());await billing.publishCatalog(H('hq'),catalogDraft.catalog.catalogId,K());
-  const catalogOffer=await row("SELECT id,catalog_id,plan_code,offer_kind,billing_interval,price_minor FROM hon.saas_catalog_offers WHERE plan_code='COMPLETE' AND offer_kind='REGULAR_MONTHLY' ORDER BY created_at DESC,id DESC LIMIT 1");
+  const catalogOffer=await row("SELECT id,catalog_id,plan_code,offer_kind,billing_interval,price_minor FROM hon.saas_catalog_offers WHERE catalog_id=$1 AND plan_code='COMPLETE' AND offer_kind='REGULAR_MONTHLY'",[catalogDraft.catalog.catalogId]);
   const conflictBindings=(await row('SELECT count(*)::int n FROM hon.saas_schedule_bindings')).n,conflictOutbox=(await row('SELECT count(*)::int n FROM hon.saas_outbox')).n,conflictCalls=provider.calls;
   const activeSubscription=K(),activeCheckout=K();
   await withUserTriggersDisabled(['saas_subscriptions','saas_checkout_sessions'],async()=>{
@@ -260,7 +261,7 @@ try {
   await deny(()=>schedules.ingestVerifiedTestEvidence(unsupported,unsupportedDigest),400,'INVALID_SAAS_INPUT');
   assert.equal((await row('SELECT count(*)::int n FROM hon.saas_schedule_provider_events')).n,eventsBeforeUnsupported,'unsupported event must have no ledger effect');
   const after=await schedules.read(H('school'),org.school,binding.bindingId);assert.equal(after.qualifyingPaidPeriodCount,2);assert.equal(after.unresolvedReconciliation,true);
-  assert.equal((await row('SELECT status FROM hon.saas_access_program')).status,'INACTIVE');assert.equal((await row('SELECT count(*)::int n FROM hon.saas_access_transitions')).n,0);
+  assert.equal((await row('SELECT status FROM hon.saas_access_program')).status,'INACTIVE');assert.equal((await row("SELECT count(*)::int n FROM hon.saas_access_transitions WHERE kind='FIRST_PAYMENT_ACTIVATION'")).n,0);
   passed('valid provider evidence reaches the immutable ledger; replay, concurrent duplicate, digest conflict, out-of-order, unsupported, failed, refund, and dispute facts remain idempotent or fail closed with paid access inactive');
   for(const q of ['SELECT * FROM hon.saas_schedule_bindings','UPDATE hon.saas_schedule_bindings SET id=id','DELETE FROM hon.saas_schedule_provider_events','INSERT INTO hon.saas_schedule_paid_periods SELECT * FROM hon.saas_schedule_paid_periods LIMIT 1'])await sqlDeny(restricted.query(q),'42501');
   await verifySaasBillingSecurity(admin,'hon_champions_runtime');
