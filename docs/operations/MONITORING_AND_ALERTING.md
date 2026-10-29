@@ -31,10 +31,13 @@ Critical-operation failures are 5xx responses on `POST/PUT/PATCH/DELETE` and are
 
 - Only fixed fields are emitted: `ts, level, service, event, diagnosticId, method, route, status, durationMs, operation, component, origin, errorName, sqlState, problemCode, message, stack, context, count`. Anything else a caller passes is dropped.
 - Routes are logged as the matched template (`/v1/leads/:leadId/close`). Query strings are always dropped. Path segments that are not route words or UUIDs become `:value`.
-- PostgreSQL errors keep only the SQLSTATE. `detail`, `where`, parameters and query text are never read. Quoted values in messages (`Key (email)=(…)`, `"…"`) are removed.
-- Free text is scrubbed of emails, phone numbers, card-like numbers, JWTs, bearer/basic credentials, cookies, `key=value` secrets, Stripe/OpenRouter/GitHub/AWS keys, webhook secrets, connection strings, PEM blocks and long opaque tokens. Property names such as email, phone, name, student, parent, guardian, family, note, card, bank, password, token, session and cookie are always dropped.
-- Browsers may send only `{kind, name, digest, path}`, same-origin, ≤ 2 KiB. The error message and stack are never accepted from the browser.
-- Tests: `apps/api/test/observability.test.cjs` and `apps/web/test/web-error-reporting.test.ts` assert that synthetic emails, phone numbers, cards, JWTs, Stripe/OpenRouter keys, DB URLs, cookies and student names never appear in output.
+- **Exception messages are never logged** (API error summaries, Nest warn/error logs, the Next.js `onRequestError` hook). Free text can carry student, family or medical details that no pattern list reliably removes. Records keep the diagnostic id, the error class name, SQLSTATE, HON problem code and well-formed stack frames. The web digest correlates a record with the user's support reference. Only Nest's own fixed lifecycle messages (`NestFactory`, `NestApplication`) are logged as text.
+- PostgreSQL errors keep only the SQLSTATE. `detail`, `where`, parameters and query text are never read.
+- Remaining text fields (paths, framework templates, fixed startup codes) are also scrubbed of emails, phone numbers, card-like numbers, JWTs, bearer/basic credentials, cookies, `key=value` secrets, Stripe/OpenRouter/GitHub/AWS keys, webhook secrets, connection strings, PEM blocks and long opaque tokens. Property names such as email, phone, name, student, parent, guardian, family, note, card, bank, password, token, session and cookie are always dropped.
+- Browsers may send only `{kind, name, digest, path}`, same-origin, ≤ 2 KiB counted in bytes while the body streams in (the upload is cancelled at the limit, whatever `Content-Length` says). The error message and stack are never accepted from the browser. `Sec-Fetch-Site` only stops browsers; the byte limit and rate limit are what bound non-browser clients.
+- Tests: `apps/api/test/observability.test.cjs` and `apps/web/test/web-error-reporting.test.ts` assert that synthetic emails, phone numbers, cards, JWTs, Stripe/OpenRouter keys, DB URLs, cookies, student names and unquoted medical details never appear in output.
+
+- **Limit (not changed by this PR):** Next.js itself still prints uncaught server errors, including their message, to stderr outside this telemetry. Treat raw platform logs as sensitive: restrict who can read them and keep retention short until that output is reviewed.
 
 ## Cost controls
 

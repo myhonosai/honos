@@ -1,13 +1,12 @@
-import { redactTelemetryPath, redactTelemetryText } from '@hon/config';
+import { redactTelemetryPath } from '@hon/config';
 
 // Web server telemetry: one redacted JSON line per event on stdout/stderr for the hosting log drain.
-// Fields are fixed; free text passes through the shared redactor. No paid SDK.
+// Fields are fixed tokens or redacted paths; no free text (exception messages) is accepted. No paid SDK.
 export interface WebTelemetryFields {
   route?: string;
   method?: string;
   digest?: string;
   errorName?: string;
-  message?: string;
   routeType?: string;
   source?: string;
   count?: number;
@@ -33,7 +32,6 @@ export function emitWebTelemetry(level: 'warn' | 'error', event: string, fields:
     errorName: safeToken(fields.errorName, /^[A-Za-z][A-Za-z0-9_]{0,63}$/),
     routeType: safeToken(fields.routeType, /^[a-z]{1,20}$/),
     source: safeToken(fields.source, /^[a-z-]{1,20}$/),
-    message: fields.message === undefined ? undefined : redactTelemetryText(fields.message),
     count: typeof fields.count === 'number' && Number.isSafeInteger(fields.count) ? fields.count : undefined,
   };
   const key = [event, record.route, record.errorName, record.digest].join('|');

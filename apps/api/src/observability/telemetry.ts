@@ -84,16 +84,18 @@ function write(level: TelemetryLevel, event: string, fields: Record<string, unkn
   }
 }
 
+const STACK_FRAME = /^at (?:[\w$.<>\[\] ]{1,120} \()?(?:file:\/\/|node:|\/)[\w$@./:+~-]{1,240}:\d+:\d+\)?$/;
+
 export interface ErrorSummary {
   errorName: string;
   sqlState?: string;
   problemCode?: string;
-  message: string;
   stack: string[];
 }
 
-// Reduces any thrown value to safe operational facts. PostgreSQL `detail`, `where`, parameters and
-// query text are never read; only the SQLSTATE and an HON problem code survive verbatim.
+// Reduces any thrown value to safe operational facts. The exception message is never kept: free text
+// can carry names, medical or payment details that no pattern list reliably removes. PostgreSQL
+// `detail`, `where`, parameters and query text are never read; only fixed codes and frames survive.
 export function summarizeError(error: unknown): ErrorSummary {
   const candidate = (typeof error === 'object' && error !== null ? error : {}) as Record<string, unknown>;
   const rawName = error instanceof Error ? error.constructor?.name || error.name : typeof error;
@@ -103,20 +105,25 @@ export function summarizeError(error: unknown): ErrorSummary {
     ? (candidate as { getResponse: () => unknown }).getResponse()
     : undefined;
   const responseCode = typeof response === 'object' && response !== null ? (response as Record<string, unknown>).code : undefined;
-  const problemCode = typeof responseCode === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(responseCode) ? responseCode : undefined;
+  const problemCode = typeof responseCode === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(responseCode)
+    ? responseCode
+    : errorName === 'DatabaseConnectionConfigurationError' ? 'DATABASE_CONNECTION_CONFIGURATION_INVALID' : undefined;
+  // Only well-formed frames ("at fn (file:line:col)"); a multi-line message cannot pass as a frame.
   const stack = typeof candidate.stack === 'string'
-    ? candidate.stack.split('\n').map((line) => line.trim()).filter((line) => line.startsWith('at ')).slice(0, 8)
+    ? candidate.stack.split('\n').map((line) => line.trim()).filter((line) => STACK_FRAME.test(line)).slice(0, 8)
     : [];
   return {
     errorName,
     ...(sqlState === undefined ? {} : { sqlState }),
     ...(problemCode === undefined ? {} : { problemCode }),
-    message: redactTelemetryText(error instanceof Error ? error.message : typeof error === 'string' ? error : ''),
     stack,
   };
 }
 
 const STARTUP_CHATTER = new Set(['RouterExplorer', 'RoutesResolver', 'InstanceLoader']);
+// Nest's own lifecycle messages are fixed templates. Text from any other source, and anything at
+// warn level or above (which typically embeds an exception message), is not logged.
+const FRAMEWORK_MESSAGE_CONTEXTS = new Set(['NestFactory', 'NestApplication', ...STARTUP_CHATTER]);
 
 // Replaces Nest's default console logger so framework messages are JSON, bounded and redacted.
 export class HonTelemetryLogger implements LoggerService {
@@ -134,9 +141,11 @@ export class HonTelemetryLogger implements LoggerService {
     // Per-route and per-module startup chatter is development noise and log-drain cost in production.
     if (level === 'info' && !this.includeDebug && typeof context === 'string' && STARTUP_CHATTER.has(context)) return;
     const errorLike = message instanceof Error ? message : undefined;
+    const templateMessage = !errorLike && (level === 'info' || level === 'debug') && typeof context === 'string'
+      && FRAMEWORK_MESSAGE_CONTEXTS.has(context) && typeof message === 'string';
     emitTelemetry(level, 'framework.log', {
       context: typeof context === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(context) ? context : undefined,
-      message: errorLike ? summarizeError(errorLike).message : redactTelemetryText(typeof message === 'string' ? message : ''),
+      message: templateMessage ? redactTelemetryText(message) : undefined,
       errorName: errorLike ? summarizeError(errorLike).errorName : undefined,
     });
   }

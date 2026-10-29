@@ -100,6 +100,43 @@ test('the Nest logger replacement is JSON, redacted and quiet about route mappin
   assert.equal(JSON.parse(lines[0]).context, 'ExceptionsHandler');
 });
 
+// Unquoted free text cannot be made safe by patterns, so exception messages are never logged.
+const FREE_TEXT = 'Unable to load student Maya Park medical allergy peanut for guardian Robin Park';
+const FREE_TEXT_LEAKS = /Maya|Park|allerg|peanut|Robin|medical|Unable to load/;
+
+test('exception messages with unquoted student, family and medical details never reach telemetry', async () => {
+  capture();
+  const summary = summarizeError(Object.assign(new Error(FREE_TEXT), { code: '23514' }));
+  assert.equal(summary.errorName, 'Error');
+  assert.equal(summary.sqlState, '23514');
+  assert.equal('message' in summary, false);
+  assert.ok(summary.stack.length > 0);
+  for (const frame of summary.stack) assert.match(frame, /^at /);
+  // A multi-line message cannot smuggle text in as a stack frame.
+  const forged = new Error(`${FREE_TEXT}\nat Maya Park peanut allergy`);
+  assert.doesNotMatch(JSON.stringify(summarizeError(forged)), FREE_TEXT_LEAKS);
+  const { DatabaseConnectionConfigurationError } = require('@hon/database');
+  const configuration = summarizeError(new DatabaseConnectionConfigurationError('a non-local database requires HON_DATABASE_CA_CERT'));
+  assert.deepEqual([configuration.errorName, configuration.problemCode], ['DatabaseConnectionConfigurationError', 'DATABASE_CONNECTION_CONFIGURATION_INVALID']);
+  emitTelemetry('error', 'database.idle_client_error', { component: 'runtime-database', ...summarizeError(new Error(FREE_TEXT)) });
+  const logger = new HonTelemetryLogger(false);
+  logger.error(FREE_TEXT, 'stack', 'ExceptionsHandler');
+  logger.warn(new Error(FREE_TEXT));
+  logger.log(FREE_TEXT, 'SomeService');
+  logger.log('Nest application successfully started', 'NestApplication');
+  assert.equal(lines.length, 5);
+  for (const line of lines) assert.doesNotMatch(line, FREE_TEXT_LEAKS);
+  assert.equal(JSON.parse(lines[4]).message, 'Nest application successfully started');
+  const filter = new HonExceptionFilter({ reply: (res, body, status) => res.status(status).json(body), isHeadersSent: () => false, end: () => undefined });
+  const req = { method: 'POST', route: { path: '/v1/people/:personId' }, originalUrl: '/v1/people/x', url: '/v1/people/x' };
+  const res = { locals: {}, headersSent: false, status() { return this; }, json() { return this; }, setHeader() {}, getHeader() { return undefined; } };
+  lines = [];
+  filter.catch(new Error(FREE_TEXT), filterHost(req, res));
+  assert.equal(lines.length, 1);
+  assert.equal(JSON.parse(lines[0]).event, 'http.unexpected_error');
+  assert.doesNotMatch(lines[0], FREE_TEXT_LEAKS);
+});
+
 async function serve(configure) {
   const app = express();
   configure(app);

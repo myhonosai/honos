@@ -75,7 +75,7 @@ Migrations are forward-only. Every file is one `BEGIN … COMMIT` transaction, e
 | `db:status` shows **out-of-order pending** (for example reserved 0179/0180 landing after 0189) | The file runs after newer ones. | Its PR must state that it is order-independent before it is deployed. |
 | Data damaged by a bad migration | | Restore to a new project at the point in time before the migration (PITR), or from the pre-migration logical dump. Verify (§3). Cut over (§5). |
 
-**Before every production migration:** take a layer-C dump, run `pnpm db:status`, and record the latest applied file.
+**Before every production migration:** run `pnpm db:check` on the exact release checkout (fails if any checksum-locked migration file changed), take a layer-C dump, run `pnpm db:status` and review its output, and record the latest applied file. `db:migrate` itself trusts the filename ledger and does not re-verify file contents, so this preflight is mandatory.
 
 ## 5. Failed deployment rollback
 
@@ -110,7 +110,7 @@ There is no hosting configuration in the repository yet, so this is the procedur
 
 | Check | Evidence | Result | Who / date |
 |---|---|---|---|
-| Disposable restore drill (CI) | `test-restore-drill.mjs` in run-db-proofs | PASS locally 2026-10-28; CI pending on this PR | Claude |
+| Disposable restore drill (CI) | `test-restore-drill.mjs` in run-db-proofs | PASS locally and in CI (manual dispatch) 2026-10-28 | Claude |
 | Supabase plan, backup retention and PITR status recorded | Dashboard screenshot | NOT VERIFIED | Owner |
 | Production logical dump taken and encrypted off-site | File name + checksum | NOT VERIFIED | Owner |
 | Isolated restore of a production backup + §3 checks | Command output | NOT VERIFIED | Owner + Claude |
