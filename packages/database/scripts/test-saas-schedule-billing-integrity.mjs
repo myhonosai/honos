@@ -75,7 +75,7 @@ try {
   await deny(()=>pricing.accept(H('school'),org.school,acceptanceInput(founderPreview),K()),422,'SAAS_PRICE_ACCEPTANCE_BLOCKED');
   const recorded=(await pricing.record(H('hq'),scheduleInput(offer,offer,0),K())).schedule;
   const accepted=await pricing.accept(H('school'),org.school,acceptanceInput(await pricing.preview(H('school'),org.school,recorded.scheduleId)),K());
-  const generation=(await generations.record(H('school'),org.school,generationInput(accepted),K())).generation;
+  const generation=(await generations.record(H('school'),org.school,generationInput(accepted.acceptance),K())).generation;
   const input={generationId:generation.generationId,generationDigest:generation.generationDigest,confirmation:contracts.SAAS_SCHEDULE_BINDING_CONFIRMATION};
   await deny(()=>schedules.start(H('school'),org.school,input,K()),422,'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE');
   assert.equal((await row('SELECT count(*)::int n FROM hon.saas_schedule_bindings')).n,0,'disabled program must roll back binding intent');

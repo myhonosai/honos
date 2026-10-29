@@ -60,6 +60,10 @@ test('Commercial B2 disposable proof resolves its deterministic provider fixture
   const fixture = apiRequire('./test/fixtures/subscription-schedule-provider.cjs');
   assert.equal(typeof fixture.DeterministicScheduleProvider, 'function');
 });
+test('Commercial B2 disposable proof passes the durable acceptance value, not its receipt wrapper, to B1 generation', async () => {
+  const proof = await readFile(new URL('./test-saas-schedule-billing-integrity.mjs', import.meta.url), 'utf8');
+  assert.match(proof, /generationInput\(accepted\.acceptance\)/);
+});
 
 async function guarded(code, { symlinkAudit = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'hon-staging-guard-')), audit = join(dir, 'audit.jsonl');
