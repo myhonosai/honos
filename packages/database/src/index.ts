@@ -47,3 +47,11 @@ export function assertScopedIdentifier(identifier: string): string {
   }
   return identifier;
 }
+
+export {
+  DatabaseConnectionConfigurationError,
+  isLoopbackDatabaseUrl,
+  verifiedDatabaseConnection,
+  type DatabaseEnvironment,
+  type VerifiedDatabaseConnection,
+} from './database-tls.js';
