@@ -64,6 +64,22 @@ test('Commercial B2 disposable proof passes the durable acceptance value, not it
   const proof = await readFile(new URL('./test-saas-schedule-billing-integrity.mjs', import.meta.url), 'utf8');
   assert.match(proof, /generationInput\(accepted\.acceptance\)/);
 });
+test('Commercial B2 permits only D7/D9 awaiting-first-payment states and preserves reverse lifecycle exclusion', async () => {
+  const migration = await readFile(new URL('../migrations/0191_commercial_b2_schedule_billing.sql', import.meta.url), 'utf8');
+  const proof = await readFile(new URL('./test-saas-schedule-billing-integrity.mjs', import.meta.url), 'utf8');
+  assert.match(migration, /state IS DISTINCT FROM 'AWAITING_FIRST_PAYMENT'/);
+  assert.match(migration, /RAISE EXCEPTION 'SAAS_ACCESS_STATE_EXISTS'/);
+  assert.match(migration, /CREATE TRIGGER saas_schedule_lifecycle_exclusion BEFORE INSERT ON hon\.saas_access_states/);
+  assert.match(proof, /initialize_saas_hon_os_school_account/);
+  assert.match(proof, /onboarding\.provisionInitialSchool/);
+  assert.match(proof, /access\.awaitFirstPayment/);
+  assert.match(proof, /SAAS_SCHEDULE_LIFECYCLE_CONFLICT/);
+  assert.match(proof, /PAYMENT_ACTIVE/);
+  assert.match(proof, /SAAS_SUBSCRIPTION_EXISTS/);
+  assert.match(proof, /SAAS_CHECKOUT_OPEN/);
+  assert.match(proof, /SAAS_ACCESS_EXCEPTION_ACTIVE/);
+  assert.match(proof, /status:'INACTIVE',mutations_enabled:false/);
+});
 
 async function guarded(code, { symlinkAudit = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'hon-staging-guard-')), audit = join(dir, 'audit.jsonl');

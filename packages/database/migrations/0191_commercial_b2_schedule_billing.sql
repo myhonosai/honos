@@ -141,8 +141,12 @@ BEGIN
     RAISE EXCEPTION 'SAAS_SUBSCRIPTION_EXISTS' USING ERRCODE='23514'; END IF;
   IF EXISTS(SELECT 1 FROM hon.saas_checkout_sessions WHERE organization_id=p_org AND status IN ('CREATED','OPEN')) THEN
     RAISE EXCEPTION 'SAAS_CHECKOUT_OPEN' USING ERRCODE='23514'; END IF;
-  IF EXISTS(SELECT 1 FROM hon.saas_access_states WHERE organization_id=p_org)
-    OR hon.saas_access_exception_live(p_org) THEN RAISE EXCEPTION 'SAAS_ACCESS_EXCEPTION_ACTIVE' USING ERRCODE='23514'; END IF;
+  -- D7/D9 awaiting-first-payment is the legitimate pre-payment condition for a TEST-only B2 binding. The
+  -- historical pre-B6/B1 case with no access-state row remains eligible; any present state other than awaiting
+  -- (today PAYMENT_ACTIVE; fail closed for future values) remains a distinct lifecycle conflict.
+  IF EXISTS(SELECT 1 FROM hon.saas_access_states WHERE organization_id=p_org AND state IS DISTINCT FROM 'AWAITING_FIRST_PAYMENT') THEN
+    RAISE EXCEPTION 'SAAS_ACCESS_STATE_EXISTS' USING ERRCODE='23514'; END IF;
+  IF hon.saas_access_exception_live(p_org) THEN RAISE EXCEPTION 'SAAS_ACCESS_EXCEPTION_ACTIVE' USING ERRCODE='23514'; END IF;
 END $$;
 
 -- Every competing lifecycle writer uses the same organization key as B2 creation. A partial B2 index alone
