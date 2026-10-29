@@ -80,6 +80,8 @@ test('Commercial B2 permits only D7/D9 awaiting-first-payment states and preserv
   assert.match(proof, /SAAS_ACCESS_EXCEPTION_ACTIVE/);
   assert.match(proof, /catalogInput\.founderProgram=\{\.\.\.catalogInput\.founderProgram,eligibility:'ANY_ACTIVE_ORGANIZATION',opensAt:new Date\(Date\.now\(\)-3600_000\)\.toISOString\(\)\}/);
   assert.match(proof, /WHERE catalog_id=\$1 AND plan_code='COMPLETE' AND offer_kind='REGULAR_MONTHLY'/);
+  assert.match(proof, /status='ACTIVE',effective_from=clock_timestamp\(\)-interval '1 minute',effective_until=clock_timestamp\(\)\+interval '1 day',version=2/);
+  assert.match(proof, /status='SUSPENDED',effective_from=clock_timestamp\(\),effective_until=NULL,version=1/);
   assert.match(proof, /saas_access_transitions WHERE kind='FIRST_PAYMENT_ACTIVATION'/);
   assert.match(proof, /status:'INACTIVE',mutations_enabled:false/);
 });

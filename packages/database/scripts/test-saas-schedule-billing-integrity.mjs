@@ -169,8 +169,12 @@ try {
   await withUserTriggersDisabled(['saas_checkout_sessions'],()=>admin.query('DELETE FROM hon.saas_checkout_sessions WHERE id=$1',[openCheckout]));
   const liveException=K();
   await withUserTriggersDisabled(['saas_access_exceptions'],()=>admin.query("INSERT INTO hon.saas_access_exceptions(id,organization_id,school_id,purpose,reason,scope_tier,starts_at,expires_at,policy_version,max_days,prior_entitlement,granted_entitlement,granted_entitlement_version,granted_by_principal_id,granted_at,status) VALUES($1,$2,$3,'INTERNAL_TESTING','Disposable B2 conflict fixture','COMPLETE',clock_timestamp()-interval '1 minute',clock_timestamp()+interval '1 day',1,2,'{}','{}',2,$4,clock_timestamp(),'GRANTED')",[liveException,foreign.id,foreign.school,humans.hq.id]));
+  await admin.query("UPDATE hon.organization_entitlements SET tier='COMPLETE',status='ACTIVE',effective_from=clock_timestamp()-interval '1 minute',effective_until=clock_timestamp()+interval '1 day',version=2 WHERE organization_id=$1",[foreign.id]);
   await sqlRuleDeny(admin.query('SELECT hon.saas_schedule_binding_available($1)',[foreign.id]),'SAAS_ACCESS_EXCEPTION_ACTIVE');
-  await withUserTriggersDisabled(['saas_access_exceptions'],()=>admin.query('DELETE FROM hon.saas_access_exceptions WHERE id=$1',[liveException]));
+  await withUserTriggersDisabled(['saas_access_exceptions'],async()=>{
+    await admin.query('DELETE FROM hon.saas_access_exceptions WHERE id=$1',[liveException]);
+    await admin.query("UPDATE hon.organization_entitlements SET tier='COMPLETE',status='SUSPENDED',effective_from=clock_timestamp(),effective_until=NULL,version=1 WHERE organization_id=$1",[foreign.id]);
+  });
   assert.equal((await row('SELECT count(*)::int n FROM hon.saas_schedule_bindings')).n,conflictBindings,'all conflict rows refuse before a B2 binding');
   assert.equal((await row('SELECT count(*)::int n FROM hon.saas_outbox')).n,conflictOutbox,'all conflict rows refuse before B2 audit/outbox work');
   assert.equal(provider.calls,conflictCalls,'all conflict rows refuse before adapter invocation');
