@@ -193,6 +193,9 @@ import { CommunicationMessageController } from './communication/communication-me
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
+import { ZernioIntegrationController, ZernioHumanUiGuard } from './integrations/zernio.controller.js';
+import { ZernioIntegrationService } from './integrations/zernio.service.js';
+import { ZERNIO_RUNTIME, ZernioCredentialRuntime } from './integrations/zernio-runtime.js';
 import { A2pPreparationController, A2pPreparationHumanGuard } from './a2p/a2p-preparation.controller.js';
 import { A2pPreparationService } from './a2p/a2p-preparation.service.js';
 import { A2P_WEBSITE_INSPECTOR, UnavailableA2pWebsiteInspector } from './a2p/a2p-inspector.js';
@@ -348,6 +351,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqController,
     HqOnboardingController,
     HqAiProviderController,
+    ZernioIntegrationController,
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
@@ -469,6 +473,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InvoiceHumanUiGuard,
     HqOnboardingService,
     HqAiProviderService,
+    ZernioIntegrationService, ZernioHumanUiGuard,
+    { provide: ZERNIO_RUNTIME, useFactory: () => new ZernioCredentialRuntime() },
     A2pPreparationService, A2pPreparationHumanGuard,
     {provide:A2P_WEBSITE_INSPECTOR,useFactory:()=>new UnavailableA2pWebsiteInspector()},
     HqEntitlementService,

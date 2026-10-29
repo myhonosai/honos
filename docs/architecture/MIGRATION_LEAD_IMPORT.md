@@ -18,7 +18,7 @@ Pinned local `csv-parse@6.1.0` enforces strict quoting/column count, comma delim
 | displayName | Display-only fallback is stored unsplit as given name with empty family name; original display name also retained in lead JSON attribution |
 | email | Trimmed, lowercase exact match; conservative address syntax, 254 chars |
 | mobile | International E.164 required; removes only spaces, parentheses and hyphens; no country guessing |
-| source | `crm_leads.source_code`, original trimmed source, 200 chars |
+| source | `crm_leads.source_code`, original trimmed source, effective 80 chars; the staging parser's broader generic cell bound does not relax the later immutable source-facts trigger |
 | note | `crm_leads.attribution.note`, 2,000 chars; not a CRM activity or communication |
 | campaign, medium, sourceDetail | Existing lead attribution JSON, 200 chars each |
 

@@ -21,6 +21,10 @@
       "title": "HON HQ | AI Provider Control"
     },
     {
+      "path": "/hq/integrations/zernio",
+      "title": "HON HQ | Zernio"
+    },
+    {
       "path": "/core",
       "title": "HON Core | School Management"
     },
@@ -83,6 +87,10 @@
     {
       "path": "/staff/marketing/forms",
       "title": "Human Public Lead Forms"
+    },
+    {
+      "path": "/staff/marketing/intake",
+      "title": "HON | Lead Sources & Intake Monitor"
     },
     {
       "path": "/forms/:publicId",

@@ -66,6 +66,25 @@ proof() { # fixture, script, description
   summary+=("| $description | \`$script\` | pass |")
 }
 
+# Public lead forms use the uniquely marked marketing fixture. Keep its descriptor
+# separate from every other proof and invoke the package's existing db:test-public-forms
+# command so it builds the current contracts/config/database/API before both proofs.
+public_forms_fixture='public-lead-forms'
+echo "::group::Provision disposable fixture: $public_forms_fixture"
+"${clean_env[@]}" \
+  HON_CAMPAIGN_VALIDATION_TARGET=postgresql://localhost:5432/hon_campaign_validation \
+  HON_CAMPAIGN_ENV_FILE="$job_dir/$public_forms_fixture.env" \
+  node "$scripts/setup-marketing-validation.mjs"
+echo "::endgroup::"
+echo "::group::Public lead forms: current-school monitor, signed session, lifecycle and ingress integrity"
+# shellcheck disable=SC2016 # descriptor is sourced only inside the clean subprocess.
+"${clean_env[@]}" \
+  HON_CAMPAIGN_VALIDATION_TARGET=postgresql://localhost:5432/hon_campaign_validation \
+  bash -c 'set -a; . "$1"; set +a; cd "$2" && pnpm --filter @hon/database db:test-public-forms' _ "$job_dir/$public_forms_fixture.env" "$repo_root"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Public lead forms: current-school monitor, signed session, lifecycle and ingress integrity | \`db:test-public-forms\` | pass |")
+
 setup class-sessions-read HON_CLASS_SESSIONS_READ_VALIDATION_TARGET hon_class_sessions_read_validation HON_CLASS_SESSIONS_READ_ENV_FILE
 proof class-sessions-read test-security-boundaries.mjs "Tenant isolation, restricted runtime role, parent-family boundaries"
 proof class-sessions-read test-outbox-leases.mjs "Outbox leases never treat UNKNOWN as published"
@@ -147,7 +166,7 @@ summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-m
 /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
 rm -f "$adult_draft_dir/$adult_draft_fixture.env"
 
-echo "All $passed disposable-database proofs passed (7 fixtures, all migrations applied)."
+echo "All $passed disposable-database proofs passed (8 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"
