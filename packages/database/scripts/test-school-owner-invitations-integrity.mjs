@@ -93,7 +93,10 @@ try{
   assert.equal((await restricted.query("SELECT * FROM hon.resolve_authorized_scope($1,$2,'school.view')",[identity.externalSubject,other.schoolId])).rowCount,0);
   const bound=await q("SELECT g.organization_id,g.school_id,r.code FROM hon.users u JOIN hon.principals p ON p.user_id=u.id JOIN hon.principal_role_grants g ON g.principal_id=p.id JOIN hon.roles r ON r.id=g.role_id WHERE u.external_subject=$1",[identity.externalSubject]);assert.equal(bound.length,1);assert.equal(bound[0].code,'OWNER');assert.equal(bound[0].school_id,o.schoolId);
  }
- pass('two independent signed owners get exactly their own server-selected role/school; single use and lost-response exact replay do not duplicate');
+ // Test already-bound, fully permissioned school owners too, not only unknown signed subjects.
+ await denied(()=>send('hq/school-owner-invitations',{who:'a',body:invite(orgB,'forbidden-'+K()+'@example.invalid')}),403);
+ await denied(()=>send('hq/school-owner-invitations',{who:'b',body:invite(orgA,'forbidden-'+K()+'@example.invalid')}),403);
+ pass('two independent signed owners get exactly their own server-selected role/school; cross-organization HQ invitation attempts denied; single use and lost-response exact replay do not duplicate');
  const c={externalSubject:'oidc:p0:'+K(),email:'c-'+K()+'@example.invalid',emailVerified:true},inputC=invite(orgA,c.email),invC=receipt(await send('hq/school-owner-invitations',{body:inputC})),kc=K(),bc=accept(invC,inputC.token);
  const parallel=await Promise.all([send('account/school-owner-invitations/accept',{identity:c,body:bc,key:kc}),send('account/school-owner-invitations/accept',{identity:c,body:bc,key:kc})]);
  assert(parallel.some(r=>r.status===200));assert(parallel.every(r=>[200,503].includes(r.status)));receipt(await send('account/school-owner-invitations/accept',{identity:c,body:bc,key:kc}));
