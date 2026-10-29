@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { proofs, validateEnvironment, parseArguments, assertEmptyInstance, parseFixtureCredentials, postgresTarget, readMigrationEvidence, validateMigrationEvidence } from './commercial-staging-safety.mjs';
 
 test('credit-program simulation is restricted to the existing D7 zero-grant proof', () => {
@@ -53,6 +54,11 @@ test('canonical runtime ACL restores only the fixed Commercial B2 procedures whe
   const found = [...block.matchAll(/hon\.([a-z_]+\([^']*?\))/g)].map(match => match[1]);
   assert.deepEqual([...new Set(found)].sort(), [...expected].sort(), 'B2 grant list must contain exactly the five fixed procedures');
   for (const forbidden of ['saas_schedule_requirements', 'saas_schedule_binding_json', 'saas_schedule_binding_available', 'guard_saas_schedule_lifecycle_exclusion', 'saas_schedule_payment_program', 'guard_saas_schedule_bindings', 'guard_saas_schedule_binding_insert', 'verify_saas_schedule_binding_evidence', 'saas_schedule_bindings', 'saas_schedule_provider_events', 'saas_schedule_paid_periods', 'saas_schedule_reconciliations', 'PUBLIC', 'anon', 'authenticated', 'service_role']) assert.doesNotMatch(block, new RegExp(forbidden));
+});
+test('Commercial B2 disposable proof resolves its deterministic provider fixture from the API package', () => {
+  const apiRequire = createRequire(new URL('../../../apps/api/package.json', import.meta.url));
+  const fixture = apiRequire('./test/fixtures/subscription-schedule-provider.cjs');
+  assert.equal(typeof fixture.DeterministicScheduleProvider, 'function');
 });
 
 async function guarded(code, { symlinkAudit = false } = {}) {

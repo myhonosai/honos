@@ -19,7 +19,7 @@ const {SaasScheduleBillingService}=await import('../../../apps/api/dist/saas-pri
 const {SaasPaymentsService}=await import('../../../apps/api/dist/payments/saas-payments.service.js');
 const apiRequire=createRequire(new URL('../../../apps/api/package.json',import.meta.url));
 const contracts=apiRequire('@hon/contracts');
-const {DeterministicScheduleProvider}=apiRequire('../../../apps/api/test/fixtures/subscription-schedule-provider.cjs');
+const {DeterministicScheduleProvider}=apiRequire('./test/fixtures/subscription-schedule-provider.cjs');
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),pricing=new SaasPriceAcceptanceService(billing),generations=new SaasSubscriptionGenerationService(billing);
 const provider=new DeterministicScheduleProvider(),schedules=new SaasScheduleBillingService(billing,provider),payments=new SaasPaymentsService(billing,database,{});
 const client=u=>new pg.Client({connectionString:u.toString(),ssl:false}),admin=client(owner),restricted=client(runtime);
