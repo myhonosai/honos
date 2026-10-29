@@ -28,14 +28,20 @@ export class SaasScheduleBillingService {
   async start(subject: string, school: unknown, body: unknown, key: unknown) {
     const [s,input,k] = parse(() => [saasUuid(school), validateSaasScheduleBindingInput(body), saasUuid(key)] as const);
     const intent = await this.billing.call('startScheduleBinding', [subject,s,JSON.stringify(input),k,randomUUID(),randomUUID()], validateSaasScheduleBindingReceipt);
+    // An observed binding is the durable result for every later identical command; never re-contact an adapter.
     if (intent.binding.status !== 'PENDING_PROVIDER_BINDING') return intent;
+    // The original human command already committed the intent. A replayed pending receipt means its adapter/observation
+    // outcome is uncertain, not that a second provider operation is authorized. Preserve the original identity for a
+    // separate reconciliation worker rather than calling bindOrFindSchedule again from this browser retry path.
+    if (intent.replayed) throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED', detail: 'The original binding is pending reconciliation; retry did not contact a provider or create another schedule.' });
     let observation;
     try {
       observation = await this.provider.bindOrFindSchedule({ bindingId:intent.binding.bindingId, bindingKey:intent.binding.bindingKey,
         requirementsDigest:intent.binding.requirementsDigest, requirements:providerRequirements(intent.binding.requirements) });
     } catch {
-      // The intent is durable. The exact caller can retry the same command so the adapter first finds by binding key.
-      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: 'Retry the identical request with the same key; do not assume a provider binding took effect.' });
+      // The intent is durable but the adapter outcome is unknown. A browser retry preserves the binding and enters
+      // reconciliation without adapter I/O; only a future privileged reconciler may inspect the original binding key.
+      throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE', detail: 'Do not assume a provider binding took effect; the original binding requires reconciliation before any further provider inspection.' });
     }
     return this.billing.call('recordScheduleBindingObservation', [intent.binding.bindingId,JSON.stringify(observation),randomUUID(),randomUUID()], validateSaasScheduleBindingReceipt);
   }

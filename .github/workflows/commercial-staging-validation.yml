@@ -1,7 +1,9 @@
 name: Commercial staging rehearsal (disposable only)
 on:
   pull_request:
-    branches: [main]
+    # Commercial B2 is intentionally based on PR #82 until its 0190 prerequisite reaches main.
+    # Run the same disposable fixture proof on that dependency base; after #82 merges, main remains the only base.
+    branches: [main, codex/a2p-1-backend]
     types: [opened, synchronize, reopened]
     paths:
       - 'packages/database/scripts/*commercial-staging*'

@@ -4,7 +4,7 @@
 
 **Branch:** `manus/commercial-b2-a2p-0191`<br>
 **Base:** `codex/a2p-1-backend` / PR #82 head `e35754188a618167305696a3e021fcc629f4fc3b` (unmodified dependency base)<br>
-**Migration coordination:** PR #82 / PR #83 retain the physical `0190_a2p_registration_preparation.sql` claim. This dependent B2 draft is based on that unmodified predecessor and its `0191` SQL refuses to apply unless the `0190_a2p_registration_preparation.sql` ledger record already exists. It must be rebased and revalidated against canonical main only after #82 lands and before any merge.
+**Migration coordination:** PR #82 / PR #83 retain the physical `0190_a2p_registration_preparation.sql` claim. PR #88 also currently has a physical `0191` migration. The owner-proposed allocation is #82 `0190`, #88 `0191`, and #90 `0192`, but no allocation change is approved yet: this dependent B2 draft retains its current `0191` filename and refuses to apply unless the `0190_a2p_registration_preparation.sql` ledger record already exists. After allocation approval and #82 landing, the separately authorized renumber/rebase/revalidation step must use canonical main before any merge.
 
 ## 1. Scope and reuse
 
@@ -39,7 +39,7 @@ For this slice, the only executable adapter is an explicitly injected determinis
 
 The production default remains `UnconfiguredSubscriptionScheduleProvider`. A real Stripe test-mode schedule adapter is deliberately out of scope until a separate sandbox authorization proves that the provider mechanism can enforce the verified-paid-period gate without automatic calendar repricing or collection. Native calendar phase observations, automatic collection, live credentials/events, unsupported event versions, unknown provider outcomes, and schedule/account/subscription mismatches fail closed.
 
-Provider invocation must never occur inside a database transaction. The server first commits a binding intent and its exact idempotency identity. It calls `bindOrFindSchedule` outside locks, then records a signed, immutable observation in a second transaction. If the provider outcome is unknown, a retry must find/reconcile the same binding key before any repeat request; it must not invent a schedule or financial result.
+Provider invocation must never occur inside a database transaction. The server first commits a binding intent and its exact idempotency identity. A fresh intent may call `bindOrFindSchedule` outside locks, then records a signed, immutable observation in a second transaction. A repeated human command whose original receipt is still `PENDING_PROVIDER_BINDING` makes **no** second adapter call: it fails closed as reconciliation-required while returning no invented success. Once the observation is durable, the same command returns the stored `BOUND_TEST_ONLY` receipt without provider I/O. A future privileged reconciliation worker, not the human retry route, would have to prove an uncertain provider result using the original binding key before recording one observation; it may never create a second binding, payment, transition, checkout, or entitlement effect.
 
 ## 4. Proposed additive database boundary
 
@@ -59,7 +59,7 @@ The human binding path follows the B1 lock safety posture: complete IAM authorit
 
 ## 5. Reconciliation and no-effect rules
 
-A duplicate provider event with the same digest returns the original receipt. The same provider event identity with a different digest is an immutable conflict. Missing predecessor binding or evidence is retryable and rolls back the claim so an authenticated redelivery can apply it later.
+A duplicate provider event with the same digest returns the original receipt. The same provider event identity with a different digest is an immutable conflict. A late covered period that would precede an already recorded qualifying period is preserved as `NEEDS_REVIEW` with no count change; the system does not infer reordered pricing history. Missing predecessor binding or evidence is retryable and rolls back the claim so an authenticated redelivery can apply it later.
 
 Failed, pending, unknown, mismatched, duplicate-covered-period, cancelled, reversed, refunded, disputed, or unlinked evidence cannot release a phase, increment a qualifying-period count, restore a promotion, issue a fresh schedule, activate paid access, mutate an entitlement, grant capabilities or AI credits, or execute a provider refund. It is preserved as immutable evidence with `NEEDS_REVIEW` or reconciliation-required status.
 

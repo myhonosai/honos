@@ -234,7 +234,19 @@ BEGIN
   PERFORM hon.saas_generation_lock_authority(); SELECT * INTO actor FROM hon.require_saas_school_purchaser(p_subject,p_school);
   replay:=hon.saas_claim_request(actor.principal_id,p_key,'saas.schedule_binding.start',
     hon.saas_fingerprint(ARRAY['saas.schedule_binding.start',p_school::text,p::text]),p_request,p_correlation);
-  IF replay IS NOT NULL THEN PERFORM hon.require_saas_school_purchaser(p_subject,p_school); RETURN replay; END IF;
+  IF replay IS NOT NULL THEN
+    PERFORM hon.require_saas_school_purchaser(p_subject,p_school);
+    -- The original request receipt records its initial PENDING intent. After the separate observation transaction
+    -- completes, return the authoritative durable binding rather than repeating a provider operation on retry.
+    IF coalesce(replay->'binding'->>'bindingId','') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      SELECT * INTO b FROM hon.saas_schedule_bindings
+        WHERE id=(replay->'binding'->>'bindingId')::uuid AND organization_id=actor.organization_id AND school_id=p_school;
+      IF b.id IS NOT NULL AND b.status<>'PENDING_PROVIDER_BINDING' THEN
+        RETURN jsonb_build_object('binding',hon.saas_schedule_binding_json(b),'replayed',true);
+      END IF;
+    END IF;
+    RETURN replay;
+  END IF;
   SELECT * INTO g FROM hon.saas_subscription_generations WHERE id=(p->>'generationId')::uuid AND organization_id=actor.organization_id AND school_id=p_school;
   IF g.id IS NULL THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE='P0002'; END IF;
   IF g.generation_digest<>p->>'generationDigest' THEN RAISE EXCEPTION 'SAAS_GENERATION_ACCEPTANCE_STALE' USING ERRCODE='40001'; END IF;
@@ -310,8 +322,8 @@ BEGIN
   BEGIN occurred_at:=(p->>'occurredAt')::timestamptz;
   EXCEPTION WHEN datetime_field_overflow OR invalid_datetime_format THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END;
   IF occurred_at>at+interval '5 minutes' THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
-  -- Serialize same-event deliveries before reading the immutable event ledger; re-delivery returns its original receipt.
-  PERFORM pg_advisory_xact_lock(hashtextextended('saas.schedule.provider-event:'||p->>'eventId',0));
+  -- Extract eventId before key concatenation: serialize same-event deliveries before the immutable-ledger lookup.
+  PERFORM pg_advisory_xact_lock(hashtextextended('saas.schedule.provider-event:' || (p->>'eventId'),0));
   SELECT * INTO e FROM hon.saas_schedule_provider_events WHERE provider='STRIPE_SIMULATED' AND provider_event_id=p->>'eventId';
   IF e.id IS NOT NULL THEN
     IF e.payload_digest<>p_digest THEN RAISE EXCEPTION 'SAAS_SCHEDULE_EVENT_CONFLICT' USING ERRCODE='23505'; END IF;
@@ -331,6 +343,8 @@ BEGIN
     expected_amount:=CASE WHEN (b.requirements->>'introductoryPaidPeriods')::integer>count_paid THEN (b.requirements->>'initialAmountMinor')::integer ELSE (b.requirements->>'renewalAmountMinor')::integer END;
     IF (p->>'amountMinor')::integer<>expected_amount THEN reason:='AMOUNT_MISMATCH';
     ELSIF EXISTS(SELECT 1 FROM hon.saas_schedule_paid_periods q WHERE q.binding_id=b.id AND q.provider_invoice_reference=p->>'invoiceReference') THEN outcome:='ALREADY_APPLIED'; reason:='DUPLICATE_INVOICE_REFERENCE';
+    ELSIF EXISTS(SELECT 1 FROM hon.saas_schedule_paid_periods q WHERE q.binding_id=b.id
+      AND (p->'coveredPeriod'->>'startsAt')::timestamptz < q.covered_starts_at) THEN reason:='OUT_OF_ORDER_COVERED_PERIOD';
     ELSIF EXISTS(SELECT 1 FROM hon.saas_schedule_paid_periods q WHERE q.binding_id=b.id AND tstzrange(q.covered_starts_at,q.covered_ends_at,'[)') && tstzrange((p->'coveredPeriod'->>'startsAt')::timestamptz,(p->'coveredPeriod'->>'endsAt')::timestamptz,'[)')) THEN reason:='OVERLAPPING_COVERED_PERIOD';
     ELSE
       INSERT INTO hon.saas_schedule_paid_periods(binding_id,provider_invoice_reference,provider_event_id,covered_starts_at,covered_ends_at,amount_minor,currency,recorded_at)
