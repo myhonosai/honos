@@ -43,6 +43,17 @@ test('entire reviewed migration chain and every 0181–0191 checksum are pinned'
   assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0192_unreviewed.sql', sha256: 'x' }], actual));
   assert.throws(() => validateMigrationEvidence([...actual.entries.slice(0, -1), { file: '0179_reserved.sql', sha256: 'x' }], actual));
 });
+test('canonical runtime ACL restores only the fixed Commercial B2 procedures when the optional boundary exists', async () => {
+  const acl = await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const expected = ['start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)', 'record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)', 'read_saas_schedule_binding(text,uuid,uuid)', 'read_saas_schedule_binding_from_hq(text,uuid)', 'ingest_saas_schedule_evidence(jsonb,text)'];
+  const start = acl.indexOf('-- Commercial B2 is optional while its dependent migration remains a draft.');
+  const block = acl.slice(start, acl.indexOf('END $$;', start) + 'END $$;'.length);
+  assert(start > acl.lastIndexOf("p.proname ~ 'saas'"), 'B2 grant must follow the final global SaaS revoke');
+  assert.match(block, /to_regprocedure\('hon\.start_saas_schedule_binding\(text,uuid,jsonb,uuid,uuid,uuid\)'\)/);
+  const found = [...block.matchAll(/hon\.([a-z_]+\([^']*?\))/g)].map(match => match[1]);
+  assert.deepEqual([...new Set(found)].sort(), [...expected].sort(), 'B2 grant list must contain exactly the five fixed procedures');
+  for (const forbidden of ['saas_schedule_requirements', 'saas_schedule_binding_json', 'saas_schedule_binding_available', 'guard_saas_schedule_lifecycle_exclusion', 'saas_schedule_payment_program', 'guard_saas_schedule_bindings', 'guard_saas_schedule_binding_insert', 'verify_saas_schedule_binding_evidence', 'saas_schedule_bindings', 'saas_schedule_provider_events', 'saas_schedule_paid_periods', 'saas_schedule_reconciliations', 'PUBLIC', 'anon', 'authenticated', 'service_role']) assert.doesNotMatch(block, new RegExp(forbidden));
+});
 
 async function guarded(code, { symlinkAudit = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'hon-staging-guard-')), audit = join(dir, 'audit.jsonl');
