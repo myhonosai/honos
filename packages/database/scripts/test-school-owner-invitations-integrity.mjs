@@ -10,12 +10,13 @@ for(const [u,user]of [[owner,'hon_champions_owner'],[runtime,'hon_champions_runt
  assert.equal(u.protocol,'postgresql:');assert.equal(u.hostname,'localhost');assert.equal(u.port,'5432');assert.equal(u.pathname,'/hon_champions_validation');assert.equal(u.username,user);assert(u.password);assert.equal(u.search,'');assert.equal(u.hash,'');
 }
 for(const key of Object.keys(process.env))assert(!/^(?:PG[A-Z_]*|STRIPE.*|SQUARE.*|TWILIO.*|ZERNIO.*|OPENAI.*|ANTHROPIC.*|SUPABASE.*|AWS.*|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER).*)$/i.test(key));
+// createRequire resolves relative specifiers from apps/api/package.json, NOT this script.
 const require=createRequire(new URL('../../../apps/api/package.json',import.meta.url));require('reflect-metadata');
 const {Test}=require('@nestjs/testing'),{issueSession,HON_SESSION_COOKIE}=require('@hon/auth');
-const {RuntimeDatabaseService}=require('../../../apps/api/dist/foundation/runtime-database.service.js');
-const {HonIdentityService}=require('../../../apps/api/dist/foundation/hon-identity.service.js');
-const {SchoolOwnerInvitationService}=require('../../../apps/api/dist/accounts/school-owner-invitation.service.js');
-const {SchoolOwnerInvitationController,SchoolAccountHumanGuard}=require('../../../apps/api/dist/accounts/school-owner-invitation.controller.js');
+const {RuntimeDatabaseService}=require('./dist/foundation/runtime-database.service.js');
+const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
+const {SchoolOwnerInvitationService}=require('./dist/accounts/school-owner-invitation.service.js');
+const {SchoolOwnerInvitationController,SchoolAccountHumanGuard}=require('./dist/accounts/school-owner-invitation.controller.js');
 const {OWNER_INVITATION_CONFIRMATION}=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;

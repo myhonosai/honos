@@ -34,3 +34,12 @@ test('database denials redact internal SQL and token details; no fallback writes
  for(const [code,status]of [['42501',403],['23505',409],['55P03',503]]){let calls=0;const service=new SchoolOwnerInvitationService({callSchoolAccount:async()=>{calls++;throw Object.assign(new Error('SECRET SQL'),{code});}});
  await assert.rejects(()=>service.command({honIdentity:{externalSubject:'owner'}},'revoke',{invitationId:ids.invitationId},randomUUID()),e=>e.status===status&&!JSON.stringify(e).includes('SECRET'));assert.equal(calls,1);}
 });
+
+test('disposable proof loads actual built API classes from its API-anchored require independent of working directory',()=>{
+ const {readFileSync}=require('node:fs'),{createRequire}=require('node:module'),{resolve}=require('node:path');
+ const apiRoot=resolve(__dirname,'..'),apiRequire=createRequire(resolve(apiRoot,'package.json'));
+ const source=readFileSync(resolve(apiRoot,'../../packages/database/scripts/test-school-owner-invitations-integrity.mjs'),'utf8');
+ const specifiers=[...source.matchAll(/require\('([^']*dist\/[^']+)'\)/g)].map(m=>m[1]);
+ assert.equal(specifiers.length,4);
+ for(const specifier of specifiers){const file=apiRequire.resolve(specifier);assert(file.startsWith(apiRoot+'/dist/'));assert.equal(typeof apiRequire(specifier),'object');}
+});
