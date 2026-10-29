@@ -5,9 +5,9 @@ const c=require('@hon/contracts'),auth=require('@hon/auth');
 const ids={invitationId:randomUUID(),organizationId:randomUUID(),schoolId:randomUUID()},t=randomBytes(32).toString('base64url');
 const receipt={...ids,accountStatus:'OWNER_BOUND',accessGranted:false,billingActivated:false,aiCreditsGranted:false};
 test('closed request/response never accept authority, financial effects or raw server tokens',()=>{
- const input={organizationId:ids.organizationId,schoolId:ids.schoolId,email:'owner@example.invalid',ttlHours:24,token:t};
+ const input={schoolId:ids.schoolId,email:'owner@example.invalid',ttlHours:24,token:t};
  assert.deepEqual(c.validateOwnerInvitationInput(input),input);
- for(const patch of [{role:'OWNER'},{externalSubject:'other'},{ttlHours:169},{token:'short'},{email:' OWNER@example.invalid'}])assert.throws(()=>c.validateOwnerInvitationInput({...input,...patch}));
+ for(const patch of [{organizationId:ids.organizationId},{role:'OWNER'},{externalSubject:'other'},{ttlHours:169},{token:'short'},{email:' OWNER@example.invalid'}])assert.throws(()=>c.validateOwnerInvitationInput({...input,...patch}));
  assert.deepEqual(c.validateOwnerAccountReceipt(receipt),receipt);
  for(const k of ['accessGranted','billingActivated','aiCreditsGranted'])assert.throws(()=>c.validateOwnerAccountReceipt({...receipt,[k]:true}));
 });
@@ -40,6 +40,15 @@ test('disposable proof loads actual built API classes from its API-anchored requ
  const apiRoot=resolve(__dirname,'..'),apiRequire=createRequire(resolve(apiRoot,'package.json'));
  const source=readFileSync(resolve(apiRoot,'../../packages/database/scripts/test-school-owner-invitations-integrity.mjs'),'utf8');
  const specifiers=[...source.matchAll(/require\('([^']*dist\/[^']+)'\)/g)].map(m=>m[1]);
- assert.equal(specifiers.length,4);
+ assert.equal(specifiers.length,7);
  for(const specifier of specifiers){const file=apiRequire.resolve(specifier);assert(file.startsWith(apiRoot+'/dist/'));assert.equal(typeof apiRequire(specifier),'object');}
+});
+
+test('HQ invitation command sends only school selector to the protected SQL resolver and rejects browser organization authority',async()=>{
+ const calls=[],invitation={...ids,email:'owner@example.invalid',expiresAt:'2026-11-01T12:00:00.000Z',status:'PENDING'};
+ const service=new SchoolOwnerInvitationService({callSchoolAccount:async(...a)=>{calls.push(a);return invitation;}});
+ const request={honIdentity:{externalSubject:'verified-hq-owner'}},input={schoolId:ids.schoolId,email:invitation.email,ttlHours:24,token:t};
+ assert.deepEqual(await service.command(request,'invite',input,randomUUID()),invitation);
+ const body=JSON.parse(calls[0][1][1]);assert.deepEqual(Object.keys(body).sort(),['email','schoolId','tokenHash','ttlHours']);assert.equal(body.schoolId,ids.schoolId);
+ await assert.rejects(()=>service.command(request,'invite',{...input,organizationId:randomUUID()},randomUUID()),e=>e.status===400);assert.equal(calls.length,1);
 });

@@ -7,12 +7,12 @@ export function accountClosed(v: unknown, keys: readonly string[]): Record<strin
   return v as Record<string,unknown>;
 }
 function token(v: unknown): string { if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(v)) throw new Error('ACCOUNT_INPUT_INVALID'); return v; }
-export interface OwnerInvitationInput { organizationId: string; schoolId: string; email: string; ttlHours: number; token: string }
+export interface OwnerInvitationInput { schoolId: string; email: string; ttlHours: number; token: string }
 export function validateOwnerInvitationInput(v: unknown): OwnerInvitationInput {
-  const o = accountClosed(v,['organizationId','schoolId','email','ttlHours','token']);
+  const o = accountClosed(v,['schoolId','email','ttlHours','token']);
   if (typeof o.email !== 'string' || o.email !== o.email.toLowerCase().trim() || o.email.length>254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)
     || !Number.isInteger(o.ttlHours) || (o.ttlHours as number)<1 || (o.ttlHours as number)>168) throw new Error('ACCOUNT_INPUT_INVALID');
-  return Object.freeze({organizationId:accountUuid(o.organizationId),schoolId:accountUuid(o.schoolId),email:o.email,ttlHours:o.ttlHours as number,token:token(o.token)});
+  return Object.freeze({schoolId:accountUuid(o.schoolId),email:o.email,ttlHours:o.ttlHours as number,token:token(o.token)});
 }
 export function validateOwnerInvitationAcceptance(v: unknown) {
   const o=accountClosed(v,['invitationId','token','confirmation']);

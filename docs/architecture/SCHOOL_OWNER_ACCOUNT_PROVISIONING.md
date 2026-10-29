@@ -14,7 +14,7 @@ An existing current HON HQ OWNER approves an exact active organization/school fr
 
 1. Configure the existing deployment-owned OIDC provider (account registration, verified email, MFA and provider recovery). No credentials were configured or providers contacted by this PR.
 2. HQ provisions/approves the organization and school using the existing HQ onboarding API. No database console is needed. If the organization is not yet approved, do not issue an invitation.
-3. Signed-in HQ owner opens `/hq/school-owner-invitations`, verifies access and explicitly loads the approved directory. Select school, enter owner email, generate a private 256-bit token and record the invitation. Default expiry 24 hours; API permits 1–168 hours. The database chooses the invitation ID and canonical OWNER role.
+3. Signed-in HQ owner opens `/hq/school-owner-invitations`, verifies access and explicitly loads the approved directory. Select school, enter owner email, generate a private 256-bit token and record the invitation. Default expiry 24 hours; API permits 1–168 hours. The minimized production directory contains no organization ID; its exact closed response is validated unchanged. The database resolves the selected school’s organization and chooses the invitation ID and canonical OWNER role.
 4. Share `/account/owner-invitation`, the invitation ID and token through an independently approved secure channel. The token is NOT a query/fragment/path value. No email/SMS is sent. The existing login callback still lands at `/hq`; the school owner opens the fixed invitation page again after login. An automatic account-type landing router is a follow-up.
 5. Owner signs in with the invited verified email and explicitly accepts. One transaction creates/reuses the exact subject's human identity and creates one school-scoped OWNER grant. Existing active grants in another organization, mixed HQ/family identity, duplicate email under another subject and ambiguous/inactive principals require review. Same-organization additional schools are supported only via independent approved invitations, not an organization-wide grant.
 6. Owner can sign in normally and resolve ONLY the bound school. Operating APIs retain their existing entitlement checks. `OWNER_BOUND` means identity binding; it never means paid access or commercially activated software.
@@ -24,7 +24,7 @@ An existing current HON HQ OWNER approves an exact active organization/school fr
 
 All routes use the verified HON session and private/no-store responses. Commands require POST JSON, exact configured Origin, same-origin fetch metadata, `X-HON-Human-Command: school-owner-account`, UUID `Idempotency-Key`, and no contextual headers/query/delegation.
 
-- POST `/v1/hq/school-owner-invitations`: closed `{organizationId, schoolId, email, ttlHours, token}`. IDs are untrusted targets; live HQ authority and composite school ownership are independently checked.
+- POST `/v1/hq/school-owner-invitations`: closed `{schoolId, email, ttlHours, token}`. The school ID is an untrusted target; current HQ-owner authority is independently checked. PostgreSQL derives the organization from that school while holding the existing authority locks, never from browser fields. Supplied organization/role fields are rejected.
 - GET `/v1/hq/schools/:schoolId/owner-invitations`: HQ OWNER only, bounded latest 50, explicit read. No token/hash, creator, accepting subject, grant identity or private evidence returned.
 - POST `/v1/hq/school-owner-invitations/revoke`: closed `{invitationId}`.
 - POST `/v1/account/school-owner-invitations/accept`: closed `{invitationId, token, confirmation: "ACCEPT_SCHOOL_OWNER_INVITATION"}`. No role, organization, email, entitlement, person or subject input.
@@ -66,3 +66,9 @@ No migration 0190 is authored: pending A2P #82 already uses it. Migration 0191 i
 ## Independent review request
 
 Claude: independently review exact final PR head, verified-email trust and identity recovery boundary, broad NOWAIT authority serialization, token handling, private evidence/ACLs, replay/revocation and two-organization real signed-session proofs. Approval requested for source merge only; deployment, real account creation, providers, billing and activation remain separately gated. No changes to Claude's conversation, A2P or other PRs are requested.
+
+## P1 directory/invitation correction
+
+The prior browser fixture incorrectly added organization/invitation IDs to the minimized school directory. The fixture now matches the unchanged seven-field production row, the UI reuses the existing strict directory validator, and the invitation command submits only the selected school ID plus closed invitation fields. The live HQ-owner check and canonical organization lookup happen together inside the existing protected database command and authority locks. No new lookup API, direct runtime table access or broader directory projection is added.
+
+The real signed-session/PostgreSQL proof now calls the actual HQ directory controller/service first and uses its organization-ID-free row to issue an invitation. It verifies the resulting canonical school/organization and rejection of organization overrides in both HTTP and direct protected-function input, expired HQ grants/sessions, unauthorized actors, cross-school identities and revoked invitations. Migration 0191 remains an unmerged draft under the same proposed number; only its draft command body/checksum changes. Historical main migrations and number reservations remain untouched.

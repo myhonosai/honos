@@ -18,11 +18,14 @@ const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
 const {SchoolOwnerInvitationService}=require('./dist/accounts/school-owner-invitation.service.js');
 const {SchoolOwnerInvitationController,SchoolAccountHumanGuard}=require('./dist/accounts/school-owner-invitation.controller.js');
 const {OWNER_INVITATION_CONFIRMATION}=require('@hon/contracts');
+const {HqController}=require('./dist/hq/hq.controller.js');
+const {HqOverviewService}=require('./dist/hq/hq-overview.service.js');
+const {HqSchoolDirectoryService}=require('./dist/hq/hq-school-directory.service.js');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
 const session={mode:'OIDC',audience:'p0-disposable',secret:randomBytes(32).toString('hex')};
 Object.assign(process.env,{HON_AUTH_MODE:session.mode,HON_SESSION_AUDIENCE:session.audience,HON_SESSION_JWT_SECRET:session.secret});
-const actor={hq:{subject:'p0-hq-'+K(),principal:K(),user:K()},operator:{subject:'p0-op-'+K(),principal:K(),user:K()}};
+const actor={hq:{subject:'p0-hq-'+K(),principal:K(),user:K()},operator:{subject:'p0-op-'+K(),principal:K(),user:K()},expired:{subject:'p0-expired-'+K(),principal:K(),user:K()}};
 const identities={a:{externalSubject:'oidc:p0:'+K(),email:'a-'+K()+'@example.invalid',emailVerified:true},b:{externalSubject:'oidc:p0:'+K(),email:'b-'+K()+'@example.invalid',emailVerified:true}};
 const pass=name=>console.log('PASS P0-1 '+(++groups)+' '+name);
 const hash=x=>createHash('sha256').update(x).digest('hex');
@@ -31,7 +34,7 @@ async function send(path,{who='hq',body,key=K(),method='POST',identity,expired=f
  const cookie=person?HON_SESSION_COOKIE+'='+issueSession(person,session,Math.floor(Date.now()/1000)-(expired?43201:0)):undefined;
  return new Promise((resolve,reject)=>{const req=request(origin+'/v1/'+path,{method,headers:{...(cookie?{cookie}:{}),origin,'sec-fetch-site':'same-origin','sec-fetch-mode':'same-origin','sec-fetch-dest':'empty',...(method==='POST'?{'content-type':'application/json','x-hon-human-command':'school-owner-account','idempotency-key':key}:{}),...headers}},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(text),headers:res.headers}));});req.on('error',reject);req.end(body===undefined?undefined:JSON.stringify(body));});
 }
-const invite=(o,email,extra={})=>{const token=randomBytes(32).toString('base64url');return {organizationId:o.organizationId,schoolId:o.schoolId,email,ttlHours:24,token,...extra};};
+const invite=(o,email,extra={})=>{const token=randomBytes(32).toString('base64url');return {schoolId:o.schoolId,email,ttlHours:24,token,...extra};};
 const accept=(i,token)=>({invitationId:i.invitationId,token,confirmation:OWNER_INVITATION_CONFIRMATION});
 const q=async(sql,args=[])=>(await admin.query(sql,args)).rows;
 const receipt=r=>{assert.equal(r.status,200,JSON.stringify(r));return r.body.data;};
@@ -44,27 +47,36 @@ try{
  for(const [kind,a]of Object.entries(actor)){
   await q("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'P0 synthetic HQ')",[a.user,a.subject,a.user+'@example.invalid']);
   await q("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','P0 synthetic HQ')",[a.principal,a.user]);
-  await q("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes) VALUES($1,$2,ARRAY['hq.onboarding.manage'])",[a.principal,kind==='hq'?'HON_HQ_OWNER':'HON_HQ_OPERATOR']);
+  await q("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,$2,ARRAY['hq.onboarding.manage'],clock_timestamp()-interval '2 days',CASE WHEN $3 THEN clock_timestamp()-interval '1 day' ELSE NULL END)",[a.principal,kind==='operator'?'HON_HQ_OPERATOR':'HON_HQ_OWNER',kind==='expired']);
  }
  const provision=async()=>{const id=K();return (await q("SELECT organization_id AS \"organizationId\",school_id AS \"schoolId\" FROM hon.provision_school_from_hq($1,'P0 synthetic','P0 synthetic','P0 school',$2,'UTC','COMPLETE',$3,$3,$4,$4)",[actor.hq.subject,'p0-'+id,K(),K()]))[0];};
  const orgA=await provision(),orgB=await provision();
  const excluded=['users','principals','principal_role_grants','school_owner_invitations','school_account_requests','school_account_events'];
  const tables=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' AND NOT(tablename=ANY($1)) ORDER BY tablename",[excluded])).map(r=>r.tablename);
  const snapshot=async()=>{const out={};for(const t of tables){assert.match(t,/^[a-z_]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};const baseline=await snapshot();
- const module=await Test.createTestingModule({controllers:[SchoolOwnerInvitationController],providers:[SchoolOwnerInvitationService,SchoolAccountHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
+ const module=await Test.createTestingModule({controllers:[SchoolOwnerInvitationController,HqController],providers:[SchoolOwnerInvitationService,SchoolAccountHumanGuard,HonIdentityService,HqOverviewService,HqSchoolDirectoryService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
- const inputA=invite(orgA,identities.a.email),inputB=invite(orgB,identities.b.email),key=K();
+ const productionDirectory=receipt(await send('hq/schools',{method:'GET'})).directory;
+ const selected=productionDirectory.schools.find(s=>s.schoolId===orgA.schoolId);assert(selected);
+ assert.deepEqual(Object.keys(selected).sort(),['createdAt','entitlementTier','organizationDisplayName','organizationOperationalStatus','schoolDisplayName','schoolId','schoolOperationalStatus']);
+ assert(!Object.hasOwn(selected,'organizationId'));assert(!Object.hasOwn(selected,'invitationId'));
+ const inputA=invite(selected,identities.a.email),inputB=invite(orgB,identities.b.email),key=K();
  const invitationA=receipt(await send('hq/school-owner-invitations',{body:inputA,key}));
- assert.equal(invitationA.status,'PENDING');assert(!JSON.stringify(invitationA).includes(inputA.token));
+ assert.equal(invitationA.status,'PENDING');assert.equal(invitationA.organizationId,orgA.organizationId);assert.equal(invitationA.schoolId,selected.schoolId);
+ pass('real HQ directory response has no organizationId; school-only UI command creates invitation under the database-resolved organization');assert(!JSON.stringify(invitationA).includes(inputA.token));
  assert.deepEqual(receipt(await send('hq/school-owner-invitations',{body:inputA,key})),invitationA);
  await denied(()=>send('hq/school-owner-invitations',{body:{...inputA,email:'changed@example.invalid'},key}),409);
  const invitationB=receipt(await send('hq/school-owner-invitations',{body:inputB}));
  pass('HQ-only expiring invitations, server hash custody, exact retry and changed-key conflict; independent organizations');
  await denied(()=>send('hq/school-owner-invitations',{who:'operator',body:invite(orgA,'op@example.invalid')}),403);
  await denied(()=>send('hq/school-owner-invitations',{who:'a',body:invite(orgA,'owner@example.invalid')}),403);
- await denied(()=>send('hq/school-owner-invitations',{body:invite({...orgA,schoolId:orgB.schoolId},'mismatch@example.invalid')}),404);
- for(const patch of [{role:'OWNER'},{activate:true},{organizationId:orgA.organizationId,principalId:K()}])await denied(()=>send('hq/school-owner-invitations',{body:{...inputA,...patch}}),400);
- pass('operator/school denial; cross-organization school selectors and client authority/activation overrides refused atomically');
+ await denied(()=>send('hq/school-owner-invitations',{body:invite({schoolId:K()},'missing@example.invalid')}),404);
+ for(const patch of [{organizationId:orgB.organizationId},{role:'OWNER'},{activate:true},{organizationId:orgA.organizationId,principalId:K()}])await denied(()=>send('hq/school-owner-invitations',{body:{...inputA,...patch}}),400);
+ await denied(()=>send('hq/school-owner-invitations',{who:'expired',body:invite(orgA,'expired@example.invalid')}),403);
+ await denied(()=>send('hq/school-owner-invitations',{body:invite(orgA,'expired-session@example.invalid'),expired:true}),401);
+ const rawOverride={schoolId:orgA.schoolId,organizationId:orgB.organizationId,email:'raw-'+K()+'@example.invalid',ttlHours:24,tokenHash:hash(randomBytes(32))};
+ const noClaims=await counts();await assert.rejects(()=>restricted.query("SELECT hon.manage_school_owner_invitation($1,'INVITE',$2::jsonb,$3::uuid)",[actor.hq.subject,rawOverride,K()]),e=>e.code==='22023');assert.deepEqual(await counts(),noClaims);
+ pass('operator/school/expired-HQ/session denial; browser and direct-function organization overrides, unknown schools and role/activation overrides refused atomically');
  for(const [who,body,identity]of [['b',accept(invitationA,inputA.token),undefined],['a',accept(invitationB,inputB.token),undefined],['a',accept(invitationA,randomBytes(32).toString('base64url')),undefined],['a',accept(invitationA,inputA.token),{...identities.a,emailVerified:undefined}]])
   await denied(()=>send('account/school-owner-invitations/accept',{who,body,identity}),403);
  await denied(()=>send('account/school-owner-invitations/accept',{who:'a',body:accept(invitationA,inputA.token),expired:true}),401);

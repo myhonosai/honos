@@ -110,17 +110,20 @@ BEGIN
   END IF;
   at:=clock_timestamp();
   IF p_operation='INVITE' THEN
-    IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) IS DISTINCT FROM ARRAY['email','organizationId','schoolId','tokenHash','ttlHours']
+    IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) IS DISTINCT FROM ARRAY['email','schoolId','tokenHash','ttlHours']
       OR jsonb_typeof(p_input->'email') IS DISTINCT FROM 'string' OR p_input->>'email'<>lower(btrim(p_input->>'email'))
       OR length(p_input->>'email') NOT BETWEEN 3 AND 254 OR p_input->>'email' !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
       OR jsonb_typeof(p_input->'tokenHash') IS DISTINCT FROM 'string' OR p_input->>'tokenHash' !~ '^[0-9a-f]{64}$'
       OR jsonb_typeof(p_input->'ttlHours') IS DISTINCT FROM 'number' OR p_input->>'ttlHours' !~ '^[0-9]{1,3}$'
-      OR jsonb_typeof(p_input->'organizationId') IS DISTINCT FROM 'string' OR jsonb_typeof(p_input->'schoolId') IS DISTINCT FROM 'string' THEN
+      OR jsonb_typeof(p_input->'schoolId') IS DISTINCT FROM 'string' THEN
       RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
-    v_org:=(p_input->>'organizationId')::uuid; v_school:=(p_input->>'schoolId')::uuid; v_ttl:=(p_input->>'ttlHours')::integer;
+    v_school:=(p_input->>'schoolId')::uuid; v_ttl:=(p_input->>'ttlHours')::integer;
     IF v_ttl NOT BETWEEN 1 AND 168 THEN RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
-    IF NOT EXISTS(SELECT 1 FROM hon.schools s JOIN hon.organizations o ON o.id=s.organization_id WHERE s.id=v_school AND s.organization_id=v_org AND s.status='ACTIVE' AND o.status='ACTIVE')
-      OR NOT EXISTS(SELECT 1 FROM hon.roles WHERE organization_id=v_org AND code='OWNER' AND is_system_role) THEN
+    -- The browser supplies a school selector only. Derive its organization under the same
+    -- live HQ-owner authority/table locks as the insertion; no directory expansion or second-read race.
+    SELECT s.organization_id INTO v_org FROM hon.schools s JOIN hon.organizations o ON o.id=s.organization_id
+      WHERE s.id=v_school AND s.status='ACTIVE' AND o.status='ACTIVE';
+    IF v_org IS NULL OR NOT EXISTS(SELECT 1 FROM hon.roles WHERE organization_id=v_org AND code='OWNER' AND is_system_role) THEN
       RAISE EXCEPTION 'ACCOUNT_UNAVAILABLE' USING ERRCODE='P0002'; END IF;
     IF EXISTS(SELECT 1 FROM hon.school_owner_invitations WHERE school_id=v_school AND email=p_input->>'email' AND status='PENDING' AND expires_at>at) THEN
       RAISE EXCEPTION 'ACCOUNT_INVITATION_EXISTS' USING ERRCODE='23505'; END IF;

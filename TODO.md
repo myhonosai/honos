@@ -1,5 +1,7 @@
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 
+- P1 correction: keep the minimized production HQ directory unchanged, submit school-only invitation input, and resolve the canonical organization inside the protected HQ-owner database transaction. Correct the enhanced browser fixture; fresh exact-head verification pending.
+
 - Reuse deployment-owned OIDC and HON IAM; invite an exact approved organization/school, bind verified email and issuer-scoped subject, expire/revoke/single-use accept with immutable retries and private evidence.
 - No billing/access/AI activation. School-owner login is separate from operating entitlements. Full self-service registration, staff/parent invitations and reviewed identity replacement remain launch-critical sequenced dependencies, not optional beta scope.
 - Preserve approved main HON design and all existing shared assets/modes. No old Manus PR #27 or unmerged visual replacement.

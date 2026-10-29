@@ -1,10 +1,11 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import { OWNER_INVITATION_CONFIRMATION, validateOwnerInvitation, validateOwnerAccountReceipt, type OwnerInvitation } from '@hon/contracts';
+import { OWNER_INVITATION_CONFIRMATION, accountClosed, validateOwnerInvitation, validateOwnerAccountReceipt, type OwnerInvitation, type HqSchoolDirectoryEntry } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT, reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { accountRequest, AccountError } from './http';
 import styles from './workbench.module.css';
-type School={schoolId:string;organizationId:string;schoolDisplayName:string;organizationDisplayName:string};
+import { verifyHqSchoolDirectorySnapshot } from '../hq-school-directory-http';
+type School=HqSchoolDirectoryEntry;
 type Command=Readonly<{path:string;body:Readonly<Record<string,unknown>>;key:string;identity:string;kind:'invite'|'revoke'|'accept'}>;
 export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
   const [hidden,setHidden]=useState(false),[verified,setVerified]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[schools,setSchools]=useState<School[]>([]),[school,setSchool]=useState(''),[items,setItems]=useState<OwnerInvitation[]>([]),[email,setEmail]=useState(''),[token,setToken]=useState(''),[invitation,setInvitation]=useState(''),[confirmed,setConfirmed]=useState(false),[retry,setRetry]=useState(false),[receipt,setReceipt]=useState('');
@@ -69,14 +70,14 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
       {retry&&<aside><p>The exact request remains in private memory. Retry requires your action. Abandoning local recovery cannot reverse a server action; a full page reload loses this request.</p><button disabled={busy} onClick={()=>pending.current&&void execute(pending.current)}>Retry exact request</button><button disabled={busy} onClick={()=>{if(window.confirm('Abandon local recovery? This cannot reverse an action already committed by HON.')){pending.current=null;setRetry(false);}}}>Abandon local recovery</button></aside>}
       <fieldset disabled={busy||retry}>
         {hq?<>
-          <button type="button" onClick={()=>void load('hq/schools',v=>{const d=v as {directory?:{schools?:School[]}};if(!Array.isArray(d.directory?.schools))throw new Error();setSchools(d.directory.schools);})}>Load approved schools</button>
+          <button type="button" onClick={()=>void load('hq/schools',v=>{const d=accountClosed(v,['directory']);setSchools(verifyHqSchoolDirectorySnapshot(d.directory).schools);})}>Load approved schools</button>
           <label>Approved school<select value={school} onChange={e=>{setSchool(e.target.value);setItems([]);setReceipt('');}}><option value="">Select a school</option>{schools.map(s=><option value={s.schoolId} key={s.schoolId}>{s.organizationDisplayName} — {s.schoolDisplayName}</option>)}</select></label>
           <button type="button" disabled={!school} onClick={()=>void load('hq/schools/'+school+'/owner-invitations',v=>{if(!Array.isArray(v))throw new Error();setItems(v.map(validateOwnerInvitation));})}>Review invitations (latest 50)</button>
           <label>Owner email<input type="email" value={email} onChange={e=>setEmail(e.target.value.toLowerCase())}/></label>
           <label>Private invitation token<input value={token} readOnly autoComplete="off"/></label>
           <button type="button" onClick={()=>{const b=crypto.getRandomValues(new Uint8Array(32));setToken(btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''));}}>Generate private token</button>
           <p>Keep this token out of URLs, logs and browser storage. Send the ID and token through your approved secure channel. Expires in 24 hours.</p>
-          <button type="button" disabled={!school||!email||!token} onClick={()=>{const s=schools.find(x=>x.schoolId===school);if(s&&window.confirm('Invite this email as owner of the selected school?'))start('invite',{organizationId:s.organizationId,schoolId:s.schoolId,email,token,ttlHours:24});}}>Record owner invitation</button>
+          <button type="button" disabled={!school||!email||!token} onClick={()=>{const s=schools.find(x=>x.schoolId===school);if(s&&window.confirm('Invite this email as owner of the selected school?'))start('invite',{schoolId:s.schoolId,email,token,ttlHours:24});}}>Record owner invitation</button>
           <ul>{items.map(i=><li key={i.invitationId}><p>{i.email} — {i.status}</p><p>Invitation ID: {i.invitationId}</p><p>Expires: {i.expiresAt}</p>{i.status!=='REVOKED'&&<button type="button" onClick={()=>{if(window.confirm('Revoke this invitation and only the owner grant it created?'))start('revoke',{invitationId:i.invitationId});}}>Revoke invitation / bound grant</button>}</li>)}</ul>
         </>:<>
           <label>Invitation ID<input value={invitation} onChange={e=>setInvitation(e.target.value)} autoComplete="off"/></label>

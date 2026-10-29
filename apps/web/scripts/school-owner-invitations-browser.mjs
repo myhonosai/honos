@@ -7,7 +7,7 @@ import {spawn} from 'node:child_process';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {issueSession,verifySession,cookieValue,HON_SESSION_COOKIE} from '@hon/auth';
-import {HQ_OVERVIEW_UNAVAILABLE_REASONS} from '@hon/contracts';
+import {HQ_OVERVIEW_UNAVAILABLE_REASONS,validateOwnerInvitationInput} from '@hon/contracts';
 assert(process.env.GITHUB_ACTIONS==='true'||process.env.HON_P0_BROWSER_LOCAL==='1');
 for(const k of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL','ZERNIO_API_KEY','STRIPE_SECRET_KEY','OPENAI_API_KEY'])assert(!process.env[k]);
 const root=resolve('.'),req=createRequire(join(root,'package.json')),tools=createRequire(join(process.env.HON_HQ_BROWSER_TOOLS,'runner.cjs'));
@@ -17,6 +17,7 @@ const report={sourceSha:process.env.HON_HQ_SOURCE_SHA,syntheticBrowserOnly:true,
 const session={mode:'OIDC',audience:'p0-browser',secret:randomBytes(32).toString('hex')},ids={invitationId:randomUUID(),organizationId:randomUUID(),schoolId:randomUUID()};
 const account={...ids,accountStatus:'OWNER_BOUND',accessGranted:false,billingActivated:false,aiCreditsGranted:false};
 const inv={...ids,email:'synthetic-owner@example.invalid',expiresAt:'2026-11-01T12:00:00.000Z',status:'PENDING'};
+const directory={schools:[{schoolId:ids.schoolId,organizationDisplayName:'Synthetic Approved Organization',schoolDisplayName:'Synthetic Approved School',organizationOperationalStatus:'ACTIVE',schoolOperationalStatus:'ACTIVE',entitlementTier:null,createdAt:'2026-10-28T12:00:00.000Z'}]};
 const state={posts:[],hold:false,settle:null,status:200,reads:0};
 const overview={asOf:'2026-10-28T12:00:00.000Z',callerHqRole:'OWNER',organizationCount:0,schoolCount:0,onboarding:{availability:'AVAILABLE',requestCount:0,inProgressRequestCount:0,completedRequestCount:0},configuredProviderStates:{disabled:0,configured:0,healthy:0,degraded:0,unavailable:0},taskProfileCount:0,financialMetrics:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics},aiUsage:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage},durableHqWork:{availability:'UNAVAILABLE',state:'NO_RECORDED_WORK',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork}};
 const api=createServer(async(r,s)=>{
@@ -25,11 +26,15 @@ const api=createServer(async(r,s)=>{
  if(r.url==='/v1/hq/session'){send(state.status,{principalId:ids.invitationId,hqRole:'HON_HQ_OWNER'});return;}
  if(r.url==='/v1/hq/overview'){send(200,{overview});return;}
  if(r.url==='/v1/me/language-preference'){send(200,{preference:{language:'en',version:1,updatedAt:'2026-10-28T00:00:00.000Z'},schoolDefault:null,effective:{language:'en',source:'PERSONAL'},supportedLanguages:['en','ko','es']});return;}
- if(r.url==='/v1/hq/schools'){++state.reads;send(state.status,{directory:{schools:[{...ids,schoolDisplayName:'Synthetic Approved School',organizationDisplayName:'Synthetic Approved Organization'}]}});return;}
+ if(r.url==='/v1/hq/schools'){++state.reads;send(state.status,{directory});return;}
  if(r.method==='GET'&&r.url.endsWith('/owner-invitations')){++state.reads;send(state.status,[inv]);return;}
  if(r.method==='POST'){
   let body='';for await(const c of r)body+=c;
   state.posts.push({path:r.url,body,key:r.headers['idempotency-key']});
+  if(r.url==='/v1/hq/school-owner-invitations'){
+   try{const input=validateOwnerInvitationInput(JSON.parse(body));assert.equal(input.schoolId,ids.schoolId);assert(!Object.hasOwn(input,'organizationId'));}
+   catch{send(400);return;}
+  }
   const result=r.url.endsWith('/accept')?account:inv;
   if(state.hold){state.settle=()=>send(state.status,result);return;}send(state.status,result);return;
  }
@@ -48,7 +53,7 @@ try{
  for(const [size,viewport]of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]){
   let {page,context}=await open(true,viewport);
   await page.getByRole('button',{name:'Load approved schools'}).click();await page.getByLabel('Approved school').selectOption(ids.schoolId);await page.getByLabel('Owner email',{exact:true}).fill(inv.email);await page.getByRole('button',{name:'Generate private token'}).click();
-  page.on('dialog',d=>d.accept());await page.getByRole('button',{name:'Record owner invitation'}).click();await page.getByText('Invitation recorded.',{exact:false}).waitFor();await capture(page,size+'-hq-owner-invitation');await context.close();
+  const beforeInvite=state.posts.length;page.on('dialog',d=>d.accept());await page.getByRole('button',{name:'Record owner invitation'}).click();await page.getByText('Invitation recorded.',{exact:false}).waitFor();assert.equal(state.posts.length,beforeInvite+1);assert.deepEqual(Object.keys(JSON.parse(state.posts[beforeInvite].body)).sort(),['email','schoolId','token','ttlHours']);await capture(page,size+'-hq-owner-invitation');await context.close();
   ({page,context}=await open(false,viewport));await page.getByLabel('Invitation ID',{exact:true}).fill(ids.invitationId);await page.getByLabel('Private invitation token',{exact:true}).fill('A'.repeat(43));await page.getByRole('checkbox').check();
   state.hold=true;const before=state.posts.length;await page.getByRole('button',{name:'Accept invitation',exact:true}).click();await page.waitForTimeout(100);assert.equal(state.posts.length,before+1);
   await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByText('Private account information is concealed.',{exact:false}).waitFor();assert(await page.getByRole('button',{name:'Verify access',exact:true}).isDisabled());assert.equal(await page.getByRole('textbox').count(),0);
