@@ -1943,6 +1943,17 @@ DO $$ DECLARE r text;c text;f text; BEGIN
  END IF;
 END $$;
 
+
+-- A2P-1 read-only preparation scope (0190): no new table or provider grants.
+DO $$ DECLARE r text; BEGIN
+ IF to_regprocedure('hon.read_a2p_preparation_scope(text)') IS NULL THEN RAISE EXCEPTION 'Apply A2P-1 migration 0190 first'; END IF;
+ FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role','hon_outbox_worker','hon_runtime'] LOOP
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION hon.read_a2p_preparation_scope(text) FROM %I',r); END IF;
+ END LOOP;
+ REVOKE ALL ON FUNCTION hon.read_a2p_preparation_scope(text) FROM PUBLIC;
+ GRANT EXECUTE ON FUNCTION hon.read_a2p_preparation_scope(text) TO hon_runtime;
+END $$;
+
 -- P0-1 0191 private school account custody and fixed function grants.
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_owner_invitations','school_account_requests','school_account_events'] LOOP
@@ -1955,6 +1966,7 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
     END LOOP;
   END LOOP;
   FOREACH f IN ARRAY ARRAY['guard_school_account_evidence()','guard_school_owner_invitation()','lock_school_account_authority()',
+    'check_school_owner_acceptance(text,text,jsonb,uuid)',
     'school_invitation_json(hon.school_owner_invitations)','school_account_result(hon.school_owner_invitations)',
     'school_account_record(text,uuid,text,uuid,text,jsonb)','manage_school_owner_invitation(text,text,jsonb,uuid)',
     'accept_school_owner_invitation(text,text,jsonb,uuid)','read_school_owner_invitations(text,uuid)'] LOOP

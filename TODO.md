@@ -5,15 +5,27 @@
 - Reuse deployment-owned OIDC and HON IAM; invite an exact approved organization/school, bind verified email and issuer-scoped subject, expire/revoke/single-use accept with immutable retries and private evidence.
 - No billing/access/AI activation. School-owner login is separate from operating entitlements. Full self-service registration, staff/parent invitations and reviewed identity replacement remain launch-critical sequenced dependencies, not optional beta scope.
 - Preserve approved main HON design and all existing shared assets/modes. No old Manus PR #27 or unmerged visual replacement.
-- Verification pending. Migration 0191 avoids unmerged A2P #82's 0190; 0179/0180 stay reserved.
+- Verification pending. Migration 0191 follows merged A2P #82's 0190; 0179/0180 stay reserved.
 
 # HON Delivery Backlog
+
+## PR #88 final main integration — Codex
+
+- [x] Reconcile main `8c1c0af12a5d9f6030b4c53d81741d6bd511204c` into the existing invitation branch with a normal two-parent merge. Preserve merged A2P 0190, invitation 0191, both runtime/RLS boundaries, and the unchanged HQ ownership-handoff policy.
+- [x] Regenerate evidence from all 183 migration files, targeting 0181–0191; retain historical bytes and reserved 0179/0180. Later PR #90 owns 0192 and remains unchanged.
+- [ ] Run fresh exact-head workspace, signed-session/disposable PostgreSQL, commercial and desktop/mobile accessibility checks; report actual results and stop before source merge or deployment.
 
 ## PR #88 P2 security correction — Codex
 
 - [x] Add initial live HQ/capability authorization before broad account locks, retain post-lock/wait reauthorization, refuse stale snapshot isolation, and bound authenticated command attempts without new business records. Preserve exact retry on 429.
 - [x] Add default-off verified-email issuance and compatible readers, with staged rollout/rollback tests and a proposed HQ-versus-school ownership policy; no ownership behavior change. Owner-approved allocation remains #82/0190, #88/0191, #90/0192; no renumbering here.
 - [ ] Verify the corrected exact head through fresh draft-safe workspace, browser, disposable PostgreSQL and commercial CI; request independent Claude security review. No activation or deployment approval is implied.
+
+## A2P-1 registration preparation backend — Codex
+
+- [x] Implement source-backed structured website checks, fixture-only inspection policy and deterministic martial-arts campaign/sample preparation with narrow exact-school read-only APIs. No public fetcher, legal/approval guarantee, saved consent, registration submission, provider call or SMS delivery.
+- [ ] Add the dedicated preparation permission and additive 0190 scope boundary; preserve historical migrations, RLS and all commercial gates. Verify API/contract/security tests and disposable database proofs; publish one focused draft PR with frontend handoff. PRs #78/#79/#80 and Claude's frontend remain untouched. Contract: `docs/architecture/A2P_REGISTRATION_ASSISTANT.md`.
+- [x] Owner-approved migration allocation: PR #82 = 0190, PR #88 = 0191, PR #90 = 0192. This reconciliation preserves the existing 0190 file and all historical migrations; PR #90's separate owner must carry out its authorized 0192 correction. No activation or deployment is authorized by this allocation.
 
 ## Zernio secure integration foundation — Codex
 

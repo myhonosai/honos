@@ -5,6 +5,7 @@ export * from './human-work-items.js';
 export * from './marketing-campaigns.js';
 export * from './zernio-integration.js';
 export * from './marketing-meta.js';
+export * from './a2p-registration.js';
 export * from './revenue-planning.js';
 export * from './search.js';
 export * from './staff-roles.js';

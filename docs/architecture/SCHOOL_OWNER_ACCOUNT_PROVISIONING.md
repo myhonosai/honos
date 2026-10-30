@@ -1,6 +1,6 @@
 # Launch P0-1 — school-owner account provisioning
 
-Status: implementation for independent review, not deployment approval. Baseline `2877a2711c8831be8bff3fa4c37ad81905255c2f`. HON OS targets a complete functional SaaS launch; this is the first account slice, not a concierge-beta definition of done.
+Status: implementation for independent review, not deployment approval. Integrated baseline `8c1c0af12a5d9f6030b4c53d81741d6bd511204c` (merged A2P #82); prior invitation review baseline `2877a2711c8831be8bff3fa4c37ad81905255c2f`. HON OS targets a complete functional SaaS launch; this is the first account slice, not a concierge-beta definition of done.
 
 ## Reuse and authority
 
@@ -65,7 +65,7 @@ Launch-critical sequenced PRs, not optional beta tasks:
 6. Localize the new account strings into shared English/Korean/Spanish catalogs and complete the account UX/navigation/browser acceptance before launch. Current new strings are English; no complete localization claim.
 7. Commercial/trial/AI activation remains governed by its own milestones/policy. This account foundation never bypasses entitlement gates to make login appear operational.
 
-No migration 0190 is authored: pending A2P #82 already uses it. Migration 0191 is additive. 0179/0180 stay reserved, all 181 historical main migrations stay byte-identical. Before combined release, recheck competing migrations and persistent deployment posture; do not run these fixtures/migrations against a shared database.
+This PR does not author or alter migration 0190: merged A2P #82's `0190_a2p_registration_preparation.sql` is preserved. Migration 0191 is additive. 0179/0180 stay reserved; all 182 historical migrations on the integrated main remain byte-identical. The combined tree contains 183 migrations and pins 11 targets from 0181 through 0191. Before combined release, recheck competing migrations and persistent deployment posture; do not run these fixtures/migrations against a shared database.
 
 ## Verified-email session rollout and rollback
 
@@ -93,3 +93,9 @@ Claude: independently review exact final PR head, verified-email trust and ident
 The prior browser fixture incorrectly added organization/invitation IDs to the minimized school directory. The fixture now matches the unchanged seven-field production row, the UI reuses the existing strict directory validator, and the invitation command submits only the selected school ID plus closed invitation fields. The live HQ-owner check and canonical organization lookup happen together inside the existing protected database command and authority locks. No new lookup API, direct runtime table access or broader directory projection is added.
 
 The real signed-session/PostgreSQL proof now calls the actual HQ directory controller/service first and uses its organization-ID-free row to issue an invitation. It verifies the resulting canonical school/organization and rejection of organization overrides in both HTTP and direct protected-function input, expired HQ grants/sessions, unauthorized actors, cross-school identities and revoked invitations. Migration 0191 remains an unmerged draft under the same proposed number; only its draft command body/checksum changes. Historical main migrations and number reservations remain untouched.
+
+## Final A2P/main integration checkpoint
+
+Normal two-parent integration of main `8c1c0af12a5d9f6030b4c53d81741d6bd511204c` into invitation head `0afde4b1ac9807da0781f8d7208cf01740595dde` retains both closed runtime API paths, both RLS/security registries, both contracts and both disposable proofs. Runtime reconciliation also explicitly revokes access to the private acceptance-preflight helper, matching migration 0191. Migration evidence is regenerated from the final sorted file bytes, not copied from either parent. Fresh combined-head results belong in the PR evidence record, not in older historical test counts.
+
+The owner has allocated later PR #90 to 0192. At inspection, PR #90 head `f36e7492a0268274d3e0af7174526991c365bbf6` still contains `0191_commercial_b2_schedule_billing.sql`; its owner must perform the separately authorized renumbering before combined integration. This PR neither imports that file nor changes #90. The current ceiling deliberately remains 0191; a later 0192 integration must regenerate the chain and update its ceiling/target count with fresh proofs. No HQ ownership-handoff behavior or policy changes are included.

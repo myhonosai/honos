@@ -1,6 +1,6 @@
 {
-  "baseline": "f2c040a12a1447f723a182fe21e73bcf545c6698",
-  "chainSha256": "c849a25b5ac2328803d92a558dd2cb6ced40ee8311e71b295183f6f42dbd8a1c",
+  "baseline": "8c1c0af12a5d9f6030b4c53d81741d6bd511204c",
+  "chainSha256": "c80ec2889fc1049e350ddbd0e1c8b67c07ebffa9cac0da6b278d630ee71d7ec4",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -37,6 +37,10 @@
     {
       "file": "0189_provider_subscription_schedule_foundation.sql",
       "sha256": "0ed32867b17b9e606f9b76237f54ef6bc2238895ebab66fc23c96027f9c84d08"
+    },
+    {
+      "file": "0190_a2p_registration_preparation.sql",
+      "sha256": "266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638"
     },
     {
       "file": "0191_school_owner_invitations.sql",
