@@ -1,3 +1,11 @@
+## Founder Setup guide — Codex (isolated frontend)
+
+- Local verification: 28 focused transport/lifecycle/catalog tests and all 1,037 web tests pass; typecheck, web production build and 183-pin migration validation pass. Hosted browser/screenshots and full workspace results remain pending on the final draft head. No backend/migration or commercial changes.
+
+- [x] Audit canonical main `f5815e0a9259418e68a5f7ee573074b9e6ee9fa3`: Owner Launch has requester-owned creation receipts, not a global readiness or pre-activation setup API. Staff/parent invitations, support tickets, shared checklist persistence and HQ-wide progress are gaps.
+- [x] Build a protected EN/KR/ES eight-step guide, explicit minimal receipt read/resume, static searchable help and support-outline copy. Add a separate authorized HQ directory view with unknown real progress and clearly isolated synthetic progress examples. No setup-complete, founder-allocation, payment, access or AI success claims.
+- [ ] Verify privacy/session/school/stale-response behavior, three layouts, 390/834/1440 screenshots, localization, accessibility and exact-head draft-safe CI. Preserve PRs #90/#92 and all security/billing work; no activation or deployment.
+
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 
 - P1 correction: keep the minimized production HQ directory unchanged, submit school-only invitation input, and resolve the canonical organization inside the protected HQ-owner database transaction. Correct the enhanced browser fixture; fresh exact-head verification pending.

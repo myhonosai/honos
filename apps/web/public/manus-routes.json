@@ -379,6 +379,14 @@
     {
       "path": "/hq/school-owner-invitations",
       "title": "HON HQ | Owner invitations"
+    },
+    {
+      "path": "/staff/founder-setup",
+      "title": "HON OS | Founder Setup"
+    },
+    {
+      "path": "/hq/founder-setup",
+      "title": "HON HQ | Founder Setup"
     }
   ]
 }
