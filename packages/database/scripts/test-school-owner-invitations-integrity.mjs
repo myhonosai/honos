@@ -40,9 +40,11 @@ const q=async(sql,args=[])=>(await admin.query(sql,args)).rows;
 const receipt=r=>{assert.equal(r.status,200,JSON.stringify(r));return r.body.data;};
 const counts=async()=>Object.fromEntries(await Promise.all(['users','principals','principal_role_grants','school_owner_invitations','school_account_requests','school_account_events'].map(async t=>[t,(await q('SELECT count(*) n FROM hon.'+t))[0].n])));
 async function denied(work,status){const before=await counts();const r=await work();assert.equal(r.status,status,JSON.stringify(r));assert.deepEqual(await counts(),before);assert.equal(r.headers['cache-control'],'private, no-store');assert(!JSON.stringify(r.body).match(/tokenHash|external_subject|SQLSTATE|SELECT /));return r;}
-async function waitBehindInvitationRow(pid){
+async function waitBehindInvitationRow(pid,blockerPid){
  for(let n=0;n<250;n++){
-  const row=(await q("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND relation='hon.users'::regclass AND mode='ShareRowExclusiveLock' AND granted) AS authority,EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock') AS waiting",[pid]))[0];
+  // pg_stat_activity wait details are masked across roles; pg_blocking_pids exposes the
+  // actual blocking edge without granting fixture owners pg_read_all_stats.
+  const row=(await q("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND relation='hon.users'::regclass AND mode='ShareRowExclusiveLock' AND granted) AS authority,$2::integer=ANY(pg_blocking_pids($1::integer)) AS waiting",[pid,blockerPid]))[0];
   if(row.authority&&row.waiting)return;
   await new Promise(done=>setTimeout(done,20));
  }
@@ -158,13 +160,13 @@ try{
  const expiredId=K(),expiredToken=randomBytes(32).toString('base64url');
  await q("INSERT INTO hon.school_owner_invitations(id,organization_id,school_id,email,token_hash,created_by,created_at,expires_at,status) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()-interval '2 days',clock_timestamp()-interval '1 day','PENDING')",[expiredId,orgA.organizationId,orgA.schoolId,c.email,hash(expiredToken),actor.hq.principal]);
  await denied(()=>send('account/school-owner-invitations/accept',{identity:c,body:accept({invitationId:expiredId},expiredToken)}),403);pass('expired invitations fail closed without cleanup or new claims');
- const pid=(await restricted.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+ const pid=(await restricted.query('SELECT pg_backend_pid() pid')).rows[0].pid,blockerPid=(await blocker.query('SELECT pg_backend_pid() pid')).rows[0].pid;
  // Authorized requests may wait behind a private invitation row, but live authority/expiry
  // must be checked after that wait; the losing command must roll back every possible effect.
  await blocker.query('BEGIN');await blocker.query('SELECT id FROM hon.school_owner_invitations WHERE id=$1 FOR UPDATE',[otherOrgInv.invitationId]);
  await q("UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp()+interval '5 seconds' WHERE principal_id=$1",[actor.waiter.principal]);
  const beforeWait=await counts(),pendingRevoke=restricted.query("SELECT hon.manage_school_owner_invitation($1,'REVOKE',$2::jsonb,$3)",[actor.waiter.subject,{invitationId:otherOrgInv.invitationId},K()]).then(value=>({value}),error=>({error}));
- await waitBehindInvitationRow(pid);
+ await waitBehindInvitationRow(pid,blockerPid);
  await q('SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM(effective_until-clock_timestamp())))+0.02) FROM hon.hq_operator_grants WHERE principal_id=$1',[actor.waiter.principal]);
  await blocker.query('COMMIT');assert.equal((await pendingRevoke).error?.code,'42501');assert.deepEqual(await counts(),beforeWait);assert.equal((await q('SELECT status FROM hon.school_owner_invitations WHERE id=$1',[otherOrgInv.invitationId]))[0].status,'PENDING');
  await q('UPDATE hon.hq_operator_grants SET effective_until=NULL WHERE principal_id=$1',[actor.waiter.principal]);
@@ -172,7 +174,7 @@ try{
  await q("INSERT INTO hon.school_owner_invitations(id,organization_id,school_id,email,token_hash,created_by,created_at,expires_at,status) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp(),clock_timestamp()+interval '5 seconds','PENDING')",[waitId,orgA.organizationId,orgA.schoolId,waitIdentity.email,hash(waitToken),actor.hq.principal]);
  await blocker.query('BEGIN');await blocker.query('SELECT id FROM hon.school_owner_invitations WHERE id=$1 FOR UPDATE',[waitId]);
  const beforeExpiry=await counts(),pendingAccept=restricted.query('SELECT hon.accept_school_owner_invitation($1,$2,$3::jsonb,$4)',[waitIdentity.externalSubject,waitIdentity.email,{invitationId:waitId,confirmation:OWNER_INVITATION_CONFIRMATION,tokenHash:hash(waitToken)},K()]).then(value=>({value}),error=>({error}));
- await waitBehindInvitationRow(pid);await q('SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM(expires_at-clock_timestamp())))+0.02) FROM hon.school_owner_invitations WHERE id=$1',[waitId]);
+ await waitBehindInvitationRow(pid,blockerPid);await q('SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM(expires_at-clock_timestamp())))+0.02) FROM hon.school_owner_invitations WHERE id=$1',[waitId]);
  await blocker.query('COMMIT');assert.equal((await pendingAccept).error?.code,'42501');assert.deepEqual(await counts(),beforeExpiry);
  pass('HQ authority and invitation expiry during actual row waits fail closed; no partial identity, role, invitation, claim or evidence effects');
  const rollbackIdentity={externalSubject:'oidc:p0:'+K(),email:'rollback-'+K()+'@example.invalid',emailVerified:true},rollbackInput=invite(orgA,rollbackIdentity.email);
