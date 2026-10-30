@@ -93,6 +93,16 @@ proof class-sessions-read test-class-sessions-read-integrity.mjs "Class Sessions
 setup crm-lead-close HON_CRM_LEAD_CLOSE_VALIDATION_TARGET hon_crm_close_validation HON_CRM_LEAD_CLOSE_ENV_FILE
 proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational table"
 proof crm-lead-close test-crm-lead-close-integrity.mjs "CRM lead close authority, atomicity and replay"
+proof crm-lead-close test-platform-least-privilege.mjs "Platform least privilege: nothing in schema hon reachable through PUBLIC or Supabase client roles; injected regressions rejected"
+proof crm-lead-close test-migration-runner-safety.mjs "Migration tooling: single-runner lock, read-only db:status (current, divergent history), TLS refusal before connecting"
+proof crm-lead-close test-restore-drill.mjs "Backup/restore drill: pg_dump, total loss, pg_restore, identical data/ledger/security posture, verifiers pass on the restored database"
+
+# Database TLS verification needs its own private TLS-only cluster (no fixture descriptor).
+echo "::group::Database TLS verification against a private TLS-only cluster (test-database-tls-verification.mjs)"
+"${clean_env[@]}" HON_DB_PROOFS_LOCAL=1 bash -c 'cd "$1" && node scripts/test-database-tls-verification.mjs' _ "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Database TLS verification: configured CA required, wrong CA and host mismatch refused, URL TLS overrides refused | \`test-database-tls-verification.mjs\` | pass |")
 
 setup champions-club HON_CHAMPIONS_VALIDATION_TARGET hon_champions_validation HON_CHAMPIONS_ENV_FILE
 proof champions-club test-a2p-preparation-integrity.mjs "A2P-1: read-only exact-school owner-confirmed registration preparation, live IAM/entitlement checks, signed-session API/database, no public fetching or provider/consent/message effects"

@@ -1,5 +1,6 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { checksumManifest, duplicateNumbers, migrationChecksum } from './migration-chain.mjs';
 
 const migrationsDirectory = new URL('../migrations/', import.meta.url);
 const files = (await readdir(migrationsDirectory))
@@ -29,4 +30,28 @@ for (const requiredFragment of [
   }
 }
 
-console.log(`Verified ${files.length} PostgreSQL migration files.`);
+const duplicates = duplicateNumbers(files);
+if (duplicates.length) throw new Error(`Duplicate migration numbers: ${duplicates.map((group) => group.join(' + ')).join('; ')}.`);
+
+// History is append-only: a migration recorded in migration-checksums.json must never change or
+// disappear, because databases that already applied it would silently diverge from the repository.
+// New files are allowed and reported; `--record-new` appends them (it never rewrites an entry).
+const manifest = JSON.parse(await readFile(checksumManifest, 'utf8'));
+const changed = [], missing = [], unrecorded = [];
+for (const [file, checksum] of Object.entries(manifest.migrations)) {
+  if (!files.includes(file)) missing.push(file);
+  else if (await migrationChecksum(file) !== checksum) changed.push(file);
+}
+for (const file of files) if (!(file in manifest.migrations)) unrecorded.push(file);
+if (changed.length || missing.length) {
+  throw new Error(`Applied migration history must not change. Modified: ${changed.join(', ') || 'none'}; removed: ${missing.join(', ') || 'none'}. Add a new migration instead.`);
+}
+if (unrecorded.length && process.argv.includes('--record-new')) {
+  for (const file of unrecorded) manifest.migrations[file] = await migrationChecksum(file);
+  await writeFile(checksumManifest, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`Recorded checksums for ${unrecorded.length} new migration(s): ${unrecorded.join(', ')}.`);
+} else if (unrecorded.length) {
+  console.log(`New migrations without a recorded checksum (record after merge with --record-new): ${unrecorded.join(', ')}.`);
+}
+
+console.log(`Verified ${files.length} PostgreSQL migration files (${files.length - unrecorded.length} checksum-locked).`);

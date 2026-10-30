@@ -218,3 +218,4 @@ export * from './community.js';
 export const VOICE_SESSION_POLICY = { permission: 'ai.voice.interact', tier: 'COMPLETE', lifetimeSeconds: 1800, maxDraftCharacters: 500, providerExecutionEnabled: false } as const;
 
 export * from './marketplace.js';
+export * from './telemetry-redaction.js';

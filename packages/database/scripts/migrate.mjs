@@ -7,14 +7,15 @@ import { requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-acco
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
+import { verifiedDatabaseConnection } from '../dist/index.js';
 
 const { Client } = pg;
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error('DATABASE_URL must be configured before HON migrations can run.');
 }
-const parsedDatabaseUrl = new URL(databaseUrl);
-const isLoopbackDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(parsedDatabaseUrl.hostname);
+// Verified TLS for every non-loopback database (refuses URL TLS overrides); see database-tls.ts.
+const connection = verifiedDatabaseConnection(databaseUrl);
 
 if (new URL(databaseUrl).username === 'hon_classpass_owner') requireClassPassLocalUrls();
 if (new URL(databaseUrl).username === 'hon_curriculum_library_owner') requireCurriculumLibraryLocalUrls();
@@ -51,8 +52,16 @@ const files = (await readdir(migrationsDirectory))
   .filter((file) => !stopAfter || file <= stopAfter)
   .sort();
 
-const client = new Client({ connectionString: databaseUrl, ssl: isLoopbackDatabase ? false : { rejectUnauthorized: false } });
+const client = new Client(connection);
 await client.connect();
+// One migration runner at a time: two deploy jobs racing would interleave files and the ledger.
+// Session-level lock, released explicitly and by disconnect. Requires a session (not transaction) pooler.
+const MIGRATION_LOCK_KEY = '5210469387739812417'; // stable 64-bit key: the ASCII bytes of "HONMIGRA"
+const locked = (await client.query('SELECT pg_try_advisory_lock($1::bigint) AS locked', [MIGRATION_LOCK_KEY])).rows[0]?.locked === true;
+if (!locked) {
+  await client.end();
+  throw new Error('Another HON migration run holds the migration lock; refusing to run concurrently.');
+}
 try {
   if (new URL(databaseUrl).username === 'hon_owner_launch_owner') {
     requireOwnerLaunchLocalUrls();
@@ -246,5 +255,6 @@ try {
   }
   console.log('HON PostgreSQL migrations are current.');
 } finally {
+  try { await client.query('SELECT pg_advisory_unlock($1::bigint)', [MIGRATION_LOCK_KEY]); } catch { /* released on disconnect */ }
   await client.end();
 }
