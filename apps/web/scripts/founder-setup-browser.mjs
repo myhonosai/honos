@@ -54,6 +54,7 @@ async function open(language, viewport, plane = 'school', expired = false) {
   return { context, page };
 }
 async function capture(page, name) {
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); window.scrollTo(0, 0); });
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Horizontal overflow');
   await page.addScriptTag({ content: axe });
   const scan = await page.evaluate(() => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21aa'] } }));

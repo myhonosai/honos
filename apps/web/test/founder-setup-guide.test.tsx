@@ -12,7 +12,8 @@ vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ 
 type El = ReactElement<Record<string, any>>;
 const nodes = (v: unknown): El[] => Array.isArray(v) ? v.flatMap(nodes) : React.isValidElement(v) ? [v as El, ...nodes((v as El).props.children)] : [];
 const text = (v: unknown): string => Array.isArray(v) ? v.map(text).join('') : React.isValidElement(v) ? text((v as El).props.children) : typeof v === 'string' || typeof v === 'number' ? String(v) : '';
-function render() { h.cursor = 0; const result = FounderSetup({}); h.effects.splice(0).forEach(f => f()); return result; }
+let plane: 'school' | 'hq' = 'school';
+function render() { h.cursor = 0; const result = FounderSetup({ plane }); h.effects.splice(0).forEach(f => f()); return result; }
 const button = (label: string) => nodes(render()).find(e => e.type === 'button' && text(e) === label)!;
 const load = () => button(english.load).props.onClick();
 const settle = async () => { for (let i = 0; i < 70; i++) await Promise.resolve(); };
@@ -20,7 +21,7 @@ const data = (d: unknown, status = 200) => new Response(JSON.stringify({ data: d
 const id = '00000000-0000-4000-8000-000000000001';
 const school = { organizationId: id, schoolId: id, schoolName: 'PRIVATE_SCHOOL_CANARY', tier: 'COMPLETE', program: null, classSession: null, registration: null, guardianChildRegistration: null };
 const me = () => data({ externalSubject: 'synthetic:owner' });
-beforeEach(() => { h.values = []; h.cursor = 0; h.effects = []; h.language = 'en'; vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
+beforeEach(() => { plane = 'school'; h.values = []; h.cursor = 0; h.effects = []; h.language = 'en'; vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
 afterEach(() => { for (const v of h.values) v?.cleanup?.(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it('never reads on mount, guide navigation, language or three presentation mode changes', () => {
   const f = vi.spyOn(globalThis, 'fetch'); render(); window.dispatchEvent(new Event('blur')); expect(text(render())).not.toContain(english.hidden);
@@ -60,4 +61,12 @@ it('help search, support outline and synthetic example never submit or store fak
 it('all EN/KR/ES copy keys exist with English fallback and meaningful searchable answers', () => {
   for (const lang of ['en','ko','es'] as const) { expect(Object.keys(founderCatalogs[lang])).toEqual(Object.keys(english)); expect(Object.values(founderCatalogs[lang]).every(s => s.trim())).toBe(true); }
   expect(founderText('future-language', 'heading')).toBe(english.heading); expect(searchFounderHelp('ko', '계정').length).toBeGreaterThan(0); expect(searchFounderHelp('es', 'personal').length).toBeGreaterThan(0); expect(searchFounderHelp('en', 'impossible-zxy')).toEqual([]);
+});
+
+it('describes authorized HQ directory results as directory evidence rather than school creation receipts', async () => {
+  plane = 'hq';
+  const directory = { schools: [{ schoolId: id, organizationDisplayName: 'HQ org', schoolDisplayName: 'HQ directory school', organizationOperationalStatus: 'ACTIVE', schoolOperationalStatus: 'ACTIVE', entitlementTier: null, createdAt: '2026-10-30T12:00:00.000Z' }] };
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory })).mockResolvedValueOnce(me());
+  button(english.hqLoad).props.onClick(); await settle(); const out = text(render());
+  expect(out).toContain(english.hqLoaded); expect(out).toContain(english.hqUnknown); expect(out).not.toContain(english.loaded);
 });
