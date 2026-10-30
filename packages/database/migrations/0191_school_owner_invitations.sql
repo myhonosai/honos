@@ -71,6 +71,8 @@ CREATE TRIGGER no_truncate BEFORE TRUNCATE ON hon.school_owner_invitations FOR E
 CREATE FUNCTION hon.lock_school_account_authority() RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
 BEGIN
   PERFORM hon.saas_refuse_context();
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'ACCOUNT_ISOLATION_UNSUPPORTED' USING ERRCODE='42501'; END IF;
   IF NOT pg_try_advisory_xact_lock(hashtextextended('hon.school-account.v1',0)) THEN
     RAISE EXCEPTION 'ACCOUNT_BUSY' USING ERRCODE='55P03'; END IF;
   LOCK TABLE hon.organizations,hon.schools,hon.users,hon.principals,hon.principal_role_grants,
@@ -93,6 +95,51 @@ BEGIN
   RETURN p_result;
 END $$;
 
+-- Private, read-only preflight. A verified invitation capability can authorize a new identity;
+-- it never grants a role by itself. Run again after locks/row waits. No broad or row locks here.
+CREATE FUNCTION hon.check_school_owner_acceptance(p_subject text,p_verified_email text,p_input jsonb,p_key uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,hon AS $$
+DECLARE i hon.school_owner_invitations%ROWTYPE; prior hon.school_account_requests%ROWTYPE;
+  issuer_subject text; v_user uuid; actor uuid; fp text;
+BEGIN
+  PERFORM hon.saas_refuse_context();
+  SELECT * INTO i FROM hon.school_owner_invitations WHERE id=(p_input->>'invitationId')::uuid;
+  IF i.id IS NULL OR i.token_hash IS DISTINCT FROM p_input->>'tokenHash' OR i.email IS DISTINCT FROM p_verified_email OR i.status='REVOKED'
+    OR NOT EXISTS(SELECT 1 FROM hon.schools s JOIN hon.organizations o ON o.id=s.organization_id
+      WHERE s.id=i.school_id AND s.organization_id=i.organization_id AND s.status='ACTIVE' AND o.status='ACTIVE') THEN
+    RAISE EXCEPTION 'ACCOUNT_INVITATION_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+  IF i.status='ACCEPTED' THEN
+    SELECT * INTO prior FROM hon.school_account_requests WHERE subject=p_subject AND idempotency_key=p_key;
+    IF NOT FOUND OR i.accepted_subject IS DISTINCT FROM p_subject OR NOT EXISTS(
+      SELECT 1 FROM hon.principal_role_grants g JOIN hon.principals p ON p.id=g.principal_id
+      WHERE g.id=i.owner_grant_id AND p.is_active AND g.effective_from<=clock_timestamp()
+        AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp())) THEN
+      RAISE EXCEPTION 'ACCOUNT_INVITATION_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+    fp:=encode(sha256(convert_to('ACCEPT:'||p_input::text,'UTF8')),'hex');
+    IF prior.fingerprint<>fp THEN RAISE EXCEPTION 'ACCOUNT_KEY_REUSED' USING ERRCODE='23505'; END IF;
+    RETURN;
+  END IF;
+  IF i.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'ACCOUNT_INVITATION_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+  SELECT u.external_subject INTO issuer_subject FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE p.id=i.created_by;
+  PERFORM hon.require_saas_hq_actor(issuer_subject,true);
+  SELECT id INTO v_user FROM hon.users WHERE external_subject=p_subject;
+  IF v_user IS NULL THEN
+    IF EXISTS(SELECT 1 FROM hon.users WHERE lower(email::text)=p_verified_email) THEN RAISE EXCEPTION 'ACCOUNT_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
+  ELSE
+    SELECT id INTO actor FROM hon.principals WHERE user_id=v_user AND is_active AND principal_type='HUMAN_USER';
+    IF actor IS NULL OR (SELECT count(*) FROM hon.principals WHERE user_id=v_user AND is_active)<>1
+      OR NOT EXISTS(SELECT 1 FROM hon.users WHERE id=v_user AND lower(email::text)=p_verified_email) THEN
+      RAISE EXCEPTION 'ACCOUNT_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
+    IF EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp()))
+      OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp()))
+      OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp())
+        AND (organization_id<>i.organization_id OR school_id=i.school_id)) THEN
+      RAISE EXCEPTION 'ACCOUNT_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM hon.roles WHERE organization_id=i.organization_id AND code='OWNER' AND is_system_role) THEN
+    RAISE EXCEPTION 'ACCOUNT_INVITATION_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+END $$;
+
 CREATE FUNCTION hon.manage_school_owner_invitation(p_subject text,p_operation text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; i hon.school_owner_invitations%ROWTYPE; prior hon.school_account_requests%ROWTYPE;
@@ -100,12 +147,14 @@ DECLARE actor uuid; i hon.school_owner_invitations%ROWTYPE; prior hon.school_acc
 BEGIN
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input)<>'object' OR p_operation IS NULL OR p_operation NOT IN ('INVITE','REVOKE') THEN
     RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
+  PERFORM hon.require_saas_hq_actor(p_subject,true);
   PERFORM hon.lock_school_account_authority();
   actor:=hon.require_saas_hq_actor(p_subject,true);
   fp:=encode(sha256(convert_to(p_operation||':'||p_input::text,'UTF8')),'hex');
   SELECT * INTO prior FROM hon.school_account_requests WHERE subject=p_subject AND idempotency_key=p_key;
   IF FOUND THEN
     IF prior.fingerprint<>fp THEN RAISE EXCEPTION 'ACCOUNT_KEY_REUSED' USING ERRCODE='23505'; END IF;
+    PERFORM hon.require_saas_hq_actor(p_subject,true);
     RETURN prior.response;
   END IF;
   at:=clock_timestamp();
@@ -159,8 +208,10 @@ BEGIN
     OR jsonb_typeof(p_input->'invitationId') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_input->'tokenHash') IS DISTINCT FROM 'string' OR p_input->>'tokenHash' !~ '^[0-9a-f]{64}$' THEN
     RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
+  PERFORM hon.check_school_owner_acceptance(p_subject,p_verified_email,p_input,p_key);
   PERFORM hon.lock_school_account_authority();
   SELECT * INTO i FROM hon.school_owner_invitations WHERE id=(p_input->>'invitationId')::uuid FOR UPDATE;
+  PERFORM hon.check_school_owner_acceptance(p_subject,p_verified_email,p_input,p_key);
   -- Uniform failure: no invitation, wrong identity/email/token, expired, revoked or suspended school disclose no facts.
   IF i.id IS NULL OR i.token_hash IS DISTINCT FROM p_input->>'tokenHash' OR i.email IS DISTINCT FROM p_verified_email OR i.status='REVOKED'
     OR NOT EXISTS(SELECT 1 FROM hon.schools s JOIN hon.organizations o ON o.id=s.organization_id WHERE s.id=i.school_id AND s.organization_id=i.organization_id AND s.status='ACTIVE' AND o.status='ACTIVE') THEN
@@ -207,12 +258,16 @@ END $$;
 
 CREATE FUNCTION hon.read_school_owner_invitations(p_subject text,p_school uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE result jsonb;
 BEGIN
+  PERFORM hon.require_saas_hq_actor(p_subject,true);
   PERFORM hon.lock_school_account_authority();
   PERFORM hon.require_saas_hq_actor(p_subject,true);
   IF NOT EXISTS(SELECT 1 FROM hon.schools WHERE id=p_school) THEN RAISE EXCEPTION 'ACCOUNT_UNAVAILABLE' USING ERRCODE='P0002'; END IF;
-  RETURN (SELECT coalesce(jsonb_agg(hon.school_invitation_json(i) ORDER BY i.created_at DESC,i.id),'[]'::jsonb)
+  result:=(SELECT coalesce(jsonb_agg(hon.school_invitation_json(i) ORDER BY i.created_at DESC,i.id),'[]'::jsonb)
     FROM (SELECT * FROM hon.school_owner_invitations WHERE school_id=p_school ORDER BY created_at DESC,id LIMIT 50) i);
+  PERFORM hon.require_saas_hq_actor(p_subject,true);
+  RETURN result;
 END $$;
 
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
@@ -226,6 +281,7 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
     END LOOP;
   END LOOP;
   FOREACH f IN ARRAY ARRAY['guard_school_account_evidence()','guard_school_owner_invitation()','lock_school_account_authority()',
+    'check_school_owner_acceptance(text,text,jsonb,uuid)',
     'school_invitation_json(hon.school_owner_invitations)','school_account_result(hon.school_owner_invitations)',
     'school_account_record(text,uuid,text,uuid,text,jsonb)','manage_school_owner_invitation(text,text,jsonb,uuid)',
     'accept_school_owner_invitation(text,text,jsonb,uuid)','read_school_owner_invitations(text,uuid)'] LOOP

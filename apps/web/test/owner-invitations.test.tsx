@@ -35,6 +35,16 @@ it('different signed identity cannot recover or reveal the original capsule',asy
  const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'first'}));click('Verify access');await settle();fill();window.dispatchEvent(new Event('blur'));f.mockResolvedValueOnce(response({externalSubject:'second'}));click('Verify access');await settle();expect(text(render())).toContain('ACCOUNT_CHANGED_RESTART_REQUIRED');expect(nodes(render()).some(e=>e.type==='input')).toBe(false);
 });
 
+it('a throttled retry retains the exact unknown request and never retries automatically',async()=>{
+ const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'oidc:fixture:owner'}));click('Verify access');await settle();fill();
+ f.mockRejectedValueOnce(new Error('synthetic lost response'));click('Accept invitation');await settle();expect(f).toHaveBeenCalledTimes(2);
+ f.mockResolvedValueOnce(new Response(JSON.stringify({code:'ACCOUNT_RATE_LIMITED',outcome:'NOT_SUBMITTED'}),{status:429}));click('Retry exact request');await settle();
+ expect(text(render())).toContain('earlier unknown outcome remains unresolved');expect(text(render())).toContain('exact request remains');expect(f).toHaveBeenCalledTimes(3);
+ f.mockResolvedValueOnce(response({invitationId:id,organizationId:id,schoolId:id,accountStatus:'OWNER_BOUND',accessGranted:false,billingActivated:false,aiCreditsGranted:false}));click('Retry exact request');await settle();
+ expect(f).toHaveBeenCalledTimes(4);for(const index of [2,3]){expect(f.mock.calls[index]![1]!.body).toBe(f.mock.calls[1]![1]!.body);expect(f.mock.calls[index]![1]!.headers).toEqual(f.mock.calls[1]![1]!.headers);}
+ expect(text(render())).toContain('account bound');
+});
+
 const productionRow={schoolId:id,organizationDisplayName:'Verified Organization',schoolDisplayName:'Verified School',organizationOperationalStatus:'ACTIVE',schoolOperationalStatus:'ACTIVE',entitlementTier:null,createdAt:'2026-10-28T00:00:00.000Z'};
 it('HQ uses the exact minimized production directory and submits school-only input; organization comes only from the authorized server receipt',async()=>{
  hqMode=true;const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({externalSubject:'hq-owner'})).mockResolvedValueOnce(response({hqRole:'HON_HQ_OWNER'}));

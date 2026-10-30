@@ -14,14 +14,14 @@ const root=resolve('.'),req=createRequire(join(root,'package.json')),tools=creat
 const {chromium}=tools('playwright-core'),axe=await readFile(tools.resolve('axe-core/axe.min.js'),'utf8'),results=process.env.HON_HQ_BROWSER_RESULTS;
 await mkdir(results,{recursive:true});
 const report={sourceSha:process.env.HON_HQ_SOURCE_SHA,syntheticBrowserOnly:true,realProviderCalls:0,checks:[],screenshots:[],accessibility:[]};
-const session={mode:'OIDC',audience:'p0-browser',secret:randomBytes(32).toString('hex')},ids={invitationId:randomUUID(),organizationId:randomUUID(),schoolId:randomUUID()};
+const session={mode:'OIDC',audience:'p0-browser',secret:randomBytes(32).toString('hex'),emitVerifiedEmail:true},ids={invitationId:randomUUID(),organizationId:randomUUID(),schoolId:randomUUID()};
 const account={...ids,accountStatus:'OWNER_BOUND',accessGranted:false,billingActivated:false,aiCreditsGranted:false};
 const inv={...ids,email:'synthetic-owner@example.invalid',expiresAt:'2026-11-01T12:00:00.000Z',status:'PENDING'};
 const directory={schools:[{schoolId:ids.schoolId,organizationDisplayName:'Synthetic Approved Organization',schoolDisplayName:'Synthetic Approved School',organizationOperationalStatus:'ACTIVE',schoolOperationalStatus:'ACTIVE',entitlementTier:null,createdAt:'2026-10-28T12:00:00.000Z'}]};
-const state={posts:[],hold:false,settle:null,status:200,reads:0};
+const state={posts:[],hold:false,settle:null,status:200,reads:0,limitNext:false};
 const overview={asOf:'2026-10-28T12:00:00.000Z',callerHqRole:'OWNER',organizationCount:0,schoolCount:0,onboarding:{availability:'AVAILABLE',requestCount:0,inProgressRequestCount:0,completedRequestCount:0},configuredProviderStates:{disabled:0,configured:0,healthy:0,degraded:0,unavailable:0},taskProfileCount:0,financialMetrics:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics},aiUsage:{availability:'UNAVAILABLE',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage},durableHqWork:{availability:'UNAVAILABLE',state:'NO_RECORDED_WORK',reason:HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork}};
 const api=createServer(async(r,s)=>{
- const send=(status,data)=>{s.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store'});s.end(JSON.stringify(status===200?{data}:{code:'SYNTHETIC_DENIED'}));};
+ const send=(status,data)=>{s.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store',...(status===429?{'Retry-After':'60'}:{})});s.end(JSON.stringify(status===200?{data}:status===429?{code:'ACCOUNT_RATE_LIMITED',outcome:'NOT_SUBMITTED',retryAfterSeconds:60}:{code:'SYNTHETIC_DENIED'}));};
  try{verifySession(cookieValue(r.headers.cookie,HON_SESSION_COOKIE)??'',session);}catch{send(401);return;}
  if(r.url==='/v1/hq/session'){send(state.status,{principalId:ids.invitationId,hqRole:'HON_HQ_OWNER'});return;}
  if(r.url==='/v1/hq/overview'){send(200,{overview});return;}
@@ -31,6 +31,7 @@ const api=createServer(async(r,s)=>{
  if(r.method==='POST'){
   let body='';for await(const c of r)body+=c;
   state.posts.push({path:r.url,body,key:r.headers['idempotency-key']});
+  if(state.limitNext){state.limitNext=false;send(429);return;}
   if(r.url==='/v1/hq/school-owner-invitations'){
    try{const input=validateOwnerInvitationInput(JSON.parse(body));assert.equal(input.schoolId,ids.schoolId);assert(!Object.hasOwn(input,'organizationId'));}
    catch{send(400);return;}
@@ -58,9 +59,10 @@ try{
   state.hold=true;const before=state.posts.length;await page.getByRole('button',{name:'Accept invitation',exact:true}).click();await page.waitForTimeout(100);assert.equal(state.posts.length,before+1);
   await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.getByText('Private account information is concealed.',{exact:false}).waitFor();assert(await page.getByRole('button',{name:'Verify access',exact:true}).isDisabled());assert.equal(await page.getByRole('textbox').count(),0);
   state.settle();state.hold=false;await page.getByRole('button',{name:'Verify access',exact:true}).waitFor({state:'visible'});await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Verify access').disabled);
-  const url=page.url();await page.getByRole('button',{name:'Verify access',exact:true}).click();await page.getByRole('button',{name:'Retry exact request'}).click();await page.getByText('School-owner account bound.',{exact:false}).waitFor();assert.equal(page.url(),url);assert.equal(state.posts[before].body,state.posts[before+1].body);assert.equal(state.posts[before].key,state.posts[before+1].key);
+  const url=page.url();await page.getByRole('button',{name:'Verify access',exact:true}).click();state.limitNext=true;await page.getByRole('button',{name:'Retry exact request'}).click();await page.getByText('Please wait up to 60 seconds,',{exact:false}).waitFor();assert.equal(state.posts.length,before+2);await page.waitForTimeout(100);assert.equal(state.posts.length,before+2);
+  await page.getByRole('button',{name:'Retry exact request'}).click();await page.getByText('School-owner account bound.',{exact:false}).waitFor();assert.equal(page.url(),url);for(const attempt of [before+1,before+2]){assert.equal(state.posts[before].body,state.posts[attempt].body);assert.equal(state.posts[before].key,state.posts[attempt].key);}
   await page.getByRole('link',{name:'Open staff workspace'}).focus();assert(await page.getByRole('link',{name:'Open staff workspace'}).evaluate(e=>e===document.activeElement));await capture(page,size+'-owner-account-receipt');
-  await page.evaluate(()=>window.dispatchEvent(new Event('hon:session-invalidated')));assert.equal(await page.getByText('School-owner account bound.',{exact:false}).count(),0);report.checks.push(size+': HQ explicit invitation, owner acceptance, privacy while pending, no reload recovery, exact-key retry, keyboard and axe');await context.close();
+  await page.evaluate(()=>window.dispatchEvent(new Event('hon:session-invalidated')));assert.equal(await page.getByText('School-owner account bound.',{exact:false}).count(),0);report.checks.push(size+': HQ explicit invitation, owner acceptance, privacy while pending, no reload recovery, throttled exact-key retry without automatic resend, keyboard and axe');await context.close();
  }
  console.log('PASS mounted P0-1 browser: '+report.checks.length+' desktop/mobile scenario groups, '+report.accessibility.length+' axe scans');
 }finally{await browser?.close();app?.kill('SIGTERM');await new Promise(done=>api.close(done));await writeFile(join(results,'browser-report.json'),JSON.stringify(report,null,2)+'\n');}

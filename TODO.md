@@ -9,6 +9,12 @@
 
 # HON Delivery Backlog
 
+## PR #88 P2 security correction — Codex
+
+- [x] Add initial live HQ/capability authorization before broad account locks, retain post-lock/wait reauthorization, refuse stale snapshot isolation, and bound authenticated command attempts without new business records. Preserve exact retry on 429.
+- [x] Add default-off verified-email issuance and compatible readers, with staged rollout/rollback tests and a proposed HQ-versus-school ownership policy; no ownership behavior change. Owner-approved allocation remains #82/0190, #88/0191, #90/0192; no renumbering here.
+- [ ] Verify the corrected exact head through fresh draft-safe workspace, browser, disposable PostgreSQL and commercial CI; request independent Claude security review. No activation or deployment approval is implied.
+
 ## Zernio secure integration foundation — Codex
 
 - [x] Add API-server-only secret configuration, hidden local key entry, HQ-owner configuration status and explicitly gated read-only credential verification using official Zernio contracts. No browser key store, live calls, posting, messaging, ads, OAuth connection, workers or changes to paid/trial/AI activation.

@@ -10,8 +10,8 @@ export async function verifySchoolAccountSecurity(client,runtime) {
     const columns=(await client.query('SELECT attname FROM pg_attribute WHERE attrelid=$1::regclass AND attnum>0 AND NOT attisdropped',['hon.'+table])).rows;
     for(const {attname}of columns)for(const privilege of ['SELECT','INSERT','UPDATE','REFERENCES'])assert.equal((await client.query('SELECT has_column_privilege($1,$2,$3,$4) ok',[runtime,'hon.'+table,attname,privilege])).rows[0].ok,false);
   }
-  const fns=(await client.query("SELECT p.oid,p.proname,p.prosecdef,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname=ANY($1)",[['guard_school_account_evidence','guard_school_owner_invitation','lock_school_account_authority','school_invitation_json','school_account_result','school_account_record','manage_school_owner_invitation','accept_school_owner_invitation','read_school_owner_invitations']])).rows;
-  assert.equal(fns.length,9);
+  const fns=(await client.query("SELECT p.oid,p.proname,p.prosecdef,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname=ANY($1)",[['guard_school_account_evidence','guard_school_owner_invitation','lock_school_account_authority','check_school_owner_acceptance','school_invitation_json','school_account_result','school_account_record','manage_school_owner_invitation','accept_school_owner_invitation','read_school_owner_invitations']])).rows;
+  assert.equal(fns.length,10);
   for(const f of fns){const allowed=['manage_school_owner_invitation','accept_school_owner_invitation','read_school_owner_invitations'].includes(f.proname);
     assert.equal(f.prosecdef,allowed);assert(f.proconfig.includes('search_path=pg_catalog, hon'));
     assert.equal((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime,f.oid])).rows[0].ok,allowed);

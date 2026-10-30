@@ -50,8 +50,8 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
       else{const i=validateOwnerInvitation(result);setItems([i]);setReceipt(command.kind==='invite'?'Invitation recorded. Securely share its ID and the token you entered with the intended owner. Nothing was sent.':'Invitation and its own owner grant revoked. Other authority is unchanged.');}
       pending.current=null;setRetry(false);setMessage('Verified command receipt received.');
     }catch(e){if(!s.mounted||s.mountId!==instance||s.concealed)return;
-      setMessage(e instanceof AccountError?e.code:'Outcome unknown. Retry the exact request explicitly after checking access.');
-      if(e instanceof AccountError&&e.status>=400&&e.status<500){pending.current=null;setRetry(false);if(e.status===403)conceal();}
+      setMessage(e instanceof AccountError?(e.status===429?'Please wait up to 60 seconds, then explicitly retry the exact request. This attempt was not submitted; any earlier unknown outcome remains unresolved.':e.code):'Outcome unknown. Retry the exact request explicitly after checking access.');
+      if(e instanceof AccountError&&e.status>=400&&e.status<500&&e.status!==429){pending.current=null;setRetry(false);if(e.status===403)conceal();}
     }finally{if(s.mounted&&s.mountId===instance){s.busy=false;setBusy(false);}}
   }
   const start=(kind:Command['kind'],body:Record<string,unknown>)=>{

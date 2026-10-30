@@ -22,7 +22,11 @@ export function normalizedIdentity(input: Record<string, unknown>): NormalizedId
 }
 
 export function issueSession(identity: NormalizedIdentity, config: SessionConfig, now = Math.floor(Date.now() / 1000)): string {
-  return jwt.sign({ ...normalizedIdentity({ ...identity }), iss: config.mode, aud: config.audience, iat: now, exp: now + SESSION_SECONDS }, config.secret, { algorithm: 'HS256' });
+  const { emailVerified, ...profile } = normalizedIdentity({ ...identity });
+  if (emailVerified !== undefined && config.mode !== 'OIDC') throw new AuthValidationError();
+  // Reader-first rollout: legacy readers reject unknown claims. Only upgraded issuers explicitly
+  // enabled after every reader is compatible may add this proof. Readers accept both shapes.
+  return jwt.sign({ ...profile, ...(config.mode === 'OIDC' && config.emitVerifiedEmail === true && emailVerified === true ? { emailVerified: true } : {}), iss: config.mode, aud: config.audience, iat: now, exp: now + SESSION_SECONDS }, config.secret, { algorithm: 'HS256' });
 }
 export function verifySession(token: string, config: SessionConfig, now = Math.floor(Date.now() / 1000)): NormalizedIdentity {
   try {

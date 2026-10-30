@@ -17,7 +17,7 @@ export function authMode(env: Environment = process.env): AuthMode {
   throw new AuthConfigurationError();
 }
 
-export interface SessionConfig { mode: AuthMode; secret: string; audience: string; }
+export interface SessionConfig { mode: AuthMode; secret: string; audience: string; emitVerifiedEmail?: boolean; }
 export function sessionConfig(env: Environment = process.env): SessionConfig {
   const mode = authMode(env);
   const secret = env.HON_SESSION_JWT_SECRET;
@@ -25,7 +25,10 @@ export function sessionConfig(env: Environment = process.env): SessionConfig {
   if (!secret || Buffer.byteLength(secret) < 32 || secret !== secret.trim() || /[\x00-\x1f\x7f<>]/.test(secret) || secret.startsWith('REPLACE_') || !audience || audience !== audience.trim() || /[\x00-\x20\x7f<>]/.test(audience) || audience.length > 256) throw new AuthConfigurationError();
   // Reusing the development adapter key is not a HON-owned trust boundary.
   if (mode === 'MANUS_DEVELOPMENT' && secret === env.MANUS_JWT_SECRET) throw new AuthConfigurationError();
-  return { mode, secret, audience };
+  const emailClaims = env.HON_SESSION_VERIFIED_EMAIL_ENABLED;
+  if (emailClaims !== undefined && emailClaims !== 'true' && emailClaims !== 'false') throw new AuthConfigurationError();
+  if (emailClaims === 'true' && mode !== 'OIDC') throw new AuthConfigurationError();
+  return { mode, secret, audience, ...(emailClaims === 'true' ? { emitVerifiedEmail: true } : {}) };
 }
 
 function required(env: Environment, key: string): string {
