@@ -1,10 +1,19 @@
 ## Founder Setup guide — Codex (isolated frontend)
 
+- Reconcile externally accepted main `b234be7f14c49d07349219dfb4ae3b9c2a05d3f9` without changing PR #92 or its branch. Preserve its startup guard and both TODO sections. Scoped HQ contrast correction and29 focused tests are included; final integrated CI is pending.
+
 - Local verification: 28 focused transport/lifecycle/catalog tests and all 1,037 web tests pass; typecheck, web production build and 183-pin migration validation pass. Hosted browser/screenshots and full workspace results remain pending on the final draft head. No backend/migration or commercial changes.
 
 - [x] Audit canonical main `f5815e0a9259418e68a5f7ee573074b9e6ee9fa3`: Owner Launch has requester-owned creation receipts, not a global readiness or pre-activation setup API. Staff/parent invitations, support tickets, shared checklist persistence and HQ-wide progress are gaps.
 - [x] Build a protected EN/KR/ES eight-step guide, explicit minimal receipt read/resume, static searchable help and support-outline copy. Add a separate authorized HQ directory view with unknown real progress and clearly isolated synthetic progress examples. No setup-complete, founder-allocation, payment, access or AI success claims.
 - [ ] Verify privacy/session/school/stale-response behavior, three layouts, 390/834/1440 screenshots, localization, accessibility and exact-head draft-safe CI. Preserve PRs #90/#92 and all security/billing work; no activation or deployment.
+
+## Web production authentication startup guard — Codex
+
+- Local evidence: 60 focused configuration/auth-route tests and all 1,044 web tests pass; web typecheck, production build and the existing 183-file migration check pass. Browser and full repository/database evidence remain pending on the final draft head.
+
+- [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
+- [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
 
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 

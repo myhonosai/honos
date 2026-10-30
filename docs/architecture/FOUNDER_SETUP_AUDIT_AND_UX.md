@@ -1,6 +1,6 @@
 # Founder Setup: source audit, UX and contract inventory
 
-Audited canonical main: `f5815e0a9259418e68a5f7ee573074b9e6ee9fa3` (183 migrations, highest0191; reserved0179/0180 untouched). PRs90/92 and their branches are excluded. This is a bounded frontend guide and review proposal, not commercial launch authorization.
+Audited canonical main: `f5815e0a9259418e68a5f7ee573074b9e6ee9fa3` (183 migrations, highest0191; reserved0179/0180 untouched). PRs90/92 and their branches are not modified. During verification, PR92 was externally accepted as main `b234be7f14c49d07349219dfb4ae3b9c2a05d3f9`; it is inherited unchanged through a normal merge. The onboarding audit remains source-equivalent: no onboarding backend or migration changed. This is a bounded frontend guide and review proposal, not commercial launch authorization.
 
 ## Implemented versus missing
 

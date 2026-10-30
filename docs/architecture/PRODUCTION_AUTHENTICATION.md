@@ -8,6 +8,15 @@ The web server completes authorization-code exchange and verifies the ID token w
 
 The API verifies only **HON-owned `hon_session` cookies**, never provider bearer tokens or `webdev_app_session`. Web and API share `@hon/auth`'s strict session validation; the historical `ManusIdentityService` export is only an alias to the provider-neutral `HonIdentityService`.
 
+## Web startup enforcement
+
+The standard web server now requires an explicit deployment identity at startup.
+Production/staging require the complete OIDC configuration below; development
+sign-in is refused there. Builds remain secret-free and explicitly isolated
+previews retain existing fail-closed routes. See the
+[web startup guard contract](WEB_STARTUP_AUTHENTICATION_GUARD.md), including the
+preview hosting decision and unsupported standalone/custom-server release gate.
+
 ## Required protected runtime configuration
 
 Do not use `NEXT_PUBLIC_` names, browser-delivered config, client components, or database/UI settings for these values. `.env.example` contains placeholders, not deployable secrets. Provision actual values through the deployment environment's secret manager; do not paste secrets into chats, commits, logs, or test output.
@@ -74,7 +83,7 @@ The opaque provider subject is never silently trimmed/reassigned. Display names 
 
 `HON_AUTH_MODE=MANUS_DEVELOPMENT` deliberately retains the development portal `/app-auth` and `ExchangeToken`/`GetUserInfo` RPC flow. Its required web settings are `MANUS_PROJECT_ID`, `MANUS_OAUTH_PORTAL_URL`, `MANUS_OAUTH_API_URL`, `MANUS_JWT_SECRET`, and the separate `HON_SESSION_JWT_SECRET`. `HON_SESSION_AUDIENCE` may default to `MANUS_PROJECT_ID` in this mode, although an explicit audience is recommended.
 
-For backward compatibility, **only when `HON_AUTH_MODE` is absent, `NODE_ENV` is not `production`, and all four Manus variables exist**, the development adapter is selected implicitly. Partial Manus config, an explicit invalid mode, or absent mode in production never falls back. Built public previews using Next production servers must explicitly select the development mode if that adapter is desired. A HON-owned key is required even for development; there is intentionally no implicit key reuse or insecure hardcoded key.
+For backward compatibility, **only when `HON_AUTH_MODE` is absent, `NODE_ENV` is not `production`, and all four Manus variables exist**, the development adapter is selected implicitly. Partial Manus config, an explicit invalid mode, or absent mode in production never falls back. Isolated previews using Next production servers must explicitly declare `HON_DEPLOYMENT_ENVIRONMENT=preview` and select the development mode if that adapter is desired. This is not permission to use the development adapter in customer-facing production or staging. A HON-owned key is required even for development; there is intentionally no implicit key reuse or insecure hardcoded key.
 
 The development callback issues the same normalized `hon_session` and also retains `webdev_app_session` for the development adapter only. A still-valid legacy development cookie can be migrated to `hon_session` by visiting `/api/identity/me` in development mode. An invalid HON cookie never falls back to the legacy cookie. The API accepts no legacy cookie in either mode. Existing in-flight pre-upgrade OAuth attempts must restart `/auth/login` to obtain the signed transaction. Development subjects retain the existing Manus `openId` identity key.
 

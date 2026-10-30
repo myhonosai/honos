@@ -179,7 +179,7 @@ const session = { mode: 'OIDC', audience: 'hon-hq-browser-local', secret: random
 const cookie = issueSession({ externalSubject: 'hon-hq-browser-fixture' }, session);
 // Whitelisted environment: no inherited cloud, database, provider or application credentials.
 const childEnv = {
-  PATH: process.env.PATH, HOME: process.env.HOME, LANG: 'C.UTF-8', NODE_ENV: 'production',
+  PATH: process.env.PATH, HOME: process.env.HOME, LANG: 'C.UTF-8', NODE_ENV: 'production', HON_DEPLOYMENT_ENVIRONMENT: 'preview',
   NEXT_TELEMETRY_DISABLED: '1', HON_AUTH_MODE: session.mode,
   HON_SESSION_AUDIENCE: session.audience, HON_SESSION_JWT_SECRET: session.secret,
   HON_API_BASE_URL: `http://127.0.0.1:${apiPort}`,
