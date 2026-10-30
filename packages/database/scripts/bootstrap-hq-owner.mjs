@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { verifiedDatabaseConnection } from '../dist/index.js';
 
 const { Client } = pg;
 const subject = process.env.HON_HQ_OWNER_EXTERNAL_SUBJECT;
@@ -10,10 +11,7 @@ if (!subject) throw new Error('HON_HQ_OWNER_EXTERNAL_SUBJECT must be supplied fr
 if (!email || !displayName) throw new Error('HON_HQ_OWNER_EMAIL and HON_HQ_OWNER_DISPLAY_NAME must be supplied from the verified OAuth profile.');
 if (!databaseUrl) throw new Error('DATABASE_URL must be configured for privileged HON HQ owner bootstrap.');
 
-const client = new Client({
-  connectionString: databaseUrl,
-  ssl: databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false },
-});
+const client = new Client(verifiedDatabaseConnection(databaseUrl));
 await client.connect();
 
 try {

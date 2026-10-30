@@ -1,5 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
-import { Pool, type PoolClient } from 'pg';
+import { Pool, type PoolClient, type PoolConfig } from 'pg';
+import { runtimePoolOptions } from './runtime-pool-options.js';
+import { emitTelemetry, summarizeError } from '../observability/telemetry.js';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { HqEntitlementTransitionInput, HqEntitlementTransitionReceipt } from '@hon/contracts';
@@ -199,6 +201,7 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
   private postureCheck: Promise<void> | undefined;
+  private configurationErrorReported = false;
 
   isConfigured(): boolean {
     return Boolean(process.env.HON_RUNTIME_DATABASE_URL);
@@ -216,15 +219,28 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       });
     }
 
-    const databaseHost = new URL(connectionString).hostname;
-    const isLoopbackDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(databaseHost);
-    this.pool ??= new Pool({
-      connectionString,
-      max: 8,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-      ssl: isLoopbackDatabase ? false : { rejectUnauthorized: false },
-    });
+    if (!this.pool) {
+      let options: PoolConfig;
+      try {
+        options = runtimePoolOptions(connectionString);
+      } catch (error) {
+        // Logged once per process so a misconfiguration cannot flood (and bill) the log drain.
+        if (!this.configurationErrorReported) emitTelemetry('error', 'database.configuration_invalid', { component: 'runtime-database', ...summarizeError(error) });
+        this.configurationErrorReported = true;
+        throw new ServiceUnavailableException({
+          type: 'https://hon.example/problems/runtime-database-not-configured',
+          title: 'HON runtime database is not configured',
+          status: 503,
+          code: 'PERSISTENCE_NOT_CONFIGURED',
+          detail: 'HON requires a verified TLS connection to its runtime database.',
+        });
+      }
+      const pool = new Pool(options);
+      // An idle client can fail when the database or pooler restarts. Without a listener the pool's
+      // 'error' event would crash the process; the pool already discards the broken client.
+      pool.on('error', (error) => emitTelemetry('warn', 'database.idle_client_error', { component: 'runtime-database', ...summarizeError(error) }));
+      this.pool = pool;
+    }
     return this.pool;
   }
 

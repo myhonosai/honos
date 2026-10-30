@@ -16,6 +16,12 @@
 
 # HON Delivery Backlog
 
+## PR #89 canonical-main reconciliation — Codex
+
+- [x] Normally merge canonical main `92bba0359c5e0dceeb0565b0b1e892828b1481c1` into the existing draft security branch. Preserve merged A2P/invitation scopes, private runtime/RLS boundaries and verified-email protections alongside TLS and corrected bounded/redacted telemetry.
+- [x] Use the existing append-only checksum recorder to pin 0190 and 0191, preserving all 181 prior entries and all 183 SQL files. No migrations, ledgers, policies, credentials or PR #90 changes.
+- [ ] Verify the exact integrated head through draft-safe workspace/build, complete PostgreSQL/TLS/restore, commercial and invitation browser/API checks. Keep draft status and all deployment/activation gates; report for fresh independent review and later owner source-merge approval.
+
 ## PR #88 final main integration — Codex
 
 - [x] Reconcile main `8c1c0af12a5d9f6030b4c53d81741d6bd511204c` into the existing invitation branch with a normal two-parent merge. Preserve merged A2P 0190, invitation 0191, both runtime/RLS boundaries, and the unchanged HQ ownership-handoff policy.

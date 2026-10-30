@@ -4,6 +4,17 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
+      - '.github/scripts/run-db-proofs.sh'
+      - 'apps/api/src/foundation/**'
+      - 'apps/api/src/observability/**'
+      - 'apps/web/src/app/api/client-errors/**'
+      - 'apps/web/src/app/global-error.tsx'
+      - 'apps/web/src/instrumentation.ts'
+      - 'packages/config/src/telemetry-redaction.ts'
+      - 'packages/database/src/database-tls.ts'
+      - 'packages/database/scripts/migration-*.mjs'
+      - 'packages/database/scripts/verify-rls.mjs'
+      - 'packages/database/migration-checksums.json'
       - 'apps/api/src/accounts/**'
       - 'apps/api/test/school-owner-invitations.test.cjs'
       - 'apps/web/src/components/owner-invitations/**'
