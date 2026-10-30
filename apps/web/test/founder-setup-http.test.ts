@@ -48,6 +48,11 @@ describe('founder setup existing-contract reads', () => {
     expect(f.mock.calls.map(c => c[0])).toEqual(['/api/identity/me','/api/v1/hq/schools','/api/identity/me']);
     expect(JSON.stringify(out)).not.toMatch(/schoolId|entitlement|progress|founder/);
   });
+  it('keeps school authority separate from a denied HQ directory read', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(response({ directory: { schools: [] } }, 403));
+    await expect(readFounderEvidence('hq', new AbortController().signal)).rejects.toMatchObject({ status: 403 });
+    expect(f.mock.calls.map(c => c[0])).toEqual(['/api/identity/me', '/api/v1/hq/schools']);
+  });
   it('rejects enhanced HQ fixture fields instead of trusting browser organization authority', async () => {
     const f = setup({ directory: { schools: [{ organizationId: id(99), schoolId: id(2) }] } });
     await expect(readFounderEvidence('hq', new AbortController().signal)).rejects.toThrow(); expect(f).toHaveBeenCalledTimes(2);

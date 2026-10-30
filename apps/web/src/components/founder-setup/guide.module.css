@@ -1,6 +1,12 @@
 .page {
   --ink:#092538;
+  background:#f4f7fb;
+  border-radius:18px;
   --muted:#405c70;
+  --hq-muted:var(--muted);
+  --hq-text:var(--ink);
+  --hq-line:var(--line);
+  color-scheme:light;
   --accent:#005b76;
   --line:#cadde6;
   max-width:1440px;
@@ -12,6 +18,7 @@
   font-family:system-ui,-apple-system,'Noto Sans CJK KR','Noto Sans KR',sans-serif
 }
 .hero {
+  --hq-muted:#d1eaf4;
   background:linear-gradient(120deg,#081f32,#123d56);
   border:1px solid #30576b;
   border-radius:24px;

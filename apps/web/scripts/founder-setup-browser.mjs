@@ -57,9 +57,9 @@ async function capture(page, name) {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Horizontal overflow');
   await page.addScriptTag({ content: axe });
   const scan = await page.evaluate(() => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21aa'] } }));
-  report.accessibility.push({ name, violations: scan.violations.map(v => ({ id: v.id, impact: v.impact })) });
-  assert.equal(scan.violations.length, 0, JSON.stringify(scan.violations.map(v => v.id)));
+  report.accessibility.push({ name, violations: scan.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.map(n => ({ target: n.target, summary: n.failureSummary })) })) });
   await page.screenshot({ path: join(results, name + '.png'), fullPage: true }); report.screenshots.push(name + '.png');
+  assert.equal(scan.violations.length, 0, JSON.stringify(scan.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) }))));
 }
 try {
   await new Promise((done, reject) => { api.once('error', reject); api.listen(3001, '127.0.0.1', done); });
