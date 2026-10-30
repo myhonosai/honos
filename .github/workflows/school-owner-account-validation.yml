@@ -10,6 +10,10 @@ on:
       - 'apps/web/src/app/account/**'
       - 'apps/web/src/app/hq/school-owner-invitations/**'
       - 'apps/web/test/owner-invitations.test.tsx'
+      - 'apps/web/next.config.ts'
+      - 'apps/web/src/server/web-startup.ts'
+      - 'apps/web/test/web-startup.test.ts'
+      - 'apps/web/scripts/web-startup-verification.mjs'
       - 'packages/auth/**'
       - 'packages/contracts/src/school-owner-invitations.ts'
       - 'packages/database/migrations/0191_*'
@@ -112,6 +116,8 @@ jobs:
       - name: Actual application with signed synthetic contract fixtures
         id: browser
         run: pnpm --filter @hon/web exec node scripts/school-owner-invitations-browser.mjs
+      - name: Actual built web startup and authentication safety
+        run: pnpm --filter @hon/web exec node scripts/web-startup-verification.mjs
       - name: Retain private screenshots and sanitized browser report
         if: always() && steps.browser.outcome != 'skipped'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

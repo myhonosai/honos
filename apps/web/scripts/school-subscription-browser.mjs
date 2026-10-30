@@ -86,7 +86,7 @@ const api=createServer(async(req,res)=>{
   report.unexpectedRequests.push({method:req.method,path:url.pathname});send(res,404,{});
 });
 await new Promise((done,reject)=>{api.once('error',reject);api.listen(3001,'127.0.0.1',done);});
-const app=spawn(process.execPath,[requireWeb.resolve('next/dist/bin/next'),'start','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{PATH:process.env.PATH,HOME:process.env.HOME,LANG:'C.UTF-8',NODE_ENV:'production',NEXT_TELEMETRY_DISABLED:'1',HON_API_BASE_URL:'http://127.0.0.1:3001',HON_AUTH_MODE:session.mode,HON_SESSION_AUDIENCE:session.audience,HON_SESSION_JWT_SECRET:session.secret},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,[requireWeb.resolve('next/dist/bin/next'),'start','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{PATH:process.env.PATH,HOME:process.env.HOME,LANG:'C.UTF-8',NODE_ENV:'production',HON_DEPLOYMENT_ENVIRONMENT:'preview',NEXT_TELEMETRY_DISABLED:'1',HON_API_BASE_URL:'http://127.0.0.1:3001',HON_AUTH_MODE:session.mode,HON_SESSION_AUDIENCE:session.audience,HON_SESSION_JWT_SECRET:session.secret},stdio:['ignore','pipe','pipe']});
 app.stdout.on('data',()=>{});app.stderr.on('data',()=>{});
 const delay=ms=>new Promise(done=>setTimeout(done,ms));let browser;
 async function check(name,operation){try{await operation();report.checks.push(name);console.log(`PASS ${name}`);}catch(e){report.failures.push({name,message:String(e.message).slice(0,1600)});console.log(`FAIL ${name}: ${String(e.message).slice(0,1600)}`);}}

@@ -1,3 +1,10 @@
+## Web production authentication startup guard — Codex
+
+- Local evidence: 60 focused configuration/auth-route tests and all 1,044 web tests pass; web typecheck, production build and the existing 183-file migration check pass. Browser and full repository/database evidence remain pending on the final draft head.
+
+- [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
+- [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
+
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 
 - P1 correction: keep the minimized production HQ directory unchanged, submit school-only invitation input, and resolve the canonical organization inside the protected HQ-owner database transaction. Correct the enhanced browser fixture; fresh exact-head verification pending.
