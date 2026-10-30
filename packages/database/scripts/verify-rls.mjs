@@ -1,3 +1,4 @@
+import { schoolAccountTables, verifySchoolAccountSecurity } from './school-account-security.mjs';
 import { verifyCrmLeadCloseSecurity } from './crm-lead-close-security.mjs';
 import { verifyA2pPreparationSecurity } from './a2p-preparation-security.mjs';
 import { verifyParentPlannedAbsenceRequestSecurity } from './parent-planned-absence-request-security.mjs';
@@ -82,6 +83,7 @@ const expectedRlsTables = [
   ...communityTables,
   ...championsClubTables,
   ...saasBillingTables,
+  ...schoolAccountTables,
   ...languagePreferenceTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
   'crm_follow_ups', 'crm_follow_up_versions', 'crm_follow_up_requests',
@@ -291,6 +293,7 @@ try {
   await verifyChampionsClubSecurity(client, runtimeRoleName);
   await verifySaasBillingSecurity(client, runtimeRoleName);
   await verifyA2pPreparationSecurity(client, runtimeRoleName);
+  await verifySchoolAccountSecurity(client, runtimeRoleName);
   await verifyLanguagePreferenceSecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
   await verifyHumanWorkSecurity(client,runtimeRoleName);

@@ -12,7 +12,8 @@ export class HonIdentityService {
       const config = sessionConfig();
       const token = cookieValue(request.headers.cookie, HON_SESSION_COOKIE);
       if (!token) throw new UnauthorizedException('HON requires an authenticated application session.');
-      return verifySession(token, config);
+      const { emailVerified: _proof, ...identity } = verifySession(token, config);
+      return identity;
     } catch (error) {
       if (error instanceof AuthConfigurationError) throw new ServiceUnavailableException('HON application session validation is not configured.');
       // Never attach the original JWT/provider error, request, cookie, or authorization header.
