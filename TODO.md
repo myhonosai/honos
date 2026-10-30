@@ -1,5 +1,11 @@
 # HON Delivery Backlog
 
+## A2P-1 registration preparation backend — Codex
+
+- [x] Implement source-backed structured website checks, fixture-only inspection policy and deterministic martial-arts campaign/sample preparation with narrow exact-school read-only APIs. No public fetcher, legal/approval guarantee, saved consent, registration submission, provider call or SMS delivery.
+- [ ] Add the dedicated preparation permission and additive 0190 scope boundary; preserve historical migrations, RLS and all commercial gates. Verify API/contract/security tests and disposable database proofs; publish one focused draft PR with frontend handoff. PRs #78/#79/#80 and Claude's frontend remain untouched. Contract: `docs/architecture/A2P_REGISTRATION_ASSISTANT.md`.
+- [x] Owner-approved migration allocation: PR #82 = 0190, PR #88 = 0191, PR #90 = 0192. This reconciliation preserves the existing 0190 file and all historical migrations; PR #90's separate owner must carry out its authorized 0192 correction. No activation or deployment is authorized by this allocation.
+
 ## Zernio secure integration foundation — Codex
 
 - [x] Add API-server-only secret configuration, hidden local key entry, HQ-owner configuration status and explicitly gated read-only credential verification using official Zernio contracts. No browser key store, live calls, posting, messaging, ads, OAuth connection, workers or changes to paid/trial/AI activation.
