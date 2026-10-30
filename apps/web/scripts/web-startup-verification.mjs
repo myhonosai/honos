@@ -112,8 +112,15 @@ try {
     for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
       const context = await browser.newContext({ viewport, reducedMotion: 'reduce', serviceWorkers: 'block' });
       await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      // The page's real server session gate must pass before mounting the idle workbench.
+      // This identity confers no HQ/school authority and we never click its protected-read control.
+      await context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession(
+        { externalSubject: 'oidc:synthetic:startup-browser' },
+        { mode: 'OIDC', secret: oidc.HON_SESSION_JWT_SECRET, audience: oidc.HON_SESSION_AUDIENCE },
+      ), url: origin, httpOnly: true, sameSite: 'Lax' }]);
       const page = await context.newPage();
       await page.goto(origin + '/account/owner-invitation');
+      assert.equal(page.url(), origin + '/account/owner-invitation');
       const verify = page.getByRole('button', { name: 'Verify access', exact: true });
       await verify.focus(); assert(await verify.evaluate(el => el === document.activeElement));
       assert.equal(await page.getByRole('textbox').count(), 0);
