@@ -430,6 +430,14 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return result.rows[0];
   }
 
+  async readA2pPreparationScope(context: ResolvedPrincipalScope & {externalSubject:string;principalType:'HUMAN_USER';requestId:string}): Promise<(ResolvedPrincipalScope & {schoolName:string;canConfirmOwnerFacts:boolean}) | null> {
+    return this.withTenantReadOnlyTransaction(context, async client => {
+      await client.query("SET LOCAL statement_timeout='3s'; SET LOCAL lock_timeout='1s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)",[context.externalSubject]);
+      return (await client.query<{data:ResolvedPrincipalScope & {schoolName:string;canConfirmOwnerFacts:boolean}}>('SELECT hon.read_a2p_preparation_scope($1) data',[context.externalSubject])).rows[0]?.data ?? null;
+    });
+  }
+
   async resolvePlannedAbsenceReviewScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
     await this.assertRuntimePosture();
     const result = await this.getPool().query<ResolvedPrincipalScope>(
@@ -1158,6 +1166,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call = LANGUAGE_CALLS[operation];
     if (!call || params.length !== call.arity) throw new Error('LANGUAGE_UNAVAILABLE');
     return this.callFixedSubjectFunction(call, params, 'LANGUAGE_UNAVAILABLE');
+  }
+
+  async callSchoolAccount(operation: 'invite'|'revoke'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      invite: {sql: "SELECT hon.manage_school_owner_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},
+      revoke: {sql: "SELECT hon.manage_school_owner_invitation($1,'REVOKE',$2::jsonb,$3::uuid) data",arity:3},
+      accept: {sql: 'SELECT hon.accept_school_owner_invitation($1,$2,$3::jsonb,$4::uuid) data',arity:4},
+      list: {sql: 'SELECT hon.read_school_owner_invitations($1,$2::uuid) data',arity:2},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

@@ -4,6 +4,12 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened]
     paths:
+      - '.github/scripts/run-db-proofs.sh'
+      - 'packages/database/src/database-tls.ts'
+      - 'packages/database/migration-checksums.json'
+      - 'packages/database/scripts/migration-*.mjs'
+      - 'packages/database/scripts/verify-rls.mjs'
+      - 'apps/api/src/foundation/runtime-*.ts'
       - 'packages/database/scripts/*commercial-staging*'
       - '.github/workflows/commercial-staging-validation.yml'
       - 'packages/database/migrations/0186_*'

@@ -108,6 +108,14 @@ There is no hosting configuration in the repository yet, so this is the procedur
 
 ## 7. Recovery verification and sign-off
 
+### Canonical-main integration record (PR #89)
+
+PR #89 is reconciled with main `92bba0359c5e0dceeb0565b0b1e892828b1481c1`, containing merged A2P 0190 and school-owner invitation 0191. The source-side `migration-checksums.json` now pins all **183** canonical files. The existing `verify-migrations.mjs --record-new` mechanism appended only those two previously unrecorded entries; all 181 earlier pins and every SQL byte remain unchanged. Reserved 0179/0180 remain absent. This is derived repository evidence, not a change to a database migration ledger or approval to apply SQL.
+
+The commercial staging manifest remains the merged main's independently generated 183-file chain (11 targets through 0191). The restore drill fingerprints the actual table inventory and full filename ledger, including the private invitation tables and A2P scope; historical 277-table/181-migration results above are not fresh combined-head evidence. New CI results and exact commit belong in the PR report. Draft-safe workflow paths include shared TLS/runtime/telemetry changes so the existing invitation browser/API proofs and commercial rehearsals run without changing PR readiness.
+
+The mandatory release-checkout `db:check` and reviewed `db:status` preflight remain necessary: the migrator still uses the filename-only applied ledger. Real Supabase CA/pooler verification, production backup/restore, approved environment/logging configuration and reader-first verified-email rollout remain separate deployment gates. No retained database, credential, provider, account, financial, trial or AI activation is performed by this source integration.
+
 | Check | Evidence | Result | Who / date |
 |---|---|---|---|
 | Disposable restore drill (CI) | `test-restore-drill.mjs` in run-db-proofs | PASS locally and in CI (manual dispatch) 2026-10-28 | Claude |

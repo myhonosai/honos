@@ -181,6 +181,8 @@
     "0186_saas_exception_policy_approval.sql": "03b5f331cb982e28e3b704e86e249422ddeaea54caef6bc414390ea279d0ac43",
     "0187_customer_trial_governance.sql": "ff9f9d8a5f768b8d3bc1d8c3f44b4ff64faea3ce72602ff455ebf81b86d25c66",
     "0188_immutable_pricing_acceptance.sql": "fb7bd8bbb78f9fc92a45e3a6645fd435073b092a594e870ba84422c5eb396c8b",
-    "0189_provider_subscription_schedule_foundation.sql": "0ed32867b17b9e606f9b76237f54ef6bc2238895ebab66fc23c96027f9c84d08"
+    "0189_provider_subscription_schedule_foundation.sql": "0ed32867b17b9e606f9b76237f54ef6bc2238895ebab66fc23c96027f9c84d08",
+    "0190_a2p_registration_preparation.sql": "266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638",
+    "0191_school_owner_invitations.sql": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f"
   }
 }
