@@ -56,3 +56,19 @@ it('keeps the first controlled edit and invalidates confirmation without capture
  change('subject','First entered subject');expect(el('subject').props.value).toBe('First entered subject');expect(el('load').props.disabled).toBe(true);
  el('confirm').props.onChange({target:{checked:true}});change('note','Changed content');expect(el('confirm').props.checked).toBe(false);
 });
+it('shows the exact validated trial window using the shared date formatter',async()=>{
+ const f=await loaded();click('step-trial');change('start','2026-11-02T09:00');change('end','2026-11-02T10:00');el('confirm').props.onChange({target:{checked:true}});
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({id:'00000000-0000-4000-8000-000000000008',crmLeadId:row.id,appointmentType:'TRIAL',status:'SCHEDULED',startsAt:'2026-11-02T09:00:00.000Z',endsAt:'2026-11-02T10:00:00.000Z',createdByPrincipalId:'00000000-0000-4000-8000-000000000006',version:1,createdAt:'2026-10-31T05:00:00.000Z',updatedAt:'2026-10-31T05:00:00.000Z'}));
+ nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();expect(text(el('trial-window'))).toContain('2026-11-02T09:00:00.000Z');expect(text(el('trial-window'))).toContain('2026-11-02T10:00:00.000Z');
+});
+it('clears concealed form details but keeps the exact private note and key for an explicit retry',async()=>{
+ const f=await loaded();click('step-close');change('note','Private original note');el('confirm').props.onChange({target:{checked:true}});f.mockResolvedValueOnce(identity()).mockRejectedValueOnce(new Error('Unknown outcome'));
+ nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();const original=f.mock.calls[4]!;window.dispatchEvent(new Event('blur'));authorize(f);click('restore');await settle();expect(el('note').props.value).toBe('');
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({...closeReceipt(),closeNote:'Private original note'}));click('retry');await settle();const last=f.mock.calls.at(-1)!;expect(last[1]?.body).toBe(original[1]?.body);expect(last[1]?.headers).toEqual(original[1]?.headers);expect(el('receipt')).toBeDefined();expect(el('note').props.value).toBe('');
+});
+it('retains an earlier unknown request across replay permission denial until explicit reauthorization',async()=>{
+ const f=await loaded();const submit=prepareClose();f.mockResolvedValueOnce(identity()).mockRejectedValueOnce(new Error('Unknown original'));submit({preventDefault(){}});await settle();const original=f.mock.calls[4]!;
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},403));click('retry');await settle();expect(hidden()).toBe(true);expect(el('restore').props.disabled).toBe(false);
+ authorize(f,'WON');click('restore');await settle();expect(hidden()).toBe(false);expect(el('retry')).toBeDefined();
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(closeReceipt()));click('retry');await settle();expect(f.mock.calls.at(-1)![1]?.body).toBe(original[1]?.body);expect(f.mock.calls.at(-1)![1]?.headers).toEqual(original[1]?.headers);expect(el('receipt')).toBeDefined();
+});
