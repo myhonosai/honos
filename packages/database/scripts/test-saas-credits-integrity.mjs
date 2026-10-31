@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
+import { addUtcMonthsClamped, verifyUtcMonthFixtures } from './commercial-staging-month-fixtures.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B3 (0156) integrity proof through the real API service on a disposable
@@ -76,6 +77,7 @@ const balance=async(org)=>(await api.readOrganizationCredits(H('operator'),org))
 await Promise.all([admin.connect(),restricted.connect()]);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
+ await verifyUtcMonthFixtures(admin, 'B3', { allowancePeriods: true });
  // ---------- runtime posture ----------
  for(const t of b3Tables)await sqlDeny(restricted.query(`SELECT * FROM hon.${t}`));
  for(const sig of ['saas_current_allowance(uuid,uuid,timestamptz)','saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)','require_saas_school_actor(text,uuid)','saas_record_thresholds(uuid,timestamptz)'])
@@ -235,8 +237,8 @@ try{
  assert.deepEqual([allowB.balance.allowanceCredits,allowB.allowanceBasis,allowB.planCode,allowB.balance.heldCredits,allowB.balance.availableCredits,allowB.balance.usedPercent],
   [12000,'LIFETIME','COMPLETE',12000,0,100]);
  assert.deepEqual(allowB.thresholds.map(t=>[t.thresholdPercent,t.notification]),[[75,'NOT_SENT'],[90,'NOT_SENT'],[100,'NOT_SENT']]);
- const anchorB=new Date(subs.B.serviceStartedAt),endB=new Date(anchorB);endB.setUTCMonth(endB.getUTCMonth()+1);
- assert.deepEqual([allowB.periodStart,allowB.periodEnd,allowB.periodIndex],[subs.B.serviceStartedAt,endB.toISOString(),0]);
+ const endB=addUtcMonthsClamped(subs.B.serviceStartedAt,1);
+ assert.deepEqual([allowB.periodStart,allowB.periodEnd,allowB.periodIndex],[subs.B.serviceStartedAt,endB,0]);
  assert.equal((await api.estimatePremiumOperation(H('staffB'),O.B.school,{operation:'research.deep',units:'1'})).refusal,'SAAS_CREDITS_EXHAUSTED');
  await deny(reserve('staffB',O.B.school,'research.deep',1),422,'SAAS_CREDITS_EXHAUSTED'); // no top-up, no overage
  const wonB=won.map(r=>r.value.reservation);
