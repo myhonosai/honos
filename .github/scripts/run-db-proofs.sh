@@ -66,6 +66,12 @@ proof() { # fixture, script, description
   summary+=("| $description | \`$script\` | pass |")
 }
 
+# AI-0 spend-authority regression baseline (test only, no fix). Single-use dedicated fixture with
+# fake providers only; known failures KF-AI2/AI9/AI14/AI8/AI3 pass only while they reproduce exactly as
+# pinned OPEN in ai-spend-entrypoints.json and must be replaced by S4 (or the approved AI-D3 slice).
+setup ai-spend-baseline HON_AI_SPEND_BASELINE_VALIDATION_TARGET hon_ai_spend_baseline_validation HON_AI_SPEND_BASELINE_ENV_FILE
+proof ai-spend-baseline test-ai-spend-authority-baseline.mjs "AI-0 spend-authority baseline: strict inventory of AI spend paths, grants and ceilings; closed credit/trial/access/payment programs; entitlement gates for all three agents; 5 known failures (open, replaced by S4 or a later approved slice)"
+
 # Public lead forms use the uniquely marked marketing fixture. Keep its descriptor
 # separate from every other proof and invoke the package's existing db:test-public-forms
 # command so it builds the current contracts/config/database/API before both proofs.
@@ -177,7 +183,7 @@ summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-m
 /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
 rm -f "$adult_draft_dir/$adult_draft_fixture.env"
 
-echo "All $passed disposable-database proofs passed (8 fixtures, all migrations applied)."
+echo "All $passed disposable-database proofs passed (9 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

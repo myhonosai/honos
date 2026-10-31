@@ -5,6 +5,14 @@
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
 
+## AI-0 spend-authority regression baseline — Claude (2026-10-31)
+
+- Test only; not the security fix. No migration, runtime, policy, provider or deployment change. Design: `docs/architecture/HON_AI_SPEND_AUTHORITY_BASELINE.md`.
+- [x] Dedicated single-use disposable fixture `hon_ai_spend_baseline_validation`; strict inventory `packages/database/scripts/ai-spend-entrypoints.json` (spend tables/functions, ledger/reservation/allowance/credit writers, 12000 ceilings, grants, programs, AI policy records); 12 invariants; fake providers only; wired into `run-db-proofs.sh` (AI-10 closed for the baseline) and `db:test-ai-spend-baseline`.
+- [x] Known failures pinned OPEN: KF-AI2 cross-agent over-commit (S4), KF-AI9 unpaid HQ COMPLETE exception reaches the provider (S4), KF-AI8 UNKNOWN hold never released and not month-scoped (AI-D3 slice), KF-AI3 same-agent race (S4; observed serialized, not reproduced), and new KF-AI14: an entitlement lapse while a call is in flight loses its usage record and leaves the hold SENDING for all three agents (S4).
+- [ ] Independent review of the draft PR, then owner merge decision. AI-D1 (S4 scope/order) stays open.
+- [ ] S4 must flip KF-AI2/AI9/AI3/AI14 to FIXED_BY_S4 and replace each probe with its invariant in the same reviewed PR; an explicit exception refusal (`AI_EXCEPTION_NO_AI`) and an organization-wide budget lock and unguarded evidence steps (record/fail after a lapse) are required.
+
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 
 - P1 correction: keep the minimized production HQ directory unchanged, submit school-only invitation input, and resolve the canonical organization inside the protected HQ-owner database transaction. Correct the enhanced browser fixture; fresh exact-head verification pending.
