@@ -72,3 +72,11 @@ it('retains an earlier unknown request across replay permission denial until exp
  authorize(f,'WON');click('restore');await settle();expect(hidden()).toBe(false);expect(el('retry')).toBeDefined();
  f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(closeReceipt()));click('retry');await settle();expect(f.mock.calls.at(-1)![1]?.body).toBe(original[1]?.body);expect(f.mock.calls.at(-1)![1]?.headers).toEqual(original[1]?.headers);expect(el('receipt')).toBeDefined();
 });
+it('keeps a stronger recovery denial local and requires separate preparation without claiming no registration',async()=>{
+ const f=await loaded();click('step-register');f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},403));click('verify-registration');await settle();expect(hidden()).toBe(true);expect(el('prepare-record')).toBeUndefined();authorize(f);click('restore');await settle();expect(hidden()).toBe(false);expect(text(render())).toContain('Canary');expect(el('birth')).toBeUndefined();expect(text(render())).toContain(journeyCatalog.en.registrationLimited);expect(text(render())).not.toContain(journeyCatalog.en.registrationReady);
+ click('prepare-record');expect(el('birth')).toBeDefined();expect(el('confirm').props.checked).toBe(false);expect(text(render())).toContain(journeyCatalog.en.registrationUnverified);expect(f.mock.calls.filter(c=>String(c[0]).endsWith('/register'))).toHaveLength(0);
+});
+it('does not mistake a recovery403caused by revoked CRM access for registration-only authority',async()=>{
+ const f=await loaded();click('step-register');f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},403));click('verify-registration');await settle();expect(hidden()).toBe(true);
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},403));click('restore');await settle();expect(hidden()).toBe(true);expect(el('prepare-record')).toBeUndefined();expect(el('save-registration')).toBeUndefined();
+});

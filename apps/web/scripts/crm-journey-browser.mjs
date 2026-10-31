@@ -18,7 +18,7 @@ const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const scope={organizationId:id(1),schoolId:id(2)},session={mode:'OIDC',audience:'crm-journey-synthetic-browser',secret:randomBytes(32).toString('hex')};
 const lead=()=>({id:id(3),primaryPersonId:id(4),pipelineStageId:id(5),version:state.closed?2:1,status:state.closed?'WON':'OPEN',givenName:'Synthetic',familyName:'Rivera',email:'synthetic@example.test',createdAt:'2026-10-30T12:00:00.000Z'});
 const report={sourceSha:process.env.HON_CRM_JOURNEY_SHA,syntheticBrowserOnly:true,realApiDatabaseVerification:false,blockedExternalRequests:0,blockedOrigins:[],externalProviderExecutions:0,screenshots:[],accessibility:[],checks:[]};
-const state={language:'en',reads:0,commands:0,closed:false,registered:false,deny:false,hold:false,settle:null,keys:new Map()};
+const state={language:'en',reads:0,commands:0,closed:false,registered:false,recoveryDenied:false,deny:false,hold:false,settle:null,keys:new Map()};
 const api=createServer(async(r,s)=>{
  const send=(status,data,meta=true)=>{if(s.destroyed)return;s.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store'});s.end(JSON.stringify(status>=400?{code:'SYNTHETIC_DENIED'}:{data,...(meta?{meta:{requestId:id(9),correlationId:id(9),replayed:false}}:{})}));};
  try{verifySession(cookieValue(r.headers.cookie,HON_SESSION_COOKIE)??'',session);}catch{send(401);return;}
@@ -29,7 +29,7 @@ const api=createServer(async(r,s)=>{
  if(r.method==='GET'&&r.url===`/v1/organizations/${id(1)}/schools/${id(2)}/crm/leads?limit=50`){send(200,[lead()]);return;}
  if(r.method==='GET'&&r.url==='/v1/staff/crm/follow-ups?queue=mine&status=ALL'){send(200,{schoolId:id(2),principalId:id(6),canManage:false,humanOnly:true,queue:'mine',status:'ALL',items:[],nextAfter:null});return;}
  let raw='';for await(const c of r)raw+=c;const body=raw?JSON.parse(raw):null;
- if(r.url?.endsWith('/guardian-child-enrollment')){assert.equal(raw,'{}');assert.equal(r.headers['idempotency-key'],undefined);send(200,{leadId:id(3),workflowState:state.registered?'ADULT_REGISTRATION':'NOT_REGISTERED'});return;}
+ if(r.url?.endsWith('/guardian-child-enrollment')){if(state.recoveryDenied){send(403);return;}assert.equal(raw,'{}');assert.equal(r.headers['idempotency-key'],undefined);send(200,{leadId:id(3),workflowState:state.registered?'ADULT_REGISTRATION':'NOT_REGISTERED'});return;}
  if(r.method!=='POST'){send(404);return;}
  const key=r.headers['idempotency-key'];assert(key);const fingerprint=JSON.stringify({path:r.url,body});
  if(state.keys.has(key)){const saved=state.keys.get(key);assert.equal(saved.fingerprint,fingerprint);send(200,saved.data);return;}
@@ -62,14 +62,14 @@ try{
  let ready=false;for(let i=0;i<100;i++){try{await fetch(origin,{redirect:'manual'});ready=true;break;}catch{}await new Promise(r=>setTimeout(r,200));}assert(ready,'Application did not start');
  browser=await chromium.launch({executablePath:process.env.HON_CRM_JOURNEY_CHROME,headless:true,args:['--no-sandbox']});
  for(const lang of ['en','ko','es'])for(const width of [390,834,1440]){
-  state.closed=false;state.registered=false;state.keys.clear();const{context,page}=await open(lang,width);const before=state.reads;await page.waitForTimeout(100);assert.equal(state.reads,before);
+  state.closed=false;state.registered=false;state.recoveryDenied=false;state.keys.clear();const{context,page}=await open(lang,width);const before=state.reads;await page.waitForTimeout(100);assert.equal(state.reads,before);
   await test(page,'load').focus();assert(await test(page,'load').evaluate(e=>e===document.activeElement));await load(page);assert.equal(state.reads,before+1);
   for(const mode of ['modern','classic','big'])await test(page,'mode').selectOption(mode);assert.equal(state.reads,before+1);await test(page,'mode').selectOption(width===390?'big':width===834?'classic':'modern');
   await test(page,'step-follow').click();await test(page,'verify-follow').click();await test(page,'subject').waitFor();await test(page,'subject').fill('Synthetic internal follow-up');await test(page,'note').fill('Synthetic private planning. No contact sent.');await confirm(page,'save-follow');await refresh(page);
   await test(page,'step-trial').click();const starts=new Date(Date.now()+86400000).toISOString().slice(0,16),ends=new Date(Date.now()+90000000).toISOString().slice(0,16);await test(page,'start').fill(starts);await test(page,'end').fill(ends);await confirm(page,'save-trial');assert.equal(await test(page,'trial-window').count(),1);await refresh(page);
   await test(page,'step-outcome').click();await test(page,'outcome').selectOption('COMPLETED');await confirm(page,'save-outcome');await refresh(page);
   await test(page,'step-close').click();await confirm(page,'save-close');await refresh(page);
-  await test(page,'step-register').click();await test(page,'verify-registration').click();await test(page,'registration-path').waitFor();
+  await test(page,'step-register').click();state.recoveryDenied=width===390;await test(page,'verify-registration').click();if(state.recoveryDenied){await test(page,'restore').click();await test(page,'prepare-record').click();}await test(page,'registration-path').waitFor();
   if(width===390){await test(page,'registration-path').selectOption('GUARDIAN_CHILD');await test(page,'child-given').fill('Synthetic child');await test(page,'child-family').fill('Rivera');await test(page,'birth').fill('2018-01-02');}else await test(page,'birth').fill('1990-01-02');
   await confirm(page,'save-registration');await test(page,'step-history').click();assert.equal(state.commands>=5,true);
   await capture(page,`${lang}-${width}-connected-journey`);

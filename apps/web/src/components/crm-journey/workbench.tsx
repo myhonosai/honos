@@ -16,7 +16,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   const [mode, setMode] = useState('modern'), [step, setStep] = useState<Step>('lead');
   const [scope, setScope] = useState<Scope>({ organizationId: initialScope.organizationId ?? '', schoolId: initialScope.schoolId ?? '' });
   const [rows, setRows] = useState<LeadListItem[] | null>(null), [leadId, setLeadId] = useState(initialLeadId), [query, setQuery] = useState('');
-  const [queue, setQueue] = useState<FollowUpQueue | null>(null), [registration, setRegistration] = useState<'NOT_REGISTERED' | 'EXISTING_RECORD' | null>(null);
+  const [queue, setQueue] = useState<FollowUpQueue | null>(null), [registration, setRegistration] = useState<'NOT_REGISTERED' | 'EXISTING_RECORD' | 'UNAVAILABLE' | 'UNVERIFIED_PREPARED' | null>(null);
   const [trial, setTrial] = useState<CrmAppointmentSummary | null>(null), [trialUsed, setTrialUsed] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]), [receiptConcealed, setReceiptConcealed] = useState(false);
   const [loading, setLoading] = useState(false), [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false), [dirty, setDirty] = useState(false), [needsRefresh, setNeedsRefresh] = useState(false);
@@ -25,6 +25,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   const [start, setStart] = useState(''), [end, setEnd] = useState(''), [location, setLocation] = useState(''), [outcome, setOutcome] = useState('COMPLETED'), [decision, setDecision] = useState('WON');
   const [path, setPath] = useState('ADULT'), [birth, setBirth] = useState(''), [childGiven, setChildGiven] = useState(''), [childFamily, setChildFamily] = useState('');
   const area = useRef<HTMLDivElement | null>(null), heading = useRef<HTMLHeadingElement | null>(null), shieldHeading = useRef<HTMLHeadingElement | null>(null);
+  const registrationReadDenied = useRef(false);
   const mounted = useRef(true), readEpoch = useRef(0), readAbort = useRef<AbortController | null>(null), readActive = useRef(false);
   // Command lifetime deliberately does not use the read epoch: blur invalidates reads, never command settlement.
   const commandEpoch = useRef(0), commandBusy = useRef(false), pending = useRef<Command | null>(null), shield = useRef(false), dead = useRef(false);
@@ -41,7 +42,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
     setConcealed(true); setDiscard(false); setNotice('');
   }
   function invalidateSession(): void {
-    conceal(); dead.current = true; commandEpoch.current++; pending.current = null;
+    conceal(); registrationReadDenied.current = false; dead.current = true; commandEpoch.current++; pending.current = null;
     setRows(null); setQueue(null); setTrial(null); setReceipts([]); setRegistration(null); setQuery(''); clearDraft();
     setUncertain(false); setSessionLost(true); setNotice('');
   }
@@ -79,7 +80,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       if (!mounted.current || epoch !== readEpoch.current || signal.aborted || document.visibilityState === 'hidden') return;
       if (normalized.schoolId !== scopeRef.current.schoolId || normalized.organizationId !== scopeRef.current.organizationId) { clearDraft(); setReceipts([]); setTrial(null); setTrialUsed(false); setReceiptConcealed(false); }
       if (original && list.some(r => r.id === original.id && r.primaryPersonId !== original.primaryPersonId)) { setLeadId(''); setTrial(null); setTrialUsed(true); setReceipts([]); clearDraft(); }
-      setScope(normalized); setRows(list); setQuery(''); setQueue(null); setRegistration(null); setNeedsRefresh(false);
+      setScope(normalized); setRows(list); setQuery(''); setQueue(null); setRegistration(registrationReadDenied.current ? 'UNAVAILABLE' : null); registrationReadDenied.current = false; setNeedsRefresh(false);
       if (!list.some(r => r.id === leadId)) setLeadId('');
       if (restoring) { setReceipts([]); setTrial(null); setReceiptConcealed(true); clearDraft(); }
       shield.current = false; setConcealed(false);
@@ -96,7 +97,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       await verifyJourneySession(sessionSubject, signal);
       if (epoch !== readEpoch.current || signal.aborted || shield.current || dead.current || !mounted.current) return;
       if (kind === 'follow') setQueue(v as FollowUpQueue); else setRegistration(v as 'NOT_REGISTERED' | 'EXISTING_RECORD');
-    } catch (e) { if (epoch === readEpoch.current && !controller.signal.aborted && mounted.current) { if (kind === 'follow') setQueue(null); else setRegistration(null); error(e); } }
+    } catch (e) { if (epoch === readEpoch.current && !controller.signal.aborted && mounted.current) { if (kind === 'registration' && e instanceof JourneyError && e.kind === 'DENIED') { registrationReadDenied.current = true; conceal(); setNotice('denied'); } else { if (kind === 'follow') setQueue(null); else setRegistration(null); error(e); } } }
     finally { if (epoch === readEpoch.current && mounted.current) { readActive.current = false; setLoading(false); } }
   }
   async function send(c: Command, retry = false): Promise<void> {
@@ -144,7 +145,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       } else if (kind === 'OUTCOME') { if (!trial || trial.status !== 'SCHEDULED') throw new Error(); input = { expectedVersion: trial.version, status: outcome, ...(note.trim() ? { outcomeNotes: note.trim() } : {}) }; }
       else if (kind === 'CLOSE') input = { expectedVersion: selected.version, status: decision, ...(note.trim() ? { closeNote: note.trim() } : {}) };
       else {
-        if (registration !== 'NOT_REGISTERED') throw new Error();
+        if (registration !== 'NOT_REGISTERED' && registration !== 'UNVERIFIED_PREPARED') throw new Error();
         input = { registrationPath: path, ...(path === 'ADULT' ? { birthDate: birth } : { childGivenName: childGiven.trim(), childFamilyName: childFamily.trim(), childBirthDate: birth }), confirmation: CRM_LEAD_REGISTRATION_CONFIRMATION };
       }
       const c = prepareCommand(kind, scope, selected, input, crypto.randomUUID(), kind === 'OUTCOME' ? trial : null);
@@ -154,7 +155,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   function abandon(): void {
     if (commandBusy.current) return;
     const couldHaveScheduled = pending.current?.kind === 'SCHEDULE';
-    commandEpoch.current++; pending.current = null; setUncertain(false); setDiscard(false); clearDraft(); setNotice('');
+    commandEpoch.current++; registrationReadDenied.current = false; pending.current = null; setUncertain(false); setDiscard(false); clearDraft(); setNotice('');
     if (couldHaveScheduled) setTrialUsed(true);
     // Deliberate abandonment discards only local state. The next facts require an explicit server read.
     setRows(null); setQueue(null); setRegistration(null); setTrial(null); setReceipts([]); setNeedsRefresh(false); setLeadId('');
@@ -196,7 +197,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
             {step === 'trial' && <><p>{t('trialHelp')}</p><p>{t('UTC')}</p>{trialUsed ? <p>{trial ? t('historical') : t('outcomeMissing')}</p> : <form autoComplete="off" onSubmit={e => submit(e,'SCHEDULE')}><fieldset disabled={inert}><div className={styles.fields}><label>{t('start')}<input data-testid="start" type="datetime-local" required value={start} onChange={e => edit(setStart, e.target.value)} /></label><label>{t('end')}<input data-testid="end" type="datetime-local" required value={end} onChange={e => edit(setEnd, e.target.value)} /></label></div><label>{t('location')}<input maxLength={160} value={location} onChange={e => edit(setLocation, e.target.value)} /></label>{noteField}{confirmation}<button data-testid="save-trial" disabled={!confirmed}>{t('trialSave')}</button></fieldset></form>}</>}
             {step === 'outcome' && <><p>{t('outcomeHelp')}</p>{trial?.status === 'SCHEDULED' ? <><p>{t('historical')}</p><p>{locale.date(trial.startsAt)} — {locale.date(trial.endsAt)}</p><form autoComplete="off" onSubmit={e => submit(e,'OUTCOME')}><fieldset disabled={inert}><label>{t('outcome')}<select data-testid="outcome" value={outcome} onChange={e => edit(setOutcome, e.target.value)}>{(['COMPLETED','NO_SHOW','CANCELLED'] as const).map(v => <option key={v} value={v}>{t(v)}</option>)}</select></label>{noteField}{confirmation}<button data-testid="save-outcome" disabled={!confirmed}>{t('outcomeSave')}</button></fieldset></form></> : <p>{t('outcomeMissing')}</p>}</>}
             {step === 'close' && <><p>{t('closeHelp')}</p>{selected.status !== 'OPEN' ? <p>{t('closeBlocked')}</p> : <form autoComplete="off" onSubmit={e => submit(e,'CLOSE')}><fieldset disabled={inert}><label>{t('closeChoice')}<select data-testid="decision" value={decision} onChange={e => edit(setDecision, e.target.value)}><option value="WON">{t('WON')}</option><option value="LOST">{t('LOST')}</option></select></label>{noteField}{confirmation}<button data-testid="save-close" disabled={!confirmed}>{t('closeSave')}</button></fieldset></form>}</>}
-            {step === 'register' && <><p>{t('registerHelp')}</p><button data-testid="verify-registration" disabled={locked} onClick={() => void readExtra('registration')}>{t('checkRegistration')}</button>{registration === null ? <p>{t('unchecked')}</p> : registration === 'EXISTING_RECORD' ? <p>{t('existingRegistration')}</p> : <><p>{t('registrationReady')}</p><form autoComplete="off" onSubmit={e => submit(e,'REGISTER')}><fieldset disabled={inert}><label>{t('registrationPath')}<select data-testid="registration-path" value={path} onChange={e => { edit(setPath, e.target.value); setBirth(''); }}><option value="ADULT">{t('adult')}</option><option value="GUARDIAN_CHILD">{t('family')}</option></select></label>{path === 'GUARDIAN_CHILD' && <div className={styles.fields}><label>{t('childGiven')}<input data-testid="child-given" required maxLength={100} value={childGiven} onChange={e => edit(setChildGiven, e.target.value)} /></label><label>{t('childFamily')}<input data-testid="child-family" required maxLength={100} value={childFamily} onChange={e => edit(setChildFamily, e.target.value)} /></label></div>}<label>{t(path === 'ADULT' ? 'birth' : 'childBirth')}<input data-testid="birth" type="date" required value={birth} onChange={e => edit(setBirth, e.target.value)} /></label>{confirmation}<button data-testid="save-registration" disabled={!confirmed}>{t('registerSave')}</button></fieldset></form></>}<p><a href={`/staff/crm/leads?${linkedScope}`}>{t('registrationWorkbench')}</a></p></>}
+            {step === 'register' && <><p>{t('registerHelp')}</p><button data-testid="verify-registration" disabled={locked} onClick={() => void readExtra('registration')}>{t('checkRegistration')}</button>{registration === null ? <p>{t('unchecked')}</p> : registration === 'EXISTING_RECORD' ? <p>{t('existingRegistration')}</p> : registration === 'UNAVAILABLE' ? <><p>{t('registrationLimited')}</p><button data-testid="prepare-record" disabled={inert} onClick={() => { setRegistration('UNVERIFIED_PREPARED'); setConfirmed(false); }}>{t('prepareRecord')}</button></> : <><p>{t(registration === 'NOT_REGISTERED' ? 'registrationReady' : 'registrationUnverified')}</p><form autoComplete="off" onSubmit={e => submit(e,'REGISTER')}><fieldset disabled={inert}><label>{t('registrationPath')}<select data-testid="registration-path" value={path} onChange={e => { edit(setPath, e.target.value); setBirth(''); }}><option value="ADULT">{t('adult')}</option><option value="GUARDIAN_CHILD">{t('family')}</option></select></label>{path === 'GUARDIAN_CHILD' && <div className={styles.fields}><label>{t('childGiven')}<input data-testid="child-given" required maxLength={100} value={childGiven} onChange={e => edit(setChildGiven, e.target.value)} /></label><label>{t('childFamily')}<input data-testid="child-family" required maxLength={100} value={childFamily} onChange={e => edit(setChildFamily, e.target.value)} /></label></div>}<label>{t(path === 'ADULT' ? 'birth' : 'childBirth')}<input data-testid="birth" type="date" required value={birth} onChange={e => edit(setBirth, e.target.value)} /></label>{confirmation}<button data-testid="save-registration" disabled={!confirmed}>{t('registerSave')}</button></fieldset></form></>}<p><a href={`/staff/crm/leads?${linkedScope}`}>{t('registrationWorkbench')}</a></p></>}
             </div>
             {step === 'history' && <><p>{t('historyUnavailable')}</p>{receipts.length === 0 && <p>{t('noReceipts')}</p>}</>}
             {receipts.length > 0 && <section className={styles.receipts} aria-label={t('history')}><h3>{t('receipt')}</h3><p>{t('historical')}</p>{receipts.map((r,i) => <p key={i} data-testid="receipt">{t(({FOLLOW_UP:'follow',SCHEDULE:'trial',OUTCOME:'outcome',CLOSE:'close',REGISTER:'register'} as const)[r.kind])}: {r.kind === 'REGISTER' ? t(r.record.outcome === 'REGISTERED' ? 'registered' : 'review') : <>{statusLabel(r.record.status)} · {t('version')} {locale.number(r.record.version)} · {locale.date(r.kind === 'FOLLOW_UP' ? r.record.recordedAt : r.kind === 'CLOSE' ? r.record.closedAt : r.record.updatedAt)}{(r.kind === 'SCHEDULE' || r.kind === 'OUTCOME') && <span data-testid="trial-window"><br />{locale.date(r.record.startsAt)} — {locale.date(r.record.endsAt)}</span>}</>}</p>)}</section>}
