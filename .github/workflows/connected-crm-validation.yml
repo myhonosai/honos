@@ -1,0 +1,124 @@
+name: Connected staff CRM validation
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'apps/web/src/components/crm-journey/**'
+      - 'apps/web/src/app/staff/crm/journey/**'
+      - 'apps/web/src/components/crm-leads-workbench.tsx'
+      - 'apps/web/src/components/crm-leads-http.ts'
+      - 'apps/web/src/components/crm-follow-ups-http.ts'
+      - 'apps/web/src/components/trial-appointment-http.ts'
+      - 'apps/web/test/crm-journey*'
+      - 'apps/web/scripts/crm-journey*'
+      - '.github/workflows/connected-crm-validation.yml'
+permissions:
+  contents: read
+concurrency:
+  group: connected-crm-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm check
+      - run: pnpm build
+      - run: pnpm db:check
+      - run: git diff --exit-code
+  database:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/api build
+      - name: Complete canonical disposable PostgreSQL security proofs
+        run: |
+          sudo systemctl start postgresql.service
+          pg_isready -h /var/run/postgresql -p 5432
+          bash .github/scripts/run-db-proofs.sh
+      - name: Actual signed-session connected-journey transport and database
+        run: |
+          set -euo pipefail
+          fixture_dir=/home/ubuntu/jobs/connected_crm
+          sudo mkdir -p "$fixture_dir"
+          sudo chown "$(id -u):$(id -g)" /home/ubuntu /home/ubuntu/jobs "$fixture_dir"
+          chmod 700 "$fixture_dir"
+          trap 'rm -f "$fixture_dir/journey.env"' EXIT
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET=postgresql://localhost:5432/hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE="$fixture_dir/journey.env" node packages/database/scripts/setup-flexible-billing-accounts-validation.mjs
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_JOURNEY_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-journey-api-verification.mjs' _ "$fixture_dir/journey.env"
+      - if: always()
+        run: git diff --exit-code
+  browser:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      HON_API_BASE_URL: 'http://127.0.0.1:3001'
+      HON_CRM_JOURNEY_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
+      - name: Isolated browser tools and Korean fonts
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          fc-cache -f
+          chrome_bin="$(command -v google-chrome || command -v chromium || true)"
+          test -n "$chrome_bin"
+          echo "HON_CRM_JOURNEY_CHROME=$chrome_bin" >> "$GITHUB_ENV"
+          echo "HON_CRM_JOURNEY_TOOLS=$RUNNER_TEMP/connected-crm-tools" >> "$GITHUB_ENV"
+          echo "HON_CRM_JOURNEY_RESULTS=$RUNNER_TEMP/connected-crm-results" >> "$GITHUB_ENV"
+          npm install --prefix "$RUNNER_TEMP/connected-crm-tools" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1 axe-core@4.10.3 esbuild@0.25.12
+      - name: Mounted connected workflow, retries, privacy, localization and accessibility
+        id: browser
+        run: pnpm --filter @hon/web exec node scripts/crm-journey-browser.mjs
+      - name: Private synthetic screenshot evidence
+        if: always() && steps.browser.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hon-connected-crm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/connected-crm-results/
+          retention-days: 3
+          if-no-files-found: warn
+      - if: always()
+        run: git diff --exit-code
