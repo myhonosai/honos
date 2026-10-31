@@ -17,7 +17,7 @@ const axe=await readFile(tools.resolve('axe-core/axe.min.js'),'utf8'),results=pr
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const scope={organizationId:id(1),schoolId:id(2)},session={mode:'OIDC',audience:'crm-journey-synthetic-browser',secret:randomBytes(32).toString('hex')};
 const lead=()=>({id:id(3),primaryPersonId:id(4),pipelineStageId:id(5),version:state.closed?2:1,status:state.closed?'WON':'OPEN',givenName:'Synthetic',familyName:'Rivera',email:'synthetic@example.test',createdAt:'2026-10-30T12:00:00.000Z'});
-const report={sourceSha:process.env.HON_CRM_JOURNEY_SHA,syntheticBrowserOnly:true,realApiDatabaseVerification:false,externalCalls:0,screenshots:[],accessibility:[],checks:[]};
+const report={sourceSha:process.env.HON_CRM_JOURNEY_SHA,syntheticBrowserOnly:true,realApiDatabaseVerification:false,blockedExternalRequests:0,blockedOrigins:[],externalProviderExecutions:0,screenshots:[],accessibility:[],checks:[]};
 const state={language:'en',reads:0,commands:0,closed:false,registered:false,deny:false,hold:false,settle:null,keys:new Map()};
 const api=createServer(async(r,s)=>{
  const send=(status,data,meta=true)=>{if(s.destroyed)return;s.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store'});s.end(JSON.stringify(status>=400?{code:'SYNTHETIC_DENIED'}:{data,...(meta?{meta:{requestId:id(9),correlationId:id(9),replayed:false}}:{})}));};
@@ -47,7 +47,7 @@ const api=createServer(async(r,s)=>{
 });
 const origin='http://127.0.0.1:3100';let app,browser,log='';
 async function open(lang,width){state.language=lang;const context=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce',serviceWorkers:'block'});
- await context.route('**/*',route=>{if(new URL(route.request().url()).origin===origin)return route.continue();report.externalCalls++;return route.abort();});
+ await context.route('**/*',route=>{if(new URL(route.request().url()).origin===origin)return route.continue();report.blockedExternalRequests++;const host=new URL(route.request().url()).origin;if(!report.blockedOrigins.includes(host))report.blockedOrigins.push(host);return route.abort();});
  await context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'oidc:synthetic:journey'},session),url:origin,httpOnly:true,sameSite:'Lax'}]);
  const page=await context.newPage();await page.goto(origin+`/staff/crm/journey?${new URLSearchParams({...scope,leadId:id(3)})}`);await page.waitForFunction(lang=>document.documentElement.lang===lang,lang);return{context,page};
 }

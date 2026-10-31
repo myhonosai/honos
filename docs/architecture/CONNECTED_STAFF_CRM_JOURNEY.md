@@ -45,3 +45,9 @@ A successful scheduled appointment concealed by focus loss cannot be recovered a
 The existing follow-up SQL explicitly locks/rechecks live authority. The new disposable proof verifies a real HTTP request waiting on a permission lock and being refused after revocation commits. Existing lead/trial generic resolvers and tenant services remain unchanged; broader post-resolution authorization/entitlement race guarantees must not be inferred from this single follow-up proof. These older boundaries need their own backend review before claiming every legacy CRM read/command is serialized against all IAM changes.
 
 The new journey is localized in EN/KR/ES. Ordinary links preserve the existing adult/family Resume Setup interfaces, whose untranslated text and broader lifecycle gaps are not claimed fixed here. No new support, AI, messaging, billing, parent or enrollment authority is added.
+
+## First hosted verification findings
+
+The full canonical proof suite was actually attempted. On October31 the unchanged `test-saas-subscription-integrity.mjs:193` fails because its JavaScript `setUTCMonth` expectation overflows October31+1month to December1, while PostgreSQL clamps to November30. This PR changes no billing implementation or historical proof. The suite stops at this failure; later proofs are not claimed passed. The separate connected-journey API/database step still executes to collect independent CRM evidence, while the job retains its canonical-suite failure.
+
+Mounted browser testing exposed a genuine new-form defect: updating dirty state during input capture could restore the first controlled field before React's onChange read its value. Edits now read and store the value in the normal handler before updating dirty/confirmation state. The synthetic provider-free browser test remains strict about receiving a new validated receipt for each command.

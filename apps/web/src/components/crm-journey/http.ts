@@ -41,6 +41,7 @@ async function request(path: string, signal: AbortSignal, body?: string, key?: s
     const envelope: unknown = JSON.parse(raw); closed(envelope, path === '/api/identity/me' || path === '/api/v1/staff/current-reporting-school' ? ['data'] : ['data', 'meta']);
     if (body !== undefined) {
       closed(envelope.meta, ['requestId', 'correlationId', 'replayed']);
+      if (readOnly && envelope.meta.replayed !== false) throw new Error();
       if (id(String(envelope.meta.requestId)) !== id(String(envelope.meta.correlationId)) || typeof envelope.meta.replayed !== 'boolean') throw new Error();
     }
     return envelope;

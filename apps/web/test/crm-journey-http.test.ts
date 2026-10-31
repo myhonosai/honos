@@ -48,3 +48,7 @@ it('recovery is an explicit existing read-only POST and never registers automati
  const f=vi.spyOn(globalThis,'fetch').mockResolvedValue(envelope({leadId:row.id,workflowState:'NOT_REGISTERED'}));expect(await readRegistration(scope,row,new AbortController().signal)).toBe('NOT_REGISTERED');expect(f.mock.calls[0]![1]?.body).toBe('{}');expect(f.mock.calls[0]![1]?.headers).not.toHaveProperty('Idempotency-Key');
  f.mockResolvedValue(envelope({leadId:row.id,workflowState:'NEEDS_STAFF_REVIEW'}));expect(await readRegistration(scope,row,new AbortController().signal)).toBe('EXISTING_RECORD');
 });
+it('refuses a replay-tagged recovery response as current registration evidence',async()=>{
+ vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({data:{leadId:row.id,workflowState:'NOT_REGISTERED'},meta:{requestId:id(9),correlationId:id(9),replayed:true}}),{headers:{'content-type':'application/json'}}));
+ await expect(readRegistration(scope,row,new AbortController().signal)).rejects.toMatchObject({kind:'READ'});
+});

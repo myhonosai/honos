@@ -62,11 +62,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/api build
       - name: Complete canonical disposable PostgreSQL security proofs
+        id: proofs
         run: |
           sudo systemctl start postgresql.service
           pg_isready -h /var/run/postgresql -p 5432
           bash .github/scripts/run-db-proofs.sh
       - name: Actual signed-session connected-journey transport and database
+        if: always() && steps.proofs.outcome != 'skipped'
         run: |
           set -euo pipefail
           fixture_dir=/home/ubuntu/jobs/connected_crm
@@ -75,6 +77,9 @@ jobs:
           chmod 700 "$fixture_dir"
           trap 'rm -f "$fixture_dir/journey.env"' EXIT
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET=postgresql://localhost:5432/hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE="$fixture_dir/journey.env" node packages/database/scripts/setup-flexible-billing-accounts-validation.mjs
+          for proof in test-billing-account-crm-draft-compatibility-integrity.mjs test-crm-owner-launch-lock-order-integrity.mjs test-crm-lead-registration-recovery-integrity.mjs test-school-membership-plan-catalog-integrity.mjs test-crm-guardian-child-enrollment-integrity.mjs; do
+            env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 bash -c 'set -a; . "$1"; set +a; cd packages/database; node "scripts/$2"' _ "$fixture_dir/journey.env" "$proof"
+          done
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_JOURNEY_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-journey-api-verification.mjs' _ "$fixture_dir/journey.env"
       - if: always()
         run: git diff --exit-code
