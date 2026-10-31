@@ -56,7 +56,7 @@ export async function verifyUtcMonthFixtures(client, label, { allowancePeriods =
       // Exercise the actual unchanged 0156 function as well as native SQL arithmetic.
       // Construct a composite VALUE, not a subscription row or an allowance grant.
       const { rows: [period] } = await client.query(`SELECT period_index,
-        hon.saas_iso(period_start) AS starts_at, hon.saas_iso(period_end) AS ends_at
+        hon.saas_ts(period_start) AS starts_at, hon.saas_ts(period_end) AS ends_at
         FROM hon.saas_allowance_period(jsonb_populate_record(NULL::hon.saas_subscriptions,
           jsonb_build_object('service_started_at', $1::text, 'billing_interval', 'LIFETIME')),
           (($1::timestamptz AT TIME ZONE 'UTC') + make_interval(months => $2::integer - 1)) AT TIME ZONE 'UTC')`, [anchor, months]);
