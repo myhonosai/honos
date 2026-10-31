@@ -11,5 +11,8 @@ export default async function CrmJourneyPage({searchParams}:{searchParams:Promis
   const token = (await cookies()).get(HON_SESSION_COOKIE)?.value ?? '';
   let subject: string;
   try { subject = verifySession(token, sessionConfig()).externalSubject; } catch { redirect('/auth/login'); }
-  return <CrmJourney key={createHash('sha256').update(token).digest('hex')} sessionSubject={subject} initialScope={{organizationId:uuid(query.organizationId),schoolId:uuid(query.schoolId)}} initialLeadId={uuid(query.leadId)} />;
+  const initialScope = { organizationId: uuid(query.organizationId), schoolId: uuid(query.schoolId) }, initialLeadId = uuid(query.leadId);
+  // A changed selector starts an idle private view; it never reuses another scope's mounted memory.
+  const viewKey = [createHash('sha256').update(token).digest('hex'), initialScope.organizationId, initialScope.schoolId, initialLeadId].join(':');
+  return <CrmJourney key={viewKey} sessionSubject={subject} initialScope={initialScope} initialLeadId={initialLeadId} />;
 }

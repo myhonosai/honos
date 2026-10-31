@@ -10,6 +10,7 @@ import styles from './workbench.module.css';
 type Step = 'lead' | 'follow' | 'trial' | 'outcome' | 'close' | 'register' | 'history';
 const steps: Step[] = ['lead','follow','trial','outcome','close','register','history'];
 type Notice = 'denied' | 'readError' | 'rejected' | 'unknown' | 'invalid' | 'restoredMissing' | 'retryRejected' | '';
+type CommandResult = Exclude<Kind, 'REGISTER'> | 'REGISTERED' | 'REVIEW' | '';
 const timeout = () => AbortSignal.timeout(20_000);
 export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = '' }: { sessionSubject: string; initialScope?: Partial<Scope>; initialLeadId?: string }): React.ReactElement {
   const locale = useLocale(), t = (k: JourneyKey) => journeyText(locale.preferences.language, k);
@@ -19,6 +20,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   const [queue, setQueue] = useState<FollowUpQueue | null>(null), [registration, setRegistration] = useState<'NOT_REGISTERED' | 'EXISTING_RECORD' | 'UNAVAILABLE' | 'UNVERIFIED_PREPARED' | null>(null);
   const [trial, setTrial] = useState<CrmAppointmentSummary | null>(null), [trialUsed, setTrialUsed] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]), [receiptConcealed, setReceiptConcealed] = useState(false);
+  const [commandResult, setCommandResult] = useState<CommandResult>('');
   const [loading, setLoading] = useState(false), [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false), [dirty, setDirty] = useState(false), [needsRefresh, setNeedsRefresh] = useState(false);
   const [concealed, setConcealed] = useState(false), [sessionLost, setSessionLost] = useState(false), [notice, setNotice] = useState<Notice>(''), [discard, setDiscard] = useState(false), [confirmed, setConfirmed] = useState(false);
   const [subject, setSubject] = useState(''), [note, setNote] = useState(''), [due, setDue] = useState(''), [priority, setPriority] = useState('NORMAL');
@@ -33,7 +35,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   const selected = rows?.find(r => r.id === leadId) ?? null;
   facts.current = Boolean(rows || trial || receipts.length || dirty || pending.current); rowRef.current = selected; scopeRef.current = scope; queueRef.current = queue; dirtyRef.current = dirty;
   const locked = busy || loading || uncertain || dirty;
-  function clearDraft(): void { setSubject(''); setNote(''); setDue(''); setPriority('NORMAL'); setStart(''); setEnd(''); setLocation(''); setBirth(''); setChildGiven(''); setChildFamily(''); setConfirmed(false); setDirty(false); dirtyRef.current = false; }
+  function clearDraft(): void { setSubject(''); setNote(''); setDue(''); setPriority('NORMAL'); setStart(''); setEnd(''); setLocation(''); setBirth(''); setChildGiven(''); setChildFamily(''); setConfirmed(false); setCommandResult(''); setDirty(false); dirtyRef.current = false; }
   function conceal(): void {
     readEpoch.current++; readAbort.current?.abort(); readActive.current = false; setLoading(false);
     if (!facts.current && !commandBusy.current && !shield.current) return;
@@ -65,7 +67,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
     if (dead.current || readActive.current || commandBusy.current || (!shield.current && (pending.current || dirtyRef.current))) return;
     const restoring = shield.current, original = rowRef.current ?? (pending.current ? { id: pending.current.leadId, primaryPersonId: pending.current.contactId } : null);
     readActive.current = true; const epoch = ++readEpoch.current, controller = new AbortController(); readAbort.current?.abort(); readAbort.current = controller;
-    const signal = AbortSignal.any([controller.signal, timeout()]); setLoading(true); setNotice('');
+    const signal = AbortSignal.any([controller.signal, timeout()]); setLoading(true); setNotice(''); setConfirmed(false); setCommandResult('');
     try {
       await verifyJourneySession(sessionSubject, signal); if (signal.aborted) return;
       const next = useCurrent ? await readCurrentSchool(signal) : scopeRef.current;
@@ -90,7 +92,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   async function readExtra(kind: 'follow' | 'registration'): Promise<void> {
     if (!selected || commandBusy.current || pending.current || readActive.current || dirty || shield.current || dead.current) return;
     const current = selected, s = scope, epoch = ++readEpoch.current, controller = new AbortController(); readAbort.current = controller;
-    readActive.current = true; setLoading(true); setNotice(''); const signal = AbortSignal.any([controller.signal, timeout()]);
+    readActive.current = true; setLoading(true); setNotice(''); setConfirmed(false); setCommandResult(''); const signal = AbortSignal.any([controller.signal, timeout()]);
     try {
       await verifyJourneySession(sessionSubject, signal); if (signal.aborted) return;
       const v = kind === 'follow' ? await readQueue(s, signal) : await readRegistration(s, current, signal);
@@ -104,7 +106,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
     if (commandBusy.current || readActive.current || shield.current || dead.current || pending.current && pending.current !== c
       || rowRef.current?.id !== c.leadId || rowRef.current.primaryPersonId !== c.contactId
       || scopeRef.current.schoolId !== c.scope.schoolId || scopeRef.current.organizationId !== c.scope.organizationId) return;
-    commandBusy.current = true; setBusy(true); pending.current = c; setUncertain(false); setNotice(''); setDiscard(false);
+    commandBusy.current = true; setBusy(true); pending.current = c; setUncertain(false); setNotice(''); setDiscard(false); setCommandResult('');
     const epoch = commandEpoch.current;
     try {
       await verifyJourneySession(sessionSubject, timeout());
@@ -114,6 +116,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       const r = await sendCommand(c, timeout());
       if (dead.current || epoch !== commandEpoch.current || !mounted.current) return;
       pending.current = null; setUncertain(false); clearDraft(); setNeedsRefresh(true);
+      setCommandResult(r.kind === 'REGISTER' ? r.record.outcome === 'REGISTERED' ? 'REGISTERED' : 'REVIEW' : r.kind);
       setReceipts(old => [...old.slice(-19), r]);
       if (r.kind === 'SCHEDULE' || r.kind === 'OUTCOME') { setTrial(r.record); setTrialUsed(true); }
       if (r.kind === 'REGISTER') setRegistration('EXISTING_RECORD');
@@ -178,9 +181,10 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
     {sessionLost ? <section><h2>{t('reauth')}</h2><a href="/auth/login">{t('signIn')}</a></section> : <>
       {concealed && <section className={styles.shield} aria-busy={loading}><h2 ref={shieldHeading} tabIndex={-1}>{t('shield')}</h2><p>{t('shieldText')}</p>{busy && <p>{t('saving')}</p>}{notice && <p role="alert">{t(notice)}</p>}<button data-testid="restore" disabled={busy || loading} onClick={() => void load()}>{t('restore')}</button><button data-testid="shield-discard" disabled={busy || loading} onClick={() => setDiscard(true)}>{t('discard')}</button></section>}
       <div ref={area} hidden={concealed} inert={concealed} aria-hidden={concealed || undefined}>
+      <div className={styles.announce} data-testid="command-status" role="status" aria-live="polite" aria-atomic="true">{commandResult === 'REVIEW' ? t('review') : commandResult === 'REGISTERED' ? t('registered') : commandResult ? `${t(({FOLLOW_UP:'follow',SCHEDULE:'trial',OUTCOME:'outcome',CLOSE:'close'} as const)[commandResult])}: ${t('receipt')}` : ''}</div>
       <p className={styles.limit}>{t('intro')}</p>
       <section aria-label={t('school')}><h2>{t('school')}</h2><div className={styles.actions}><button data-testid="current-school" disabled={locked} onClick={() => void load(true)}>{t('currentSchool')}</button><button data-testid="load" disabled={locked || !scope.organizationId || !scope.schoolId} onClick={() => void load()}>{t('load')}</button></div>
-        <details><summary>{t('knownSchool')}</summary><p>{t('scopeHelp')}</p><fieldset disabled={locked} className={styles.fields}><label>{t('organization')}<input data-testid="organization" value={scope.organizationId} onChange={e => { setScope({ ...scope, organizationId: e.target.value }); setRows(null); setLeadId(''); setQueue(null); setTrial(null); setTrialUsed(false); setReceipts([]); }} /></label><label>{t('schoolId')}<input data-testid="school" value={scope.schoolId} onChange={e => { setScope({ ...scope, schoolId: e.target.value }); setRows(null); setLeadId(''); setQueue(null); setTrial(null); setTrialUsed(false); setReceipts([]); }} /></label></fieldset></details>
+        <details><summary>{t('knownSchool')}</summary><p>{t('scopeHelp')}</p><fieldset disabled={locked} className={styles.fields}><label>{t('organization')}<input data-testid="organization" value={scope.organizationId} onChange={e => { setScope({ ...scope, organizationId: e.target.value }); setCommandResult(''); setRows(null); setLeadId(''); setQueue(null); setTrial(null); setTrialUsed(false); setReceipts([]); }} /></label><label>{t('schoolId')}<input data-testid="school" value={scope.schoolId} onChange={e => { setScope({ ...scope, schoolId: e.target.value }); setCommandResult(''); setRows(null); setLeadId(''); setQueue(null); setTrial(null); setTrialUsed(false); setReceipts([]); }} /></label></fieldset></details>
         {rows ? <><p>{t('limit')}</p><label>{t('search')}<input data-testid="search" disabled={locked} value={query} onChange={e => setQuery(e.target.value)} /></label><label>{t('choose')}<select data-testid="lead-select" disabled={locked} value={leadId} onChange={e => { setLeadId(e.target.value); setQueue(null); setRegistration(null); setTrial(null); setTrialUsed(false); setReceipts([]); setReceiptConcealed(false); setNeedsRefresh(false); clearDraft(); }}><option value="">{t('choose')}</option>{rows.filter(r => r.id === leadId || `${r.givenName} ${r.familyName} ${r.email ?? ''}`.toLowerCase().includes(query.toLowerCase())).map(r => <option key={r.id} value={r.id}>{r.givenName} {r.familyName} · {statusLabel(r.status)}</option>)}</select></label></> : <p>{t('empty')}</p>}
       </section>
       <div className={styles.layout}>

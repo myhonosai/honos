@@ -2,6 +2,7 @@ import React,{type ReactElement} from 'react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {CrmJourney} from '../src/components/crm-journey/workbench';
 import {journeyCatalog,journeyText} from '../src/components/crm-journey/catalog';
+import {CrmJourneyLink} from '../src/components/crm-journey/entry';
 import {scope,row,identity,envelope,closeReceipt} from './crm-journey-fixtures';
 const h=vi.hoisted(()=>({values:[] as any[],cursor:0,effects:[] as (()=>void)[],language:'en'}));
 vi.mock('react',async()=>{const r=await vi.importActual<typeof import('react')>('react');return {...r,
@@ -79,4 +80,30 @@ it('keeps a stronger recovery denial local and requires separate preparation wit
 it('does not mistake a recovery403caused by revoked CRM access for registration-only authority',async()=>{
  const f=await loaded();click('step-register');f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},403));click('verify-registration');await settle();expect(hidden()).toBe(true);
  f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},403));click('restore');await settle();expect(hidden()).toBe(true);expect(el('prepare-record')).toBeUndefined();expect(el('save-registration')).toBeUndefined();
+});
+it('requires a fresh acknowledgement after a rejected close and a protected refresh',async()=>{
+ const f=await loaded();const submit=prepareClose();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},409));
+ submit({preventDefault(){}});await settle();expect(el('confirm').props.checked).toBe(true);
+ authorize(f);click('refresh');await settle();expect(el('confirm').props.checked).toBe(false);
+ const count=f.mock.calls.length;nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();expect(f.mock.calls.length).toBe(count);
+});
+it('requires a fresh acknowledgement after revalidating the follow-up queue',async()=>{
+ const f=await loaded();click('step-follow');
+ const queue={schoolId:scope.schoolId,principalId:'00000000-0000-4000-8000-000000000006',canManage:false,humanOnly:true,queue:'mine',status:'ALL',items:[],nextAfter:null};
+ const check=()=>{f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(queue)).mockResolvedValueOnce(identity());click('verify-follow');};
+ check();await settle();el('confirm').props.onChange({target:{checked:true}});check();await settle();expect(el('confirm').props.checked).toBe(false);
+});
+it('keeps an initially empty status region and announces only a verified command result',async()=>{
+ const f=await loaded();expect(el('command-status').props.role).toBe('status');expect(el('command-status').props['aria-live']).toBe('polite');expect(text(el('command-status'))).toBe('');
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(closeReceipt()));prepareClose()({preventDefault(){}});await settle();expect(text(el('command-status'))).toContain(journeyCatalog.en.receipt);
+ window.dispatchEvent(new Event('blur'));expect(hidden()).toBe(true);authorize(f,'WON');click('restore');await settle();expect(text(el('command-status'))).toBe('');
+});
+it('announces registration review without claiming enrollment or registration success',async()=>{
+ const f=await loaded();click('step-register');f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({leadId:row.id,workflowState:'NOT_REGISTERED'})).mockResolvedValueOnce(identity());click('verify-registration');await settle();
+ change('birth','1990-01-02');el('confirm').props.onChange({target:{checked:true}});f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({outcome:'NEEDS_STAFF_REVIEW'}));nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();
+ expect(text(el('command-status'))).toBe(journeyCatalog.en.review);expect(text(render())).not.toContain(journeyCatalog.en.registered);
+});
+it.each(['en','ko','es'])('%s entry from the existing CRM lead route is inert UUID-only navigation',language=>{
+ h.language=language;const f=vi.spyOn(globalThis,'fetch');const link=CrmJourneyLink({...scope,leadId:row.id}) as El;
+ const href=new URL(link.props.href,'https://hon.invalid');expect(href.pathname).toBe('/staff/crm/journey');expect([...href.searchParams.keys()].sort()).toEqual(['leadId','organizationId','schoolId']);expect(href.searchParams.get('leadId')).toBe(row.id);expect(text(link)).toBe(journeyText(language,'title'));expect(f).not.toHaveBeenCalled();
 });

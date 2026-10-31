@@ -17,3 +17,18 @@ it('binds mounted memory to the signed session and accepts only inert UUID selec
  const p=await Page({searchParams:Promise.resolve({organizationId:id(1),schoolId:'not-a-school',leadId:id(3)})});
  expect(p.props.sessionSubject).toBe('synthetic');expect(p.props.initialScope).toEqual({organizationId:id(1),schoolId:''});expect(p.props.initialLeadId).toBe(id(3));expect(JSON.stringify(p)).not.toContain(state.token);
 });
+it.each(['organizationId','schoolId','leadId'] as const)('isolates mounted private memory when the %s selector changes',async field=>{
+ state.token=issueSession({externalSubject:'synthetic'},config);
+ const selectors={organizationId:id(1),schoolId:id(2),leadId:id(3)};
+ const first=await Page({searchParams:Promise.resolve(selectors)});
+ const next=await Page({searchParams:Promise.resolve({...selectors,[field]:id(20)})});
+ expect(next.key).not.toBe(first.key);
+ expect(next.props.sessionSubject).toBe(first.props.sessionSubject);
+});
+it('does not reset private memory solely for equivalent normalized UUID selectors',async()=>{
+ state.token=issueSession({externalSubject:'synthetic'},config);
+ const selectors={organizationId:'abcdefff-0000-4000-8000-000000000001',schoolId:id(2),leadId:id(3)};
+ const first=await Page({searchParams:Promise.resolve(selectors)});
+ const next=await Page({searchParams:Promise.resolve({...selectors,organizationId:selectors.organizationId.toUpperCase()})});
+ expect(next.key).toBe(first.key);
+});

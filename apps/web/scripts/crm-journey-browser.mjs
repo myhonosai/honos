@@ -6,7 +6,7 @@ import {randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
-import {issueSession,verifySession,cookieValue,HON_SESSION_COOKIE} from '@hon/auth';
+import {issueSession,verifySession,cookieValue,HON_SESSION_COOKIE,SESSION_SECONDS} from '@hon/auth';
 assert(process.env.GITHUB_ACTIONS==='true'||process.env.HON_CRM_JOURNEY_BROWSER_LOCAL==='1');
 for(const k of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL','ZERNIO_API_KEY','STRIPE_SECRET_KEY','OPENAI_API_KEY'])assert(!process.env[k]);
 const root=resolve('.'),req=createRequire(join(root,'package.json')),tools=createRequire(join(process.env.HON_CRM_JOURNEY_TOOLS,'runner.cjs'));
@@ -16,9 +16,9 @@ const {journeyText:t}=await import('data:text/javascript;base64,'+Buffer.from(co
 const axe=await readFile(tools.resolve('axe-core/axe.min.js'),'utf8'),results=process.env.HON_CRM_JOURNEY_RESULTS;await mkdir(results,{recursive:true});
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const scope={organizationId:id(1),schoolId:id(2)},session={mode:'OIDC',audience:'crm-journey-synthetic-browser',secret:randomBytes(32).toString('hex')};
-const lead=()=>({id:id(3),primaryPersonId:id(4),pipelineStageId:id(5),version:state.closed?2:1,status:state.closed?'WON':'OPEN',givenName:'Synthetic',familyName:'Rivera',email:'synthetic@example.test',createdAt:'2026-10-30T12:00:00.000Z'});
+const lead=()=>({id:id(3),primaryPersonId:id(4),pipelineStageId:id(5),version:state.version,status:state.closed?'WON':'OPEN',givenName:'Synthetic',familyName:'Rivera',email:'synthetic@example.test',createdAt:'2026-10-30T12:00:00.000Z'});
 const report={sourceSha:process.env.HON_CRM_JOURNEY_SHA,syntheticBrowserOnly:true,realApiDatabaseVerification:false,blockedExternalRequests:0,blockedOrigins:[],externalProviderExecutions:0,screenshots:[],accessibility:[],checks:[]};
-const state={language:'en',reads:0,commands:0,closed:false,registered:false,recoveryDenied:false,deny:false,hold:false,settle:null,keys:new Map()};
+const state={language:'en',version:1,empty:false,rejectCloseOnce:false,rejectedKey:null,reviewOnRegister:false,registrationReview:false,reads:0,commands:0,closed:false,registered:false,recoveryDenied:false,deny:false,hold:false,settle:null,keys:new Map()};
 const api=createServer(async(r,s)=>{
  const send=(status,data,meta=true)=>{if(s.destroyed)return;s.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store'});s.end(JSON.stringify(status>=400?{code:'SYNTHETIC_DENIED'}:{data,...(meta?{meta:{requestId:id(9),correlationId:id(9),replayed:false}}:{})}));};
  try{verifySession(cookieValue(r.headers.cookie,HON_SESSION_COOKIE)??'',session);}catch{send(401);return;}
@@ -26,20 +26,21 @@ const api=createServer(async(r,s)=>{
  if(r.url==='/v1/staff/current-reporting-school'){send(200,{state:'RESOLVED',...scope},false);return;}
  state.reads+=r.method==='GET'?1:0;
  if(state.deny){send(403);return;}
- if(r.method==='GET'&&r.url===`/v1/organizations/${id(1)}/schools/${id(2)}/crm/leads?limit=50`){send(200,[lead()]);return;}
+ if(r.method==='GET'&&r.url===`/v1/organizations/${id(1)}/schools/${id(2)}/crm/leads?limit=50`){send(200,state.empty?[]:[lead()]);return;}
  if(r.method==='GET'&&r.url==='/v1/staff/crm/follow-ups?queue=mine&status=ALL'){send(200,{schoolId:id(2),principalId:id(6),canManage:false,humanOnly:true,queue:'mine',status:'ALL',items:[],nextAfter:null});return;}
  let raw='';for await(const c of r)raw+=c;const body=raw?JSON.parse(raw):null;
- if(r.url?.endsWith('/guardian-child-enrollment')){if(state.recoveryDenied){send(403);return;}assert.equal(raw,'{}');assert.equal(r.headers['idempotency-key'],undefined);send(200,{leadId:id(3),workflowState:state.registered?'ADULT_REGISTRATION':'NOT_REGISTERED'});return;}
+ if(r.url?.endsWith('/guardian-child-enrollment')){if(state.recoveryDenied){send(403);return;}assert.equal(raw,'{}');assert.equal(r.headers['idempotency-key'],undefined);send(200,{leadId:id(3),workflowState:state.registrationReview?'NEEDS_STAFF_REVIEW':state.registered?'ADULT_REGISTRATION':'NOT_REGISTERED'});return;}
  if(r.method!=='POST'){send(404);return;}
  const key=r.headers['idempotency-key'];assert(key);const fingerprint=JSON.stringify({path:r.url,body});
  if(state.keys.has(key)){const saved=state.keys.get(key);assert.equal(saved.fingerprint,fingerprint);send(200,saved.data);return;}
+ if(state.rejectCloseOnce&&r.url?.endsWith('/close')){state.rejectCloseOnce=false;state.rejectedKey=key;state.version++;send(409);return;}
  state.commands++;
  const now=new Date().toISOString();let data;
  if(r.url==='/v1/staff/crm/follow-ups')data={...body,followUpId:id(10),schoolId:id(2),version:1,status:'OPEN',recordedAt:now,completedAt:null,cancelledAt:null,humanOnly:true};
  else if(r.url?.endsWith('/trials'))data={id:id(8),crmLeadId:id(3),appointmentType:'TRIAL',status:'SCHEDULED',startsAt:body.startsAt,endsAt:body.endsAt,createdByPrincipalId:id(6),version:1,createdAt:now,updatedAt:now,...(body.location?{location:body.location}:{}),...(body.notes?{notes:body.notes}:{})};
  else if(r.url?.endsWith('/outcome')){const a=[...state.keys.values()].find(x=>x.data.appointmentType==='TRIAL')?.data;assert(a);data={...a,status:body.status,version:2,updatedAt:now};}
- else if(r.url?.endsWith('/close')){state.closed=true;data={...scope,leadId:id(3),status:body.status,priorVersion:body.expectedVersion,version:body.expectedVersion+1,closedAt:now,closeNote:body.closeNote??null,crmOnly:true};}
- else if(r.url?.endsWith('/register')){state.registered=true;data={outcome:'REGISTERED',leadId:id(3),sourceContactPersonId:id(4),registrationPath:body.registrationPath,studentProfileId:id(11),familyId:body.registrationPath==='ADULT'?null:id(12),recordedAt:now};}
+ else if(r.url?.endsWith('/close')){state.closed=true;state.version=body.expectedVersion+1;data={...scope,leadId:id(3),status:body.status,priorVersion:body.expectedVersion,version:body.expectedVersion+1,closedAt:now,closeNote:body.closeNote??null,crmOnly:true};}
+ else if(r.url?.endsWith('/register')){if(state.reviewOnRegister){state.registrationReview=true;data={outcome:'NEEDS_STAFF_REVIEW'};}else{state.registered=true;data={outcome:'REGISTERED',leadId:id(3),sourceContactPersonId:id(4),registrationPath:body.registrationPath,studentProfileId:id(11),familyId:body.registrationPath==='ADULT'?null:id(12),recordedAt:now};}}
  else{state.commands--;send(404);return;}
  if(r.url==='/v1/staff/crm/follow-ups')delete data.expectedVersion;
  state.keys.set(key,{fingerprint,data});
@@ -62,7 +63,7 @@ try{
  let ready=false;for(let i=0;i<100;i++){try{await fetch(origin,{redirect:'manual'});ready=true;break;}catch{}await new Promise(r=>setTimeout(r,200));}assert(ready,'Application did not start');
  browser=await chromium.launch({executablePath:process.env.HON_CRM_JOURNEY_CHROME,headless:true,args:['--no-sandbox']});
  for(const lang of ['en','ko','es'])for(const width of [390,834,1440]){
-  state.closed=false;state.registered=false;state.recoveryDenied=false;state.keys.clear();const{context,page}=await open(lang,width);const before=state.reads;await page.waitForTimeout(100);assert.equal(state.reads,before);
+  state.closed=false;state.version=1;state.registered=false;state.recoveryDenied=false;state.keys.clear();const{context,page}=await open(lang,width);const before=state.reads;await page.waitForTimeout(100);assert.equal(state.reads,before);
   await test(page,'load').focus();assert(await test(page,'load').evaluate(e=>e===document.activeElement));await load(page);assert.equal(state.reads,before+1);
   for(const mode of ['modern','classic','big'])await test(page,'mode').selectOption(mode);assert.equal(state.reads,before+1);await test(page,'mode').selectOption(width===390?'big':width===834?'classic':'modern');
   await test(page,'step-follow').click();await test(page,'verify-follow').click();await test(page,'subject').waitFor();if(lang==='es'&&width===834)await capture(page,'es-834-follow-up-form');await test(page,'subject').fill('Synthetic internal follow-up');await test(page,'note').fill('Synthetic private planning. No contact sent.');await confirm(page,'save-follow');await refresh(page);
@@ -77,11 +78,19 @@ try{
   report.checks.push(`${lang}/${width}: five real-contract fixture commands, explicit refresh, adult/family registration, three modes, keyboard Enter/Space submissions, privacy, no automatic read/retry`);await context.close();
  }
  // Unknown close behind a shield: server fixture commits, returns503; exact retry returns original evidence.
- state.closed=false;state.registered=false;state.keys.clear();let{context,page}=await open('en',390);await load(page);await test(page,'step-close').click();await test(page,'confirm').check();state.hold=true;const n=state.commands;await test(page,'save-close').dblclick();for(let i=0;!state.settle&&i<100;i++)await page.waitForTimeout(20);assert(state.settle);assert.equal(state.commands,n+1);
+ state.closed=false;state.version=1;state.registered=false;state.keys.clear();let{context,page}=await open('en',390);await load(page);await test(page,'step-close').click();await test(page,'confirm').check();state.hold=true;const n=state.commands;await test(page,'save-close').dblclick();for(let i=0;!state.settle&&i<100;i++)await page.waitForTimeout(20);assert(state.settle);assert.equal(state.commands,n+1);
  await page.evaluate(()=>window.dispatchEvent(new Event('blur')));assert(await test(page,'restore').isDisabled());assert(await test(page,'shield-discard').isDisabled());state.hold=false;state.settle();state.settle=null;await page.waitForFunction(()=>!document.querySelector('[data-testid=restore]').disabled);
  await test(page,'restore').click();await test(page,'retry').waitFor();const savedKey=[...state.keys.keys()][0];await test(page,'retry').dblclick();await test(page,'receipt').waitFor();assert.equal(state.commands,n+1);assert.deepEqual([...state.keys.keys()],[savedKey]);report.checks.push('unknown close settles behind shield, busy clears, exact-key explicit retry without page reload or duplicate effect');
  state.deny=true;await test(page,'refresh').click();await page.getByText(t('en','denied'),{exact:true}).waitFor();assert.equal(await page.getByText('Synthetic Rivera',{exact:true}).count(),0);state.deny=false;report.checks.push('live fixture permission denial clears facts');await context.close();
  ({context,page}=await open('ko',834));await load(page);await page.evaluate(()=>window.dispatchEvent(new Event('hon:session-invalidated')));assert.equal(await page.getByText('Synthetic Rivera',{exact:true}).count(),0);await page.getByText(t('ko','reauth'),{exact:true}).first().waitFor();report.checks.push('shared session invalidation clears mounted Korean view');await context.close();
+ // A stale version cannot reuse the acknowledgement or idempotency key for a new close.
+ Object.assign(state,{closed:false,version:1,registered:false,recoveryDenied:false,registrationReview:false,reviewOnRegister:false,empty:false});state.keys.clear();({context,page}=await open('en',834));await load(page);await test(page,'step-close').click();await test(page,'confirm').check();state.rejectCloseOnce=true;let commands=state.commands;await test(page,'save-close').click();await page.getByText(t('en','rejected'),{exact:true}).waitFor();assert.equal(state.commands,commands);await capture(page,'en-834-stale-close');await refresh(page);assert.equal(await test(page,'confirm').isChecked(),false);assert(await test(page,'save-close').isDisabled());await confirm(page,'save-close');assert.notEqual([...state.keys.keys()][0],state.rejectedKey);assert.equal(state.commands,commands+1);assert.equal(state.version,3);report.checks.push('stale close requires fresh protected read, new acknowledgement and a fresh key; no false success or automatic retry');await context.close();
+ // A real contract staff-review result remains review, including its accessible announcement.
+ Object.assign(state,{closed:true,version:2,registered:false,recoveryDenied:false,registrationReview:false,reviewOnRegister:true});state.keys.clear();({context,page}=await open('ko',834));await load(page);await test(page,'mode').selectOption('classic');await test(page,'step-register').click();await test(page,'verify-registration').click();await test(page,'birth').fill('1990-01-02');await confirm(page,'save-registration');assert.equal(state.registered,false);assert.equal(await test(page,'command-status').innerText(),t('ko','review'));assert.equal(await page.getByText(t('ko','registered'),{exact:true}).count(),0);await capture(page,'ko-834-registration-review');report.checks.push('WON lead registration staff-review receipt and live announcement never claim registration, paid membership or enrollment success');await context.close();
+ // Empty authorized reads remain explicit and expose no consequential controls.
+ Object.assign(state,{closed:false,version:1,registered:false,registrationReview:false,reviewOnRegister:false,empty:true});state.keys.clear();({context,page}=await open('en',390));await test(page,'mode').selectOption('big');await test(page,'load').click();await test(page,'lead-select').waitFor();assert.equal(await page.getByText('Synthetic Rivera',{exact:true}).count(),0);await page.getByText(t('en','noLead'),{exact:true}).waitFor();assert.equal(await test(page,'save-close').count(),0);await capture(page,'en-390-empty-state');report.checks.push('empty authorized lead snapshot has no contact facts or consequential form');await context.close();
+ // Expire the actual signed synthetic cookie while the mounted view holds facts.
+ state.empty=false;({context,page}=await open('es',390));await load(page);await test(page,'step-close').click();await test(page,'confirm').check();commands=state.commands;await context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'oidc:synthetic:journey'},session,Math.floor(Date.now()/1000)-SESSION_SECONDS-1),url:origin,httpOnly:true,sameSite:'Lax'}]);await test(page,'save-close').click();await page.getByText(t('es','reauth'),{exact:true}).first().waitFor();assert.equal(await page.getByText('Synthetic Rivera',{exact:true}).count(),0);assert.equal(state.commands,commands);assert.equal(await test(page,'receipt').count(),0);report.checks.push('actual expired signed browser session conceals facts and prevents the prepared close before POST');await context.close();
  console.log(`PASS connected CRM browser: ${report.checks.length} groups, ${report.accessibility.length} zero-violation axe scans, ${report.screenshots.length} screenshots; synthetic API only`);
 }catch(e){report.failure={name:e.name,message:e.message};if(browser){for(const context of browser.contexts())for(const p of context.pages())await p.screenshot({path:join(results,'failure.png'),fullPage:true}).catch(()=>{});}process.exitCode=1;console.error(e);}
 finally{await writeFile(join(results,'crm-journey-browser-report.json'),JSON.stringify(report,null,2));await writeFile(join(results,'next.log'),log);await browser?.close();app?.kill('SIGTERM');await new Promise(r=>api.close(r));}
