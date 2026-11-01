@@ -16,20 +16,22 @@ import { randomUUID as K } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import pg from 'pg';
+import { AI0_DATABASE as database, AI0_OWNER_ROLE as ownerRole, AI0_RUNTIME_ROLE as runtimeRole, assertDisposableTarget, assertNoLibpqOverrides } from './ai-spend-baseline-target.mjs';
 
-const database = 'hon_ai_spend_baseline_validation', ownerRole = 'hon_ai_spend_baseline_owner', runtimeRole = 'hon_ai_spend_baseline_runtime';
 const marker = 'HON disposable AI spend baseline validation';
-const owner = new URL(process.env.DATABASE_URL ?? ''), runtime = new URL(process.env.HON_RUNTIME_DATABASE_URL ?? '');
-for (const [url, role] of [[owner, ownerRole], [runtime, runtimeRole]]) {
-  if (url.hostname !== 'localhost' || url.port !== '5432' || url.pathname !== `/${database}` || url.username !== role) throw new Error('AI-0 permits only the exact disposable localhost owner/runtime aliases.');
-}
+// Both URLs are checked before any client exists. The socket-free negative cases run first, in every CI run.
+await import('./test-ai-spend-baseline-target.mjs');
+assertNoLibpqOverrides(process.env);
+const ownerUrl = assertDisposableTarget(process.env.DATABASE_URL, ownerRole);
+const runtimeUrl = assertDisposableTarget(process.env.HON_RUNTIME_DATABASE_URL, runtimeRole);
+process.env.HON_RUNTIME_DATABASE_URL = runtimeUrl;
 const forbidden = Object.keys(process.env).filter((k) => /^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|HEYGEN|HIGGSFIELD|GOOGLE_AI|GOOGLE_GENERATIVE|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(k));
 if (forbidden.length) throw new Error(`AI-0 refuses provider, payment or execution variables (${forbidden.join(', ')}).`);
 let networkCalls = 0;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async () => { networkCalls += 1; throw new Error('EXTERNAL_NETWORK_FORBIDDEN'); };
 
-const admin = new pg.Client({ connectionString: owner.toString(), ssl: false });
+const admin = new pg.Client({ connectionString: ownerUrl, ssl: false });
 const row = async (sql, args = []) => (await admin.query(sql, args)).rows[0];
 const rows = async (sql, args = []) => (await admin.query(sql, args)).rows;
 
@@ -95,6 +97,15 @@ async function collectInventory() {
 await admin.connect();
 const identity = await row("SELECT current_database() db,current_user usr,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()");
 assert.deepEqual(identity, { db: database, usr: ownerRole, marker });
+{
+  // The runtime alias must reach the same disposable database as the runtime role, before any service uses it.
+  const probe = new pg.Client({ connectionString: runtimeUrl, ssl: false });
+  await probe.connect();
+  try {
+    const actual = (await probe.query("SELECT current_database() db,current_user usr,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0];
+    assert.deepEqual(actual, { db: database, usr: runtimeRole, marker });
+  } finally { await probe.end(); }
+}
 if (process.argv.includes('--print-inventory')) {
   console.log(JSON.stringify(await collectInventory(), null, 2));
   await admin.end();

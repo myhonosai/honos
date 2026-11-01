@@ -25,6 +25,7 @@ AI-0 locks down what exists so nothing changes silently before S4:
 Safety rails in the proof:
 
 - It accepts only the exact localhost owner and runtime roles of this fixture, and checks the database name, owner and fixture marker before anything else.
+- Before any client is constructed, both URLs must use a PostgreSQL scheme, exact `localhost:5432`, the exact database and role, and a non-empty password, with **no query string or fragment** (node-postgres lets query parameters such as `host`, `user`, `port` and `sslmode` override the URL). libpq `PG*` environment variables are refused. After connecting, the owner and the runtime connections each verify `current_database()`, `current_user` and the marker. The guard is a pure module (`ai-spend-baseline-target.mjs`) with socket-free negative cases (`test-ai-spend-baseline-target.mjs`) that run at the start of every AI-0 run.
 - It refuses to start if any provider, payment, Supabase, AWS or execution variable is present.
 - `fetch` is replaced with a counter that throws; the run must end with zero network calls.
 - Providers are in-process fakes. The real provider runtime is never built.
