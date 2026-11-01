@@ -13,6 +13,7 @@ import { DEFAULT_HON_INTERFACE_THEME, HON_INTERFACE_THEMES } from '@hon/design-s
 
 const catalogSource = readFileSync('../../packages/config/src/public-plan-catalog.ts', 'utf8');
 const hqOnboardingSource = readFileSync('src/components/hq-onboarding-panel.tsx', 'utf8');
+const hqOnboardingHttpSource = readFileSync('src/components/hq-onboarding-http.ts', 'utf8');
 const referenceSource = readFileSync('src/components/hon-reference-suite.tsx', 'utf8');
 const interfaceThemesSource = readFileSync('../../packages/design-system/src/interface-themes.ts', 'utf8');
 const pricingPageSource = readFileSync('src/app/pricing/page.tsx', 'utf8');
@@ -62,16 +63,16 @@ describe('public plan catalog', () => {
     });
   });
 
-  it('keeps the catalog on the dedicated pricing reference and governed HQ tier selector, never a school command reference', () => {
+  it('keeps legacy public catalog metadata out of HQ school creation and school command references', () => {
     expect(referenceSource).not.toContain('PUBLIC_PLAN_CATALOG');
     expect(referenceSource).not.toContain('Public plan catalog');
     expect(referenceSource).not.toMatch(/(?:monthlyDisplayPriceUsd|premiumAiCreditPlanningAllowance|planning allowance|grant credits)/i);
-    expect(hqOnboardingSource).toContain('initialTier: DEFAULT_PUBLIC_PLAN_TIER');
-    expect(hqOnboardingSource).toContain('PUBLIC_PLAN_CATALOG.map');
-    expect(hqOnboardingSource).not.toContain('<option value="ESSENTIAL"');
-    expect(hqOnboardingSource).toContain('does not activate live billing or an offer, create a subscription, issue an invoice, charge a payment, or grant credits.');
-    expect(hqOnboardingSource).toContain("fetch('/api/v1/hq/organizations'");
-    expect(hqOnboardingSource).not.toMatch(/fetch\([^)]*\/(?:subscriptions?|memberships|invoices|payments)/is);
+    expect(hqOnboardingSource).not.toMatch(/PUBLIC_PLAN_CATALOG|DEFAULT_PUBLIC_PLAN_TIER|<select|monthlyDisplayPriceUsd|premiumAiCreditPlanningAllowance/);
+    expect(hqOnboardingSource).toContain('HON OS is one product.');
+    expect(hqOnboardingSource).toContain('This form grants no subscription, payment or AI credits.');
+    expect(hqOnboardingHttpSource).toContain("initialTier: 'COMPLETE'");
+    expect(hqOnboardingHttpSource).toContain("fetch('/api/v1/hq/organizations'");
+    expect(hqOnboardingHttpSource).not.toMatch(/fetch\([^)]*\/(?:subscriptions?|memberships|invoices|payments)/is);
   });
 
   it('is inert catalog data: it contains no transport or persistence call', () => {

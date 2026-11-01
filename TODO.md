@@ -1,3 +1,12 @@
+## C-HQ-2 — guarded HQ school creation integration
+
+- [x] Mount the existing provisioning panel on `/hq/schools`; use explicit HQ-owner authorization, human confirmation, immutable owner-bound exact retries, verified creation receipts and privacy clearing. Preserve the minimized directory and all backend/contracts/migrations.
+- Provisioning uses the merged `POST /v1/hq/organizations`, with internal `initialTier: COMPLETE` only; HON OS stays one product with no public tier/price selector. D9 creates SUSPENDED entitlements without access. The HTTP receipt returns IDs/replay only, so policy copy must not claim returned entitlement/payment facts.
+- Existing contract limits: `/hq/session` exposes no onboarding capability list (owner-only UI is conservative); provisioning independently resolves `hq.onboarding.manage` but has no server human-command/origin guard. An advisory browser marker cannot supply that server protection. No new backend authority is introduced here.
+- Local evidence: all 1,078 web tests passed (140 files); 39 focused checks cover creation, directory lifecycle/coupling, minimized directory and catalog regressions. Final production web build, sequential typecheck, browser-script syntax check and whitespace check passed. Details: `docs/CODEX_HQ_SCHOOL_CREATE.md`.
+- [x] Correct the demonstrated page-coupling privacy gap: synchronously hide/inert directory facts on shared session/school/privacy events, abort/invalidate late reads, require explicit fresh restoration with pre/post current OWNER/OPERATOR principal checks, and preserve the independently mounted creation request. Coupled transport-401/late-read/retained-retry tests pass.
+- [ ] Exact-head CI and mounted desktop/mobile accessibility verification remain pending. Local loopback sockets and Chromium are refused by the sandbox (`EPERM`); no browser pass or screenshots are claimed. The existing missing server human-origin/atomic actor binding remains an operational review gate. No provider, database, commercial activation, publication or deployment.
+
 ## Web production authentication startup guard — Codex
 
 - Local evidence: 60 focused configuration/auth-route tests and all 1,044 web tests pass; web typecheck, production build and the existing 183-file migration check pass. Browser and full repository/database evidence remain pending on the final draft head.
