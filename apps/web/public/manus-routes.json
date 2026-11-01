@@ -21,6 +21,10 @@
       "title": "HON HQ | AI Provider Control"
     },
     {
+      "path": "/hq/integrations/zernio",
+      "title": "HON HQ | Zernio"
+    },
+    {
       "path": "/core",
       "title": "HON Core | School Management"
     },
@@ -83,6 +87,10 @@
     {
       "path": "/staff/marketing/forms",
       "title": "Human Public Lead Forms"
+    },
+    {
+      "path": "/staff/marketing/intake",
+      "title": "HON | Lead Sources & Intake Monitor"
     },
     {
       "path": "/forms/:publicId",
@@ -358,7 +366,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers · Design review"
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -367,6 +375,14 @@
     {
       "path": "/reference/hon-conversation",
       "title": "HON Conversation | Design preview (synthetic)"
+    },
+    {
+      "path": "/account/owner-invitation",
+      "title": "HON OS | Owner invitation"
+    },
+    {
+      "path": "/hq/school-owner-invitations",
+      "title": "HON HQ | Owner invitations"
     }
   ]
 }

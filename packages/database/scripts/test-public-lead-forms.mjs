@@ -1,11 +1,13 @@
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { RuntimeDatabaseService } from '../../../apps/api/dist/foundation/runtime-database.service.js';
 import { PublicFormService } from '../../../apps/api/dist/marketing/public-form.service.js';
-import { StaffPublicFormController } from '../../../apps/api/dist/marketing/public-form.controller.js';
+import { StaffPublicFormController, PublicFormHumanUiGuard } from '../../../apps/api/dist/marketing/public-form.controller.js';
 import { CampaignService } from '../../../apps/api/dist/marketing/campaign.service.js';
 import { LeadService } from '../../../apps/api/dist/crm/lead.service.js';
+const apiRequire=createRequire(new URL('../../../apps/api/package.json',import.meta.url));
 if (process.env.HON_CAMPAIGN_VALIDATION_TARGET !== 'postgresql://localhost:5432/hon_campaign_validation') throw new Error('Explicit disposable local validation target required.');
 for (const [key,role] of [['DATABASE_URL','hon_campaign_owner'],['HON_RUNTIME_DATABASE_URL','hon_campaign_runtime']]) {
   const u = new URL(process.env[key] ?? 'https://invalid');
@@ -28,6 +30,22 @@ const primary = ['people','crm_leads','crm_lead_attributions','public_lead_forms
 const countTables = async tables => { const result = {}; for (const table of tables) result[table] = await count(table); return result; };
 const counts = () => countTables(primary);
 const noEffects = ['communication_consents','communication_messages','crm_appointments','class_bookings','attendance_records','memberships','membership_payment_schedules','billing_accounts','invoices','payment_attempts','action_requests','action_approvals','ai_usage_ledger','ai_invocation_plans','work_items','crm_activities','student_profiles','outbox_delivery_attempts'];
+const monitorReadTables=[...new Set([...primary,'public_lead_form_versions','public_lead_form_requests',...noEffects])];
+const monitorFootprint=async()=>({
+  ...await countTables(monitorReadTables),
+  public_lead_form_rates:Number((await admin.query('SELECT count(*) n FROM hon.public_lead_form_rates r JOIN hon.public_lead_forms f ON f.id=r.form_id WHERE f.organization_id=ANY($1::uuid[])',[[id.org,id.otherOrg]])).rows[0].n),
+});
+const settled=promise=>promise.then(value=>({value}),error=>({error}));
+const waitForBlockingPid=async (probe,blocker,waiting,label) => {
+  const deadline=Date.now()+5000;
+  while (Date.now()<deadline) {
+    const result=waiting===undefined
+      ? await probe.query('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))) blocked',[blocker])
+      : await probe.query('SELECT $1::int=ANY(pg_blocking_pids($2::int)) blocked',[blocker,waiting]);
+    if (result.rows[0].blocked) return;
+  }
+  assert.fail(`Expected actual PostgreSQL lock wait: ${label}`);
+};
 let injection;
 await admin.connect(); await runtime.connect();
 try {
@@ -67,7 +85,7 @@ try {
   const active = (await campaigns.status(c(),campaignDraft.id,{expectedVersion:1,status:'ACTIVE'})).campaign;
   await deny(()=>forms.mutate(c('sibling',id.sibling),'configure',null,config({pipelineId:id.siblingPipeline,pipelineStageId:id.siblingStage,campaignId:active.id})),400);
   await deny(()=>forms.mutate(c('other',id.otherSchool),'configure',null,config({pipelineId:id.otherPipeline,pipelineStageId:id.otherStage,campaignId:active.id})),400);
-  const ctx=c(),input=config({campaignId:active.id});
+  const ctx=c(),input=config({campaignId:active.id,title:'School monitor form'});
   const draft=(await forms.mutate(ctx,'configure',null,input)).form;
   assert.match(draft.publicId,/^[a-f0-9]{48}$/); assert((await forms.mutate(ctx,'configure',null,input)).replayed);
   await deny(()=>forms.mutate(ctx,'configure',null,{...input,title:'Changed'}),409);
@@ -76,6 +94,57 @@ try {
   const publishCtx=c(); const f=(await forms.mutate(publishCtx,'publish',draft.id,{expectedVersion:1})).form;
   assert((await forms.mutate(publishCtx,'publish',draft.id,{expectedVersion:1})).replayed);
   const projection=await forms.published(f.publicId); assert.deepEqual(Object.keys(projection).sort(),['description','optionalFields','publicId','title']);
+  // Create the sibling form through the public current API only. Its unique fields
+  // must never cross the server-side single-school monitor boundary.
+  const siblingForm=(await forms.mutate(c('sibling',id.sibling),'configure',null,config({title:'SIBLING_SENTINEL',description:'SIBLING_PRIVATE_DESCRIPTION',pipelineId:id.siblingPipeline,pipelineStageId:id.siblingStage}))).form;
+  const monitorBefore=await monitorFootprint();
+  const expectedMonitor=[
+    {title:f.title,status:f.status,acceptedCount:f.acceptedCount,hasCampaignAssociation:true},
+    {title:useful.title,status:useful.status,acceptedCount:useful.acceptedCount,hasCampaignAssociation:false},
+  ].sort((a,b)=>a.title.localeCompare(b.title));
+  const monitor=(await forms.intakeMonitor(c())).sort((a,b)=>a.title.localeCompare(b.title));
+  const controllerMonitor=await controller.intakeMonitor({honIdentity:{externalSubject:humans.staff.subject}});
+  assert.deepEqual(monitor,expectedMonitor); assert.deepEqual(Object.keys(controllerMonitor),['data']); assert.deepEqual([...controllerMonitor.data].sort((a,b)=>a.title.localeCompare(b.title)),monitor);
+  for (const item of monitor) assert.deepEqual(Object.keys(item).sort(),['acceptedCount','hasCampaignAssociation','status','title']);
+  const monitorJson=JSON.stringify(controllerMonitor);
+  for (const privateValue of ['SIBLING_SENTINEL','SIBLING_PRIVATE_DESCRIPTION',siblingForm.id,siblingForm.publicId,id.sibling,id.siblingPipeline,id.siblingStage,'hash_secret']) assert(!monitorJson.includes(privateValue),`monitor leaked ${privateValue}`);
+  assert.deepEqual(await monitorFootprint(),monitorBefore,'service/controller GET-like monitor reads changed business, audit, outbox, or no-effect tables');
+  // The same verified human subject can move between sole current-school grants,
+  // but never chooses that school in a request. A fresh server read resolves only
+  // the newly sole scope; any prior browser memory must already have been cleared.
+  await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND role_id=$4',[id.org,id.school,humans.staff.id,id.role]);
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 day')",[id.org,id.sibling,humans.staff.id,id.role]);
+  const sameSubjectSibling=await controller.intakeMonitor({honIdentity:{externalSubject:humans.staff.subject}});
+  assert.deepEqual(sameSubjectSibling.data,[{title:'SIBLING_SENTINEL',status:siblingForm.status,acceptedCount:siblingForm.acceptedCount,hasCampaignAssociation:false}]);
+  await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND role_id=$4',[id.org,id.sibling,humans.staff.id,id.role]);
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 day')",[id.org,id.school,humans.staff.id,id.role]);
+  // A family-only parent, HQ grant, limited role and nonhuman service context do
+  // not widen the public-form monitor's current human school read semantics.
+  for (const who of ['parent','hq','limited']) {
+    await deny(()=>forms.intakeMonitor(c(who)));
+    await deny(()=>controller.intakeMonitor({honIdentity:{externalSubject:humans[who].subject}}));
+  }
+  await deny(()=>forms.intakeMonitor({...c(),principalType:'AI_EMPLOYEE'}));
+  // Scope resolution is deliberately selector-free: two current grants for the
+  // same staff identity are ambiguous, so the controller denies rather than pick.
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 day')",[id.org,id.sibling,humans.staff.id,id.role]);
+  assert.equal(await db.resolvePublicFormScope(humans.staff.subject,'marketing.form.read'),undefined);
+  await deny(()=>controller.intakeMonitor({honIdentity:{externalSubject:humans.staff.subject}}));
+  await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND role_id=$4',[id.org,id.sibling,humans.staff.id,id.role]);
+  // Existing entitlement policy remains authoritative both before scope use and
+  // in the locked read; restore the disposable fixture state after each denial.
+  const entitlement=(await admin.query('SELECT status,effective_until FROM hon.organization_entitlements WHERE organization_id=$1',[id.org])).rows[0];
+  await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1",[id.org]);
+  await deny(()=>forms.intakeMonitor(c())); await deny(()=>controller.intakeMonitor({honIdentity:{externalSubject:humans.staff.subject}}));
+  await admin.query('UPDATE hon.organization_entitlements SET status=$2,effective_until=$3 WHERE organization_id=$1',[id.org,entitlement.status,entitlement.effective_until]);
+  await admin.query("UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '1 second' WHERE organization_id=$1",[id.org]);
+  await deny(()=>forms.intakeMonitor(c())); await deny(()=>controller.intakeMonitor({honIdentity:{externalSubject:humans.staff.subject}}));
+  await admin.query('UPDATE hon.organization_entitlements SET status=$2,effective_until=$3 WHERE organization_id=$1',[id.org,entitlement.status,entitlement.effective_until]);
+  // Current permission revocation denies a fresh service and controller monitor
+  // read; the precise original grant is restored before later fixture evidence.
+  await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.form.read'",[id.role]);
+  await deny(()=>forms.intakeMonitor(c())); await deny(()=>controller.intakeMonitor({honIdentity:{externalSubject:humans.staff.subject}}));
+  await admin.query("INSERT INTO hon.role_permissions VALUES($1,$2,'marketing.form.read') ON CONFLICT DO NOTHING",[id.role,id.org]);
   await deny(()=>forms.mutate(c(),'configure',f.id,config({expectedVersion:2})),400);
   const badBodies=[{actorId:humans.staff.id},{organizationId:id.otherOrg},{schoolId:id.sibling},{formId:randomUUID()},{campaignId:active.id},{name:'x'.repeat(121)},{email:'x'.repeat(255)},{mobile:'+123'},{interest:'x'.repeat(81)},{source:'x'.repeat(81)},{name:'=IMPORTXML(1)'},{source:' +SUM(1)'},{name:'Line\nBreak'},{name:'Control\u0001'},{name:'Bidi\u202e'},{name:{}},{email:12},{acknowledged:'true'},{website:'bot'},{ageBand:'PRIVATE_CUSTOM'},{experience:'NEW'},{email:'',mobile:''}];
   const baseline=await counts();
@@ -156,12 +225,92 @@ try {
   await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.form.publish'",[id.role]); await deny(()=>forms.mutate(publishCtx,'publish',draft.id,{expectedVersion:1}));
   await admin.query("INSERT INTO hon.role_permissions VALUES($1,$2,'marketing.form.publish')",[id.role,id.org]);
   await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1',[humans.limited.id]); await deny(()=>forms.mutate(c('limited'),'configure',null,config()));
-  // Observe an actual organization lock wait, revoke before release, require post-wait denial.
-  await admin.query('BEGIN'); const blocker=(await admin.query('SELECT pg_backend_pid() pid')).rows[0].pid; await admin.query('SELECT id FROM hon.organizations WHERE id=$1 FOR UPDATE',[id.org]);
-  const waiting=forms.list(c()).then(value=>({value}),error=>({error})); const probe=new pg.Client({connectionString:process.env.DATABASE_URL,ssl:false}); await probe.connect();
-  let blocked=false; const deadline=Date.now()+2000; while(Date.now()<deadline) { blocked=(await probe.query('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) blocked',[blocker])).rows[0].blocked; if(blocked) break; await new Promise(resolve=>setTimeout(resolve,10)); } assert(blocked);
-  await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.form.read'",[id.role]); await admin.query('COMMIT'); assert.equal((await waiting).error.getStatus(),403); await probe.end();
-  await admin.query("INSERT INTO hon.role_permissions VALUES($1,$2,'marketing.form.read')",[id.role,id.org]);
+  // Actual signed HON session -> production identity guard -> controller/service
+  // -> restricted disposable PostgreSQL. There is no guard override or external
+  // listener; the server binds only to the loopback ephemeral port.
+  const sessionKeys=['HON_AUTH_MODE','HON_SESSION_JWT_SECRET','HON_SESSION_AUDIENCE'];
+  const savedSessionEnvironment=Object.fromEntries(sessionKeys.map(key=>[key,process.env[key]]));
+  let resolverReads=0,tenantReads=0,loopbackApp,loopbackDatabase;
+  Object.assign(process.env,{HON_AUTH_MODE:'OIDC',HON_SESSION_JWT_SECRET:'PUBLIC_FORM_DISPOSABLE_TEST_ONLY_SESSION_SECRET_123456789',HON_SESSION_AUDIENCE:'public-form-disposable-monitor'});
+  const loopbackBefore=await monitorFootprint();
+  try {
+    apiRequire('reflect-metadata');
+    const {Test}=apiRequire('@nestjs/testing');
+    const {issueSession,sessionConfig,HON_SESSION_COOKIE}=apiRequire('@hon/auth');
+    const {HonIdentityGuard}=await import('../../../apps/api/dist/foundation/hon-identity.guard.js');
+    const {HonIdentityService}=await import('../../../apps/api/dist/foundation/hon-identity.service.js');
+    loopbackDatabase=new RuntimeDatabaseService();
+    const originalResolvePublicFormScope=loopbackDatabase.resolvePublicFormScope;
+    const originalWithTenantTransaction=loopbackDatabase.withTenantTransaction;
+    loopbackDatabase.resolvePublicFormScope=async (...args)=>{resolverReads++;return originalResolvePublicFormScope.apply(loopbackDatabase,args);};
+    loopbackDatabase.withTenantTransaction=async (...args)=>{tenantReads++;return originalWithTenantTransaction.apply(loopbackDatabase,args);};
+    const testingModule=await Test.createTestingModule({
+      controllers:[StaffPublicFormController],
+      providers:[PublicFormService,PublicFormHumanUiGuard,{provide:RuntimeDatabaseService,useValue:loopbackDatabase},HonIdentityGuard,HonIdentityService],
+    }).compile();
+    loopbackApp=testingModule.createNestApplication({bodyParser:false}); loopbackApp.setGlobalPrefix('v1');
+    await loopbackApp.listen(0,'127.0.0.1');
+    const monitorUrl=`http://127.0.0.1:${loopbackApp.getHttpServer().address().port}/v1/marketing/forms/intake-monitor`;
+    const cookie=(who,now=Math.floor(Date.now()/1000))=>`${HON_SESSION_COOKIE}=${issueSession({externalSubject:humans[who].subject,displayName:'Fixture user',email:'fixture@example.test'},sessionConfig(),now)}`;
+    const requestMonitor=value=>fetch(monitorUrl,value===undefined?{}:{headers:{cookie:value}});
+    for (const value of [undefined,`${HON_SESSION_COOKIE}=malformed`,cookie('staff',Math.floor(Date.now()/1000)-43_201)]) {
+      resolverReads=0; tenantReads=0;
+      assert.equal((await requestMonitor(value)).status,401);
+      assert.equal(resolverReads,0,'invalid session reached scope resolver'); assert.equal(tenantReads,0,'invalid session reached form database read');
+    }
+    resolverReads=0; tenantReads=0;
+    const staffResponse=await requestMonitor(cookie('staff'));
+    assert.equal(staffResponse.status,200); assert.equal(staffResponse.headers.get('cache-control'),'private, no-store');
+    const staffMonitor=await staffResponse.json(); assert(Array.isArray(staffMonitor.data));
+    assert.equal(resolverReads,1); assert.equal(tenantReads,1);
+    for (const item of staffMonitor.data) assert.deepEqual(Object.keys(item).sort(),['acceptedCount','hasCampaignAssociation','status','title']);
+    const staffMonitorJson=JSON.stringify(staffMonitor);
+    for (const privateValue of ['SIBLING_SENTINEL','SIBLING_PRIVATE_DESCRIPTION',siblingForm.id,siblingForm.publicId,id.sibling,id.siblingPipeline,id.siblingStage,'hash_secret']) assert(!staffMonitorJson.includes(privateValue),`signed-session monitor leaked ${privateValue}`);
+    for (const who of ['parent','hq','limited']) {
+      resolverReads=0; tenantReads=0;
+      assert.equal((await requestMonitor(cookie(who))).status,403);
+      assert.equal(resolverReads,1,`authorized-but-ineligible ${who} skipped current scope check`); assert.equal(tenantReads,0,`authorized-but-ineligible ${who} read forms`);
+    }
+  } finally {
+    if (loopbackApp) await loopbackApp.close();
+    else if (loopbackDatabase) await loopbackDatabase.onModuleDestroy();
+    for (const key of sessionKeys) { if (savedSessionEnvironment[key]===undefined) delete process.env[key]; else process.env[key]=savedSessionEnvironment[key]; }
+  }
+  assert.deepEqual(await monitorFootprint(),loopbackBefore,'signed-session GET-like monitor reads changed business, audit, outbox, or no-effect tables');
+  // Revocation-first: a real monitor read waits on the organization lock. The
+  // permission is removed before release, so its post-wait authority recheck denies.
+  const probe=new pg.Client({connectionString:process.env.DATABASE_URL,ssl:false}); let revoker;
+  await probe.connect();
+  try {
+    await admin.query('BEGIN'); const blocker=(await admin.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    await admin.query('SELECT id FROM hon.organizations WHERE id=$1 FOR UPDATE',[id.org]);
+    const pendingMonitor=settled(forms.intakeMonitor(c()));
+    await waitForBlockingPid(probe,blocker,undefined,'revocation-first monitor read');
+    await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.form.read'",[id.role]);
+    await admin.query('COMMIT');
+    const deniedAfterWait=await pendingMonitor; assert.equal(deniedAfterWait.error.getStatus(),403);
+    await admin.query("INSERT INTO hon.role_permissions VALUES($1,$2,'marketing.form.read') ON CONFLICT DO NOTHING",[id.role,id.org]);
+    // Read-first is the other valid serialization: the authorized fixed-function
+    // read completes while holding its SHARE locks, the revoker demonstrably waits
+    // on that reader, and only a later read observes revocation. This deliberately
+    // does not claim that revocation always wins.
+    await runtime.query('BEGIN');
+    const readerPid=(await runtime.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    const readRequest=randomUUID();
+    await runtime.query("SELECT set_config('app.hon_organization_id',$1,true),set_config('app.hon_school_id',$2,true),set_config('app.hon_principal_id',$3,true),set_config('app.hon_principal_type','HUMAN_USER',true),set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_request_id',$4,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)",[id.org,id.school,humans.staff.id,readRequest]);
+    const authorizedRead=await runtime.query('SELECT hon.read_public_forms($1) data',[humans.staff.subject]); assert(Array.isArray(authorizedRead.rows[0].data));
+    revoker=new pg.Client({connectionString:process.env.DATABASE_URL,ssl:false}); await revoker.connect(); await revoker.query('BEGIN');
+    const revokerPid=(await revoker.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+    const revocation=settled(revoker.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.form.read'",[id.role]));
+    await waitForBlockingPid(probe,readerPid,revokerPid,'read-first permission revoker');
+    await runtime.query('COMMIT');
+    const revoked=await revocation; assert(revoked.value,'read-first revocation did not complete after reader committed'); await revoker.query('COMMIT');
+    const deniedSubsequently=await settled(forms.intakeMonitor(c())); assert.equal(deniedSubsequently.error.getStatus(),403);
+  } finally {
+    await Promise.allSettled([admin.query('ROLLBACK'),runtime.query('ROLLBACK'),revoker?.query('ROLLBACK')]);
+    if (revoker) await revoker.end(); await probe.end();
+    await admin.query("INSERT INTO hon.role_permissions VALUES($1,$2,'marketing.form.read') ON CONFLICT DO NOTHING",[id.role,id.org]);
+  }
   // Direct private data writes/helpers and forged ingress GUCs cannot authorize public lead creation.
   for (const table of ['public_lead_forms','public_lead_form_versions','public_lead_form_requests','public_lead_form_receipts','public_lead_form_rates','users','principals','roles','permissions','role_permissions','principal_role_grants','family_access_grants','organizations','schools','hq_operator_grants','hq_ai_provider_connections','hq_ai_control_requests','crm_activities']) {
     await sqlDeny(()=>runtime.query(`SELECT * FROM hon.${table}`)); assert.equal((await runtime.query("SELECT has_table_privilege(current_user,$1,'INSERT,UPDATE,DELETE,TRUNCATE') OR has_any_column_privilege(current_user,$1,'INSERT,UPDATE') allowed",[`hon.${table}`])).rows[0].allowed,false);

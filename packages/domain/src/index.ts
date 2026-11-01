@@ -85,3 +85,6 @@ export * from './kiosk.js';
 export * from './hq-overview.js';
 export * from './hq-school-directory.js';
 export * from './saas-introductory-pricing.js';
+export * from './marketing-meta.js';
+export * from './a2p-registration.js';
+export * from './a2p-website-policy.js';

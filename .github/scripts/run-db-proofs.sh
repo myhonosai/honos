@@ -66,6 +66,25 @@ proof() { # fixture, script, description
   summary+=("| $description | \`$script\` | pass |")
 }
 
+# Public lead forms use the uniquely marked marketing fixture. Keep its descriptor
+# separate from every other proof and invoke the package's existing db:test-public-forms
+# command so it builds the current contracts/config/database/API before both proofs.
+public_forms_fixture='public-lead-forms'
+echo "::group::Provision disposable fixture: $public_forms_fixture"
+"${clean_env[@]}" \
+  HON_CAMPAIGN_VALIDATION_TARGET=postgresql://localhost:5432/hon_campaign_validation \
+  HON_CAMPAIGN_ENV_FILE="$job_dir/$public_forms_fixture.env" \
+  node "$scripts/setup-marketing-validation.mjs"
+echo "::endgroup::"
+echo "::group::Public lead forms: current-school monitor, signed session, lifecycle and ingress integrity"
+# shellcheck disable=SC2016 # descriptor is sourced only inside the clean subprocess.
+"${clean_env[@]}" \
+  HON_CAMPAIGN_VALIDATION_TARGET=postgresql://localhost:5432/hon_campaign_validation \
+  bash -c 'set -a; . "$1"; set +a; cd "$2" && pnpm --filter @hon/database db:test-public-forms' _ "$job_dir/$public_forms_fixture.env" "$repo_root"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Public lead forms: current-school monitor, signed session, lifecycle and ingress integrity | \`db:test-public-forms\` | pass |")
+
 setup class-sessions-read HON_CLASS_SESSIONS_READ_VALIDATION_TARGET hon_class_sessions_read_validation HON_CLASS_SESSIONS_READ_ENV_FILE
 proof class-sessions-read test-security-boundaries.mjs "Tenant isolation, restricted runtime role, parent-family boundaries"
 proof class-sessions-read test-outbox-leases.mjs "Outbox leases never treat UNKNOWN as published"
@@ -74,8 +93,19 @@ proof class-sessions-read test-class-sessions-read-integrity.mjs "Class Sessions
 setup crm-lead-close HON_CRM_LEAD_CLOSE_VALIDATION_TARGET hon_crm_close_validation HON_CRM_LEAD_CLOSE_ENV_FILE
 proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational table"
 proof crm-lead-close test-crm-lead-close-integrity.mjs "CRM lead close authority, atomicity and replay"
+proof crm-lead-close test-platform-least-privilege.mjs "Platform least privilege: nothing in schema hon reachable through PUBLIC or Supabase client roles; injected regressions rejected"
+proof crm-lead-close test-migration-runner-safety.mjs "Migration tooling: single-runner lock, read-only db:status (current, divergent history), TLS refusal before connecting"
+proof crm-lead-close test-restore-drill.mjs "Backup/restore drill: pg_dump, total loss, pg_restore, identical data/ledger/security posture, verifiers pass on the restored database"
+
+# Database TLS verification needs its own private TLS-only cluster (no fixture descriptor).
+echo "::group::Database TLS verification against a private TLS-only cluster (test-database-tls-verification.mjs)"
+"${clean_env[@]}" HON_DB_PROOFS_LOCAL=1 bash -c 'cd "$1" && node scripts/test-database-tls-verification.mjs' _ "$repo_root/packages/database"
+echo "::endgroup::"
+passed=$((passed + 1))
+summary+=("| Database TLS verification: configured CA required, wrong CA and host mismatch refused, URL TLS overrides refused | \`test-database-tls-verification.mjs\` | pass |")
 
 setup champions-club HON_CHAMPIONS_VALIDATION_TARGET hon_champions_validation HON_CHAMPIONS_ENV_FILE
+proof champions-club test-a2p-preparation-integrity.mjs "A2P-1: read-only exact-school owner-confirmed registration preparation, live IAM/entitlement checks, signed-session API/database, no public fetching or provider/consent/message effects"
 proof champions-club test-champions-club-integrity.mjs "Champions Club authority, attribution, qualification gates and evidence"
 proof champions-club test-champions-club-rewards-integrity.mjs "Champions Club reward accounting: liabilities, approvals, reversals, no billing effect"
 proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Club leaderboards: qualified-only standings, privacy, holds, statistics"
@@ -94,6 +124,7 @@ proof champions-club test-saas-hon-os-purchase-integrity.mjs "HON OS purchase bi
 proof champions-club test-saas-hon-os-new-school-onboarding.mjs "HON OS new-school onboarding (0183, D7; paid access ACTIVE simulated in the disposable DB only): private registration awaiting first payment, HON OS purchase without an active entitlement, verified activation for every offer kind, failed/cancelled/expired/out-of-order/replayed payments, HQ retry with sale-limit and founder rechecks"
 proof champions-club test-saas-hon-os-only-new-sales.mjs "HON OS-only new sales (0184, D8; legacy sales pinned CLOSED, reopened only to build the pre-closure fixture): every legacy sale path refused for new customers (school/HQ checkout, replayed keys, provider sessions, HQ records and founder holds, direct writes), stale legacy payments held for review, HON OS-only first purchases, legacy customers' renewals, refunds, disputes and lifetime rights unchanged"
 proof champions-club test-saas-secure-hq-provisioning.mjs "Secure HQ provisioning (0185, D9): provisioned schools get no access, capability or credits; only a current HQ owner grants a scoped, 90-day-capped, audited, idempotent exception (operators, support, school owners, AI/delegated contexts, forged fields and direct writes refused); revocation, expiry, scheduling and closing; revoke-first pilot conversion (awaiting-first-payment refused while an exception is active or scheduled, then D7 after revocation or expiry); never a purchase basis or widened by a tier change; existing customers, D7 first purchase and D8 closure unchanged"
+proof champions-club test-school-owner-invitations-integrity.mjs "P0-1: signed OIDC account invitations, exact-school OWNER binding, single use, expiry, revocation, NOWAIT authority concurrency, immutable private evidence, no commercial effects"
 proof champions-club test-saas-subscription-generation-integrity.mjs "Commercial B1 0189: immutable A2 generation lineage, zero provider binding, human authorization, race-safe exact retries and inert billing gates"
 proof champions-club test-saas-price-acceptance-integrity.mjs "Commercial A2: immutable schedules/disclosures, signed-session acceptance, authorization/lock races, no billing"
 proof champions-club test-saas-trial-governance-integrity.mjs "D11-A: isolated trial policy/campaign metadata, owner-only bounded publication, immutable decisions, concurrency and no activation"
@@ -146,7 +177,7 @@ summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-m
 /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
 rm -f "$adult_draft_dir/$adult_draft_fixture.env"
 
-echo "All $passed disposable-database proofs passed (7 fixtures, all migrations applied)."
+echo "All $passed disposable-database proofs passed (8 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

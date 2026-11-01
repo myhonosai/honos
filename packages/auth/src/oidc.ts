@@ -30,7 +30,7 @@ export async function verifyIdToken(token: string, config: OidcConfig, nonce: st
     const sub = textClaim(payload.sub, 512)!;
     if (sub !== payload.sub) throw new Error();
     // Pairwise namespacing avoids mapping another issuer's coincidentally identical subject to HON IAM.
-    return normalizedIdentity({ externalSubject: `oidc:${encodeURIComponent(config.issuer)}:${encodeURIComponent(sub)}`, displayName: payload.name, email: payload.email });
+    return normalizedIdentity({ externalSubject: `oidc:${encodeURIComponent(config.issuer)}:${encodeURIComponent(sub)}`, displayName: payload.name, email: payload.email, ...(payload.email_verified === true ? { emailVerified: true } : {}) });
   } catch { throw new AuthValidationError(); }
 }
 
