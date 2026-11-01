@@ -162,6 +162,8 @@ const SAAS_BILLING_CALLS = {
   awaitFirstPayment: { sql: 'SELECT hon.place_saas_organization_awaiting_payment($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   retryFirstPaymentActivation: { sql: 'SELECT hon.retry_saas_first_payment_activation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   // D9 HQ-owner access exceptions (0185): time-limited free access for testing, demos and approved pilots; never credits.
+  readAiUnknownInvocations: { sql: 'SELECT hon.read_ai_unknown_invocations_from_hq($1) AS data', arity: 1, readOnly: true },
+  resolveAiUnknownInvocation: { sql: 'SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readAiSpendPauses: { sql: 'SELECT hon.read_ai_spend_pauses_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiSpendPause: { sql: 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },

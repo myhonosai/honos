@@ -2016,3 +2016,18 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.command_ai_spend_pause(text,jsonb,uuid), hon.read_ai_spend_pauses_from_hq(text) TO hon_runtime;
   END IF;
 END $$;
+
+-- S4-d 0196 UNKNOWN resolution: counting and validation stay internal; only the HQ resolve command and queue read are runtime boundaries.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['ai_sending_stale_after()','ai_hold_counts(text,timestamptz,tstzrange,timestamptz)','ai_org_committed_credits(uuid,timestamptz)',
+    'guard_ai_unknown_resolutions()','ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)','ai_unknown_validate(text,jsonb)',
+    'resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)','read_ai_unknown_invocations_from_hq(text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.ai_unknown_resolutions FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_unknown_resolutions FROM '||quote_ident(r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid), hon.read_ai_unknown_invocations_from_hq(text) TO hon_runtime;
+  END IF;
+END $$;
