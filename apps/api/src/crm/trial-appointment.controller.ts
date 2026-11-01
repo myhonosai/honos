@@ -17,13 +17,14 @@ import { randomUUID } from 'node:crypto';
 import type { CommandContext } from '@hon/contracts';
 import type { Response } from 'express';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
+import { TrialAppointmentHumanUiGuard } from './trial-appointment-human-ui.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { CreateTrialAppointmentDto } from './create-trial-appointment.dto.js';
 import { TrialAppointmentService } from './trial-appointment.service.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/crm/leads/:leadId/trials')
-@UseGuards(HonIdentityGuard)
+@UseGuards(TrialAppointmentHumanUiGuard, HonIdentityGuard)
 export class TrialAppointmentController {
   constructor(
     private readonly database: RuntimeDatabaseService,
