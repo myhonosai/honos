@@ -1,6 +1,10 @@
 {
   "routes": [
     {
+      "path": "/auth/access",
+      "title": "HON | Access not verified"
+    },
+    {
       "path": "/",
       "title": "HON Complete | AI Command Center"
     },
