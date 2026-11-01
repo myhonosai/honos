@@ -1,27 +1,27 @@
-/** Actual frontend HTTP modules -> signed HON sessions -> pinned Nest backend -> guarded disposable PostgreSQL.
+/** Actual frontend HTTP modules -> signed HON sessions -> merged Nest backend -> guarded disposable PostgreSQL.
  * Browser rendering uses separate synthetic evidence. This proof never changes production backend files. */
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdtemp, rm, realpath } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { issueSession, HON_SESSION_COOKIE, SESSION_SECONDS } from '@hon/auth';
 import { requireFlexibleBillingAccountsLocalUrls, flexibleBillingAccountsFixture } from '../../../packages/database/scripts/flexible-billing-accounts-local-guard.mjs';
 
-const BACKEND_SHA = '9e8289fc0e9485ea8f4cc4b76f3765940c8b7f52';
+const BACKEND_FOUNDATION_SHA = 'dce550e7c286dcf34a8ca6beb175b39289f7c69e';
 assert.equal(process.env.HON_CRM_TRIAL_RECOVERY_API_TEST, '1');
 const urls = await requireFlexibleBillingAccountsLocalUrls(); // Exact aliases, marked private descriptor, no external credentials.
 const front = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const back = resolve(process.env.HON_CRM_TRIAL_RECOVERY_BACKEND_ROOT ?? '');
-assert.notEqual(back, front); assert.equal(await realpath(back), back);
+// Both sides are built from this exact reconciled PR checkout; no alternate backend path or credentials.
+const back = front;
 const sha = root => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const frontendSha = sha(front); assert.match(frontendSha, /^[0-9a-f]{40}$/);
 assert.equal(frontendSha, process.env.HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA);
-assert.equal(sha(back), BACKEND_SHA); assert.equal(process.env.HON_CRM_TRIAL_RECOVERY_BACKEND_SHA, BACKEND_SHA);
+assert.equal(sha(back), frontendSha);
 const apiRequire = createRequire(resolve(back, 'apps/api/package.json')), dbRequire = createRequire(resolve(back, 'packages/database/package.json'));
 const webRequire = createRequire(resolve(front, 'apps/web/package.json'));
 apiRequire('reflect-metadata');
@@ -164,7 +164,7 @@ try {
   await denied(() => recovery.readTrialDetail(scope(A), A.leadId, detail.id, signal()), 'DENIED', 403);
   await denied(() => journey.sendCommand(command, signal()), 'DENIED', 403);
   pass('absent/expired sessions and a revoked live grant refuse reads/replays with no unauthorized effects');
-  console.log(JSON.stringify({ evidence: 'ACTUAL_FRONTEND_SIGNED_SESSION_NEST_DISPOSABLE_POSTGRES', frontendSha, backendSha: BACKEND_SHA, checks: checks.length, browserFixtureEvidence: false, identityMocked: false, apiMocked: false, providerCalls: 0, entitlementPolicyChanged: false }));
+  console.log(JSON.stringify({ evidence: 'ACTUAL_FRONTEND_SIGNED_SESSION_NEST_DISPOSABLE_POSTGRES', frontendSha, backendSha: frontendSha, backendFoundationSha: BACKEND_FOUNDATION_SHA, checks: checks.length, browserFixtureEvidence: false, identityMocked: false, apiMocked: false, providerCalls: 0, entitlementPolicyChanged: false }));
 } finally {
   globalThis.fetch = originalFetch; Date.now = originalNow;
   if (originalLocation) Object.defineProperty(globalThis, 'location', originalLocation); else delete globalThis.location;

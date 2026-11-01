@@ -1,9 +1,9 @@
 ## Connected CRM — persistent trial recovery integration
 
 - [x] Prepare explicit saved-trial list/detail reads, current-version outcome review, strict duplicate-conflict evidence and retained exact retries on top of PR #95; preserve F1 scheduling holds, F2 lead-refresh barriers, EN/KR/ES, privacy and all existing registration workflows.
-- [x] Preserve accepted #105/main `023304297c309881215bf6ccccd4e512e0af8c2e` normally; new backend bindings target #107 `9e8289fc0e9485ea8f4cc4b76f3765940c8b7f52` and remain contingent on its independent review and owner merge approval.
+- [x] Normally incorporate accepted #107/main `dce550e7c286dcf34a8ca6beb175b39289f7c69e`, source-identical to reviewed `9e8289fc0e9485ea8f4cc4b76f3765940c8b7f52`. Preserve the reviewed frontend application code from `bc6c0188d9c0354845ac660d60052497fd736120` and run the recovery proof against this same combined checkout, without an alternate backend.
 - Local evidence: 131 focused regressions and all 1,191 web tests passed, with typecheck and 183 unchanged migration checksums. Browser/API/PostgreSQL evidence remains pending on the final published head; no local socket/database pass is claimed.
-- [ ] Freeze the corrected PR #95 head; run fresh repository/build, browser/accessibility, full PostgreSQL and pinned-backend signed-session verification. Keep draft for independent review; do not infer operational approval from test fixtures or policy decisions not yet made.
+- [ ] Verify the final reconciled PR #95 head through fresh repository/build, browser/accessibility, all 48 canonical PostgreSQL proofs and combined-source signed-session recovery tests. Earlier `bc6c0188` passed all five draft-safe jobs; that history does not establish this new head. Keep draft for independent frontend review, required regular CI and owner merge approval; entitlement-lapse policy remains a pilot gate.
 
 ## Connected staff CRM operating journey — Codex (in progress)
 
