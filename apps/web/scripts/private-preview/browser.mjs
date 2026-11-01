@@ -39,14 +39,14 @@ try {
   const page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(e.message));await unlock(page);
   assert.equal((await context.request.post(origin+'/__preview/switch',{headers:{Origin:origin},form:{profile:'hq',csrf:'forged'}})).status(),403);
   for(const language of ['en','ko','es']) {
-   let f=await frame(page);const utility=f.locator('[data-locale-utility] select');await utility.waitFor();await utility.selectOption(language);await f.waitForFunction(lang=>document.documentElement.lang===lang,language);
+   let f=await frame(page);const utility=f.locator('[data-locale-utility] select');await utility.waitFor();await utility.selectOption(language);await f.waitForFunction(lang=>document.documentElement.lang===lang,language);await f.waitForFunction(()=>!document.querySelector('[data-locale-utility] select').disabled);assert.equal((await(await context.request.get(origin+'/api/v1/me/language-preference')).json()).data.preference.language,language);
    const guide=f.locator('[data-founder-plane=school]');
    for(const mode of ['modern','classic','big-button']) {
     await guide.getByRole('button',{name:t(language,mode),exact:true}).click();
     for(let n=0;n<8;n++){await guide.getByRole('navigation',{name:t(language,'steps')}).getByRole('button',{name:new RegExp(t(language,`step${n}Title`).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))}).focus();await page.keyboard.press('Enter');await f.waitForFunction(title=>document.querySelector('[data-founder-stage-status]')?.textContent.includes(title),t(language,`step${n}Title`));}
    }
    await guide.getByRole('button',{name:t(language,'load'),exact:true}).click();await f.getByText('SYNTHETIC Sunrise Taekwondo',{exact:true}).first().waitFor();await capture(page,`${language}-${width}-founder`);await scan(f,`${language}-${width}-founder`);
-   f=await navigate(page,'Connected CRM journey');await f.getByTestId('load').click();await f.getByTestId('lead-select').waitFor();await f.getByTestId('mode').selectOption(width===390?'big':width===834?'classic':'modern');await capture(page,`${language}-${width}-crm`);await scan(f,`${language}-${width}-crm`);
+   f=await navigate(page,'Connected CRM journey');await f.waitForFunction(lang=>document.documentElement.lang===lang,language);await f.getByTestId('current-school').click();await f.getByTestId('lead-select').waitFor();await f.getByTestId('lead-select').selectOption({index:1});await f.getByTestId('mode').selectOption(width===390?'big':width===834?'classic':'modern');await capture(page,`${language}-${width}-crm`);await scan(f,`${language}-${width}-crm`);
    // Presentation/language navigation never changes fixture authority; fresh read remains explicit.
    f=await navigate(page,'Founder Setup');await f.locator('[data-founder-plane=school]').waitFor();
    report.checks.push(`${language}/${width}: actual Founder eight stages x three modes, native keyboard/live status, explicit synthetic read, actual CRM journey, no horizontal overflow`);
@@ -74,7 +74,7 @@ try {
  }
  // Execute one complete connected journey through the persistent gateway, not a scripted mock response interceptor.
  const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block'});await context.route(url=>url.origin!==origin,r=>{report.blockedExternalRequests++;return r.abort();});const page=await context.newPage();page.on('pageerror',e=>report.pageErrors.push(e.message));page.on('request',async r=>{if(r.method()==='POST'&&new URL(r.url()).pathname.startsWith('/api/v1/')){const h=await r.allHeaders();report.mutationOrigins.push({path:new URL(r.url()).pathname,origin:h.origin,fetchSite:h['sec-fetch-site']});}});await unlock(page);
- let f=await navigate(page,'Connected CRM journey');await f.getByTestId('load').click();await f.getByTestId('lead-select').waitFor();
+ let f=await navigate(page,'Connected CRM journey');await f.getByTestId('current-school').click();await f.getByTestId('lead-select').waitFor();await f.getByTestId('lead-select').selectOption({index:1});
  await f.getByTestId('step-follow').click();await f.getByTestId('verify-follow').click();await f.getByTestId('subject').fill('Synthetic owner walkthrough');await confirm(f,'save-follow');await refresh(f);
  await f.getByTestId('step-trial').click();await f.getByTestId('start').fill(new Date(Date.now()+86400000).toISOString().slice(0,16));await f.getByTestId('end').fill(new Date(Date.now()+90000000).toISOString().slice(0,16));await confirm(f,'save-trial');await refresh(f);
  await f.getByTestId('step-outcome').click();await f.getByTestId('outcome').selectOption('COMPLETED');await confirm(f,'save-outcome');await refresh(f);

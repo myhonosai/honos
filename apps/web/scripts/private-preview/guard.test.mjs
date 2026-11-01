@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { previewConfiguration, childEnvironment, sameOriginMutation } from './guard.mjs';
+import { previewConfiguration, childEnvironment, sameOriginMutation, presentationCookieName } from './guard.mjs';
 const run = fn => {const dir=mkdtempSync(join(tmpdir(),'hon-preview-guard-'));mkdirSync(join(dir,'apps/web'),{recursive:true});try{fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}};
 test('default and production processes cannot start the synthetic gateway',()=>run(root=>{
  for(const env of [{},{HON_DEPLOYMENT_ENVIRONMENT:'production',HON_PRIVATE_PREVIEW_LOCAL:'1'},{HON_DEPLOYMENT_ENVIRONMENT:'staging',HON_PRIVATE_PREVIEW_LOCAL:'1'}])assert.throws(()=>previewConfiguration(env,root));
@@ -37,4 +37,8 @@ test('HON no-referrer requests need browser-supplied exact same-origin fetch met
 });
 test('missing or foreign origins never inherit preview mutation authority',()=>{
  const origin='https://preview.example.test';for(const h of [{},{'sec-fetch-site':'same-origin'},{origin:'https://foreign.example.test','sec-fetch-site':'same-origin'}])assert(!sameOriginMutation(h,origin));
+});
+test('presentation cookies remain signed-subject-specific, separate from auth cookies',()=>{
+ const s={mode:'OIDC',audience:'synthetic',secret:'synthetic-only'};
+ assert.match(presentationCookieName(s,'A'),/^hon_locale_v1_[a-f0-9]{64}$/);assert.notEqual(presentationCookieName(s,'A'),presentationCookieName(s,'B'));assert.notEqual(presentationCookieName(s,'A'),presentationCookieName({...s,secret:'rotated-synthetic'},'A'));
 });

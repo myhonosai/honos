@@ -4,7 +4,7 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
 import { createPreviewFixtures, PROFILES } from './fixtures.mjs';
 import { hubPage, loginPage } from './hub.mjs';
-import { sameOriginMutation } from './guard.mjs';
+import { sameOriginMutation, presentationCookieName } from './guard.mjs';
 
 const PREVIEW_COOKIE='hon_private_preview';
 const hash = x => createHash('sha256').update(x).digest();
@@ -67,7 +67,8 @@ export function createPreviewServers({origin,secure,session,accessCode,guideText
    if(owned(req)!==gate||gate.subject!==requestSubject||active.get(requestSubject)!==gate)return send(res,401,{code:'PREVIEW_IDENTITY_REPLACED'});
    // One fixed loopback destination only. Never follow redirects or proxy arbitrary URLs/headers.
    const ownedSubject=requestSubject;
-   const forward=httpRequest({hostname:'127.0.0.1',port:3100,path:req.url,method:req.method,timeout:15000,headers:{host:new URL(origin).host,'x-forwarded-host':new URL(origin).host,'x-forwarded-proto':secure?'https':'http',cookie:`${HON_SESSION_COOKIE}=${gate.token}`,...Object.fromEntries(['accept','content-type','idempotency-key','x-hon-human-command','rsc','next-router-state-tree','next-router-prefetch','next-url'].filter(k=>typeof req.headers[k]==='string').map(k=>[k,req.headers[k]]))}},upstream=>{
+   let presentation='';try{const name=presentationCookieName(session,ownedSubject),value=cookieValue(req.headers.cookie,name);if(value&&value.length<=1500)presentation=`; ${name}=${encodeURIComponent(value)}`;}catch{} // Presentation hints cannot invalidate or replace identity.
+   const forward=httpRequest({hostname:'127.0.0.1',port:3100,path:req.url,method:req.method,timeout:15000,headers:{host:new URL(origin).host,'x-forwarded-host':new URL(origin).host,'x-forwarded-proto':secure?'https':'http',cookie:`${HON_SESSION_COOKIE}=${gate.token}${presentation}`,...Object.fromEntries(['accept','content-type','idempotency-key','x-hon-human-command','rsc','next-router-state-tree','next-router-prefetch','next-url'].filter(k=>typeof req.headers[k]==='string').map(k=>[k,req.headers[k]]))}},upstream=>{
     if(active.get(ownedSubject)!==gate){upstream.destroy();return send(res,401,{code:'PREVIEW_IDENTITY_REPLACED'});}
     const location=upstream.headers.location;if(location&&(!location.startsWith('/')||location.startsWith('//'))){upstream.destroy();return send(res,503,{code:'PREVIEW_REDIRECT_REFUSED'});}
     // Buffer a bounded response so identity replacement during a read cannot expose late facts.

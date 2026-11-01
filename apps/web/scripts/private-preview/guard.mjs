@@ -1,6 +1,7 @@
 /** Preview-process boundary only; never imported by the application. */
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHmac } from 'node:crypto';
 
 export function previewConfiguration(env, root) {
   const local = env.HON_PRIVATE_PREVIEW_LOCAL === '1';
@@ -30,4 +31,10 @@ export function childEnvironment(env, session) {
 export function sameOriginMutation(headers, origin) {
   if (headers.origin === origin) return !headers['sec-fetch-site'] || headers['sec-fetch-site'] === 'same-origin';
   return headers.origin === 'null' && headers['sec-fetch-site'] === 'same-origin';
+}
+
+/** Same existing readLocaleContext presentation namespace; never tenant authority. */
+export function presentationCookieName(session, subject) {
+  const scope=createHmac('sha256',session.secret).update(JSON.stringify(['hon-local-presentation-v1',session.mode,session.audience,subject])).digest('hex');
+  return 'hon_locale_v1_'+scope;
 }
