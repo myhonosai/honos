@@ -14,6 +14,7 @@ import type {
   CrmAppointmentType,
 } from '@hon/contracts';
 import { assertCurrentTrialAuthority } from './trial-authority-recheck.js';
+import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 const MAX_FUTURE_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -223,6 +224,7 @@ export class TrialAppointmentService {
       // idempotency reservation, appointment, audit or outbox row exists.
       await assertCurrentTrialAuthority(client, authority.externalSubject, context, 'crm.trial.schedule',
         'HON trial scheduling is no longer authorized for this school.');
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required for trial scheduling.');
 
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (
@@ -398,6 +400,7 @@ export class TrialAppointmentService {
       throw new ForbiddenException('HON trial reconciliation requires an authenticated human UI request.');
     }
     return this.database.withTenantReadOnlyTransaction(context, async (client) => {
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to read trials.');
       const lead = await client.query<{ id: string }>('SELECT id FROM hon.crm_leads WHERE id = $1::uuid', [leadId]);
       if (!lead.rowCount) throw new NotFoundException('CRM lead was not found in this school.');
       // The active trial is derived from ALL of this lead's trial rows, independently of the bounded history window,
@@ -437,6 +440,7 @@ export class TrialAppointmentService {
       throw new ForbiddenException('HON trial reconciliation requires an authenticated human UI request.');
     }
     return this.database.withTenantReadOnlyTransaction(context, async (client) => {
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to read trials.');
       const row = await client.query<TrialAppointmentRow>(
         `SELECT ${APPOINTMENT_COLUMNS} FROM hon.crm_appointments
          WHERE id = $1::uuid AND appointment_type = 'TRIAL'::hon.crm_appointment_type`,

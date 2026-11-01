@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { tierIncludesFeature } from '@hon/config';
+import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
 import type { CommandContext, CreateLeadInput, HonTier, LeadListItem, LeadSummary } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -34,6 +35,7 @@ export class LeadService {
 
   async list(context: CommandContext, options: { status?: LeadListItem['status']; limit?: number }): Promise<LeadListItem[]> {
     return this.database.withTenantTransaction(context, async (client) => {
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to read leads.');
       const result = await client.query<LeadListItem>(
         `SELECT lead.id, lead.status, lead.pipeline_stage_id AS "pipelineStageId", lead.primary_person_id AS "primaryPersonId",
                 lead.version, lead.created_at AS "createdAt", person.given_name AS "givenName", person.family_name AS "familyName",

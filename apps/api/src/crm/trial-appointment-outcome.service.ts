@@ -17,6 +17,7 @@ import {
   type RecordTrialAppointmentOutcomeInput,
 } from '@hon/contracts';
 import { assertCurrentTrialAuthority } from './trial-authority-recheck.js';
+import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -159,6 +160,7 @@ export class TrialAppointmentOutcomeService {
       // the same appointment. Re-resolve the authority now, before any idempotency reservation or mutation.
       await assertCurrentTrialAuthority(client, authority.externalSubject, context, 'crm.trial.manage',
         'HON trial outcome recording is no longer authorized for this school.');
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to record a trial outcome.');
       const current = currentResult.rows[0];
       if (!current) throw new NotFoundException('CRM appointment was not found in this school.');
       if (!CRM_APPOINTMENT_STATUSES.includes(current.status)) {
