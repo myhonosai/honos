@@ -2332,7 +2332,7 @@ DO $$ DECLARE f record; p record; t text; runtime_oid oid := (SELECT oid FROM pg
   FOR f IN SELECT * FROM (VALUES
     ('hon.guard_hq_entitlement_evidence()','918eb49dd64a752e408f32dfe38da61f',false,false,'trigger'),
     ('hon.require_hq_entitlement_actor(text)','39a28e82a9f0168ea33e82731d761289',false,true,'uuid'),
-    ('hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)','773d89c5cb55b57addaf50640ff21717',true,true,'jsonb')
+    ('hon.transition_organization_entitlement_from_hq(text,uuid,text,integer,uuid,text,uuid,uuid)','b3245db9dfde9617ddacef299242c960',true,true,'jsonb')
   ) expected(signature,source_md5,runtime_allowed,definer,return_type) LOOP
     SELECT proc.*,owner.rolsuper,owner.rolbypassrls,owner.rolname owner_name INTO p FROM pg_proc proc JOIN pg_roles owner ON owner.oid=proc.proowner WHERE proc.oid=to_regprocedure(f.signature);
     IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.provolatile<>'v' OR p.prokind<>'f' OR p.proretset
@@ -2679,3 +2679,16 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'Membership date permissions must exist as sensitive staff-assignable permissions'; END IF;
 END $$;
 -- End membership date revisions exact verification.
+
+
+-- Exact A2P-1 resolver security. No mutable records or direct table grants.
+DO $$ DECLARE safe boolean; BEGIN
+ SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+   AND (o.rolsuper OR o.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+   AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='b43923e631e0754e70c4c039c2cddceb7b8a00a7a1f4ac41bb2da03d7b136419'
+   AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+     WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+ INTO safe FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_a2p_preparation_scope(text)'::regprocedure;
+ IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'A2P-1 preparation scope drift'; END IF;
+END $$;

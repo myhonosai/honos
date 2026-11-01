@@ -3,6 +3,9 @@ export * from './hq-entitlement.js';
 export * from './owner-launch.js';
 export * from './human-work-items.js';
 export * from './marketing-campaigns.js';
+export * from './zernio-integration.js';
+export * from './marketing-meta.js';
+export * from './a2p-registration.js';
 export * from './revenue-planning.js';
 export * from './search.js';
 export * from './staff-roles.js';
@@ -1010,4 +1013,14 @@ export * from './saas-refunds-rewards.js';
 export * from './saas-payments.js';
 export * from './saas-school-billing.js';
 export * from './saas-paid-access.js';
+export * from './saas-exception-policy.js';
+export * from './saas-offers.js';
+export * from './saas-introductory-pricing.js';
 export * from './language-preferences.js';
+
+export * from './saas-trials.js';
+
+export * from './saas-price-acceptance.js';
+export * from './saas-subscription-generation.js';
+
+export * from './school-owner-invitations.js';

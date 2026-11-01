@@ -78,6 +78,26 @@ export async function runDateBrowserChecks({ fixture, open, visual, check, origi
     await page.getByRole('checkbox', { name: /^I confirm this exact date change/ }).check();
   }
   for (const [size, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
+    for (const event of ['pagehide', 'hon:session-invalidated', 'hon:school-context-changed']) await check(`${size}: ${event} immediately conceals mounted facts and requires an explicit authorized read`, async () => {
+      fixture.reset(); const { context, page } = await open(viewport);
+      try {
+        await begin(page);
+        const synchronous = await page.evaluate(name => {
+          window.dispatchEvent(new Event(name));
+          return [...document.querySelectorAll('main [hidden][inert]')].some(node => node.textContent.includes('Synthetic Morgan Lee'));
+        }, event);
+        assert.equal(synchronous, true, 'Protected DOM must be hidden before a React rerender');
+        await page.getByRole('heading', { name: 'Membership information hidden' }).waitFor();
+        assert.equal(await page.getByText('Synthetic Morgan Lee', { exact: true }).count(), 0);
+        const reads = fixture.reads.length;
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        assert.equal(fixture.reads.length, reads, 'Focus alone must not read or reveal');
+        await page.getByRole('button', { name: 'Verify access and resume' }).click();
+        await page.getByRole('heading', { name: 'Verified current membership' }).waitFor();
+        assert(fixture.reads.length > reads); assert.equal(fixture.commands.length, 0);
+        await visual(page, `${size}-dates-${event.replaceAll(':', '-')}`);
+      } finally { await context.close(); }
+    });
     await check(`${size}: date extension, distinct final confirmation, immutable receipt/history, keyboard and axe`, async () => {
       fixture.reset(); const { context, page } = await open(viewport); try {
         await begin(page); assert.equal(fixture.commands.length, 0); await visual(page, `${size}-dates-preview`); await final(page); await visual(page, `${size}-dates-confirm`);

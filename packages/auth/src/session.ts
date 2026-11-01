@@ -4,7 +4,7 @@ import { AuthValidationError, type ManusConfig, type SessionConfig } from './con
 export const HON_SESSION_COOKIE = 'hon_session';
 export const MANUS_SESSION_COOKIE = 'webdev_app_session';
 export const SESSION_SECONDS = 43_200;
-export interface NormalizedIdentity { externalSubject: string; displayName?: string; email?: string; }
+export interface NormalizedIdentity { externalSubject: string; displayName?: string; email?: string; emailVerified?: true; }
 
 export function textClaim(value: unknown, max: number, optional = false): string | undefined {
   if (value === undefined && optional) return undefined;
@@ -17,11 +17,16 @@ export function normalizedIdentity(input: Record<string, unknown>): NormalizedId
   if (externalSubject !== input.externalSubject) throw new AuthValidationError();
   const displayName = textClaim(input.displayName, 256, true);
   const email = textClaim(input.email, 254, true);
-  return { externalSubject, ...(displayName === undefined ? {} : { displayName }), ...(email === undefined ? {} : { email }) };
+  if (input.emailVerified !== undefined && (input.emailVerified !== true || !email)) throw new AuthValidationError();
+  return { externalSubject, ...(input.emailVerified === true ? { emailVerified: true as const } : {}), ...(displayName === undefined ? {} : { displayName }), ...(email === undefined ? {} : { email }) };
 }
 
 export function issueSession(identity: NormalizedIdentity, config: SessionConfig, now = Math.floor(Date.now() / 1000)): string {
-  return jwt.sign({ ...normalizedIdentity({ ...identity }), iss: config.mode, aud: config.audience, iat: now, exp: now + SESSION_SECONDS }, config.secret, { algorithm: 'HS256' });
+  const { emailVerified, ...profile } = normalizedIdentity({ ...identity });
+  if (emailVerified !== undefined && config.mode !== 'OIDC') throw new AuthValidationError();
+  // Reader-first rollout: legacy readers reject unknown claims. Only upgraded issuers explicitly
+  // enabled after every reader is compatible may add this proof. Readers accept both shapes.
+  return jwt.sign({ ...profile, ...(config.mode === 'OIDC' && config.emitVerifiedEmail === true && emailVerified === true ? { emailVerified: true } : {}), iss: config.mode, aud: config.audience, iat: now, exp: now + SESSION_SECONDS }, config.secret, { algorithm: 'HS256' });
 }
 export function verifySession(token: string, config: SessionConfig, now = Math.floor(Date.now() / 1000)): NormalizedIdentity {
   try {
@@ -29,8 +34,9 @@ export function verifySession(token: string, config: SessionConfig, now = Math.f
     const result = jwt.verify(token, config.secret, { algorithms: ['HS256'], issuer: config.mode, audience: config.audience, clockTimestamp: now, complete: true });
     const payload = result.payload;
     if (typeof payload === 'string' || result.header.typ !== 'JWT' || Object.keys(result.header).some((key) => !['alg', 'typ'].includes(key))) throw new Error();
-    if (Object.keys(payload).some((key) => !['externalSubject', 'displayName', 'email', 'iss', 'aud', 'iat', 'exp'].includes(key))) throw new Error();
+    if (Object.keys(payload).some((key) => !['externalSubject', 'displayName', 'email', 'emailVerified', 'iss', 'aud', 'iat', 'exp'].includes(key))) throw new Error();
     if (payload.iss !== config.mode || payload.aud !== config.audience || !Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp) || payload.iat! > now || payload.exp! <= now || payload.exp! <= payload.iat! || payload.exp! - payload.iat! > SESSION_SECONDS) throw new Error();
+    if (payload.emailVerified !== undefined && config.mode !== 'OIDC') throw new Error();
     const identity = normalizedIdentity(payload);
     if (identity.displayName !== payload.displayName || identity.email !== payload.email) throw new Error();
     return identity;

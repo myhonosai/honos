@@ -1,9 +1,30 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadMembershipDateHistory, loadMembershipDateQueue, loadMembershipStatusSummary, previewMembershipDates, prepareMembershipDateRevision, reviseMembershipDates, MembershipDatesError } from '../src/components/membership-dates-http';
 import { scope, id, history, preview, receipt, input, report, envelope, rejected } from './membership-dates-fixtures';
+import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 const school = { organizationId: scope.organizationId, schoolId: scope.schoolId };
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('0178 exact staff frontend transport', () => {
+  it.each(['history', 'confirmation'])('broadcasts %s 401 before waiting for the error body', async kind => {
+    const events = new EventTarget(); vi.stubGlobal('window', events);
+    const invalidated = vi.fn(); events.addEventListener(HON_SESSION_INVALIDATED_EVENT, invalidated);
+    let settle!: (value: string) => void;
+    const response = rejected(401, 'VALIDATION_FAILED');
+    vi.spyOn(response, 'text').mockImplementation(() => new Promise(done => { settle = done; }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+    const work = kind === 'history' ? loadMembershipDateHistory(scope) : reviseMembershipDates(prepareMembershipDateRevision(scope, input(), id('8')));
+    const refusal = expect(work).rejects.toMatchObject({ status: 401 });
+    await Promise.resolve(); await Promise.resolve();
+    expect(invalidated).toHaveBeenCalledTimes(1);
+    settle('{}'); await refusal;
+  });
+  it('keeps a school-level 403 local without invalidating authenticated sessions', async () => {
+    const events = new EventTarget(); vi.stubGlobal('window', events);
+    const invalidated = vi.fn(); events.addEventListener(HON_SESSION_INVALIDATED_EVENT, invalidated);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(rejected(403, 'MEMBERSHIP_DATE_HISTORY_FORBIDDEN'));
+    await expect(loadMembershipDateHistory(scope)).rejects.toMatchObject({ status: 403 });
+    expect(invalidated).not.toHaveBeenCalled();
+  });
   it('uses closed POST read markers, no command key, credentials and no-store, and independent report scope', async () => {
     const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(history(), false, true)).mockResolvedValueOnce(envelope(preview())).mockResolvedValueOnce(envelope({ items: [], next: null }, false, true)).mockResolvedValueOnce(envelope(report(), false, true));
     await loadMembershipDateHistory(scope); await previewMembershipDates(scope, { changeKind: 'CORRECTION' }); await loadMembershipDateQueue(school, { limit: 10 }); await loadMembershipStatusSummary(school);

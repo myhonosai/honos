@@ -1,3 +1,11 @@
+import { SchoolOwnerInvitationController, SchoolAccountHumanGuard } from './accounts/school-owner-invitation.controller.js';
+import { SchoolOwnerInvitationService } from './accounts/school-owner-invitation.service.js';
+import { SaasSubscriptionGenerationService } from './saas-pricing/saas-subscription-generation.service.js';
+import { SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController } from './saas-pricing/saas-subscription-generation.controller.js';
+import { SaasPriceAcceptanceService } from './saas-pricing/saas-price-acceptance.service.js';
+import { SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController } from './saas-pricing/saas-price-acceptance.controller.js';
+import { SaasTrialsService } from './saas-trials/saas-trials.service.js';
+import { SaasTrialsHqController } from './saas-trials/saas-trials.controller.js';
 import { CrmAdultMembershipDraftController } from './billing/crm-adult-membership-draft.controller.js';
 import { CrmAdultMembershipDraftService } from './billing/crm-adult-membership-draft.service.js';
 import { CrmAdultMembershipDraftFromPlanController, MembershipPlanController } from './billing/membership-plan.controller.js';
@@ -187,6 +195,12 @@ import { CommunicationMessageController } from './communication/communication-me
 import { CommunicationMessageService } from './communication/communication-message.service.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
+import { ZernioIntegrationController, ZernioHumanUiGuard } from './integrations/zernio.controller.js';
+import { ZernioIntegrationService } from './integrations/zernio.service.js';
+import { ZERNIO_RUNTIME, ZernioCredentialRuntime } from './integrations/zernio-runtime.js';
+import { A2pPreparationController, A2pPreparationHumanGuard } from './a2p/a2p-preparation.controller.js';
+import { A2pPreparationService } from './a2p/a2p-preparation.service.js';
+import { A2P_WEBSITE_INSPECTOR, UnavailableA2pWebsiteInspector } from './a2p/a2p-inspector.js';
 import { HqOverviewService } from './hq/hq-overview.service.js';
 import { HqEntitlementController } from './hq/hq-entitlement.controller.js';
 import { HqEntitlementService } from './hq/hq-entitlement.service.js';
@@ -196,9 +210,10 @@ import { ChampionsClubService } from './champions/champions-club.service.js';
 import { ChampionsCommandGuard, ChampionsReadGuard } from './champions/champions-club.guards.js';
 import { SaasBillingHqController, SaasCreditsSchoolController } from './saas-billing/saas-billing.controller.js';
 import { SaasBillingService } from './saas-billing/saas-billing.service.js';
-import { PaymentWebhookController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
+import { SaasOffersHqController, SaasOffersSchoolController } from './saas-billing/saas-offers.controller.js';
+import { PaymentWebhookController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
 import { SaasPaymentsService } from './payments/saas-payments.service.js';
-import { SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
+import { SaasExceptionPolicyHqController, SaasAccessExceptionCommandsHqController, SaasAccessExceptionsHqController, SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
 import { SaasSchoolBillingService } from './school-billing/saas-school-billing.service.js';
 import { LanguageCommandGuard, LanguagePreferencesService, LanguageReadGuard, MyLanguagePreferenceController, SchoolLanguageDefaultController } from './preferences/language-preferences.controller.js';
 import { PAYMENT_PROVIDER_ADAPTER, UnconfiguredPaymentProvider } from './payments/payment-provider.js';
@@ -244,7 +259,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
 
 @Module({
   imports: [ClassPassModule, KioskModule],
-  controllers: [OwnerLaunchController,
+  controllers: [SchoolOwnerInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
     StaffCurriculumLibraryController, ParentCurriculumLibraryController,
     AchievementsController, ParentAchievementsController,
@@ -338,12 +353,15 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqController,
     HqOnboardingController,
     HqAiProviderController,
+    ZernioIntegrationController,
+    A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasBillingHqController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
+  providers: [SchoolOwnerInvitationService, SchoolAccountHumanGuard,
+    SaasSubscriptionGenerationService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
     AchievementsService, AchievementHumanUiGuard,
@@ -457,6 +475,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InvoiceHumanUiGuard,
     HqOnboardingService,
     HqAiProviderService,
+    ZernioIntegrationService, ZernioHumanUiGuard,
+    { provide: ZERNIO_RUNTIME, useFactory: () => new ZernioCredentialRuntime() },
+    A2pPreparationService, A2pPreparationHumanGuard,
+    {provide:A2P_WEBSITE_INSPECTOR,useFactory:()=>new UnavailableA2pWebsiteInspector()},
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,

@@ -1,4 +1,6 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
+import { activatePreD9ProvisionedSchool } from './pre-d9-provisioning-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B5.1 (0170) integrity proof: school-owner billing reads and the INACTIVE B6 paid-access
@@ -114,6 +116,8 @@ try{
  for(const sig of ['read_saas_school_billing_account(text,uuid)','read_saas_school_invoices(text,uuid,text,text,timestamptz,uuid,integer)','read_saas_school_invoice(text,uuid,uuid)','read_saas_access_readiness_from_hq(text,uuid)'])
   assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,true,sig);
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
 
  // ---------- fixture ----------
  await admin.query('BEGIN');
@@ -140,6 +144,8 @@ try{
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Billing Reads Martial Arts LLC',
   displayName:'Billing Reads Martial Arts',schoolName:'Billing Reads Main',schoolSlug:`b51-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
  A={id:provisioned.organizationId,school:provisioned.schoolId,school2:randomUUID(),clerkRole:randomUUID()};
+ // This fixture stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED).
+ await activatePreD9ProvisionedSchool(admin,provisioned.organizationId);
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.role_permissions WHERE role_id=$1 AND permission_code='billing.hon.view'",[provisioned.ownerRoleId])).rows[0].n,1,
   'A newly registered school owner can view their own billing.');
  await admin.query('BEGIN');
@@ -355,6 +361,7 @@ try{
  assert.equal(reservation.status,'RESERVED');
  console.log('PASS: HON school billing reads B5.1 (simulated Stripe + HQ attestation) — billing.hon.view at the exact school (HQ, support, clerk, family-named role, revoked grant and other organizations refused); organization-level billing across two schools; complete keyset pagination stable under a concurrent invoice; drafts, HQ notes and internal references hidden; provider-verified versus HQ-recorded payments; refunds and chargebacks; entitlement, activation (never from payment) and B3 allowance from canonical records; HQ dry run of the proposed paid-access terms (ACTIVE, RESTRICTED, SUSPENDED, ENDED) with enforcement NONE; access program cannot be activated; no write.');
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  await cleanup().catch(e=>console.error('cleanup failed',e.message));
  await Promise.allSettled([admin.end(),restricted.end(),database.onModuleDestroy?.()]);
 }

@@ -1,0 +1,50 @@
+{
+  "baseline": "8c1c0af12a5d9f6030b4c53d81741d6bd511204c",
+  "chainSha256": "c80ec2889fc1049e350ddbd0e1c8b67c07ebffa9cac0da6b278d630ee71d7ec4",
+  "targets": [
+    {
+      "file": "0181_hon_os_commercial_offers.sql",
+      "sha256": "b7f642044940d6badcf38d208844f270b4fb4a4bc2524cbe20c10db7c8553cdf"
+    },
+    {
+      "file": "0182_hon_os_purchase_binding.sql",
+      "sha256": "7682715818dd9297a9e2ee79abd59c5329fc94b5c17c7b4ad58c80cf59569173"
+    },
+    {
+      "file": "0183_hon_os_new_school_onboarding.sql",
+      "sha256": "3f7442a8899f7acabd25e393ba7fd82ab174255e33f859366038e2bb78890cfb"
+    },
+    {
+      "file": "0184_hon_os_only_new_sales.sql",
+      "sha256": "5ab955b068e5ef0bdddb93b43097ff488a6e0a6905cf9a56afb422ce0cf6e412"
+    },
+    {
+      "file": "0185_secure_hq_school_provisioning.sql",
+      "sha256": "1c47d29a62f28710b9d5907c695abc0236997a49f1af646ac6b8c680d04e12d7"
+    },
+    {
+      "file": "0186_saas_exception_policy_approval.sql",
+      "sha256": "03b5f331cb982e28e3b704e86e249422ddeaea54caef6bc414390ea279d0ac43"
+    },
+    {
+      "file": "0187_customer_trial_governance.sql",
+      "sha256": "ff9f9d8a5f768b8d3bc1d8c3f44b4ff64faea3ce72602ff455ebf81b86d25c66"
+    },
+    {
+      "file": "0188_immutable_pricing_acceptance.sql",
+      "sha256": "fb7bd8bbb78f9fc92a45e3a6645fd435073b092a594e870ba84422c5eb396c8b"
+    },
+    {
+      "file": "0189_provider_subscription_schedule_foundation.sql",
+      "sha256": "0ed32867b17b9e606f9b76237f54ef6bc2238895ebab66fc23c96027f9c84d08"
+    },
+    {
+      "file": "0190_a2p_registration_preparation.sql",
+      "sha256": "266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638"
+    },
+    {
+      "file": "0191_school_owner_invitations.sql",
+      "sha256": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f"
+    }
+  ]
+}

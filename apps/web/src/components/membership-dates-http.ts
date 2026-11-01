@@ -5,6 +5,7 @@ import {
   type MembershipDateRevisionPreviewInput, type ConfirmMembershipDateRevisionInput, type MembershipDateConfirmationQueueInput,
 } from '@hon/contracts';
 import { membershipActivationPath, type KnownMembership } from './membership-activation-http';
+import { reportConfirmedSessionInvalidation } from './session-invalidation';
 
 export type DateScope = Pick<KnownMembership, 'organizationId' | 'schoolId'>;
 export type DateRequest = Readonly<{ scope: Readonly<KnownMembership>; body: string; key: string }>;
@@ -44,6 +45,9 @@ function school(scope: DateScope): string {
 }
 async function result(response: Response, commandMeta: boolean): Promise<{ data: unknown; replayed: boolean }> {
   if (!response.ok) {
+    // Conceal all mounted protected surfaces before consuming an asynchronous error body.
+    // A school permission refusal is local; it is not evidence that the session expired.
+    if (response.status === 401) reportConfirmedSessionInvalidation();
     let code = '';
     try { const raw = await response.text(); if (raw.length < 4000) { const e = JSON.parse(raw); if (typeof e?.code === 'string' && Object.hasOwn(messages, e.code)) code = e.code; } } catch { /* Never render raw error details. */ }
     const uncertain = ![400, 401, 403, 404, 405, 409, 413, 415, 422].includes(response.status) || code === 'IDEMPOTENCY_IN_PROGRESS';

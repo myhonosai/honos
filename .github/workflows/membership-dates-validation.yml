@@ -1,0 +1,100 @@
+name: Staff membership dates verification
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/web/src/components/membership-dates-*'
+      - 'apps/web/src/app/staff/billing/membership-dates/**'
+      - 'apps/web/test/membership-dates-*'
+      - 'apps/web/scripts/membership-dates-*'
+      - 'apps/web/public/manus-routes.json'
+      - '.github/workflows/membership-dates-validation.yml'
+permissions:
+  contents: read
+concurrency:
+  group: membership-dates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  checks:
+    name: Repository tests, typecheck, build and migrations
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm check
+      - run: pnpm build
+      - run: pnpm db:check
+      - run: git diff --exit-code
+  database:
+    name: Complete disposable PostgreSQL security proofs
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
+      - run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/api build
+      - run: sudo systemctl start postgresql.service && pg_isready -h /var/run/postgresql -p 5432
+      - run: .github/scripts/run-db-proofs.sh
+  commercial:
+    name: Guarded commercial regression rehearsal
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/api build
+      - name: Prepare only the disposable runner database
+        run: |
+          set -euo pipefail
+          sudo systemctl start postgresql.service
+          pg_isready -h /var/run/postgresql -p 5432
+          sudo mkdir -p /home/ubuntu/jobs
+          sudo chown "$(id -u):$(id -g)" /home/ubuntu /home/ubuntu/jobs
+          chmod 700 /home/ubuntu/jobs
+          mkdir -m 700 "$RUNNER_TEMP/hon-dates-commercial"
+      - name: Existing commercial rehearsal without provider access or inherited secrets
+        run: |
+          set -euo pipefail
+          env -i "PATH=$PATH" "HOME=$HOME" LANG=C.UTF-8 GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+            node packages/database/scripts/run-commercial-staging-validation.mjs --confirm-disposable-local --report "$RUNNER_TEMP/hon-dates-commercial/report.json"
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hon-membership-dates-commercial-${{ github.run_id }}
+          path: ${{ runner.temp }}/hon-dates-commercial/report.json
+          retention-days: 7
+          if-no-files-found: warn
+      - if: always()
+        run: git diff --exit-code

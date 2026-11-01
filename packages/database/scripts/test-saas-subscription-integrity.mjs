@@ -1,4 +1,6 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
+import { addUtcMonthsClamped, verifyUtcMonthFixtures } from './commercial-staging-month-fixtures.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B1 (0154) integrity proof through the real API service on a disposable
@@ -60,6 +62,7 @@ const cmd=(id,version,action,reasonCode,extra={})=>api.commandSubscription(H('ow
 await Promise.all([admin.connect(),restricted.connect()]);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
+ await verifyUtcMonthFixtures(admin, 'B1');
  // ---------- runtime posture ----------
  for(const t of [...saasTables,'saas_policy_decisions'])await sqlDeny(restricted.query(`SELECT * FROM hon.${t}`));
  for(const sig of ['require_saas_hq_actor(text,boolean)','saas_claim_request(uuid,uuid,text,text,uuid,uuid)','saas_founder_inventory(timestamptz)','saas_plan_capabilities(text)'])
@@ -67,6 +70,8 @@ try{
 
  // ---------- fixture ----------
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
  await admin.query('BEGIN');
  for(const h of Object.values(humans)){await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[h.user,h.subject,`${h.user}@example.test`]);await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[h.id,h.user]);}
  for(const[n,o]of Object.entries(O)){
@@ -186,7 +191,7 @@ try{
  // ---------- 6. lifecycle ----------
  let x=(await ok(cmd(s4.subscriptionId,1,'START_SERVICE','SERVICE_STARTED'))).subscription;
  assert.equal(x.status,'IN_SERVICE');assert.equal(x.currentPeriod.index,0);assert.equal(x.currentPeriod.startsAt,x.serviceStartedAt);
- const anchor=new Date(x.serviceStartedAt);const plusMonths=n=>{const d=new Date(anchor);d.setUTCMonth(d.getUTCMonth()+n);return d.toISOString();};
+ const plusMonths=n=>addUtcMonthsClamped(x.serviceStartedAt,n);
  assert.equal(x.currentPeriod.endsAt,plusMonths(1));
  await deny(api.commandSubscription(H('operator'),s4.subscriptionId,{action:'SUSPEND',expectedVersion:2,reasonCode:'OWNER_HOLD'},K()),403,'SAAS_FORBIDDEN');
  await deny(cmd(s4.subscriptionId,1,'SUSPEND','OWNER_HOLD'),409,'SAAS_VERSION_CONFLICT');
@@ -198,7 +203,7 @@ try{
  await withoutGuards('saas_subscriptions',`UPDATE hon.saas_subscriptions SET service_started_at=service_started_at-interval '40 days',period_anchor_at=period_anchor_at-interval '40 days',
   current_period_start=current_period_start-interval '40 days',current_period_end=current_period_start-interval '40 days'+interval '1 month' WHERE id=$1`,[s4.subscriptionId]);
  x=(await ok(cmd(s4.subscriptionId,2,'ADVANCE_PERIOD','PERIOD_ELAPSED'))).subscription;
- const a2=new Date(x.serviceStartedAt),m=n=>{const d=new Date(a2);d.setUTCMonth(d.getUTCMonth()+n);return d.toISOString();};
+ const m=n=>addUtcMonthsClamped(x.serviceStartedAt,n);
  assert.deepEqual(x.currentPeriod,{index:1,startsAt:m(1),endsAt:m(2)});assert.equal(x.paymentStatus,'NOT_BILLED');
  await deny(cmd(s4.subscriptionId,3,'ADVANCE_PERIOD','PERIOD_ELAPSED'),422,'SAAS_PERIOD_NOT_ENDED');
  x=(await ok(cmd(s4.subscriptionId,3,'SUSPEND','ACCOUNT_REVIEW'))).subscription;assert.equal(x.status,'SUSPENDED');assert.equal(x.currentPeriod.index,1);
@@ -297,5 +302,6 @@ try{
  assert.deepEqual(await untouched(),before,'No entitlement, school billing, AI usage, Champions or shared audit/outbox row changed.');
  console.log(`PASS: HON subscription catalog B1 proof — ${commands} commands with exact evidence; owner-only publication; atomic founder inventory under concurrency; entitlement-linked records; undecided policies refused; financial activation pinned off.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }

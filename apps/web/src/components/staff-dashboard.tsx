@@ -8,6 +8,7 @@ import { loadCurrentStaffReportingSchool, type CurrentStaffReportingSchool } fro
 import { loadStaffReportingSchools, type StaffReportingSchools, type StaffReportingSchoolChoice } from './staff-reporting-schools-http';
 import { loadOwnerLaunch, loadOwnerLaunchFirstClassBookingContext, loadOwnerLaunchMembershipDraft } from './owner-launch-http';
 import { InterfaceThemePicker } from './interface-theme-picker';
+import { HonTeamBand } from './hon-command/hon-command';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
 import styles from './staff-dashboard.module.css';
 
@@ -382,8 +383,9 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   const attendanceHref = selection ? attendanceScopeHref(selection.organizationId, selection.schoolId) : '/staff/attendance';
   const verifiedSchoolName = selection ? schoolChoices.find((school) => school.organizationId === selection.organizationId && school.schoolId === selection.schoolId) : undefined;
   return <main className={`${styles.page} ${themeClass}`} data-interface-theme={interfaceTheme}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href={classPassHref}>ClassPass &amp; Walk-In</a><a href={attendanceHref}>Attendance workbench</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/staff/hon?return=%2Fstaff%2Fdashboard">HON AI team</a><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href={classPassHref}>ClassPass &amp; Walk-In</a><a href={attendanceHref}>Attendance workbench</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
+    {snapshot && selection && <HonTeamBand scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} variant={interfaceTheme} />}
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
     <section className={styles.scopeSection} aria-labelledby="scope-heading">
       <div><h2 id="scope-heading">Current verified school</h2><p>A single eligible current school loads automatically without entering IDs. For multiple eligible schools, choose one explicitly. Manual fallback: enter already-known staff-context IDs. Loading validates the exact organization, school, active human session, and <code>reporting.view</code> authority through the existing school operations report.</p></div>

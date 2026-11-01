@@ -1709,3 +1709,271 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 -- End HON paid-access B6A exact reconciliation.
+
+-- HON OS commercial offers (0181) exact reconciliation: three private deny-all tables, private helpers and eight runtime
+-- entry points (HQ offer management reads and owner commands, and the school purchaser discovery read).
+DO $$ DECLARE t text; r text; col text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_saas_offer_sets()','hon.guard_saas_offer_set_offers()','hon.saas_hon_os_product_json()',
+      'hon.saas_offer_json(hon.saas_offer_set_offers)','hon.saas_offer_set_json(uuid)','hon.saas_offer_set_preview(uuid)',
+      'hon.saas_offer_set_content_valid(jsonb)','hon.saas_offer_set_write_content(uuid,jsonb)','hon.saas_offer_owner(text)',
+      'hon.read_saas_offer_management_from_hq(text)','hon.read_saas_offer_set_from_hq(text,uuid)',
+      'hon.create_saas_offer_set_draft(text,jsonb,uuid,uuid,uuid)','hon.revise_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)',
+      'hon.discard_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)','hon.publish_saas_offer_set(text,uuid,jsonb,uuid,uuid,uuid)',
+      'hon.stop_saas_offer_sales(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_saas_hon_os_offers_for_school(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_offer_management_from_hq(text), hon.read_saas_offer_set_from_hq(text,uuid),
+      hon.create_saas_offer_set_draft(text,jsonb,uuid,uuid,uuid), hon.revise_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.discard_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid), hon.publish_saas_offer_set(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.stop_saas_offer_sales(text,uuid,jsonb,uuid,uuid,uuid), hon.read_saas_hon_os_offers_for_school(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End HON OS commercial offers exact reconciliation.
+
+-- HON OS purchase binding (0182) exact reconciliation: private purchase helpers and one runtime entry point (the school
+-- purchaser's test-mode HON OS checkout). The purchase columns live in already private deny-all tables.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.saas_hon_os_billing_interval(text)','hon.saas_hon_os_recurring(hon.saas_offer_set_offers)',
+      'hon.saas_hon_os_offer_on_sale(hon.saas_offer_set_offers,timestamptz)','hon.saas_hon_os_accepted_offer(hon.saas_offer_set_offers)',
+      'hon.saas_hon_os_digest(jsonb)','hon.saas_hon_os_offer_usage(uuid,timestamptz,uuid)','hon.saas_hon_os_founder_usage(timestamptz,uuid)',
+      'hon.saas_hon_os_refusal(uuid,hon.saas_offer_set_offers,timestamptz)','hon.saas_open_hon_os_checkout(uuid,uuid,uuid,uuid,timestamptz)',
+      'hon.saas_hon_os_purchase_json(hon.saas_checkout_sessions)','hon.create_saas_hon_os_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid)',
+      'hon.saas_activate_hon_os_checkout(uuid,jsonb,timestamptz)','hon.saas_planned_monthly_credits(hon.saas_subscriptions)',
+      'hon.saas_refund_window_hours(uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_saas_hon_os_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- End HON OS purchase binding exact reconciliation.
+
+-- HON OS new-school onboarding (0183) exact reconciliation: the registration initializer and the HON OS activation core
+-- are private (no runtime role may execute them). Replaced functions keep their existing grants.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.initialize_saas_hon_os_school_account(text,jsonb,uuid,uuid,uuid)',
+      'hon.saas_activate_hon_os_checkout_core(uuid,jsonb,timestamptz,boolean)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+END $$;
+-- End HON OS new-school onboarding exact reconciliation.
+
+-- HON OS-only new sales (0184, owner decision D8) exact reconciliation: the pinned new-sales policy is a private deny-all
+-- table, and its read helper and the legacy new-sale guard are private. Replaced functions keep their existing grants.
+DO $$ DECLARE r text; col text; f text; BEGIN
+  ALTER TABLE hon.saas_new_sales_policy ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE hon.saas_new_sales_policy FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON TABLE hon.saas_new_sales_policy FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.saas_new_sales_policy FROM %I',r);
+  END LOOP;
+  FOR col IN SELECT attname FROM pg_attribute WHERE attrelid='hon.saas_new_sales_policy'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.saas_new_sales_policy FROM PUBLIC',col);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.saas_new_sales_policy FROM %I',col,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.saas_legacy_new_sales_open()','hon.guard_saas_legacy_new_sale()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+END $$;
+-- End HON OS-only new sales exact reconciliation.
+
+-- Secure HQ school provisioning (0185, owner decision D9) exact reconciliation: the HQ-owner access exception table is a
+-- private deny-all table; its guards and helpers are private; only the four HQ commands and read are runtime-callable.
+-- Replaced functions (provisioning, the HQ tier transition, HON OS refusal and offers read, B6A place-awaiting and the
+-- Champions contest counts) keep their existing grants; the awaiting-state exception guard is private.
+DO $$ DECLARE r text; col text; f text; BEGIN
+  ALTER TABLE hon.saas_access_exceptions ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE hon.saas_access_exceptions FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON TABLE hon.saas_access_exceptions FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.saas_access_exceptions FROM %I',r);
+  END LOOP;
+  FOR col IN SELECT attname FROM pg_attribute WHERE attrelid='hon.saas_access_exceptions'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.saas_access_exceptions FROM PUBLIC',col);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.saas_access_exceptions FROM %I',col,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_saas_access_exceptions()','hon.guard_saas_access_exception_grant()','hon.guard_saas_access_state_exception()',
+    'hon.saas_access_exception_live(uuid)',
+    'hon.saas_access_exception_json(hon.saas_access_exceptions)','hon.saas_end_access_exception(uuid,text,text,uuid,timestamp with time zone)',
+    'hon.grant_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)','hon.revoke_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',
+    'hon.close_expired_saas_access_exceptions(text,uuid,uuid,uuid)','hon.read_saas_access_exceptions_from_hq(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.grant_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.revoke_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.close_expired_saas_access_exceptions(text,uuid,uuid,uuid) TO hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.read_saas_access_exceptions_from_hq(text,uuid) TO hon_runtime;
+END $$;
+-- End secure HQ school provisioning exact reconciliation.
+
+-- D10 exception-only policy: exact private-table/function privilege reconciliation.
+DO $$ DECLARE r text; c text; f text; BEGIN
+  ALTER TABLE hon.saas_exception_policy_decisions ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE hon.saas_exception_policy_decisions FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON TABLE hon.saas_exception_policy_decisions FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.saas_exception_policy_decisions FROM %I',r);
+  END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid='hon.saas_exception_policy_decisions'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.saas_exception_policy_decisions FROM PUBLIC',c);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.saas_exception_policy_decisions FROM %I',c,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_saas_exception_policy_decision()','hon.verify_saas_exception_policy_evidence()','hon.verify_saas_exception_policy_binding()','hon.saas_exception_policy_json(hon.saas_exception_policy_decisions)','hon.saas_require_exception_policy()','hon.decide_saas_exception_policy(text,jsonb,uuid,uuid,uuid)','hon.read_saas_exception_policy(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.decide_saas_exception_policy(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_saas_exception_policy(text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- D11-A customer trial governance: metadata only; no activation endpoint.
+
+-- Exact private table/column/function ACLs. No public/signup/activation or issuance function exists.
+DO $$ DECLARE r text;t text;c text;f text;BEGIN
+ FOREACH t IN ARRAY ARRAY['saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications'] LOOP
+  EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r);END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['hon.saas_trial_keys(jsonb,text[])','hon.saas_trial_uint(jsonb,bigint,bigint)','hon.saas_trial_choices(jsonb,jsonb)','hon.saas_trial_timestamp(jsonb)','hon.saas_trial_policy_valid(jsonb)','hon.saas_trial_campaign_valid(jsonb)','hon.saas_trial_policy_json(hon.saas_trial_policy_versions)','hon.saas_trial_decision_json(hon.saas_trial_policy_decisions)','hon.saas_trial_campaign_json(hon.saas_trial_campaign_versions)','hon.saas_trial_publication_json(hon.saas_trial_publications)','hon.saas_trial_begin(text,uuid,text,jsonb,uuid,uuid)','hon.saas_trial_preview(uuid)','hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid)','hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid)','hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid)','hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)','hon.withdraw_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)','hon.guard_saas_trial_insert()','hon.verify_saas_trial_evidence()','hon.read_saas_trial_governance(text)','hon.read_saas_trial_campaign(text,uuid)','hon.preview_saas_trial_publication(text,uuid)'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);END LOOP;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+ GRANT EXECUTE ON FUNCTION hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.withdraw_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.read_saas_trial_governance(text) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.read_saas_trial_campaign(text,uuid) TO hon_runtime;
+ GRANT EXECUTE ON FUNCTION hon.preview_saas_trial_publication(text,uuid) TO hon_runtime;
+ END IF;
+END $$;
+
+-- Commercial A2 exact private-table/function reconciliation (0188). No provider or activation authority.
+DO $$ DECLARE r text;t text;c text;f text;BEGIN
+ FOREACH t IN ARRAY ARRAY['saas_price_schedules','saas_price_acceptances'] LOOP
+  EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+  EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r); END LOOP;
+  FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+   EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+  END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['hon.saas_price_usd(integer)','hon.saas_price_content(uuid,uuid)',
+  'hon.saas_price_schedule_json(hon.saas_price_schedules)','hon.saas_price_acceptance_json(hon.saas_price_acceptances)',
+  'hon.saas_price_lock_authority()','hon.record_saas_price_schedule(text,jsonb,uuid,uuid,uuid)',
+  'hon.saas_price_acceptance_preview(uuid,uuid,uuid)','hon.preview_saas_price_acceptance(text,uuid,uuid)',
+  'hon.accept_saas_price_schedule(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_saas_price_schedule(text,uuid)',
+  'hon.read_saas_price_acceptance(text,uuid,uuid)','hon.guard_saas_price_insert()','hon.verify_saas_price_evidence()',
+  'hon.guard_saas_price_provider_boundary()'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+  GRANT EXECUTE ON FUNCTION hon.record_saas_price_schedule(text,jsonb,uuid,uuid,uuid),hon.preview_saas_price_acceptance(text,uuid,uuid),
+   hon.accept_saas_price_schedule(text,uuid,jsonb,uuid,uuid,uuid),hon.read_saas_price_schedule(text,uuid),hon.read_saas_price_acceptance(text,uuid,uuid) TO hon_runtime;
+ END IF;
+END $$;
+
+-- Commercial B1 0189 private intent only. Never provider or payment authority.
+DO $$ DECLARE r text;c text;f text; BEGIN
+ REVOKE ALL ON TABLE hon.saas_subscription_generations FROM PUBLIC;
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.saas_subscription_generations FROM %I',r); END LOOP;
+ FOR c IN SELECT attname FROM pg_attribute WHERE attrelid='hon.saas_subscription_generations'::regclass AND attnum>0 AND NOT attisdropped LOOP
+  EXECUTE format('REVOKE ALL (%I) ON hon.saas_subscription_generations FROM PUBLIC',c);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.saas_subscription_generations FROM %I',c,r); END LOOP;
+ END LOOP;
+ FOREACH f IN ARRAY ARRAY['hon.saas_generation_lock_authority()','hon.saas_generation_content(uuid,uuid)','hon.saas_generation_json(hon.saas_subscription_generations)',
+  'hon.saas_generation_available(uuid)','hon.record_saas_subscription_generation(text,uuid,jsonb,uuid,uuid,uuid)',
+  'hon.read_saas_subscription_generation(text,uuid,uuid)','hon.read_saas_subscription_generation_from_hq(text,uuid)',
+  'hon.guard_saas_generation_insert()','hon.verify_saas_generation_evidence()'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+  GRANT EXECUTE ON FUNCTION hon.record_saas_subscription_generation(text,uuid,jsonb,uuid,uuid,uuid),
+   hon.read_saas_subscription_generation(text,uuid,uuid),hon.read_saas_subscription_generation_from_hq(text,uuid) TO hon_runtime;
+ END IF;
+END $$;
+
+
+-- A2P-1 read-only preparation scope (0190): no new table or provider grants.
+DO $$ DECLARE r text; BEGIN
+ IF to_regprocedure('hon.read_a2p_preparation_scope(text)') IS NULL THEN RAISE EXCEPTION 'Apply A2P-1 migration 0190 first'; END IF;
+ FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role','hon_outbox_worker','hon_runtime'] LOOP
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION hon.read_a2p_preparation_scope(text) FROM %I',r); END IF;
+ END LOOP;
+ REVOKE ALL ON FUNCTION hon.read_a2p_preparation_scope(text) FROM PUBLIC;
+ GRANT EXECUTE ON FUNCTION hon.read_a2p_preparation_scope(text) TO hon_runtime;
+END $$;
+
+-- P0-1 0191 private school account custody and fixed function grants.
+DO $$ DECLARE t text; r text; f text; c text; BEGIN
+  FOREACH t IN ARRAY ARRAY['school_owner_invitations','school_account_requests','school_account_events'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['guard_school_account_evidence()','guard_school_owner_invitation()','lock_school_account_authority()',
+    'check_school_owner_acceptance(text,text,jsonb,uuid)',
+    'school_invitation_json(hon.school_owner_invitations)','school_account_result(hon.school_owner_invitations)',
+    'school_account_record(text,uuid,text,uuid,text,jsonb)','manage_school_owner_invitation(text,text,jsonb,uuid)',
+    'accept_school_owner_invitation(text,text,jsonb,uuid)','read_school_owner_invitations(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.manage_school_owner_invitation(text,text,jsonb,uuid),hon.accept_school_owner_invitation(text,text,jsonb,uuid),hon.read_school_owner_invitations(text,uuid) TO hon_runtime;
+  END IF;
+END $$;

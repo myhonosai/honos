@@ -47,6 +47,14 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 
 /** Human-command header values, one per command route. */
 export const SAAS_COMMANDS = {
+  recordSubscriptionGeneration: 'saas-subscription-generation-record',
+  recordPriceSchedule: 'saas-price-schedule-record',
+  acceptPriceSchedule: 'saas-price-schedule-accept',
+  proposeTrialPolicy: 'saas-trial-policy-propose',
+  decideTrialPolicy: 'saas-trial-policy-decide',
+  draftTrialCampaign: 'saas-trial-campaign-draft',
+  publishTrialCampaign: 'saas-trial-campaign-publish',
+  withdrawTrialCampaign: 'saas-trial-campaign-withdraw',
   createCatalogDraft: 'saas-catalog-draft',
   publishCatalog: 'saas-catalog-publish',
   reserveFounder: 'saas-founder-reserve',
@@ -75,6 +83,16 @@ export const SAAS_COMMANDS = {
   recoverPaymentEvents: 'saas-payment-recover',
   awaitFirstPayment: 'saas-access-await',
   retryFirstPaymentActivation: 'saas-access-retry',
+  createOfferSetDraft: 'saas-offer-set-draft',
+  reviseOfferSetDraft: 'saas-offer-set-revise',
+  discardOfferSetDraft: 'saas-offer-set-discard',
+  publishOfferSet: 'saas-offer-set-publish',
+  stopOfferSales: 'saas-offer-sales-stop',
+  startHonOsCheckout: 'saas-hon-os-checkout-start',
+  grantAccessException: 'saas-access-exception-grant',
+  revokeAccessException: 'saas-access-exception-revoke',
+  closeExpiredAccessExceptions: 'saas-access-exception-close',
+  decideExceptionPolicy: 'saas-access-exception-policy-decision',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
@@ -163,10 +181,21 @@ export interface SaasFounderReservation {
 }
 export interface SaasFounderReservationList { reservations: SaasFounderReservation[]; inventory: SaasFounderInventory; limit: 200 }
 export interface SaasFounderReservationReceipt { reservation: SaasFounderReservation; inventory: SaasFounderInventory; replayed: boolean }
+/**
+ * Offer kinds a sold record (checkout, subscription, invoice, refund) can carry: the legacy catalog kinds plus the HON OS
+ * kinds (0182). A HON OS record has source HON_OS_OFFER, no catalog version and no legacy founder reservation.
+ */
+export const SAAS_SOLD_OFFER_KINDS = ['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME','REGULAR_ANNUAL','FOUNDER_ANNUAL','LIFETIME'] as const;
+export type SaasSoldOfferKind = typeof SAAS_SOLD_OFFER_KINDS[number];
+export type SaasSoldBillingInterval = 'MONTHLY' | 'ANNUAL' | 'LIFETIME';
+/** The billing interval the server derives from a sold offer kind. */
+export function saasSoldInterval(kind: unknown): SaasSoldBillingInterval {
+  return kind === 'LIFETIME' || kind === 'FOUNDER_LIFETIME' ? 'LIFETIME' : kind === 'REGULAR_ANNUAL' || kind === 'FOUNDER_ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+}
 export interface SaasSubscription {
-  subscriptionId: string; organizationId: string; organizationName: string; source: 'CATALOG_OFFER' | 'LEGACY_ENTITLEMENT';
-  catalogVersion: number | null; offerId: string | null; planCode: SaasPlanCode; entitlementTier: SaasPlanCode; offerKind: SaasOfferKind | null;
-  billingInterval: 'MONTHLY' | 'LIFETIME' | 'NONE'; priceMinor: number | null; currency: 'USD'; founderReservationId: string | null;
+  subscriptionId: string; organizationId: string; organizationName: string; source: 'CATALOG_OFFER' | 'LEGACY_ENTITLEMENT' | 'HON_OS_OFFER';
+  catalogVersion: number | null; offerId: string | null; planCode: SaasPlanCode; entitlementTier: SaasPlanCode; offerKind: SaasSoldOfferKind | null;
+  billingInterval: SaasSoldBillingInterval | 'NONE'; priceMinor: number | null; currency: 'USD'; founderReservationId: string | null;
   status: SaasSubscriptionStatus; statusReason: SaasSubscriptionReason; version: number; serviceStartedAt: string | null;
   currentPeriod: { index: number | null; startsAt: string; endsAt: string | null } | null;
   paymentStatus: SaasSubscriptionPaymentStatus; paidThroughAt: string | null; chargesEnabled: false;
@@ -338,25 +367,28 @@ function validateSubscription(value: unknown, withName = true): void {
   exactKeys(s, ['subscriptionId','organizationId',...(withName ? ['organizationName'] : []),'source','catalogVersion','offerId','planCode','entitlementTier','offerKind',
     'billingInterval','priceMinor','currency','founderReservationId','status','statusReason','version','serviceStartedAt','currentPeriod',
     'paymentStatus','paidThroughAt','chargesEnabled','premiumCredits','createdAt','updatedAt'], drift);
-  const catalog = s.source === 'CATALOG_OFFER';
-  if (!isUuid(s.subscriptionId) || !isUuid(s.organizationId) || (withName && !text(s.organizationName, 300)) || !has(['CATALOG_OFFER','LEGACY_ENTITLEMENT'], s.source)
+  const catalog = s.source === 'CATALOG_OFFER', honOs = s.source === 'HON_OS_OFFER', periodic = s.billingInterval === 'MONTHLY' || s.billingInterval === 'ANNUAL';
+  if (!isUuid(s.subscriptionId) || !isUuid(s.organizationId) || (withName && !text(s.organizationName, 300))
+    || !has(['CATALOG_OFFER','LEGACY_ENTITLEMENT','HON_OS_OFFER'], s.source)
     || !has(PLAN_CODES, s.planCode) || s.entitlementTier !== s.planCode || s.currency !== 'USD'
     || (catalog ? !isInt(s.catalogVersion, 1, 2147483647) || !isUuid(s.offerId) || !has(OFFER_KINDS, s.offerKind) || !isInt(s.priceMinor, 100, 10_000_000)
         || s.billingInterval !== (s.offerKind === 'FOUNDER_LIFETIME' ? 'LIFETIME' : 'MONTHLY') || s.planCode === 'ESSENTIAL'
         || (s.founderReservationId === null) !== (s.offerKind === 'REGULAR_MONTHLY')
+      : honOs ? s.catalogVersion !== null || !isUuid(s.offerId) || !has(SAAS_SOLD_OFFER_KINDS, s.offerKind) || !isInt(s.priceMinor, 100, 10_000_000)
+        || s.billingInterval !== saasSoldInterval(s.offerKind) || s.planCode !== 'COMPLETE' || s.founderReservationId !== null
       : s.catalogVersion !== null || s.offerId !== null || s.offerKind !== null || s.priceMinor !== null || s.billingInterval !== 'NONE' || s.founderReservationId !== null)
     || !nullable(s.founderReservationId, isUuid)
     || !has(SAAS_SUBSCRIPTION_STATUSES, s.status) || !has(SUBSCRIPTION_REASONS, s.statusReason) || !isInt(s.version, 1, 2147483647)
     || !nts(s.serviceStartedAt) || (s.serviceStartedAt !== null) !== (s.status === 'IN_SERVICE' || s.status === 'SUSPENDED')
-    || !has(SAAS_SUBSCRIPTION_PAYMENT_STATUSES, s.paymentStatus) || !nts(s.paidThroughAt) || (s.billingInterval !== 'MONTHLY' && s.paidThroughAt !== null)
-    || (!catalog && s.paymentStatus !== 'NOT_BILLED')
+    || !has(SAAS_SUBSCRIPTION_PAYMENT_STATUSES, s.paymentStatus) || !nts(s.paidThroughAt) || (!periodic && s.paidThroughAt !== null)
+    || (!catalog && !honOs && s.paymentStatus !== 'NOT_BILLED')
     || s.chargesEnabled !== false || !ts(s.createdAt) || !ts(s.updatedAt)) drift();
   if (s.currentPeriod === null) {
     if (s.serviceStartedAt !== null && s.billingInterval !== 'NONE') drift();
   } else {
     const p = record(s.currentPeriod, drift); exactKeys(p, ['index','startsAt','endsAt'], drift);
     if (s.serviceStartedAt === null || s.billingInterval === 'NONE' || !ts(p.startsAt)
-      || (s.billingInterval === 'MONTHLY' ? !count(p.index) || !ts(p.endsAt) : p.index !== null || p.endsAt !== null)) drift();
+      || (periodic ? !count(p.index) || !ts(p.endsAt) : p.index !== null || p.endsAt !== null)) drift();
   }
   const c = record(s.premiumCredits, drift); exactKeys(c, ['plannedMonthlyAllowance','status'], drift);
   if (!nullable(c.plannedMonthlyAllowance, count) || c.status !== 'NOT_GRANTED') drift();

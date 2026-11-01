@@ -37,6 +37,20 @@ export class SaasPlanSchoolController {
   }
 }
 
+/**
+ * School purchaser's HON OS purchase (0182, test mode): staff with billing.hon.purchase at the exact school send only the
+ * published offer ID. A started checkout is cancelled through the hon-plan cancel route like any school checkout.
+ */
+@Controller('schools/:schoolId/hon-os-offers')
+@UseGuards(HonIdentityGuard)
+export class SaasHonOsCheckoutSchoolController {
+  constructor(private readonly payments: SaasPaymentsService) {}
+  @Post('checkout') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.startHonOsCheckout)
+  async checkout(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.payments.startSchoolHonOsCheckout(subject(req), schoolId, body, key) };
+  }
+}
+
 /** HQ view and control of the test-mode payment program, checkouts, provider events and reconciliation. */
 @Controller('hq/saas/payments')
 @UseGuards(HonIdentityGuard)

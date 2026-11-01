@@ -1,4 +1,6 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
+import { addUtcMonthsClamped, verifyUtcMonthFixtures } from './commercial-staging-month-fixtures.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B3 (0156) integrity proof through the real API service on a disposable
@@ -75,11 +77,14 @@ const balance=async(org)=>(await api.readOrganizationCredits(H('operator'),org))
 await Promise.all([admin.connect(),restricted.connect()]);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
+ await verifyUtcMonthFixtures(admin, 'B3', { allowancePeriods: true });
  // ---------- runtime posture ----------
  for(const t of b3Tables)await sqlDeny(restricted.query(`SELECT * FROM hon.${t}`));
  for(const sig of ['saas_current_allowance(uuid,uuid,timestamptz)','saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)','require_saas_school_actor(text,uuid)','saas_record_thresholds(uuid,timestamptz)'])
   assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,false,sig);
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
 
  // ---------- fixture ----------
  await admin.query('BEGIN');
@@ -232,8 +237,8 @@ try{
  assert.deepEqual([allowB.balance.allowanceCredits,allowB.allowanceBasis,allowB.planCode,allowB.balance.heldCredits,allowB.balance.availableCredits,allowB.balance.usedPercent],
   [12000,'LIFETIME','COMPLETE',12000,0,100]);
  assert.deepEqual(allowB.thresholds.map(t=>[t.thresholdPercent,t.notification]),[[75,'NOT_SENT'],[90,'NOT_SENT'],[100,'NOT_SENT']]);
- const anchorB=new Date(subs.B.serviceStartedAt),endB=new Date(anchorB);endB.setUTCMonth(endB.getUTCMonth()+1);
- assert.deepEqual([allowB.periodStart,allowB.periodEnd,allowB.periodIndex],[subs.B.serviceStartedAt,endB.toISOString(),0]);
+ const endB=addUtcMonthsClamped(subs.B.serviceStartedAt,1);
+ assert.deepEqual([allowB.periodStart,allowB.periodEnd,allowB.periodIndex],[subs.B.serviceStartedAt,endB,0]);
  assert.equal((await api.estimatePremiumOperation(H('staffB'),O.B.school,{operation:'research.deep',units:'1'})).refusal,'SAAS_CREDITS_EXHAUSTED');
  await deny(reserve('staffB',O.B.school,'research.deep',1),422,'SAAS_CREDITS_EXHAUSTED'); // no top-up, no overage
  const wonB=won.map(r=>r.value.reservation);
@@ -319,5 +324,6 @@ try{
  assert.deepEqual(await untouched(),before,'No entitlement, school billing, HON invoice/evidence, Champions or shared audit row changed.');
  console.log(`PASS: HON premium credits B3 proof — ${commands} commands with exact evidence; owner-gated program; verified-cost-linked pricing; one allowance per period; idempotent reserve; finalize/release/unknown/resolve; exact balance under 8-way contention; 75/90/100 thresholds and hard stop; plan capabilities; suspension; expiry without rollover; provider cost kept apart from credits; no billing or Champions effect.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }

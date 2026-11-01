@@ -3,6 +3,7 @@ import './globals.css';
 import { readLocaleContext } from '../server/locale-context';
 import { LocaleProvider } from '../components/localization/provider';
 import { LocaleUtility } from '../components/localization/utility';
+import { HonLauncherSlot } from '../components/hon-command/hon-launcher-slot';
 
 export const metadata: Metadata = {
   title: 'HON | School Operations',
@@ -16,7 +17,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const locale = await readLocaleContext();
   return (
     <html lang={locale.preferences.language}>
-      <body><LocaleProvider key={locale.scope ?? 'public'} scope={locale.scope} initial={locale.preferences}><LocaleUtility/>{children}</LocaleProvider></body>
+      <body><LocaleProvider key={locale.scope ?? 'public'} scope={locale.scope} initial={locale.preferences}><LocaleUtility/>{children}<HonLauncherSlot/></LocaleProvider></body>
     </html>
   );
 }

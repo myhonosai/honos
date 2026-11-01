@@ -1,4 +1,6 @@
+import { schoolAccountTables, verifySchoolAccountSecurity } from './school-account-security.mjs';
 import { verifyCrmLeadCloseSecurity } from './crm-lead-close-security.mjs';
+import { verifyA2pPreparationSecurity } from './a2p-preparation-security.mjs';
 import { verifyParentPlannedAbsenceRequestSecurity } from './parent-planned-absence-request-security.mjs';
 import { verifyPlannedAbsenceReviewSecurity } from './planned-absence-review-security.mjs';
 import { curriculumLibraryTables,verifyCurriculumLibrarySecurity } from './curriculum-library-security.mjs';
@@ -26,6 +28,8 @@ import { verifyRetentionReviewSecurity } from './retention-review-security.mjs';
 import { ownerLaunchTables, verifyOwnerLaunchSecurity } from './owner-launch-security.mjs';
 import { requireOwnerLaunchLocalUrls } from './owner-launch-local-guard.mjs';
 import pg from 'pg';
+import { verifiedDatabaseConnection } from '../dist/index.js';
+import { verifyPlatformLeastPrivilege } from './platform-least-privilege-security.mjs';
 import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
 import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
@@ -81,6 +85,7 @@ const expectedRlsTables = [
   ...communityTables,
   ...championsClubTables,
   ...saasBillingTables,
+  ...schoolAccountTables,
   ...languagePreferenceTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
   'crm_follow_ups', 'crm_follow_up_versions', 'crm_follow_up_requests',
@@ -233,10 +238,7 @@ const curriculumFunctions = [
   ['hon.guard_curriculum_structure_identity()', false, false],
 ];
 
-const client = new Client({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-});
+const client = new Client(verifiedDatabaseConnection(process.env.DATABASE_URL));
 await client.connect();
 try {
   await verifyOwnerLaunchSecurity(client,runtimeRoleName);
@@ -289,6 +291,8 @@ try {
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyChampionsClubSecurity(client, runtimeRoleName);
   await verifySaasBillingSecurity(client, runtimeRoleName);
+  await verifyA2pPreparationSecurity(client, runtimeRoleName);
+  await verifySchoolAccountSecurity(client, runtimeRoleName);
   await verifyLanguagePreferenceSecurity(client, runtimeRoleName);
   await verifyVoiceSecurity(client,runtimeRoleName);
   await verifyHumanWorkSecurity(client,runtimeRoleName);
@@ -814,6 +818,7 @@ try {
   }
 
   await verifyCrmLeadCloseSecurity(client, runtimeRoleName);
+  await verifyPlatformLeastPrivilege(client);
   const context = await client.query("SELECT hon.current_organization_id() AS organization_id, hon.current_school_id() AS school_id");
   if (context.rows[0].organization_id !== null || context.rows[0].school_id !== null) {
     throw new Error('Connection began with unexpected residual tenant context.');

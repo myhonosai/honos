@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { assertWebStartupConfiguration } from './src/server/web-startup';
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@hon/design-system'],
@@ -8,4 +9,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function configureNext(phase: string): NextConfig {
+  assertWebStartupConfiguration(phase);
+  return nextConfig;
+}

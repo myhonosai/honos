@@ -13,6 +13,7 @@ import { PlanAccessError } from './membership-plans/http';
 import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
 import { requirementText } from './membership-activation-copy';
 import { type KnownMembership } from './membership-activation-http';
+import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from './session-invalidation';
 import { loadMembershipDateHistory, loadMembershipDateQueue, loadMembershipStatusSummary, previewMembershipDates, prepareMembershipDateRevision,
   reviseMembershipDates, MembershipDatesError, type DateRequest, type DateResult } from './membership-dates-http';
 import styles from './membership-dates-workbench.module.css';
@@ -36,6 +37,7 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
   const epoch = useRef(0), abort = useRef<AbortController | null>(null), instance = useRef(0), concealed = useRef(false), sensitive = useRef(false);
   const active = useRef<DateRequest | null>(null), retained = useRef<DateRequest | null>(null), lastView = useRef<View>('membership');
   const shieldHeading = useRef<HTMLHeadingElement | null>(null), finalHeading = useRef<HTMLHeadingElement | null>(null);
+  const privateView = useRef<HTMLDivElement | null>(null);
   const locked = busy || pending !== null;
   sensitive.current = !!(scope.organizationId || scope.schoolId || scope.membershipId || history || preview || queue || report || saved || pending || reading);
   const school = () => ({ organizationId: scope.organizationId, schoolId: scope.schoolId });
@@ -43,12 +45,16 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
   function invalidate(): void { epoch.current++; abort.current?.abort(); setReading(false); }
   function conceal(): void {
     if (!sensitive.current) return;
+    // React may batch state updates; hide protected content synchronously on lifecycle events.
+    if (privateView.current) { privateView.current.hidden = true; privateView.current.inert = true; }
     concealed.current = true; setHidden(true); invalidate(); setSummary(null); setConfirmed(false); setError(''); setNotice('');
   }
   useEffect(() => {
     const blur = () => conceal(), visibility = () => { if (document.visibilityState !== 'visible') conceal(); };
-    window.addEventListener('blur', blur); document.addEventListener('visibilitychange', visibility);
-    return () => { instance.current++; epoch.current++; abort.current?.abort(); active.current = null; window.removeEventListener('blur', blur); document.removeEventListener('visibilitychange', visibility); };
+    const events = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
+    for (const event of events) window.addEventListener(event, blur);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { instance.current++; epoch.current++; abort.current?.abort(); active.current = null; for (const event of events) window.removeEventListener(event, blur); document.removeEventListener('visibilitychange', visibility); };
   }, [sessionSubject]);
   useEffect(() => { if (hidden) shieldHeading.current?.focus(); else if (summary) finalHeading.current?.focus(); }, [hidden, summary]);
   function editScope(key: keyof KnownMembership, value: string): void {
@@ -79,7 +85,10 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
     const { run, controller } = startRead(); setPreview(null); setCanRevise(false); resetReview(); lastView.current = 'membership';
     try {
       await verifyEnrollmentSession(sessionSubject, controller.signal);
+      if (run !== epoch.current || concealed.current) return;
       const data = await previewMembershipDates(target, { changeKind: nextKind, ...(proposed ?? {}) }, controller.signal);
+      if (run !== epoch.current || concealed.current) return;
+      await verifyEnrollmentSession(sessionSubject, controller.signal);
       if (run !== epoch.current || concealed.current) return;
       setPreview(data); setKind(nextKind); setCanRevise(data.state === 'ACTIVE');
       setDates({ startDate: data.proposedDates.startDate ?? '', endDate: data.proposedDates.endDate });
@@ -91,7 +100,9 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
     const { run, controller } = startRead(); setHistory(null); setPreview(null); setQueue(null); setReport(null); setDates(null); setSaved(null); setCanRevise(false); resetReview(); lastView.current = 'membership';
     try {
       await verifyEnrollmentSession(sessionSubject, controller.signal);
+      if (run !== epoch.current || concealed.current) return;
       const next = await loadMembershipDateHistory(target, controller.signal);
+      if (run !== epoch.current || concealed.current) return;
       // A successful preview is the server-backed capability check. Read-only staff can still see authorized history.
       let candidate: MembershipDateRevisionPreview | null = null;
       const nextKind = next.datesConfirmed ? 'CORRECTION' : 'INITIAL_CONFIRMATION';
@@ -99,6 +110,7 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
         try { candidate = await previewMembershipDates(target, { changeKind: nextKind, ...(next.currentPeriod ? { startDate: next.currentPeriod.startDate, endDate: next.currentPeriod.endDate } : {}) }, controller.signal); }
         catch (e) { if (!(e instanceof MembershipDatesError && e.status === 403)) throw e; }
       }
+      await verifyEnrollmentSession(sessionSubject, controller.signal);
       if (run !== epoch.current || concealed.current) return;
       setScope(target); setHistory(next); setPreview(candidate); setCanRevise(candidate !== null);
       setKind(nextKind);
@@ -112,8 +124,9 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
     const { run, controller } = startRead(); setHistory(null); setPreview(null); setDates(null); setSaved(null); setCanRevise(false); setQueue(null); setReport(null); resetReview(); lastView.current = view;
     try {
       await verifyEnrollmentSession(sessionSubject, controller.signal);
-      if (view === 'queue') { const data = await loadMembershipDateQueue(school(), { ...(after ? { after } : {}), limit: 10 }, controller.signal); if (run === epoch.current && !concealed.current) setQueue(data); }
-      else { const data = await loadMembershipStatusSummary(school(), controller.signal); if (run === epoch.current && !concealed.current) setReport(data); }
+      if (run !== epoch.current || concealed.current) return;
+      if (view === 'queue') { const data = await loadMembershipDateQueue(school(), { ...(after ? { after } : {}), limit: 10 }, controller.signal); await verifyEnrollmentSession(sessionSubject, controller.signal); if (run === epoch.current && !concealed.current) setQueue(data); }
+      else { const data = await loadMembershipStatusSummary(school(), controller.signal); await verifyEnrollmentSession(sessionSubject, controller.signal); if (run === epoch.current && !concealed.current) setReport(data); }
     } catch (e) { readFailure(e, run); }
     finally { if (run === epoch.current) setReading(false); }
   }
@@ -145,6 +158,8 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
       if (concealed.current) { setNotice('No command was sent. Verify access, then explicitly retry the retained request.'); return; }
       const result = await reviseMembershipDates(request);
       if (instance.current !== life || active.current !== request) return;
+      await verifyEnrollmentSession(sessionSubject, AbortSignal.timeout(15_000));
+      if (instance.current !== life || active.current !== request) return;
       retained.current = null; setPending(null); setSaved(result); setPreview(null); setDates(null); setHistory(null); setCanRevise(false);
     } catch (e) {
       if (instance.current !== life || active.current !== request) return;
@@ -166,6 +181,7 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
     const { run, controller } = startRead();
     try {
       await verifyEnrollmentSession(sessionSubject, controller.signal);
+      if (run !== epoch.current || !concealed.current) return;
       const target = retained.current?.scope ?? scope;
       let nextHistory: MembershipDateHistory | null = null, nextQueue: MembershipDateConfirmationQueue | null = null, nextReport: SchoolMembershipStatusSummary | null = null;
       if (lastView.current === 'membership') {
@@ -176,6 +192,7 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
         }
       } else if (lastView.current === 'queue') nextQueue = await loadMembershipDateQueue(school(), { limit: 10 }, controller.signal);
       else nextReport = await loadMembershipStatusSummary(school(), controller.signal);
+      await verifyEnrollmentSession(sessionSubject, controller.signal);
       if (run !== epoch.current || !concealed.current || document.visibilityState !== 'visible') return;
       setHistory(nextHistory); setQueue(nextQueue); setReport(nextReport); setPreview(null); setDates(null); setCanRevise(false); resetReview(); concealed.current = false; setHidden(false);
       setNotice('Session and current exact-school access verified. Historical receipts are separate from current history. Review again before a new change; retry is always explicit.');
@@ -198,7 +215,7 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
       {busy && <p role="status">The in-flight command is settling safely. Restoration and Discard remain unavailable until settlement.</p>}
       <button type="button" disabled={busy || reading} onClick={() => void restore()}>Verify access and resume</button><a href="/auth/login">Sign in again</a>
       <CrmEnrollmentDiscard disabled={busy || reading} onDiscard={discard} label="Discard local date view" />
-    </section> : <>
+    </section> : <div ref={privateView}>
       <section><h2>Verified school and membership</h2><p>Enter known identifiers. Selectors confer no authority. No data or command is loaded from a URL.</p>
         <form onSubmit={event => { event.preventDefault(); void load(); }}><fieldset disabled={locked}>
           <div className={styles.row}>{(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{key === 'organizationId' ? 'Organization ID' : key === 'schoolId' ? 'School ID' : 'Already-known membership ID'}<input autoComplete="off" maxLength={36} required value={scope[key]} onChange={event => editScope(key, event.target.value)} /></label>)}</div>
@@ -239,7 +256,7 @@ export function MembershipDatesWorkbench({ sessionSubject }: { sessionSubject?: 
       {saved && <section><h2>Membership date revision receipt</h2><p>{saved.replayed ? 'Verified idempotent replay.' : 'Revision recorded.'} Historical receipt · {instant(saved.receipt.recordedAt)} · membership version {saved.receipt.version}</p>{period(saved.receipt.effectivePeriod.startDate, saved.receipt.effectivePeriod.endDate, saved.receipt.effectivePeriod.schoolTimezone)}<p>Effective status at revision: {saved.receipt.effectiveStatusAtRevision}.</p>{saved.receipt.effectiveStatusAtRevision === 'SCHEDULED' && <p>Membership confirmed — scheduled to begin {calendar(saved.receipt.effectivePeriod.startDate)}.</p>}<p>Past days added {number(saved.receipt.retroactiveDays.added)} · removed {number(saved.receipt.retroactiveDays.removed)}.</p><p>Warnings acknowledged: {saved.receipt.acknowledgedWarnings.map(readable).join('; ') || 'None'}</p>{saved.receipt.followUps.map(f => <p key={f.workItemId}>A billing review reminder was created; no payment, invoice or schedule was changed.</p>)}<p>No financial effects. This receipt does not prove payment, agreement, consent or financial enrollment.</p><button type="button" disabled={reading} onClick={() => void load()}>Refresh verified current dates and history</button></section>}
       {queue && <section><h2>Legacy date confirmation queue</h2><p>Unconfirmed hints only. Review each membership individually; no bulk confirmation is available.</p>{queue.items.length === 0 ? <p>No unconfirmed memberships were returned in this page.</p> : <ul>{queue.items.map(item => <li key={item.membershipId}><strong>{item.participantDisplayName ?? 'Name unavailable'}</strong><p>{item.planCode} · unconfirmed start {instant(item.legacyStoredTerm.termStartedAt)} · unconfirmed exclusive end {instant(item.legacyStoredTerm.termEndsAt)}</p><button type="button" disabled={locked || reading} onClick={() => void load({ ...scope, membershipId: item.membershipId })}>Review individual membership · {item.participantDisplayName ?? item.membershipId}</button></li>)}</ul>}{queue.next && <button type="button" disabled={locked || reading} onClick={() => void auxiliary('queue', queue.next!)}>Next legacy queue page</button>}</section>}
       {report && <section><h2>School membership status summary</h2><p>Backend-calculated totals · {report.schoolTimezone} · school-local today {calendar(report.localToday)} · generated {instant(report.generatedAt)}</p><h3>Lifecycle totals</h3><dl>{Object.entries(report.lifecycle).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{number(value)}</dd></React.Fragment>)}</dl><h3>ACTIVE by confirmed effective status</h3><dl>{Object.entries(report.activeByEffectiveStatus).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{number(value)}</dd></React.Fragment>)}</dl><h3>UNDATED · unconfirmed stored-term hints</h3><dl>{Object.entries(report.undatedHints).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{number(value)}</dd></React.Fragment>)}</dl><p>Confirmed starts in next 30 school-local days: {number(report.confirmedStartingNext30Days)}. Confirmed ends: {number(report.confirmedEndingNext30Days)}. Window through {calendar(report.windowEndDate)}.</p></section>}
-    </>}
+    </div>}
     {reading && <p role="status">Verifying current session and authorized school facts…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.notice}>{notice}</p>}
   </main>;
 }

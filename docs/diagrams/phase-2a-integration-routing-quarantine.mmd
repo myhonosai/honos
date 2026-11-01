@@ -1,0 +1,64 @@
+flowchart TB
+  RAW[RAW_BYTES]
+  SIGN[SIGNING_KEY_VERIFICATION]
+  INST[VERIFIED_INSTALLATION]
+
+  RAW -->|fixed endpoint / installation\nno body trust| SIGN
+  SIGN -->|unknown, revoked, disabled, invalid,\nor cutover-ineligible key context| SIG_REJECT[SIGNATURE_REJECTED]
+  SIGN -->|eligible signing key\nverifies raw bytes| INST
+  INST -->|envelope/schema cannot parse| MALFORMED[MALFORMED_REJECTED]
+  INST -->|adapter/schema not allowlisted| UNSUPPORTED[UNSUPPORTED_VERSION_QUARANTINED]
+
+  subgraph boundaryA[Boundary A — ingress reservation, deduplication, and routing]
+    RESERVE[RECEIPT_RESERVED\nstable event identity locked\ndelivery attempt appended]
+    BIND[BINDING_RESOLUTION\nresolve and pin historical binding]
+    REPLAY[REPLAY_RECORDED]
+    CONFLICT[IDENTITY_CONFLICT]
+    RETRY_AMBIG[RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED]
+    RECOVER[RECONCILE_ORIGINAL_DURABLE_EVIDENCE\noriginal verified identity and digest only\nno new receipt, case, or CRM effect]
+    UNKNOWN[UNKNOWN_BINDING_QUARANTINED]
+    AMBIG[AMBIGUOUS_BINDING_QUARANTINED]
+    ROUTED[ROUTED_TO_REVIEW]
+  end
+
+  INST -->|eligible authenticated envelope| RESERVE
+  RESERVE -->|same identity + verified digest| REPLAY
+  RESERVE -->|same identity + different verified digest| CONFLICT
+  RESERVE -->|durable prior outcome cannot be proven| RETRY_AMBIG
+  RETRY_AMBIG -->|must reconcile original evidence before response claim| RECOVER
+  RESERVE -->|new identity| BIND
+  BIND -->|no unique historical binding| UNKNOWN
+  BIND -->|multiple bindings or unprovable cutover| AMBIG
+  BIND -->|new eligible resolved occurrence| ROUTED
+
+  ACK[Adapter response gate\nonly after the applicable durable outcome commits\nretry-ambiguous: only after original evidence reconciliation\n2xx only where provider policy permits\nnever CRM creation]
+  REPLAY --> ACK
+  CONFLICT --> ACK
+  RECOVER --> ACK
+  UNSUPPORTED --> ACK
+  UNKNOWN --> ACK
+  AMBIG --> ACK
+  ROUTED --> ACK
+
+  PRENOTE[Pre-tenant signing purpose only:\nserver-recorded current or approved-overlap signing generations.\nNever resolve API/data credentials, enumerate tenant keys,\nor confer school authority.]
+  SIGN -. applies .-> PRENOTE
+
+  ORDERNOTE[Reservation is a Boundary A annotation, not a lifecycle enum:\n1 reserve + append delivery; 2 classify replay/conflict;\n3 only new identity resolves/pins historical binding;\n4 commit applicable durable outcome before response.]
+  RESERVE -. required order .-> ORDERNOTE
+
+  POSTNOTE[A later separately approved provider/data operation needs a distinct credential\nand a current verified school connection, exact asset grant/capability,\nauthorization, purpose, and lifecycle check.]
+  BIND -. separate future operation .-> POSTNOTE
+
+  UNKNOWNNOTE[No school queue or candidate unless independent stored evidence proves one school.\nDefault without approved operator plane: reject.]
+  UNKNOWN -. boundary .-> UNKNOWNNOTE
+  AMBIGNOTE[Never route by current mapping, label, externalId, default account, or selector.]
+  AMBIG -. boundary .-> AMBIGNOTE
+
+  classDef receipt fill:#eaf7ff,stroke:#126782,color:#082a39
+  classDef reject fill:#fff0f1,stroke:#a51c30,color:#4a0610
+  classDef durable fill:#eefbf4,stroke:#197345,color:#092b18
+  classDef note fill:#fff9e8,stroke:#886500,color:#332600
+  class RAW,SIGN,INST,RESERVE,BIND receipt
+  class SIG_REJECT,MALFORMED,UNSUPPORTED,UNKNOWN,AMBIG,RETRY_AMBIG,CONFLICT reject
+  class REPLAY,ROUTED,RECOVER,ACK durable
+  class PRENOTE,ORDERNOTE,POSTNOTE,UNKNOWNNOTE,AMBIGNOTE note

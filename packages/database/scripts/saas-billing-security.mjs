@@ -3,7 +3,7 @@
 // HON-bills-schools records,
 // separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
-export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
+export const saasBillingTables = ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
  'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
  'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence',
  'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
@@ -11,11 +11,12 @@ export const saasBillingTables = ['saas_policy_decisions','saas_catalog_versions
  'saas_refund_requests','saas_refund_history','saas_reward_fulfillment','saas_reward_applications','saas_account_credit_ledger',
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions'];
-const evidenceTables = ['saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
+ 'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
+ 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications'];
+const evidenceTables = ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
- 'saas_access_program','saas_access_policy_terms','saas_access_transitions'];
+ 'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
@@ -23,6 +24,29 @@ const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
 const invoicingTables = ['saas_invoice_sequences','saas_invoices'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const saasBillingFunctions = [
+ ['hon.saas_generation_lock_authority()',false,false],
+ ['hon.saas_generation_content(uuid,uuid)',false,false],
+ ['hon.saas_generation_json(hon.saas_subscription_generations)',false,false],
+ ['hon.saas_generation_available(uuid)',false,false],
+ ['hon.record_saas_subscription_generation(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_subscription_generation(text,uuid,uuid)',true,true],
+ ['hon.read_saas_subscription_generation_from_hq(text,uuid)',true,true],
+ ['hon.guard_saas_generation_insert()',false,true],
+ ['hon.verify_saas_generation_evidence()',false,true],
+ ['hon.saas_price_usd(integer)',false,false],
+ ['hon.saas_price_content(uuid,uuid)',false,false],
+ ['hon.saas_price_schedule_json(hon.saas_price_schedules)',false,false],
+ ['hon.saas_price_acceptance_json(hon.saas_price_acceptances)',false,false],
+ ['hon.saas_price_lock_authority()',false,false],
+ ['hon.record_saas_price_schedule(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.saas_price_acceptance_preview(uuid,uuid,uuid)',false,false],
+ ['hon.preview_saas_price_acceptance(text,uuid,uuid)',true,true],
+ ['hon.accept_saas_price_schedule(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_price_schedule(text,uuid)',true,true],
+ ['hon.read_saas_price_acceptance(text,uuid,uuid)',true,true],
+ ['hon.guard_saas_price_insert()',false,true],
+ ['hon.verify_saas_price_evidence()',false,true],
+ ['hon.guard_saas_price_provider_boundary()',false,false],
  ['hon.saas_plan_capabilities(text)',false,false],
  ['hon.guard_saas_evidence()',false,false],
  ['hon.guard_saas_records()',false,false],
@@ -163,12 +187,121 @@ export const saasBillingFunctions = [
  ['hon.read_saas_organization_access_from_hq(text,uuid)',true,true],
  ['hon.place_saas_organization_awaiting_payment(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.retry_saas_first_payment_activation(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0181 HON OS commercial offers (HQ Pricing & Offers; no checkout connection)
+ ['hon.guard_saas_offer_sets()',false,false],
+ ['hon.guard_saas_offer_set_offers()',false,false],
+ ['hon.saas_hon_os_product_json()',false,false],
+ ['hon.saas_offer_json(hon.saas_offer_set_offers)',false,false],
+ ['hon.saas_offer_set_json(uuid)',false,false],
+ ['hon.saas_offer_set_preview(uuid)',false,false],
+ ['hon.saas_offer_set_content_valid(jsonb)',false,false],
+ ['hon.saas_offer_set_write_content(uuid,jsonb)',false,false],
+ ['hon.saas_offer_owner(text)',false,false],
+ ['hon.read_saas_offer_management_from_hq(text)',true,true],
+ ['hon.read_saas_offer_set_from_hq(text,uuid)',true,true],
+ ['hon.create_saas_offer_set_draft(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.revise_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.discard_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.publish_saas_offer_set(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.stop_saas_offer_sales(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_hon_os_offers_for_school(text,uuid)',true,true],
+ // 0182 HON OS purchase binding (test-mode checkout of published HON OS offers)
+ ['hon.saas_hon_os_billing_interval(text)',false,false],
+ ['hon.saas_hon_os_recurring(hon.saas_offer_set_offers)',false,false],
+ ['hon.saas_hon_os_offer_on_sale(hon.saas_offer_set_offers,timestamp with time zone)',false,false],
+ ['hon.saas_hon_os_accepted_offer(hon.saas_offer_set_offers)',false,false],
+ ['hon.saas_hon_os_digest(jsonb)',false,false],
+ ['hon.saas_hon_os_offer_usage(uuid,timestamp with time zone,uuid)',false,false],
+ ['hon.saas_hon_os_founder_usage(timestamp with time zone,uuid)',false,false],
+ ['hon.saas_hon_os_refusal(uuid,hon.saas_offer_set_offers,timestamp with time zone)',false,false],
+ ['hon.saas_open_hon_os_checkout(uuid,uuid,uuid,uuid,timestamp with time zone)',false,false],
+ ['hon.saas_hon_os_purchase_json(hon.saas_checkout_sessions)',false,false],
+ ['hon.saas_activate_hon_os_checkout(uuid,jsonb,timestamp with time zone)',false,false],
+ ['hon.saas_planned_monthly_credits(hon.saas_subscriptions)',false,false],
+ ['hon.saas_refund_window_hours(uuid)',false,false],
+ ['hon.create_saas_hon_os_checkout_from_school(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ // 0183 HON OS new-school onboarding (D7): private registration and the HON OS activation core
+ ['hon.initialize_saas_hon_os_school_account(text,jsonb,uuid,uuid,uuid)',false,true],
+ ['hon.saas_activate_hon_os_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',false,false],
+ // 0184 HON OS-only new sales (D8): the pinned policy read and the legacy new-sale guard
+ ['hon.saas_legacy_new_sales_open()',false,false],
+ ['hon.guard_saas_legacy_new_sale()',false,false],
+ // 0185 secure HQ provisioning (D9): HQ-owner access exceptions
+ ['hon.guard_saas_access_exceptions()',false,false],
+ ['hon.guard_saas_access_exception_grant()',false,false],
+ ['hon.guard_saas_access_state_exception()',false,false],
+ ['hon.saas_access_exception_live(uuid)',false,false],
+ ['hon.saas_access_exception_json(hon.saas_access_exceptions)',false,false],
+ ['hon.saas_end_access_exception(uuid,text,text,uuid,timestamp with time zone)',false,false],
+ ['hon.grant_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.revoke_saas_access_exception(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.close_expired_saas_access_exceptions(text,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_access_exceptions_from_hq(text,uuid)',true,true],
+ // 0186 D10: immutable policy ledger, command/read and private enforcement.
+ ['hon.saas_exception_policy_json(hon.saas_exception_policy_decisions)',false,false],
+ ['hon.saas_require_exception_policy()',false,false],
+ ['hon.guard_saas_exception_policy_decision()',false,false],
+ ['hon.verify_saas_exception_policy_evidence()',false,true],
+ ['hon.verify_saas_exception_policy_binding()',false,true],
+ ['hon.decide_saas_exception_policy(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.read_saas_exception_policy(text)',true,true],
+
+ // D11-A governance only.
+ ['hon.saas_trial_keys(jsonb,text[])',false,false],
+ ['hon.saas_trial_uint(jsonb,bigint,bigint)',false,false],
+ ['hon.saas_trial_choices(jsonb,jsonb)',false,false],
+ ['hon.saas_trial_timestamp(jsonb)',false,false],
+ ['hon.saas_trial_policy_valid(jsonb)',false,false],
+ ['hon.saas_trial_campaign_valid(jsonb)',false,false],
+ ['hon.saas_trial_policy_json(hon.saas_trial_policy_versions)',false,false],
+ ['hon.saas_trial_decision_json(hon.saas_trial_policy_decisions)',false,false],
+ ['hon.saas_trial_campaign_json(hon.saas_trial_campaign_versions)',false,false],
+ ['hon.saas_trial_publication_json(hon.saas_trial_publications)',false,false],
+ ['hon.saas_trial_begin(text,uuid,text,jsonb,uuid,uuid)',false,false],
+ ['hon.saas_trial_preview(uuid)',false,false],
+ ['hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.withdraw_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.guard_saas_trial_insert()',false,true],
+ ['hon.verify_saas_trial_evidence()',false,true],
+ ['hon.read_saas_trial_governance(text)',true,true],
+ ['hon.read_saas_trial_campaign(text,uuid)',true,true],
+ ['hon.preview_saas_trial_publication(text,uuid)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 const crossTriggers = [
+ ['saas_subscription_generations','saas_generation_authority',7,'guard_saas_generation_insert'],
+ ['saas_subscription_generations','saas_generation_evidence',5,'verify_saas_generation_evidence'],
+ ['saas_price_schedules','saas_price_authority',7,'guard_saas_price_insert'],
+ ['saas_price_schedules','saas_price_evidence',5,'verify_saas_price_evidence'],
+ ['saas_price_acceptances','saas_price_authority',7,'guard_saas_price_insert'],
+ ['saas_price_acceptances','saas_price_evidence',5,'verify_saas_price_evidence'],
+ ['saas_checkout_sessions','saas_price_provider_boundary',7,'guard_saas_price_provider_boundary'],
+ ['saas_trial_policy_versions','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_policy_versions','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+ ['saas_trial_policy_decisions','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_policy_decisions','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+ ['saas_trial_campaign_versions','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_campaign_versions','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+ ['saas_trial_publications','saas_trial_authority',7,'guard_saas_trial_insert'],
+ ['saas_trial_publications','saas_trial_evidence',5,'verify_saas_trial_evidence'],
+
+ ['saas_exception_policy_decisions','saas_exception_policy_authority',7,'guard_saas_exception_policy_decision'],
+ ['saas_exception_policy_decisions','saas_exception_policy_evidence',5,'verify_saas_exception_policy_evidence'],
+ ['saas_access_exceptions','saas_exception_policy_binding',5,'verify_saas_exception_policy_binding'],
  ['saas_payment_evidence','saas_referral_alert',5,'saas_evidence_referral_alert'],
  ['saas_invoices','saas_free_period_check',7,'saas_invoice_free_period_check'],
  ['saas_credit_allowances','saas_champions_basis',7,'saas_allowance_free_month_basis'],
+ // 0184: no new legacy sale while legacy sales are closed.
+ ['saas_subscriptions','saas_legacy_new_sale',7,'guard_saas_legacy_new_sale'],
+ ['saas_checkout_sessions','saas_legacy_new_sale',23,'guard_saas_legacy_new_sale'],
+ ['saas_founder_reservations','saas_legacy_new_sale',7,'guard_saas_legacy_new_sale'],
+ // 0185: a new exception must name a current HQ owner and describe the entitlement exactly.
+ ['saas_access_exceptions','saas_exception_authority',7,'guard_saas_access_exception_grant'],
+ // 0185: no access state (awaiting or paid) while an exception is open and unexpired (revoke-first pilot conversion).
+ ['saas_access_states','saas_exception_await',7,'guard_saas_access_state_exception'],
 ];
 export async function verifySaasBillingSecurity(client, runtime) {
  if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe HON subscription runtime role.');
@@ -185,6 +318,9 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
    : paymentTables.includes(table) ? ['guard_saas_payments','saas_guarded',27]
    : table === 'saas_access_states' ? ['guard_saas_access','saas_guarded',27]
+   : table === 'saas_access_exceptions' ? ['guard_saas_access_exceptions','saas_guarded',27]
+   : table === 'saas_offer_sets' ? ['guard_saas_offer_sets','saas_guarded',27]
+   : table === 'saas_offer_set_offers' ? ['guard_saas_offer_set_offers','saas_offer_rows',31]
    : refundRewardTables.includes(table) ? ['guard_saas_refunds_rewards','saas_guarded',27]
    : creditTables.includes(table) ? ['guard_saas_credits','saas_guarded',27]
    : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];

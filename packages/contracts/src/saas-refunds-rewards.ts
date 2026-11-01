@@ -6,7 +6,8 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { validateSaasInvoiceDetail, type SaasInvoiceDetail } from './saas-invoicing.js';
 
-export type SaasRefundOfferKind = 'REGULAR_MONTHLY' | 'FOUNDER_MONTHLY' | 'FOUNDER_LIFETIME';
+/** Legacy catalog kinds plus the HON OS kinds (0182); a HON OS purchase's refund window is its accepted offer's. */
+export type SaasRefundOfferKind = 'REGULAR_MONTHLY' | 'FOUNDER_MONTHLY' | 'FOUNDER_LIFETIME' | 'REGULAR_ANNUAL' | 'FOUNDER_ANNUAL' | 'LIFETIME';
 export type SaasRefundStatus = 'REQUESTED' | 'APPROVED' | 'DENIED' | 'REFUND_EVIDENCED';
 export type SaasRefundStatusReason = 'REQUESTED' | 'GUARANTEE_APPROVED' | 'OWNER_DECLINED_TERMS' | 'FRAUD_SUSPECTED' | 'DUPLICATE_REQUEST'
   | 'REFUND_EVIDENCE_RECORDED';
@@ -20,7 +21,7 @@ export type SaasRewardBlocker = 'SAAS_REWARD_VOIDED' | 'SAAS_REWARD_UNDER_REVIEW
   | 'SAAS_REWARD_SUBSTITUTE_MANUAL' | 'SAAS_REWARD_PAYMENT_ALERT_OPEN' | 'SAAS_REWARD_NO_SUBSCRIPTION' | 'SAAS_REWARD_NOT_APPLICABLE'
   | 'SAAS_REWARD_NOTHING_TO_APPLY' | 'SAAS_REWARDS_NOT_ACTIVE';
 export type SaasAlertResolution = 'ATTRIBUTION_DECIDED' | 'NO_QUALIFICATION_IMPACT';
-const OFFERS: readonly SaasRefundOfferKind[] = ['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME'];
+const OFFERS: readonly SaasRefundOfferKind[] = ['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME','REGULAR_ANNUAL','FOUNDER_ANNUAL','LIFETIME'];
 const REFUND_STATUSES: readonly SaasRefundStatus[] = ['REQUESTED','APPROVED','DENIED','REFUND_EVIDENCED'];
 const REFUND_REASONS: readonly SaasRefundStatusReason[] = ['REQUESTED','GUARANTEE_APPROVED','OWNER_DECLINED_TERMS','FRAUD_SUSPECTED','DUPLICATE_REQUEST','REFUND_EVIDENCE_RECORDED'];
 const DENY_REASONS: readonly SaasRefundDenyReason[] = ['OWNER_DECLINED_TERMS','FRAUD_SUSPECTED','DUPLICATE_REQUEST'];
@@ -39,6 +40,7 @@ export const SAAS_CHAMPIONS_LADDER = {
   firstFreeMonthsCount: 5, firstFreeMonthsTotal: 6, secondFreeMonthsCount: 10, secondFreeMonthsTotal: 12, prizeCount: 20, lifetimeCount: 30,
 } as const;
 export const SAAS_REFUND_WINDOW_DAYS = 30;
+const windowDays = (ms: number) => Number.isInteger(ms / 86_400_000) && ms >= 0 && ms <= 365 * 86_400_000;
 
 // ---------- inputs ----------
 export interface SaasRefundRequestInput { organizationId: string; requestReceivedAt: string; customerReference: string; note: string | null }
@@ -185,7 +187,8 @@ function validateRefund(value: unknown): void {
   if (!isUuid(r.refundRequestId) || !isUuid(r.organizationId) || typeof r.organizationName !== 'string' || !isUuid(r.subscriptionId) || !isUuid(r.invoiceId)
     || typeof r.invoiceNumber !== 'string' || !/^HON-20\d{2}-\d{6}$/.test(r.invoiceNumber) || !has(OFFERS, r.offerKind)
     || !isTimestamp(r.firstPaidAt) || !isTimestamp(r.windowEndsAt) || !isTimestamp(r.requestReceivedAt)
-    || Date.parse(r.windowEndsAt as string) - Date.parse(r.firstPaidAt as string) !== SAAS_REFUND_WINDOW_DAYS * 86_400_000
+    // Legacy purchases: SAAS_REFUND_WINDOW_DAYS. HON OS purchases (0182): the accepted offer's window, whole days, 0 to 365.
+    || !windowDays(Date.parse(r.windowEndsAt as string) - Date.parse(r.firstPaidAt as string))
     || Date.parse(r.requestReceivedAt as string) < Date.parse(r.firstPaidAt as string) || Date.parse(r.requestReceivedAt as string) >= Date.parse(r.windowEndsAt as string)
     || !text(r.customerReference, 200) || !isInt(r.requestedAmountMinor, 1, 200_000_000) || !nullable(r.approvedAmountMinor, (v): v is number => isInt(v, 1, 200_000_000))
     || !has(['HQ_ATTESTED','PROVIDER_VERIFIED'], r.evidenceStrength) || !has(REFUND_STATUSES, r.status) || !has(REFUND_REASONS, r.statusReason)

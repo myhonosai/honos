@@ -6,5 +6,6 @@ dist/
 *.tsbuildinfo
 .env
 .env.*
+.secrets/
 !.env.example
 coverage/

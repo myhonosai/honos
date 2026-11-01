@@ -15,7 +15,11 @@ import { randomUUID } from 'node:crypto';
 const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
 if(owner.hostname!=='localhost'||owner.port!=='5432'||owner.pathname!=='/hon_champions_validation'||owner.username!=='hon_champions_owner'||runtime.hostname!==owner.hostname||runtime.port!==owner.port||runtime.pathname!==owner.pathname||runtime.username!=='hon_champions_runtime')throw new Error('Only exact disposable localhost validation URLs permitted; never remote DB.');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
-const orgs={ACTIVE:{id:randomUUID(),school:randomUUID(),role:randomUUID()},SUSPENDED:{id:randomUUID(),school:randomUUID(),role:randomUUID()}};
+// D9 (0185): an HQ-owner exception carries its expiry and start in the entitlement window, so access must also end at
+// the window's edges without anyone suspending the row. LAPSED is ACTIVE with an expired window, SCHEDULED is ACTIVE
+// with a future start: every function that refuses the SUSPENDED school must refuse them too.
+const orgs={ACTIVE:{id:randomUUID(),school:randomUUID(),role:randomUUID()},SUSPENDED:{id:randomUUID(),school:randomUUID(),role:randomUUID()},
+ LAPSED:{id:randomUUID(),school:randomUUID(),role:randomUUID()},SCHEDULED:{id:randomUUID(),school:randomUUID(),role:randomUUID()}};
 const humans=Object.fromEntries(Object.keys(orgs).map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`b6a-cov-${k}-${randomUUID()}`}]));
 
 function args(f,k,target=k){
@@ -35,6 +39,7 @@ function args(f,k,target=k){
 const OPEN_BY_DESIGN={
  'hon.read_saas_school_billing_account(text,uuid)':'billing recovery: the school sees why access is unavailable and what it owes',
  'hon.read_saas_school_plan_options(text,uuid)':'billing recovery: plan selection and checkout for the first or a renewed payment',
+ 'hon.read_saas_hon_os_offers_for_school(text,uuid)':'billing recovery: the published HON OS offers and the server eligibility decision for this school (read only)',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',
@@ -83,7 +88,9 @@ try{
   await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[h.user,h.subject,`${h.user}@example.test`]);
   await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[h.id,h.user]);
   await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,$2,$2)",[o.id,`B6A Coverage Dojo ${k}`]);
-  await admin.query("INSERT INTO hon.organization_entitlements(organization_id,tier,status,effective_from) VALUES($1,'COMPLETE',$2,clock_timestamp()-interval '90 days')",[o.id,k]);
+  await admin.query("INSERT INTO hon.organization_entitlements(organization_id,tier,status,effective_from,effective_until) VALUES($1,'COMPLETE',$2,$3::timestamptz,$4::timestamptz)",
+   [o.id,k==='SUSPENDED'?'SUSPENDED':'ACTIVE',k==='SCHEDULED'?new Date(Date.now()+86_400_000):new Date(Date.now()-90*86_400_000),
+    k==='LAPSED'?new Date(Date.now()-3_600_000):k==='SCHEDULED'?new Date(Date.now()+30*86_400_000):null]);
   await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1::uuid,$2,$3,$1::text,'America/New_York')",[o.school,o.id,`School ${k}`]);
   await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'OWNER','School Owner',true)",[o.role,o.id]);
   await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) SELECT $1,$2,code FROM hon.permissions",[o.role,o.id]);
@@ -97,9 +104,9 @@ try{
  const results=[];
  await restricted.query('BEGIN');
  for(const f of fns){
-  const act=await call(f,'ACTIVE'),sus=await call(f,'SUSPENDED');
+  const act=await call(f,'ACTIVE'),sus=await call(f,'SUSPENDED'),lapsed=await call(f,'LAPSED'),scheduled=await call(f,'SCHEDULED');
   const outcome=act==='OK'&&sus==='OK'?'OPEN':sus!=='OK'&&act!==sus?'ENFORCED':act==='OK'?'ENFORCED':'NOT_REACHED';
-  results.push({sig:f.sig,outcome,act,sus});
+  results.push({sig:f.sig,outcome,act,sus,lapsed,scheduled});
  }
  await restricted.query('ROLLBACK');
  if(process.argv[2]==='--explore'){for(const r of results)console.log(`${r.outcome}\t${r.sig}\t${r.act}\t${r.sus}`);}
@@ -110,6 +117,9 @@ try{
  assert.deepEqual(Object.keys(OPEN_BY_DESIGN).filter(s=>!open.includes(s)),[],'a reviewed recovery path no longer works for a suspended school (or was renamed)');
  assert.deepEqual(Object.keys(OPEN_KNOWN_GAP).filter(s=>!open.includes(s)),[],'a recorded gap changed: update OPEN_KNOWN_GAP');
  assert.deepEqual(MUST_ENFORCE.filter(s=>!enforced.includes(s)),[],'a gated function is no longer refused for a suspended school');
+ // Outside its window an entitlement grants nothing a suspended one would not (D9 exception expiry and start).
+ assert.deepEqual(results.filter(r=>r.outcome==='ENFORCED'&&(r.lapsed===r.act||r.scheduled===r.act)).map(r=>r.sig),[],
+  'a function refused for a suspended school still answers an expired or not-yet-started entitlement');
  // Tenant isolation: the active school's owner never reaches the other organization through any reached function.
  await restricted.query('BEGIN');
  const cross=[];
@@ -117,7 +127,7 @@ try{
   if(await call(f,'ACTIVE','SUSPENDED')==='OK')cross.push(f.sig);
  await restricted.query('ROLLBACK');
  assert.deepEqual(cross,[],'a school owner reached another organization');
- console.log(`PASS: B6A entitlement enforcement coverage — ${fns.length} runtime-callable functions called as an all-permission school owner for an ACTIVE and a SUSPENDED organization: ${enforced.length} refuse the suspended school, ${open.length-Object.keys(OPEN_KNOWN_GAP).length} stay open by reviewed design (billing recovery, settings, public intake, predicates), ${Object.keys(OPEN_KNOWN_GAP).length} recorded gaps, ${by('NOT_REACHED').length} refused identically before any entitlement decision with generic input (covered by the static inventory); no cross-organization access.`);
+ console.log(`PASS: B6A entitlement enforcement coverage — ${fns.length} runtime-callable functions called as an all-permission school owner for an ACTIVE, a SUSPENDED, an expired-window and a future-window organization: ${enforced.length} refuse the suspended school (and both windows), ${open.length-Object.keys(OPEN_KNOWN_GAP).length} stay open by reviewed design (billing recovery, settings, public intake, predicates), ${Object.keys(OPEN_KNOWN_GAP).length} recorded gaps, ${by('NOT_REACHED').length} refused identically before any entitlement decision with generic input (covered by the static inventory); no cross-organization access.`);
 }finally{
  await restricted.query('ROLLBACK').catch(()=>{});
  await admin.query('ROLLBACK').catch(()=>{});

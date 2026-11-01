@@ -1,4 +1,6 @@
 import pg from 'pg';
+import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
+import { activatePreD9ProvisionedSchool } from './pre-d9-provisioning-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // HON Subscription Billing B5 (0158) integrity proof, TEST MODE, SIMULATED PROVIDER. The real API
@@ -111,6 +113,8 @@ try{
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.principals WHERE id='00000000-0000-4000-8000-0000000000b5' AND principal_type='INTEGRATION' AND user_id IS NULL")).rows[0].n,1);
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.hq_operator_grants WHERE principal_id='00000000-0000-4000-8000-0000000000b5'")).rows[0].n,0);
  await cleanup();
+ // 0184 (D8) closed legacy new sales; this proof exercises them, so it reopens them in this disposable database only.
+ await setLegacySales(admin,true);
 
  // ---------- fixture ----------
  await admin.query('BEGIN');
@@ -149,6 +153,8 @@ try{
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Journey Martial Arts LLC',
   displayName:'Journey Martial Arts',schoolName:'Journey Martial Arts Main',schoolSlug:`journey-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
  const A={id:provisioned.organizationId,school:provisioned.schoolId};
+ // This fixture stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED).
+ await activatePreD9ProvisionedSchool(admin,provisioned.organizationId);
  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')",
   [A.id,A.school,humans.ownerA.id,provisioned.ownerRoleId,humans.owner.id]);
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.role_permissions WHERE role_id=$1 AND permission_code='billing.hon.purchase'",[provisioned.ownerRoleId])).rows[0].n,1,
@@ -480,5 +486,6 @@ try{
  assert.deepEqual(await untouched(),before,'No entitlement, school-to-family billing or payment attempt, shared audit/outbox or Champions reward row changed.');
  console.log(`PASS: HON payments B5 proof (TEST MODE, SIMULATED Stripe) — school registered through HQ provisioning; plan options; hosted checkout through the real adapter; ${ev5.events} signature-verified events applied once (tampered, unsigned, live, conflicting and wrong-provider deliveries refused); subscription, invoice and PROVIDER_VERIFIED evidence in one transaction; Core 5,000 / lifetime Complete 12,000 allowances; founder contention, expiry, async failure, cancellation and late payment; unknown-outcome retry; abandoned sweep; renewals and PAST_DUE; provider refunds and disputes reconciled (B4 evidence and alert); missed-webhook recovery; no entitlement or school-billing effect.`);
 }finally{
+ await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}
 }

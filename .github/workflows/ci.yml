@@ -37,8 +37,12 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: pnpm
+      - name: Require a patched Node.js runtime (October 2026 security release)
+        run: |
+          node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
+          node --test .github/scripts/verify-node-runtime.test.mjs
       - name: Install dependencies (lockfile only)
         run: pnpm install --frozen-lockfile
       - name: pnpm test
@@ -56,7 +60,8 @@ jobs:
     name: Disposable PostgreSQL security proofs
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Full canonical suite includes the exhaustive lock-order audit plus B1.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,8 +69,10 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: pnpm
+      - name: Require a patched Node.js runtime (October 2026 security release)
+        run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
       - name: Install dependencies (lockfile only)
         run: pnpm install --frozen-lockfile
       - name: Build packages used by the proofs

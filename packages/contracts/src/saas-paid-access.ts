@@ -98,3 +98,117 @@ export function validateSaasAccessRetryReceipt(value: unknown): SaasAccessRetryR
     || (r.outcome === 'APPLIED' && r.detail === 'ACCESS_ACTIVATED') !== (a.state === 'PAYMENT_ACTIVE')) drift();
   return r as unknown as SaasAccessRetryReceipt;
 }
+
+// ---------- D9: HQ-owner access exceptions ----------
+// Time-limited free access an HQ owner grants one school for internal testing, a product demonstration or an approved
+// pilot. The server decides eligibility, the window cap (policy exception_max_days) and the scope's capabilities; an
+// exception never carries AI credits and is never a purchase basis.
+export const SAAS_ACCESS_EXCEPTION_PURPOSES = ['INTERNAL_TESTING','PRODUCT_DEMONSTRATION','APPROVED_PILOT'] as const;
+export type SaasAccessExceptionPurpose = typeof SAAS_ACCESS_EXCEPTION_PURPOSES[number];
+export type SaasAccessExceptionLifecycle = 'SCHEDULED' | 'IN_EFFECT' | 'EXPIRED' | 'SUPERSEDED' | 'REVOKED';
+const EXCEPTION_LIFECYCLES: readonly SaasAccessExceptionLifecycle[] = ['SCHEDULED','IN_EFFECT','EXPIRED','SUPERSEDED','REVOKED'];
+
+export interface SaasAccessExceptionGrantInput {
+  schoolId: string; purpose: SaasAccessExceptionPurpose; reason: string; scopeTier: 'CORE' | 'COMPLETE';
+  startsAt: string; expiresAt: string; expectedEntitlementVersion: number;
+}
+export interface SaasAccessExceptionRevokeInput { reason: string }
+export interface SaasAccessException {
+  exceptionId: string; organizationId: string; schoolId: string; purpose: SaasAccessExceptionPurpose; reason: string;
+  scopeTier: 'CORE' | 'COMPLETE'; capabilities: string[]; aiCredits: 'NONE'; startsAt: string; expiresAt: string;
+  policyVersion: number; maxDays: number; status: 'GRANTED' | 'ENDED'; lifecycle: SaasAccessExceptionLifecycle;
+  grantedByPrincipalId: string; grantedAt: string; priorEntitlement: SaasEntitlementView | null; grantedEntitlement: SaasEntitlementView;
+  endReason: 'REVOKED' | 'EXPIRED' | 'SUPERSEDED' | null; endNote: string | null; endEntitlement: SaasEntitlementView | null;
+  endedByPrincipalId: string | null; endedAt: string | null;
+  // Absent only on exact pre-D10 receipts; null identifies an unapproved historical row.
+  governingPolicy?: { approvalId: string; revision: number; termsVersion: number; maxDays: number } | null;
+}
+export interface SaasAccessExceptionsView { organizationId: string; access: SaasOrganizationAccess; exceptions: SaasAccessException[]; asOf: string }
+export interface SaasAccessExceptionGrantReceipt { exception: SaasAccessException; access: SaasOrganizationAccess; replayed: boolean }
+export interface SaasAccessExceptionRevokeReceipt {
+  exception: SaasAccessException; entitlementSuspended: boolean; access: SaasOrganizationAccess; replayed: boolean;
+}
+export interface SaasAccessExceptionCloseReceipt { closed: SaasAccessException[]; asOf: string; replayed: boolean }
+
+const note = (v: unknown): v is string => typeof v === 'string' && v === v.trim() && v.length >= 10 && v.length <= 500;
+
+export function validateSaasAccessExceptionGrantInput(value: unknown): SaasAccessExceptionGrantInput {
+  const r = record(value, invalid);
+  exactKeys(r, ['schoolId','purpose','reason','scopeTier','startsAt','expiresAt','expectedEntitlementVersion'], invalid);
+  if (!isUuid(r.schoolId) || !has(SAAS_ACCESS_EXCEPTION_PURPOSES, r.purpose) || !note(r.reason) || !has(['CORE','COMPLETE'], r.scopeTier)
+    || !isTimestamp(r.startsAt) || !isTimestamp(r.expiresAt) || Date.parse(r.expiresAt as string) <= Date.parse(r.startsAt as string)
+    || !isInt(r.expectedEntitlementVersion, 1, 999_999_999)) invalid();
+  return r as unknown as SaasAccessExceptionGrantInput;
+}
+export function validateSaasAccessExceptionRevokeInput(value: unknown): SaasAccessExceptionRevokeInput {
+  const r = record(value, invalid); exactKeys(r, ['reason'], invalid);
+  if (!note(r.reason)) invalid();
+  return { reason: r.reason as string };
+}
+export function validateSaasAccessExceptionCloseInput(value: unknown): Record<string, never> {
+  exactKeys(record(value, invalid), [], invalid);
+  return {};
+}
+
+function exception(value: unknown): SaasAccessException {
+  const x = record(value, drift);
+  exactKeys(x, ['exceptionId','organizationId','schoolId','purpose','reason','scopeTier','capabilities','aiCredits','startsAt','expiresAt',
+    'policyVersion','maxDays','status','lifecycle','grantedByPrincipalId','grantedAt','priorEntitlement','grantedEntitlement','endReason','endNote',
+    'endEntitlement','endedByPrincipalId','endedAt', ...(Object.hasOwn(x,'governingPolicy') ? ['governingPolicy'] : [])], drift);
+  if (x.governingPolicy !== undefined && x.governingPolicy !== null) {
+    const p = record(x.governingPolicy, drift); exactKeys(p,['approvalId','revision','termsVersion','maxDays'],drift);
+    if (!isUuid(p.approvalId) || !isInt(p.revision,1,999_999_999) || p.termsVersion !== x.policyVersion || p.maxDays !== x.maxDays) drift();
+  }
+  validateSaasEntitlementView(x.priorEntitlement); validateSaasEntitlementView(x.grantedEntitlement); validateSaasEntitlementView(x.endEntitlement);
+  const granted = x.grantedEntitlement as SaasEntitlementView | null;
+  const ended = x.status === 'ENDED';
+  if (!isUuid(x.exceptionId) || !isUuid(x.organizationId) || !isUuid(x.schoolId) || !has(SAAS_ACCESS_EXCEPTION_PURPOSES, x.purpose) || !note(x.reason)
+    || !has(['CORE','COMPLETE'], x.scopeTier) || !Array.isArray(x.capabilities)
+    || x.capabilities.join(',') !== (SAAS_PLAN_CAPABILITIES[x.scopeTier as 'CORE' | 'COMPLETE'] ?? []).join(',')
+    // An exception never carries premium AI credits.
+    || x.aiCredits !== 'NONE'
+    || !isTimestamp(x.startsAt) || !isTimestamp(x.expiresAt) || Date.parse(x.expiresAt as string) <= Date.parse(x.startsAt as string)
+    || !isInt(x.policyVersion, 1, 999_999) || !isInt(x.maxDays, 1, 90)
+    || Date.parse(x.expiresAt as string) - Date.parse(x.startsAt as string) > (x.maxDays as number) * 86_400_000
+    || !has(['GRANTED','ENDED'], x.status) || !has(EXCEPTION_LIFECYCLES, x.lifecycle)
+    || granted === null || granted.tier !== x.scopeTier || granted.status !== 'ACTIVE' || granted.effectiveUntil !== x.expiresAt
+    || !isUuid(x.grantedByPrincipalId) || !isTimestamp(x.grantedAt)
+    || ended !== (x.endReason !== null) || ended !== (x.endedAt !== null) || ended !== (x.endedByPrincipalId !== null)
+    || (ended && (x.lifecycle !== x.endReason || x.endEntitlement === null)) || (!ended && x.endEntitlement !== null)
+    || !nullable(x.endReason, (v): v is string => has(['REVOKED','EXPIRED','SUPERSEDED'], v))
+    || (x.endReason === 'REVOKED') !== (x.endNote !== null) || !nullable(x.endNote, note)
+    || !nullable(x.endedByPrincipalId, isUuid) || !nullable(x.endedAt, isTimestamp)
+    || (!ended && x.lifecycle === 'REVOKED')) drift();
+  return x as unknown as SaasAccessException;
+}
+export function validateSaasAccessExceptionsView(value: unknown): SaasAccessExceptionsView {
+  const r = record(value, drift); exactKeys(r, ['organizationId','access','exceptions','asOf'], drift);
+  validateSaasOrganizationAccess(r.access);
+  if (!isUuid(r.organizationId) || (r.access as SaasOrganizationAccess).organizationId !== r.organizationId || !isTimestamp(r.asOf)
+    || !Array.isArray(r.exceptions) || r.exceptions.length > 50) drift();
+  (r.exceptions as unknown[]).forEach(v => { if (exception(v).organizationId !== r.organizationId) drift(); });
+  // At most one open exception per organization.
+  if ((r.exceptions as SaasAccessException[]).filter(x => x.status === 'GRANTED').length > 1) drift();
+  return r as unknown as SaasAccessExceptionsView;
+}
+export function validateSaasAccessExceptionGrantReceipt(value: unknown): SaasAccessExceptionGrantReceipt {
+  const r = record(value, drift); exactKeys(r, ['exception','access','replayed'], drift);
+  const x = exception(r.exception); validateSaasOrganizationAccess(r.access);
+  if (typeof r.replayed !== 'boolean' || x.organizationId !== (r.access as SaasOrganizationAccess).organizationId) drift();
+  return r as unknown as SaasAccessExceptionGrantReceipt;
+}
+export function validateSaasAccessExceptionRevokeReceipt(value: unknown): SaasAccessExceptionRevokeReceipt {
+  const r = record(value, drift); exactKeys(r, ['exception','entitlementSuspended','access','replayed'], drift);
+  const x = exception(r.exception); validateSaasOrganizationAccess(r.access);
+  if (typeof r.replayed !== 'boolean' || typeof r.entitlementSuspended !== 'boolean' || x.status !== 'ENDED' || x.endReason !== 'REVOKED'
+    || x.organizationId !== (r.access as SaasOrganizationAccess).organizationId
+    // A revoked exception that still held the entitlement leaves no access in effect.
+    || (r.entitlementSuspended && (r.access as SaasOrganizationAccess).entitlement?.inEffect !== false)) drift();
+  return r as unknown as SaasAccessExceptionRevokeReceipt;
+}
+export function validateSaasAccessExceptionCloseReceipt(value: unknown): SaasAccessExceptionCloseReceipt {
+  const r = record(value, drift); exactKeys(r, ['closed','asOf','replayed'], drift);
+  if (!Array.isArray(r.closed) || r.closed.length > 200 || !isTimestamp(r.asOf) || typeof r.replayed !== 'boolean') drift();
+  (r.closed as unknown[]).forEach(v => { const x = exception(v); if (x.status !== 'ENDED' || x.endReason === 'REVOKED') drift(); });
+  return r as unknown as SaasAccessExceptionCloseReceipt;
+}

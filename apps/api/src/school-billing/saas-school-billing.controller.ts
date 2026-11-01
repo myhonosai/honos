@@ -43,6 +43,19 @@ export class SaasAccessReadinessHqController {
   }
 }
 
+/** Independent exception-only decision; never a payment, entitlement or credit activation. */
+@Controller('hq/saas/access-exception-policy')
+@UseGuards(HonIdentityGuard)
+export class SaasExceptionPolicyHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async read(@Req() req: HonRequest) { return { data: await this.reads.readExceptionPolicy(subject(req)) }; }
+  @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.decideExceptionPolicy)
+  async decide(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.reads.decideExceptionPolicy(subject(req),body,key) };
+  }
+}
+
 /**
  * B6A central access authority (HQ) and the inactive first-payment pathway. Placing an organization awaiting
  * its first payment and retrying a held activation are HQ-owner commands the database refuses while the
@@ -71,5 +84,41 @@ export class SaasAccessRetryHqController {
   @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.retryFirstPaymentActivation)
   async retry(@Req() req: HonRequest, @Param('checkoutId') checkoutId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.reads.retryFirstPaymentActivation(subject(req), checkoutId, body, key) };
+  }
+}
+
+/**
+ * D9 HQ-owner access exceptions: time-limited free access for internal testing, product demonstrations and approved
+ * pilots. Granting and revoking are HQ-owner commands; HQ billing staff may read and close lapsed exceptions. The
+ * database refuses everyone else, an organization with access, a subscription or an unresolved checkout, and any
+ * window over the policy maximum. An exception never carries AI credits and is never a purchase basis.
+ */
+@Controller('hq/saas/organizations/:organizationId/access-exceptions')
+@UseGuards(HonIdentityGuard)
+export class SaasAccessExceptionsHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async list(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
+    return { data: await this.reads.readAccessExceptions(subject(req), organizationId) };
+  }
+  @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.grantAccessException)
+  async grant(@Req() req: HonRequest, @Param('organizationId') organizationId: string, @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.reads.grantAccessException(subject(req), organizationId, body, key) };
+  }
+}
+
+@Controller('hq/saas/access-exceptions')
+@UseGuards(HonIdentityGuard)
+export class SaasAccessExceptionCommandsHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Post('close-expired') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.closeExpiredAccessExceptions)
+  async closeExpired(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.reads.closeExpiredAccessExceptions(subject(req), body, key) };
+  }
+  @Post(':exceptionId/revoke') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.revokeAccessException)
+  async revoke(@Req() req: HonRequest, @Param('exceptionId') exceptionId: string, @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.reads.revokeAccessException(subject(req), exceptionId, body, key) };
   }
 }

@@ -21,6 +21,10 @@
       "title": "HON HQ | AI Provider Control"
     },
     {
+      "path": "/hq/integrations/zernio",
+      "title": "HON HQ | Zernio"
+    },
+    {
       "path": "/core",
       "title": "HON Core | School Management"
     },
@@ -85,6 +89,10 @@
       "title": "Human Public Lead Forms"
     },
     {
+      "path": "/staff/marketing/intake",
+      "title": "HON | Lead Sources & Intake Monitor"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },
@@ -145,6 +153,10 @@
       "title": "Human membership activation only"
     },
     {
+      "path": "/staff/billing/membership-dates",
+      "title": "HON OS | Membership dates and history"
+    },
+    {
       "path": "/staff/billing/invoices",
       "title": "HON | Human Invoice Workbench"
     },
@@ -167,6 +179,10 @@
     {
       "path": "/staff/ai-work",
       "title": "HON | My AI Draft Work"
+    },
+    {
+      "path": "/staff/hon",
+      "title": "HON | AI Command Workspace"
     },
     {
       "path": "/community/marketplace",
@@ -198,7 +214,7 @@
     },
     {
       "path": "/staff/teaching-assistant",
-      "title": "HON Claire | Curriculum support guide"
+      "title": "HON | Teaching draft assistant (legacy)"
     },
     {
       "path": "/staff/retention/review",
@@ -351,6 +367,22 @@
     {
       "path": "/staff/billing/membership-plans",
       "title": "HON OS | School membership plans"
+    },
+    {
+      "path": "/hq/pricing-offers",
+      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
+    },
+    {
+      "path": "/reference/classic-dashboard",
+      "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/account/owner-invitation",
+      "title": "HON OS | Owner invitation"
+    },
+    {
+      "path": "/hq/school-owner-invitations",
+      "title": "HON HQ | Owner invitations"
     }
   ]
 }

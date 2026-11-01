@@ -5,7 +5,7 @@ const { request: httpRequest } = require('node:http');
 require('reflect-metadata');
 const { Test } = require('@nestjs/testing');
 const { json } = require('express');
-const { PaymentWebhookController, SaasPaymentsHqController, SaasPlanSchoolController } = require('../dist/payments/saas-payments.controller.js');
+const { PaymentWebhookController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, SaasPlanSchoolController } = require('../dist/payments/saas-payments.controller.js');
 const { SaasPaymentsService } = require('../dist/payments/saas-payments.service.js');
 const { PAYMENT_PROVIDER_ADAPTER, PaymentProviderError, UnconfiguredPaymentProvider } = require('../dist/payments/payment-provider.js');
 const { StripeTestModeAdapter, normalizeStripeEvent, verifyStripeSignature, eventDigest, paymentProviderFromEnvironment, STRIPE_API_VERSION } = require('../dist/payments/stripe-test-mode-adapter.js');
@@ -77,7 +77,7 @@ test('normalizer keeps only applied fields, in a closed shape, with a stable dig
 
 test('hosted checkout request: test key, pinned API version, idempotent on the checkout id, no tax, no card data', async () => {
   const sim = new StripeSimulator(SECRET), adapter = adapterWith(sim), id = U();
-  const input = { checkoutId: id, organizationId: U(), planCode: 'CORE', offerKind: 'FOUNDER_MONTHLY', billingInterval: 'MONTHLY', amountMinor: 7900,
+  const input = { checkoutId: id, organizationId: U(), planCode: 'CORE', offerKind: 'FOUNDER_MONTHLY', billingInterval: 'MONTHLY', recurring: 'MONTH', amountMinor: 7900,
     productName: 'HON Core — founder monthly', expiresAt: new Date(Date.now() + 3600_000).toISOString(), successUrl: 'https://hon.example/ok', cancelUrl: 'https://hon.example/no' };
   const a = await adapter.createCheckoutSession(input), b = await adapter.createCheckoutSession(input);
   assert.equal(a.providerSessionId, b.providerSessionId, 'retry returns the same session');
@@ -85,9 +85,25 @@ test('hosted checkout request: test key, pinned API version, idempotent on the c
   assert.deepEqual([r.method, r.path, r.idempotencyKey, r.form.get('mode'), r.form.get('line_items[0][price_data][unit_amount]'),
     r.form.get('line_items[0][price_data][recurring][interval]'), r.form.get('client_reference_id'), r.form.has('automatic_tax[enabled]')],
     ['POST', '/v1/checkout/sessions', `hon-checkout-${id}`, 'subscription', '7900', 'month', id, false]);
-  const lifetime = await adapterWith(sim).createCheckoutSession({ ...input, checkoutId: U(), offerKind: 'FOUNDER_LIFETIME', billingInterval: 'LIFETIME', amountMinor: 189600 });
+  const lifetime = await adapterWith(sim).createCheckoutSession({ ...input, checkoutId: U(), offerKind: 'FOUNDER_LIFETIME', billingInterval: 'LIFETIME', recurring: 'NONE', amountMinor: 189600 });
   assert.match(lifetime.checkoutUrl, /^https:\/\/checkout\.simulated\.invalid\//);
   assert.equal(sim.requests.at(-1).form.get('mode'), 'payment');
+  // HON OS (0182): the server decides recurring billing from the accepted offer; the adapter refuses any inconsistent request before sending.
+  const hon = { ...input, planCode: 'COMPLETE', productName: 'HON OS — Annual' };
+  const form = () => { const f = sim.requests.at(-1).form; return [f.get('mode'), f.get('line_items[0][price_data][unit_amount]'), f.get('line_items[0][price_data][recurring][interval]'),
+    f.get('line_items[0][price_data][product_data][name]'), f.get('subscription_data[metadata][honCheckoutId]') !== null]; };
+  await adapter.createCheckoutSession({ ...hon, checkoutId: U(), offerKind: 'REGULAR_ANNUAL', billingInterval: 'ANNUAL', recurring: 'YEAR', amountMinor: 317000 });
+  assert.deepEqual(form(), ['subscription', '317000', 'year', 'HON OS — Annual', true]);
+  await adapter.createCheckoutSession({ ...hon, checkoutId: U(), offerKind: 'FOUNDER_ANNUAL', billingInterval: 'ANNUAL', recurring: 'NONE', amountMinor: 183000 });
+  assert.deepEqual(form(), ['payment', '183000', null, 'HON OS — Annual', false], 'an annual term without auto-renewal is a one-time payment');
+  await adapter.createCheckoutSession({ ...hon, checkoutId: U(), offerKind: 'LIFETIME', billingInterval: 'LIFETIME', recurring: 'NONE', amountMinor: 950000 });
+  assert.deepEqual(form(), ['payment', '950000', null, 'HON OS — Annual', false]);
+  const sent = sim.requests.length;
+  for (const bad of [{ offerKind: 'REGULAR_ANNUAL', billingInterval: 'ANNUAL', recurring: 'MONTH' }, { offerKind: 'LIFETIME', billingInterval: 'LIFETIME', recurring: 'YEAR' },
+    { offerKind: 'REGULAR_MONTHLY', billingInterval: 'MONTHLY', recurring: 'NONE' }, { offerKind: 'REGULAR_MONTHLY', billingInterval: 'MONTHLY', recurring: 'YEAR' },
+    { offerKind: 'REGULAR_MONTHLY', billingInterval: 'MONTHLY', recurring: undefined }, { offerKind: 'REGULAR_ANNUAL', billingInterval: 'ANNUAL', recurring: null }])
+    await assert.rejects(adapter.createCheckoutSession({ ...hon, checkoutId: U(), amountMinor: 1000, ...bad }), e => e.outcome === 'PRE_SEND', JSON.stringify(bad));
+  assert.equal(sim.requests.length, sent, 'refused requests never reach the provider');
   sim.failNextRequest('REJECT');
   await assert.rejects(adapter.createCheckoutSession({ ...input, checkoutId: U() }), e => e instanceof PaymentProviderError && e.outcome === 'FAILED');
   sim.failNextRequest('NETWORK');
@@ -102,7 +118,9 @@ test('hosted checkout request: test key, pinned API version, idempotent on the c
 test('contracts: closed shapes for checkout, program, plan options; live mode and card data never appear', () => {
   assert.doesNotThrow(() => contracts.validateSaasCheckoutReceipt({ checkout: checkout(), replayed: false }));
   for (const bad of [checkout({ mode: 'LIVE' }), checkout({ status: 'OPEN' }), checkout({ checkoutUrl: 'https://evil.example/pay', status: 'OPEN', providerSessionId: 'cs_test_1' }),
-    checkout({ providerSessionId: 'cs_live_1' }), checkout({ offerKind: 'FOUNDER_MONTHLY' }), checkout({ status: 'COMPLETED' }), checkout({ cardNumber: '4242' })])
+    checkout({ providerSessionId: 'cs_live_1' }), checkout({ offerKind: 'FOUNDER_MONTHLY' }), checkout({ offerKind: 'FOUNDER_LIFETIME' }), checkout({ status: 'COMPLETED' }), checkout({ cardNumber: '4242' }),
+    checkout({ offerKind: 'REGULAR_ANNUAL', billingInterval: 'ANNUAL' }), checkout({ offerKind: 'LIFETIME', billingInterval: 'LIFETIME', planCode: 'COMPLETE', requesterKind: 'HQ', schoolId: null }),
+    checkout({ offerKind: 'REGULAR_ANNUAL', billingInterval: 'MONTHLY', planCode: 'COMPLETE' }), checkout({ offerKind: 'LIFETIME', billingInterval: 'LIFETIME', planCode: 'COMPLETE', founderReservationId: U() })])
     assert.throws(() => contracts.validateSaasCheckoutReceipt({ checkout: bad, replayed: false }));
   const program = { status: 'TEST_MODE', provider: 'STRIPE', mode: 'TEST', liveMode: 'UNAVAILABLE', testTaxReference: 'Owner test-mode tax note', authorizationReference: 'Owner auth',
     version: 2, changedAt: T, cardDataStored: false, refundExecution: 'UNAVAILABLE' };
@@ -126,7 +144,7 @@ const human = command => ({ 'content-type': 'application/json', origin: 'https:/
   'sec-fetch-mode': 'same-origin', 'sec-fetch-dest': 'empty', 'idempotency-key': randomUUID() });
 
 async function appWith(callSaasBilling, adapter) {
-  const module = await Test.createTestingModule({ controllers: [SaasPlanSchoolController, SaasPaymentsHqController, PaymentWebhookController],
+  const module = await Test.createTestingModule({ controllers: [SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController],
     providers: [SaasPaymentsService, SaasBillingService, SaasCommandGuard, SaasReadGuard, { provide: PAYMENT_PROVIDER_ADAPTER, useValue: adapter },
       { provide: RuntimeDatabaseService, useValue: { callSaasBilling } }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-human' }; return true; } }).compile();
@@ -220,4 +238,75 @@ test('service: checkout opens through the adapter; failure and unknown outcomes 
     await assert.rejects(never.startSchoolCheckout('verified-human', U(), { offerId: U(), priceMinor: 1 }, U()), e => e.getStatus() === 400);
     await assert.rejects(never.handleWebhook('not a buffer', 't=1,v1=00'), e => e.getStatus() === 400);
   } finally { if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
+});
+
+test('HON OS checkout: the school sends only an offer ID; the provider session sells the accepted offer', async () => {
+  const previous = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
+  const sim = new StripeSimulator(SECRET), calls = [], digest = 'b'.repeat(64);
+  let current = checkout({ planCode: 'COMPLETE', offerKind: 'REGULAR_ANNUAL', billingInterval: 'ANNUAL', amountMinor: 317000 });
+  const purchase = (recurringBilling = 'YEAR') => ({ productName: 'HON OS — Annual', offerDisplayName: 'Annual', recurringBilling, offerSetVersion: 2,
+    termsReference: 'Fixture HON OS terms', acceptedOfferDigest: digest });
+  let recurringBilling = 'YEAR';
+  const { app, base } = await appWith(async (operation, params) => { calls.push([operation, params]);
+    if (operation === 'createSchoolHonOsCheckout') return { checkout: current, purchase: purchase(recurringBilling), replayed: false };
+    if (operation === 'attachCheckoutSession') { const p = JSON.parse(params[2]);
+      current = { ...current, status: 'OPEN', statusReason: 'PROVIDER_SESSION_OPENED', providerSessionId: p.providerSessionId, checkoutUrl: p.checkoutUrl, version: 2 };
+      return { checkout: current, replayed: false }; }
+    throw new Error('unexpected ' + operation); }, adapterWith(sim));
+  try {
+    const school = current.schoolId, url = `${base}/schools/${school}/hon-os-offers/checkout`, headers = human('saas-hon-os-checkout-start');
+    const res = await send(url, { method: 'POST', headers, body: JSON.stringify({ offerId: current.offerId }) });
+    assert.equal(res.status, 200, res.body);
+    const data = JSON.parse(res.body).data;
+    assert.deepEqual([data.providerCall, data.checkout.status, data.purchase.recurringBilling, data.purchase.acceptedOfferDigest], ['OPENED', 'OPEN', 'YEAR', digest]);
+    assert.deepEqual(calls[0], ['createSchoolHonOsCheckout', ['verified-human', school, JSON.stringify({ offerId: current.offerId }), headers['idempotency-key'], calls[0][1][4], calls[0][1][5]]]);
+    const f = sim.requests.at(-1).form;
+    assert.deepEqual([f.get('mode'), f.get('line_items[0][price_data][unit_amount]'), f.get('line_items[0][price_data][recurring][interval]'), f.get('line_items[0][price_data][product_data][name]')],
+      ['subscription', '317000', 'year', 'HON OS — Annual']);
+    assert.match(f.get('success_url'), new RegExp(`^https://hon\\.example/schools/${school}/hon-plan\\?checkout=`));
+    // A one-time annual term opens a payment session with no recurring price.
+    current = checkout({ planCode: 'COMPLETE', offerKind: 'FOUNDER_ANNUAL', billingInterval: 'ANNUAL', amountMinor: 183000 }); recurringBilling = 'NONE';
+    assert.equal((await send(`${base}/schools/${current.schoolId}/hon-os-offers/checkout`, { method: 'POST', headers: human('saas-hon-os-checkout-start'), body: JSON.stringify({ offerId: current.offerId }) })).status, 200);
+    assert.deepEqual([sim.requests.at(-1).form.get('mode'), sim.requests.at(-1).form.get('line_items[0][price_data][recurring][interval]')], ['payment', null]);
+    // A receipt whose recurring billing contradicts its interval never reaches the provider.
+    current = checkout({ planCode: 'COMPLETE', offerKind: 'LIFETIME', billingInterval: 'LIFETIME', amountMinor: 950000 }); recurringBilling = 'YEAR';
+    const sent = sim.requests.length;
+    assert.equal((await send(`${base}/schools/${current.schoolId}/hon-os-offers/checkout`, { method: 'POST', headers: human('saas-hon-os-checkout-start'), body: JSON.stringify({ offerId: current.offerId }) })).status, 503);
+    assert.equal(sim.requests.length, sent);
+    const n = calls.length;
+    for (const body of [{ offerId: current.offerId, priceMinor: 1 }, { offerId: current.offerId, offerKind: 'LIFETIME' }, { offerId: 'OS_MONTHLY' }, {}])
+      assert.equal((await send(url, { method: 'POST', headers: human('saas-hon-os-checkout-start'), body: JSON.stringify(body) })).status, 400, JSON.stringify(body));
+    for (const extra of [{ 'x-hon-human-command': 'saas-checkout-start' }, { origin: 'https://attacker.example' }, { 'sec-fetch-site': 'cross-site' }, { 'content-type': 'text/plain' }])
+      assert.equal((await send(url, { method: 'POST', headers: { ...human('saas-hon-os-checkout-start'), ...extra }, body: JSON.stringify({ offerId: current.offerId }) })).status, 403, JSON.stringify(extra));
+    assert.equal((await send(`${url}?price=1`, { method: 'POST', headers: human('saas-hon-os-checkout-start'), body: JSON.stringify({ offerId: current.offerId }) })).status, 400);
+    assert.equal((await send(`${base}/schools/not-a-uuid/hon-os-offers/checkout`, { method: 'POST', headers: human('saas-hon-os-checkout-start'), body: JSON.stringify({ offerId: current.offerId }) })).status, 400);
+    assert.equal(calls.length, n, 'refused requests never reach the database');
+  } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
+});
+
+test('HON OS checkout receipt: closed shape tied to the checkout interval', () => {
+  const c = checkout({ planCode: 'COMPLETE', offerKind: 'LIFETIME', billingInterval: 'LIFETIME', amountMinor: 950000 });
+  const purchase = { productName: 'HON OS — Lifetime', offerDisplayName: 'Lifetime', recurringBilling: 'NONE', offerSetVersion: 1, termsReference: 'Fixture terms', acceptedOfferDigest: 'c'.repeat(64) };
+  assert.doesNotThrow(() => contracts.validateSaasHonOsCheckoutReceipt({ checkout: c, purchase, replayed: false }));
+  for (const bad of [{ checkout: c, purchase: { ...purchase, recurringBilling: 'YEAR' }, replayed: false }, { checkout: c, purchase: { ...purchase, productName: 'HON Complete — lifetime' }, replayed: false },
+    { checkout: c, purchase: { ...purchase, acceptedOfferDigest: 'C'.repeat(64) }, replayed: false }, { checkout: c, purchase: { ...purchase, priceMinor: 950000 }, replayed: false },
+    { checkout: { ...c, planCode: 'CORE' }, purchase, replayed: false }, { checkout: { ...c, founderReservationId: U() }, purchase, replayed: false }, { checkout: c, replayed: false }])
+    assert.throws(() => contracts.validateSaasHonOsCheckoutReceipt(bad), JSON.stringify(bad).slice(0, 120));
+  assert.equal(contracts.SAAS_COMMANDS.startHonOsCheckout, 'saas-hon-os-checkout-start');
+});
+
+test('D8: a closed legacy sale is a 422 rule refusal before any provider call; held legacy checkouts keep a closed shape', async () => {
+  const sim = new StripeSimulator(SECRET), calls = [];
+  const closed = Object.assign(new Error('SAAS_LEGACY_SALES_CLOSED'), { code: '23514' });
+  const db = { callSaasBilling: async (operation) => { calls.push(operation); throw closed; } };
+  const service = new SaasPaymentsService(new SaasBillingService(db), db, adapterWith(sim));
+  await assert.rejects(service.startSchoolCheckout('verified-human', U(), { offerId: U() }, U()),
+    e => e.getStatus() === 422 && e.getResponse().code === 'SAAS_LEGACY_SALES_CLOSED');
+  await assert.rejects(service.startHqCheckout('verified-human', { organizationId: U(), offerId: U() }, U()),
+    e => e.getStatus() === 422 && e.getResponse().code === 'SAAS_LEGACY_SALES_CLOSED');
+  assert.deepEqual(calls, ['createSchoolCheckout', 'createHqCheckout']);
+  assert.equal(sim.requests.length, 0, 'no provider session is requested');
+  const held = checkout({ status: 'PAID_NEEDS_REVIEW', statusReason: 'LEGACY_SALES_CLOSED', providerSessionId: 'cs_test_held', version: 3 });
+  assert.equal(contracts.validateSaasCheckout(held), held);
+  assert.throws(() => contracts.validateSaasCheckout({ ...held, statusReason: 'LEGACY_SALES_REOPENED' }));
 });

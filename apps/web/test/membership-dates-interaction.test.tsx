@@ -15,6 +15,8 @@ vi.mock('../src/components/crm-enrollment-privacy', () => ({ verifyEnrollmentSes
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: 'en', region: 'auto', timeZone: 'UTC', currencyDisplay: 'symbol' }, date: (s: string) => s, number: (n: number) => String(n) }) }));
 import { MembershipDatesWorkbench } from '../src/components/membership-dates-workbench';
 import { scope, id, history, preview, receipt, period, report, envelope, rejected } from './membership-dates-fixtures';
+import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from '../src/components/session-invalidation';
+import { PlanAccessError } from '../src/components/membership-plans/http';
 const render = () => { harness.cursor = 0; return MembershipDatesWorkbench({ sessionSubject: 'synthetic-staff' }); };
 const nodes = (tree: any, type: string): any[] => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(value => nodes(value, type)) : [...(tree.type === type ? [tree] : []), ...nodes(tree.props?.children, type)];
 const text = (tree: any): string => typeof tree === 'string' ? tree : Array.isArray(tree) ? tree.map(text).join('') : tree && typeof tree === 'object' ? text(tree.props?.children) : '';
@@ -31,6 +33,38 @@ function confirm() { final(); tick('I confirm this exact date change'); button('
 beforeEach(() => { harness.slots = []; harness.cursor = 0; harness.effects = []; harness.session.mockReset().mockResolvedValue(undefined); vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('E1b-1 independent staff date-management lifecycle', () => {
+  it.each(['pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT])('conceals on %s and rejects late reads until an explicit authorized restoration', async event => {
+    let settle!: (value: Response) => void;
+    const f = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(done => { settle = done; }))
+      .mockResolvedValueOnce(envelope(history(), false, true));
+    render(); harness.effects[0]!(); await load();
+    window.dispatchEvent(new Event(event));
+    expect(html()).toContain('Membership information hidden');
+    settle(envelope(history(), false, true)); await flush();
+    expect(html()).not.toContain('Verified current membership'); expect(f).toHaveBeenCalledTimes(1);
+    button('Verify access and resume').props.onClick(); await flush();
+    expect(html()).toContain('Verified current membership'); expect(f).toHaveBeenCalledTimes(2);
+  });
+  it('refuses a completed read when the verified identity changes before display', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(history(), false, true)).mockResolvedValueOnce(envelope(preview()));
+    harness.session.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new PlanAccessError('identity changed'));
+    await load(); expect(html()).toContain('Membership information hidden');
+    expect(html()).not.toContain('Verified current membership'); expect(button('Confirm membership date change')).toBeUndefined();
+  });
+  it('preserves an immutable command after a success response whose final identity check fails', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(history(), false, true)).mockResolvedValueOnce(envelope(preview())).mockResolvedValueOnce(envelope(receipt()));
+    await load();
+    harness.session.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new PlanAccessError('identity changed'));
+    confirm(); await flush();
+    expect(html()).toContain('Membership information hidden'); expect(html()).not.toContain('Membership date revision receipt');
+    expect(f).toHaveBeenCalledTimes(3); expect(button('Verify access and resume').props.disabled).toBe(false);
+    f.mockResolvedValueOnce(envelope(history(), false, true)).mockResolvedValueOnce(envelope(preview())).mockResolvedValueOnce(envelope(receipt(), true));
+    button('Verify access and resume').props.onClick(); await flush();
+    expect(f).toHaveBeenCalledTimes(5); button('Retry exact retained date change').props.onClick(); await flush();
+    expect(f.mock.calls[5]![1]!.body).toBe(f.mock.calls[2]![1]!.body);
+    expect(f.mock.calls[5]![1]!.headers).toEqual(f.mock.calls[2]![1]!.headers);
+    expect(html()).toContain('Verified idempotent replay');
+  });
   it('mounts idle, verifies history and capability, and requires a separate reason/review/confirmation', async () => {
     let resolve!: (r: Response) => void;
     const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(history(), false, true)).mockResolvedValueOnce(envelope(preview())).mockImplementationOnce(() => new Promise(done => { resolve = done; }));

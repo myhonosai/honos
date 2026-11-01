@@ -18,13 +18,17 @@ import {
   validateSaasRefundRequestList, validateSaasRefundRequestReceipt, validateSaasRefundReserve, validateSaasRefundStatusFilter,
   validateSaasRewardApplyInput, validateSaasRewardApplyReceipt, validateSaasRewardFulfillmentInput, validateSaasRewardFulfillmentReceipt,
   validateSaasRewardPreview,
+  validateSaasHonOsOfferManagementView, validateSaasHonOsOfferSetDetail, validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
+  validateSaasHonOsOfferSetDiscardInput, validateSaasHonOsOfferSetPublishInput, validateSaasHonOsOfferStopSalesInput, validateSaasHonOsOfferSetReceipt,
+  validateSaasHonOsOfferSetDiscardReceipt, validateSaasHonOsOfferSetPublishReceipt, validateSaasHonOsOfferStopSalesReceipt, validateSaasHonOsSchoolOfferView,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
 
 // Business-rule refusals the UI may show verbatim. Any other database message stays private.
-const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED','SAAS_FOUNDER_LIMIT_BELOW_USAGE','SAAS_OFFER_NOT_AVAILABLE',
+const RULE_REFUSALS = new Set(['SAAS_GENERATION_ACCEPTANCE_INVALID','SAAS_GENERATION_EVIDENCE_REQUIRED','SAAS_PRICE_TERMS_UNSUPPORTED','SAAS_PRICE_ACCEPTANCE_BLOCKED','SAAS_PRICE_EVIDENCE_REQUIRED','SAAS_PRICE_PROVIDER_BINDING_REQUIRED','SAAS_TRIAL_POLICY_REQUIRED','SAAS_TRIAL_POLICY_WINDOW_INVALID','SAAS_TRIAL_PUBLICATION_BLOCKED','SAAS_TRIAL_EVIDENCE_REQUIRED','SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED','SAAS_FOUNDER_LIMIT_BELOW_USAGE','SAAS_OFFER_NOT_AVAILABLE',
   'SAAS_OFFER_NOT_FOUNDER','SAAS_FOUNDER_WINDOW_CLOSED','SAAS_FOUNDER_NOT_ELIGIBLE','SAAS_FOUNDER_ALREADY_RESERVED','SAAS_FOUNDER_SOLD_OUT',
-  'SAAS_ENTITLEMENT_NOT_ACTIVE','SAAS_ENTITLEMENT_MISMATCH','SAAS_SUBSCRIPTION_EXISTS','SAAS_FOUNDER_RESERVATION_REQUIRED',
+  'SAAS_ENTITLEMENT_NOT_ACTIVE','SAAS_ENTITLEMENT_MISMATCH','SAAS_ACCESS_EXCEPTION_ACTIVE','SAAS_ENTITLEMENT_IN_EFFECT',
+  'SAAS_EXCEPTION_WINDOW_INVALID','SAAS_EXCEPTION_TOO_LONG','SAAS_EXCEPTION_ENDED','SAAS_SUBSCRIPTION_EXISTS','SAAS_FOUNDER_RESERVATION_REQUIRED',
   'SAAS_FOUNDER_RESERVATION_MISMATCH','SAAS_FOUNDER_RESERVATION_EXPIRED','SAAS_NO_BILLING_PERIODS','SAAS_PERIOD_NOT_ENDED',
   'SAAS_INVOICE_NOT_BILLABLE','SAAS_INVOICE_PERIOD_NOT_STARTED','SAAS_INVOICE_EXISTS','SAAS_INVOICE_TOO_MANY_LINES','SAAS_INVOICE_NEGATIVE_TOTAL',
   'SAAS_INVOICE_TAX_UNRESOLVED','SAAS_INVOICE_ZERO_TOTAL','SAAS_INVOICE_HAS_EVIDENCE','SAAS_INVOICE_NOT_ISSUED','SAAS_EVIDENCE_IN_FUTURE',
@@ -40,8 +44,11 @@ const RULE_REFUSALS = new Set(['SAAS_POLICY_UNDECIDED','SAAS_CATALOG_UNDECIDED',
   'SAAS_REWARD_PERIOD_TAKEN','SAAS_NO_ACCOUNT_CREDIT','SAAS_ALERT_ATTRIBUTION_UNDECIDED',
   'SAAS_PAYMENTS_NOT_ACTIVE','SAAS_CHECKOUT_OPEN',
   'SAAS_ACCESS_NOT_ACTIVE','SAAS_ACCESS_STATE_EXISTS','SAAS_ACCESS_STATE_CHANGED','SAAS_ACCESS_PAYMENT_UNVERIFIED','SAAS_ACCESS_PAYMENT_REVERSED',
-  'SAAS_ACCESS_NOT_RETRYABLE']);
-const STATE_CONFLICTS = new Set(['SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT']);
+  'SAAS_ACCESS_NOT_RETRYABLE',
+  'SAAS_EXCEPTION_POLICY_REQUIRED','SAAS_EXCEPTION_POLICY_WINDOW_INVALID','SAAS_EXCEPTION_POLICY_LIMIT','SAAS_EXCEPTION_POLICY_EVIDENCE_REQUIRED',
+  'SAAS_OFFER_PREVIEW_CHANGED','SAAS_OFFER_SET_NOT_READY','SAAS_OFFER_NOT_PUBLISHED','SAAS_OFFER_SALES_ALREADY_STOPPED',
+  'SAAS_OFFER_NOT_ELIGIBLE','SAAS_OFFER_SOLD_OUT','SAAS_OFFER_TERMS_UNSUPPORTED','SAAS_LEGACY_SALES_CLOSED']);
+const STATE_CONFLICTS = new Set(['SAAS_GENERATION_ACCEPTANCE_STALE','SAAS_GENERATION_EXISTS','SAAS_PRICE_PREVIEW_STALE','SAAS_TRIAL_POLICY_STALE','SAAS_TRIAL_PREVIEW_STALE','SAAS_VERSION_CONFLICT','SAAS_TRANSITION_NOT_ALLOWED','SAAS_CATALOG_NOT_DRAFT','SAAS_OFFER_SET_NOT_DRAFT']);
 
 function parse<T>(work: () => T): T {
   try { return work(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); }
@@ -220,6 +227,39 @@ export class SaasBillingService {
   async resolveReferralAlert(subject: string, alertId: unknown, body: unknown, key: unknown) {
     const [alert, input, idempotencyKey] = parse(() => [saasUuid(alertId), validateSaasReferralAlertResolveInput(body), saasUuid(key)] as const);
     return this.run('resolveReferralAlert', [subject, alert, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasReferralAlertReceipt);
+  }
+
+  // ---------- HON OS commercial offers (0181): HQ Pricing & Offers; nothing here sells, charges or grants ----------
+  async readOfferManagement(subject: string) {
+    return this.run('readOfferManagement', [subject], validateSaasHonOsOfferManagementView);
+  }
+  async readOfferSet(subject: string, setId: unknown) {
+    const set = parse(() => saasUuid(setId));
+    return this.run('readOfferSet', [subject, set], validateSaasHonOsOfferSetDetail);
+  }
+  async createOfferSetDraft(subject: string, body: unknown, key: unknown) {
+    const [input, idempotencyKey] = parse(() => [validateSaasHonOsOfferSetDraftInput(body), saasUuid(key)] as const);
+    return this.run('createOfferSetDraft', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetReceipt);
+  }
+  async reviseOfferSetDraft(subject: string, setId: unknown, body: unknown, key: unknown) {
+    const [set, input, idempotencyKey] = parse(() => [saasUuid(setId), validateSaasHonOsOfferSetReviseInput(body), saasUuid(key)] as const);
+    return this.run('reviseOfferSetDraft', [subject, set, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetReceipt);
+  }
+  async discardOfferSetDraft(subject: string, setId: unknown, body: unknown, key: unknown) {
+    const [set, input, idempotencyKey] = parse(() => [saasUuid(setId), validateSaasHonOsOfferSetDiscardInput(body), saasUuid(key)] as const);
+    return this.run('discardOfferSetDraft', [subject, set, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetDiscardReceipt);
+  }
+  async publishOfferSet(subject: string, setId: unknown, body: unknown, key: unknown) {
+    const [set, input, idempotencyKey] = parse(() => [saasUuid(setId), validateSaasHonOsOfferSetPublishInput(body), saasUuid(key)] as const);
+    return this.run('publishOfferSet', [subject, set, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferSetPublishReceipt);
+  }
+  async stopOfferSales(subject: string, offerId: unknown, body: unknown, key: unknown) {
+    const [offer, input, idempotencyKey] = parse(() => [saasUuid(offerId), validateSaasHonOsOfferStopSalesInput(body), saasUuid(key)] as const);
+    return this.run('stopOfferSales', [subject, offer, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasHonOsOfferStopSalesReceipt);
+  }
+  async readSchoolHonOsOffers(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.run('readSchoolHonOsOffers', [subject, school], validateSaasHonOsSchoolOfferView);
   }
 
   /** Shared fixed-function call with the SaaS error mapping (used by the B5 payments service). */

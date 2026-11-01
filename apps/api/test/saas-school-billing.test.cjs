@@ -5,7 +5,8 @@ const { request: httpRequest } = require('node:http');
 require('reflect-metadata');
 const { Test } = require('@nestjs/testing');
 const { json } = require('express');
-const { SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } = require('../dist/school-billing/saas-school-billing.controller.js');
+const { SaasExceptionPolicyHqController, SaasAccessExceptionCommandsHqController, SaasAccessExceptionsHqController, SaasAccessReadinessHqController, SaasAccessRetryHqController,
+  SaasOrganizationAccessHqController, SaasSchoolBillingController } = require('../dist/school-billing/saas-school-billing.controller.js');
 const { SaasSchoolBillingService } = require('../dist/school-billing/saas-school-billing.service.js');
 const { SaasBillingService } = require('../dist/saas-billing/saas-billing.service.js');
 const { SaasCommandGuard, SaasReadGuard } = require('../dist/saas-billing/saas-billing.guards.js');
@@ -88,7 +89,8 @@ const send = (url, { method = 'GET', headers = {}, body } = {}) => new Promise((
   req.on('error', reject); req.end(body);
 });
 async function appWith(callSaasBilling) {
-  const module = await Test.createTestingModule({ controllers: [SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController],
+  const module = await Test.createTestingModule({ controllers: [SaasExceptionPolicyHqController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController,
+    SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController],
     providers: [SaasSchoolBillingService, SaasBillingService, SaasReadGuard, SaasCommandGuard, { provide: RuntimeDatabaseService, useValue: { callSaasBilling } }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-human' }; return true; } }).compile();
   const app = module.createNestApplication({ bodyParser: false });
@@ -204,4 +206,147 @@ test('HTTP: B6A HQ access commands are exact human commands; the browser supplie
     assert.equal((await send(`${base}/hq/saas/organizations/${org}/access/await-first-payment`, { method: 'POST', headers: { ...human(contracts.SAAS_COMMANDS.awaitFirstPayment), origin: 'https://evil.example' }, body })).status, 403);
     assert.equal(calls.length, n, 'refused requests never reach the database');
   } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
+});
+
+// ---------- D9: HQ-owner access exceptions ----------
+const X_START = '2026-10-24T00:00:00.000Z', X_END = '2026-11-23T00:00:00.000Z';
+const grantedEnt = (patch = {}) => ({ tier: 'COMPLETE', status: 'ACTIVE', effectiveFrom: X_START, effectiveUntil: X_END, version: 2, inEffect: true, ...patch });
+const accessException = (patch = {}) => ({ exceptionId: U(), organizationId: U(), schoolId: U(), purpose: 'APPROVED_PILOT', reason: 'Approved pilot for a fixture partner',
+  scopeTier: 'COMPLETE', capabilities: [...contracts.SAAS_PLAN_CAPABILITIES.COMPLETE], aiCredits: 'NONE', startsAt: X_START, expiresAt: X_END, policyVersion: 1, maxDays: 90,
+  status: 'GRANTED', lifecycle: 'IN_EFFECT', grantedByPrincipalId: U(), grantedAt: X_START,
+  priorEntitlement: { tier: 'COMPLETE', status: 'SUSPENDED', effectiveFrom: T, effectiveUntil: null, version: 1, inEffect: false }, grantedEntitlement: grantedEnt(),
+  endReason: null, endNote: null, endEntitlement: null, endedByPrincipalId: null, endedAt: null, ...patch });
+const grantInput = (patch = {}) => ({ schoolId: U(), purpose: 'PRODUCT_DEMONSTRATION', reason: 'Demonstration for an approved prospect', scopeTier: 'COMPLETE',
+  startsAt: X_START, expiresAt: X_END, expectedEntitlementVersion: 1, ...patch });
+
+test('contracts: D9 exception inputs are closed; views never carry credits and stay inside the scope and window', () => {
+  assert.equal(contracts.validateSaasAccessExceptionGrantInput(grantInput()).scopeTier, 'COMPLETE');
+  for (const bad of [{ purpose: 'FREE' }, { reason: 'short' }, { reason: ' padded fixture reason ' }, { scopeTier: 'ESSENTIAL' }, { startsAt: '2026-10-24' },
+    { expiresAt: X_START }, { expectedEntitlementVersion: 0 }, { schoolId: 'x' }, { approvedByPrincipalId: U() }, { grantedByPrincipalId: U() }, { aiCredits: 5000 },
+    { organizationId: U() }, { tier: 'COMPLETE' }])
+    assert.throws(() => contracts.validateSaasAccessExceptionGrantInput(grantInput(bad)), JSON.stringify(bad));
+  assert.throws(() => contracts.validateSaasAccessExceptionRevokeInput({ reason: 'Fixture revocation reason', exceptionId: U() }));
+  assert.throws(() => contracts.validateSaasAccessExceptionCloseInput({ organizationId: U() }));
+  const x = accessException();
+  assert.equal(contracts.validateSaasAccessExceptionGrantReceipt({ exception: x, access: { organizationId: x.organizationId, state: 'PROVISIONED', source: 'PROVISIONED',
+    entitlement: grantedEnt(), capabilities: [...contracts.SAAS_PLAN_CAPABILITIES.COMPLETE], paidAccessProgram: 'INACTIVE' }, replayed: false }).exception.lifecycle, 'IN_EFFECT');
+  for (const bad of [{ aiCredits: 12000 }, { capabilities: [...contracts.SAAS_PLAN_CAPABILITIES.CORE] }, { maxDays: 91 }, { expiresAt: '2027-02-01T00:00:00.000Z' },
+    { grantedEntitlement: grantedEnt({ tier: 'CORE' }) }, { grantedEntitlement: grantedEnt({ effectiveUntil: null }) }, { lifecycle: 'REVOKED' }, { endReason: 'REVOKED' },
+    { status: 'ENDED' }, { purpose: 'FREE_FOREVER' }])
+    assert.throws(() => contracts.validateSaasAccessExceptionsView({ organizationId: x.organizationId, access: orgAccess({ organizationId: x.organizationId }),
+      exceptions: [{ ...x, ...bad }], asOf: T }), JSON.stringify(bad));
+  const ended = accessException({ status: 'ENDED', lifecycle: 'REVOKED', endReason: 'REVOKED', endNote: 'Demonstration finished early', endedByPrincipalId: U(), endedAt: T2,
+    endEntitlement: grantedEnt({ status: 'SUSPENDED', version: 3, inEffect: false }) });
+  const susp = orgAccess({ organizationId: ended.organizationId, source: 'NONE', capabilities: [], entitlement: grantedEnt({ status: 'SUSPENDED', version: 3, inEffect: false }) });
+  assert.equal(contracts.validateSaasAccessExceptionRevokeReceipt({ exception: ended, entitlementSuspended: true, access: susp, replayed: false }).entitlementSuspended, true);
+  assert.throws(() => contracts.validateSaasAccessExceptionRevokeReceipt({ exception: ended, entitlementSuspended: true,
+    access: orgAccess({ organizationId: ended.organizationId }), replayed: false }), 'a suspended revocation leaves no access in effect');
+  assert.throws(() => contracts.validateSaasAccessExceptionRevokeReceipt({ exception: { ...ended, endNote: null }, entitlementSuspended: true, access: susp, replayed: false }));
+  assert.throws(() => contracts.validateSaasAccessExceptionsView({ organizationId: x.organizationId, access: orgAccess({ organizationId: x.organizationId }),
+    exceptions: [x, { ...accessException(), organizationId: x.organizationId }], asOf: T }), 'one open exception per organization');
+  assert.throws(() => contracts.validateSaasAccessExceptionCloseReceipt({ closed: [ended], asOf: T, replayed: false }), 'closing never reports a revocation');
+});
+
+test('HTTP: D9 exception commands are exact HQ human commands; the browser never names the grantor, credits or price', async () => {
+  const previous = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
+  const calls = [], org = U(), exceptionId = U();
+  const human = command => ({ 'content-type': 'application/json', origin: 'https://hon.example', 'x-hon-human-command': command, 'sec-fetch-site': 'same-origin',
+    'sec-fetch-mode': 'same-origin', 'sec-fetch-dest': 'empty', 'idempotency-key': randomUUID() });
+  const { app, base } = await appWith(async (operation, params) => {
+    calls.push([operation, params]);
+    if (operation === 'readAccessExceptions') return { organizationId: params[1], access: orgAccess({ organizationId: params[1] }), exceptions: [], asOf: T };
+    if (operation === 'grantAccessException') { const e = new Error('SAAS_FORBIDDEN'); e.code = '42501'; throw e; }
+    if (operation === 'revokeAccessException') { const e = new Error('SAAS_EXCEPTION_ENDED'); e.code = '23514'; throw e; }
+    if (operation === 'closeExpiredAccessExceptions') return { closed: [], asOf: T, replayed: false };
+    throw new Error('unexpected');
+  });
+  try {
+    const read = await send(`${base}/hq/saas/organizations/${org}/access-exceptions`);
+    assert.equal(read.status, 200, read.body); assert.deepEqual(calls.at(-1), ['readAccessExceptions', ['verified-human', org]]);
+    const body = JSON.stringify(grantInput());
+    const granted = await send(`${base}/hq/saas/organizations/${org}/access-exceptions`, { method: 'POST', headers: human(contracts.SAAS_COMMANDS.grantAccessException), body });
+    assert.deepEqual([granted.status, JSON.parse(granted.body).code], [403, 'SAAS_FORBIDDEN'], 'the database decides who is an HQ owner');
+    assert.deepEqual(calls.at(-1)[1].slice(0, 3), ['verified-human', org, body]);
+    const revoked = await send(`${base}/hq/saas/access-exceptions/${exceptionId}/revoke`, { method: 'POST', headers: human(contracts.SAAS_COMMANDS.revokeAccessException),
+      body: JSON.stringify({ reason: 'Fixture revocation reason' }) });
+    assert.deepEqual([revoked.status, JSON.parse(revoked.body).code], [422, 'SAAS_EXCEPTION_ENDED']);
+    const closed = await send(`${base}/hq/saas/access-exceptions/close-expired`, { method: 'POST', headers: human(contracts.SAAS_COMMANDS.closeExpiredAccessExceptions), body: '{}' });
+    assert.equal(closed.status, 200, closed.body); assert.equal(calls.at(-1)[0], 'closeExpiredAccessExceptions');
+    const n = calls.length;
+    for (const [path, command, payload] of [
+      [`hq/saas/organizations/${org}/access-exceptions`, contracts.SAAS_COMMANDS.awaitFirstPayment, body], // wrong command header
+      [`hq/saas/organizations/${org}/access-exceptions`, contracts.SAAS_COMMANDS.grantAccessException, JSON.stringify(grantInput({ approvedByPrincipalId: U() }))],
+      [`hq/saas/organizations/${org}/access-exceptions`, contracts.SAAS_COMMANDS.grantAccessException, JSON.stringify(grantInput({ priceMinor: 0 }))],
+      [`hq/saas/organizations/not-a-uuid/access-exceptions`, contracts.SAAS_COMMANDS.grantAccessException, body],
+      [`hq/saas/access-exceptions/${exceptionId}/revoke`, contracts.SAAS_COMMANDS.revokeAccessException, JSON.stringify({ reason: 'x' })],
+      [`hq/saas/access-exceptions/close-expired`, contracts.SAAS_COMMANDS.closeExpiredAccessExceptions, JSON.stringify({ organizationId: org })]])
+      assert.ok([400, 403].includes((await send(`${base}/${path}`, { method: 'POST', headers: human(command), body: payload })).status), path);
+    assert.equal((await send(`${base}/hq/saas/organizations/${org}/access-exceptions`, { method: 'POST', headers: { ...human(contracts.SAAS_COMMANDS.grantAccessException), origin: 'https://evil.example' }, body })).status, 403);
+    assert.equal(calls.length, n, 'refused requests never reach the database');
+  } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
+});
+
+// D10 exception-only governance; no full PAID_ACCESS approval or activation endpoint.
+const validateException = x => contracts.validateSaasAccessExceptionGrantReceipt({exception:x,access:orgAccess({organizationId:x.organizationId,entitlement:x.grantedEntitlement,capabilities:[...contracts.SAAS_PLAN_CAPABILITIES.COMPLETE]}),replayed:false}).exception;
+const policy = patch => ({ approvalId: U(), revision: 1, status: 'APPROVED', termsVersion: 1, maxDays: 30,
+  validFrom: T, validUntil: T2, reason: 'Synthetic independently confirmed policy', actorPrincipalId: U(), recordedAt: T, ...patch });
+const decisionInput = patch => ({ expectedRevision: 0, decision: 'APPROVED', termsVersion: 1, maxDays: 30,
+  validFrom: T, validUntil: T2, reason: 'Synthetic independently confirmed policy', confirmation: contracts.SAAS_EXCEPTION_POLICY_CONFIRMATION, ...patch });
+test('D10 contracts: closed explicit decisions, bounded dates/duration and no automatic approval', () => {
+  assert.equal(contracts.validateSaasExceptionPolicyDecisionInput(decisionInput()).decision, 'APPROVED');
+  for (const patch of [{ confirmation: undefined }, { confirmation: 'yes' }, { maxDays: 91 }, { maxDays: 0 }, { validUntil: T },
+    { reason: 'short' }, { expectedRevision: -1 }, { termsVersion: 0 }, { decision: 'ACTIVE' }, { organizationId: U() }, { approvePaidAccess: true }])
+    assert.throws(() => contracts.validateSaasExceptionPolicyDecisionInput(decisionInput(patch)));
+  const { confirmation, ...proposed } = decisionInput({ decision: 'PROPOSED' });
+  assert.equal(contracts.validateSaasExceptionPolicyDecisionInput(proposed).decision, 'PROPOSED');
+  assert.throws(() => contracts.validateSaasExceptionPolicyDecisionInput({ ...proposed, confirmation }));
+  for (const decision of ['WITHDRAWN','REVOKED']) {
+    const minimal = { expectedRevision: 1, decision, reason: 'Explicit exception-only withdrawal' };
+    assert.equal(contracts.validateSaasExceptionPolicyDecisionInput(minimal).decision, decision);
+    assert.throws(() => contracts.validateSaasExceptionPolicyDecisionInput({ ...minimal, maxDays: 90 }));
+  }
+});
+test('D10 response contracts: coherent history and historical pre-D10 receipt compatibility', () => {
+  const p = policy(), view = { scope: 'ACCESS_EXCEPTIONS_ONLY', current: p, effectiveStatus: 'ACTIVE', history: [p], historyLimit: 100,
+    asOf: T, termsStatus: 'PROPOSED', paidAccessProgram: 'INACTIVE', aiCreditProgram: 'INACTIVE' };
+  assert.equal(contracts.validateSaasExceptionPolicyView(view).current.approvalId,p.approvalId);
+  for (const patch of [{ current: null }, { effectiveStatus: 'PROPOSED' }, { termsStatus: 'APPROVED' }, { history: [p,p] }, { scope: 'PAID_ACCESS' }])
+    assert.throws(() => contracts.validateSaasExceptionPolicyView({ ...view,...patch }));
+  const x=accessException();
+  assert.equal(validateException(x).governingPolicy,undefined,'old stored exact receipt is not rewritten');
+  const binding={approvalId:p.approvalId,revision:1,termsVersion:x.policyVersion,maxDays:x.maxDays};
+  assert.equal(validateException({...x,governingPolicy:binding}).governingPolicy.approvalId,p.approvalId);
+  assert.throws(()=>validateException({...x,governingPolicy:{...binding,maxDays:1}}));
+});
+test('D10 HTTP: explicit human command, origin, closed body, fixed subject and safe refusals', async () => {
+  const previous=process.env.HON_PUBLIC_ORIGIN;process.env.HON_PUBLIC_ORIGIN='https://hon.example';
+  const calls=[],p=policy();
+  const {app,base}=await appWith(async(operation,params)=>{
+    calls.push([operation,params]);
+    if(operation==='readExceptionPolicy')return {scope:'ACCESS_EXCEPTIONS_ONLY',current:null,effectiveStatus:'ABSENT',history:[],historyLimit:100,
+      asOf:T,termsStatus:'PROPOSED',paidAccessProgram:'INACTIVE',aiCreditProgram:'INACTIVE'};
+    if(operation==='decideExceptionPolicy'){
+      const input=JSON.parse(params[1]);
+      if(input.reason==='Denied synthetic policy attempt'){const e=new Error('SAAS_FORBIDDEN');e.code='42501';throw e;}
+      return {policy:p,replayed:false};
+    }
+    throw new Error('unexpected');
+  });
+  const headers=()=>({'content-type':'application/json',origin:'https://hon.example','x-hon-human-command':contracts.SAAS_COMMANDS.decideExceptionPolicy,
+    'sec-fetch-site':'same-origin','sec-fetch-mode':'same-origin','sec-fetch-dest':'empty','idempotency-key':U()});
+  try{
+    const path=`${base}/hq/saas/access-exception-policy`;
+    assert.equal((await send(path)).status,200);
+    assert.deepEqual(calls[0],['readExceptionPolicy',['verified-human']]);
+    const input=decisionInput(),key=U();
+    assert.equal((await send(path,{method:'POST',headers:{...headers(),'idempotency-key':key},body:JSON.stringify(input)})).status,200);
+    assert.deepEqual(calls.at(-1)[1].slice(0,3),['verified-human',JSON.stringify(input),key]);
+    const n=calls.length;
+    for(const [h,body] of [[{...headers(),origin:'https://evil.example'},input],[{...headers(),'x-hon-human-command':'saas-access-exception-grant'},input],
+      [{...headers(),'idempotency-key':'invalid'},input],[headers(),{...input,organizationId:U()}],[headers(),{...input,confirmation:'yes'}]])
+      assert([400,403].includes((await send(path,{method:'POST',headers:h,body:JSON.stringify(body)})).status));
+    assert.equal((await send(path+'?schoolId='+U())).status,400);
+    assert.equal(calls.length,n,'invalid/forged commands never call the database');
+    assert.equal((await send(path,{method:'POST',headers:headers(),body:JSON.stringify(decisionInput({reason:'Denied synthetic policy attempt'}))})).status,403);
+  }finally{await app.close();if(previous===undefined)delete process.env.HON_PUBLIC_ORIGIN;else process.env.HON_PUBLIC_ORIGIN=previous;}
 });

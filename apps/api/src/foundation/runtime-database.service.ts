@@ -1,5 +1,7 @@
 import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
-import { Pool, type PoolClient } from 'pg';
+import { Pool, type PoolClient, type PoolConfig } from 'pg';
+import { runtimePoolOptions } from './runtime-pool-options.js';
+import { emitTelemetry, summarizeError } from '../observability/telemetry.js';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { HqEntitlementTransitionInput, HqEntitlementTransitionReceipt } from '@hon/contracts';
@@ -90,6 +92,14 @@ export type ChampionsClubOperation = keyof typeof CHAMPIONS_CLUB_CALLS;
 
 // HON subscription catalog (B1): HON billing schools. Separate from school-to-family billing.
 const SAAS_BILLING_CALLS = {
+  recordSubscriptionGeneration: { sql: 'SELECT hon.record_saas_subscription_generation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSubscriptionGeneration: { sql: 'SELECT hon.read_saas_subscription_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  readSubscriptionGenerationHq: { sql: 'SELECT hon.read_saas_subscription_generation_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  recordPriceSchedule: { sql: 'SELECT hon.record_saas_price_schedule($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readPriceSchedule: { sql: 'SELECT hon.read_saas_price_schedule($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  previewPriceAcceptance: { sql: 'SELECT hon.preview_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  acceptPriceSchedule: { sql: 'SELECT hon.accept_saas_price_schedule($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readPriceAcceptance: { sql: 'SELECT hon.read_saas_price_acceptance($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   readCatalog: { sql: 'SELECT hon.read_saas_catalog_from_hq($1) AS data', arity: 1, readOnly: true },
   createCatalogDraft: { sql: 'SELECT hon.create_saas_catalog_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   publishCatalog: { sql: 'SELECT hon.publish_saas_catalog($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
@@ -151,6 +161,31 @@ const SAAS_BILLING_CALLS = {
   readOrganizationAccess: { sql: 'SELECT hon.read_saas_organization_access_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   awaitFirstPayment: { sql: 'SELECT hon.place_saas_organization_awaiting_payment($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   retryFirstPaymentActivation: { sql: 'SELECT hon.retry_saas_first_payment_activation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // D9 HQ-owner access exceptions (0185): time-limited free access for testing, demos and approved pilots; never credits.
+  readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  closeExpiredAccessExceptions: { sql: 'SELECT hon.close_expired_saas_access_exceptions($1,$2::uuid,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
+  readTrialGovernance: { sql: 'SELECT hon.read_saas_trial_governance($1) AS data', arity: 1, readOnly: true },
+  readTrialCampaign: { sql: 'SELECT hon.read_saas_trial_campaign($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  previewTrialPublication: { sql: 'SELECT hon.preview_saas_trial_publication($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  proposeTrialPolicy: { sql: 'SELECT hon.propose_saas_trial_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  decideTrialPolicy: { sql: 'SELECT hon.decide_saas_trial_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  draftTrialCampaign: { sql: 'SELECT hon.draft_saas_trial_campaign($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishTrialCampaign: { sql: 'SELECT hon.publish_saas_trial_campaign($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  withdrawTrialCampaign: { sql: 'SELECT hon.withdraw_saas_trial_campaign($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readExceptionPolicy: { sql: 'SELECT hon.read_saas_exception_policy($1) AS data', arity: 1, readOnly: true },
+  decideExceptionPolicy: { sql: 'SELECT hon.decide_saas_exception_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
+  readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },
+  readOfferSet: { sql: 'SELECT hon.read_saas_offer_set_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createOfferSetDraft: { sql: 'SELECT hon.create_saas_offer_set_draft($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  reviseOfferSetDraft: { sql: 'SELECT hon.revise_saas_offer_set_draft($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  discardOfferSetDraft: { sql: 'SELECT hon.discard_saas_offer_set_draft($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  publishOfferSet: { sql: 'SELECT hon.publish_saas_offer_set($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  stopOfferSales: { sql: 'SELECT hon.stop_saas_offer_sales($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readSchoolHonOsOffers: { sql: 'SELECT hon.read_saas_hon_os_offers_for_school($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  createSchoolHonOsCheckout: { sql: 'SELECT hon.create_saas_hon_os_checkout_from_school($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type SaasBillingOperation = keyof typeof SAAS_BILLING_CALLS;
 // Interface language persistence (0171): fixed subject-bound functions; the subject is the verified identity.
@@ -166,6 +201,7 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
   private postureCheck: Promise<void> | undefined;
+  private configurationErrorReported = false;
 
   isConfigured(): boolean {
     return Boolean(process.env.HON_RUNTIME_DATABASE_URL);
@@ -183,15 +219,28 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       });
     }
 
-    const databaseHost = new URL(connectionString).hostname;
-    const isLoopbackDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(databaseHost);
-    this.pool ??= new Pool({
-      connectionString,
-      max: 8,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-      ssl: isLoopbackDatabase ? false : { rejectUnauthorized: false },
-    });
+    if (!this.pool) {
+      let options: PoolConfig;
+      try {
+        options = runtimePoolOptions(connectionString);
+      } catch (error) {
+        // Logged once per process so a misconfiguration cannot flood (and bill) the log drain.
+        if (!this.configurationErrorReported) emitTelemetry('error', 'database.configuration_invalid', { component: 'runtime-database', ...summarizeError(error) });
+        this.configurationErrorReported = true;
+        throw new ServiceUnavailableException({
+          type: 'https://hon.example/problems/runtime-database-not-configured',
+          title: 'HON runtime database is not configured',
+          status: 503,
+          code: 'PERSISTENCE_NOT_CONFIGURED',
+          detail: 'HON requires a verified TLS connection to its runtime database.',
+        });
+      }
+      const pool = new Pool(options);
+      // An idle client can fail when the database or pooler restarts. Without a listener the pool's
+      // 'error' event would crash the process; the pool already discards the broken client.
+      pool.on('error', (error) => emitTelemetry('warn', 'database.idle_client_error', { component: 'runtime-database', ...summarizeError(error) }));
+      this.pool = pool;
+    }
     return this.pool;
   }
 
@@ -379,6 +428,14 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       [externalSubject, schoolId, permissionCode],
     );
     return result.rows[0];
+  }
+
+  async readA2pPreparationScope(context: ResolvedPrincipalScope & {externalSubject:string;principalType:'HUMAN_USER';requestId:string}): Promise<(ResolvedPrincipalScope & {schoolName:string;canConfirmOwnerFacts:boolean}) | null> {
+    return this.withTenantReadOnlyTransaction(context, async client => {
+      await client.query("SET LOCAL statement_timeout='3s'; SET LOCAL lock_timeout='1s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)",[context.externalSubject]);
+      return (await client.query<{data:ResolvedPrincipalScope & {schoolName:string;canConfirmOwnerFacts:boolean}}>('SELECT hon.read_a2p_preparation_scope($1) data',[context.externalSubject])).rows[0]?.data ?? null;
+    });
   }
 
   async resolvePlannedAbsenceReviewScope(externalSubject: string): Promise<ResolvedPrincipalScope | undefined> {
@@ -1109,6 +1166,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call = LANGUAGE_CALLS[operation];
     if (!call || params.length !== call.arity) throw new Error('LANGUAGE_UNAVAILABLE');
     return this.callFixedSubjectFunction(call, params, 'LANGUAGE_UNAVAILABLE');
+  }
+
+  async callSchoolAccount(operation: 'invite'|'revoke'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      invite: {sql: "SELECT hon.manage_school_owner_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},
+      revoke: {sql: "SELECT hon.manage_school_owner_invitation($1,'REVOKE',$2::jsonb,$3::uuid) data",arity:3},
+      accept: {sql: 'SELECT hon.accept_school_owner_invitation($1,$2,$3::jsonb,$4::uuid) data',arity:4},
+      list: {sql: 'SELECT hon.read_school_owner_invitations($1,$2::uuid) data',arity:2},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

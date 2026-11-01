@@ -1,11 +1,14 @@
-import type { SaasProviderCode, SaasProviderEvent } from '@hon/contracts';
+import type { SaasHonOsRecurringBilling, SaasProviderCode, SaasProviderEvent, SaasSoldBillingInterval, SaasSoldOfferKind } from '@hon/contracts';
 
 export const PAYMENT_PROVIDER_ADAPTER = Symbol('PAYMENT_PROVIDER_ADAPTER');
 
-/** What HON asks the provider to host. HON never sees or stores card data. */
+/**
+ * What HON asks the provider to host. HON never sees or stores card data. `recurring` is decided by the server (legacy
+ * monthly or a HON OS accepted offer): NONE is a one-time payment that can never create a recurring obligation.
+ */
 export interface HostedCheckoutRequest {
   checkoutId: string; organizationId: string; planCode: 'CORE' | 'COMPLETE';
-  offerKind: 'REGULAR_MONTHLY' | 'FOUNDER_MONTHLY' | 'FOUNDER_LIFETIME'; billingInterval: 'MONTHLY' | 'LIFETIME';
+  offerKind: SaasSoldOfferKind; billingInterval: SaasSoldBillingInterval; recurring: SaasHonOsRecurringBilling;
   amountMinor: number; productName: string; expiresAt: string; successUrl: string; cancelUrl: string;
 }
 export interface HostedCheckoutSession { providerSessionId: string; checkoutUrl: string }

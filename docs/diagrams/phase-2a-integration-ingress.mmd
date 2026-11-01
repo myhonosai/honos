@@ -1,0 +1,64 @@
+flowchart TB
+  P[Future provider delivery\nnot connected by this design]
+  K[Pre-tenant signing-key resolution\nfixed server endpoint + installation context\nsigning purpose; eligible generations only]
+  V[Bounded raw-byte signature verification\nbefore parse or body-context trust]
+  I[Verified provider installation\nkey generation only]
+  B[Historical verified asset binding\ninstallation + connection + exact asset + capability]
+  S[Exactly one organization + school\nproven by binding]
+
+  subgraph noSchool[Fail-closed / non-school handling]
+    R1[SIGNATURE_REJECTED\nnon-PII security telemetry only]
+    R2[MALFORMED_REJECTED]
+    R3[UNSUPPORTED_VERSION_QUARANTINED\nonly if approved bounded operator plane]
+    R4[UNKNOWN_BINDING_QUARANTINED]
+    R5[AMBIGUOUS_BINDING_QUARANTINED]
+    R6[RETRY_AMBIGUOUS_RECONCILIATION_REQUIRED]
+    C[IDENTITY_CONFLICT\nimmutable different-digest evidence]
+  end
+
+  subgraph receipt[Boundary A — receipt reservation and deduplication\nbefore school routing]
+    E[Boundary A.1 — receipt reservation + deduplication\nstable event identity + delivery-attempt evidence\nclassify verified identity + digest]
+    Y[REPLAY_RECORDED\nreturns original durable outcome]
+  end
+
+  subgraph school[Future school-scoped boundary after unique proof]
+    N[Protected normalized candidate V1\nonly after PII-custody approval]
+    Q[Metadata-only review case\nROUTED_TO_REVIEW]
+    A0[Boundary A.4 — acknowledgement gate\ncommit ROUTED_TO_REVIEW first; then adapter response\n2xx only if permitted; never CRM creation]
+    D[Later Boundary B — qualified\ndirect-human disposition]
+    X[Same atomic Boundary B —\nCREATE_DISTINCT_NEW_LEAD only\nunique CRM effect + canonical CRM creation]
+    T[Same atomic Boundary B —\nreview decision + terminal case transition]
+    A[Same atomic Boundary B —\nprivate provenance/result\nredacted audit + non-dispatchable inert evidence]
+  end
+
+  P --> K --> V
+  K -->|unknown / revoked / disabled / outside cutover| R1
+  V -->|signature invalid / missing| R1
+  V -->|verified signature| I
+  I -->|authenticated envelope malformed| R2
+  I -->|unsupported adapter/schema| R3
+  I -->|eligible authenticated envelope| E
+  E -->|same identity + same digest| Y
+  E -->|prior durable outcome cannot be proven| R6
+  E -->|same identity + different digest| C
+  E -->|new stable identity; routing required| B
+  B -->|no unique historical proof| R4
+  B -->|two schools or unprovable cutover| R5
+  B -->|one proven school| S --> N --> Q --> A0
+  A0 -. only later, direct-human Boundary B .-> D
+  D -->|CREATE_DISTINCT_NEW_LEAD only after live rechecks| X --> T --> A
+  D -->|SKIP / REJECT / EVIDENCE / ESCALATE| T
+
+  O[Future post-routing provider/data resolution\nseparate credential: verified school connection + exact asset grant\ncurrent authorization + purpose + lifecycle]
+  S -. only for separately approved provider/data operation .-> O
+
+  classDef future fill:#fff5e6,stroke:#a35b00,color:#3d2600
+  classDef trust fill:#eaf7ff,stroke:#126782,color:#082a39
+  classDef exception fill:#fff0f1,stroke:#a51c30,color:#4a0610
+  classDef protected fill:#eefbf4,stroke:#197345,color:#092b18
+  classDef boundary fill:#f4f4f4,stroke:#333,stroke-width:2px,color:#111
+  class P,O future
+  class K,V,I,B,S trust
+  class R1,R2,R3,R4,R5,R6,C exception
+  class E,Y,N,Q,D,X,T,A protected
+  class A0 boundary

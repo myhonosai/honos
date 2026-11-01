@@ -6,19 +6,21 @@
 // transition while the paid-access program is ACTIVE (it is INACTIVE until the owner approves).
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
-import { saasUuid, validateSaasSubscriptionForSchool, type SaasSubscription } from './saas-billing.js';
+import { SAAS_SOLD_OFFER_KINDS, saasSoldInterval, saasUuid, validateSaasSubscriptionForSchool, type SaasSoldBillingInterval, type SaasSoldOfferKind,
+  type SaasSubscription } from './saas-billing.js';
 
 export type SaasProviderCode = 'STRIPE' | 'STRIPE_SIMULATED';
 export type SaasCheckoutStatus = 'CREATED' | 'OPEN' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED' | 'FAILED' | 'PAID_NEEDS_REVIEW';
 export type SaasCheckoutReason = 'CREATED' | 'PROVIDER_SESSION_OPENED' | 'PROVIDER_CREATE_FAILED' | 'PAYMENT_VERIFIED' | 'PROVIDER_EXPIRED'
   | 'LOCAL_EXPIRED' | 'CANCELLED_BY_REQUESTER' | 'CANCELLED_BY_HQ' | 'ASYNC_PAYMENT_FAILED' | 'PAID_AFTER_CLOSE' | 'AMOUNT_MISMATCH'
-  | 'FOUNDER_UNAVAILABLE' | 'ENTITLEMENT_CHANGED' | 'SUBSCRIPTION_EXISTS' | 'ACCESS_PROGRAM_INACTIVE';
+  | 'FOUNDER_UNAVAILABLE' | 'ENTITLEMENT_CHANGED' | 'SUBSCRIPTION_EXISTS' | 'ACCESS_PROGRAM_INACTIVE'
+  | 'OFFER_SALES_STOPPED' | 'SALE_LIMIT_REACHED' | 'RECURRING_MISMATCH' | 'LEGACY_SALES_CLOSED';
 export type SaasProviderEventOutcome = 'APPLIED' | 'ALREADY_APPLIED' | 'IGNORED' | 'NEEDS_REVIEW' | 'AWAITING_ASYNC_PAYMENT';
 const PROVIDERS: readonly SaasProviderCode[] = ['STRIPE','STRIPE_SIMULATED'];
 const STATUSES: readonly SaasCheckoutStatus[] = ['CREATED','OPEN','COMPLETED','EXPIRED','CANCELLED','FAILED','PAID_NEEDS_REVIEW'];
 const REASONS: readonly SaasCheckoutReason[] = ['CREATED','PROVIDER_SESSION_OPENED','PROVIDER_CREATE_FAILED','PAYMENT_VERIFIED','PROVIDER_EXPIRED',
   'LOCAL_EXPIRED','CANCELLED_BY_REQUESTER','CANCELLED_BY_HQ','ASYNC_PAYMENT_FAILED','PAID_AFTER_CLOSE','AMOUNT_MISMATCH','FOUNDER_UNAVAILABLE',
-  'ENTITLEMENT_CHANGED','SUBSCRIPTION_EXISTS','ACCESS_PROGRAM_INACTIVE'];
+  'ENTITLEMENT_CHANGED','SUBSCRIPTION_EXISTS','ACCESS_PROGRAM_INACTIVE','OFFER_SALES_STOPPED','SALE_LIMIT_REACHED','RECURRING_MISMATCH','LEGACY_SALES_CLOSED'];
 const OUTCOMES: readonly SaasProviderEventOutcome[] = ['APPLIED','ALREADY_APPLIED','IGNORED','NEEDS_REVIEW','AWAITING_ASYNC_PAYMENT'];
 const OFFER_KINDS = ['REGULAR_MONTHLY','FOUNDER_MONTHLY','FOUNDER_LIFETIME'] as const;
 
@@ -43,9 +45,13 @@ export interface SaasPaymentProgram {
   testTaxReference: string | null; authorizationReference: string | null; version: number; changedAt: string;
   cardDataStored: false; refundExecution: 'UNAVAILABLE';
 }
+/**
+ * A legacy catalog checkout or (0182) a HON OS checkout. For HON OS, offerId is the HON OS offer, planCode is COMPLETE,
+ * the kind may be annual or LIFETIME, and founderReservationId is null (the HON OS founder hold is the checkout itself).
+ */
 export interface SaasCheckout {
   checkoutId: string; organizationId: string; schoolId: string | null; offerId: string; planCode: 'CORE' | 'COMPLETE';
-  offerKind: typeof OFFER_KINDS[number]; billingInterval: 'MONTHLY' | 'LIFETIME'; amountMinor: number; currency: 'USD';
+  offerKind: SaasSoldOfferKind; billingInterval: SaasSoldBillingInterval; amountMinor: number; currency: 'USD';
   founderReservationId: string | null; requesterKind: 'SCHOOL_OWNER' | 'HQ'; provider: SaasProviderCode; mode: 'TEST';
   providerSessionId: string | null; checkoutUrl: string | null; status: SaasCheckoutStatus; statusReason: SaasCheckoutReason;
   subscriptionId: string | null; invoiceId: string | null; expiresAt: string; version: number; createdAt: string; completedAt: string | null;
@@ -72,6 +78,14 @@ export interface SaasSchoolPlanOptions {
 }
 export interface SaasPaymentProgramReceipt { program: SaasPaymentProgram; replayed: boolean }
 export interface SaasCheckoutReceipt { checkout: SaasCheckout; replayed: boolean }
+/** Recurring provider billing of a HON OS purchase: NONE for lifetime and non-renewing annual offers (one-time payment). */
+export type SaasHonOsRecurringBilling = 'MONTH' | 'YEAR' | 'NONE';
+export interface SaasHonOsCheckoutReceipt {
+  checkout: SaasCheckout;
+  purchase: { productName: string; offerDisplayName: string; recurringBilling: SaasHonOsRecurringBilling; offerSetVersion: number;
+    termsReference: string; acceptedOfferDigest: string };
+  replayed: boolean;
+}
 export interface SaasProviderEventReceipt {
   event: { eventId: string; providerEventId: string; type: string; outcome: SaasProviderEventOutcome; detail: string;
     organizationId: string | null; checkoutId: string | null; subscriptionId: string | null };
@@ -125,14 +139,20 @@ function validateProgram(value: unknown): void {
     || !nullable(p.authorizationReference, (v): v is string => text(v, 200)) || p.liveMode !== 'UNAVAILABLE' || !isInt(p.version, 1, 2147483647)
     || !isTimestamp(p.changedAt) || p.cardDataStored !== false || p.refundExecution !== 'UNAVAILABLE') drift();
 }
+/** Closed validation of one checkout (legacy or HON OS). */
+export function validateSaasCheckout(value: unknown): SaasCheckout { validateCheckout(value); return value as SaasCheckout; }
 function validateCheckout(value: unknown): void {
   const c = record(value, drift);
   exactKeys(c, ['checkoutId','organizationId','schoolId','offerId','planCode','offerKind','billingInterval','amountMinor','currency','founderReservationId',
     'requesterKind','provider','mode','providerSessionId','checkoutUrl','status','statusReason','subscriptionId','invoiceId','expiresAt','version','createdAt','completedAt'], drift);
   if (!isUuid(c.checkoutId) || !isUuid(c.organizationId) || !nullable(c.schoolId, isUuid) || !isUuid(c.offerId) || !has(['CORE','COMPLETE'], c.planCode)
-    || !has(OFFER_KINDS, c.offerKind) || c.billingInterval !== (c.offerKind === 'FOUNDER_LIFETIME' ? 'LIFETIME' : 'MONTHLY')
+    || !has(SAAS_SOLD_OFFER_KINDS, c.offerKind) || c.billingInterval !== saasSoldInterval(c.offerKind)
     || !isInt(c.amountMinor, 100, 10_000_000) || c.currency !== 'USD' || !nullable(c.founderReservationId, isUuid)
-    || (c.founderReservationId === null) !== (c.offerKind === 'REGULAR_MONTHLY') || !has(['SCHOOL_OWNER','HQ'], c.requesterKind)
+    // Legacy founder checkouts hold a reservation; HON OS checkouts (founder or not) and legacy regular ones never do.
+    || (c.founderReservationId !== null && !has(['FOUNDER_MONTHLY','FOUNDER_LIFETIME'], c.offerKind))
+    // A founder checkout without a reservation can only be a HON OS school purchase (COMPLETE, school owner).
+    || (c.founderReservationId === null && has(['FOUNDER_MONTHLY','FOUNDER_LIFETIME'], c.offerKind) && (c.planCode !== 'COMPLETE' || c.requesterKind !== 'SCHOOL_OWNER'))
+    || (!has(OFFER_KINDS, c.offerKind) && (c.planCode !== 'COMPLETE' || c.requesterKind !== 'SCHOOL_OWNER')) || !has(['SCHOOL_OWNER','HQ'], c.requesterKind)
     || (c.requesterKind === 'SCHOOL_OWNER') !== (c.schoolId !== null) || !has(PROVIDERS, c.provider) || c.mode !== 'TEST'
     || !nullable(c.providerSessionId, (v): v is string => typeof v === 'string' && SESSION.test(v))
     || !nullable(c.checkoutUrl, (v): v is string => typeof v === 'string' && URL_RE.test(v)) || (c.checkoutUrl !== null) !== (c.status === 'OPEN')
@@ -200,6 +220,17 @@ export function validateSaasProviderEventReceipt(value: unknown): SaasProviderEv
   const r = record(value, drift); exactKeys(r, ['event','replayed'], drift); validateEventResult(r.event);
   if (typeof r.replayed !== 'boolean') drift();
   return r as unknown as SaasProviderEventReceipt;
+}
+export function validateSaasHonOsCheckoutReceipt(value: unknown): SaasHonOsCheckoutReceipt {
+  const r = record(value, drift); exactKeys(r, ['checkout','purchase','replayed'], drift); validateCheckout(r.checkout);
+  const c = r.checkout as SaasCheckout, p = record(r.purchase, drift);
+  exactKeys(p, ['productName','offerDisplayName','recurringBilling','offerSetVersion','termsReference','acceptedOfferDigest'], drift);
+  if (c.planCode !== 'COMPLETE' || c.founderReservationId !== null || c.requesterKind !== 'SCHOOL_OWNER' || !text(p.offerDisplayName, 80)
+    || p.productName !== `HON OS — ${p.offerDisplayName}` || !has(['MONTH','YEAR','NONE'], p.recurringBilling)
+    || p.recurringBilling !== (c.billingInterval === 'MONTHLY' ? 'MONTH' : c.billingInterval === 'LIFETIME' ? 'NONE' : p.recurringBilling)
+    || (c.billingInterval === 'ANNUAL' && p.recurringBilling === 'MONTH') || !isInt(p.offerSetVersion, 1, 2147483647) || !text(p.termsReference, 500)
+    || typeof p.acceptedOfferDigest !== 'string' || !/^[0-9a-f]{64}$/.test(p.acceptedOfferDigest) || typeof r.replayed !== 'boolean') drift();
+  return r as unknown as SaasHonOsCheckoutReceipt;
 }
 export function validateSaasCheckoutSweepReceipt(value: unknown): SaasCheckoutSweepReceipt {
   const r = record(value, drift); exactKeys(r, ['expired','asOf','replayed'], drift);

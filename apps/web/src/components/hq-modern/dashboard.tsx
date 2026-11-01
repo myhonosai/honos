@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { HQ_EXECUTIVES, HQ_GROWTH, HQ_RESPONSIBILITIES } from './catalog';
 import { useHqModern, HonCore } from './shell';
 import { HonComposer } from './assistant';
+import { CommercialStatus } from './commercial-status';
 import { HqIcon } from './icon';
 import styles from './hq-modern.module.css';
 
@@ -112,6 +113,7 @@ export function HqModernDashboard(): React.ReactElement {
     <div className={styles.dashboard}>
       <CommandStage/>
       <PerformanceStrip/>
+      <CommercialStatus/>
       <div className={styles.managementGrid}>
         <div className={styles.attentionSlot}><NeedsAttention/></div>
         <div className={styles.snapshotSlot}><CompanySnapshot/></div>

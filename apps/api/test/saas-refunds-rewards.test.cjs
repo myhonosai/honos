@@ -55,9 +55,11 @@ test('B4 inputs: refund intake, decisions, reward application and alert resoluti
 test('B4 responses fail closed on executed refunds, prizes, payouts, debts or a preview passing as fulfillment', () => {
   assert.doesNotThrow(() => contracts.validateSaasRefundRequestReceipt({ refundRequest:refund(), replayed:false }));
   for (const bad of [refund({ executionStatus:'EXECUTED' }), refund({ execution:'AVAILABLE' }), refund({ subscriptionConsequence:'CANCELLED' }),
-    refund({ windowEndsAt:'2026-11-01T12:00:00.000Z' }), refund({ requestReceivedAt:END }), refund({ requestReceivedAt:'2026-09-30T12:00:00.000Z' }),
+    refund({ windowEndsAt:'2026-10-31T13:00:00.000Z' }), refund({ windowEndsAt:'2027-10-02T12:00:00.000Z' }), refund({ requestReceivedAt:END }), refund({ requestReceivedAt:'2026-09-30T12:00:00.000Z' }),
     refund({ approvedAmountMinor:14900 })])
     assert.throws(() => contracts.validateSaasRefundRequestReceipt({ refundRequest:bad, replayed:false }));
+  // HON OS purchases carry the accepted offer's whole-day window (legacy purchases stay 30 days).
+  assert.doesNotThrow(() => contracts.validateSaasRefundRequestReceipt({ refundRequest:refund({ offerKind:'LIFETIME', windowEndsAt:'2026-10-08T12:00:00.000Z', requestReceivedAt:'2026-10-02T12:00:00.000Z' }), replayed:false }));
   const approved = refund({ status:'APPROVED', statusReason:'GUARANTEE_APPROVED', approvedAmountMinor:14900, version:2, decidedAt:T });
   assert.doesNotThrow(() => contracts.validateSaasRefundDecisionReceipt({ refundRequest:approved, decision:'APPROVE', replayed:false }));
   assert.throws(() => contracts.validateSaasRefundDecisionReceipt({ refundRequest:approved, decision:'DENY', replayed:false }));
