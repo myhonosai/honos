@@ -14,13 +14,15 @@ const { TrialAppointmentController } = await import('../../../apps/api/dist/crm/
 const { TrialAppointmentService } = await import('../../../apps/api/dist/crm/trial-appointment.service.js');
 const { TrialAppointmentOutcomeController } = await import('../../../apps/api/dist/crm/trial-appointment-outcome.controller.js');
 const { TrialAppointmentOutcomeService } = await import('../../../apps/api/dist/crm/trial-appointment-outcome.service.js');
+const { TrialAppointmentReadController } = await import('../../../apps/api/dist/crm/trial-appointment-read.controller.js');
 const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
 
 const ids = Object.fromEntries(
   [
     'organization', 'schoolA', 'schoolB', 'user', 'principal', 'ownerRole',
     'personA', 'personB', 'pipelineA', 'pipelineB', 'stageA', 'stageB', 'leadA', 'leadB',
-    'foreignAppointment', 'localScheduledAppointment', 'localConsultationAppointment',
+    'personA2', 'personA3', 'leadA2', 'leadA3',
+    'foreignAppointment', 'localScheduledAppointment', 'localConsultationAppointment', 'pastScheduledAppointment',
   ].map((key) => [key, randomUUID()]),
 );
 const externalSubject = `crm-trial-appointment-${randomUUID()}`;
@@ -88,6 +90,10 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.crm_appointments WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
     await administrator.query('DELETE FROM hon.roles WHERE id = $1', [ids.ownerRole]);
+    // Campaign attribution evidence is immutable by trigger; disposable-fixture cleanup only (transactional).
+    await administrator.query('ALTER TABLE hon.crm_lead_attributions DISABLE TRIGGER USER');
+    await administrator.query('DELETE FROM hon.crm_lead_attributions WHERE organization_id = $1', [ids.organization]);
+    await administrator.query('ALTER TABLE hon.crm_lead_attributions ENABLE TRIGGER USER');
     await administrator.query('DELETE FROM hon.crm_leads WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.crm_pipeline_stages WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.crm_pipelines WHERE organization_id = $1', [ids.organization]);
@@ -110,6 +116,20 @@ const service = new TrialAppointmentService(database);
 const controller = new TrialAppointmentController(database, service);
 const outcomeService = new TrialAppointmentOutcomeService(database);
 const outcomeController = new TrialAppointmentOutcomeController(database, outcomeService);
+const readController = new TrialAppointmentReadController(database, service);
+
+async function expectConflictCode(expectedCode, operation, message) {
+  try {
+    await operation();
+    throw new Error(message);
+  } catch (error) {
+    if (error instanceof Error && error.message === message) throw error;
+    if (typeof error?.getStatus !== 'function' || error.getStatus() !== 409) throw error;
+    const body = error.getResponse();
+    if (body?.code !== expectedCode) throw new Error(`${message} (code ${body?.code})`);
+    return body;
+  }
+}
 
 try {
   const permissions = await administrator.query(
@@ -188,8 +208,10 @@ try {
     await administrator.query(
       `INSERT INTO hon.people (id, organization_id, school_id, given_name, family_name) VALUES
        ($1, $2, $3, 'Avery', 'Local'),
-       ($4, $2, $5, 'Bailey', 'Foreign')`,
-      [ids.personA, ids.organization, ids.schoolA, ids.personB, ids.schoolB],
+       ($4, $2, $5, 'Bailey', 'Foreign'),
+       ($6, $2, $3, 'Casey', 'Local'),
+       ($7, $2, $3, 'Devon', 'Local')`,
+      [ids.personA, ids.organization, ids.schoolA, ids.personB, ids.schoolB, ids.personA2, ids.personA3],
     );
     await administrator.query(
       `INSERT INTO hon.crm_pipelines (id, organization_id, school_id, name) VALUES
@@ -210,10 +232,13 @@ try {
          id, organization_id, school_id, primary_person_id, pipeline_id, pipeline_stage_id, status
        ) VALUES
        ($1, $2, $3, $4, $5, $6, 'OPEN'),
-       ($7, $2, $8, $9, $10, $11, 'OPEN')`,
+       ($7, $2, $8, $9, $10, $11, 'OPEN'),
+       ($12, $2, $3, $13, $5, $6, 'OPEN'),
+       ($14, $2, $3, $15, $5, $6, 'OPEN')`,
       [
         ids.leadA, ids.organization, ids.schoolA, ids.personA, ids.pipelineA, ids.stageA,
         ids.leadB, ids.schoolB, ids.personB, ids.pipelineB, ids.stageB,
+        ids.leadA2, ids.personA2, ids.leadA3, ids.personA3,
       ],
     );
     await administrator.query(
@@ -232,7 +257,17 @@ try {
        ) VALUES (
          $1, $2, $3, $4, 'TRIAL', 'SCHEDULED', $5, $6, 'Studio A', 'Unchanged schedule note', $7
       )`,
-      [ids.localScheduledAppointment, ids.organization, ids.schoolA, ids.leadA, startsAt.toISOString(), endsAt.toISOString(), ids.principal],
+      [ids.localScheduledAppointment, ids.organization, ids.schoolA, ids.leadA2, startsAt.toISOString(), endsAt.toISOString(), ids.principal],
+    );
+    // A SCHEDULED trial whose time already passed (outcome never recorded) must not block a new trial.
+    await administrator.query(
+      `INSERT INTO hon.crm_appointments (
+         id, organization_id, school_id, crm_lead_id, appointment_type, status,
+         starts_at, ends_at, created_by_principal_id
+       ) VALUES (
+         $1, $2, $3, $4, 'TRIAL', 'SCHEDULED', now() - interval '2 days', now() - interval '2 days' + interval '1 hour', $5
+       )`,
+      [ids.pastScheduledAppointment, ids.organization, ids.schoolA, ids.leadA3, ids.principal],
     );
     await administrator.query(
       `INSERT INTO hon.crm_appointments (
@@ -270,6 +305,88 @@ try {
   assert(replayResponse.statusCode === 200 && replay.meta.replayed && replay.data.id === first.data.id,
     'A matching trial scheduling idempotency request did not replay its original response.');
 
+  // P1-1: a lost tab/session retrying with a NEW key cannot create a second active trial for the same lead.
+  const secondKey = `crm-trial-second-${randomUUID()}`;
+  const laterStart = new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
+  const laterEnd = new Date(endsAt.getTime() + 24 * 60 * 60 * 1000);
+  const duplicate = await expectConflictCode('TRIAL_ALREADY_SCHEDULED', () => controller.schedule(
+    ids.organization, ids.schoolA, ids.leadA, secondKey, inputFor(laterStart, laterEnd), request, responseCapture(),
+  ), 'A new idempotency key created a second active trial for the same lead.');
+  assert(duplicate.existingAppointment?.id === first.data.id && duplicate.existingAppointment?.status === 'SCHEDULED',
+    'The active-trial refusal did not return the existing appointment for reconciliation.');
+  const fixtureDuplicate = await expectConflictCode('TRIAL_ALREADY_SCHEDULED', () => controller.schedule(
+    ids.organization, ids.schoolA, ids.leadA2, `crm-trial-a2-${randomUUID()}`, inputFor(laterStart, laterEnd), request, responseCapture(),
+  ), 'A lead with an existing scheduled trial accepted another.');
+  assert(fixtureDuplicate.existingAppointment?.id === ids.localScheduledAppointment, 'The refusal named the wrong existing trial.');
+
+  // Unknown-result reconciliation: the exact school's direct-human read finds the committed trial.
+  const reconciled = await controller.listForLead(ids.organization, ids.schoolA, ids.leadA, request);
+  assert(reconciled.data.activeTrial?.id === first.data.id
+    && reconciled.data.trials.length === 1 && reconciled.data.trials[0].id === first.data.id,
+  'The reconciliation read did not return exactly the committed trial as active.');
+  const detail = await readController.read(ids.organization, ids.schoolA, first.data.id, request);
+  assert(detail.data.id === first.data.id && detail.data.version === first.data.version, 'The trial detail read did not return the committed trial.');
+  await expectStatus(404, () => readController.read(ids.organization, ids.schoolA, ids.foreignAppointment, request),
+    'The trial detail read exposed another school\'s appointment.');
+  await expectStatus(404, () => readController.read(ids.organization, ids.schoolA, ids.localConsultationAppointment, request),
+    'The trial detail read returned a non-trial appointment.');
+  await expectStatus(404, () => controller.listForLead(ids.organization, ids.schoolA, ids.leadB, request),
+    'The reconciliation read exposed another school\'s lead.');
+  await expectStatus(403, () => controller.listForLead(randomUUID(), ids.schoolA, ids.leadA, request),
+    'The reconciliation read accepted an organization route outside its resolved scope.');
+
+  // Exact-key replay is recognised before the clock rule: after the trial's start has passed, the same key
+  // still returns the original receipt, while a new key with the same input is refused as past.
+  const realNow = Date.now;
+  Date.now = () => realNow() + 4 * 24 * 60 * 60 * 1000;
+  try {
+    const lateReplayResponse = responseCapture();
+    const lateReplay = await controller.schedule(
+      ids.organization, ids.schoolA, ids.leadA, firstKey, inputFor(startsAt, endsAt), request, lateReplayResponse,
+    );
+    assert(lateReplayResponse.statusCode === 200 && lateReplay.meta.replayed && lateReplay.data.id === first.data.id,
+      'A post-start exact-key replay was refused by time validation instead of returning its receipt.');
+    await expectStatus(400, () => controller.schedule(
+      ids.organization, ids.schoolA, ids.leadA, `crm-trial-late-${randomUUID()}`, inputFor(startsAt, endsAt), request, responseCapture(),
+    ), 'A new key scheduled a trial whose start has passed.');
+  } finally {
+    Date.now = realNow;
+  }
+
+  // Concurrent new keys on one lead (two tabs): exactly one trial is created. A past, never-closed
+  // SCHEDULED trial on that lead does not block.
+  // Deterministic interleaving: a blocker holds appointment inserts so both commands are in flight together.
+  // Without the per-lead serialization both would pass the active-trial check and wait at the insert.
+  const blocker = new Client(connectionOptions(process.env.DATABASE_URL));
+  await blocker.connect();
+  let raced;
+  try {
+    await blocker.query('BEGIN');
+    await blocker.query('LOCK TABLE hon.crm_appointments IN SHARE ROW EXCLUSIVE MODE');
+    const racing = Promise.allSettled([0, 1].map((n) => controller.schedule(
+      ids.organization, ids.schoolA, ids.leadA3, `crm-trial-race-${n}-${randomUUID()}`, inputFor(startsAt, endsAt), request, responseCapture(),
+    )));
+    const deadline = Date.now() + 20000;
+    for (;;) {
+      const waiting = await administrator.query(
+        "SELECT count(DISTINCT pid)::integer AS n FROM pg_locks WHERE NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+      );
+      if (waiting.rows[0].n >= 2) break;
+      if (Date.now() > deadline) throw new Error('The two concurrent trial commands never reached a lock wait together.');
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await blocker.query('COMMIT');
+    raced = await racing;
+  } finally {
+    await blocker.query('ROLLBACK').catch(() => {});
+    await blocker.end();
+  }
+  const racedCreated = raced.filter((r) => r.status === 'fulfilled');
+  const racedRefused = raced.filter((r) => r.status === 'rejected' && r.reason?.getResponse?.()?.code === 'TRIAL_ALREADY_SCHEDULED');
+  assert(racedCreated.length === 1 && racedRefused.length === 1
+    && racedRefused[0].reason.getResponse().existingAppointment?.id === racedCreated[0].value.data.id,
+  `Concurrent trial scheduling on one lead did not create exactly one trial: ${JSON.stringify(raced.map((r) => r.status))}`);
+
   const outcomeKey = `crm-trial-outcome-${randomUUID()}`;
   const outcomeInput = outcomeFor('COMPLETED', first.data.version, { outcomeNotes: '  Trial completed successfully.  ' });
   const outcomeResponse = responseCapture();
@@ -304,6 +421,13 @@ try {
     ids.organization, ids.schoolA, first.data.id, `outcome-terminal-${randomUUID()}`,
     outcomeFor('NO_SHOW', outcome.data.version), request, responseCapture(),
   ), 'A terminal CRM appointment accepted another trial outcome.');
+  // Once the trial has an outcome, a new trial may be scheduled; the key refused earlier was released by rollback.
+  const afterOutcomeResponse = responseCapture();
+  const afterOutcome = await controller.schedule(
+    ids.organization, ids.schoolA, ids.leadA, secondKey, inputFor(laterStart, laterEnd), request, afterOutcomeResponse,
+  );
+  assert(afterOutcomeResponse.statusCode === 201 && !afterOutcome.meta.replayed && afterOutcome.data.id !== first.data.id,
+    'A new trial could not be scheduled after the previous trial outcome was recorded.');
   await expectStatus(409, () => outcomeController.record(
     ids.organization, ids.schoolA, ids.localConsultationAppointment, `outcome-consultation-${randomUUID()}`,
     outcomeFor('COMPLETED', 1), request, responseCapture(),
@@ -453,6 +577,16 @@ try {
     throw error;
   }
 
+  // Permission revocation: neither replay nor reconciliation survives a removed role grant.
+  await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
+  await expectStatus(403, () => controller.schedule(
+    ids.organization, ids.schoolA, ids.leadA, firstKey, inputFor(startsAt, endsAt), request, responseCapture(),
+  ), 'A revoked principal replayed a trial scheduling receipt.');
+  await expectStatus(403, () => controller.listForLead(ids.organization, ids.schoolA, ids.leadA, request),
+    'A revoked principal read trial reconciliation.');
+  await expectStatus(403, () => readController.read(ids.organization, ids.schoolA, first.data.id, request),
+    'A revoked principal read a trial appointment.');
+
   const evidence = await administrator.query(`
     SELECT
       (SELECT count(*)::integer FROM hon.crm_appointments WHERE organization_id = $1) AS appointments,
@@ -479,9 +613,9 @@ try {
       (SELECT count(*)::integer FROM hon.ai_usage_ledger WHERE organization_id = $1) AS ai_usage,
       (SELECT count(*)::integer FROM hon.action_requests WHERE organization_id = $1) AS action_requests
   `, [ids.organization, ids.leadA, first.data.id, ids.localScheduledAppointment, ids.localConsultationAppointment]);
-  assert(evidence.rows[0]?.appointments === 4
-    && evidence.rows[0]?.schedule_audits === 1 && evidence.rows[0]?.outcome_audits === 1
-    && evidence.rows[0]?.schedule_outbox === 1 && evidence.rows[0]?.outcome_outbox === 1
+  assert(evidence.rows[0]?.appointments === 7
+    && evidence.rows[0]?.schedule_audits === 3 && evidence.rows[0]?.outcome_audits === 1
+    && evidence.rows[0]?.schedule_outbox === 3 && evidence.rows[0]?.outcome_outbox === 1
     && evidence.rows[0]?.audit_outcome_notes === 'Trial completed successfully.'
     && evidence.rows[0]?.outbox_outcome_notes === 'Trial completed successfully.',
   'Trial scheduling/outcome did not create exactly one atomic audit and v1 outbox event under idempotent replay.');
@@ -496,7 +630,7 @@ try {
     && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,
   'Trial outcome mutated booking, student/family, enrollment, membership, CRM activity, or AI/action state.');
 
-  console.log('Verified CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
+  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation, CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
 } finally {
   try {
     await database.onModuleDestroy();

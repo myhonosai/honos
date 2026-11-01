@@ -59,3 +59,47 @@ test('trial schedule and outcome accept only same-origin human-UI JSON commands 
     if (old === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = old;
   }
 });
+
+test('trial reconciliation reads are GET-only, selector-free, never cached and resolve exact-school trial permission', async () => {
+  const { TrialAppointmentReadController } = require('../dist/crm/trial-appointment-read.controller.js');
+  const { TrialAppointmentReadGuard } = require('../dist/crm/trial-appointment-human-ui.guard.js');
+  const granted = new Set(['crm.trial.manage']);
+  let scopeOrg = scope.organizationId, lists = 0, reads = 0;
+  const permissionsAsked = [];
+  const db = { resolveAuthorizedScope: async (_subject, _school, permission) => { permissionsAsked.push(permission); return granted.has(permission) ? { ...scope, organizationId: scopeOrg } : null; } };
+  const module = await Test.createTestingModule({
+    controllers: [TrialAppointmentController, TrialAppointmentReadController],
+    providers: [TrialAppointmentHumanUiGuard, TrialAppointmentReadGuard, { provide: RuntimeDatabaseService, useValue: db },
+      { provide: TrialAppointmentService, useValue: {
+        listForLead: async (context) => { lists++; assert.equal(context.source, 'HUMAN_UI'); assert.equal(context.principalType, 'HUMAN_USER'); return { activeTrial: null, trials: [] }; },
+        readOne: async (_context, id) => { reads++; return { id }; } } }],
+  }).overrideGuard(HonIdentityGuard).useValue({ canActivate(c) { c.switchToHttp().getRequest().honIdentity = { externalSubject: 'trusted' }; return true; } }).compile();
+  const app = module.createNestApplication(); app.setGlobalPrefix('v1');
+  await app.listen(0, '127.0.0.1');
+  const root = `http://127.0.0.1:${app.getHttpServer().address().port}/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/crm`;
+  const listPath = `${root}/leads/${leadId}/trials`, detailPath = `${root}/appointments/${appointmentId}`;
+  const get = (path, headers = {}) => fetch(path, { headers });
+  try {
+    const list = await get(listPath); assert.equal(list.status, 200); assert.equal(list.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual((await list.json()).data, { activeTrial: null, trials: [] });
+    const detail = await get(detailPath, { 'Sec-Fetch-Site': 'same-origin' }); assert.equal(detail.status, 200);
+    assert.equal((await detail.json()).data.id, appointmentId);
+    // A principal with outcome permission but not scheduling permission may reconcile; schedule is asked first.
+    assert.deepEqual(permissionsAsked.slice(0, 2), ['crm.trial.schedule', 'crm.trial.manage']);
+    for (const headers of [{ 'X-HON-Source': 'HUMAN_UI' }, { 'X-HON-School-Id': randomUUID() }, { 'Sec-Fetch-Site': 'cross-site' }, { 'Sec-Fetch-Site': 'same-site' }]) {
+      assert.equal((await get(listPath, headers)).status, 403, JSON.stringify(headers));
+      assert.equal((await get(detailPath, headers)).status, 403, JSON.stringify(headers));
+    }
+    assert.equal((await get(`${listPath}?schoolId=${randomUUID()}`)).status, 400);
+    assert.equal((await get(`${detailPath}?leadId=${leadId}`)).status, 400);
+    assert.deepEqual({ lists, reads }, { lists: 1, reads: 1 });
+    scopeOrg = randomUUID();
+    assert.equal((await get(listPath)).status, 403, 'route organization outside the resolved scope');
+    scopeOrg = scope.organizationId; granted.clear();
+    assert.equal((await get(listPath)).status, 403, 'no trial permission');
+    assert.equal((await get(detailPath)).status, 403, 'no trial permission');
+    assert.deepEqual({ lists, reads }, { lists: 1, reads: 1 });
+  } finally {
+    await app.close();
+  }
+});

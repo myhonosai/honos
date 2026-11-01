@@ -86,21 +86,25 @@ function parseStrictTimestamp(value: unknown, field: 'startsAt' | 'endsAt'): Dat
   return parsed;
 }
 
-/** Repeats transport validation so future adapters cannot bypass command invariants. */
-function normalizeInput(input: CreateTrialAppointmentInput): NormalizedTrialAppointmentInput {
+interface StructuredTrialInput {
+  normalized: NormalizedTrialAppointmentInput;
+  startsAtMs: number;
+  endsAtMs: number;
+}
+
+/**
+ * Structural validation only: strict timestamps, ordering, maximum length and text limits. It never depends on
+ * the clock, so an exact-key replay of an already-committed command is recognised even after its start passed.
+ * Repeats transport validation so future adapters cannot bypass command invariants.
+ */
+function normalizeStructure(input: CreateTrialAppointmentInput): StructuredTrialInput {
   const startsAt = parseStrictTimestamp(input?.startsAt, 'startsAt');
   const endsAt = parseStrictTimestamp(input?.endsAt, 'endsAt');
-  const now = Date.now();
 
-  if (startsAt.getTime() <= now) {
-    throw validationError('Trial appointments must start in the future.');
-  }
   if (endsAt.getTime() <= startsAt.getTime()) {
     throw validationError('Trial appointment end must be strictly later than its start.');
   }
-  if (startsAt.getTime() > now + MAX_FUTURE_WINDOW_MS
-    || endsAt.getTime() > now + MAX_FUTURE_WINDOW_MS
-    || endsAt.getTime() - startsAt.getTime() > MAX_FUTURE_WINDOW_MS) {
+  if (endsAt.getTime() - startsAt.getTime() > MAX_FUTURE_WINDOW_MS) {
     throw validationError('Trial appointments must fit within the next 90 days.');
   }
 
@@ -122,12 +126,43 @@ function normalizeInput(input: CreateTrialAppointmentInput): NormalizedTrialAppo
   const location = normalizeOptionalText(input.location, 'location', 160);
   const notes = normalizeOptionalText(input.notes, 'notes', 2000);
   return {
-    startsAt: startsAt.toISOString(),
-    endsAt: endsAt.toISOString(),
-    ...(location ? { location } : {}),
-    ...(notes ? { notes } : {}),
+    normalized: {
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      ...(location ? { location } : {}),
+      ...(notes ? { notes } : {}),
+    },
+    startsAtMs: startsAt.getTime(),
+    endsAtMs: endsAt.getTime(),
   };
 }
+
+/** Clock-dependent rule, applied only to a new command (never to an exact-key replay). */
+function assertSchedulingWindow({ startsAtMs, endsAtMs }: StructuredTrialInput): void {
+  const now = Date.now();
+  if (startsAtMs <= now) {
+    throw validationError('Trial appointments must start in the future.');
+  }
+  if (startsAtMs > now + MAX_FUTURE_WINDOW_MS || endsAtMs > now + MAX_FUTURE_WINDOW_MS) {
+    throw validationError('Trial appointments must fit within the next 90 days.');
+  }
+}
+
+const APPOINTMENT_COLUMNS = `
+  id,
+  crm_lead_id AS "crmLeadId",
+  appointment_type::text AS "appointmentType",
+  status::text AS status,
+  starts_at AS "startsAt",
+  ends_at AS "endsAt",
+  location,
+  notes,
+  created_by_principal_id AS "createdByPrincipalId",
+  version,
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"`;
+
+const MAX_RECONCILIATION_ROWS = 50;
 
 function toSummary(row: TrialAppointmentRow): CrmAppointmentSummary {
   return {
@@ -161,7 +196,8 @@ export class TrialAppointmentService {
       throw new ForbiddenException('HON trial scheduling requires an authenticated human UI command.');
     }
 
-    const normalized = normalizeInput(input);
+    const structured = normalizeStructure(input);
+    const { normalized } = structured;
     const requestFingerprint = createHash('sha256')
       .update(JSON.stringify({ leadId, ...normalized }))
       .digest('hex');
@@ -176,6 +212,10 @@ export class TrialAppointmentService {
       if (!lead.rowCount) {
         throw new NotFoundException('CRM lead was not found in this school.');
       }
+
+      // One active trial per lead: every scheduling command for this lead serializes here, so two tabs, two
+      // devices or a lost response retried with a new key cannot each create a SCHEDULED trial.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('hon.crm.trial:' || $1::text, 0))", [leadId]);
 
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (
@@ -216,6 +256,31 @@ export class TrialAppointmentService {
         });
       }
 
+      // Exact-key replay above never reaches the clock rule; a new command must still be in the window.
+      assertSchedulingWindow(structured);
+
+      const active = await client.query<TrialAppointmentRow>(
+        `SELECT ${APPOINTMENT_COLUMNS}
+         FROM hon.crm_appointments
+         WHERE crm_lead_id = $1::uuid
+           AND appointment_type = 'TRIAL'::hon.crm_appointment_type
+           AND status = 'SCHEDULED'::hon.crm_appointment_status
+           AND ends_at > now()
+         ORDER BY starts_at, id
+         LIMIT 1`,
+        [leadId],
+      );
+      const existingActive = active.rows[0];
+      if (existingActive) {
+        // The transaction rolls back, releasing this key's reservation; the existing trial is returned so the
+        // caller reconciles instead of creating a duplicate. Cancel or record its outcome to schedule another.
+        throw new ConflictException({
+          code: 'TRIAL_ALREADY_SCHEDULED',
+          detail: 'This lead already has an active scheduled trial. Record its outcome or cancel it before scheduling another.',
+          existingAppointment: toSummary(existingActive),
+        });
+      }
+
       const inserted = await client.query<TrialAppointmentRow>(
         `INSERT INTO hon.crm_appointments (
            organization_id, school_id, crm_lead_id, appointment_type, status,
@@ -224,19 +289,7 @@ export class TrialAppointmentService {
            $1, $2, $3::uuid, 'TRIAL'::hon.crm_appointment_type, 'SCHEDULED'::hon.crm_appointment_status,
            $4::timestamptz, $5::timestamptz, $6, $7, $8::uuid
          )
-         RETURNING
-           id,
-           crm_lead_id AS "crmLeadId",
-           appointment_type::text AS "appointmentType",
-           status::text AS status,
-           starts_at AS "startsAt",
-           ends_at AS "endsAt",
-           location,
-           notes,
-           created_by_principal_id AS "createdByPrincipalId",
-           version,
-           created_at AS "createdAt",
-           updated_at AS "updatedAt"`,
+         RETURNING ${APPOINTMENT_COLUMNS}`,
         [
           context.organizationId,
           context.schoolId,
@@ -322,6 +375,51 @@ export class TrialAppointmentService {
       );
 
       return { appointment, replayed: false };
+    });
+  }
+
+  /**
+   * Direct-human reconciliation read: this lead's trial appointments in the exact authorized school (RLS scope),
+   * newest first, with the active trial identified. A caller that lost a scheduling response reads this instead
+   * of retrying with a new key. Read-only; never exposed to AI, automation or integrations.
+   */
+  async listForLead(
+    context: CommandContext,
+    leadId: string,
+  ): Promise<{ activeTrial: CrmAppointmentSummary | null; trials: CrmAppointmentSummary[] }> {
+    if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
+      throw new ForbiddenException('HON trial reconciliation requires an authenticated human UI request.');
+    }
+    return this.database.withTenantReadOnlyTransaction(context, async (client) => {
+      const lead = await client.query<{ id: string }>('SELECT id FROM hon.crm_leads WHERE id = $1::uuid', [leadId]);
+      if (!lead.rowCount) throw new NotFoundException('CRM lead was not found in this school.');
+      const rows = await client.query<TrialAppointmentRow & { active: boolean }>(
+        `SELECT ${APPOINTMENT_COLUMNS},
+                (status = 'SCHEDULED'::hon.crm_appointment_status AND ends_at > now()) AS active
+         FROM hon.crm_appointments
+         WHERE crm_lead_id = $1::uuid AND appointment_type = 'TRIAL'::hon.crm_appointment_type
+         ORDER BY created_at DESC, id DESC
+         LIMIT ${MAX_RECONCILIATION_ROWS}`,
+        [leadId],
+      );
+      const activeRow = rows.rows.filter((row) => row.active).sort((a, b) => asIso(a.startsAt).localeCompare(asIso(b.startsAt)))[0];
+      return { activeTrial: activeRow ? toSummary(activeRow) : null, trials: rows.rows.map(toSummary) };
+    });
+  }
+
+  /** Direct-human detail read of one trial appointment in the exact authorized school; foreign rows are 404. */
+  async readOne(context: CommandContext, appointmentId: string): Promise<CrmAppointmentSummary> {
+    if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
+      throw new ForbiddenException('HON trial reconciliation requires an authenticated human UI request.');
+    }
+    return this.database.withTenantReadOnlyTransaction(context, async (client) => {
+      const row = await client.query<TrialAppointmentRow>(
+        `SELECT ${APPOINTMENT_COLUMNS} FROM hon.crm_appointments
+         WHERE id = $1::uuid AND appointment_type = 'TRIAL'::hon.crm_appointment_type`,
+        [appointmentId],
+      );
+      if (!row.rows[0]) throw new NotFoundException('CRM trial appointment was not found in this school.');
+      return toSummary(row.rows[0]);
     });
   }
 }

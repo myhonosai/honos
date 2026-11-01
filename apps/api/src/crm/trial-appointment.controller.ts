@@ -9,6 +9,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Get,
   Req,
   Res,
   UseGuards,
@@ -17,14 +18,13 @@ import { randomUUID } from 'node:crypto';
 import type { CommandContext } from '@hon/contracts';
 import type { Response } from 'express';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
-import { TrialAppointmentHumanUiGuard } from './trial-appointment-human-ui.guard.js';
+import { TrialAppointmentHumanUiGuard, TrialAppointmentReadGuard } from './trial-appointment-human-ui.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { CreateTrialAppointmentDto } from './create-trial-appointment.dto.js';
 import { TrialAppointmentService } from './trial-appointment.service.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/crm/leads/:leadId/trials')
-@UseGuards(TrialAppointmentHumanUiGuard, HonIdentityGuard)
 export class TrialAppointmentController {
   constructor(
     private readonly database: RuntimeDatabaseService,
@@ -32,6 +32,7 @@ export class TrialAppointmentController {
   ) {}
 
   @Post()
+  @UseGuards(TrialAppointmentHumanUiGuard, HonIdentityGuard)
   @HttpCode(HttpStatus.CREATED)
   async schedule(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
@@ -86,4 +87,48 @@ export class TrialAppointmentController {
       },
     };
   }
+
+  /** Reconciliation read after a lost or unknown scheduling response. Never creates anything. */
+  @Get()
+  @UseGuards(TrialAppointmentReadGuard, HonIdentityGuard)
+  async listForLead(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('leadId', new ParseUUIDPipe()) leadId: string,
+    @Req() request: HonRequest,
+  ) {
+    const context = await resolveTrialReadContext(this.database, request, organizationId, schoolId);
+    const data = await this.trials.listForLead(context, leadId);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+}
+
+/**
+ * Trial reads resolve the same exact-school authority as the commands: a principal holding trial scheduling or
+ * trial outcome permission in this school. Route values never grant scope.
+ */
+export async function resolveTrialReadContext(
+  database: RuntimeDatabaseService,
+  request: HonRequest,
+  organizationId: string,
+  schoolId: string,
+): Promise<CommandContext> {
+  const identity = request.honIdentity;
+  if (!identity) throw new ForbiddenException('HON identity context is missing.');
+  const scope = (await database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'crm.trial.schedule'))
+    ?? (await database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'crm.trial.manage'));
+  if (!scope || scope.organizationId !== organizationId) {
+    throw new ForbiddenException('HON trial reconciliation is not authorized for this school.');
+  }
+  const requestId = randomUUID();
+  return {
+    organizationId: scope.organizationId,
+    schoolId: scope.schoolId,
+    principalId: scope.principalId,
+    principalType: 'HUMAN_USER',
+    requestId,
+    correlationId: requestId,
+    idempotencyKey: `read:${requestId}`,
+    source: 'HUMAN_UI',
+  };
 }
