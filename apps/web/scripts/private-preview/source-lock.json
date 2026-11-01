@@ -1,0 +1,20 @@
+{
+  "main": "6ab871cd781935fc633dfec7685075b3d95432be",
+  "founder": "1beba39b3c7b01f4b11b2872eeba820ca5231275",
+  "crm": "a804f3fc923f2c8e439db68ba92f1091201c45df",
+  "files": {
+    "apps/web/src/components/founder-setup/catalog.ts": "9f47885aef9833cac3eca593216363903af0c4406b66748e323617733d20b5f4",
+    "apps/web/src/components/founder-setup/guide.module.css": "0a83cac5c52c423a7dcb84b4f1f27b56bbf3862ed51166d49bffc36bd0811763",
+    "apps/web/src/components/founder-setup/guide.tsx": "dc853f16e7aa0504ceb6376b3c388295b2d4dddeb14854f4b733a7da9b857a27",
+    "apps/web/src/components/founder-setup/http.ts": "07db14847fdf0fe68612bbe5a0cd368586ed698d7e418366c3bdbf08b5ba169b",
+    "apps/web/src/components/crm-journey/catalog.ts": "897112a4572a387398321a715fe88c315339569b0ee48a245e865b9fc2e6e11a",
+    "apps/web/src/components/crm-journey/entry.tsx": "38ee4a6b12de28bf84412a7ef867162b6850cda728a41e6426c6716d22491992",
+    "apps/web/src/components/crm-journey/http.ts": "85ed5364cdf0cb59b3d127afe4b6fa05f9f45794b8d51906a4af6c72513ad01f",
+    "apps/web/src/components/crm-journey/workbench.module.css": "c9c1b902e355e831436df3d1f3ed8589f6829454f47153a0a426fc463fd2f2f5",
+    "apps/web/src/components/crm-journey/workbench.tsx": "32e6e6193ccda0d93d66ec1bdc0d0a6ab9d87ead112289750c4a982049800b82",
+    "apps/web/src/components/session-invalidation.ts": "de19805acf791888da64d640a509d087545ea65466c47f08eafed400c50d540e",
+    "apps/web/src/app/staff/founder-setup/page.tsx": "11a99c341e81ccbc5f65d84c56c77f664b642e5ab95a9201234ce071758b184a",
+    "apps/web/src/app/hq/founder-setup/page.tsx": "2ac0a3bb97ad2bb3f5a91740704e4938972a86fb1b7439664230056f1c7ff43e",
+    "apps/web/src/app/staff/crm/journey/page.tsx": "25de8b6fee5badd5006790e4061a9c8a3deff68b92a834c1de070fb554e296e5"
+  }
+}
