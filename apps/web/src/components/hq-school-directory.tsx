@@ -19,7 +19,7 @@ function DirectoryTable({ directory }: { directory: HqSchoolDirectory }): React.
 
   return <section className={styles.section} aria-labelledby="hq-schools-directory-title">
     <header><p className={styles.eyebrow}>MINIMIZED CUSTOMER DIRECTORY</p><h2 id="hq-schools-directory-title">Schools</h2><p>Rows are fixed and chronological. They are not a selector, support-access link, impersonation session, or school administration surface.</p></header>
-    <div className={styles.tableWrap}>
+    <div className={styles.tableWrap} role="region" aria-label="School directory table" tabIndex={0}>
       <table>
         <thead><tr><th>Organization</th><th>School</th><th>Operational status</th><th>Current tier</th><th>Created</th></tr></thead>
         <tbody>{directory.schools.map((school) => <tr key={school.schoolId}>

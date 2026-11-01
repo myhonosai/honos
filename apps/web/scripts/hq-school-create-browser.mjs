@@ -95,7 +95,7 @@ async function idle(s) { await s.page.waitForFunction(() => document.querySelect
 async function capture(s, name) {
   assert(await s.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'No horizontal viewport overflow');
   await s.page.addScriptTag({ content: axe });
-  const violations = await s.page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })).violations.map(v => ({ id: v.id, impact: v.impact })));
+  const violations = await s.page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })).violations.map(v => ({ id: v.id, impact: v.impact, targets: v.nodes.map(n => n.target) })));
   report.accessibility.push({ name, violations });
   assert.equal(violations.length, 0, JSON.stringify(violations));
   await s.panel.screenshot({ path: join(results, name + '.png') }); report.screenshots.push(name + '.png');
@@ -111,6 +111,11 @@ try {
       await s.page.setViewportSize({ width, height: 1000 });
       for (const label of ['Modern', 'Classic', 'Big Button']) {
         await s.page.getByRole('group', { name: 'Platform view', exact: true }).getByRole('button', { name: label, exact: true }).click();
+        if (width === 390) {
+          const region = s.page.getByRole('region', { name: 'School directory table', exact: true });
+          await region.focus(); await s.page.keyboard.press('ArrowRight');
+          await s.page.waitForFunction(() => document.querySelector('[role="region"][aria-label="School directory table"]')?.scrollLeft > 0);
+        }
         await capture(s, `create-${width}-${label.toLowerCase().replaceAll(' ', '-')}`);
       }
     }
