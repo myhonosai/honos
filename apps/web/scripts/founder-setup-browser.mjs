@@ -96,7 +96,7 @@ try {
         assert.equal(await rootGuide.locator('[data-founder-status]').getAttribute('role'), 'status');
         assert.equal(await rootGuide.getByRole('button', { name: t(language, 'previous'), exact: true }).isDisabled(), stage === 0);
         assert.equal(await rootGuide.getByRole('button', { name: t(language, 'next'), exact: true }).isDisabled(), stage === 7);
-        assert(await rootGuide.getByText(t(language, 'boundary'), { exact: true }).isVisible());
+        assert(await rootGuide.locator('header').getByText(t(language, 'boundary'), { exact: true }).isVisible());
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Stage overflow');
         assert.equal(state.ownerReads, before + 1); assert.equal(state.mutations, 0);
         report.stageChecks.push({ language, width, mode, stage: stage + 1, title });
