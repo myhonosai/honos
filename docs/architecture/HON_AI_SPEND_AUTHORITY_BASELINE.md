@@ -32,6 +32,14 @@ Safety rails in the proof:
 
 **Single-use fixture, no row cleanup.** The fixture is dropped and recreated before every run, and INV-4 refuses a database that is not pristine. Instead of deleting rows afterwards, INV-12 asserts that every AI row is confined to the proof's own synthetic organizations and that program rows are unchanged.
 
+## Checked universe (what AI-0 does and does not cover)
+
+AI-0 pins only what it actually collects and asserts. It does **not** claim completeness beyond this list.
+
+- **Covered:** the three agent runtimes (Marcus, Claire, Chad) end to end through their real services with fake providers; their spend tables, record/fail/prepare functions and runtime grants; `ai_usage_ledger` writers; `saas_credit_reservations` writers; literal `12000` ceilings; spend-table triggers; the B3 premium reservation refusal while the credit program is inactive; credit, trial, paid-access and payment program posture; the exception end-of-access path (INV-9).
+- **Not covered (review separately; candidates to extend INV-1/INV-2):** B3 allowance and credit-ledger internals beyond the writer list, pricing and provider-cost evidence helpers, generic helper functions that spend paths call, and restricted Supabase-shaped roles other than the disposable runtime role (anon/authenticated/service_role are checked only for grants, not exercised).
+- **Exception and post-lapse probes:** KF-AI14 asserts per agent the exact `*_PERSISTENCE_UNKNOWN` code, one provider call, no ledger row and the agent's estimate still held; KF-AI2 asserts the per-agent split (6 + 6 + 3 at used 11,990). KF-AI9 exercises Marcus only; S4-c must prove all three agents.
+
 ## Invariants (must pass; any failure blocks CI)
 
 | # | What is locked |

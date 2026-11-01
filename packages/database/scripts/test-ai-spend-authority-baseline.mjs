@@ -354,7 +354,9 @@ try {
       error: settled.error ? (settled.error.getResponse?.()?.code ?? settled.error.message) : null, status: settled.value?.status ?? null, stuckSending: stuck.n, stuckReserved: stuck.r };
   }
   await restoreEntitlement(lapse);
-  const lapseLost = Object.values(lapseOutcomes).filter((o) => o.providerCalls === 1 && o.ledgerRowsAdded === 0 && o.error && o.stuckSending === 1 && o.stuckReserved > 0);
+  // Exact per-agent outcome: one provider call, the agent's own PERSISTENCE_UNKNOWN code, no ledger row, one stuck SENDING row with its estimate held.
+  const persistenceUnknown = { marcus: 'MARKETING_PERSISTENCE_UNKNOWN', claire: 'TEACHING_PERSISTENCE_UNKNOWN', chad: 'FOLLOW_UP_DRAFT_PERSISTENCE_UNKNOWN' };
+  const lapseLost = Object.entries(lapseOutcomes).filter(([name, o]) => o.providerCalls === 1 && o.ledgerRowsAdded === 0 && o.error === persistenceUnknown[name] && o.stuckSending === 1 && o.stuckReserved === agents[name].estimate);
   reportKnownFailure('KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE', lapseLost.length === Object.keys(agents).length,
     `provider answered after the entitlement was suspended mid-flight: ${JSON.stringify(lapseOutcomes)}`);
 
@@ -368,7 +370,9 @@ try {
   for (const name of Object.keys(fakes)) fakes[name].release();
   await Promise.all(held.map(([, h]) => h.submitted));
   assert.deepEqual(await reservedByAgent(k1), { marcus: 0, claire: 0, chad: 0 });
-  reportKnownFailure('KF-AI2-CROSS-AGENT-OVERCOMMIT', allSending && k1Committed.total === 12005 && k1Committed.total > 12000,
+  // Causal split: each agent reserved exactly its own estimate against its own table, so no single agent saw the others.
+  const k1Split = k1Reserved.marcus === 6 && k1Reserved.claire === 6 && k1Reserved.chad === 3 && k1Committed.used === 11990;
+  reportKnownFailure('KF-AI2-CROSS-AGENT-OVERCOMMIT', allSending && k1Split && k1Committed.total === 12005,
     `used ${k1Committed.used} + reserved ${JSON.stringify(k1Reserved)} = ${k1Committed.total} committed against a 12000 ceiling`);
 
   // ---- KNOWN FAILURE KF-AI9: unpaid HQ COMPLETE exception reaches the provider ----
