@@ -439,8 +439,8 @@ try {
   }
   pass('INV-14', `S4-b: one organization agent budget at used 11990 in all 6 arrival orders, committed <= 12000, refusals BLOCKED before any provider call (${orderOutcomes.join('; ')})`);
 
-  // ---- KNOWN FAILURE KF-AI9: unpaid HQ COMPLETE exception reaches the provider ----
-  const x = await makeOrg('kf-ai9');
+  // ---- INV-16 (S4-c, replaces KF-AI9): an HQ access exception grants product access, never AI spend (AI-D1 = A) ----
+  const x = await makeOrg('inv-16');
   await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [x.id]);
   assert.equal(await expectRefused('marcus', x, {}, 'suspended before exception'), 'HTTP_403');
   const view = await schoolBilling.readExceptionPolicy(hq.subject);
@@ -448,18 +448,45 @@ try {
   await schoolBilling.decideExceptionPolicy(hq.subject, { expectedRevision: view.current?.revision ?? 0, decision: 'APPROVED', termsVersion: 1, maxDays: 90,
     validFrom: new Date(Date.now() - 60_000).toISOString(), validUntil: new Date(Date.now() + 86_400_000).toISOString(),
     reason: 'DISPOSABLE SYNTHETIC AI-0 TEST ONLY; no operational policy approval', confirmation: 'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY' }, K());
-  const version = async () => (await row('SELECT version FROM hon.organization_entitlements WHERE organization_id=$1', [x.id])).version;
-  const grant = async (scopeTier, ms) => schoolBilling.grantAccessException(hq.subject, x.id, { schoolId: x.school, purpose: 'INTERNAL_TESTING', reason: 'Disposable synthetic AI-0 exception only', scopeTier,
-    startsAt: new Date().toISOString(), expiresAt: new Date(Date.now() + ms).toISOString(), expectedEntitlementVersion: await version() }, K());
+  const versionOf = async (o) => (await row('SELECT version FROM hon.organization_entitlements WHERE organization_id=$1', [o.id])).version;
+  const grantFor = async (o, scopeTier, ms) => schoolBilling.grantAccessException(hq.subject, o.id, { schoolId: o.school, purpose: 'INTERNAL_TESTING', reason: 'Disposable synthetic AI-0 exception only', scopeTier,
+    startsAt: new Date().toISOString(), expiresAt: new Date(Date.now() + ms).toISOString(), expectedEntitlementVersion: await versionOf(o) }, K());
+  const grant = (scopeTier, ms) => grantFor(x, scopeTier, ms);
+  const decision = async (o, cls = 'AGENT_INFERENCE') => (await row("SELECT hon.ai_spend_allowed($1,clock_timestamp(),$2) d", [o.id, cls])).d;
   const granted = await grant('COMPLETE', 86_400_000);
   const aiCredits = JSON.stringify(granted).match(/"aiCredits":"([A-Z_]+)"/)?.[1];
   assert.equal(aiCredits, 'NONE', `exception receipt must state aiCredits NONE: ${JSON.stringify(granted)}`);
-  const callsBefore = fakes.marcus.calls, ledgerBefore = await ledgerRows(x);
-  fakes.marcus.mode = 'RESULT';
-  const exceptionSpend = await settle(agents.marcus.service.submit(context(x), agents.marcus.input(x)));
-  const reachedProvider = !exceptionSpend.error && exceptionSpend.value.status === 'AWAITING_APPROVAL' && fakes.marcus.calls === callsBefore + 1 && await ledgerRows(x) === ledgerBefore + 1;
-  reportKnownFailure('KF-AI9-EXCEPTION-SPEND', reachedProvider,
-    `COMPLETE HQ exception (receipt aiCredits ${aiCredits}) on an unpaid school: provider calls ${fakes.marcus.calls - callsBefore}, ledger rows +${await ledgerRows(x) - ledgerBefore}`);
+  assert.equal(await decision(x), 'AI_EXCEPTION_NO_AI');
+  assert.equal(await decision(x, 'CREATIVE_MEDIA'), 'AI_EXCEPTION_NO_AI');
+  const beginRefusals = {};
+  for (const name of Object.keys(agents)) beginRefusals[name] = await expectRefused(name, x, {}, 'COMPLETE exception on an unpaid school');
+  assert.deepEqual(Object.values(beginRefusals), ['HTTP_403', 'HTTP_403', 'HTTP_403']);
+  // Prepare and in-flight edges on a legacy school that receives an exception: a request begun before the grant is
+  // refused at prepare (reserve guard) with no provider call; a call already SENDING at grant time still records.
+  const y = await makeOrg('inv-16-inflight');
+  const begunBefore = {}, inflight = {};
+  for (const name of Object.keys(agents)) {
+    fakes[name].readiness = () => 'NOT_CONFIGURED';
+    begunBefore[name] = (await agents[name].service.submit(context(y), agents[name].input(y))).id;
+    fakes[name].readiness = () => 'READY';
+    inflight[name] = await startHeld(name, y);
+    assert(inflight[name].sending, `${name} must be SENDING before the grant`);
+  }
+  // Exceptions are granted only where no entitlement is in effect (D9): the school lapses, then HQ grants one.
+  await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [y.id]);
+  await grantFor(y, 'COMPLETE', 86_400_000);
+  assert.equal(await decision(y), 'AI_EXCEPTION_NO_AI');
+  const yCalls = Object.fromEntries(Object.keys(fakes).map((n) => [n, fakes[n].calls])), yLedger = await ledgerRows(y);
+  for (const name of Object.keys(agents)) {
+    const refused = await settle(agents[name].service.generate(context(y), begunBefore[name]));
+    assert.equal(refused.error?.getStatus?.(), 403, `${name}: prepare after the grant must be refused: ${JSON.stringify(refused.value ?? refused.error?.getResponse?.())}`);
+    assert.equal(fakes[name].calls, yCalls[name], `${name}: refused prepare reached the provider`);
+  }
+  for (const name of Object.keys(fakes)) fakes[name].complete();
+  await Promise.all(Object.values(inflight).map((h) => h.submitted));
+  assert.equal(await ledgerRows(y) - yLedger, 3, 'calls in flight at grant time still record exactly one ledger row each');
+  assert.equal(await sendingCount(y), 0);
+  pass('INV-16', `S4-c: a live COMPLETE HQ exception (receipt aiCredits ${aiCredits}) refuses begin for all three agents and prepare for requests begun earlier (AI_EXCEPTION_NO_AI, no provider call); calls already in flight at grant time still record`);
 
   // ---- INV-9: exception lifecycle edges stop spend ----
   const exceptionId = JSON.stringify(granted).match(/"exceptionId":"([0-9a-f-]{36})"/)?.[1];
@@ -473,6 +500,65 @@ try {
   await sleep(4_000);
   const afterExpiry = await expectRefused('marcus', x, {}, 'after exception expiry');
   pass('INV-9', `exception end stops spend without any job: revoked ${afterRevoke}, CORE scope ${coreScope}, expired ${afterExpiry}`);
+
+  // ---- INV-17 (S4-c): every paid-access state maps to its documented decision; legacy is unchanged ----
+  const mapping = { PAYMENT_ACTIVE: [null, 'AI_ACCESS_LAPSED'], CANCELLATION_SCHEDULED: [null, 'AI_ACCESS_LAPSED'], AWAITING_FIRST_PAYMENT: ['AI_ACCESS_NOT_PAID', 'AI_ACCESS_NOT_PAID'],
+    REGISTERED: ['AI_ACCESS_NOT_PAID', 'AI_ACCESS_NOT_PAID'], TRIAL_ENDED: ['AI_ACCESS_NOT_PAID', 'AI_ACCESS_NOT_PAID'], TRIAL_ACTIVE: ['AI_TRIAL_FUNDING_NOT_APPROVED', 'AI_TRIAL_FUNDING_NOT_APPROVED'],
+    PAST_DUE_GRACE: ['AI_ACCESS_PAST_DUE', 'AI_ACCESS_PAST_DUE'], SUSPENDED_NONPAYMENT: ['AI_ACCESS_SUSPENDED', 'AI_ACCESS_SUSPENDED'], REVIEW_HOLD: ['AI_ACCESS_REVIEW_HOLD', 'AI_ACCESS_REVIEW_HOLD'],
+    ENDED: ['AI_ACCESS_ENDED', 'AI_ACCESS_ENDED'], SOMETHING_NEW: ['AI_ACCESS_UNKNOWN_STATE', 'AI_ACCESS_UNKNOWN_STATE'] };
+  for (const [state, [inEffect, lapsed]] of Object.entries(mapping)) {
+    assert.equal((await row('SELECT hon.ai_access_state_decision($1,true,false) d', [state])).d, inEffect, `${state} with entitlement in effect`);
+    assert.equal((await row('SELECT hon.ai_access_state_decision($1,false,false) d', [state])).d, lapsed, `${state} with entitlement lapsed`);
+  }
+  assert.equal((await row("SELECT hon.ai_access_state_decision('TRIAL_ACTIVE',true,true) d")).d, null, 'trial funding hook, once approved, is the only trial path');
+  const legacy = await makeOrg('inv-17-legacy');
+  assert.equal(await decision(legacy), null, 'legacy organization (no access-state row, no exception) is unchanged');
+  // Real rows inside a rolled-back transaction (the proof leaves no access-state rows behind, INV-12).
+  await admin.query('BEGIN');
+  try {
+    await admin.query("INSERT INTO hon.saas_access_states(organization_id,state,reason,version,changed_by_principal_id,created_at,updated_at) VALUES($1,'AWAITING_FIRST_PAYMENT','AWAITING_INITIAL_PAYMENT',1,$2,clock_timestamp(),clock_timestamp())", [legacy.id, legacy.principal]);
+    assert.equal(await decision(legacy), 'AI_ACCESS_NOT_PAID');
+    await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [legacy.id]);
+    assert.equal(await decision(legacy), 'AI_ACCESS_NOT_PAID');
+  } finally { await admin.query('ROLLBACK'); }
+  assert.equal(await decision(legacy), null);
+  pass('INV-17', `S4-c: ${Object.keys(mapping).length} access states map to documented decisions in both entitlement conditions (unknown -> AI_ACCESS_UNKNOWN_STATE, trial only via the unapproved funding hook); a real AWAITING_FIRST_PAYMENT row refuses; legacy unchanged`);
+
+  // ---- INV-18 (S4-c): HQ emergency AI pause, human HQ owner only ----
+  const paused = await makeOrg('inv-18');
+  const pauseCmd = (subject, input, key) => settle(admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [subject, JSON.stringify(input), key]));
+  const pIn = (action, organizationId, spendClass = 'AGENT_INFERENCE') => ({ action, organizationId, spendClass, reason: 'Disposable synthetic AI-0 pause test' });
+  assert.equal((await pauseCmd(paused.subject, pIn('PAUSE', paused.id), K())).error?.code, '42501', 'a school owner cannot pause');
+  const pk = K();
+  const pauseA = await pauseCmd(hq.subject, pIn('PAUSE', paused.id), pk);
+  assert.equal(pauseA.value?.rows[0].r.status, 'ACTIVE', JSON.stringify(pauseA.error?.message));
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', paused.id), pk)).value?.rows[0].r.replayed, true, 'pause replay');
+  assert.equal((await pauseCmd(hq.subject, { ...pIn('PAUSE', paused.id), reason: 'A different synthetic pause reason' }, pk)).error?.code, '23505', 'pause key reuse');
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', paused.id), K())).error?.message, 'AI_SPEND_PAUSE_ALREADY_ACTIVE', 'second active pause for the same scope');
+  assert.equal(await decision(paused), 'AI_PAUSED_BY_HQ');
+  assert.equal(await decision(paused, 'CREATIVE_MEDIA'), null, 'an agent pause does not pause creative');
+  assert.equal(await decision(legacy), null, 'an organization pause does not affect another organization');
+  for (const name of Object.keys(agents)) assert.equal(await expectRefused(name, paused, {}, 'HQ pause'), 'HTTP_403');
+  const rk = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', paused.id), rk)).value?.rows[0].r.status, 'ENDED');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', paused.id), rk)).value?.rows[0].r.replayed, true, 'resume replay');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', paused.id), K())).error?.message, 'AI_SPEND_PAUSE_NOT_ACTIVE', 'nothing left to resume');
+  assert.equal(await decision(paused), null);
+  fakes.claire.mode = 'RESULT';
+  assert.equal((await agents.claire.service.submit(context(paused), agents.claire.input(paused))).status, 'AWAITING_APPROVAL', 'spend resumes after the pause ends');
+  // Platform-wide pause for all classes, then resume.
+  const platformKey = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', null, 'ALL'), platformKey)).value?.rows[0].r.status, 'ACTIVE');
+  assert.equal(await decision(legacy), 'AI_PAUSED_BY_HQ');
+  assert.equal(await decision(legacy, 'CREATIVE_MEDIA'), 'AI_PAUSED_BY_HQ');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', null, 'ALL'), K())).value?.rows[0].r.status, 'ENDED');
+  assert.equal(await decision(legacy), null);
+  assert.equal((await settle(admin.query('UPDATE hon.ai_spend_pauses SET reason=$1', ['Tampered synthetic pause reason']))).error?.code, '55000', 'pause records are append-only');
+  assert.equal((await settle(admin.query('DELETE FROM hon.ai_spend_pauses'))).error?.code, '55000');
+  const listed = (await row('SELECT hon.read_ai_spend_pauses_from_hq($1) r', [hq.subject])).r.pauses;
+  assert.equal(listed.filter((p) => p.status === 'ENDED').length >= 2, true);
+  assert.equal((await settle(admin.query('SELECT hon.read_ai_spend_pauses_from_hq($1)', [paused.subject]))).error?.code, '42501', 'a school owner cannot read HQ pauses');
+  pass('INV-18', 'S4-c: HQ-owner-only organization and platform AI pause/resume, idempotent per key, one active pause per scope, class-scoped, append-only; agents refused while paused and resume afterwards');
 
   // ---- KNOWN FAILURE KF-AI8: UNKNOWN holds never release and are not month-scoped ----
   const k3 = await makeOrg('kf-ai8');

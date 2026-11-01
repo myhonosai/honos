@@ -5,10 +5,20 @@
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
 
+## S4-c AI spend access decision and HQ pause — Claude (2026-11-01, owner-authorized draft, stacked on S4-b)
+
+- Migration `0195_ai_spend_access_decision.sql` (number proposed; owner allocates). Owner decision AI-D1 = A. Findings AI-9, AI-1. Design: `docs/architecture/HON_AI_ACCESS_DECISION_S4C.md`.
+- [x] One access decision `ai_spend_allowed(org, at, class)`: HQ pause, promotional hook (off), live exception refuses (`AI_EXCEPTION_NO_AI`), legacy unchanged, explicit mapping for every paid-access state (unknown refuses). Applied at begin, at every hold increase (before the budget check) and at B3 reservation insert. Evidence steps never gated.
+- [x] HQ emergency pause: append-only `ai_spend_pauses`, human HQ owner only, organization or platform, per class or ALL, idempotent per key; `GET/POST /v1/hq/ai/spend-pauses` with exact human-command guard.
+- [x] AI-0: KF-AI9 flipped to `FIXED_BY_S4C`, replaced by INV-16 (all three agents); INV-17 (state mapping) and INV-18 (pause) added. API test `ai-spend-pause.test.cjs`.
+- [ ] Codex: HQ pause screen and plain refusal copy on agent screens.
+- [ ] Owner decisions before the hooks do anything: promotional AI access, trial AI funding.
+- [ ] Independent review; owner merge after #97, S4-a and S4-b.
+
 ## S4-b organization agent budget and lock — Claude (2026-11-01, owner-authorized draft, stacked on S4-a)
 
 - Migration `0194_ai_org_budget_lock.sql` (number proposed; owner allocates). Findings AI-2, AI-3, AI-17. Design: `docs/architecture/HON_AI_ORG_BUDGET_LOCK_S4B.md`.
-- [x] One organization agent budget: `ai_org_committed_credits` (agent-inference ledger credits in the `ai_spend_window` plus every open Marcus/Claire/Chad hold), `ai_org_ceiling` (12,000, the only literal left), `ai_budget_lock` (`ai.budget:<org>`, always last). The three prepares use them; refusal stays durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED`. Reserve guard trigger re-checks any hold increase (`AI_ORG_BUDGET_EXCEEDED`, 42501).
+- [x] One organization agent budget: `ai_org_committed_credits` (agent-inference ledger credits in the `ai_spend_window` plus every open Marcus/Claire/Chad hold), `ai_org_ceiling` (12,000, the only literal left), `ai_budget_lock` (`ai.budget:<org>`, taken first in every prepare, before the gate row locks; see the design doc for the deadlock it avoids). The three prepares use them; refusal stays durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED`. Reserve guard trigger re-checks any hold increase (`AI_ORG_BUDGET_EXCEEDED`, 42501).
 - [x] `ai_usage_ledger.spend_class` (AGENT_INFERENCE / CREATIVE_MEDIA / HQ_INTERNAL); B3 rows backfilled and written CREATIVE_MEDIA; agent writers set AGENT_INFERENCE; planning eligibility counts agent rows only.
 - [x] AI-0: KF-AI2 and KF-AI3 flipped to `FIXED_BY_S4B`, replaced by INV-14 (all 6 arrival orders at used 11,990) and INV-15 (deterministic pg_locks serialization, 3 same-agent + 3 cross-agent pairs). KF-AI8 probe now shows the stale hold blocking both agents (still open for S4-d).
 - [ ] B3 creative reservations keep their own allowance check (closed program); the B3 budget guard is deferred to the creative-wallet slices (AI-17 keeps creative out of the agent budget).

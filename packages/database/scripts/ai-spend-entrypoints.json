@@ -266,22 +266,26 @@
     "chad_follow_up_invocations": [
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
       "chad_follow_up_invocations_immutable",
       "chad_follow_up_invocations_no_truncate"
     ],
     "marketing_ai_invocations": [
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
       "marketing_invocation_guard",
       "marketing_invocation_no_truncate"
     ],
     "saas_credit_reservations": [
+      "ai_spend_b3_guard",
       "saas_guarded",
       "saas_no_truncate"
     ],
     "teaching_ai_invocations": [
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
       "teaching_ai_invocations_immutable",
       "teaching_ai_invocations_no_truncate"
     ]
@@ -371,10 +375,11 @@
     {
       "id": "KF-AI9-EXCEPTION-SPEND",
       "finding": "AI-9",
-      "status": "OPEN",
-      "replacedBy": "S4",
+      "status": "FIXED_BY_S4C",
+      "replacedBy": "S4-c (migration 0195, invariant INV-16)",
       "currentOutcome": "An unpaid school with a COMPLETE HQ access exception (receipt aiCredits NONE) reaches the provider and records usage.",
-      "replacementOutcome": "Refused before the provider (AI_EXCEPTION_NO_AI) unless owner decision AI-D1 approves a capped exception AI allowance."
+      "replacementOutcome": "Refused before the provider (AI_EXCEPTION_NO_AI) unless owner decision AI-D1 approves a capped exception AI allowance.",
+      "fixedOutcome": "hon.ai_spend_allowed denies AI_EXCEPTION_NO_AI while a live HQ access exception owns the entitlement (before the legacy rule). Begin (start guard) and prepare (reserve guard) are refused for all three agents with no provider call; B3 reservations get the same decision; calls already in flight at grant time still record."
     },
     {
       "id": "KF-AI8-UNKNOWN-HOLD",

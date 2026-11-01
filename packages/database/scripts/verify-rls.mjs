@@ -99,6 +99,7 @@ const expectedRlsTables = [
   'action_requests',
   'ai_team_presentation_preferences',
   'ai_usage_ledger',
+  'ai_spend_pauses',
   'ai_invocation_plans',
   'chad_follow_up_invocations',
   'chad_follow_up_drafts',
