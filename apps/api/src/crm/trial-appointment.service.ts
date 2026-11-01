@@ -393,17 +393,34 @@ export class TrialAppointmentService {
     return this.database.withTenantReadOnlyTransaction(context, async (client) => {
       const lead = await client.query<{ id: string }>('SELECT id FROM hon.crm_leads WHERE id = $1::uuid', [leadId]);
       if (!lead.rowCount) throw new NotFoundException('CRM lead was not found in this school.');
-      const rows = await client.query<TrialAppointmentRow & { active: boolean }>(
-        `SELECT ${APPOINTMENT_COLUMNS},
-                (status = 'SCHEDULED'::hon.crm_appointment_status AND ends_at > now()) AS active
-         FROM hon.crm_appointments
-         WHERE crm_lead_id = $1::uuid AND appointment_type = 'TRIAL'::hon.crm_appointment_type
-         ORDER BY created_at DESC, id DESC
-         LIMIT ${MAX_RECONCILIATION_ROWS}`,
+      // The active trial is derived from ALL of this lead's trial rows, independently of the bounded history window,
+      // with the same predicate and order as the scheduling guard. A preserved pre-upgrade history can hold an
+      // active appointment older than the newest rows; the read must still report the trial the guard would name.
+      // One statement, so the active row and the history come from one snapshot.
+      const result = await client.query<TrialAppointmentRow & { part: 'ACTIVE' | 'HISTORY' }>(
+        `WITH active AS (
+           SELECT ${APPOINTMENT_COLUMNS} FROM hon.crm_appointments
+           WHERE crm_lead_id = $1::uuid
+             AND appointment_type = 'TRIAL'::hon.crm_appointment_type
+             AND status = 'SCHEDULED'::hon.crm_appointment_status
+             AND ends_at > now()
+           ORDER BY starts_at, id
+           LIMIT 1
+         ), history AS (
+           SELECT ${APPOINTMENT_COLUMNS}, created_at AS sort_created, id AS sort_id FROM hon.crm_appointments
+           WHERE crm_lead_id = $1::uuid AND appointment_type = 'TRIAL'::hon.crm_appointment_type
+           ORDER BY created_at DESC, id DESC
+           LIMIT ${MAX_RECONCILIATION_ROWS}
+         )
+         SELECT active.*, NULL::timestamptz AS sort_created, NULL::uuid AS sort_id, 'ACTIVE' AS part FROM active
+         UNION ALL
+         SELECT history.*, 'HISTORY' FROM history
+         ORDER BY part, sort_created DESC, sort_id DESC`,
         [leadId],
       );
-      const activeRow = rows.rows.filter((row) => row.active).sort((a, b) => asIso(a.startsAt).localeCompare(asIso(b.startsAt)))[0];
-      return { activeTrial: activeRow ? toSummary(activeRow) : null, trials: rows.rows.map(toSummary) };
+      const activeRow = result.rows.find((row) => row.part === 'ACTIVE');
+      const trials = result.rows.filter((row) => row.part === 'HISTORY').map(toSummary);
+      return { activeTrial: activeRow ? toSummary(activeRow) : null, trials };
     });
   }
 

@@ -318,6 +318,25 @@ try {
     ids.organization, ids.schoolA, ids.leadA2, `crm-trial-a2-${randomUUID()}`, inputFor(laterStart, laterEnd), request, responseCapture(),
   ), 'A lead with an existing scheduled trial accepted another.');
   assert(fixtureDuplicate.existingAppointment?.id === ids.localScheduledAppointment, 'The refusal named the wrong existing trial.');
+  // Preserved pre-upgrade history: the active trial is OLDER than the newest 50 rows (51 later-created trials that
+  // were cancelled). The read must still name it, exactly as the scheduling guard does, while the history stays bounded.
+  await administrator.query(
+    `INSERT INTO hon.crm_appointments (id, organization_id, school_id, crm_lead_id, appointment_type, status, starts_at, ends_at,
+       created_by_principal_id, created_at, updated_at)
+     SELECT gen_random_uuid(), $1, $2, $3, 'TRIAL', 'CANCELLED', now() + (g || ' days')::interval, now() + (g || ' days')::interval + interval '1 hour',
+       $4, clock_timestamp() + (g || ' seconds')::interval, clock_timestamp() + (g || ' seconds')::interval
+     FROM generate_series(1, 51) g`,
+    [ids.organization, ids.schoolA, ids.leadA2, ids.principal],
+  );
+  const upgraded = await controller.listForLead(ids.organization, ids.schoolA, ids.leadA2, request);
+  assert(upgraded.data.activeTrial?.id === ids.localScheduledAppointment,
+    'The reconciliation read lost an active trial that sits outside the newest 50 history rows.');
+  assert(upgraded.data.trials.length === 50 && !upgraded.data.trials.some((t) => t.id === ids.localScheduledAppointment)
+    && upgraded.data.trials.every((t) => t.status === 'CANCELLED'), 'The bounded trial history window changed.');
+  const upgradedRefusal = await expectConflictCode('TRIAL_ALREADY_SCHEDULED', () => controller.schedule(
+    ids.organization, ids.schoolA, ids.leadA2, `crm-trial-a2-upgrade-${randomUUID()}`, inputFor(laterStart, laterEnd), request, responseCapture(),
+  ), 'An upgraded history with an older active trial accepted another.');
+  assert(upgradedRefusal.existingAppointment?.id === upgraded.data.activeTrial.id, 'The read and the scheduling guard named different active trials.');
 
   // Unknown-result reconciliation: the exact school's direct-human read finds the committed trial.
   const reconciled = await controller.listForLead(ids.organization, ids.schoolA, ids.leadA, request);
@@ -613,7 +632,7 @@ try {
       (SELECT count(*)::integer FROM hon.ai_usage_ledger WHERE organization_id = $1) AS ai_usage,
       (SELECT count(*)::integer FROM hon.action_requests WHERE organization_id = $1) AS action_requests
   `, [ids.organization, ids.leadA, first.data.id, ids.localScheduledAppointment, ids.localConsultationAppointment]);
-  assert(evidence.rows[0]?.appointments === 7
+  assert(evidence.rows[0]?.appointments === 7 + 51
     && evidence.rows[0]?.schedule_audits === 3 && evidence.rows[0]?.outcome_audits === 1
     && evidence.rows[0]?.schedule_outbox === 3 && evidence.rows[0]?.outcome_outbox === 1
     && evidence.rows[0]?.audit_outcome_notes === 'Trial completed successfully.'
