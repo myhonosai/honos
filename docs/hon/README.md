@@ -17,6 +17,7 @@ These existing documents define hard safety invariants: PostgreSQL + forced RLS;
 3. [CHAMPIONS_CLUB_AND_GROWTH.md](CHAMPIONS_CLUB_AND_GROWTH.md) — 30-day guarantee, referrals, leaderboard, owner-launchable contests, acquisition phases.
 4. [HQ_AUTONOMY_AND_AI.md](HQ_AUTONOMY_AND_AI.md) — HQ as operating control plane, governed agents and owner-configurable operations.
 5. [IMPLEMENTATION_AND_COLLABORATION.md](IMPLEMENTATION_AND_COLLABORATION.md) — implementation truth, GitHub coordination, first Claude task and development priorities.
+6. [LANGUAGE_AND_REGION.md](LANGUAGE_AND_REGION.md) — owner-approved English/Korean/Spanish interface roadmap for every tier; shared localization and persistent personal preferences are planned, not implemented. See the [architecture and implementation plan](../architecture/LANGUAGE_AND_REGION_PLAN.md).
 
 ## Conflict-resolution policy
 
