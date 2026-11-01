@@ -189,6 +189,7 @@ export class TrialAppointmentService {
     context: CommandContext,
     leadId: string,
     input: CreateTrialAppointmentInput,
+    authority: { externalSubject: string },
   ): Promise<{ appointment: CrmAppointmentSummary; replayed: boolean }> {
     // This is a staff human-UI command only. It is deliberately not exposed to
     // the AI Action Engine, integrations, automation, providers, or messaging.
@@ -216,6 +217,20 @@ export class TrialAppointmentService {
       // One active trial per lead: every scheduling command for this lead serializes here, so two tabs, two
       // devices or a lost response retried with a new key cannot each create a SCHEDULED trial.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended('hon.crm.trial:' || $1::text, 0))", [leadId]);
+
+      // The controller's authorization ran before this lock, and the wait can be long. Re-resolve the signed
+      // subject's exact-school scheduling authority now (a fresh READ COMMITTED statement sees any grant revoked
+      // during the wait) and require the same principal, organization and school. A refusal rolls back before any
+      // idempotency reservation, appointment, audit or outbox row exists.
+      const current = await client.query<{ principal_id: string; organization_id: string; school_id: string }>(
+        "SELECT principal_id, organization_id, school_id FROM hon.resolve_authorized_scope($1, $2::uuid, 'crm.trial.schedule')",
+        [authority.externalSubject, context.schoolId],
+      );
+      const still = current.rows[0];
+      if (!still || still.principal_id !== context.principalId || still.organization_id !== context.organizationId
+        || still.school_id !== context.schoolId) {
+        throw new ForbiddenException('HON trial scheduling is no longer authorized for this school.');
+      }
 
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (

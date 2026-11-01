@@ -75,7 +75,7 @@ export class TrialAppointmentController {
       idempotencyKey: normalizedIdempotencyKey,
       source: 'HUMAN_UI',
     };
-    const result = await this.trials.schedule(command, leadId, input);
+    const result = await this.trials.schedule(command, leadId, input, { externalSubject: identity.externalSubject });
 
     response.status(result.replayed ? HttpStatus.OK : HttpStatus.CREATED);
     return {

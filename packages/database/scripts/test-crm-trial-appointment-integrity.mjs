@@ -21,7 +21,7 @@ const ids = Object.fromEntries(
   [
     'organization', 'schoolA', 'schoolB', 'user', 'principal', 'ownerRole',
     'personA', 'personB', 'pipelineA', 'pipelineB', 'stageA', 'stageB', 'leadA', 'leadB',
-    'personA2', 'personA3', 'leadA2', 'leadA3',
+    'personA2', 'personA3', 'leadA2', 'leadA3', 'personA4', 'leadA4',
     'foreignAppointment', 'localScheduledAppointment', 'localConsultationAppointment', 'pastScheduledAppointment',
   ].map((key) => [key, randomUUID()]),
 );
@@ -210,8 +210,9 @@ try {
        ($1, $2, $3, 'Avery', 'Local'),
        ($4, $2, $5, 'Bailey', 'Foreign'),
        ($6, $2, $3, 'Casey', 'Local'),
-       ($7, $2, $3, 'Devon', 'Local')`,
-      [ids.personA, ids.organization, ids.schoolA, ids.personB, ids.schoolB, ids.personA2, ids.personA3],
+       ($7, $2, $3, 'Devon', 'Local'),
+       ($8, $2, $3, 'Emery', 'Local')`,
+      [ids.personA, ids.organization, ids.schoolA, ids.personB, ids.schoolB, ids.personA2, ids.personA3, ids.personA4],
     );
     await administrator.query(
       `INSERT INTO hon.crm_pipelines (id, organization_id, school_id, name) VALUES
@@ -234,11 +235,12 @@ try {
        ($1, $2, $3, $4, $5, $6, 'OPEN'),
        ($7, $2, $8, $9, $10, $11, 'OPEN'),
        ($12, $2, $3, $13, $5, $6, 'OPEN'),
-       ($14, $2, $3, $15, $5, $6, 'OPEN')`,
+       ($14, $2, $3, $15, $5, $6, 'OPEN'),
+       ($16, $2, $3, $17, $5, $6, 'OPEN')`,
       [
         ids.leadA, ids.organization, ids.schoolA, ids.personA, ids.pipelineA, ids.stageA,
         ids.leadB, ids.schoolB, ids.personB, ids.pipelineB, ids.stageB,
-        ids.leadA2, ids.personA2, ids.leadA3, ids.personA3,
+        ids.leadA2, ids.personA2, ids.leadA3, ids.personA3, ids.leadA4, ids.personA4,
       ],
     );
     await administrator.query(
@@ -596,6 +598,59 @@ try {
     throw error;
   }
 
+  // Revocation DURING the per-lead lock wait: the request passes the controller's authorization, then waits behind
+  // another holder of the lead's scheduling lock while its role grant is revoked. When the lock releases it must be
+  // refused with 403 and leave no appointment, audit, outbox or idempotency record. (leadA4 has no trial at all, so without
+  // the post-lock recheck the command would create one.)
+  {
+    const lockKey = `crm-trial-revoked-in-wait-${randomUUID()}`;
+    const countsFor = async () => (await administrator.query(`
+      SELECT
+        (SELECT count(*)::integer FROM hon.crm_appointments WHERE organization_id = $1) AS appointments,
+        (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1) AS audits,
+        (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1) AS outbox,
+        (SELECT count(*)::integer FROM hon.idempotency_records WHERE organization_id = $1 AND idempotency_key = $2) AS receipts`,
+    [ids.organization, lockKey])).rows[0];
+    const before = await countsFor();
+    const leadLock = new Client(connectionOptions(process.env.DATABASE_URL));
+    await leadLock.connect();
+    let waited;
+    try {
+      await leadLock.query('BEGIN');
+      await leadLock.query("SELECT pg_advisory_xact_lock(hashtextextended('hon.crm.trial:' || $1::text, 0))", [ids.leadA4]);
+      const pending = controller.schedule(
+        ids.organization, ids.schoolA, ids.leadA4, lockKey, inputFor(laterStart, laterEnd), request, responseCapture(),
+      ).then((value) => ({ status: 'fulfilled', value }), (reason) => ({ status: 'rejected', reason }));
+      const deadline = Date.now() + 20000;
+      for (;;) {
+        const waiting = await administrator.query(
+          "SELECT count(*)::integer AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+        );
+        if (waiting.rows[0].n >= 1) break;
+        if (Date.now() > deadline) throw new Error('The authorized trial command never reached the per-lead lock wait.');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
+      await leadLock.query('COMMIT');
+      waited = await pending;
+    } finally {
+      await leadLock.query('ROLLBACK').catch(() => {});
+      await leadLock.end();
+    }
+    assert(waited.status === 'rejected' && waited.reason?.getStatus?.() === 403,
+      `A trial command whose role grant was revoked during the per-lead lock wait was not refused with 403: ${waited.status} ${waited.reason?.getStatus?.() ?? ""} ${String(waited.reason?.message ?? "").slice(0, 160)} ${waited.reason?.getResponse?.()?.code ?? ""}`);
+    const after = await countsFor();
+    assert(after.appointments === before.appointments && after.audits === before.audits && after.outbox === before.outbox
+      && after.receipts === 0, 'A trial command refused after the lock wait left an appointment, audit, outbox or idempotency record.');
+    // Restore the grant for the remaining checks.
+    await administrator.query(
+      `INSERT INTO hon.principal_role_grants (
+         organization_id, school_id, principal_id, role_id, granted_by_principal_id
+       ) VALUES ($1, $2, $3, $4, $3)`,
+      [ids.organization, ids.schoolA, ids.principal, ids.ownerRole],
+    );
+  }
+
   // Permission revocation: neither replay nor reconciliation survives a removed role grant.
   await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
   await expectStatus(403, () => controller.schedule(
@@ -649,7 +704,7 @@ try {
     && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,
   'Trial outcome mutated booking, student/family, enrollment, membership, CRM activity, or AI/action state.');
 
-  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation, CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
+  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the per-lead lock wait), CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
 } finally {
   try {
     await database.onModuleDestroy();
