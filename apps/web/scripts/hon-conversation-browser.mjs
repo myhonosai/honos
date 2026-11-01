@@ -36,7 +36,7 @@ let serverLog = '';
 async function start(preview) {
   const port = await freePort();
   const command = process.env.HON_COMMAND_SERVER === 'start' ? ['start', '--port', String(port), '--hostname', '127.0.0.1'] : ['dev', '--port', String(port), '--hostname', '127.0.0.1'];
-  const env = { PATH: process.env.PATH, HOME: process.env.HOME, LANG: 'C.UTF-8', NODE_ENV: command[0] === 'start' ? 'production' : 'development', NEXT_TELEMETRY_DISABLED: '1', HON_API_BASE_URL: 'http://127.0.0.1:9' };
+  const env = { PATH: process.env.PATH, HOME: process.env.HOME, LANG: 'C.UTF-8', NODE_ENV: command[0] === 'start' ? 'production' : 'development', HON_DEPLOYMENT_ENVIRONMENT: 'preview', NEXT_TELEMETRY_DISABLED: '1', HON_API_BASE_URL: 'http://127.0.0.1:9' };
   if (preview) env.HON_REFERENCE_PREVIEW = '1';
   const child = spawn(join(webRoot, 'node_modules/.bin/next'), command, { cwd: webRoot, env, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', (d) => { serverLog += d; }); child.stderr.on('data', (d) => { serverLog += d; });
@@ -48,7 +48,7 @@ const previewServer = await start(true);
 const plainServer = await start(false);
 const origin = previewServer.origin;
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.HON_COMMAND_CHROME_BIN ? { executablePath: process.env.HON_COMMAND_CHROME_BIN } : {});
 async function context(viewport) {
   const value = await browser.newContext({ viewport, deviceScaleFactor: 1, reducedMotion: 'reduce' });
   await value.route('**/*', (route) => {
