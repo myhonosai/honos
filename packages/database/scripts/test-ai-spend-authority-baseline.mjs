@@ -607,7 +607,7 @@ try {
     const o = await makeOrg(`inv-15-${x}-${y}`);
     const room = Math.max(agents[x].estimate, agents[y].estimate);
     await setUsed(o, 12000 - room);
-    const blocker = new pg.Client({ connectionString: owner.toString(), ssl: false });
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
     await blocker.connect();
     // Begin both requests first (provider not ready: durable CONFIGURATION_REQUIRED, nothing reserved), so the race
     // below is between two prepares only, exactly as two open tabs retrying would be.
