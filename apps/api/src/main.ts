@@ -6,7 +6,7 @@ import { json } from 'express';
 import { publicFormTransport } from './marketing/public-form-transport.js';
 import { kioskTransport } from './kiosk/kiosk-transport.js';
 import { paymentWebhookTransport } from './payments/payment-webhook-transport.js';
-import { validateDeploymentConfiguration } from './foundation/production-config.js';
+import { apiListenHost, validateDeploymentConfiguration } from './foundation/production-config.js';
 import { emitTelemetry, HonTelemetryLogger } from './observability/telemetry.js';
 import { diagnosticIdMiddleware, HonExceptionFilter, installProcessTelemetry, transportErrorHandler } from './observability/http-telemetry.js';
 
@@ -40,7 +40,7 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   const port = Number(process.env.HON_API_PORT ?? 3001);
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, apiListenHost());
   emitTelemetry('info', 'startup.listening', { component: 'bootstrap', context: configuration.deployment });
 }
 

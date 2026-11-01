@@ -5,7 +5,7 @@ const { join, relative } = require('node:path');
 require('reflect-metadata');
 const { verifiedDatabaseConnection, isLoopbackDatabaseUrl } = require('@hon/database');
 const { runtimePoolOptions, runtimePoolMax } = require('../dist/foundation/runtime-pool-options.js');
-const { validateDeploymentConfiguration } = require('../dist/foundation/production-config.js');
+const { apiListenHost, validateDeploymentConfiguration } = require('../dist/foundation/production-config.js');
 const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
 const { setTelemetryWriter, resetTelemetryRateLimit } = require('../dist/observability/telemetry.js');
 
@@ -89,6 +89,18 @@ test('a correctly configured production API starts', () => {
   // Local development and the existing fixtures keep working unchanged.
   assert.deepEqual(validateDeploymentConfiguration({}), { deployment: 'development', failures: [] });
   assert.deepEqual(validateDeploymentConfiguration({ HON_RUNTIME_DATABASE_URL: 'postgresql://u:p@localhost:5432/db', DATABASE_URL: 'postgresql://o:p@localhost:5432/db' }).failures, []);
+});
+
+test('the API listen interface defaults to all interfaces and accepts only exact loopback or wildcard values', () => {
+  assert.equal(apiListenHost({}), '0.0.0.0');
+  for (const host of ['127.0.0.1', '::1', '0.0.0.0']) {
+    assert.equal(apiListenHost({ HON_API_LISTEN_HOST: host }), host);
+    assert.deepEqual(validateDeploymentConfiguration({ HON_API_LISTEN_HOST: host }).failures, []);
+  }
+  for (const host of ['', ' 127.0.0.1', 'localhost', '192.168.1.10', '127.0.0.1:3001', '::']) {
+    assert.throws(() => apiListenHost({ HON_API_LISTEN_HOST: host }));
+    assert.deepEqual(validateDeploymentConfiguration({ HON_API_LISTEN_HOST: host }).failures, ['API_LISTEN_HOST_INVALID']);
+  }
 });
 
 test('production never silently falls back to development or unverified settings', () => {
