@@ -651,6 +651,60 @@ try {
     );
   }
 
+  // Revocation DURING the outcome row-lock wait: another session holds the trial row lock, an authorized outcome
+  // command passes the controller and waits on it, the role grant is revoked, the lock is released. The command must
+  // be refused with 403 and leave the appointment, audit, outbox and idempotency state unchanged.
+  {
+    const outcomeKey = `crm-trial-outcome-revoked-in-wait-${randomUUID()}`;
+    const stateFor = async () => (await administrator.query(`
+      SELECT
+        (SELECT status::text || ':' || version FROM hon.crm_appointments WHERE id = $2::uuid) AS appointment,
+        (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1) AS audits,
+        (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1) AS outbox,
+        (SELECT count(*)::integer FROM hon.idempotency_records WHERE organization_id = $1 AND idempotency_key = $3) AS receipts`,
+    [ids.organization, ids.localScheduledAppointment, outcomeKey])).rows[0];
+    const before = await stateFor();
+    const currentVersion = Number(before.appointment.split(':')[1]);
+    assert(before.appointment.startsWith('SCHEDULED:'), 'The outcome lock-wait fixture trial is not scheduled.');
+    const rowLock = new Client(connectionOptions(process.env.DATABASE_URL));
+    await rowLock.connect();
+    let waited;
+    try {
+      await rowLock.query('BEGIN');
+      await rowLock.query('SELECT id FROM hon.crm_appointments WHERE id = $1::uuid FOR UPDATE', [ids.localScheduledAppointment]);
+      const pending = outcomeController.record(
+        ids.organization, ids.schoolA, ids.localScheduledAppointment, outcomeKey, outcomeFor('NO_SHOW', currentVersion),
+        request, responseCapture(),
+      ).then((value) => ({ status: 'fulfilled', value }), (reason) => ({ status: 'rejected', reason }));
+      const deadline = Date.now() + 20000;
+      for (;;) {
+        const waiting = await administrator.query(
+          "SELECT count(*)::integer AS n FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid', 'tuple')",
+        );
+        if (waiting.rows[0].n >= 1) break;
+        if (Date.now() > deadline) throw new Error('The authorized trial outcome command never reached the row-lock wait.');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
+      await rowLock.query('COMMIT');
+      waited = await pending;
+    } finally {
+      await rowLock.query('ROLLBACK').catch(() => {});
+      await rowLock.end();
+    }
+    assert(waited.status === 'rejected' && waited.reason?.getStatus?.() === 403,
+      `A trial outcome whose role grant was revoked during the row-lock wait was not refused with 403: ${waited.status} ${waited.reason?.getStatus?.() ?? ''} ${waited.reason?.getResponse?.()?.code ?? ''}`);
+    const after = await stateFor();
+    assert(after.appointment === before.appointment && after.audits === before.audits && after.outbox === before.outbox
+      && after.receipts === 0, 'A trial outcome refused after the row-lock wait changed the appointment or left audit, outbox or idempotency state.');
+    await administrator.query(
+      `INSERT INTO hon.principal_role_grants (
+         organization_id, school_id, principal_id, role_id, granted_by_principal_id
+       ) VALUES ($1, $2, $3, $4, $3)`,
+      [ids.organization, ids.schoolA, ids.principal, ids.ownerRole],
+    );
+  }
+
   // Permission revocation: neither replay nor reconciliation survives a removed role grant.
   await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
   await expectStatus(403, () => controller.schedule(
@@ -704,7 +758,7 @@ try {
     && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,
   'Trial outcome mutated booking, student/family, enrollment, membership, CRM activity, or AI/action state.');
 
-  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the per-lead lock wait), CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
+  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the scheduling lock wait and the outcome row-lock wait), CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
 } finally {
   try {
     await database.onModuleDestroy();

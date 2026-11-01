@@ -78,7 +78,7 @@ export class TrialAppointmentOutcomeController {
       idempotencyKey: normalizedIdempotencyKey,
       source: 'HUMAN_UI',
     };
-    const result = await this.outcomes.record(context, appointmentId, input);
+    const result = await this.outcomes.record(context, appointmentId, input, { externalSubject: identity.externalSubject });
 
     response.status(HttpStatus.OK);
     return {
