@@ -20,6 +20,7 @@ const settle = async () => { for (let i = 0; i < 70; i++) await Promise.resolve(
 const data = (d: unknown, status = 200) => new Response(JSON.stringify({ data: d }), { status });
 const id = '00000000-0000-4000-8000-000000000001';
 const school = { organizationId: id, schoolId: id, schoolName: 'PRIVATE_SCHOOL_CANARY', tier: 'COMPLETE', program: null, classSession: null, registration: null, guardianChildRegistration: null };
+const hqDirectory = { schools: [{ schoolId: id, organizationDisplayName: 'PRIVATE_ORG_CANARY', schoolDisplayName: 'PRIVATE_HQ_CANARY', organizationOperationalStatus: 'ACTIVE', schoolOperationalStatus: 'ACTIVE', entitlementTier: null, createdAt: '2026-10-30T12:00:00.000Z' }] };
 const me = () => data({ externalSubject: 'synthetic:owner' });
 beforeEach(() => { plane = 'school'; h.values = []; h.cursor = 0; h.effects = []; h.language = 'en'; vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
 afterEach(() => { for (const v of h.values) v?.cleanup?.(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -69,4 +70,62 @@ it('describes authorized HQ directory results as directory evidence rather than 
   vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory })).mockResolvedValueOnce(me());
   button(english.hqLoad).props.onClick(); await settle(); const out = text(render());
   expect(out).toContain(english.hqLoaded); expect(out).toContain(english.hqUnknown); expect(out).not.toContain(english.loaded);
+});
+
+it.each(['en','ko','es'] as const)('all eight %s stages remain guide navigation in every mode without protected reads', language => {
+  h.language = language;
+  const f = vi.spyOn(globalThis, 'fetch');
+  for (const mode of ['modern','classic','big-button'] as const) {
+    button(founderText(language, mode)).props.onClick();
+    for (let stage = 0; stage < 8; stage++) {
+      const title = founderText(language, `step${stage}Title` as keyof typeof english);
+      const nav = nodes(render()).find(e => e.type === 'button' && text(e) === `${stage + 1}${title}`)!;
+      nav.props.onClick();
+      const out = render(), heading = nodes(out).find(e => e.props.id === 'founder-current-step');
+      expect(text(heading)).toBe(title);
+      expect(text(out)).toContain(founderText(language, `step${stage}Body` as keyof typeof english));
+      expect(nav.props.disabled).not.toBe(true);
+      expect(button(founderText(language, 'previous')).props.disabled).toBe(stage === 0);
+      expect(button(founderText(language, 'next')).props.disabled).toBe(stage === 7);
+      expect(text(out)).toContain(founderText(language, 'boundary'));
+      expect(text(out)).not.toContain(founderText(language, 'recorded'));
+    }
+  }
+  expect(f).not.toHaveBeenCalled();
+});
+
+it.each(['blur','pagehide','hon:session-invalidated','hon:school-context-changed','visibilitychange'])('HQ clears both protected directory and synthetic overlay on %s', async event => {
+  plane = 'hq';
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: hqDirectory })).mockResolvedValueOnce(me());
+  button(english.hqLoad).props.onClick(); await settle(); button(english.sample).props.onClick();
+  expect(text(render())).toContain('PRIVATE_HQ_CANARY'); expect(text(render())).toContain(english.sampleBanner);
+  if (event === 'visibilitychange') { Object.assign(document, { visibilityState: 'hidden' }); document.dispatchEvent(new Event(event)); } else window.dispatchEvent(new Event(event));
+  expect(text(render())).not.toMatch(/PRIVATE_HQ_CANARY|PRIVATE_ORG_CANARY/); expect(text(render())).not.toContain(english.sampleBanner);
+  window.dispatchEvent(new Event('focus')); expect(f).toHaveBeenCalledTimes(3);
+});
+
+it('HQ rejects a late concealed directory and restores only through a fresh explicit protected read', async () => {
+  plane = 'hq'; let finish!: (r: Response) => void;
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockImplementationOnce(() => new Promise(r => { finish = r; }));
+  const start = button(english.hqLoad).props.onClick; start(); start(); await settle(); expect(f).toHaveBeenCalledTimes(2);
+  window.dispatchEvent(new Event('pagehide')); finish(data({ directory: hqDirectory })); await settle();
+  expect(text(render())).not.toContain('PRIVATE_HQ_CANARY'); window.dispatchEvent(new Event('focus')); expect(f).toHaveBeenCalledTimes(2);
+  f.mockReset().mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: hqDirectory })).mockResolvedValueOnce(me());
+  button(english.hqLoad).props.onClick(); await settle(); expect(text(render())).toContain('PRIVATE_HQ_CANARY'); expect(f).toHaveBeenCalledTimes(3);
+});
+
+it.each([401,403,503])('HQ failed refresh %s clears previous facts without fabricated progress', async status => {
+  plane = 'hq'; let invalidations = 0; window.addEventListener('hon:session-invalidated', () => invalidations++);
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: hqDirectory })).mockResolvedValueOnce(me());
+  button(english.hqLoad).props.onClick(); await settle(); expect(text(render())).toContain('PRIVATE_HQ_CANARY');
+  f.mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: hqDirectory }, status));
+  button(english.hqLoad).props.onClick(); await settle(); const out = text(render());
+  expect(out).not.toMatch(/PRIVATE_HQ_CANARY|PRIVATE_ORG_CANARY/); expect(out).toContain(english[status === 401 ? 'signedout' : status === 403 ? 'hqDenied' : 'error']);
+  expect(invalidations).toBe(status === 401 ? 1 : 0); expect(out).not.toContain(english.sampleBanner);
+});
+
+it('an empty HQ directory is not a completed founder cohort', async () => {
+  plane = 'hq'; vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: { schools: [] } })).mockResolvedValueOnce(me());
+  button(english.hqLoad).props.onClick(); await settle();
+  expect(text(render())).toContain(english.empty); expect(text(render())).toContain(english.hqGap); expect(text(render())).not.toContain(english.sampleBanner);
 });

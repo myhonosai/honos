@@ -1,5 +1,7 @@
 ## Founder Setup guide — Codex (isolated frontend)
 
+- Current-main refresh: normally incorporate accepted `6ab871cd781935fc633dfec7685075b3d95432be` (the three test-only PR #99 files), preserve the original eight-stage frontend scope, and verify every stage/mode/language plus HQ synthetic-progress and privacy boundaries. Fresh focused/browser/accessibility/typecheck/build CI evidence is pending on the reconciled exact head. PR #95 remains read-only and unmerged; no shared CRM or onboarding backend changes.
+
 - Reconcile externally accepted main `b234be7f14c49d07349219dfb4ae3b9c2a05d3f9` without changing PR #92 or its branch. Preserve its startup guard and both TODO sections. Scoped HQ contrast correction and29 focused tests are included; final integrated CI is pending.
 
 - Local verification: 28 focused transport/lifecycle/catalog tests and all 1,037 web tests pass; typecheck, web production build and 183-pin migration validation pass. Hosted browser/screenshots and full workspace results remain pending on the final draft head. No backend/migration or commercial changes.
