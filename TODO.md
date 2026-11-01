@@ -1,3 +1,9 @@
+## C-AUTH-1 — verified post-login navigation (isolated web integration)
+
+- Replace the callback's unconditional HQ landing with a fixed session-verified continuation route. Reuse only current HQ-session and exact-one staff reporting-school APIs; strict closed results select fixed local destinations, while ambiguous/missing/error classifications remain **Access not verified**. No role claims, parent-content probe, backend, migration, provider or provisioning changes.
+- Document the precise missing minimal guardian/current-access reader for Claude; preserve parent/staff/HQ independent API authorization, all callback PKCE/nonce/verified-email behavior, manual workspace choices and no automatic retries. Scope and evidence limits: [verified post-login routing](docs/architecture/VERIFIED_POST_LOGIN_ROUTING.md).
+- Local verification on the isolated current-main branch: 73 focused auth/routing/page tests and all 1,106 web tests pass; web TypeScript and production build pass. Response streaming is bounded to 16 KB and cancels on deadline. Script syntax, workflow YAML, documentation links, manifest uniqueness and whitespace checks pass. Local mounted HTTP/browser execution is blocked by `listen EPERM`; the dedicated synthetic production-Next/browser proof awaits hosted CI, while the existing account workflow retains full repository/disposable PostgreSQL checks. Web classification responses are mocked; no fresh API/database/IAM proof is claimed. No commit, publication, merge, deployment, Codespaces or changes to PRs #94/#95/#104 are authorized by this checkpoint.
+
 ## Web production authentication startup guard — Codex
 
 - Local evidence: 60 focused configuration/auth-route tests and all 1,044 web tests pass; web typecheck, production build and the existing 183-file migration check pass. Browser and full repository/database evidence remain pending on the final draft head.
