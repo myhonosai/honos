@@ -17,7 +17,7 @@ export type Command = Readonly<{ kind: Kind; scope: Scope; leadId: string; conta
 export type Receipt = { kind: 'FOLLOW_UP'; record: FollowUpRecord } | { kind: 'SCHEDULE' | 'OUTCOME'; record: CrmAppointmentSummary }
   | { kind: 'CLOSE'; record: ReturnType<typeof parseCrmLeadCloseResult>['receipt'] } | { kind: 'REGISTER'; record: CrmLeadRegistrationResult };
 export class JourneyError extends Error {
-  constructor(readonly kind: 'SESSION' | 'DENIED' | 'REJECTED' | 'UNKNOWN' | 'READ', readonly status = 0) { super(kind); }
+  constructor(readonly kind: 'SESSION' | 'DENIED' | 'REJECTED' | 'UNKNOWN' | 'READ', readonly status = 0, readonly trialConflict?: unknown) { super(kind); }
 }
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 function id(v: string): string { if (!UUID.test(v)) throw new JourneyError('REJECTED'); return v.toLowerCase(); }
@@ -33,6 +33,13 @@ async function request(path: string, signal: AbortSignal, body?: string, key?: s
   } catch { throw new JourneyError(readOnly ? 'READ' : 'UNKNOWN'); }
   if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new JourneyError('SESSION', 401); }
   if (response.status === 403) throw new JourneyError('DENIED', 403);
+  if (response.status === 409 && marker === 'crm-trial-appointment' && path.endsWith('/trials')) {
+    // A duplicate conflict is current server evidence, never a receipt for this command.
+    // Its closed, lead-bound shape is checked by the recovery reader before display.
+    let conflict: unknown;
+    try { const raw = await response.text(); if (raw.length <= 250_000) conflict = JSON.parse(raw); } catch { /* Refusal remains a refusal; no raw provider/server detail is exposed. */ }
+    throw new JourneyError('REJECTED', 409, conflict);
+  }
   if ([400, 404, 405, 409, 413, 415, 422].includes(response.status)) throw new JourneyError('REJECTED', response.status);
   if (!response.ok) throw new JourneyError(readOnly ? 'READ' : 'UNKNOWN', response.status);
   try {

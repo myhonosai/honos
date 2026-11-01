@@ -83,7 +83,7 @@ it('does not mistake a recovery403caused by revoked CRM access for registration-
 });
 it('requires a fresh acknowledgement after a rejected close and a protected refresh',async()=>{
  const f=await loaded();const submit=prepareClose();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},409));
- submit({preventDefault(){}});await settle();expect(el('confirm').props.checked).toBe(true);
+ submit({preventDefault(){}});await settle();expect(el('confirm').props.checked).toBe(false);
  authorize(f);click('refresh');await settle();expect(el('confirm').props.checked).toBe(false);
  const count=f.mock.calls.length;nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();expect(f.mock.calls.length).toBe(count);
 });
@@ -134,7 +134,8 @@ it('F1: an unknown schedule still permits its explicit immutable exact-key retry
  const f=await loadedPair(),keys=vi.spyOn(globalThis.crypto,'randomUUID'),submit=prepareTrial();
  f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();const original=f.mock.calls.at(-1)!;
  window.dispatchEvent(new Event('blur'));pairRead(f);click('restore');await settle();
- f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(appointment()));click('retry');await settle();
+ expect(el('retry').props.disabled).toBe(true); readTrialResponses(f); click('read-trials'); await settle();
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(savedTrials()).mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(appointment()));click('retry');await settle();
  expect(f.mock.calls.at(-1)![1]?.body).toBe(original[1]?.body);expect(f.mock.calls.at(-1)![1]?.headers).toEqual(original[1]?.headers);
  expect(keys).toHaveBeenCalledTimes(1);expect(postCount(f)).toBe(2);expect(el('save-trial')).toBeUndefined();
 });
@@ -171,4 +172,54 @@ it.each([401,403])('F2: a denied refresh (%s) clears private facts and cannot ma
  expect(text(render())).not.toContain('Canary');expect(el('receipt')).toBeUndefined();submit({preventDefault(){}});await settle();expect(f.mock.calls).toHaveLength(count);expect(keys).toHaveBeenCalledTimes(1);
  if(status===401){expect(text(render())).toContain(journeyCatalog.en.reauth);expect(el('load')).toBeUndefined();pairRead(f);reload();await settle();expect(f.mock.calls).toHaveLength(count);}
  else{pairRead(f);click('load');await settle();expect(text(render())).toContain('Canary');}
+});
+
+const savedTrials = (activeTrial: unknown = null, trials: unknown[] = []) => new Response(JSON.stringify({data:{activeTrial,trials},meta:{requestId:id(9),correlationId:id(9)}}),{headers:{'Content-Type':'application/json','Cache-Control':'private, no-store'}});
+const savedDetail = (record:unknown) => new Response(JSON.stringify({data:record,meta:{requestId:id(9),correlationId:id(9)}}),{headers:{'Content-Type':'application/json','Cache-Control':'private, no-store'}});
+function readTrialResponses(f:Awaited<ReturnType<typeof loaded>>, active:unknown=null, trials:unknown[]=[]) { f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(savedTrials(active,trials)).mockResolvedValueOnce(identity()); }
+async function savedTrialLoaded(record={...appointment(),version:4}) { const f=await loaded();click('step-outcome');readTrialResponses(f,record,[record]);click('read-trials');await settle();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(savedDetail(record)).mockResolvedValueOnce(identity());click('inspect-trial-'+record.id);await settle();return {f,record}; }
+it('recovers a persisted trial on a fresh mounted view without a creation receipt or automatic command',async()=>{
+ const {f,record}=await savedTrialLoaded();expect(el('verified-trial')).toBeDefined();expect(el('save-outcome')).toBeDefined();expect(text(render())).toContain('4');expect(postCount(f)).toBe(0);
+ const reads=f.mock.calls.length;change('mode','classic');change('mode','big');h.language='ko';render();click('step-history');expect(f.mock.calls).toHaveLength(reads);expect(el('receipt')).toBeUndefined();expect(record.version).toBe(4);
+});
+it('keeps an independently active trial outside the full newest-50 history visible and blocks replacement scheduling',async()=>{
+ const f=await loaded();click('step-trial');const active={...appointment(),id:id(80),version:3};const history=Array.from({length:50},(_,n)=>({...appointment(),id:id(200-n),status:'CANCELLED',createdAt:'2026-11-01T12:00:00.000Z'}));
+ readTrialResponses(f,active,history);click('read-trials');await settle();expect(el('inspect-trial-'+active.id)).toBeDefined();expect(el('save-trial')).toBeUndefined();expect(postCount(f)).toBe(0);expect(el('receipt')).toBeUndefined();
+});
+it('fresh detail and a separate confirmation bind an outcome to the persisted appointment version',async()=>{
+ const {f,record}=await savedTrialLoaded();el('confirm').props.onChange({target:{checked:true}});const submit=nodes(render()).find(e=>e.type==='form')!.props.onSubmit;
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(savedDetail(record)).mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({...record,status:'COMPLETED',version:5}));submit({preventDefault(){}});submit({preventDefault(){}});await settle();
+ const posts=f.mock.calls.filter(c=>c[1]?.method==='POST');expect(posts).toHaveLength(1);expect(JSON.parse(posts[0]![1]!.body as string).expectedVersion).toBe(4);expect(posts[0]![0]).toContain('/appointments/'+record.id+'/outcome');expect(text(render())).toContain(journeyCatalog.en.needsRefresh);expect(el('verified-trial')).toBeUndefined();
+});
+it('a changed persisted version refuses outcome before dispatch and requires another authorized review',async()=>{
+ const {f,record}=await savedTrialLoaded();el('confirm').props.onChange({target:{checked:true}});const submit=nodes(render()).find(e=>e.type==='form')!.props.onSubmit;
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(savedDetail({...record,version:5,status:'CANCELLED'})).mockResolvedValueOnce(identity());submit({preventDefault(){}});await settle();expect(postCount(f)).toBe(0);expect(text(render())).toContain(journeyCatalog.en.needsRefresh);expect(el('confirm').props.checked).toBe(false);
+});
+it('an unknown schedule needs an explicit read, does not settle from null, and retries only the original body and key',async()=>{
+ const f=await loadedPair(),keys=vi.spyOn(crypto,'randomUUID'),submit=prepareTrial();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();const original=f.mock.calls.at(-1)!;
+ expect(el('retry').props.disabled).toBe(true);click('retry');await settle();expect(postCount(f)).toBe(1);
+ readTrialResponses(f);click('read-trials');await settle();expect(postCount(f)).toBe(1);expect(el('receipt')).toBeUndefined();expect(el('save-trial')).toBeUndefined();expect(el('retry').props.disabled).toBe(false);expect(text(render())).toContain(journeyCatalog.en.noActiveTrial);
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(savedTrials()).mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(appointment()));const retry=el('retry').props.onClick;retry();retry();await settle();const posts=f.mock.calls.filter(c=>c[1]?.method==='POST');expect(posts).toHaveLength(2);expect(posts[1]![1]!.body).toBe(original[1]!.body);expect(posts[1]![1]!.headers).toEqual(original[1]!.headers);expect(keys).toHaveBeenCalledTimes(1);
+});
+it('abandoning an unknown schedule cannot release the hold from an empty authoritative read',async()=>{
+ const f=await loadedPair(),submit=prepareTrial();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();click('discard');click('abandon');pairRead(f);click('load');await settle();change('lead-select',row.id);click('step-trial');readTrialResponses(f);click('read-trials');await settle();expect(el('save-trial')).toBeUndefined();expect(text(render())).toContain(journeyCatalog.en.trialUnresolvedHold);expect(postCount(f)).toBe(1);
+});
+it('a duplicate409 shows the existing trial without inventing a receipt or matching rejected requested dates',async()=>{
+ const f=await loadedPair(),submit=prepareTrial();const existing={...appointment('2026-11-10T09:00:00.000Z','2026-11-10T10:00:00.000Z'),id:id(88),version:2};
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(new Response(JSON.stringify({code:'TRIAL_ALREADY_SCHEDULED',detail:'private server detail',existingAppointment:existing}),{status:409,headers:{'Content-Type':'application/json'}}));submit({preventDefault(){}});await settle();expect(el('receipt')).toBeUndefined();expect(el('save-trial')).toBeUndefined();expect(el('retry')).toBeUndefined();expect(text(render())).toContain(journeyCatalog.en.trialConflict);expect(text(render())).not.toContain('private server detail');expect(postCount(f)).toBe(1);
+});
+it.each(['blur','pagehide','visibilitychange','hon:school-context-changed'])('saved trial %s concealment invalidates a pending read and its late response',async event=>{
+ const f=await loaded();click('step-trial');let finish!:(r:Response)=>void;f.mockResolvedValueOnce(identity()).mockImplementationOnce(()=>new Promise(r=>finish=r));click('read-trials');await settle();
+ if(event==='visibilitychange')Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});(event==='visibilitychange'?document:window).dispatchEvent(new Event(event));expect(hidden()).toBe(true);finish(savedTrials(appointment(),[appointment()]));await settle();expect(el('verified-trial')).toBeUndefined();expect(el('inspect-trial-'+appointment().id)).toBeUndefined();expect(postCount(f)).toBe(0);
+});
+it.each([401,403])('saved trial denial %s clears facts and never confirms an unknown scheduling command',async status=>{
+ const f=await loadedPair(),submit=prepareTrial();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(new Response('{}',{status}));click('read-trials');await settle();expect(el('inspect-trial-'+appointment().id)).toBeUndefined();expect(el('receipt')).toBeUndefined();expect(postCount(f)).toBe(1);if(status===401){expect(text(render())).toContain(journeyCatalog.en.reauth);expect(text(render())).not.toContain('Private');}else expect(hidden()).toBe(true);
+});
+it('a conflicting exact retry retains its key and permits another protected recovery read without a reload or abandonment',async()=>{
+ const f=await loadedPair(),submit=prepareTrial();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();const original=f.mock.calls.at(-1)!;const existing={...appointment(),id:id(88)};
+ readTrialResponses(f,existing,[existing]);click('read-trials');await settle();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(savedTrials(existing,[existing])).mockResolvedValueOnce(identity()).mockResolvedValueOnce(new Response(JSON.stringify({code:'TRIAL_ALREADY_SCHEDULED',detail:'Already scheduled',existingAppointment:existing}),{status:409,headers:{'Content-Type':'application/json'}}));click('retry');await settle();
+ expect(el('read-trials').props.disabled).toBe(false);expect(el('retry').props.disabled).toBe(true);expect(el('receipt')).toBeUndefined();expect(el('save-trial')).toBeUndefined();readTrialResponses(f,existing,[existing]);click('read-trials');await settle();expect(el('retry').props.disabled).toBe(false);const posts=f.mock.calls.filter(c=>c[1]?.method==='POST');expect(posts).toHaveLength(2);expect(posts[1]![1]!.body).toBe(original[1]!.body);expect(posts[1]![1]!.headers).toEqual(original[1]!.headers);
+});
+it.each(['en','ko','es'])('%s announces saved-trial verification as a read, never as a command receipt',async language=>{
+ h.language=language;const f=await loaded();click('step-trial');readTrialResponses(f);click('read-trials');await settle();expect(text(el('command-status'))).toBe(journeyText(language,'trialReadComplete'));expect(el('receipt')).toBeUndefined();window.dispatchEvent(new Event('blur'));expect(text(el('command-status'))).toBe('');
 });

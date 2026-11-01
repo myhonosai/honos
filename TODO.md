@@ -1,3 +1,10 @@
+## Connected CRM — persistent trial recovery integration
+
+- [x] Prepare explicit saved-trial list/detail reads, current-version outcome review, strict duplicate-conflict evidence and retained exact retries on top of PR #95; preserve F1 scheduling holds, F2 lead-refresh barriers, EN/KR/ES, privacy and all existing registration workflows.
+- [x] Preserve accepted #105/main `023304297c309881215bf6ccccd4e512e0af8c2e` normally; new backend bindings target #107 `9e8289fc0e9485ea8f4cc4b76f3765940c8b7f52` and remain contingent on its independent review and owner merge approval.
+- Local evidence: 131 focused regressions and all 1,191 web tests passed, with typecheck and 183 unchanged migration checksums. Browser/API/PostgreSQL evidence remains pending on the final published head; no local socket/database pass is claimed.
+- [ ] Freeze the corrected PR #95 head; run fresh repository/build, browser/accessibility, full PostgreSQL and pinned-backend signed-session verification. Keep draft for independent review; do not infer operational approval from test fixtures or policy decisions not yet made.
+
 ## Connected staff CRM operating journey — Codex (in progress)
 
 - PR #95 independent-review corrections F1/F2: retain school-scoped trial scheduling holds for this mounted lifetime across lead switches, refreshes and deliberate abandonment; retain required lead refresh until a successful authorized lead read. Add negative key/POST/preparation regressions and fresh draft-safe verification. No backend reader is invented; cross-session trial recovery and pilot readiness remain blocked.
