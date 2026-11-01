@@ -387,6 +387,10 @@
     {
       "path": "/hq/founder-setup",
       "title": "HON HQ | Founder Setup"
+    },
+    {
+      "path": "/staff/crm/journey",
+      "title": "Human CRM leads"
     }
   ]
 }

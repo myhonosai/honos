@@ -1,0 +1,62 @@
+name: Owner private interactive preview (synthetic)
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/web/scripts/private-preview/**'
+      - 'apps/web/test/private-preview-*.test.*'
+      - '.devcontainer/devcontainer.json'
+      - '.github/workflows/owner-private-preview.yml'
+permissions:
+  contents: read
+concurrency:
+  group: owner-private-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      HON_PRIVATE_PREVIEW_LOCAL: '1'
+      HON_PREVIEW_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node apps/web/scripts/private-preview/guard.test.mjs
+      - run: pnpm prepare:workspace && pnpm --filter @hon/web exec vitest run test/private-preview-contracts.test.ts
+      - run: node apps/web/scripts/private-preview/prepare.mjs
+      - name: Isolated browser tools and Korean font
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          fc-cache -f
+          echo "HON_PREVIEW_CHROME=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          echo "HON_PREVIEW_TOOLS=$RUNNER_TEMP/owner-preview-tools" >> "$GITHUB_ENV"
+          echo "HON_PREVIEW_RESULTS=$RUNNER_TEMP/owner-preview-results" >> "$GITHUB_ENV"
+          npm install --prefix "$RUNNER_TEMP/owner-preview-tools" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1 axe-core@4.10.3 esbuild@0.25.12
+      - name: Actual Next app, gateway isolation, synthetic workflows, desktop/mobile and axe
+        id: browser
+        run: node apps/web/scripts/private-preview/browser.mjs
+      - name: Retain private synthetic screenshots and report
+        if: always() && steps.browser.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hon-owner-private-preview-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/owner-preview-results/
+          retention-days: 3
+          if-no-files-found: warn
+      - if: always()
+        run: git diff --exit-code
