@@ -34,7 +34,7 @@ jobs:
           node-version: 22.23.4
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: node apps/web/scripts/private-preview/guard.test.mjs
+      - run: node apps/web/scripts/private-preview/guard-check.mjs
       - run: pnpm prepare:workspace && pnpm --filter @hon/web exec vitest run test/private-preview-contracts.test.ts
       - run: node apps/web/scripts/private-preview/prepare.mjs
       - name: Isolated browser tools and Korean font
