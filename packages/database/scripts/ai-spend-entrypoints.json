@@ -60,12 +60,11 @@
     "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
   ],
   "budgetCeilingLiteral12000": [
-    "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
-    "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
-    "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
-    "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)"
+    "hon.ai_org_ceiling(uuid,timestamp with time zone)"
   ],
   "spendReferences": [
+    "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
+    "hon.ai_spend_reserve_guard()",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
@@ -119,6 +118,11 @@
   "b3ReservationsInAgentFunctions": [],
   "agentTablesInB3Functions": [],
   "grants": {
+    "hon.ai_org_ceiling(uuid,timestamp with time zone)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": false
+    },
     "hon.begin_chad_follow_up_request(text,jsonb,uuid)": {
       "runtime": true,
       "public": false,
@@ -260,10 +264,14 @@
   "spendTableTriggers": {
     "ai_usage_ledger": [],
     "chad_follow_up_invocations": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
       "chad_follow_up_invocations_immutable",
       "chad_follow_up_invocations_no_truncate"
     ],
     "marketing_ai_invocations": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
       "marketing_invocation_guard",
       "marketing_invocation_no_truncate"
     ],
@@ -272,6 +280,8 @@
       "saas_no_truncate"
     ],
     "teaching_ai_invocations": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
       "teaching_ai_invocations_immutable",
       "teaching_ai_invocations_no_truncate"
     ]
@@ -352,10 +362,11 @@
     {
       "id": "KF-AI2-CROSS-AGENT-OVERCOMMIT",
       "finding": "AI-2",
-      "status": "OPEN",
-      "replacedBy": "S4",
+      "status": "FIXED_BY_S4B",
+      "replacedBy": "S4-b (migration 0194, invariant INV-14)",
       "currentOutcome": "Marcus, Claire and Chad all reach SENDING at used 11990; 12005 committed against the 12000 ceiling because each prepare sums only its own table.",
-      "replacementOutcome": "The third prepare is refused AI_ORG_BUDGET_EXCEEDED under one organization budget lock; committed never exceeds the ceiling."
+      "replacementOutcome": "The third prepare is refused AI_ORG_BUDGET_EXCEEDED under one organization budget lock; committed never exceeds the ceiling.",
+      "fixedOutcome": "All three prepares compute one organization total (hon.ai_org_committed_credits: agent-inference ledger credits in the UTC-month window plus every open agent hold) under ai.budget:<org>. At used 11990 every arrival order admits greedily against the 12000 ceiling; a refused agent is BLOCKED / CUSTOMER_BUDGET_EXCEEDED before any provider call. A reserve guard trigger re-checks any hold increase."
     },
     {
       "id": "KF-AI9-EXCEPTION-SPEND",
@@ -376,10 +387,11 @@
     {
       "id": "KF-AI3-SAME-AGENT-RACE",
       "finding": "AI-3",
-      "status": "OPEN",
-      "replacedBy": "S4",
+      "status": "FIXED_BY_S4B",
+      "replacedBy": "S4-b (migration 0194, invariant INV-15)",
       "currentOutcome": "Observed on b234be7: the second concurrent Marcus prepare at used 11994 waits on a transactionid ShareLock held by the first and is refused by the per-agent ceiling after the first commits (12000 committed). Reported as not reproduced (mayNotReproduce); an over-commit above 12000 would be reported as reproduced. Either way it never fails CI while OPEN.",
-      "replacementOutcome": "Serialized by the S4 organization budget lock; exactly one reserves."
+      "replacementOutcome": "Serialized by the S4 organization budget lock; exactly one reserves.",
+      "fixedOutcome": "Every prepare takes ai.budget:<org> last and recomputes after it. With the lock held by a blocker, both prepares of each same-agent and cross-agent pair are observed waiting on the advisory lock in pg_locks; after release exactly one reaches the provider and the other is BLOCKED."
     },
     {
       "id": "KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE",
