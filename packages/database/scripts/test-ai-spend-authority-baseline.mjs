@@ -141,9 +141,9 @@ const fakes = {
   chad: fakeProvider(ChadProviderRuntimeError, { subject: 'A friendly check-in', content: 'Please reply when a human team member can help with a trial class.' }),
 };
 const agents = {
-  marcus: { table: 'marketing_ai_invocations', estimate: 6, service: new MarketingAssistantService(db, plans, actions, fakes.marcus), input: (o) => ({ campaignId: o.campaign, request: 'Write a friendly beginner classes introduction. Use placeholders for unprovided facts.' }) },
-  claire: { table: 'teaching_ai_invocations', estimate: 6, service: new TeachingAssistantService(db, plans, actions, fakes.claire), input: (o) => ({ curriculumId: o.curriculum, brief: 'Synthetic AI-0 practice outline' }) },
-  chad: { table: 'chad_follow_up_invocations', estimate: 3, service: new ChadFollowUpAssistantService(db, plans, actions, fakes.chad), input: (o) => ({ leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }) },
+  marcus: { table: 'marketing_ai_invocations', estimate: 6, hold: 'hold_marketing_result', record: 'record_marketing_result', draft: { title: 'Replay', content: 'Replay' }, service: new MarketingAssistantService(db, plans, actions, fakes.marcus), input: (o) => ({ campaignId: o.campaign, request: 'Write a friendly beginner classes introduction. Use placeholders for unprovided facts.' }) },
+  claire: { table: 'teaching_ai_invocations', estimate: 6, hold: 'hold_teaching_result', record: 'record_teaching_result', draft: { title: 'Replay', content: 'Replay' }, service: new TeachingAssistantService(db, plans, actions, fakes.claire), input: (o) => ({ curriculumId: o.curriculum, brief: 'Synthetic AI-0 practice outline' }) },
+  chad: { table: 'chad_follow_up_invocations', estimate: 3, hold: 'hold_chad_follow_up_result', record: 'record_chad_follow_up_result', draft: { subject: 'Replay', content: 'Replay' }, service: new ChadFollowUpAssistantService(db, plans, actions, fakes.chad), input: (o) => ({ leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }) },
 };
 
 const results = { invariants: [], knownFailures: [] };
@@ -336,29 +336,71 @@ try {
   assert.equal(await ledgerRows(evidence), 1);
   pass('INV-11', 'allowed legacy call records exactly one ledger row; replay records none; provider rejection releases the hold');
 
-  // ---- KNOWN FAILURE KF-AI14: an entitlement lapse while a call is in flight loses its usage evidence ----
-  // record_* and fail_* re-run the entitlement gate through the agent owner check, so after the provider
-  // already answered, neither the result nor UNKNOWN can be written: no ledger row, the hold stays SENDING.
-  const lapse = await makeOrg('kf-ai14');
+  // ---- INV-13 (S4-a, replaces KF-AI14): a charged result is always recorded, even after a mid-flight lapse ----
+  // record_* and fail_* now check only tenant, requester and SENDING state. The full access gate stays on the
+  // proposal step: a lapsed result is held (RESULT_HELD / ACCESS_LAPSED) and becomes a proposal only after access returns.
+  const lapse = await makeOrg('inv-13');
+  const resetPermission = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.invocation.plan') ON CONFLICT DO NOTHING", [lapse.role, lapse.id]);
+  const lapses = [
+    ['entitlement suspended', () => admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [lapse.id])],
+    ['entitlement expired', () => admin.query("UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '1 second' WHERE organization_id=$1", [lapse.id])],
+    ['ai.invocation.plan permission removed', () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='ai.invocation.plan'", [lapse.role])],
+  ];
   const lapseOutcomes = {};
-  for (const name of Object.keys(agents)) {
-    await restoreEntitlement(lapse);
-    const ledgerBeforeLapse = await ledgerRows(lapse), callsBeforeLapse = fakes[name].calls;
+  for (const [label, cut] of lapses) for (const name of Object.keys(agents)) {
+    const a = agents[name];
+    await restoreEntitlement(lapse); await resetPermission();
+    const ledgerBefore = await ledgerRows(lapse), callsBefore = fakes[name].calls;
     const inFlight = await startHeld(name, lapse);
     assert(inFlight.sending, `${name} mid-flight call must reach SENDING`);
-    await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [lapse.id]);
+    await cut();
     fakes[name].complete();
     const settled = await inFlight.submitted;
-    const stuck = (await row(`SELECT count(*)::int n, coalesce(sum(reserved_credits),0)::int r FROM hon.${agents[name].table} WHERE organization_id=$1 AND status='SENDING'`, [lapse.id]));
-    lapseOutcomes[name] = { providerCalls: fakes[name].calls - callsBeforeLapse, ledgerRowsAdded: (await ledgerRows(lapse)) - ledgerBeforeLapse,
-      error: settled.error ? (settled.error.getResponse?.()?.code ?? settled.error.message) : null, status: settled.value?.status ?? null, stuckSending: stuck.n, stuckReserved: stuck.r };
+    assert.equal(settled.error?.getStatus?.(), 403, `${name} ${label}: a held result is reported as no longer accessible`);
+    const inv = await row(`SELECT i.id,i.status,i.reason,i.reserved_credits,i.action_request_id,i.usage_id,u.provider_cost_microunits cost,u.source_invocation_id src FROM hon.${a.table} i LEFT JOIN hon.ai_usage_ledger u ON u.id=i.usage_id WHERE i.organization_id=$1 ORDER BY i.created_at DESC LIMIT 1`, [lapse.id]);
+    assert.equal(fakes[name].calls - callsBefore, 1, `${name} ${label}: exactly one provider call`);
+    assert.equal((await ledgerRows(lapse)) - ledgerBefore, 1, `${name} ${label}: exactly one ledger row with provider cost`);
+    assert.deepEqual({ status: inv.status, reason: inv.reason, reserved: inv.reserved_credits, action: inv.action_request_id, cost: Number(inv.cost), src: inv.src },
+      { status: 'RESULT_HELD', reason: 'ACCESS_LAPSED', reserved: 0, action: null, cost: 600, src: inv.id }, `${name} ${label}: held with evidence, hold released, no proposal`);
+    assert.equal(await sendingCount(lapse), 0, `${name} ${label}: nothing stranded in SENDING`);
+    // While access is still lapsed a retry is refused and creates nothing.
+    const early = await settle(a.service.generate(context(lapse), inv.id));
+    assert.equal(early.error?.getStatus?.(), 403, `${name} ${label}: retry refused while lapsed`);
+    // After access returns, retry binds the held result exactly once and never calls the provider.
+    await restoreEntitlement(lapse); await resetPermission();
+    const resumed = await a.service.generate(context(lapse), inv.id);
+    assert.equal(resumed.status, 'AWAITING_APPROVAL', `${name} ${label}: held result becomes a proposal after access returns`);
+    const again = await a.service.generate(context(lapse), inv.id);
+    assert.equal(again.status, 'AWAITING_APPROVAL');
+    assert.equal(fakes[name].calls - callsBefore, 1, `${name} ${label}: recovery never calls the provider`);
+    assert.equal((await ledgerRows(lapse)) - ledgerBefore, 1, `${name} ${label}: recovery adds no ledger row`);
+    assert.equal((await row('SELECT count(*)::int n FROM hon.action_requests WHERE organization_id=$1 AND id=(SELECT action_request_id FROM hon.' + a.table + ' WHERE id=$2)', [lapse.id, inv.id])).n, 1);
+    lapseOutcomes[`${name}: ${label}`] = 'RESULT_HELD -> AWAITING_APPROVAL';
   }
-  await restoreEntitlement(lapse);
-  // Exact per-agent outcome: one provider call, the agent's own PERSISTENCE_UNKNOWN code, no ledger row, one stuck SENDING row with its estimate held.
-  const persistenceUnknown = { marcus: 'MARKETING_PERSISTENCE_UNKNOWN', claire: 'TEACHING_PERSISTENCE_UNKNOWN', chad: 'FOLLOW_UP_DRAFT_PERSISTENCE_UNKNOWN' };
-  const lapseLost = Object.entries(lapseOutcomes).filter(([name, o]) => o.providerCalls === 1 && o.ledgerRowsAdded === 0 && o.error === persistenceUnknown[name] && o.stuckSending === 1 && o.stuckReserved === agents[name].estimate);
-  reportKnownFailure('KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE', lapseLost.length === Object.keys(agents).length,
-    `provider answered after the entitlement was suspended mid-flight: ${JSON.stringify(lapseOutcomes)}`);
+  await restoreEntitlement(lapse); await resetPermission();
+
+  // A failed proposal (transaction 2) never rolls back recorded usage; hold is refused while access is current.
+  const proposeInTransaction = actions.proposeInTransaction;
+  for (const name of Object.keys(agents)) {
+    const a = agents[name], ledgerBefore = await ledgerRows(lapse);
+    actions.proposeInTransaction = async () => { throw new Error('synthetic proposal failure'); };
+    fakes[name].mode = 'RESULT';
+    const failed = await settle(a.service.submit(context(lapse), a.input(lapse)));
+    actions.proposeInTransaction = proposeInTransaction;
+    assert.equal(failed.error?.message, 'synthetic proposal failure', `${name}: the proposal failure surfaces unchanged`);
+    const inv = await row(`SELECT id,status,reserved_credits,usage_id FROM hon.${a.table} WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1`, [lapse.id]);
+    assert.deepEqual({ status: inv.status, reserved: inv.reserved_credits, recorded: inv.usage_id !== null }, { status: 'RESULT_RECORDED', reserved: 0, recorded: true }, `${name}: usage survives a failed proposal`);
+    assert.equal((await ledgerRows(lapse)) - ledgerBefore, 1);
+    const hold = await settle(tenant(context(lapse), (c) => c.query(`SELECT hon.${a.hold}($1,$2::uuid)`, [lapse.subject, inv.id])));
+    assert.equal(hold.error?.code, '55000', `${name}: hold refused while access is current`);
+    const replay = await settle(tenant(context(lapse), (c) => c.query(`SELECT hon.${a.record}($1,$2::uuid,$3::jsonb)`, [lapse.subject, inv.id, JSON.stringify({ draft: a.draft, inputTokens: 200, outputTokens: 100, providerCostMicrounits: 600 })])));
+    assert.equal(replay.error?.code, '40001', `${name}: a replayed record is refused`);
+    const duplicate = await settle(admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,correlation_id,source_invocation_id) VALUES($1,$2,'OPENROUTER','ai0-duplicate','TEXT',1,$3,$4)", [lapse.id, lapse.school, K(), inv.id]));
+    assert.equal(duplicate.error?.code, '23505', `${name}: a second ledger row for one invocation is refused`);
+    assert.equal((await a.service.generate(context(lapse), inv.id)).status, 'AWAITING_APPROVAL', `${name}: retry binds the recorded result`);
+    assert.equal((await ledgerRows(lapse)) - ledgerBefore, 1);
+  }
+  pass('INV-13', `S4-a: a charged result records exactly one ledger row after a mid-flight lapse (${Object.keys(lapseOutcomes).length} agent/lapse cases), is held without a proposal, and binds once after access returns; usage survives a failed proposal; replay and duplicate ledger rows refused`);
 
   // ---- KNOWN FAILURE KF-AI2: cross-agent over-commit ----
   const k1 = await makeOrg('kf-ai2');

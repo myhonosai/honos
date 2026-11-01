@@ -1977,3 +1977,18 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.manage_school_owner_invitation(text,text,jsonb,uuid),hon.accept_school_owner_invitation(text,text,jsonb,uuid),hon.read_school_owner_invitations(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- S4-a 0193 durable AI usage evidence: evidence-only actor stays internal; payload read and hold are fixed runtime boundaries.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['ai_evidence_actor(text)','read_marketing_result_payload(text,uuid)','hold_marketing_result(text,uuid)',
+    'read_teaching_result_payload(text,uuid)','hold_teaching_result(text,uuid)',
+    'read_chad_follow_up_result_payload(text,uuid)','hold_chad_follow_up_result(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_marketing_result_payload(text,uuid),hon.hold_marketing_result(text,uuid),
+      hon.read_teaching_result_payload(text,uuid),hon.hold_teaching_result(text,uuid),
+      hon.read_chad_follow_up_result_payload(text,uuid),hon.hold_chad_follow_up_result(text,uuid) TO hon_runtime;
+  END IF;
+END $$;

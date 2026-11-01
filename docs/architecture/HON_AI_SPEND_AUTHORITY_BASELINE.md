@@ -55,6 +55,7 @@ AI-0 pins only what it actually collects and asserts. It does **not** claim comp
 | INV-9 | After an exception is revoked, expires, or is CORE scope, agents are refused. |
 | INV-10 | B3 premium reservations are refused with `SAAS_CREDITS_NOT_ACTIVE`. |
 | INV-11 | An allowed call records exactly one ledger row with provider cost; a replay records none; a provider rejection releases the hold. |
+| INV-13 | (S4-a) A charged result records exactly one ledger row after a mid-flight lapse, ends `RESULT_HELD` with no proposal, and binds once after access returns; usage survives a failed proposal; duplicate ledger rows per invocation are refused. |
 | INV-12 | Zero network calls, programs unchanged, AI rows confined to synthetic organizations, no allowance, trial or access-state writes. |
 
 ## Known failures (intentionally vulnerable probes)
@@ -91,7 +92,7 @@ Exception schools have **no** paid-access state row, so an S4 decision that only
 ### Evidence after a mid-flight lapse (KF-AI14)
 
 - `record_*` and `fail_*` must not depend on the start gate. They should check only that the invocation is the caller's own `SENDING` row in the current tenant, so a result or UNKNOWN/FAILED outcome is always recorded once the provider has been called. Start and reserve stay gated.
-- In the S4 PR: KF-AI14 becomes `FIXED_BY_S4` and its probe becomes an invariant (exactly one ledger row after a lapse, hold released).
+- **Done in S4-a (migration 0193):** KF-AI14 is `FIXED_BY_S4A` and its probe is replaced by INV-13 (exactly one ledger row after a lapse, hold released, result held until access returns). See `HON_AI_SPEND_DURABLE_EVIDENCE_S4A.md`.
 
 ### What stays open after S4
 

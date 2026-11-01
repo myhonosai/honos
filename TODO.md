@@ -5,6 +5,13 @@
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
 
+## S4-a durable AI usage evidence — Claude (2026-11-01, owner-authorized draft, stacked on AI-0)
+
+- Migration `0193_ai_spend_durable_evidence.sql` (number proposed; owner allocates). Owner decisions AI-D6, AI-D7. Design: `docs/architecture/HON_AI_SPEND_DURABLE_EVIDENCE_S4A.md`.
+- [x] Evidence-only actor `ai_evidence_actor`; the six `record_*`/`fail_*` functions check only tenant, requester and SENDING, so a charged result is recorded after a mid-flight lapse (AI-14). Recording ends `RESULT_RECORDED`; the approval proposal is a separate transaction under the full gate (AI-16); a lapse ends `RESULT_HELD` / `ACCESS_LAPSED` and retry binds it once after access returns (AI-D7). `ai_usage_ledger.source_invocation_id` unique per invocation (AI-5, agent rows).
+- [x] AI-0 KF-AI14 flipped to `FIXED_BY_S4A`, replaced by INV-13 (3 agents x 3 lapse kinds, failed-proposal survival, replay, duplicate ledger refusal).
+- [ ] Independent review (Manus or Codex); regular CI after mark-ready; owner merge after PR #97. Codex: web workbenches should label `RESULT_RECORDED`/`RESULT_HELD` (validators already accept them).
+
 ## AI-0 spend-authority regression baseline — Claude (2026-10-31)
 
 - Test only; not the security fix. No migration, runtime, policy, provider or deployment change. Design: `docs/architecture/HON_AI_SPEND_AUTHORITY_BASELINE.md`.
