@@ -1,5 +1,7 @@
 ## Connected staff CRM operating journey — Codex (in progress)
 
+- PR #95 independent-review corrections F1/F2: retain school-scoped trial scheduling holds for this mounted lifetime across lead switches, refreshes and deliberate abandonment; retain required lead refresh until a successful authorized lead read. Add negative key/POST/preparation regressions and fresh draft-safe verification. No backend reader is invented; cross-session trial recovery and pilot readiness remain blocked.
+
 - [ ] Connect verified lead selection, internal self-assigned follow-up, trial schedule/outcome, CRM-only WON/LOST and optional registration record through existing exact-school commands. No provider, messaging, billing, membership activation or AI execution.
 - [ ] Preserve in-memory immutable exact retries, command ownership across privacy concealment, explicit session/school restoration, and honest historical receipts versus current reads. Three modes and EN/KR/ES; independent draft PR, no changes to PRs #90/#94.
 - [ ] Verify targeted interactions, complete workspace/build/migration checks, disposable security proofs and desktop/tablet/mobile browser accessibility on the final exact head. Inventory: `docs/architecture/CONNECTED_STAFF_CRM_JOURNEY.md`.

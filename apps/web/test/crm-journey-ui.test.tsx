@@ -3,7 +3,7 @@ import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {CrmJourney} from '../src/components/crm-journey/workbench';
 import {journeyCatalog,journeyText} from '../src/components/crm-journey/catalog';
 import {CrmJourneyLink} from '../src/components/crm-journey/entry';
-import {scope,row,identity,envelope,closeReceipt} from './crm-journey-fixtures';
+import {scope,row,identity,envelope,closeReceipt,appointment,queue,id} from './crm-journey-fixtures';
 const h=vi.hoisted(()=>({values:[] as any[],cursor:0,effects:[] as (()=>void)[],language:'en'}));
 vi.mock('react',async()=>{const r=await vi.importActual<typeof import('react')>('react');return {...r,
  useState:(initial:unknown)=>{const i=h.cursor++;if(!(i in h.values))h.values[i]=initial;return [h.values[i],(v:any)=>{h.values[i]=typeof v==='function'?v(h.values[i]):v;}];},
@@ -106,4 +106,69 @@ it('announces registration review without claiming enrollment or registration su
 it.each(['en','ko','es'])('%s entry from the existing CRM lead route is inert UUID-only navigation',language=>{
  h.language=language;const f=vi.spyOn(globalThis,'fetch');const link=CrmJourneyLink({...scope,leadId:row.id}) as El;
  const href=new URL(link.props.href,'https://hon.invalid');expect(href.pathname).toBe('/staff/crm/journey');expect([...href.searchParams.keys()].sort()).toEqual(['leadId','organizationId','schoolId']);expect(href.searchParams.get('leadId')).toBe(row.id);expect(text(link)).toBe(journeyText(language,'title'));expect(f).not.toHaveBeenCalled();
+});
+
+const secondLead={...row,id:id(30),primaryPersonId:id(31),givenName:'Other'};
+async function loadedPair(){const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row,secondLead])).mockResolvedValueOnce(identity());click('load');await settle();return f;}
+function pairRead(f:Awaited<ReturnType<typeof loadedPair>>){f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row,secondLead])).mockResolvedValueOnce(identity());}
+function prepareTrial(){click('step-trial');change('start','2026-11-02T09:00');change('end','2026-11-02T10:00');el('confirm').props.onChange({target:{checked:true}});return nodes(render()).find(e=>e.type==='form')!.props.onSubmit;}
+const postCount=(f:Awaited<ReturnType<typeof loadedPair>>)=>f.mock.calls.filter(c=>c[1]?.method==='POST').length;
+
+it('F1: successful scheduling survives A to B to A, refresh and stale submit callbacks without a new key',async()=>{
+ const f=await loadedPair(),keys=vi.spyOn(globalThis.crypto,'randomUUID'),submit=prepareTrial();
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(appointment()));submit({preventDefault(){}});await settle();expect(postCount(f)).toBe(1);expect(keys).toHaveBeenCalledTimes(1);
+ change('lead-select',secondLead.id);change('lead-select',row.id);pairRead(f);click('refresh');await settle();
+ expect(el('save-trial')).toBeUndefined();const count=f.mock.calls.length;submit({preventDefault(){}});await settle();
+ expect(f.mock.calls).toHaveLength(count);expect(keys).toHaveBeenCalledTimes(1);expect(postCount(f)).toBe(1);
+});
+
+it('F1: an abandoned unknown schedule stays held after reload and reselect with no replacement key or POST',async()=>{
+ const f=await loadedPair(),keys=vi.spyOn(globalThis.crypto,'randomUUID'),submit=prepareTrial();
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();expect(el('retry')).toBeDefined();
+ click('discard');click('abandon');pairRead(f);click('load');await settle();change('lead-select',secondLead.id);change('lead-select',row.id);
+ expect(el('save-trial')).toBeUndefined();const count=f.mock.calls.length;submit({preventDefault(){}});await settle();
+ expect(f.mock.calls).toHaveLength(count);expect(keys).toHaveBeenCalledTimes(1);expect(postCount(f)).toBe(1);
+});
+
+it('F1: an unknown schedule still permits its explicit immutable exact-key retry behind the scheduling hold',async()=>{
+ const f=await loadedPair(),keys=vi.spyOn(globalThis.crypto,'randomUUID'),submit=prepareTrial();
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();const original=f.mock.calls.at(-1)!;
+ window.dispatchEvent(new Event('blur'));pairRead(f);click('restore');await settle();
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(appointment()));click('retry');await settle();
+ expect(f.mock.calls.at(-1)![1]?.body).toBe(original[1]?.body);expect(f.mock.calls.at(-1)![1]?.headers).toEqual(original[1]?.headers);
+ expect(keys).toHaveBeenCalledTimes(1);expect(postCount(f)).toBe(2);expect(el('save-trial')).toBeUndefined();
+});
+
+it('F1: the hold is exact-school scoped and returning to the original school cannot discard it',async()=>{
+ const f=await loadedPair(),submit=prepareTrial();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(appointment()));submit({preventDefault(){}});await settle();pairRead(f);click('refresh');await settle();
+ change('school',id(20));pairRead(f);click('load');await settle();change('lead-select',row.id);expect(el('save-trial')).toBeDefined();
+ expect(f.mock.calls.some(c=>String(c[0]).includes(`/schools/${id(20)}/crm/leads`))).toBe(true);
+ change('school',scope.schoolId);pairRead(f);click('load');await settle();change('lead-select',row.id);expect(el('save-trial')).toBeUndefined();expect(postCount(f)).toBe(1);
+});
+
+it('F1: a definitely rejected first schedule is not treated as an existing appointment after a fresh read',async()=>{
+ const f=await loadedPair(),submit=prepareTrial();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},409));submit({preventDefault(){}});await settle();pairRead(f);click('refresh');await settle();
+ expect(el('save-trial')).toBeDefined();expect(el('confirm').props.checked).toBe(false);expect(postCount(f)).toBe(1);
+});
+
+it.each(['CLOSE','FOLLOW_UP'] as const)('F2: %s requires an authorized refresh after A to B to A and cannot prepare stale follow-ups or allocate a key',async kind=>{
+ const f=await loadedPair(),keys=vi.spyOn(globalThis.crypto,'randomUUID');let submit:(e:{preventDefault():void})=>void;
+ if(kind==='CLOSE'){submit=prepareClose();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(closeReceipt()));}
+ else{
+  click('step-follow');f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(queue)).mockResolvedValueOnce(identity());click('verify-follow');await settle();change('subject','Internal planning');el('confirm').props.onChange({target:{checked:true}});submit=nodes(render()).find(e=>e.type==='form')!.props.onSubmit;
+  f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({followUpId:id(10),schoolId:scope.schoolId,leadId:row.id,assigneeId:queue.principalId,subject:'Internal planning',note:'',dueAt:null,priority:'NORMAL',version:1,status:'OPEN',recordedAt:'2026-10-31T05:00:00.000Z',completedAt:null,cancelledAt:null,humanOnly:true}));
+ }
+ submit({preventDefault(){}});await settle();expect(el('receipt')).toBeDefined();
+ change('lead-select',secondLead.id);change('lead-select',row.id);expect(text(render())).toContain(journeyCatalog.en.needsRefresh);
+ const count=f.mock.calls.length,keyCount=keys.mock.calls.length;submit({preventDefault(){}});click('step-close');el('confirm').props.onChange({target:{checked:true}});nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});
+ click('step-follow');expect(el('verify-follow').props.disabled).toBe(true);click('verify-follow');await settle();expect(el('subject')).toBeUndefined();expect(f.mock.calls).toHaveLength(count);expect(keys).toHaveBeenCalledTimes(keyCount);expect(postCount(f)).toBe(1);
+ pairRead(f);click('refresh');await settle();expect(text(render())).not.toContain(journeyCatalog.en.needsRefresh);expect(el('verify-follow').props.disabled).toBe(false);
+});
+
+it.each([401,403])('F2: a denied refresh (%s) clears private facts and cannot make stale command callbacks usable',async status=>{
+ const f=await loadedPair(),keys=vi.spyOn(globalThis.crypto,'randomUUID'),reload=el('load').props.onClick,submit=prepareClose();f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope(closeReceipt()));submit({preventDefault(){}});await settle();
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},status));click('refresh');await settle();const count=f.mock.calls.length;
+ expect(text(render())).not.toContain('Canary');expect(el('receipt')).toBeUndefined();submit({preventDefault(){}});await settle();expect(f.mock.calls).toHaveLength(count);expect(keys).toHaveBeenCalledTimes(1);
+ if(status===401){expect(text(render())).toContain(journeyCatalog.en.reauth);expect(el('load')).toBeUndefined();pairRead(f);reload();await settle();expect(f.mock.calls).toHaveLength(count);}
+ else{pairRead(f);click('load');await settle();expect(text(render())).toContain('Canary');}
 });
