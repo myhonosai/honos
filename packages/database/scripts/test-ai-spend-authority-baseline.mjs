@@ -540,6 +540,8 @@ try {
   const pauseCmd = (subject, input, key) => settle(admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [subject, JSON.stringify(input), key]));
   const pIn = (action, organizationId, spendClass = 'AGENT_INFERENCE') => ({ action, organizationId, spendClass, reason: 'Disposable synthetic AI-0 pause test' });
   assert.equal((await pauseCmd(paused.subject, pIn('PAUSE', paused.id), K())).error?.code, '42501', 'a school owner cannot pause');
+  for (const bad of [{}, { action: 'PAUSE' }, { ...pIn('PAUSE', paused.id), extra: 1 }, { ...pIn('PAUSE', paused.id), spendClass: 'HQ_INTERNAL' }, { ...pIn('PAUSE', paused.id), reason: 'short' }])
+    assert.equal((await pauseCmd(hq.subject, bad, K())).error?.code, '22023', `invalid pause input ${JSON.stringify(bad)}`);
   const pk = K();
   const pauseA = await pauseCmd(hq.subject, pIn('PAUSE', paused.id), pk);
   assert.equal(pauseA.value?.rows[0].r.status, 'ACTIVE', JSON.stringify(pauseA.error?.message));

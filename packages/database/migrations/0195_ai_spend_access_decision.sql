@@ -133,7 +133,7 @@ DECLARE actor uuid; v_action text; v_org uuid; v_class text; v_reason text; fp t
 BEGIN
   actor := hon.require_saas_hq_actor(p_subject, true);
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object'
-     OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) <> ARRAY['action','organizationId','reason','spendClass']
+     OR coalesce((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k), ARRAY[]::text[]) <> ARRAY['action','organizationId','reason','spendClass']
      OR jsonb_typeof(p_input->'action') <> 'string' OR (p_input->>'action') NOT IN ('PAUSE','RESUME')
      OR (jsonb_typeof(p_input->'organizationId') <> 'null' AND (jsonb_typeof(p_input->'organizationId') <> 'string'
          OR (p_input->>'organizationId') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'))

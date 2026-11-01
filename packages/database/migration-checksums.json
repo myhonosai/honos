@@ -186,6 +186,6 @@
     "0191_school_owner_invitations.sql": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f",
     "0193_ai_spend_durable_evidence.sql": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5",
     "0194_ai_org_budget_lock.sql": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b",
-    "0195_ai_spend_access_decision.sql": "39df7e5da1728ce497cdd0462241d872ce80f0d88cf4a675bc0d82736b6d5f07"
+    "0195_ai_spend_access_decision.sql": "0d4d1e8ec8e5f9d1b9a3d684471af8f3b7d1fc3bd2a558c75e932ddce467e484"
   }
 }
