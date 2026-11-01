@@ -119,7 +119,18 @@ export async function runDateBrowserChecks({ fixture, open, visual, check, origi
     await check(`${size}: missing retroactive permission, blockers and stale previews cannot silently revise`, async () => {
       fixture.reset('retroactive'); const { context, page } = await open(viewport); try { await begin(page); assert(await page.getByRole('button', { name: 'Review final date confirmation' }).isDisabled()); await visual(page, `${size}-dates-retroactive-denied`); assert.equal(fixture.commands.length, 0); } finally { await context.close(); }
       fixture.reset('blocked'); const b = await open(viewport); try { await begin(b.page); assert(await b.page.getByRole('button', { name: 'Review final date confirmation' }).isDisabled()); assert.equal(fixture.commands.length, 0); } finally { await b.context.close(); }
-      fixture.reset('stale'); const c = await open(viewport); try { await begin(c.page); await final(c.page); await c.page.getByRole('button', { name: 'Confirm membership date change', exact: true }).click(); await c.page.getByRole('alert').waitFor(); assert.equal(fixture.commands.length, 1); assert.equal(await c.page.getByRole('button', { name: 'Retry exact retained date change' }).count(), 0); } finally { await c.context.close(); }
+      fixture.reset('stale'); const c = await open(viewport); try {
+        await begin(c.page); await final(c.page);
+        await c.page.getByRole('button', { name: 'Confirm membership date change', exact: true }).click();
+        // The global HON shell may independently announce an unavailable feature. Only
+        // the exact date-contract refusal proves that this command actually settled.
+        await c.page.getByRole('alert').filter({ hasText: 'The reviewed facts changed.' }).waitFor();
+        assert.equal(fixture.commands.length, 1);
+        assert.equal(await c.page.getByRole('button', { name: 'Retry exact retained date change' }).count(), 0);
+      } catch (error) {
+        await visual(c.page, `${size}-dates-stale-failure`);
+        throw error;
+      } finally { await c.context.close(); }
     });
     await check(`${size}: individually confirm legacy dates; load separate summary without financial commands`, async () => {
       fixture.reset('legacy'); const { context, page } = await open(viewport); try {
