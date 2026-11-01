@@ -8,6 +8,7 @@ on:
       - 'apps/web/src/app/staff/founder-setup/**'
       - 'apps/web/src/app/hq/founder-setup/**'
       - 'apps/web/src/app/staff/launch/page.tsx'
+      - 'apps/web/public/manus-routes.json'
       - 'apps/web/test/founder-setup-*.test.*'
       - 'apps/web/scripts/founder-setup-browser.mjs'
       - '.github/workflows/founder-setup-validation.yml'

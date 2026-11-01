@@ -18,6 +18,7 @@ export function FounderSetup({ plane = 'school' }: { plane?: 'school' | 'hq' }):
   const t = (key: FounderCopyKey) => founderText(preferences.language, key);
   const [phase, setPhase] = useState<Phase>('idle'), [facts, setFacts] = useState<SetupEvidence | null>(null), [directory, setDirectory] = useState<DirectoryEvidence | null>(null);
   const [step, setStep] = useState(0), [mode, setMode] = useState<'modern' | 'classic' | 'big-button'>('modern'), [query, setQuery] = useState(''), [sample, setSample] = useState(false), [copy, setCopy] = useState<'copied' | 'copyFailed' | null>(null);
+  const [stageAnnounced, setStageAnnounced] = useState(false);
   const life = useRef({ mounted: false, epoch: 0, busy: false, sensitive: false });
   const pending = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -56,25 +57,32 @@ export function FounderSetup({ plane = 'school' }: { plane?: 'school' | 'hq' }):
     try { await navigator.clipboard.writeText(t('outline')); if (s.mounted && s.epoch === epoch) setCopy('copied'); }
     catch { if (s.mounted && s.epoch === epoch) setCopy('copyFailed'); }
   }
+  function navigate(next: number | ((current: number) => number)): void {
+    setStageAnnounced(true);
+    setStep(current => Math.max(0, Math.min(7, typeof next === 'function' ? next(current) : next)));
+  }
+  const Title = plane === 'hq' ? 'h2' : 'h1';
+  const SectionTitle = plane === 'hq' ? 'h3' : 'h2';
+  const SubTitle = plane === 'hq' ? 'h4' : 'h3';
   const evidence = <section className={styles.card} aria-label={t('evidence')}>
     <h2>{t('evidence')}</h2>
     {facts ? <><p className={styles.school}>{facts.schoolName}</p><p><strong>{number([facts.program, facts.classSession, facts.registration].filter(Boolean).length)}</strong> {t('count')}</p><ul className={styles.evidence}>{(['program', 'classSession', 'registration'] as const).map((key, i) => <li key={key}><span>{t((['program', 'class', 'registration'] as const)[i]!)}</span><strong>{t(facts[key] ? 'recorded' : 'notRecorded')}</strong></li>)}</ul></> : <p>{t('unknown')}</p>}
     <p className={styles.small}>{t('history')}</p>
   </section>;
   const support = <section className={styles.card} aria-label={t('help')}>
-    <h2>{t('help')}</h2><label>{t('search')}<input type="search" value={query} maxLength={100} onChange={e => { life.current.sensitive = true; setQuery(e.target.value); }} /></label>
+    <SectionTitle className={styles.sectionTitle}>{t('help')}</SectionTitle><label>{t('search')}<input type="search" value={query} maxLength={100} onChange={e => { life.current.sensitive = true; setQuery(e.target.value); }} /></label>
     <div className={styles.answers}>{searchFounderHelp(preferences.language, query).map(topic => <details key={topic}><summary>{t(`help${topic}Q`)}</summary><p>{t(`help${topic}A`)}</p></details>)}</div>
     {searchFounderHelp(preferences.language, query).length === 0 && <p role="status">{t('noResults')}</p>}
-    <h3>{t('support')}</h3><p>{t('supportNote')}</p><pre className={styles.outline}>{t('outline')}</pre>
+    <SubTitle className={plane === 'hq' ? styles.subTitle : undefined}>{t('support')}</SubTitle><p>{t('supportNote')}</p><pre className={styles.outline}>{t('outline')}</pre>
     <div className={styles.actions}><button type="button" onClick={() => void copyOutline()}>{t('copy')}</button><button type="button" disabled>{t('submit')}</button></div><p role="status" aria-live="polite">{copy ? t(copy) : ''}</p>
   </section>;
   const Root = plane === 'hq' ? 'section' : 'main';
   return <Root className={styles.page} data-guide-mode={mode} data-founder-plane={plane}>
-    <header className={styles.hero}><p className={styles.kicker}>HON OS · {t('eyebrow')}</p><h1>{t(plane === 'hq' ? 'hqTitle' : 'heading')}</h1><p>{t(plane === 'hq' ? 'hqIntro' : 'intro')}</p><p className={styles.boundary}>{t('boundary')}</p></header>
+    <header className={styles.hero}><p className={styles.kicker}>HON OS · {t('eyebrow')}</p><Title>{t(plane === 'hq' ? 'hqTitle' : 'heading')}</Title><p>{t(plane === 'hq' ? 'hqIntro' : 'intro')}</p><p className={styles.boundary}>{t('boundary')}</p></header>
     <section className={styles.toolbar}><div role="group" aria-label={t('mode')}>{(['modern','classic','big-button'] as const).map(value => <button type="button" key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>{t(value)}</button>)}</div><small>{t('modeNote')}</small><button type="button" disabled={phase === 'loading'} onClick={() => void load()}>{t(phase === 'loading' ? 'loading' : plane === 'hq' ? 'hqLoad' : 'load')}</button><p role="status" aria-live="polite" aria-atomic="true" data-founder-status>{t(plane === 'hq' && phase === 'denied' ? 'hqDenied' : plane === 'hq' && phase === 'loaded' ? 'hqLoaded' : phase)}</p>{(phase === 'signedout' || phase === 'identity') && <a href="/auth/login">{t('signin')}</a>}</section>
     {plane === 'school' ? <div className={styles.grid}>
-      <nav className={styles.steps} aria-label={t('steps')}><ol>{STEP_TITLES.map((key, index) => <li key={key}><button type="button" aria-current={step === index ? 'step' : undefined} onClick={() => setStep(index)}><span className={styles.stepNumber}>{number(index + 1)}</span><span>{t(key)}</span></button></li>)}</ol><a href="/staff/launch">{t('openLaunch')} →</a></nav>
-      <div className={styles.content}><section className={styles.card} aria-labelledby="founder-current-step"><p className={styles.kicker}>{number(step + 1)} / {number(8)} · {t('guide')}</p><h2 id="founder-current-step">{t(STEP_TITLES[step]!)}</h2><p>{t(STEP_BODIES[step]!)}</p>
+      <nav className={styles.steps} aria-label={t('steps')}><ol>{STEP_TITLES.map((key, index) => <li key={key}><button type="button" aria-current={step === index ? 'step' : undefined} onClick={() => navigate(index)}><span className={styles.stepNumber}>{number(index + 1)}</span><span>{t(key)}</span></button></li>)}</ol><a href="/staff/launch">{t('openLaunch')} →</a></nav>
+      <div className={styles.content}><p className={styles.stageAnnouncement} role="status" aria-live="polite" aria-atomic="true" data-founder-stage-status>{stageAnnounced ? `${t('guide')}: ${number(step + 1)} / ${number(8)} · ${t(STEP_TITLES[step]!)}` : ''}</p><section className={styles.card} aria-labelledby="founder-current-step"><p className={styles.kicker}>{number(step + 1)} / {number(8)} · {t('guide')}</p><h2 id="founder-current-step">{t(STEP_TITLES[step]!)}</h2><p>{t(STEP_BODIES[step]!)}</p>
         {step === 0 && <><h3>{t('resume')}</h3><p>{t('resumeText')}</p></>}
         {step === 1 && <><h3>{t('school')}</h3><p>{facts?.schoolName ?? t('unknown')}</p><p>{t('profileGap')}</p><button type="button" disabled>{t('unsupported')}</button></>}
         {step === 2 && <><p>{t('staffGap')}</p><a href="/staff/roles">{t('openRoles')} →</a><button type="button" disabled>{t('unsupported')}</button></>}
@@ -83,10 +91,10 @@ export function FounderSetup({ plane = 'school' }: { plane?: 'school' | 'hq' }):
         {step === 5 && <><p>{t('aiIntro')}</p><a href="/staff/hon">{t('openHon')} →</a></>}
         {step === 6 && <><p>{t('reviewNote')}</p><a href="/staff/subscription">{t('openSubscription')} →</a></>}
         {step === 7 && <p>{t('supportNote')}</p>}
-        <div className={styles.actions}><button type="button" disabled={step === 0} onClick={() => setStep(v => v - 1)}>{t('previous')}</button><button type="button" disabled={step === 7} onClick={() => setStep(v => v + 1)}>{t('next')}</button></div>
+        <div className={styles.actions}><button type="button" disabled={step === 0} onClick={() => navigate(v => v - 1)}>{t('previous')}</button><button type="button" disabled={step === 7} onClick={() => navigate(v => v + 1)}>{t('next')}</button></div>
       </section>{evidence}{step === 7 && support}</div>
-      <aside className={styles.assistant}><div className={styles.honMark} aria-hidden="true">H</div><h2>{t('honTitle')}</h2><small>{t('honNote')}</small><p>{t(STEP_BODIES[step]!)}</p><a href="/staff/hon">{t('openHon')} →</a><button type="button" onClick={() => setStep(7)}>{t('help')}</button></aside>
-    </div> : <div className={styles.hqGrid}><section className={styles.card}><h2>{t('evidence')}</h2><p>{t('hqGap')}</p>{directory && (directory.length ? <ul className={styles.directory}>{directory.map((school, index) => <li key={index}><strong>{school.schoolName}</strong><span>{school.organizationName}</span><small>{t('hqUnknown')}</small></li>)}</ul> : <p>{t('empty')}</p>)}<a href="/hq/school-owner-invitations">{t('hqInvites')} →</a></section>{support}</div>}
-    <section className={styles.sample}><button type="button" aria-expanded={sample} onClick={() => setSample(v => !v)}>{t(sample ? 'sampleHide' : 'sample')}</button>{sample && <div><h2>{t('sampleBanner')}</h2><h3>{t('sampleSchool')}</h3><p>{t('sampleDetail')}</p>{plane === 'hq' && <p>{t('hqSample')}</p>}</div>}</section>
+      <aside className={styles.assistant}><div className={styles.honMark} aria-hidden="true">H</div><h2>{t('honTitle')}</h2><small>{t('honNote')}</small><p>{t(STEP_BODIES[step]!)}</p><a href="/staff/hon">{t('openHon')} →</a><button type="button" onClick={() => navigate(7)}>{t('help')}</button></aside>
+    </div> : <div className={styles.hqGrid}><section className={styles.card}><SectionTitle className={styles.sectionTitle}>{t('evidence')}</SectionTitle><p>{t('hqGap')}</p>{directory && (directory.length ? <ul className={styles.directory}>{directory.map((school, index) => <li key={index}><strong>{school.schoolName}</strong><span>{school.organizationName}</span><small>{t('hqUnknown')}</small></li>)}</ul> : <p>{t('empty')}</p>)}<a className={styles.invitationLink} href="/hq/school-owner-invitations">{t('hqInvites')} →</a></section>{support}</div>}
+    <section className={styles.sample}><button type="button" aria-expanded={sample} onClick={() => setSample(v => !v)}>{t(sample ? 'sampleHide' : 'sample')}</button>{sample && <div><SectionTitle className={styles.sampleTitle}>{t('sampleBanner')}</SectionTitle><SubTitle className={plane === 'hq' ? styles.sampleSchool : undefined}>{t('sampleSchool')}</SubTitle><p>{t('sampleDetail')}</p>{plane === 'hq' && <p>{t('hqSample')}</p>}</div>}</section>
   </Root>;
 }

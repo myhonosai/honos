@@ -1,4 +1,5 @@
 import React, { type ReactElement } from 'react';
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FounderSetup } from '../src/components/founder-setup/guide';
 import { english, founderCatalogs, founderText, searchFounderHelp } from '../src/components/founder-setup/catalog';
@@ -128,4 +129,42 @@ it('an empty HQ directory is not a completed founder cohort', async () => {
   plane = 'hq'; vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: { schools: [] } })).mockResolvedValueOnce(me());
   button(english.hqLoad).props.onClick(); await settle();
   expect(text(render())).toContain(english.empty); expect(text(render())).toContain(english.hqGap); expect(text(render())).not.toContain(english.sampleBanner);
+});
+
+it.each(['en','ko','es'] as const)('P2: %s announces stage buttons, Previous, Next and the support shortcut in every mode without reads', language => {
+  h.language = language; const f = vi.spyOn(globalThis, 'fetch');
+  const status = () => nodes(render()).find(e => e.props['data-founder-stage-status']);
+  const choose = (stage: number) => nodes(render()).find(e => e.type === 'button' && text(e) === `${stage + 1}${founderText(language, `step${stage}Title` as keyof typeof english)}`)!.props.onClick();
+  expect(status()).toBeDefined(); expect(text(status())).toBe('');
+  const announced = (stage: number) => {
+    const region = status()!;
+    expect(region.props).toMatchObject({ role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
+    expect(region.props.hidden).not.toBe(true); expect(region.props['aria-hidden']).not.toBe(true);
+    expect(text(region)).toBe(`${founderText(language, 'guide')}: ${stage + 1} / 8 · ${founderText(language, `step${stage}Title` as keyof typeof english)}`);
+    expect(text(region)).not.toMatch(/PRIVATE|CANARY/);
+  };
+  for (const mode of ['modern','classic','big-button'] as const) {
+    button(founderText(language, mode)).props.onClick();
+    for (let stage = 0; stage < 8; stage++) { choose(stage); announced(stage); }
+    for (let stage = 6; stage >= 0; stage--) { button(founderText(language, 'previous')).props.onClick(); announced(stage); }
+    for (let stage = 1; stage < 8; stage++) { button(founderText(language, 'next')).props.onClick(); announced(stage); }
+    choose(0); announced(0); button(founderText(language, 'help')).props.onClick(); announced(7);
+  }
+  expect(f).not.toHaveBeenCalled();
+});
+
+it.each(['en','ko','es'] as const)('P3: %s HQ guide uses nested headings and a dedicated invitations-link affordance', language => {
+  plane = 'hq'; h.language = language; button(founderText(language, 'sample')).props.onClick();
+  const tree = nodes(render()), heading = (key: keyof typeof english) => tree.find(e => /^h[1-6]$/.test(String(e.type)) && text(e) === founderText(language, key));
+  expect(tree.some(e => e.type === 'h1')).toBe(false);
+  expect(heading('hqTitle')?.type).toBe('h2');
+  for (const key of ['evidence','help','sampleBanner'] as const) expect(heading(key)?.type).toBe('h3');
+  for (const key of ['support','sampleSchool'] as const) expect(heading(key)?.type).toBe('h4');
+  const invite = tree.find(e => e.type === 'a' && e.props.href === '/hq/school-owner-invitations');
+  expect(invite?.props.className).toContain('invitationLink');
+});
+
+it('P3: the dedicated workflow includes the route manifest in its existing PR trigger', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/founder-setup-validation.yml', import.meta.url), 'utf8');
+  expect(workflow).toContain("      - 'apps/web/public/manus-routes.json'");
 });

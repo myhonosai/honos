@@ -26,7 +26,7 @@
   color:#f2fbff;
   box-shadow:0 12px 36px #0925380d
 }
-.hero h1 {
+.hero h1,.hero h2 {
   font-size:clamp(1.8rem,4vw,3rem);
   line-height:1.2;
   margin:10px 0 18px;
@@ -95,6 +95,21 @@
   align-items:center;
   overflow-wrap:anywhere
 }
+.page a.invitationLink {
+  text-decoration-line:underline;
+  text-underline-offset:4px
+}
+.stageAnnouncement {
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip-path:inset(50%);
+  white-space:nowrap;
+  border:0
+}
 .page :is(button,a,input,summary):focus-visible {
   outline:3px solid #007a96;
   outline-offset:3px
@@ -151,7 +166,7 @@
   box-shadow:0 4px 16px #09253805;
   animation:appear .16s ease-out
 }
-.card h2,.assistant h2 {
+.card h2,.assistant h2,.card .sectionTitle {
   font-size:1.3rem;
   margin:0 0 14px;
   line-height:1.35
@@ -159,6 +174,10 @@
 .card h3 {
   font-size:1.05rem;
   margin-top:22px
+}
+.card .subTitle {
+  font-size:1.05rem;
+  margin:22px 0 0
 }
 .actions {
   display:flex;
@@ -270,8 +289,13 @@
   margin-top:18px;
   background:#f6f9fb
 }
-.sample h2 {
+.sample h2,.sample .sampleTitle {
   font-size:1rem
+}
+.sample .sampleSchool {
+  font:inherit;
+  font-weight:700;
+  margin:0
 }
 .hqGrid {
   align-items:start;
