@@ -51,3 +51,10 @@ it('language preferences are independent across synthetic identities and replay 
  expect(validateMyLanguagePreferenceView(call('GET','/v1/me/language-preference',undefined,id(800),'',B).body.data).effective.language).toBe('en');
  expect(validateMyLanguagePreferenceReceipt(call('POST','/v1/me/language-preference',{language:'ko',expectedVersion:1},id(810),'language-preference-update').body.data).replayed).toBe(true);
 });
+it('standalone follow-up default OPEN queue and exact detail use the existing minimized contracts',()=>{
+ const {call}=fixture();const body={expectedVersion:0,leadId:id(10),assigneeId:id(900),subject:'Synthetic follow-up',note:'',dueAt:null,priority:'NORMAL'};
+ const item=verifyFollowUpRecord(call('POST','/v1/staff/crm/follow-ups',body,id(811),'crm-follow-ups').body.data);
+ const queue=verifyFollowUpQueue(call('GET','/v1/staff/crm/follow-ups?queue=mine&status=OPEN').body.data,'mine','OPEN');expect(queue.items).toHaveLength(1);expect(JSON.stringify(queue.items)).not.toContain('subject');
+ expect(verifyFollowUpRecord(call('GET','/v1/staff/crm/follow-ups/'+item.followUpId).body.data)).toEqual(item);
+ expect(()=>call('GET','/v1/staff/crm/follow-ups/'+item.followUpId,undefined,id(800),'',B)).toThrow();
+});

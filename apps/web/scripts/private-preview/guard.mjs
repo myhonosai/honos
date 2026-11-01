@@ -24,3 +24,10 @@ export function childEnvironment(env, session) {
     HON_DEPLOYMENT_ENVIRONMENT: 'preview', HON_API_BASE_URL: 'http://127.0.0.1:3001',
     HON_AUTH_MODE: 'OIDC', HON_SESSION_AUDIENCE: session.audience, HON_SESSION_JWT_SECRET: session.secret };
 }
+
+/** CSRF metadata only, never identity/role authority. HON no-referrer transports
+ * may serialize Origin as null; forbidden browser metadata must prove same-origin. */
+export function sameOriginMutation(headers, origin) {
+  if (headers.origin === origin) return !headers['sec-fetch-site'] || headers['sec-fetch-site'] === 'same-origin';
+  return headers.origin === 'null' && headers['sec-fetch-site'] === 'same-origin';
+}

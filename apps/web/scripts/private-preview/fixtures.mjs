@@ -64,7 +64,11 @@ export function createPreviewFixtures() {
       if(path==='/v1/staff/current-reporting-school')return result({state:'RESOLVED',...scope});
       if(path==='/v1/owner-launch')return result({...scope,schoolName:profile.schoolName,tier:'COMPLETE',program:null,classSession:null,registration:null,guardianChildRegistration:null});
       if(p===base+'/crm/leads'&&url.search==='?limit=50')return result(structuredClone(s.leads),true);
-      if(path==='/v1/staff/crm/follow-ups?queue=mine&status=ALL')return result({schoolId:profile.schoolId,principalId:id(900),canManage:false,humanOnly:true,queue:'mine',status:'ALL',items:s.followUps.map(f=>Object.fromEntries(['followUpId','leadId','assigneeId','version','status','priority','dueAt'].map(k=>[k,f[k]]))).sort((a,b)=>a.followUpId.localeCompare(b.followUpId)),nextAfter:null},true);
+      if(p==='/v1/staff/crm/follow-ups') {
+        const status=url.searchParams.get('status');if([...url.searchParams.keys()].sort().join(',')!=='queue,status'||url.searchParams.get('queue')!=='mine'||!['OPEN','COMPLETED','CANCELLED','ALL'].includes(status))bad(403,'SYNTHETIC_QUEUE_DENIED');
+        return result({schoolId:profile.schoolId,principalId:id(900),canManage:false,humanOnly:true,queue:'mine',status,items:s.followUps.filter(f=>status==='ALL'||f.status===status).map(f=>Object.fromEntries(['followUpId','leadId','assigneeId','version','status','priority','dueAt'].map(k=>[k,f[k]]))).sort((a,b)=>a.followUpId.localeCompare(b.followUpId)),nextAfter:null},true);
+      }
+      if(p.startsWith('/v1/staff/crm/follow-ups/')&&!url.search){const f=s.followUps.find(f=>f.followUpId===p.slice('/v1/staff/crm/follow-ups/'.length));if(!f)bad(404,'SYNTHETIC_FOLLOW_UP_UNAVAILABLE');return result(structuredClone(f),true);}
       if(p===base+'/interface-theme'&&!url.search)return result({interfaceTheme:s.theme,selectedVia:'SETTINGS'},true);
       if(p===base+'/command-center'&&!url.search) {
         const time=Date.now(),window = days => ({availability:'AVAILABLE',windowFrom:new Date(time-days*86400000).toISOString(),windowTo:new Date(time).toISOString(),count:0});

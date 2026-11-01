@@ -4,6 +4,7 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
 import { createPreviewFixtures, PROFILES } from './fixtures.mjs';
 import { hubPage, loginPage } from './hub.mjs';
+import { sameOriginMutation } from './guard.mjs';
 
 const PREVIEW_COOKIE='hon_private_preview';
 const hash = x => createHash('sha256').update(x).digest();
@@ -11,7 +12,7 @@ const equal = (a,b) => typeof a==='string' && timingSafeEqual(hash(a),hash(b));
 export async function boundedBody(req) {let n=0,raw='';for await(const c of req){n+=Buffer.byteLength(c);if(n>16384)throw Object.assign(Error('PREVIEW_BODY_TOO_LARGE'),{status:413});raw+=c;}return raw;}
 export function createPreviewServers({origin,secure,session,accessCode,guideText}) {
  const fixture=createPreviewFixtures(), gates=new Map(), active=new Map();let attempts=0,resetAt=0;
- const headers={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow','Permissions-Policy':'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+ const headers={'Cache-Control':'private, no-store','Referrer-Policy':'strict-origin','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow','Permissions-Policy':'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
   'Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; form-action 'self'; object-src 'none'; base-uri 'none'"};
  const send=(res,status,body,type='application/json')=>{res.writeHead(status,{...headers,'Content-Type':type});res.end(typeof body==='string'?body:JSON.stringify(body));};
  const cookie=(name,value,age=3600)=>`${name}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure?'; Secure':''}`;
@@ -58,7 +59,7 @@ export function createPreviewServers({origin,secure,session,accessCode,guideText
    const profile=PROFILES[gate.profile];
    if(url.pathname.startsWith('/auth/')||url.pathname.startsWith('/parent/')||url.pathname.startsWith('/hq')&&profile.plane!=='hq'||url.pathname.startsWith('/staff')&&profile.plane!=='school')return send(res,403,'This route is unavailable for this synthetic identity. Return to the preview navigation.','text/plain; charset=utf-8');
    if(req.method!=='GET'&&req.method!=='HEAD') {
-    if(req.headers.origin!==origin)return send(res,403,{code:'PREVIEW_SAME_ORIGIN_REQUIRED'});
+    if(!sameOriginMutation(req.headers,origin)||!/^application\/json(?:;|$)/i.test(req.headers['content-type']??''))return send(res,403,{code:'PREVIEW_SAME_ORIGIN_REQUIRED'});
     if(!url.pathname.startsWith('/api/v1/'))return send(res,403,{code:'PREVIEW_MUTATION_REFUSED'});
    }
    if(url.pathname==='/api/client-errors')return send(res,204,'');

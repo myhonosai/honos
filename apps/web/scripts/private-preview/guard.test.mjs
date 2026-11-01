@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { previewConfiguration, childEnvironment } from './guard.mjs';
+import { previewConfiguration, childEnvironment, sameOriginMutation } from './guard.mjs';
 const run = fn => {const dir=mkdtempSync(join(tmpdir(),'hon-preview-guard-'));mkdirSync(join(dir,'apps/web'),{recursive:true});try{fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}};
 test('default and production processes cannot start the synthetic gateway',()=>run(root=>{
  for(const env of [{},{HON_DEPLOYMENT_ENVIRONMENT:'production',HON_PRIVATE_PREVIEW_LOCAL:'1'},{HON_DEPLOYMENT_ENVIRONMENT:'staging',HON_PRIVATE_PREVIEW_LOCAL:'1'}])assert.throws(()=>previewConfiguration(env,root));
@@ -27,4 +27,14 @@ test('Next dotenv auto-loading cannot introduce ambient credentials',()=>run(roo
 test('the Next subprocess receives an explicit minimal environment, never inherited provider or GitHub tokens',()=>{
  const env=childEnvironment({PATH:'/bin',HOME:'/tmp',GITHUB_TOKEN:'PRIVATE',OPENAI_API_KEY:'PRIVATE',HON_API_BASE_URL:'https://example.test'},{audience:'synthetic',secret:'synthetic-only'});
  assert.equal(env.HON_API_BASE_URL,'http://127.0.0.1:3001');assert.equal(env.HON_DEPLOYMENT_ENVIRONMENT,'preview');assert.equal(env.HON_AUTH_MODE,'OIDC');assert(!JSON.stringify(env).includes('PRIVATE'));assert.equal(env.GITHUB_TOKEN,undefined);
+});
+test('exact origin is accepted but contradicted cross-site metadata is refused',()=>{
+ const origin='https://preview.example.test';assert(sameOriginMutation({origin},origin));assert(sameOriginMutation({origin,'sec-fetch-site':'same-origin'},origin));assert(!sameOriginMutation({origin,'sec-fetch-site':'cross-site'},origin));
+});
+test('HON no-referrer requests need browser-supplied exact same-origin fetch metadata',()=>{
+ const origin='https://preview.example.test';assert(sameOriginMutation({origin:'null','sec-fetch-site':'same-origin'},origin));
+ for(const value of [undefined,'same-site','cross-site','none'])assert(!sameOriginMutation({origin:'null','sec-fetch-site':value},origin));
+});
+test('missing or foreign origins never inherit preview mutation authority',()=>{
+ const origin='https://preview.example.test';for(const h of [{},{'sec-fetch-site':'same-origin'},{origin:'https://foreign.example.test','sec-fetch-site':'same-origin'}])assert(!sameOriginMutation(h,origin));
 });
