@@ -54,7 +54,7 @@ export class LeadController {
       organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId,
       principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey: `read:${requestId}`, source: 'HUMAN_UI',
     };
-    const leads = await this.leads.list(context, query);
+    const leads = await this.leads.list(context, query, { externalSubject: identity.externalSubject });
     return { data: leads, meta: { requestId, correlationId: requestId } };
   }
 

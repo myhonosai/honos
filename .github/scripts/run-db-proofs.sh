@@ -99,6 +99,7 @@ proof class-sessions-read test-class-sessions-read-integrity.mjs "Class Sessions
 setup crm-lead-close HON_CRM_LEAD_CLOSE_VALIDATION_TARGET hon_crm_close_validation HON_CRM_LEAD_CLOSE_ENV_FILE
 proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational table"
 proof crm-lead-close test-crm-lead-close-integrity.mjs "CRM lead close authority, atomicity and replay"
+proof crm-lead-close test-crm-trial-appointment-integrity.mjs "CRM trial appointments: one active trial per lead (new-key, cross-tab, concurrent), exact-key replay before the clock rule, direct-human reconciliation reads, revocation, outcome integrity"
 proof crm-lead-close test-platform-least-privilege.mjs "Platform least privilege: nothing in schema hon reachable through PUBLIC or Supabase client roles; injected regressions rejected"
 proof crm-lead-close test-migration-runner-safety.mjs "Migration tooling: single-runner lock, read-only db:status (current, divergent history), TLS refusal before connecting"
 proof crm-lead-close test-restore-drill.mjs "Backup/restore drill: pg_dump, total loss, pg_restore, identical data/ledger/security posture, verifiers pass on the restored database"
