@@ -15,7 +15,7 @@ const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-bil
 const service=new SaasSchoolBillingService(new SaasBillingService(new RuntimeDatabaseService()));
 const client=url=>new pg.Client({connectionString:url.toString(),ssl:false});
 const admin=client(owner),a=client(runtime),b=client(runtime);
-// Decisions bind to the latest proposed paid-access terms version (2 since 0197).
+// Decisions bind to the latest proposed paid-access terms version (2 since 0192).
 let TERMS=1;
 const humans=Object.fromEntries(['owner','operator','school','expired','ai','delegated'].map(k=>[k,{id:K(),user:K(),subject:'d10-'+K()}]));
 const H=k=>humans[k].subject,DAY=86400_000,iso=n=>new Date(n).toISOString();

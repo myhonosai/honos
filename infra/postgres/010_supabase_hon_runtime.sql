@@ -1978,7 +1978,7 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
   END IF;
 END $$;
 
--- 0197 owner CRM suspension policy: verified-owner read-only authority and the in-app access standing read are the
+-- 0192 owner CRM suspension policy: verified-owner read-only authority and the in-app access standing read are the
 -- only runtime entry points; the window helper stays private. Earlier saas blocks revoke every saas function, so the
 -- standing read is re-granted here.
 DO $$ DECLARE r text; f text; BEGIN

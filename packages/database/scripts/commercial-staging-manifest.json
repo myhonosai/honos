@@ -1,6 +1,6 @@
 {
   "baseline": "be3a26e097a4ceb355d08d93d57dd73297b6048f",
-  "chainSha256": "f4bcd4dfae15d6a1cd86c7726c33b21e1927c4b74c4870e0e64778bddf01d9dd",
+  "chainSha256": "4d133cb9cb5d924d6aede70fb897b519778836354182b4079e073fb0023d5192",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -47,8 +47,8 @@
       "sha256": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f"
     },
     {
-      "file": "0197_crm_suspended_owner_read_only.sql",
-      "sha256": "f52764cc951e31ff6527b85e1a403648eb978f6a68641b43614081894636d972"
+      "file": "0192_crm_suspended_owner_read_only.sql",
+      "sha256": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542"
     }
   ]
 }

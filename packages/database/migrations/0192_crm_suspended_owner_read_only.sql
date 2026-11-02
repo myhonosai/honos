@@ -1,7 +1,7 @@
 BEGIN;
 
--- Owner CRM suspension policy (owner direction 2026-11-02 01:52Z). Proposed migration number 0197: 0192 belongs to
--- PR #90 and 0193-0196 to the draft S4 stack; the owner allocates the final number.
+-- Owner CRM suspension policy (owner direction 2026-11-02 01:52Z). Migration number 0192 allocated by the owner on
+-- 2026-11-02 (next free number on main); later pending migrations take the next free number when each merges.
 -- - Proposed paid-access terms version 2. A failed renewal gets a 7-day grace period that starts on the renewal's
 --   scheduled due date (the end of the last paid period). Normal authorized access continues during grace, and the
 --   owner is shown the payment issue in the app. After grace, operational CRM and staff CRM access are suspended. The
