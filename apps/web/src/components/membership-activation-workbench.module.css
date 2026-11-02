@@ -10,3 +10,19 @@
 .page h2:focus, .page h3:focus { outline: 3px solid #76a5ff; outline-offset: 6px; }
 .page section > a { display: inline-block; padding: 12px; }
 @media (max-width: 640px) { .page h1 { font-size: 30px; } .page button { max-width: 100%; overflow-wrap: anywhere; } .row { padding: 0; border: 0; background: transparent; } }
+.status { min-height: 1.6em; }
+.page :focus-visible { outline: 3px solid #245ac4; outline-offset: 3px; }
+/* Match the existing HON convention: Modern light, Classic operations dark. */
+.mode_modern, .mode_big { background: #f5f7fb; }
+.page.mode_classic { background: #091727; color: #edf6ff; }
+.page.mode_classic header > p:first-child { color: #9cdbff; }
+.page.mode_classic section, .page.mode_classic .row { background: #102238; border-color: #395a74; }
+.page.mode_classic aside { background: #143146; border-color: #6ed9e5; }
+.page.mode_classic input, .page.mode_classic select, .page.mode_classic textarea { background: #0b1b2c; color: #edf6ff; border-color: #83a0b8; }
+.page.mode_classic a { color: #9fe2ff; }
+.page.mode_classic .notice { background: #14392f; color: #dcfff3; border-color: #74bfa3; }
+.page.mode_classic .error { background: #451e23; color: #ffe7df; border-color: #e6a18b; }
+.page.mode_classic :focus-visible { outline-color: #ffd66d; }
+.mode_big { font-size: 18px; }
+.page.mode_big button, .page.mode_big input:not([type=checkbox]), .page.mode_big select { min-height: 52px; font-size: 17px; }
+@media (prefers-reduced-motion: reduce) { .page * { scroll-behavior: auto; } }

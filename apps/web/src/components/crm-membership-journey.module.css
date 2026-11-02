@@ -1,0 +1,5 @@
+.progress { max-width: 1102px; margin: 20px auto 0; padding: 18px 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--text); }
+.progress ol { display: flex; flex-wrap: wrap; gap: 12px 36px; padding-left: 20px; margin: 0; font-weight: 600; line-height: 1.6; }
+.progress [aria-current=step] { text-decoration: underline; text-underline-offset: 5px; }
+.progress p { margin: 14px 0 0; font-size: 13px; line-height: 1.6; }
+@media (max-width: 640px) { .progress { margin: 14px; padding: 16px; } }
