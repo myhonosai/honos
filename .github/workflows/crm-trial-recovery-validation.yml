@@ -1,0 +1,62 @@
+name: CRM trial recovery API integration
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'apps/web/src/components/crm-journey/**'
+      - 'apps/web/test/crm-trial-recovery*'
+      - 'apps/web/scripts/crm-trial-recovery*'
+      - '.github/workflows/crm-trial-recovery-validation.yml'
+permissions:
+  contents: read
+concurrency:
+  group: crm-trial-recovery-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  # The existing connected CRM workflow runs the full workspace and all 48 canonical
+  # PostgreSQL proofs on this same reconciled head. This distinct job verifies the
+  # real frontend transport against its merged backend without repeating that suite.
+  api-database:
+    name: Merged backend and actual frontend API transport
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+      - name: Verify exact combined source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA"
+          node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
+          printf 'Combined frontend/backend head: `%s`\n\nAccepted backend foundation: `dce550e7c286dcf34a8ca6beb175b39289f7c69e` (#107).\n\nReal signed-session API/PostgreSQL evidence; synthetic browser fixtures are reported separately.\n' "$HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build the merged backend and frontend transport dependencies
+        run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/api build
+      - name: Actual frontend trial recovery through signed-session Nest and guarded local PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo systemctl start postgresql.service
+          pg_isready -h /var/run/postgresql -p 5432
+          fixture_dir=/home/ubuntu/jobs/crm_trial_recovery
+          sudo mkdir -p "$fixture_dir"
+          sudo chown "$(id -u):$(id -g)" /home/ubuntu /home/ubuntu/jobs "$fixture_dir"
+          chmod 700 "$fixture_dir"
+          trap 'rm -f "$fixture_dir/recovery.env"' EXIT
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET=postgresql://localhost:5432/hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE="$fixture_dir/recovery.env" node packages/database/scripts/setup-flexible-billing-accounts-validation.mjs
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_TRIAL_RECOVERY_API_TEST=1 HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA="$HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-trial-recovery-api-verification.mjs' _ "$fixture_dir/recovery.env"
+      - name: Tracked source remains unchanged
+        if: always()
+        run: git diff --exit-code

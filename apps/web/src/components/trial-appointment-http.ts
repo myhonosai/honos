@@ -41,7 +41,7 @@ export function verifyTrialAppointment(value: unknown, expected: { leadId: strin
   return value as unknown as CrmAppointmentSummary;
 }
 
-function validateScheduleInput(input: TrialScheduleInput): TrialScheduleInput {
+export function validateScheduleInput(input: TrialScheduleInput): TrialScheduleInput {
   closed(input, ['startsAt', 'endsAt'], ['location', 'notes']); instant(input.startsAt); instant(input.endsAt);
   if (Date.parse(input.endsAt) <= Date.parse(input.startsAt)) invalid();
   if (input.location !== undefined) text(input.location, 160);
@@ -49,7 +49,7 @@ function validateScheduleInput(input: TrialScheduleInput): TrialScheduleInput {
   return input;
 }
 
-function validateOutcomeInput(input: TrialOutcomeInput): TrialOutcomeInput {
+export function validateOutcomeInput(input: TrialOutcomeInput): TrialOutcomeInput {
   closed(input, ['status', 'expectedVersion'], ['outcomeNotes']);
   if (!['COMPLETED', 'NO_SHOW', 'CANCELLED'].includes(input.status) || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) invalid();
   if (input.outcomeNotes !== undefined) text(input.outcomeNotes, 2000);
