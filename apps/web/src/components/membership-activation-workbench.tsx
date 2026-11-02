@@ -39,7 +39,7 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
   const readEpoch = useRef(0), readAbort = useRef<AbortController | null>(null), concealed = useRef(false), sensitive = useRef(false);
   const instance = useRef(0), activeCommand = useRef<ActivationRequest | null>(null), retained = useRef<ActivationRequest | null>(null);
   const finalHeading = useRef<HTMLHeadingElement | null>(null), shieldHeading = useRef<HTMLHeadingElement | null>(null), reviewHeading = useRef<HTMLHeadingElement | null>(null);
-  const privateArea = useRef<HTMLDivElement | null>(null), sessionOwner = useRef(sessionSubject);
+  const privateArea = useRef<HTMLDivElement | null>(null), sessionOwner = useRef(sessionSubject), restoreAttempt = useRef(0);
   sensitive.current = !!(scope.organizationId || scope.schoolId || scope.membershipId || preview || saved || pending || reading);
   const locked = commandBusy || pending !== null;
   function resetReview(): void { setSummary(null); setConfirmed(false); setWarnings([]); setOverrideReason(''); setOverrideConfirmed(false); setAdult(false); setDetails(''); setAdjustment(''); }
@@ -135,7 +135,7 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
   }
   async function restore(): Promise<void> {
     if (activeCommand.current || !concealed.current || reading) return;
-    invalidateRead(); const run = readEpoch.current, controller = new AbortController(); readAbort.current = controller; setReading(true); setError('');
+    invalidateRead(); const run = readEpoch.current, attempt = ++restoreAttempt.current, life = instance.current, controller = new AbortController(); readAbort.current = controller; setReading(true); setError('');
     try {
       await verifyEnrollmentSession(sessionOwner.current, controller.signal);
       const context = await loadMembershipActivationContext(retained.current?.scope ?? scope, controller.signal);
@@ -143,7 +143,12 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
       if (run !== readEpoch.current || !concealed.current || document.visibilityState !== 'visible') return;
       setObserved(context); setPreview(null); setDates(null); resetReview(); concealed.current = false; setHidden(false);
       setNotice('Session and exact-school activation access verified. Review again before a new command; an unknown request can only be retried explicitly.');
-    } catch { if (run === readEpoch.current) setError('Access could not be verified. Information remains hidden. Sign in again if your session expired, or ask your school owner to restore access.'); }
+    } catch {
+      // A real 401 broadcasts concealment and invalidates the read epoch before
+      // it throws. Keep its generic refusal visible, but never accept a stale
+      // restoration's error in another attempt, instance or revealed view.
+      if (instance.current === life && restoreAttempt.current === attempt && concealed.current) setError('Access could not be verified. Information remains hidden. Sign in again if your session expired, or ask your school owner to restore access.');
+    }
     finally { if (run === readEpoch.current) setReading(false); }
   }
   function discard(): void {

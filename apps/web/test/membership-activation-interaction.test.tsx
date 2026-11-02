@@ -92,6 +92,25 @@ describe('E1a explicit two-step activation lifecycle', () => {
     let resolve!: (r: Response) => void; f.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     button('Verify access and resume').props.onClick(); await flush(); window.dispatchEvent(new Event('blur')); resolve(envelope(current, false, true)); await flush(); expect(html()).toContain('Membership information hidden');
   });
+  it('announces failed restoration even when a real 401 simultaneously invalidates its read epoch', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview()));
+    render(); harness.effects[0]!(); await load(); window.dispatchEvent(new Event('blur'));
+    harness.session.mockImplementationOnce(async () => { window.dispatchEvent(new Event('hon:session-invalidated')); throw new PlanAccessError('expired'); });
+    button('Verify access and resume').props.onClick(); await flush();
+    expect(html()).toContain('Access could not be verified. Information remains hidden.'); expect(html()).not.toContain('Synthetic Student');
+    expect(button('Verify access and resume').props.disabled).toBe(false); expect(f).toHaveBeenCalledOnce();
+  });
+  it('a superseded restoration cannot insert its error into a newer authorized attempt', async () => {
+    let refuseOld!: (value: Error) => void, finishNew!: (value: Response) => void;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview())).mockImplementationOnce(() => new Promise(done => { finishNew = done; }));
+    render(); harness.effects[0]!(); await load(); window.dispatchEvent(new Event('blur'));
+    harness.session.mockImplementationOnce(() => new Promise((_, reject) => { refuseOld = reject; }));
+    button('Verify access and resume').props.onClick(); await flush(); window.dispatchEvent(new Event('blur'));
+    button('Verify access and resume').props.onClick(); await flush(); refuseOld(new Error('old network outcome')); await flush();
+    expect(html()).not.toContain('Access could not be verified. Information remains hidden.');
+    finishNew(envelope(current, false, true)); await flush();
+    expect(html()).toContain('Current membership observation'); expect(html()).not.toContain('Access could not be verified. Information remains hidden.');
+  });
   it('does not shield an empty view and ignores a late preview for edited selectors', async () => {
     let resolve!: (r: Response) => void; const f = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     render(); harness.effects[0]!(); window.dispatchEvent(new Event('blur')); expect(html()).not.toContain('Membership information hidden'); await load(); fill('Already-known membership ID', id('9')); resolve(envelope(preview())); await flush(); expect(html()).not.toContain('Synthetic Student'); expect(f).toHaveBeenCalledTimes(1);
