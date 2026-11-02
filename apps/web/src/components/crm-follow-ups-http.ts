@@ -29,12 +29,7 @@ async function request(path: string, body?: FollowUpInput | FollowUpTransition, 
 export async function loadFollowUps(queue: 'mine' | 'team', status: FollowUpStatus | 'ALL', after: string | null = null): Promise<FollowUpQueue> {
   if (!['mine','team'].includes(queue) || !['OPEN','COMPLETED','CANCELLED','ALL'].includes(status)) invalid(); if (after !== null) uuid(after);
   const v = await request(`?queue=${queue}&status=${status}${after ? `&after=${after}` : ''}`);
-  closed(v, ['schoolId','principalId','canManage','humanOnly','queue','status','items','nextAfter']); uuid(v.schoolId); uuid(v.principalId);
-  if (v.humanOnly !== true || typeof v.canManage !== 'boolean' || v.queue !== queue || v.status !== status || (queue === 'team' && !v.canManage) || !Array.isArray(v.items) || v.items.length > 50) invalid();
-  if (v.nextAfter !== null) { uuid(v.nextAfter); if (v.items.length !== 50 || v.nextAfter !== (v.items[49] as FollowUpQueueItem)?.followUpId) invalid(); }
-  let previous = after?.toLowerCase() ?? null;
-  for (const x of v.items) { const r = item(x); if ((previous && r.followUpId <= previous) || (queue === 'mine' && r.assigneeId !== v.principalId) || (status !== 'ALL' && r.status !== status)) invalid(); previous = r.followUpId; }
-  return v as unknown as FollowUpQueue;
+  return verifyFollowUpQueue(v, queue, status, after);
 }
 export async function readFollowUp(id: string): Promise<FollowUpRecord> { uuid(id); const r = record(await request(`/${id}`)); if (r.followUpId !== id.toLowerCase()) invalid(); return r; }
 export async function mutateFollowUp(op: FollowUpOperation, id: string | null, input: FollowUpInput | FollowUpTransition, key: string): Promise<FollowUpRecord> {
@@ -46,3 +41,14 @@ export async function mutateFollowUp(op: FollowUpOperation, id: string | null, i
   if ('subject' in input && followUpFingerprint({ leadId:r.leadId,assigneeId:r.assigneeId,subject:r.subject,note:r.note,dueAt:r.dueAt,priority:r.priority }) !== followUpFingerprint({ ...input, leadId: input.leadId.toLowerCase(), assigneeId: input.assigneeId.toLowerCase(), expectedVersion: undefined })) invalid();
   return r;
 }
+
+/** Same closed queue validator used by the connected human journey. */
+export function verifyFollowUpQueue(v: unknown, queue: 'mine' | 'team', status: FollowUpStatus | 'ALL', after: string | null = null): FollowUpQueue {
+  closed(v, ['schoolId','principalId','canManage','humanOnly','queue','status','items','nextAfter']); uuid(v.schoolId); uuid(v.principalId);
+  if (v.humanOnly !== true || typeof v.canManage !== 'boolean' || v.queue !== queue || v.status !== status || (queue === 'team' && !v.canManage) || !Array.isArray(v.items) || v.items.length > 50) invalid();
+  if (v.nextAfter !== null) { uuid(v.nextAfter); if (v.items.length !== 50 || v.nextAfter !== (v.items[49] as FollowUpQueueItem)?.followUpId) invalid(); }
+  let previous = after?.toLowerCase() ?? null;
+  for (const x of v.items) { const r = item(x); if ((previous && r.followUpId <= previous) || (queue === 'mine' && r.assigneeId !== v.principalId) || (status !== 'ALL' && r.status !== status)) invalid(); previous = r.followUpId; }
+  return v as unknown as FollowUpQueue;
+}
+export const verifyFollowUpRecord = record;
