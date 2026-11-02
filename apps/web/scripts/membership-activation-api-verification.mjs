@@ -50,7 +50,8 @@ try {
   app = module.createNestApplication({ logger: false }); app.setGlobalPrefix('v1'); app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })); await app.listen(0, '127.0.0.1');
   const origin = `http://127.0.0.1:${app.getHttpServer().address().port}`; process.env.HON_PUBLIC_ORIGIN = origin;
   const ts = webRequire('typescript'), contractsUrl = pathToFileURL(webRequire.resolve('@hon/contracts')).href;
-  const compiled = ts.transpileModule(await readFile(resolve(repo, 'apps/web/src/components/membership-activation-http.ts'), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText.replace(/from\s+['"]@hon\/contracts['"]/g, 'from ' + JSON.stringify(contractsUrl));
+  const invalidation = ts.transpileModule(await readFile(resolve(repo, 'apps/web/src/components/session-invalidation.ts'), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const compiled = ts.transpileModule(await readFile(resolve(repo, 'apps/web/src/components/membership-activation-http.ts'), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText.replace(/from\s+['"]@hon\/contracts['"]/g, 'from ' + JSON.stringify(contractsUrl)).replace(/from\s+['"]\.\/session-invalidation['"]/g, 'from ' + JSON.stringify('data:text/javascript;base64,' + Buffer.from(invalidation).toString('base64')));
   const web = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
   let actor = staffOne, expired = false, loseResponse = false;
   globalThis.fetch = async (path, options) => {

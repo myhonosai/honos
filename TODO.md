@@ -1,3 +1,10 @@
+## 2026-11-02 — Connected school membership integration (in review)
+
+- Existing CRM registration and creator-visible current adult/child DRAFTs now hand off to the existing independently authorized E1a two-step activation UI without manual IDs. No backend, contract, migration, billing or provider behavior is added.
+- Activation privacy, original-identity verification, command settlement and exact-request retry protections extended; localized EN/KO/ES activation and three presentation modes. Current lifecycle observation remains distinct from historical receipt/effective status/payment.
+- Separate draft PR and exact-head CI evidence required before source merge. Local initial web suite: 1,222 passed; focused safety suite: 52 passed; web typecheck/build and 183 checksum-locked migration validation passed. New final regressions and real disposable API/browser verification are tracked in the PR, not inferred from these earlier results.
+- PR #104 remains unchanged/separate. Durable active-membership lookup after a full reload, effective-status integration, historical plan terms, financial enrollment and deployment remain dependencies. See `docs/architecture/MEMBERSHIP_ACTIVATION_GATE_CODEX_HANDOFF.md` connected-workflow section.
+
 ## Connected CRM — persistent trial recovery integration
 
 - [x] Prepare explicit saved-trial list/detail reads, current-version outcome review, strict duplicate-conflict evidence and retained exact retries on top of PR #95; preserve F1 scheduling holds, F2 lead-refresh barriers, EN/KR/ES, privacy and all existing registration workflows.
