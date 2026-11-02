@@ -52,7 +52,10 @@ export async function runSchoolMembershipJourneyBrowserChecks({ activationFixtur
     await root(page).getByText('Synthetic Jordan Lee', { exact: true }).waitFor();
   }
   async function loadCrm(page) {
-    await page.getByLabel('Status filter', { exact: true }).selectOption('WON');
+    // This wrapping label also contains the option captions. Use the existing
+    // CRM browser selector and assert uniqueness rather than an exact text match.
+    const status = page.getByLabel('Status filter'); assert.equal(await status.count(), 1);
+    await status.selectOption('WON');
     await keyboardActivate(page, page.getByRole('button', { name: 'Load CRM leads', exact: true }));
   }
   async function adult(page, language) {
