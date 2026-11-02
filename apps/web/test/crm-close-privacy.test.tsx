@@ -3,6 +3,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 import { CrmLeadClosePanel } from '../src/components/crm-lead-close-panel';
 import { CrmEnrollmentDiscard } from '../src/components/crm-enrollment-discard';
+import { CrmLeadCreatePanel } from '../src/components/crm-lead-create-panel';
+import { loadMyLanguage, updateMyLanguage } from '../src/components/localization/http';
+import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 vi.mock('../src/components/localization/provider',()=>({useLocale:()=>({date:(v:string)=>v})}));
 type Frame={values:unknown[];cursor:number;effects:(()=>void)[]};
 const hooks=vi.hoisted(()=>({frame:null as Frame|null}));
@@ -67,7 +70,9 @@ it.each(['expired','revoked','changed-user','missing','unavailable'] as const)('
  const f=await open();f.mockRejectedValueOnce(new Error('unknown'));command('WON');await settle();window.dispatchEvent(new Event('blur'));
  if(reason==='expired')f.mockResolvedValueOnce(response({},401));else if(reason==='changed-user')f.mockResolvedValueOnce(identity('another-user'));else f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(response(reason==='missing'?[]:{},reason==='revoked'?403:reason==='unavailable'?503:200));
  click('Verify access and resume');await settle();expect(f.mock.calls.filter(([,o])=>o?.method==='POST')).toHaveLength(1);
- if(['missing','unavailable'].includes(reason)){expect(hidden()).toBe(true);expect(panelElement()).toBeDefined();}else{expect(panelElement()).toBeUndefined();expect(text(workbench())).not.toContain('Private Lead');}
+ // A confirmed global session loss retains the private command capsule; a
+ // local revocation or changed identity still follows its access-loss path.
+ if(['expired','missing','unavailable'].includes(reason)){expect(hidden()).toBe(true);expect(panelElement()).toBeDefined();}else{expect(panelElement()).toBeUndefined();expect(text(workbench())).not.toContain('Private Lead');}
 });
 it('blocks new close commands after a changed version while retaining only exact existing requests',async()=>{
  const f=await open();window.dispatchEvent(new Event('blur'));f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(response([{...row,status:'LOST',version:2}])).mockResolvedValueOnce(identity());click('Verify access and resume');await settle();command('WON');expect(f).toHaveBeenCalledTimes(4);expect(text(panel())).toContain('This lead changed');
@@ -75,4 +80,61 @@ it('blocks new close commands after a changed version while retaining only exact
 
 it('ignores a completed callback from an earlier instance of the same lead',async()=>{
  await open();const old=panelElement();old.props.onCancel();click('Prepare CRM-only close');const current=panelElement();expect(current.key).not.toBe(old.key);current.props.onBusy(true);old.props.onBusy(false);window.dispatchEvent(new Event('blur'));expect(button(workbench(),'Verify access and resume').props.disabled).toBe(true);current.props.onBusy(false);expect(button(workbench(),'Verify access and resume').props.disabled).toBe(false);
+});
+
+// Exercise the actual authenticated transport, not a mocked invalidation callback.
+const languageRequest = (operation: 'read' | 'save') => operation === 'read'
+ ? loadMyLanguage() : updateMyLanguage({language:'ko',expectedVersion:1},id(70));
+it.each(['read','save'] as const)('language %s 401 immediately conceals loaded CRM facts until explicit authorized restoration',async operation=>{
+ const f=await open();const key=panelElement().key;
+ f.mockResolvedValueOnce(response({},401));await expect(languageRequest(operation)).rejects.toThrow();
+ expect(hidden()).toBe(true);expect(panelElement().key).toBe(key);
+ const calls=f.mock.calls.length;window.dispatchEvent(new Event('focus'));await settle();expect(hidden()).toBe(true);expect(f).toHaveBeenCalledTimes(calls);
+ authorize(f,'OPEN');click('Verify access and resume');await settle();expect(hidden()).toBe(false);expect(panelElement().key).toBe(key);
+});
+it.each(['read','save'] as const)('language %s 403 remains local and does not invalidate the staff session',async operation=>{
+ const f=await open(),invalidated=vi.fn();window.addEventListener(HON_SESSION_INVALIDATED_EVENT,invalidated);
+ f.mockResolvedValueOnce(response({},403));await expect(languageRequest(operation)).rejects.toThrow();
+ expect(invalidated).not.toHaveBeenCalled();expect(hidden()).toBe(false);expect(text(workbench())).toContain('Private Lead');
+});
+it('rejects a pending lead-list success after language 401 without an automatic replacement read',async()=>{
+ let finish!:(r:Response)=>void;const f=vi.spyOn(globalThis,'fetch').mockImplementationOnce(()=>new Promise(yes=>{finish=yes;}));
+ workbench();elements(workbench()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});
+ f.mockResolvedValueOnce(response({},401));await expect(loadMyLanguage()).rejects.toThrow();
+ finish(response([row]));await settle();expect(text(workbench())).not.toContain('Private Lead');
+ window.dispatchEvent(new Event('focus'));await settle();expect(f).toHaveBeenCalledTimes(2);
+});
+it.each(['WON','LOST'] as const)('%s close settles after session invalidation and retains its exact unknown request behind the shield',async status=>{
+ const f=await open();let finish!:(r:Response)=>void;f.mockImplementationOnce(()=>new Promise(yes=>{finish=yes;}));command(status);const key=panelElement().key;
+ f.mockResolvedValueOnce(response({},401));await expect(updateMyLanguage({language:'ko',expectedVersion:1},id(70))).rejects.toThrow();
+ expect(hidden()).toBe(true);expect(panelElement().key).toBe(key);expect(button(workbench(),'Verify access and resume').props.disabled).toBe(true);
+ const discard=elements(workbench()).find(e=>e.type===CrmEnrollmentDiscard)!;expect(discard.props.disabled).toBe(true);discard.props.onDiscard();expect(panelElement().key).toBe(key);
+ finish(response({},503));await settle();expect(hidden()).toBe(true);expect(button(workbench(),'Verify access and resume').props.disabled).toBe(false);
+ // A second invalidation must also preserve a settled uncertain command.
+ window.dispatchEvent(new Event(HON_SESSION_INVALIDATED_EVENT));expect(panelElement().key).toBe(key);
+ authorize(f,status);click('Verify access and resume');await settle();expect(hidden()).toBe(false);expect(f.mock.calls.filter(([,o])=>o?.method==='POST'&&String(o.body).includes('Private close note'))).toHaveLength(1);
+ f.mockResolvedValueOnce(response(receipt(status)));const retry=button(panel(),'Retry exact retained close request');retry.props.onClick();retry.props.onClick();await settle();
+ expect(f.mock.calls.at(-1)).toEqual(f.mock.calls[1]);expect(text(panel())).toContain('Returned CRM-only close receipt');
+});
+it('removes the session listener on unmount and rejects old read callbacks',async()=>{
+ let finish!:(r:Response)=>void;vi.spyOn(globalThis,'fetch').mockImplementationOnce(()=>new Promise(yes=>{finish=yes;}));
+ workbench();elements(workbench()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});cleanup(parent);
+ const prior=parent;parent=frame();subject='another-user';workbench();window.dispatchEvent(new Event(HON_SESSION_INVALIDATED_EVENT));
+ finish(response([row]));await settle();expect(text(workbench())).not.toContain('Private Lead');expect(hidden()).toBe(false);cleanup(prior);
+});
+it('preserves an already-uncertain lead-create capsule through invalidation, repeated blur and explicit reauthorization',async()=>{
+ const f=vi.spyOn(globalThis,'fetch').mockRejectedValueOnce(new Error('unknown'));
+ const creation=frame();const element=()=>elements(workbench()).find(e=>e.type===CrmLeadCreatePanel)!;
+ const view=()=>run(creation,()=>CrmLeadCreatePanel(element().props as Parameters<typeof CrmLeadCreatePanel>[0]));
+ for(const [label,value] of [['Known pipeline UUID',id(8)],['Known non-terminal stage UUID',id(9)],['Primary contact given name','Private'],['Primary contact family name','Contact']]){
+  const field=elements(view()).find(e=>e.type==='label'&&text(e)===label)!;
+  elements(field).find(e=>e.type==='input')!.props.onChange({target:{value}});
+ }
+ elements(view()).find(e=>e.type==='input'&&e.props.type==='checkbox')!.props.onChange({target:{checked:true}});
+ const key=element().key;elements(view()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();
+ expect(button(view(),'Retry exact retained lead-create request')).toBeDefined();expect(f).toHaveBeenCalledTimes(1);
+ f.mockResolvedValueOnce(response({},401));await expect(loadMyLanguage()).rejects.toThrow();window.dispatchEvent(new Event('blur'));
+ expect(hidden()).toBe(true);expect(element().key).toBe(key);
+ authorize(f,'OPEN');click('Verify access and resume');await settle();expect(hidden()).toBe(false);expect(element().key).toBe(key);expect(f).toHaveBeenCalledTimes(5);
+ f.mockRejectedValueOnce(new Error('still unknown'));button(view(),'Retry exact retained lead-create request').props.onClick();await settle();expect(f.mock.calls[5]).toEqual(f.mock.calls[0]);cleanup(creation);
 });
