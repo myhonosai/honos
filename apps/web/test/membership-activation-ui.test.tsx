@@ -6,7 +6,7 @@ import { formatLocaleCalendarDate, DEFAULT_LOCALE } from '@hon/design-system';
 import { MembershipActivationWorkbench } from '../src/components/membership-activation-workbench';
 import { activateKnownMembership, loadMembershipActivationContext, previewMembershipActivation, prepareMembershipActivation, membershipActivationPath, MembershipActivationError } from '../src/components/membership-activation-http';
 import { scope, id, current, preview, input, receipt, envelope, rejected } from './membership-activation-fixtures';
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('E1a closed frontend transport', () => {
   it('uses the exact preview marker, no-store human POST and no idempotency key', async () => {
     const f = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => envelope(preview()));
@@ -57,6 +57,14 @@ describe('E1a closed frontend transport', () => {
     await expect(activateKnownMembership(prepareMembershipActivation(scope, input(), id('9')))).rejects.toMatchObject({ uncertain: true });
     f.mockResolvedValue(rejected(403, 'ACTIVATION_OVERRIDE_FORBIDDEN'));
     await expect(activateKnownMembership(prepareMembershipActivation(scope, input(), id('9')))).rejects.toBeInstanceOf(MembershipActivationError);
+  });
+  it.each([401, 403])('handles %s with sanitized errors, broadcasting only confirmed session loss', async status => {
+    const target = new EventTarget(), invalidated = vi.fn(); target.addEventListener('hon:session-invalidated', invalidated); vi.stubGlobal('window', target);
+    const response = rejected(status, 'ACTIVATION_OVERRIDE_FORBIDDEN'), consume = vi.spyOn(response, 'text');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+    await expect(previewMembershipActivation(scope, {})).rejects.toMatchObject({ status });
+    if (status === 401) expect(consume).not.toHaveBeenCalled();
+    expect(invalidated).toHaveBeenCalledTimes(status === 401 ? 1 : 0);
   });
   it('renders inert, preserves billing boundaries and uses calendar dates without converting to user timezone', () => {
     const f = vi.spyOn(globalThis, 'fetch'); const html = renderToStaticMarkup(<MembershipActivationWorkbench sessionSubject="synthetic" />);

@@ -1,6 +1,7 @@
 /** Actual production Next application, real session gate, synthetic localhost API contracts. No database/provider access. */
 import assert from 'node:assert/strict';
 import { createActivationFixture, runActivationBrowserChecks } from './membership-activation-browser.mjs';
+import { runSchoolMembershipJourneyBrowserChecks } from './school-membership-journey-browser.mjs';
 import { createCloseFixture, runCloseBrowserChecks } from './crm-close-browser.mjs';
 import { createFamilyFixture, runFamilyBrowserChecks } from './crm-family-browser.mjs';
 import { createServer } from 'node:http';
@@ -33,6 +34,7 @@ const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.school
 const program = { programId: id(38), name: 'Adult martial arts' };
 const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
 let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
+let language = 'en';
 const closeFixture = createCloseFixture({id,scope,date,origin,send,rejected});
 const activationFixture = createActivationFixture({id,scope,origin,send,rejected});
 const familyFixture = createFamilyFixture({ id, scope, date, origin, send, rejected, plans: () => publishedPlans });
@@ -49,7 +51,7 @@ const api = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1:3001');
     let actor; try { actor = verifySession(cookieValue(req.headers.cookie, HON_SESSION_COOKIE) ?? '', session).externalSubject; } catch { send(res, 401, {}); return; }
     report.requests.push({ method: req.method, path: url.pathname });
-    if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: null, schoolDefault: null, effective: { language: 'en', source: 'SYSTEM_DEFAULT' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
+    if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: {language,version:1,updatedAt:date}, schoolDefault: null, effective: { language, source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
     if (actor === 'crm-staff-synthetic' && url.pathname === '/v1/staff/current-reporting-school' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({data:{state:'RESOLVED',...scope}})); return;
     }
@@ -190,6 +192,10 @@ try {
   let started = false; for (let i = 0; i < 100; i++) { try { await fetch(origin); started = true; break; } catch {} await new Promise(done => setTimeout(done, 250)); } assert(started, log.slice(-1200));
   browser = await chromium.launch({ executablePath: process.env.HON_CRM_CHROME, headless: true });
   await runActivationBrowserChecks({fixture:activationFixture,open,visual,check,origin});
+  await runSchoolMembershipJourneyBrowserChecks({ activationFixture, familyFixture, reset, open, visual, check, origin, scope, id, report,
+    setLanguage(value) { assert(['en','ko','es'].includes(value)); language = value; },
+    restoreSession: context => context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject:'crm-staff-synthetic' }, session), url: origin, httpOnly:true, sameSite:'Lax' }]),
+  });
   await runCloseBrowserChecks({fixture:closeFixture,reset,open,visual,check,captureFailure:async page=>{await page.screenshot({path:join(results,'close-first-failure.png'),fullPage:true});report.screenshots.push('close-first-failure.png');},replaceActor:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     await check(`${name}: connected registration/account/DRAFT/current confirmation; keyboard and accessibility`, async () => {
