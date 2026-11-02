@@ -1,3 +1,18 @@
+## Connected CRM — persistent trial recovery integration
+
+- [x] Prepare explicit saved-trial list/detail reads, current-version outcome review, strict duplicate-conflict evidence and retained exact retries on top of PR #95; preserve F1 scheduling holds, F2 lead-refresh barriers, EN/KR/ES, privacy and all existing registration workflows.
+- [x] Normally incorporate accepted #107/main `dce550e7c286dcf34a8ca6beb175b39289f7c69e`, source-identical to reviewed `9e8289fc0e9485ea8f4cc4b76f3765940c8b7f52`. Preserve the reviewed frontend application code from `bc6c0188d9c0354845ac660d60052497fd736120` and run the recovery proof against this same combined checkout, without an alternate backend.
+- Local evidence: 131 focused regressions and all 1,191 web tests passed, with typecheck and 183 unchanged migration checksums. Browser/API/PostgreSQL evidence remains pending on the final published head; no local socket/database pass is claimed.
+- [ ] Verify the final reconciled PR #95 head through fresh repository/build, browser/accessibility, all 48 canonical PostgreSQL proofs and combined-source signed-session recovery tests. Earlier `bc6c0188` passed all five draft-safe jobs; that history does not establish this new head. Keep draft for independent frontend review, required regular CI and owner merge approval; entitlement-lapse policy remains a pilot gate.
+
+## Connected staff CRM operating journey — Codex (in progress)
+
+- PR #95 independent-review corrections F1/F2: retain school-scoped trial scheduling holds for this mounted lifetime across lead switches, refreshes and deliberate abandonment; retain required lead refresh until a successful authorized lead read. Add negative key/POST/preparation regressions and fresh draft-safe verification. No backend reader is invented; cross-session trial recovery and pilot readiness remain blocked.
+
+- [ ] Connect verified lead selection, internal self-assigned follow-up, trial schedule/outcome, CRM-only WON/LOST and optional registration record through existing exact-school commands. No provider, messaging, billing, membership activation or AI execution.
+- [ ] Preserve in-memory immutable exact retries, command ownership across privacy concealment, explicit session/school restoration, and honest historical receipts versus current reads. Three modes and EN/KR/ES; independent draft PR, no changes to PRs #90/#94.
+- [ ] Verify targeted interactions, complete workspace/build/migration checks, disposable security proofs and desktop/tablet/mobile browser accessibility on the final exact head. Inventory: `docs/architecture/CONNECTED_STAFF_CRM_JOURNEY.md`.
+
 ## Web production authentication startup guard — Codex
 
 - Local evidence: 60 focused configuration/auth-route tests and all 1,044 web tests pass; web typecheck, production build and the existing 183-file migration check pass. Browser and full repository/database evidence remain pending on the final draft head.
