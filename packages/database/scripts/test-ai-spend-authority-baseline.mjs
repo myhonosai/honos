@@ -697,6 +697,71 @@ try {
 
   }
 
+  // ---- INV-23 (AI-R1): team readiness agrees with what a real request would do, and writes nothing ----
+  {
+  const ready = async (o, patch = {}) => (await tenant(context(o, patch), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [o.subject]))).rows[0].r;
+  const byKey = (r) => Object.fromEntries(r.agents.map((a) => [a.agentKey, a]));
+  const counts = async () => (await row(`SELECT (SELECT count(*) FROM hon.ai_invocation_plans)::int p, (SELECT count(*) FROM hon.ai_usage_ledger)::int l,
+    (SELECT count(*) FROM hon.audit_events)::int a, (SELECT count(*) FROM hon.marketing_ai_invocations)+(SELECT count(*) FROM hon.teaching_ai_invocations)+(SELECT count(*) FROM hon.chad_follow_up_invocations) i`));
+  const r0 = await makeOrg('inv-23');
+  const before = await counts(), calls0 = Object.values(fakes).reduce((n, f) => n + f.calls, 0);
+  const base = await ready(r0);
+  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['claire', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
+  assert.deepEqual([base.organizationId, base.schoolId, base.completeEntitlement, base.agentBudget.ceilingCredits], [r0.id, r0.school, true, 12000]);
+  assert.deepEqual(await counts(), before, 'readiness writes nothing');
+  assert.equal(Object.values(fakes).reduce((n, f) => n + f.calls, 0), calls0, 'readiness never reaches a provider');
+  // Equivalence with real requests across the INV-8 gate changes: every refused request is reported unavailable.
+  const ALL = Object.keys(agents);
+  const cases = [
+    ['COMPLETE SUSPENDED', ALL, () => admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [r0.id]), () => restoreEntitlement(r0)],
+    ['CORE ACTIVE', ALL, () => admin.query("UPDATE hon.organization_entitlements SET tier='CORE' WHERE organization_id=$1", [r0.id]), () => restoreEntitlement(r0)],
+    ['teaching.assistant.use removed', ['claire'], () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='teaching.assistant.use'", [r0.role]),
+      () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'teaching.assistant.use')", [r0.role, r0.id])],
+    ['owner grant expired', ALL, () => admin.query("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval '1 minute' WHERE principal_id=$1", [r0.principal]),
+      () => admin.query('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1', [r0.principal])],
+    ['no route', ALL, () => admin.query('UPDATE hon.hq_ai_routing_policies SET active=false WHERE policy_id=$1', [r0.policy]), () => admin.query('UPDATE hon.hq_ai_routing_policies SET active=true WHERE policy_id=$1', [r0.policy])],
+  ];
+  const seen = {};
+  for (const [label, affected, apply, restore] of cases) {
+    await apply();
+    try {
+      let readiness = null;
+      const refused = await settle(ready(r0));
+      if (refused.value) readiness = byKey(refused.value);
+      for (const name of Object.keys(agents)) {
+        if (!affected.includes(name)) { assert.equal(readiness?.[name].available, true, `${name} ${label}: unaffected agent stays available`); continue; }
+        const outcome = await expectRefused(name, r0, {}, `INV-23 ${label}`);
+        // A whole-school refusal (no ai.invocation.plan scope) refuses the readiness read itself, which is also unavailable.
+        assert(readiness === null || readiness[name].available === false, `${name} ${label}: readiness must report unavailable (${outcome}): ${JSON.stringify(readiness?.[name])}`);
+        seen[`${name}: ${label}`] = readiness ? readiness[name].blockedBy : 'READ_REFUSED';
+      }
+    } finally { await restore(); }
+  }
+  assert.deepEqual(byKey(await ready(r0)).claire.available, true, 'restored');
+  // Specific blockers: HQ pause (S4-c), organization budget (S4-b), and a request that still fits the smaller Chad estimate.
+  await setUsed(r0, 11996);
+  const near = byKey(await ready(r0));
+  assert.deepEqual([near.marcus.blockedBy, near.claire.blockedBy, near.chad.available], ['ORGANIZATION_AI_BUDGET_REACHED', 'ORGANIZATION_AI_BUDGET_REACHED', true], JSON.stringify(near));
+  // The real request is refused too (the planner's budget denial surfaces as a BLOCKED request with no provider call).
+  assert.match(await expectRefused('marcus', r0, {}, 'INV-23 budget'), /^BLOCKED_/, 'the real request agrees');
+  const pauseIn = { action: 'PAUSE', organizationId: r0.id, spendClass: 'AGENT_INFERENCE', reason: 'Disposable synthetic AI-0 readiness pause' };
+  const pause = await settle(admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify(pauseIn), K()]));
+  assert.equal(pause.value?.rows[0].r.status, 'ACTIVE', JSON.stringify(pause.error?.message));
+  assert.deepEqual(Object.values(byKey(await ready(r0))).map((a) => a.blockedBy), ['AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ']);
+  seen.pause = 'AI_PAUSED_BY_HQ';
+  // Only the direct human of this transaction, in the human UI, may read readiness.
+  for (const [patch, label] of [[{ source: 'AI' }, 'AI source'], [{ delegatedByPrincipalId: r0.principal }, 'delegated']]) {
+    const r = await settle(tenant(context(r0, patch), async (client) => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_delegated_by_principal_id',$2,true)", [patch.source ?? 'HUMAN_UI', patch.delegatedByPrincipalId ?? '']);
+      return client.query('SELECT hon.read_ai_team_readiness($1) r', [r0.subject]);
+    }));
+    assert.equal(r.error?.code, '42501', label);
+  }
+  const other = await makeOrg('inv-23-other');
+  assert.equal((await settle(tenant(context(r0), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [other.subject])))).error?.code, '42501', 'another school’s owner');
+  pass('INV-23', `AI-R1: team readiness reports all three agents available on a ready school, agrees with real requests across ${cases.length} gate changes (${Object.keys(seen).length} checks), names the budget and HQ pause blockers, refuses non-direct or foreign humans, and writes nothing or calls no provider`);
+  }
+
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
   // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter
