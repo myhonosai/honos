@@ -15,6 +15,8 @@ const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-bil
 const service=new SaasSchoolBillingService(new SaasBillingService(new RuntimeDatabaseService()));
 const client=url=>new pg.Client({connectionString:url.toString(),ssl:false});
 const admin=client(owner),a=client(runtime),b=client(runtime);
+// Decisions bind to the latest proposed paid-access terms version (2 since 0192).
+let TERMS=1;
 const humans=Object.fromEntries(['owner','operator','school','expired','ai','delegated'].map(k=>[k,{id:K(),user:K(),subject:'d10-'+K()}]));
 const H=k=>humans[k].subject,DAY=86400_000,iso=n=>new Date(n).toISOString();
 const orgs=Array.from({length:12},()=>({id:K(),school:K()}));
@@ -73,7 +75,8 @@ try{
  await admin.query('COMMIT');
  assert.equal((await service.readExceptionPolicy(H('owner'))).effectiveStatus,'ABSENT');
  await nothing(()=>grant(orgs[0]),orgs[0]);passed('absent policy refuses grant atomically, including no request/audit/outbox');
- const proposed={expectedRevision:0,decision:'PROPOSED',termsVersion:1,maxDays:3,validFrom:iso(Date.now()-1000),validUntil:iso(Date.now()+DAY),reason:'Synthetic proposed policy is not approval'};
+ TERMS=Number((await admin.query('SELECT max(policy_version) v FROM hon.saas_access_policy_terms')).rows[0].v);
+ const proposed={expectedRevision:0,decision:'PROPOSED',termsVersion:TERMS,maxDays:3,validFrom:iso(Date.now()-1000),validUntil:iso(Date.now()+DAY),reason:'Synthetic proposed policy is not approval'};
  await decide(proposed);await nothing(()=>grant(orgs[0]),orgs[0]);passed('PROPOSED cannot authorize access');
  const beforeApprove=await Promise.all(orgs.map(ent));
  const approved=(await approval({maxDays:3})).policy;
@@ -88,7 +91,7 @@ try{
  }
  passed('operator, school, expired, AI and ambiguous human cannot approve or grant; no writes');
  // A policy decision waiting on IAM must observe a concurrent authority revocation before writing.
- const policyAttempt={expectedRevision:approved.revision,decision:'APPROVED',termsVersion:1,maxDays:3,
+ const policyAttempt={expectedRevision:approved.revision,decision:'APPROVED',termsVersion:TERMS,maxDays:3,
   validFrom:iso(Date.now()-1000),validUntil:iso(Date.now()+DAY),reason:'Synthetic approval authority lock regression',confirmation:'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY'};
  const waitBehindAdmin=async()=>{const pid=(await row('SELECT pg_backend_pid() p')).p;
   for(const end=Date.now()+5000;Date.now()<end;await sleep(10))if((await row('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) b',[pid])).b)return;
@@ -109,7 +112,7 @@ try{
  await nothing(()=>grant(orgs[0],input(orgs[0],{schoolId:orgs[1].school})),orgs[0],404,'SAAS_UNAVAILABLE');
  await nothing(()=>grant(orgs[0],input(orgs[0],{expiresAt:iso(Date.now()+4*DAY)})),orgs[0],422,'SAAS_EXCEPTION_TOO_LONG');passed('exact school and approved duration enforced by database');
  const body=input(orgs[0]),key=K(),receipt=await grant(orgs[0],body,key);
- assert.deepEqual(receipt.exception.governingPolicy,{approvalId:approved.approvalId,revision:approved.revision,termsVersion:1,maxDays:3});
+ assert.deepEqual(receipt.exception.governingPolicy,{approvalId:approved.approvalId,revision:approved.revision,termsVersion:TERMS,maxDays:3});
  assert.equal(receipt.exception.maxDays,3);assert.equal((await grant(orgs[0],body,key)).replayed,true);
  await deny(grant(orgs[0],{...body,reason:'Changed request under existing key'},key),409,'IDEMPOTENCY_KEY_REUSED');passed('immutable governing binding, approved limit, exact replay and changed-key refusal');
  const current=(await service.readExceptionPolicy(H('owner'))).current;
@@ -181,4 +184,4 @@ try{
  await Promise.all([a.query('ROLLBACK'),b.query('ROLLBACK')]);
  try{await cleanup();await inactive();assert.equal((await row('SELECT count(*)::int n FROM hon.saas_exception_policy_decisions')).n,0);}finally{await Promise.allSettled([admin.end(),a.end(),b.end()]);}
 }
-function approvalAttempt(who){return decide({expectedRevision:2,decision:'APPROVED',termsVersion:1,maxDays:3,validFrom:iso(Date.now()-1000),validUntil:iso(Date.now()+DAY),reason:'Unauthorized synthetic approval attempt',confirmation:'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY'},K(),who);}
+function approvalAttempt(who){return decide({expectedRevision:2,decision:'APPROVED',termsVersion:TERMS,maxDays:3,validFrom:iso(Date.now()-1000),validUntil:iso(Date.now()+DAY),reason:'Unauthorized synthetic approval attempt',confirmation:'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY'},K(),who);}
