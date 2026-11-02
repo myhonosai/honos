@@ -333,6 +333,10 @@
       "title": "HON HQ | Revenue"
     },
     {
+      "path": "/hq/access-exceptions",
+      "title": "HON HQ | Access exceptions"
+    },
+    {
       "path": "/hq/support",
       "title": "HON HQ | Support"
     },

@@ -1,3 +1,11 @@
+## C-HQ-1 — HQ-owner access exceptions
+
+- [x] Implement an idle owner-verified read/grant/schedule/revoke screen using only merged D9/D10 APIs and closed validators. Manual organization/school UUIDs remain untrusted selectors; the server verifies their relation. No directory broadening, policy approval, test-only grant, paid access, credits, providers or backend changes.
+- Require a current APPROVED/effective ACTIVE exception-only decision for fresh grants; use its actual maxDays, mandatory expiry, 30-day scheduling boundary and loaded entitlement version. Revoke/immutable historical replay remain independent of fresh-grant policy eligibility.
+- Preserve private request ownership, exact body/key retries, independent command settlement, synchronous privacy concealment and fresh same-owner restoration. One HON OS product; internal capability profiles are not priced plans.
+- Normally integrate accepted main `be3a26e097a4ceb355d08d93d57dd73297b6048f`, preserving merged #95/#113/#114 and all 183 migration checksums. Fresh local combined-tree evidence: all 1,237 web tests across 145 files, TypeScript and production Next build pass. Earlier 46 focused /1,097 web checks were on the isolated pre-CRM baseline. Direct cached tools were used after the local pnpm launcher attempted an unavailable external store; no successful install is claimed. Fresh supported signed-session/PostgreSQL, full workspace/canonical security proofs and synthetic browser/axe jobs remain pending on the published draft head.
+- List-driven navigation and complete pre-command eligibility remain dependent on reviewed organization/school mapping and blocker visibility. Existing closed D9/D10 commands have no atomic expected-actor field; browser checks cannot supply that transactional guarantee. No missing contract is fabricated, and policy approval remains a separate owner action. See `docs/architecture/HON_ACCESS_EXCEPTION_POLICY_D10.md` for exact endpoints and limitations.
+
 ## Connected CRM — persistent trial recovery integration
 
 - [x] Prepare explicit saved-trial list/detail reads, current-version outcome review, strict duplicate-conflict evidence and retained exact retries on top of PR #95; preserve F1 scheduling holds, F2 lead-refresh barriers, EN/KR/ES, privacy and all existing registration workflows.
