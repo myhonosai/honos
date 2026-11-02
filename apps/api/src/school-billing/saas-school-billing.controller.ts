@@ -22,6 +22,11 @@ export class SaasSchoolBillingController {
   async account(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
     return { data: await this.reads.readAccount(subject(req), schoolId) };
   }
+  /** In-app payment-issue and suspension standing (grace end, owner CRM read-only window, CRM lock). Read-only. */
+  @Get('access-standing') @UseGuards(SaasReadGuard)
+  async accessStanding(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.reads.readAccessStanding(subject(req), schoolId) };
+  }
   @Get('invoices') @UseGuards(SaasReadGuard) @SaasReadQuery(['status','kind','cursor','limit'])
   async invoices(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Query() query: Record<string, unknown>) {
     return { data: await this.reads.readInvoices(subject(req), schoolId, query) };

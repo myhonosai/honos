@@ -1978,6 +1978,7 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
   END IF;
 END $$;
 
+<<<<<<< HEAD
 -- S4-a 0193 durable AI usage evidence: evidence-only actor stays internal; payload read and hold are fixed runtime boundaries.
 DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['ai_evidence_actor(text)','read_marketing_result_payload(text,uuid)','hold_marketing_result(text,uuid)',
@@ -1990,5 +1991,20 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_marketing_result_payload(text,uuid),hon.hold_marketing_result(text,uuid),
       hon.read_teaching_result_payload(text,uuid),hon.hold_teaching_result(text,uuid),
       hon.read_chad_follow_up_result_payload(text,uuid),hon.hold_chad_follow_up_result(text,uuid) TO hon_runtime;
+=======
+-- 0192 owner CRM suspension policy: verified-owner read-only authority and the in-app access standing read are the
+-- only runtime entry points; the window helper stays private. Earlier saas blocks revoke every saas function, so the
+-- standing read is re-granted here.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['crm_owner_read_only_window(uuid)','authorize_crm_owner_read_only(text,uuid,text,uuid,uuid)',
+    'read_saas_school_access_standing(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.authorize_crm_owner_read_only(text,uuid,text,uuid,uuid), hon.read_saas_school_access_standing(text,uuid) TO hon_runtime;
+>>>>>>> claude/project-thread-81icab
   END IF;
 END $$;

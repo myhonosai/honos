@@ -71,8 +71,8 @@ test('trial reconciliation reads are GET-only, selector-free, never cached and r
     controllers: [TrialAppointmentController, TrialAppointmentReadController],
     providers: [TrialAppointmentHumanUiGuard, TrialAppointmentReadGuard, { provide: RuntimeDatabaseService, useValue: db },
       { provide: TrialAppointmentService, useValue: {
-        listForLead: async (context) => { lists++; assert.equal(context.source, 'HUMAN_UI'); assert.equal(context.principalType, 'HUMAN_USER'); return { activeTrial: null, trials: [] }; },
-        readOne: async (_context, id) => { reads++; return { id }; } } }],
+        listForLead: async (context) => { lists++; assert.equal(context.source, 'HUMAN_UI'); assert.equal(context.principalType, 'HUMAN_USER'); return { result: { activeTrial: null, trials: [] }, access: { mode: 'FULL' } }; },
+        readOne: async (_context, id) => { reads++; return { result: { id }, access: { mode: 'FULL' } }; } } }],
   }).overrideGuard(HonIdentityGuard).useValue({ canActivate(c) { c.switchToHttp().getRequest().honIdentity = { externalSubject: 'trusted' }; return true; } }).compile();
   const app = module.createNestApplication(); app.setGlobalPrefix('v1');
   await app.listen(0, '127.0.0.1');
@@ -81,7 +81,8 @@ test('trial reconciliation reads are GET-only, selector-free, never cached and r
   const get = (path, headers = {}) => fetch(path, { headers });
   try {
     const list = await get(listPath); assert.equal(list.status, 200); assert.equal(list.headers.get('cache-control'), 'private, no-store');
-    assert.deepEqual((await list.json()).data, { activeTrial: null, trials: [] });
+    const listBody = await list.json();
+    assert.deepEqual(listBody.data, { activeTrial: null, trials: [] }); assert.equal('crmAccess' in listBody.meta, false, 'full access keeps the existing response envelope');
     const detail = await get(detailPath, { 'Sec-Fetch-Site': 'same-origin' }); assert.equal(detail.status, 200);
     assert.equal((await detail.json()).data.id, appointmentId);
     // A principal with outcome permission but not scheduling permission may reconcile; schedule is asked first.
