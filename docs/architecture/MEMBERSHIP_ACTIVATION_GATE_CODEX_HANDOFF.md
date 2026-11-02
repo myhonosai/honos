@@ -104,6 +104,8 @@ Blur, hidden visibility, pagehide, confirmed shared session invalidation and sch
 
 Full document destruction, sign-out/remount or closing the tab destroys in-memory retry evidence. `beforeunload` warns where supported; it does not provide durable recovery. Existing CRM privacy restoration still depends on its authorized, filtered 50-row lead list. No retry key or sensitive fact is placed in storage, URLs or telemetry.
 
+The CRM stage also subscribes to `HON_SESSION_INVALIDATED_EVENT`. A confirmed authenticated 401 from another mounted surface (including language GET/save) synchronously hides its private DOM and accessibility subtree, invalidates lead-list and recovery generations, aborts restoration/recovery reads, and prevents late responses from revealing data. It preserves mounted consequential-command ownership and immutable unknown-result capsules through settlement and repeated concealment. Focus restoration alone never reads or reveals; the existing explicit verification rechecks the original identity, exact school and applicable permissions. A local 403 does not emit this session event. Empty views invalidate pending reads without inventing sensitive information or a school. Page destruction still loses local retries as documented above.
+
 ### Truthful status and remaining dependencies
 
 - A registration, canonical account, saved card or DRAFT is not payment, agreement, recurring authorization or financially complete enrollment.

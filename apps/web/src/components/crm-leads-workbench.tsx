@@ -19,6 +19,7 @@ import { useLocale } from './localization/provider';
 import type { KnownMembership } from './membership-activation-http';
 import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
 import { CrmJourneyLink } from './crm-journey/entry';
+import { HON_SESSION_INVALIDATED_EVENT } from './session-invalidation';
 
 function trialHref(organizationId: string, schoolId: string, leadId: string): string {
   return `/staff/crm/trials?${new URLSearchParams({ organizationId, schoolId, leadId }).toString()}`;
@@ -101,12 +102,15 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembers
       clear(); setCreateBusy(false); setCloseBusy(false); shielded.current = conceal; setConcealed(conceal);
       if (conceal && privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; }
     };
-    const hide = (): void => {
+    const hide = (event?: Event): void => {
       membershipEpoch.current++;
       // An idle empty view has no facts or retry to conceal. Invalidate late
       // reads without inventing a school or installing a focus grace period.
       if (!shielded.current && !sensitive.current && !inputDirty.current && !unsettled()) { clear(); return; }
-      if (!familyOpen.current && !adultOpen.current && !closeOpen.current && !unsettled()) { clear(); setCreateBusy(false); setCloseBusy(false); }
+      // Confirmed session loss conceals mounted command capsules, including
+      // already-settled unknown outcomes. Do not destroy their immutable keys
+      // or instance-lifetime busy ownership; settlement must finish privately.
+      if (event?.type !== HON_SESSION_INVALIDATED_EVENT && !shielded.current && !familyOpen.current && !adultOpen.current && !closeOpen.current && !unsettled()) { clear(); setCreateBusy(false); setCloseBusy(false); }
       shielded.current = true;
       // Hide synchronously, including the accessibility tree. Mounted enrollment
       // components keep only their in-memory request state; no command is retried.
@@ -117,8 +121,8 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembers
       setLoading(false); setRecovering(false); setFamilyLoading(false);
     };
     const hidden = (): void => { if (document.visibilityState === 'hidden') hide(); };
-    window.addEventListener('pagehide', leave); window.addEventListener('blur', hide); document.addEventListener('visibilitychange', hidden);
-    return () => { membershipEpoch.current++; closeEpoch.current++; closeOpen.current = false; readEpoch.current++; privacyEpoch.current++; restoreAbort.current?.abort(); recoveryAbort.current?.abort(); familyAbort.current?.abort(); window.removeEventListener('pagehide', leave); window.removeEventListener('blur', hide); document.removeEventListener('visibilitychange', hidden); };
+    window.addEventListener('pagehide', leave); window.addEventListener('blur', hide); window.addEventListener(HON_SESSION_INVALIDATED_EVENT, hide); document.addEventListener('visibilitychange', hidden);
+    return () => { membershipEpoch.current++; closeEpoch.current++; closeOpen.current = false; readEpoch.current++; privacyEpoch.current++; restoreAbort.current?.abort(); recoveryAbort.current?.abort(); familyAbort.current?.abort(); window.removeEventListener('pagehide', leave); window.removeEventListener('blur', hide); window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, hide); document.removeEventListener('visibilitychange', hidden); };
   }, []);
   async function load(event: FormEvent): Promise<void> {
     event.preventDefault(); if (unsettled() || closeOpen.current || closeBusy || createBusy || adultBusy || adult || familyRow || familyBusy || readActive.current) return;
@@ -227,7 +231,7 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembers
     <nav aria-label="Staff navigation"><CrmJourneyLink /><a href="/staff/billing/membership-plans">Membership plans</a><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
     {concealed && <section className={privacyStyles.shield} aria-labelledby="crm-privacy-title" aria-busy={restoring}>
       <h2 id="crm-privacy-title" ref={shieldHeading} tabIndex={-1}>CRM information hidden</h2>
-      <p>Focus left this window. CRM requests remain only in memory. No command will be resent automatically.</p>
+      <p>Focus or session access changed. CRM requests remain only in memory. No command will be resent automatically. Verify current access before revealing information.</p>
       <p>Verify your signed session, selected school and current CRM read and relevant enrollment permissions before revealing information.</p>
       {(familyBusy || adultBusy || closeBusy || createBusy) && <p role="status">An existing request is settling. You can verify access after it finishes. Local recovery cannot be discarded while a request is unsettled.</p>}
       {privacyError && <p role="alert">{privacyError}</p>}

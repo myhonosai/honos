@@ -125,16 +125,16 @@ async function openAdultWorkbench() {
   view = () => CrmLeadsWorkbench({ initialScope: scope, sessionSubject: 'synthetic-staff', onMembershipReview: callbacks.onMembershipReview });
   elements(render()).find(e => e.type === 'form')!.props.onSubmit({ preventDefault() {} }); await settle(); click('Resume setup'); await settle(); return fetch;
 }
-it('checks parent privacy, physical activity and row scope even for a captured child callback', async () => {
+it.each(['blur', 'hon:session-invalidated'])('checks parent privacy on %s, physical activity and row scope even for a captured child callback', async event => {
   await openAdultWorkbench(); const adult = component(CrmAdultFlow), handoff = adult.props.onMembershipReview;
   adult.props.onBusy(true); handoff(target); expect(callbacks.onMembershipReview).not.toHaveBeenCalled(); adult.props.onBusy(false);
   handoff({ ...target, schoolId: id(99) }); expect(callbacks.onMembershipReview).not.toHaveBeenCalled();
-  window.dispatchEvent(new Event('blur')); handoff(target); expect(callbacks.onMembershipReview).not.toHaveBeenCalled();
+  window.dispatchEvent(new Event(event)); handoff(target); expect(callbacks.onMembershipReview).not.toHaveBeenCalled();
   window.dispatchEvent(new Event('focus')); expect(callbacks.onMembershipReview).not.toHaveBeenCalled();
 });
-it('requires fresh authorized CRM recovery after concealment before a newly rendered handoff can run', async () => {
+it.each(['blur', 'hon:session-invalidated'])('requires fresh authorized CRM recovery after %s before a newly rendered handoff can run', async event => {
   const fetch = await openAdultWorkbench(); const stale = component(CrmAdultFlow).props.onMembershipReview;
-  window.dispatchEvent(new Event('blur')); render();
+  window.dispatchEvent(new Event(event)); render();
   const identity = () => new Response(JSON.stringify({ data: { externalSubject: 'synthetic-staff' } }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
   fetch.mockResolvedValueOnce(identity()).mockResolvedValueOnce(response([row])).mockResolvedValueOnce(response(adultCurrent())).mockResolvedValueOnce(identity());
   click('Verify access and resume'); await settle(); stale(target); expect(callbacks.onMembershipReview).not.toHaveBeenCalled();
