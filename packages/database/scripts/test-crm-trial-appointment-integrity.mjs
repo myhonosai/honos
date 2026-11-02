@@ -21,13 +21,14 @@ const { LeadController } = await import('../../../apps/api/dist/crm/lead.control
 
 const ids = Object.fromEntries(
   [
-    'organization', 'schoolA', 'schoolB', 'user', 'principal', 'ownerRole',
+    'organization', 'schoolA', 'schoolB', 'user', 'principal', 'ownerRole', 'staffUser', 'staffPrincipal', 'staffRole',
     'personA', 'personB', 'pipelineA', 'pipelineB', 'stageA', 'stageB', 'leadA', 'leadB',
     'personA2', 'personA3', 'leadA2', 'leadA3', 'personA4', 'leadA4',
     'foreignAppointment', 'localScheduledAppointment', 'localConsultationAppointment', 'pastScheduledAppointment',
   ].map((key) => [key, randomUUID()]),
 );
 const externalSubject = `crm-trial-appointment-${randomUUID()}`;
+const staffSubject = `crm-trial-staff-${randomUUID()}`;
 const administrator = new Client(connectionOptions(process.env.DATABASE_URL));
 const runtime = new Client(connectionOptions(process.env.HON_RUNTIME_DATABASE_URL));
 
@@ -90,8 +91,12 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.audit_events WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.idempotency_records WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.crm_appointments WHERE organization_id = $1', [ids.organization]);
-    await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
-    await administrator.query('DELETE FROM hon.roles WHERE id = $1', [ids.ownerRole]);
+    // Access transitions are immutable evidence; disposable-fixture cleanup only (transactional).
+    await administrator.query('ALTER TABLE hon.saas_access_transitions DISABLE TRIGGER USER');
+    await administrator.query('DELETE FROM hon.saas_access_transitions WHERE organization_id = $1', [ids.organization]);
+    await administrator.query('ALTER TABLE hon.saas_access_transitions ENABLE TRIGGER USER');
+    await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id IN ($1, $2)', [ids.principal, ids.staffPrincipal]);
+    await administrator.query('DELETE FROM hon.roles WHERE id IN ($1, $2)', [ids.ownerRole, ids.staffRole]);
     // Campaign attribution evidence is immutable by trigger; disposable-fixture cleanup only (transactional).
     await administrator.query('ALTER TABLE hon.crm_lead_attributions DISABLE TRIGGER USER');
     await administrator.query('DELETE FROM hon.crm_lead_attributions WHERE organization_id = $1', [ids.organization]);
@@ -99,8 +104,8 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.crm_leads WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.crm_pipeline_stages WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.crm_pipelines WHERE organization_id = $1', [ids.organization]);
-    await administrator.query('DELETE FROM hon.principals WHERE id = $1', [ids.principal]);
-    await administrator.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
+    await administrator.query('DELETE FROM hon.principals WHERE id IN ($1, $2)', [ids.principal, ids.staffPrincipal]);
+    await administrator.query('DELETE FROM hon.users WHERE id IN ($1, $2)', [ids.user, ids.staffUser]);
     await administrator.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.schools WHERE id IN ($1, $2)', [ids.schoolA, ids.schoolB]);
     await administrator.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.organization]);
@@ -215,6 +220,29 @@ try {
          organization_id, school_id, principal_id, role_id, granted_by_principal_id
        ) VALUES ($1, $2, $3, $4, $3)`,
       [ids.organization, ids.schoolA, ids.principal, ids.ownerRole],
+    );
+    // Regular staff (not the system OWNER role) with the same CRM read and trial permissions at school A.
+    await administrator.query(
+      'INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, $3, $4)',
+      [ids.staffUser, staffSubject, `crm-trial-staff-${ids.staffUser}@example.test`, 'CRM Trial Staff'],
+    );
+    await administrator.query(
+      `INSERT INTO hon.principals (id, principal_type, user_id, display_name) VALUES ($1, 'HUMAN_USER', $2, 'CRM Trial Staff')`,
+      [ids.staffPrincipal, ids.staffUser],
+    );
+    await administrator.query(
+      `INSERT INTO hon.roles (id, organization_id, code, name, is_system_role) VALUES ($1, $2, 'FRONT_DESK', 'Front Desk', false)`,
+      [ids.staffRole, ids.organization],
+    );
+    await administrator.query(
+      `INSERT INTO hon.role_permissions (role_id, organization_id, permission_code)
+       VALUES ($1, $2, 'crm.trial.schedule'), ($1, $2, 'crm.trial.manage'), ($1, $2, 'crm.lead.read')`,
+      [ids.staffRole, ids.organization],
+    );
+    await administrator.query(
+      `INSERT INTO hon.principal_role_grants (organization_id, school_id, principal_id, role_id, granted_by_principal_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [ids.organization, ids.schoolA, ids.staffPrincipal, ids.staffRole, ids.principal],
     );
     await administrator.query(
       `INSERT INTO hon.people (id, organization_id, school_id, given_name, family_name) VALUES
@@ -886,6 +914,195 @@ try {
     assert(restoredTrial.data.id === ids.localScheduledAppointment, 'Restoring status did not restore the trial read.');
   }
 
+  // Owner suspension policy (proposed terms v2): 7-day grace from the failed renewal due date, then staff CRM and all CRM
+  // mutations suspended; the verified school owner keeps read-only access to historical leads and trials for 90 days from
+  // the effective suspension date recorded by the central access authority (an APPLIED PAST_DUE_SUSPENSION transition
+  // bound to the exact SUSPENDED entitlement version); then CRM is locked. Every granted owner read is audited.
+  {
+    const ownerRequest = request;
+    const staffRequest = { honIdentity: { externalSubject: staffSubject } };
+    const DAY = 24 * 60 * 60 * 1000;
+    const terms = (await administrator.query(
+      'SELECT status, grace_days, restrict_after_days, suspend_after_days, grace_basis, owner_read_only_days, after_read_only_effect FROM hon.saas_access_policy_terms WHERE policy_version = 2',
+    )).rows[0];
+    assert(terms?.status === 'PROPOSED' && terms.grace_days === 7 && terms.restrict_after_days === 7 && terms.suspend_after_days === 7
+      && terms.grace_basis === 'FAILED_RENEWAL_DUE_DATE' && terms.owner_read_only_days === 90
+      && terms.after_read_only_effect === 'CRM_LOCKED_BILLING_RECOVERY_AND_SUPPORT_OPEN', `Proposed terms v2 are not the owner's policy: ${JSON.stringify(terms)}`);
+    const v1 = (await administrator.query('SELECT grace_days, suspend_after_days, owner_read_only_days FROM hon.saas_access_policy_terms WHERE policy_version = 1')).rows[0];
+    assert(v1?.grace_days === 7 && v1.suspend_after_days === 21 && v1.owner_read_only_days === null, 'Proposed terms v1 changed.');
+
+    const fullStaff = await leadController.list(ids.organization, ids.schoolA, {}, staffRequest);
+    assert(fullStaff.meta.crmAccess === undefined && fullStaff.data.some((lead) => lead.id === ids.leadA),
+      'Staff with an entitlement in effect did not get full CRM read access with the unchanged response envelope.');
+    const baselineIds = JSON.stringify(fullStaff.data.map((lead) => lead.id));
+    const suspendFor = async (daysAgo) => {
+      const version = (await administrator.query(
+        "UPDATE hon.organization_entitlements SET status = 'SUSPENDED', version = version + 1 WHERE organization_id = $1 RETURNING version",
+        [ids.organization],
+      )).rows[0].version;
+      const occurred = (await administrator.query(
+        `INSERT INTO hon.saas_access_transitions (organization_id, kind, outcome, reason, prior_entitlement, next_entitlement,
+           actor_principal_id, occurred_at, policy_version)
+         VALUES ($1, 'PAST_DUE_SUSPENSION', 'APPLIED', 'GRACE_EXPIRED_AFTER_FAILED_RENEWAL', $2::jsonb, $3::jsonb, $4,
+           clock_timestamp() - make_interval(days => $5::integer), 2)
+         RETURNING occurred_at`,
+        [ids.organization, JSON.stringify({ status: 'ACTIVE', version: version - 1 }), JSON.stringify({ status: 'SUSPENDED', version }),
+          ids.principal, daysAgo],
+      )).rows[0].occurred_at;
+      return new Date(occurred);
+    };
+    const restore = () => administrator.query(
+      "UPDATE hon.organization_entitlements SET status = 'ACTIVE', version = version + 1 WHERE organization_id = $1", [ids.organization]);
+    const ownerAudits = async () => (await administrator.query(
+      `SELECT actor_principal_id, school_id, source, result::text AS result, next_state FROM hon.audit_events
+       WHERE organization_id = $1 AND action_code = 'crm.owner_read_only.access' ORDER BY occurred_at, id`, [ids.organization])).rows;
+    const effects = async () => (await administrator.query(`
+      SELECT
+        (SELECT string_agg(id::text || ':' || status::text || ':' || version, ',' ORDER BY id) FROM hon.crm_appointments WHERE organization_id = $1) AS appointments,
+        (SELECT string_agg(id::text || ':' || status::text || ':' || version, ',' ORDER BY id) FROM hon.crm_leads WHERE organization_id = $1) AS leads,
+        (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1 AND action_code <> 'crm.owner_read_only.access') AS audits,
+        (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1) AS outbox,
+        (SELECT count(*)::integer FROM hon.idempotency_records WHERE organization_id = $1) AS receipts`, [ids.organization])).rows[0];
+    const expectEntitlementRefusal = async (operation, message, crmAccess) => {
+      let value;
+      try {
+        value = await operation();
+      } catch (error) {
+        const body = error?.getResponse?.();
+        if (error?.getStatus?.() === 403 && body?.code === 'TIER_ENTITLEMENT_REQUIRED' && (crmAccess === undefined || body.crmAccess === crmAccess)) return;
+        throw error;
+      }
+      throw new Error(`${message} Returned: ${JSON.stringify(value)?.slice(0, 200)}`);
+    };
+    const racingDatabase = (afterAuthorize) => {
+      let fired = false;
+      return new Proxy(database, {
+        get(target, property, receiver) {
+          if (property === 'resolveAuthorizedScope') {
+            return async (...args) => {
+              const scope = await target.resolveAuthorizedScope(...args);
+              if (scope && !fired) { fired = true; await afterAuthorize(); }
+              return scope;
+            };
+          }
+          const value = Reflect.get(target, property, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    };
+    const regrantOwner = () => administrator.query(
+      `INSERT INTO hon.principal_role_grants (organization_id, school_id, principal_id, role_id, granted_by_principal_id)
+       VALUES ($1, $2, $3, $4, $3)`, [ids.organization, ids.schoolA, ids.principal, ids.ownerRole]);
+
+    // Suspended 10 days ago (inside the 90-day window).
+    const suspendedAt = await suspendFor(10);
+    const before = await effects();
+    const auditsBefore = (await ownerAudits()).length;
+    const ownerList = await leadController.list(ids.organization, ids.schoolA, {}, ownerRequest);
+    const until = Date.parse(ownerList.meta.crmAccess?.readOnlyUntil ?? '');
+    assert(ownerList.meta.crmAccess?.mode === 'OWNER_READ_ONLY' && JSON.stringify(ownerList.data.map((lead) => lead.id)) === baselineIds
+      && Math.abs(Date.parse(ownerList.meta.crmAccess.suspendedAt) - suspendedAt.getTime()) < 1000
+      && Math.abs(until - suspendedAt.getTime() - 90 * DAY) < 1000 && ownerList.meta.crmAccess.policyVersion === 2,
+    `The verified owner did not get read-only lead history with the 90-day window: ${JSON.stringify(ownerList.meta)}`);
+    const ownerTrials = await controller.listForLead(ids.organization, ids.schoolA, ids.leadA2, ownerRequest);
+    assert(ownerTrials.meta.crmAccess?.mode === 'OWNER_READ_ONLY' && ownerTrials.data.activeTrial?.id === ids.localScheduledAppointment
+      && ownerTrials.data.trials.length === 50, 'The verified owner did not get read-only trial history.');
+    const ownerTrial = await readController.read(ids.organization, ids.schoolA, ids.localScheduledAppointment, ownerRequest);
+    assert(ownerTrial.meta.crmAccess?.mode === 'OWNER_READ_ONLY' && ownerTrial.data.id === ids.localScheduledAppointment,
+      'The verified owner did not get the read-only trial detail.');
+    const audits = (await ownerAudits()).slice(auditsBefore);
+    assert(audits.length === 3 && audits.every((a) => a.actor_principal_id === ids.principal && a.school_id === ids.schoolA
+      && a.source === 'HUMAN_UI' && a.result === 'SUCCEEDED' && a.next_state.policyVersion === 2)
+      && JSON.stringify(audits.map((a) => a.next_state.resource)) === JSON.stringify(['LEAD_LIST', 'TRIAL_LIST', 'TRIAL_DETAIL']),
+    `Owner read-only access was not audited once per read: ${JSON.stringify(audits)}`);
+
+    // Regular staff get nothing while suspended.
+    await expectEntitlementRefusal(() => leadController.list(ids.organization, ids.schoolA, {}, staffRequest), 'Suspended staff listed leads.');
+    await expectEntitlementRefusal(() => controller.listForLead(ids.organization, ids.schoolA, ids.leadA2, staffRequest), 'Suspended staff read trials.');
+    await expectEntitlementRefusal(() => readController.read(ids.organization, ids.schoolA, ids.localScheduledAppointment, staffRequest),
+      'Suspended staff read a trial appointment.');
+
+    // Read-only means read-only: the owner cannot schedule a trial or record an outcome.
+    const suspendedVersion = Number((await administrator.query('SELECT version FROM hon.crm_appointments WHERE id = $1::uuid', [ids.localScheduledAppointment])).rows[0].version);
+    await expectEntitlementRefusal(() => controller.schedule(ids.organization, ids.schoolA, ids.leadA4, `owner-read-only-${randomUUID()}`,
+      inputFor(laterStart, laterEnd), ownerRequest, responseCapture()), 'A read-only owner scheduled a trial.');
+    await expectEntitlementRefusal(() => outcomeController.record(ids.organization, ids.schoolA, ids.localScheduledAppointment,
+      `owner-read-only-${randomUUID()}`, outcomeFor('NO_SHOW', suspendedVersion), ownerRequest, responseCapture()),
+    'A read-only owner recorded a trial outcome.');
+    assert(JSON.stringify(await effects()) === JSON.stringify(before),
+      'Owner read-only access or a refused mutation changed CRM records, audit, outbox or idempotency state.');
+
+    // Exact school only: the owner has no scope at school B, and the authority refuses any school other than the
+    // transaction's own tenant school, and refuses a non-owner subject.
+    await expectStatus(403, () => leadController.list(ids.organization, ids.schoolB, {}, ownerRequest), 'The owner listed another school\'s leads.');
+    const tenant = { organizationId: ids.organization, schoolId: ids.schoolA, principalId: ids.principal, principalType: 'HUMAN_USER',
+      requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: `read:${randomUUID()}`, source: 'HUMAN_UI' };
+    for (const [subject, school, label] of [[externalSubject, ids.schoolB, 'another school'], [staffSubject, ids.schoolA, 'a regular staff subject'],
+      [`unknown-${randomUUID()}`, ids.schoolA, 'an unknown subject']]) {
+      await expectDatabaseError('42501', () => database.withTenantTransaction(tenant, (client) => client.query(
+        'SELECT hon.authorize_crm_owner_read_only($1, $2::uuid, $3, $4::uuid, $5::uuid)',
+        [subject, school, 'LEAD_LIST', randomUUID(), randomUUID()],
+      )), `The owner read-only authority granted ${label}.`);
+    }
+
+    // Tenant binding: even an owner of school B is refused for school B inside a transaction scoped to school A.
+    await administrator.query(
+      `INSERT INTO hon.principal_role_grants (organization_id, school_id, principal_id, role_id, granted_by_principal_id)
+       VALUES ($1, $2, $3, $4, $3)`, [ids.organization, ids.schoolB, ids.principal, ids.ownerRole]);
+    try {
+      await expectDatabaseError('42501', () => database.withTenantTransaction(tenant, (client) => client.query(
+        'SELECT hon.authorize_crm_owner_read_only($1, $2::uuid, $3, $4::uuid, $5::uuid)',
+        [externalSubject, ids.schoolB, 'LEAD_LIST', randomUUID(), randomUUID()],
+      )), 'The owner read-only authority granted a school other than the transaction tenant school.');
+    } finally {
+      await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1 AND school_id = $2', [ids.principal, ids.schoolB]);
+    }
+
+    // Revocation race: the controller authorizes the owner, the OWNER grant is revoked, then the read runs.
+    try {
+      await expectStatus(403, () => new LeadController(racingDatabase(() => administrator.query(
+        'DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal])), leadService).list(ids.organization, ids.schoolA, {}, ownerRequest),
+      'An owner whose grant was revoked between authorization and the read still read lead history.');
+    } finally {
+      await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
+      await regrantOwner();
+    }
+    // Entitlement-change race: the entitlement version moves on after authorization (a different suspension or HQ
+    // change), which ends the recorded window before the read runs.
+    await expectEntitlementRefusal(() => new LeadController(racingDatabase(() => administrator.query(
+      'UPDATE hon.organization_entitlements SET version = version + 1 WHERE organization_id = $1', [ids.organization])), leadService)
+      .list(ids.organization, ids.schoolA, {}, ownerRequest),
+    'An owner read succeeded after the entitlement changed between authorization and the read.');
+
+    // Expiry is enforced server-side: day 89 still reads; past day 90 the owner is locked out (billing stays open).
+    await restore();
+    await suspendFor(89);
+    assert((await leadController.list(ids.organization, ids.schoolA, {}, ownerRequest)).meta.crmAccess?.mode === 'OWNER_READ_ONLY',
+      'The owner lost read-only access before the 90-day window ended.');
+    await restore();
+    await suspendFor(91);
+    await expectEntitlementRefusal(() => leadController.list(ids.organization, ids.schoolA, {}, ownerRequest),
+      'The owner read lead history after the 90-day window ended.', 'LOCKED_BILLING_RECOVERY_OPEN');
+    await expectEntitlementRefusal(() => readController.read(ids.organization, ids.schoolA, ids.localScheduledAppointment, ownerRequest),
+      'The owner read a trial after the 90-day window ended.', 'LOCKED_BILLING_RECOVERY_OPEN');
+
+    // A suspension without a recorded past-due suspension (for example awaiting first payment or an HQ change) gives
+    // no owner window at all.
+    await restore();
+    await administrator.query("UPDATE hon.organization_entitlements SET status = 'SUSPENDED', version = version + 1 WHERE organization_id = $1", [ids.organization]);
+    await expectEntitlementRefusal(() => leadController.list(ids.organization, ids.schoolA, {}, ownerRequest),
+      'The owner read lead history during a suspension that is not a recorded past-due suspension.');
+
+    // Restoration: a valid entitlement restores normal access for staff and owner, with every record kept.
+    await restore();
+    const restoredStaff = await leadController.list(ids.organization, ids.schoolA, {}, staffRequest);
+    const restoredOwner = await controller.listForLead(ids.organization, ids.schoolA, ids.leadA2, ownerRequest);
+    assert(restoredStaff.meta.crmAccess === undefined && JSON.stringify(restoredStaff.data.map((lead) => lead.id)) === baselineIds
+      && restoredOwner.meta.crmAccess === undefined && restoredOwner.data.trials.length === 50,
+    'Restoring the entitlement did not restore normal CRM access with the records intact.');
+    assert(JSON.stringify(await effects()) === JSON.stringify(before), 'Suspension and restoration changed or deleted CRM history.');
+  }
+
   // Permission revocation: neither replay nor reconciliation survives a removed role grant.
   await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
   await expectStatus(403, () => controller.schedule(
@@ -939,7 +1156,7 @@ try {
     && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,
   'Trial outcome mutated booking, student/family, enrollment, membership, CRM activity, or AI/action state.');
 
-  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the scheduling lock wait and the outcome row-lock wait), suspended-school refusal with records preserved (including suspension during the outcome lock wait) and restoration, organization/school ACTIVE->SUSPENDED refusal on the lead-list and trial-read routes including suspension or revocation committed between controller authorization and the query, CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
+  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the scheduling lock wait and the outcome row-lock wait), suspended-school refusal with records preserved (including suspension during the outcome lock wait) and restoration, organization/school ACTIVE->SUSPENDED refusal on the lead-list and trial-read routes including suspension or revocation committed between controller authorization and the query, verified-owner 90-day CRM read-only access during a recorded past-due suspension (audited, exact school, no mutations, revocation and entitlement-change races, server-side expiry, restoration), CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
 } finally {
   try {
     await database.onModuleDestroy();
