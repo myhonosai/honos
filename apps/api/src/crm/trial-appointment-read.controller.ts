@@ -5,6 +5,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { TrialAppointmentReadGuard } from './trial-appointment-human-ui.guard.js';
 import { resolveTrialReadContext } from './trial-appointment.controller.js';
 import { TrialAppointmentService } from './trial-appointment.service.js';
+import { crmAccessMeta } from './crm-entitlement.js';
 
 /** Direct-human detail read of one trial appointment, for reconciliation after an unknown command result. */
 @Controller('organizations/:organizationId/schools/:schoolId/crm/appointments')
@@ -23,7 +24,7 @@ export class TrialAppointmentReadController {
     @Req() request: HonRequest,
   ) {
     const context = await resolveTrialReadContext(this.database, request, organizationId, schoolId);
-    const data = await this.trials.readOne(context, appointmentId, { externalSubject: request.honIdentity!.externalSubject });
-    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+    const { result, access } = await this.trials.readOne(context, appointmentId, { externalSubject: request.honIdentity!.externalSubject });
+    return { data: result, meta: { requestId: context.requestId, correlationId: context.correlationId, ...crmAccessMeta(access) } };
   }
 }
