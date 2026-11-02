@@ -98,7 +98,7 @@ export class TrialAppointmentController {
     @Req() request: HonRequest,
   ) {
     const context = await resolveTrialReadContext(this.database, request, organizationId, schoolId);
-    const data = await this.trials.listForLead(context, leadId);
+    const data = await this.trials.listForLead(context, leadId, { externalSubject: request.honIdentity!.externalSubject });
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 }

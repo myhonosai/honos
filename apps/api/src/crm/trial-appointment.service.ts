@@ -13,7 +13,8 @@ import type {
   CrmAppointmentSummary,
   CrmAppointmentType,
 } from '@hon/contracts';
-import { assertCurrentTrialAuthority } from './trial-authority-recheck.js';
+import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
+import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 const MAX_FUTURE_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -221,8 +222,9 @@ export class TrialAppointmentService {
 
       // The controller's authorization ran before this lock, and the wait can be long: re-resolve it now, before any
       // idempotency reservation, appointment, audit or outbox row exists.
-      await assertCurrentTrialAuthority(client, authority.externalSubject, context, 'crm.trial.schedule',
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.schedule',
         'HON trial scheduling is no longer authorized for this school.');
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required for trial scheduling.');
 
       const reservation = await client.query<{ id: string }>(
         `INSERT INTO hon.idempotency_records (
@@ -393,11 +395,15 @@ export class TrialAppointmentService {
   async listForLead(
     context: CommandContext,
     leadId: string,
+    authority: { externalSubject: string },
   ): Promise<{ activeTrial: CrmAppointmentSummary | null; trials: CrmAppointmentSummary[] }> {
     if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
       throw new ForbiddenException('HON trial reconciliation requires an authenticated human UI request.');
     }
     return this.database.withTenantReadOnlyTransaction(context, async (client) => {
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, ['crm.trial.schedule', 'crm.trial.manage'],
+        'HON trial read access is no longer authorized for this school.');
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to read trials.');
       const lead = await client.query<{ id: string }>('SELECT id FROM hon.crm_leads WHERE id = $1::uuid', [leadId]);
       if (!lead.rowCount) throw new NotFoundException('CRM lead was not found in this school.');
       // The active trial is derived from ALL of this lead's trial rows, independently of the bounded history window,
@@ -432,11 +438,14 @@ export class TrialAppointmentService {
   }
 
   /** Direct-human detail read of one trial appointment in the exact authorized school; foreign rows are 404. */
-  async readOne(context: CommandContext, appointmentId: string): Promise<CrmAppointmentSummary> {
+  async readOne(context: CommandContext, appointmentId: string, authority: { externalSubject: string }): Promise<CrmAppointmentSummary> {
     if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
       throw new ForbiddenException('HON trial reconciliation requires an authenticated human UI request.');
     }
     return this.database.withTenantReadOnlyTransaction(context, async (client) => {
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, ['crm.trial.schedule', 'crm.trial.manage'],
+        'HON trial read access is no longer authorized for this school.');
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to read trials.');
       const row = await client.query<TrialAppointmentRow>(
         `SELECT ${APPOINTMENT_COLUMNS} FROM hon.crm_appointments
          WHERE id = $1::uuid AND appointment_type = 'TRIAL'::hon.crm_appointment_type`,

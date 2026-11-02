@@ -16,6 +16,8 @@ const { TrialAppointmentOutcomeController } = await import('../../../apps/api/di
 const { TrialAppointmentOutcomeService } = await import('../../../apps/api/dist/crm/trial-appointment-outcome.service.js');
 const { TrialAppointmentReadController } = await import('../../../apps/api/dist/crm/trial-appointment-read.controller.js');
 const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
+const { LeadService } = await import('../../../apps/api/dist/crm/lead.service.js');
+const { LeadController } = await import('../../../apps/api/dist/crm/lead.controller.js');
 
 const ids = Object.fromEntries(
   [
@@ -101,6 +103,7 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
     await administrator.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.schools WHERE id IN ($1, $2)', [ids.schoolA, ids.schoolB]);
+    await administrator.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.organizations WHERE id = $1', [ids.organization]);
     await administrator.query('COMMIT');
   } catch (error) {
@@ -113,6 +116,8 @@ await administrator.connect();
 await runtime.connect();
 const database = new RuntimeDatabaseService();
 const service = new TrialAppointmentService(database);
+const leadService = new LeadService(database);
+const leadController = new LeadController(database, leadService);
 const controller = new TrialAppointmentController(database, service);
 const outcomeService = new TrialAppointmentOutcomeService(database);
 const outcomeController = new TrialAppointmentOutcomeController(database, outcomeService);
@@ -169,6 +174,11 @@ try {
       'INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, $2, $2)',
       [ids.organization, 'CRM Trial Appointment Integrity Test'],
     );
+    // CRM requires the central entitlement to be in effect (ACTIVE inside its window).
+    await administrator.query(
+      "INSERT INTO hon.organization_entitlements (organization_id, tier, effective_from) VALUES ($1, 'CORE', clock_timestamp() - interval '1 day')",
+      [ids.organization],
+    );
     await administrator.query(
       `INSERT INTO hon.schools (id, organization_id, name, slug) VALUES
        ($1, $2, 'CRM Trial School A', $3),
@@ -196,7 +206,8 @@ try {
       `INSERT INTO hon.role_permissions (role_id, organization_id, permission_code)
        VALUES
          ($1, $2, 'crm.trial.schedule'),
-         ($1, $2, 'crm.trial.manage')`,
+         ($1, $2, 'crm.trial.manage'),
+         ($1, $2, 'crm.lead.read')`,
       [ids.ownerRole, ids.organization],
     );
     await administrator.query(
@@ -705,6 +716,176 @@ try {
     );
   }
 
+  // Suspended school (central entitlement no longer ACTIVE): every trial path and the lead list refuse with
+  // TIER_ENTITLEMENT_REQUIRED and change nothing; records are kept; restoring the entitlement restores operations.
+  {
+    const suspendKey = `crm-trial-suspended-${randomUUID()}`;
+    const stateFor = async () => (await administrator.query(`
+      SELECT
+        (SELECT count(*)::integer FROM hon.crm_appointments WHERE organization_id = $1) AS appointments,
+        (SELECT string_agg(id::text || ':' || status::text || ':' || version, ',' ORDER BY id) FROM hon.crm_appointments WHERE organization_id = $1) AS rows,
+        (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1) AS audits,
+        (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1) AS outbox,
+        (SELECT count(*)::integer FROM hon.idempotency_records WHERE organization_id = $1 AND idempotency_key LIKE $2) AS receipts`,
+    [ids.organization, `${suspendKey}%`])).rows[0];
+    const scheduledVersion = Number((await administrator.query('SELECT version FROM hon.crm_appointments WHERE id = $1::uuid', [ids.localScheduledAppointment])).rows[0].version);
+    const before = await stateFor();
+    const expectSuspended = async (operation, message) => {
+      try {
+        await operation();
+      } catch (error) {
+        if (error?.getStatus?.() === 403 && error.getResponse?.()?.code === 'TIER_ENTITLEMENT_REQUIRED') return;
+        throw error;
+      }
+      throw new Error(message);
+    };
+    await administrator.query("UPDATE hon.organization_entitlements SET status = 'SUSPENDED' WHERE organization_id = $1", [ids.organization]);
+    await expectSuspended(() => controller.schedule(
+      ids.organization, ids.schoolA, ids.leadA4, `${suspendKey}-schedule`, inputFor(laterStart, laterEnd), request, responseCapture(),
+    ), 'A suspended school scheduled a trial.');
+    await expectSuspended(() => outcomeController.record(
+      ids.organization, ids.schoolA, ids.localScheduledAppointment, `${suspendKey}-outcome`, outcomeFor('NO_SHOW', scheduledVersion),
+      request, responseCapture(),
+    ), 'A suspended school recorded a trial outcome.');
+    await expectSuspended(() => controller.listForLead(ids.organization, ids.schoolA, ids.leadA2, request),
+      'A suspended school read trial reconciliation as regular staff.');
+    await expectSuspended(() => readController.read(ids.organization, ids.schoolA, ids.localScheduledAppointment, request),
+      'A suspended school read a trial appointment as regular staff.');
+    await expectSuspended(() => leadController.list(ids.organization, ids.schoolA, {}, request),
+      'A suspended school listed leads as regular staff.');
+    const suspended = await stateFor();
+    assert(JSON.stringify(suspended) === JSON.stringify(before),
+      'A suspended-school CRM refusal changed or deleted appointments, audit, outbox or idempotency state.');
+
+    // Suspension that lands while an outcome waits on the trial row lock is also refused after the wait.
+    await administrator.query("UPDATE hon.organization_entitlements SET status = 'ACTIVE' WHERE organization_id = $1", [ids.organization]);
+    const rowLock = new Client(connectionOptions(process.env.DATABASE_URL));
+    await rowLock.connect();
+    let waited;
+    try {
+      await rowLock.query('BEGIN');
+      await rowLock.query('SELECT id FROM hon.crm_appointments WHERE id = $1::uuid FOR UPDATE', [ids.localScheduledAppointment]);
+      const pending = outcomeController.record(
+        ids.organization, ids.schoolA, ids.localScheduledAppointment, `${suspendKey}-outcome-wait`, outcomeFor('NO_SHOW', scheduledVersion),
+        request, responseCapture(),
+      ).then((value) => ({ status: 'fulfilled', value }), (reason) => ({ status: 'rejected', reason }));
+      const deadline = Date.now() + 20000;
+      for (;;) {
+        const waiting = await administrator.query("SELECT count(*)::integer AS n FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid', 'tuple')");
+        if (waiting.rows[0].n >= 1) break;
+        if (Date.now() > deadline) throw new Error('The trial outcome command never reached the row-lock wait.');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      await administrator.query("UPDATE hon.organization_entitlements SET status = 'SUSPENDED' WHERE organization_id = $1", [ids.organization]);
+      await rowLock.query('COMMIT');
+      waited = await pending;
+    } finally {
+      await rowLock.query('ROLLBACK').catch(() => {});
+      await rowLock.end();
+    }
+    assert(waited.status === 'rejected' && waited.reason?.getStatus?.() === 403
+      && waited.reason.getResponse?.()?.code === 'TIER_ENTITLEMENT_REQUIRED',
+    `A trial outcome whose school was suspended during the row-lock wait was not refused: ${waited.status} ${waited.reason?.getResponse?.()?.code ?? ''}`);
+    assert(JSON.stringify(await stateFor()) === JSON.stringify(before), 'A trial outcome refused after suspension left an effect.');
+
+    // Restoration: the same records are readable again and operations resume.
+    await administrator.query("UPDATE hon.organization_entitlements SET status = 'ACTIVE' WHERE organization_id = $1", [ids.organization]);
+    const restored = await controller.listForLead(ids.organization, ids.schoolA, ids.leadA2, request);
+    assert(restored.data.activeTrial?.id === ids.localScheduledAppointment && restored.data.trials.length === 50,
+      'Restoring the entitlement did not restore the preserved trial records.');
+  }
+
+  // Organization and school lifecycle suspension (hon.organizations / hon.schools status ACTIVE -> SUSPENDED) through the
+  // real lead-list and trial-read routes, then the race the controller cannot close on its own: the controller authorizes,
+  // the suspension or revocation commits, and only then does the service run its query. The in-transaction re-resolution
+  // must refuse with 403 and return no CRM data. Restoring the status restores the reads with the records intact.
+  {
+    const baseline = await leadController.list(ids.organization, ids.schoolA, {}, request);
+    assert(baseline.data.some((lead) => lead.id === ids.leadA), 'The authorized lead list did not return the school lead.');
+    const transitions = [
+      { label: 'organization', suspend: ['UPDATE hon.organizations SET status = $2 WHERE id = $1', ids.organization] },
+      { label: 'school', suspend: ['UPDATE hon.schools SET status = $2 WHERE id = $1', ids.schoolA] },
+    ];
+    const setStatus = (transition, status) => administrator.query(transition.suspend[0], [transition.suspend[1], status]);
+    const expectRefused = async (operation, message) => {
+      let value;
+      try {
+        value = await operation();
+      } catch (error) {
+        if (error?.getStatus?.() === 403) return;
+        throw error;
+      }
+      throw new Error(`${message} Returned: ${JSON.stringify(value)?.slice(0, 200)}`);
+    };
+    // A database facade whose authority resolution returns the genuine scope, then commits `afterAuthorize` before the
+    // controller hands off to the service: a deterministic controller-authorizes -> change-commits -> query sequence.
+    const racingDatabase = (afterAuthorize) => {
+      let fired = false;
+      return new Proxy(database, {
+        get(target, property, receiver) {
+          if (property === 'resolveAuthorizedScope') {
+            return async (...args) => {
+              const scope = await target.resolveAuthorizedScope(...args);
+              if (scope && !fired) { fired = true; await afterAuthorize(); }
+              return scope;
+            };
+          }
+          const value = Reflect.get(target, property, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    };
+    for (const transition of transitions) {
+      await setStatus(transition, 'SUSPENDED');
+      try {
+        await expectRefused(() => leadController.list(ids.organization, ids.schoolA, {}, request),
+          `A suspended ${transition.label} listed leads.`);
+        await expectRefused(() => controller.listForLead(ids.organization, ids.schoolA, ids.leadA2, request),
+          `A suspended ${transition.label} read trial reconciliation.`);
+        await expectRefused(() => readController.read(ids.organization, ids.schoolA, ids.localScheduledAppointment, request),
+          `A suspended ${transition.label} read a trial appointment.`);
+      } finally {
+        await setStatus(transition, 'ACTIVE');
+      }
+
+      for (const route of ['lead-list', 'trial-list', 'trial-read']) {
+        const raced = racingDatabase(() => setStatus(transition, 'SUSPENDED'));
+        const run = route === 'lead-list'
+          ? () => new LeadController(raced, leadService).list(ids.organization, ids.schoolA, {}, request)
+          : route === 'trial-list'
+            ? () => new TrialAppointmentController(raced, service).listForLead(ids.organization, ids.schoolA, ids.leadA2, request)
+            : () => new TrialAppointmentReadController(raced, service).read(ids.organization, ids.schoolA, ids.localScheduledAppointment, request);
+        try {
+          await expectRefused(run, `The ${route} route returned CRM data after its ${transition.label} was suspended between authorization and the query.`);
+        } finally {
+          await setStatus(transition, 'ACTIVE');
+        }
+      }
+    }
+
+    // The same race with a role-grant revocation committed between authorization and the lead-list query.
+    const revoked = racingDatabase(() => administrator.query(
+      'DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]));
+    try {
+      await expectRefused(() => new LeadController(revoked, leadService).list(ids.organization, ids.schoolA, {}, request),
+        'The lead-list route returned CRM data after the role grant was revoked between authorization and the query.');
+    } finally {
+      await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
+      await administrator.query(
+        `INSERT INTO hon.principal_role_grants (
+           organization_id, school_id, principal_id, role_id, granted_by_principal_id
+         ) VALUES ($1, $2, $3, $4, $3)`,
+        [ids.organization, ids.schoolA, ids.principal, ids.ownerRole],
+      );
+    }
+
+    const restored = await leadController.list(ids.organization, ids.schoolA, {}, request);
+    assert(JSON.stringify(restored.data.map((lead) => lead.id)) === JSON.stringify(baseline.data.map((lead) => lead.id)),
+      'Restoring organization and school status did not restore the same lead list.');
+    const restoredTrial = await readController.read(ids.organization, ids.schoolA, ids.localScheduledAppointment, request);
+    assert(restoredTrial.data.id === ids.localScheduledAppointment, 'Restoring status did not restore the trial read.');
+  }
+
   // Permission revocation: neither replay nor reconciliation survives a removed role grant.
   await administrator.query('DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
   await expectStatus(403, () => controller.schedule(
@@ -758,7 +939,7 @@ try {
     && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,
   'Trial outcome mutated booking, student/family, enrollment, membership, CRM activity, or AI/action state.');
 
-  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the scheduling lock wait and the outcome row-lock wait), CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
+  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the scheduling lock wait and the outcome row-lock wait), suspended-school refusal with records preserved (including suspension during the outcome lock wait) and restoration, organization/school ACTIVE->SUSPENDED refusal on the lead-list and trial-read routes including suspension or revocation committed between controller authorization and the query, CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
 } finally {
   try {
     await database.onModuleDestroy();
