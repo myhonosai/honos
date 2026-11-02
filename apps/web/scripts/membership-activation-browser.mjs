@@ -7,16 +7,22 @@ import {
 } from '@hon/contracts';
 
 export function createActivationFixture({ id, scope, origin, send, rejected }) {
-  const membershipId = id(80), root = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/billing/memberships/${membershipId}`;
+  let membershipId, root;
   let mode, state, version, keys, commands, reads, finish, held, signalHeld;
-  function reset(next = 'routine') { mode = next; state = 'DRAFT'; version = 1; keys = new Map(); commands = []; reads = []; finish = null; held = new Promise(done => { signalHeld = done; }); }
+  function reset(next = 'routine', selected) {
+    assert(!selected || selected.organizationId === scope.organizationId && selected.schoolId === scope.schoolId);
+    membershipId = selected?.membershipId ?? id(80);
+    assert([id(7), id(70), id(71), id(80)].includes(membershipId), 'Only known synthetic membership fixtures may be selected.');
+    root = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/billing/memberships/${membershipId}`;
+    mode = next; state = 'DRAFT'; version = 1; keys = new Map(); commands = []; reads = []; finish = null; held = new Promise(done => { signalHeld = done; });
+  }
   reset();
   function preview(input) {
     const dates = Object.keys(input).length ? input : { startDate: '2026-10-22', endDate: null };
     const future = dates.startDate > '2026-10-22', override = ['override', 'no-override'].includes(mode), missing = mode === 'missing-birth';
     const data = {
-      membershipId, state, version, billingAccountId: id(81), participantPersonId: id(82), participantDisplayName: 'Synthetic Jordan Lee', planCode: 'JUNIOR-PUBLISHED', source: 'CRM_GUARDIAN_CHILD_PLAN',
-      plan: { membershipPlanId: id(83), membershipPlanVersion: 2, terms: { displayName: 'Junior martial arts' } }, existingTerm: { termStartedAt: null, termEndsAt: null },
+      membershipId, state, version, billingAccountId: id(81), participantPersonId: id(82), participantDisplayName: 'Synthetic Jordan Lee', planCode: membershipId === id(7) ? 'ADULT-MONTHLY' : 'JUNIOR-PUBLISHED', source: membershipId === id(7) ? 'CRM_ADULT_PLAN' : 'CRM_GUARDIAN_CHILD_PLAN',
+      plan: { membershipPlanId: id(83), membershipPlanVersion: 2, terms: { displayName: membershipId === id(7) ? 'Adult martial arts' : 'Junior martial arts' } }, existingTerm: { termStartedAt: null, termEndsAt: null },
       schoolTimezone: 'America/Los_Angeles', localToday: '2026-10-22', birthDateRecorded: !missing, knownMinor: false,
       suggestedDates: { startDate: '2026-10-22', endDate: null, startBasis: 'TODAY_IN_SCHOOL_TIMEZONE', endBasis: 'PLAN_OPEN_ENDED' },
       proposedDates: { ...dates, dateSource: dates.startDate === '2026-10-22' && dates.endDate === null ? 'SUGGESTED' : 'STAFF_ADJUSTED' },
@@ -57,7 +63,7 @@ export function createActivationFixture({ id, scope, origin, send, rejected }) {
     if (mode.includes('unknown')) { mode = 'routine'; send(res, 503, {}); } else send(res, 200, data);
     return true;
   }
-  return { reset, handle, membershipId, scope, get commands() { return commands; }, get reads() { return reads; }, waitUntilHeld: () => held, release() { assert(finish); finish(); }, setMode(value) { mode = value; } };
+  return { reset, handle, get membershipId() { return membershipId; }, scope, get commands() { return commands; }, get reads() { return reads; }, waitUntilHeld: () => held, release() { assert(finish); finish(); }, setMode(value) { mode = value; } };
 }
 
 export async function runActivationBrowserChecks({ fixture, open, visual, check, origin }) {
