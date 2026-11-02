@@ -168,6 +168,10 @@ try {
       x.state.principalId = otherOwnerId; await x.button('restore').click(); await idle(x.page); assert(await x.ui.locator('[data-access-exceptions-facts]').evaluate(e => e.hidden)); assert.equal(calls, 1);
       x.state.principalId = ownerId; x.fixture.setPolicy('WITHDRAWN'); await x.button('restore').click(); await x.ui.locator('#exception-retry').waitFor(); await idle(x.page);
       assert.equal(calls, 1, 'Restore cannot resend'); assert(await x.ui.locator('input[name=organizationId]').isDisabled()); assert.equal(await x.button('grantButton').count(), 0);
+      x.state.sessionStatus = 503;
+      await x.ui.locator('section[aria-labelledby=exception-retry]').getByRole('checkbox').check(); await x.button('retryButton').click(); await idle(x.page);
+      assert.equal(await x.ui.locator('#exception-retry').count(), 1, 'A failed retry authorization read cannot discard the original unknown command');
+      assert.equal(calls, 1, 'Failed authorization preflight must not resend'); delete x.state.sessionStatus;
       await capture(x.page, 'en-390-access-retained-unknown'); await x.ui.locator('section[aria-labelledby=exception-retry]').getByRole('checkbox').check(); await x.button('retryButton').click(); await receipt(x);
       assert.equal(calls, 2); assert.equal(x.fixture.mutations, 1); assert.equal(x.fixture.attempts[0].key, x.fixture.attempts[1].key); await capture(x.page, 'en-390-access-exact-replay-receipt');
     } finally { gate.resolve(); await x.context.close(); }

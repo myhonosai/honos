@@ -143,7 +143,11 @@ export class AccessExceptionController {
       const e = error instanceof ExceptionError ? error : new ExceptionError('UNKNOWN');
       if (!this.current(epoch)) { this.failure(e, epoch); return; }
       if ([401, 403].includes(e.status)) this.failure(e, epoch);
-      else if (dispatched && (retry || ![400, 404, 409, 422].includes(e.status))) this.patch({ data: null, pending: request, message: 'UNKNOWN' });
+      else if (retry || dispatched && ![400, 404, 409, 422].includes(e.status)) {
+        // A failed retry preflight says nothing about the original uncertain command.
+        this.pending = request;
+        this.patch({ data: null, pending: request, message: 'UNKNOWN' });
+      }
       else { this.pending = null; this.context = null; this.patch({ data: null, pending: null, confirmed: false, message: e.code }); }
     } finally { this.release(lease); }
   }

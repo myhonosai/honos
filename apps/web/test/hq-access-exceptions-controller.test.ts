@@ -173,6 +173,35 @@ describe('HQ access exceptions — immutable recovery and privacy lifetimes', ()
     const s = setup(); await prepare(s); s.api.send.mockRejectedValueOnce(new Error('unknown')); await s.c.grant(); const request = s.c.snapshot().pending;
     s.api.send.mockRejectedValueOnce(new ExceptionError('SAAS_EXCEPTION_POLICY_REQUIRED', 422)); s.c.confirm(true); await s.c.retry(); expect(s.c.snapshot().pending).toBe(request);
   });
+  it.each([
+    ['grant', 'owner 503', () => new ExceptionError('UNAVAILABLE', 503)],
+    ['grant', 'owner network failure', () => new TypeError('Synthetic owner network failure')],
+    ['grant', 'malformed owner response', () => new ExceptionError('INVALID_RESPONSE')],
+    ['revoke', 'owner 503', () => new ExceptionError('UNAVAILABLE', 503)],
+    ['revoke', 'owner network failure', () => new TypeError('Synthetic owner network failure')],
+    ['revoke', 'malformed owner response', () => new ExceptionError('INVALID_RESPONSE')],
+  ] as const)('retains the original unknown %s through retry preflight %s and recovers with its exact key', async (kind, _failure, fail) => {
+    const initial = data(); if (kind === 'revoke') initial.exceptions.exceptions = [openException()];
+    const s = setup(initial);
+    if (kind === 'grant') await prepare(s);
+    else { await load(s); s.c.selectRevoke(exceptionId); s.c.editRevokeReason('Explicitly ending the approved pilot.'); s.c.confirm(true); }
+    s.api.send.mockRejectedValueOnce(new Error('Synthetic lost response; the original command may have committed'));
+    await (kind === 'grant' ? s.c.grant() : s.c.revoke());
+    const request = s.api.send.mock.calls[0]![0], original = { path: request.path, body: request.body, key: request.key, target: request.target };
+    expect(s.c.snapshot().pending).toBe(request); expect(s.c.retainsRequest()).toBe(true);
+    const uuid = vi.spyOn(crypto, 'randomUUID'), readCount = s.api.read.mock.calls.length;
+    s.api.owner.mockRejectedValueOnce(fail()); s.c.confirm(true); await s.c.retry();
+    expect(s.api.send).toHaveBeenCalledTimes(1); expect(s.api.read).toHaveBeenCalledTimes(readCount);
+    expect(uuid).not.toHaveBeenCalled(); expect(s.c.retainsRequest()).toBe(true);
+    expect(s.c.snapshot().pending).toBe(request);
+    expect(s.c.snapshot()).toMatchObject({ busy: false, receipt: null, confirmed: false });
+    expect({ path: request.path, body: request.body, key: request.key, target: request.target }).toEqual(original);
+    const recovered = receipt(request); recovered.data.replayed = true; s.api.send.mockResolvedValueOnce(recovered);
+    s.c.confirm(true); await s.c.retry();
+    expect(s.api.send).toHaveBeenCalledTimes(2); expect(s.api.send).toHaveBeenNthCalledWith(2, request);
+    expect(uuid).not.toHaveBeenCalled(); expect(s.c.retainsRequest()).toBe(false);
+    expect(s.c.snapshot()).toMatchObject({ pending: null, receipt: recovered, message: 'RECEIPT' });
+  });
   it('conceals on command access denials while preserving the original immutable retry', async () => {
     for (const status of [401, 403]) {
       const s = setup(); await prepare(s); s.api.send.mockRejectedValueOnce(new ExceptionError(status === 401 ? 'SIGNED_OUT' : 'FORBIDDEN', status)); await s.c.grant();
