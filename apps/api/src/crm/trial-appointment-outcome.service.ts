@@ -16,6 +16,7 @@ import {
   type CrmTrialOutcomeStatus,
   type RecordTrialAppointmentOutcomeInput,
 } from '@hon/contracts';
+import { assertCurrentTrialAuthority } from './trial-authority-recheck.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -117,6 +118,7 @@ export class TrialAppointmentOutcomeService {
     context: CommandContext,
     appointmentId: string,
     input: RecordTrialAppointmentOutcomeInput,
+    authority: { externalSubject: string },
   ): Promise<{ appointment: CrmAppointmentSummary; replayed: boolean }> {
     if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI') {
       throw new ForbiddenException('HON trial outcome recording requires an authenticated human UI command.');
@@ -153,6 +155,10 @@ export class TrialAppointmentOutcomeService {
          FOR UPDATE`,
         [appointmentId],
       );
+      // The controller authorized this command before the row lock above, which can wait behind another outcome for
+      // the same appointment. Re-resolve the authority now, before any idempotency reservation or mutation.
+      await assertCurrentTrialAuthority(client, authority.externalSubject, context, 'crm.trial.manage',
+        'HON trial outcome recording is no longer authorized for this school.');
       const current = currentResult.rows[0];
       if (!current) throw new NotFoundException('CRM appointment was not found in this school.');
       if (!CRM_APPOINTMENT_STATUSES.includes(current.status)) {
