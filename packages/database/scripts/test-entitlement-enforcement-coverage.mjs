@@ -38,6 +38,7 @@ function args(f,k,target=k){
 // Reviewed: open to a suspended school on purpose. B6A keeps billing recovery and settings available.
 const OPEN_BY_DESIGN={
  'hon.read_saas_school_billing_account(text,uuid)':'billing recovery: the school sees why access is unavailable and what it owes',
+ 'hon.read_saas_school_access_standing(text,uuid)':'billing recovery: the owner sees the payment issue, grace end, owner CRM read-only window or CRM lock (read only)',
  'hon.read_saas_school_plan_options(text,uuid)':'billing recovery: plan selection and checkout for the first or a renewed payment',
  'hon.read_saas_hon_os_offers_for_school(text,uuid)':'billing recovery: the published HON OS offers and the server eligibility decision for this school (read only)',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',

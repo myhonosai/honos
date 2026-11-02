@@ -23,6 +23,7 @@ import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { CreateTrialAppointmentDto } from './create-trial-appointment.dto.js';
 import { TrialAppointmentService } from './trial-appointment.service.js';
+import { crmAccessMeta } from './crm-entitlement.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/crm/leads/:leadId/trials')
 export class TrialAppointmentController {
@@ -98,8 +99,8 @@ export class TrialAppointmentController {
     @Req() request: HonRequest,
   ) {
     const context = await resolveTrialReadContext(this.database, request, organizationId, schoolId);
-    const data = await this.trials.listForLead(context, leadId, { externalSubject: request.honIdentity!.externalSubject });
-    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+    const { result, access } = await this.trials.listForLead(context, leadId, { externalSubject: request.honIdentity!.externalSubject });
+    return { data: result, meta: { requestId: context.requestId, correlationId: context.correlationId, ...crmAccessMeta(access) } };
   }
 }
 
