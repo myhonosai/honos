@@ -2085,3 +2085,12 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.read_hon_conversation(text,uuid), hon.begin_hon_turn(text,uuid,jsonb,uuid), hon.fail_hon_turn(text,uuid,text), hon.read_hon_turn_receipt(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- D-M1 0200 CRM lead membership discovery: one direct-human read; no table access.
+DO $$ DECLARE r text; BEGIN
+  REVOKE ALL ON FUNCTION hon.read_crm_lead_memberships(text,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.read_crm_lead_memberships(text,uuid) FROM '||quote_ident(r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_crm_lead_memberships(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
