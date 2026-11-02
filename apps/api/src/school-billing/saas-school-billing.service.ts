@@ -4,7 +4,7 @@ import {
   saasUuid, validateSaasAccessAwaitInput, validateSaasAccessExceptionCloseInput, validateSaasAccessExceptionCloseReceipt,
   validateSaasAccessExceptionGrantInput, validateSaasAccessExceptionGrantReceipt, validateSaasAccessExceptionRevokeInput,
   validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
-  validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
+  validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolAccessStanding, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
   validateSaasExceptionPolicyDecisionInput, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
 } from '@hon/contracts';
@@ -26,6 +26,10 @@ export class SaasSchoolBillingService {
   async readAccount(subject: string, schoolId: unknown) {
     const school = parse(() => saasUuid(schoolId));
     return this.billing.call('readSchoolBillingAccount', [subject, school], validateSaasSchoolBillingAccount);
+  }
+  async readAccessStanding(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.billing.call('readSchoolAccessStanding', [subject, school], validateSaasSchoolAccessStanding);
   }
   async readInvoices(subject: string, schoolId: unknown, query: unknown) {
     const [school, q] = parse(() => [saasUuid(schoolId), validateSaasSchoolInvoiceQuery(query)] as const);
