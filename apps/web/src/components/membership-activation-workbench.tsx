@@ -177,7 +177,7 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
   }
   return <main className={`${styles.page} ${styles[`mode_${presentation}`]}`} data-membership-activation>
     <label>{t('Presentation')}<select aria-label={t('Presentation')} value={presentation} onChange={event => setPresentation(event.target.value as typeof presentation)}><option value="modern">{t('Modern')}</option><option value="classic">{t('Classic')}</option><option value="big">{t('Big Button')}</option></select></label>
-    <div role="status" aria-live="polite" aria-atomic="true" className={styles.status}>{commandBusy ? t('Activation request in progress') : reading ? t('Verifying current session, school access and membership facts…') : hidden ? t('Membership information hidden') : notice ? t(notice) : ''}</div>
+    <div role="status" aria-live="polite" aria-atomic="true" className={`${styles.status} ${notice ? styles.notice : ''}`}>{commandBusy ? t('Activation request in progress') : reading ? t('Verifying current session, school access and membership facts…') : hidden ? t('Membership information hidden') : notice ? t(notice) : ''}</div>
     <nav aria-label={t("Membership navigation")}><a href="/staff/dashboard">{t("Staff dashboard")}</a><a href="/staff/crm/leads">{t("CRM enrollment")}</a></nav>
     {onReturn && <button type="button" disabled={locked || reading} onClick={() => { if (!activeCommand.current && !retained.current && !reading) onReturn(); }}>{t("Return to CRM registration")}</button>}
     <header><p>{t("DIRECT HUMAN STAFF · MEMBERSHIP LIFECYCLE")}</p><h1>{t("Review and confirm membership activation")}</h1><p>{t("1. Review the server preview. 2. Confirm this membership and its exact dates.")}</p></header>
@@ -253,6 +253,6 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
       {saved && <section><h2>{t("Continue school operations")}</h2><p>{t("These links do not book a class, record attendance or prove payment.")}</p><a href="/staff/schedule/bookings">{t("Class bookings")}</a><a href="/staff/attendance">{t("Attendance")}</a></section>}
     </div>}
     {reading && <p role="status">{t("Verifying current session, school access and membership facts…")}</p>}
-    {error && <p role="alert" className={styles.error}>{t(error)}</p>}{notice && <p role="status" className={styles.notice}>{t(notice)}</p>}
+    {error && <p role="alert" className={styles.error}>{t(error)}</p>}
   </main>;
 }

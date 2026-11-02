@@ -81,6 +81,7 @@ describe('E1a explicit two-step activation lifecycle', () => {
     expect(html()).toContain('Membership information hidden'); expect(html()).not.toContain('Synthetic Student'); expect(button('Verify access and resume').props.disabled).toBe(true);
     reject(new DOMException('Unknown timeout', 'TimeoutError')); await flush(); expect(button('Verify access and resume').props.disabled).toBe(false);
     button('Verify access and resume').props.onClick(); await flush(); expect(html()).not.toContain('Membership information hidden'); expect(harness.session).toHaveBeenCalledTimes(5); expect(f).toHaveBeenCalledTimes(3);
+    expect(html().match(/Session and exact-school activation access verified\./g)).toHaveLength(1);
     button('Retry exact retained activation').props.onClick(); await flush();
     expect(f.mock.calls[3]![0]).toBe(f.mock.calls[1]![0]); expect(f.mock.calls[3]![1]!.body).toBe(f.mock.calls[1]![1]!.body); expect(f.mock.calls[3]![1]!.headers).toEqual(f.mock.calls[1]![1]!.headers); expect(html()).toContain('idempotent replay');
   });
