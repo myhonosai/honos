@@ -1977,3 +1977,19 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.manage_school_owner_invitation(text,text,jsonb,uuid),hon.accept_school_owner_invitation(text,text,jsonb,uuid),hon.read_school_owner_invitations(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0192 owner CRM suspension policy: verified-owner read-only authority and the in-app access standing read are the
+-- only runtime entry points; the window helper stays private. Earlier saas blocks revoke every saas function, so the
+-- standing read is re-granted here.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['crm_owner_read_only_window(uuid)','authorize_crm_owner_read_only(text,uuid,text,uuid,uuid)',
+    'read_saas_school_access_standing(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.authorize_crm_owner_read_only(text,uuid,text,uuid,uuid), hon.read_saas_school_access_standing(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
