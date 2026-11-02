@@ -1,9 +1,11 @@
 import { PlanAccessError, PlanReadError } from './membership-plans/http';
+import { reportConfirmedSessionInvalidation } from './session-invalidation';
 
 /** Existing signed-session web read. Identity is a continuity check, never school authority. */
 export async function verifyEnrollmentSession(subject: string | undefined, signal: AbortSignal): Promise<void> {
   if (!subject) throw new PlanAccessError('Reload this page to verify your signed session before restoring CRM information.');
   const response = await fetch('/api/identity/me', { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal });
+  if (response.status === 401) reportConfirmedSessionInvalidation();
   if ([401, 403].includes(response.status)) throw new PlanAccessError('Your session has ended. Sign in and reload the authorized school.');
   if (!response.ok || response.redirected || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '') || !response.headers.get('cache-control')?.split(',').map(s => s.trim()).includes('no-store')) throw new PlanReadError('Your session could not be verified. CRM information remains hidden.');
   const raw = await response.text();

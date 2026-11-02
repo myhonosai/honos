@@ -10,11 +10,13 @@ import type { FamilyRequest } from './crm-family-http';
 import { MembershipPlanTerms } from './membership-plans/terms';
 import { useLocale } from './localization/provider';
 import { sendPlanRequest, PlanAccessError, PlanUnknownError, type PlanRequest } from './membership-plans/http';
+import type { KnownMembership } from './membership-activation-http';
+import { membershipJourneyText } from './crm-membership-journey-copy';
 
 type Registered = Extract<CrmLeadRegistrationResult, { outcome: 'REGISTERED' }>;
-type Props = AdultScope & { row: LeadListItem; initialRecovery?: CrmLeadRegistrationRecovery; onRecover?(): void; onCancel(): void; onBusy(busy: boolean): void; onStarted(): void; onAccessLost(): void };
-export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, onRecover, onCancel, onBusy, onStarted, onAccessLost }: Props): React.ReactElement {
-  const { date } = useLocale();
+type Props = AdultScope & { row: LeadListItem; initialRecovery?: CrmLeadRegistrationRecovery; onRecover?(): void; onMembershipReview?(selectors: KnownMembership): void; onCancel(): void; onBusy(busy: boolean): void; onStarted(): void; onAccessLost(): void };
+export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, onRecover, onMembershipReview, onCancel, onBusy, onStarted, onAccessLost }: Props): React.ReactElement {
+  const { date, preferences } = useLocale();
   const [pendingPlan, setPendingPlan] = useState<PlanRequest | null>(null);
   const [unexpectedRetry, setUnexpectedRetry] = useState<PlanRequest | FamilyRequest | null>(null);
   const [recoveryRequired, setRecoveryRequired] = useState(false);
@@ -47,9 +49,10 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
   const [error, setError] = useState('');
   const [review, setReview] = useState(initialRecovery?.workflowState === 'NEEDS_STAFF_REVIEW');
   const active = useRef(false), generation = useRef(0), heading = useRef<HTMLHeadingElement | null>(null);
+  const membershipReview = useRef<KnownMembership | null>(null), mounted = useRef(true);
   const scope = { organizationId, schoolId };
   useEffect(() => { heading.current?.focus(); }, []);
-  useEffect(() => () => { generation.current++; active.current = false; }, [organizationId, schoolId, row.id]);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; membershipReview.current = null; generation.current++; active.current = false; }; }, [organizationId, schoolId, row.id]);
 
   // React applies this guarded state adjustment before committing the restored view.
   if (previousRecovery !== initialRecovery) {
@@ -61,6 +64,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
 
   function discardRetry(): void {
     if (active.current || planBlocking) return;
+    membershipReview.current = null;
     setPending(null); setPendingPlan(null); setUnexpectedRetry(null); setPrepared(null); setReceipt(null); setCreatedFromPlan(null); setCurrent(false); setConsent(false); setRecoveryRequired(true); setError('');
     setMessage('Local recovery deliberately abandoned. This did not cancel or undo any server action. Refresh saved setup before starting another command.');
   }
@@ -85,6 +89,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
 
   async function run(request: AdultRequest): Promise<void> {
     if (active.current || planBlocking || recoveryRequired || unexpectedRetry) return;
+    membershipReview.current = null;
     active.current = true; const epoch = generation.current; setBusy(true); onBusy(true); setError(''); setMessage(''); setCurrent(false);
     if (request.key) onStarted();
     try {
@@ -127,6 +132,13 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     } catch { setError('Review the required date, currency or plan code and confirmation before submitting.'); }
   }
   const locked = busy || pending !== null || pendingPlan !== null || unexpectedRetry !== null;
+  const reviewSelectors = onMembershipReview && current && receipt && !locked && !planBlocking && !recoveryRequired && !review && !otherCurrent && previousRecovery === initialRecovery
+    ? { organizationId, schoolId, membershipId: receipt.membershipId } : null;
+  membershipReview.current = reviewSelectors;
+  const reviewMembership = (): void => {
+    if (!mounted.current || active.current || !reviewSelectors || membershipReview.current !== reviewSelectors) return;
+    membershipReview.current = null; onMembershipReview?.(reviewSelectors);
+  };
   return <section className={styles.flow} aria-labelledby="adult-flow-title" aria-busy={busy}>
     <header><p>ADULT CRM SETUP</p><h2 id="adult-flow-title" ref={heading} tabIndex={-1}>Set up {row.givenName} {row.familyName}</h2><p>Register adult → billing account → membership DRAFT</p>
       <button type="button" disabled={locked || planBlocking} onClick={onCancel}>Close adult setup</button>
@@ -160,6 +172,7 @@ export function CrmAdultFlow({ row, organizationId, schoolId, initialRecovery, o
     {receipt && !createdFromPlan && <p>Original published plan terms are unavailable in this receipt or recovery view. A plan code alone does not establish a catalog binding.</p>}
     {receipt && <div className={styles.receipt}><h3>Membership DRAFT creation receipt</h3><p>{receipt.planCode} · DRAFT · Recorded {date(receipt.recordedAt)}</p><p>Historical creation receipt: <code>{receipt.membershipId}</code>. Current state requires a separate check.</p>
       <button type="button" disabled={locked || planBlocking} onClick={() => void run(adultRequest(scope, 'confirm', registered!.studentProfileId, ''))}>Check current DRAFT</button>
-      {current && <p role="status">Current DRAFT verified. Membership activation and payments remain outside this workflow.</p>}</div>}
+      {current && <p role="status">{membershipJourneyText(preferences?.language, 'current')}</p>}</div>}
+    {reviewSelectors && <button type="button" onClick={reviewMembership}>{membershipJourneyText(preferences?.language, 'review')}</button>}
   </section>;
 }
