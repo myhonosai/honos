@@ -16,7 +16,7 @@ import {
   type CrmTrialOutcomeStatus,
   type RecordTrialAppointmentOutcomeInput,
 } from '@hon/contracts';
-import { assertCurrentTrialAuthority } from './trial-authority-recheck.js';
+import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
 import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -158,7 +158,7 @@ export class TrialAppointmentOutcomeService {
       );
       // The controller authorized this command before the row lock above, which can wait behind another outcome for
       // the same appointment. Re-resolve the authority now, before any idempotency reservation or mutation.
-      await assertCurrentTrialAuthority(client, authority.externalSubject, context, 'crm.trial.manage',
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.manage',
         'HON trial outcome recording is no longer authorized for this school.');
       await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to record a trial outcome.');
       const current = currentResult.rows[0];

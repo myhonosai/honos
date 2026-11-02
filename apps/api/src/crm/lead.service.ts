@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable 
 import { createHash, randomUUID } from 'node:crypto';
 import { tierIncludesFeature } from '@hon/config';
 import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
+import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
 import type { CommandContext, CreateLeadInput, HonTier, LeadListItem, LeadSummary } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -33,8 +34,16 @@ function fingerprint(input: CreateLeadInput): string {
 export class LeadService {
   constructor(private readonly database: RuntimeDatabaseService) {}
 
-  async list(context: CommandContext, options: { status?: LeadListItem['status']; limit?: number }): Promise<LeadListItem[]> {
+  async list(
+    context: CommandContext,
+    options: { status?: LeadListItem['status']; limit?: number },
+    authority: { externalSubject: string },
+  ): Promise<LeadListItem[]> {
     return this.database.withTenantTransaction(context, async (client) => {
+      // The controller authorized before this transaction began; a grant revocation or an organization/school
+      // suspension committed since then must refuse the read rather than return CRM data.
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.lead.read',
+        'HON CRM lead read access is no longer authorized for this school.');
       await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to read leads.');
       const result = await client.query<LeadListItem>(
         `SELECT lead.id, lead.status, lead.pipeline_stage_id AS "pipelineStageId", lead.primary_person_id AS "primaryPersonId",
