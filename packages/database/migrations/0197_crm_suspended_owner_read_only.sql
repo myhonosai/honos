@@ -33,7 +33,7 @@ ALTER TABLE hon.saas_access_policy_terms
   ADD COLUMN after_read_only_effect text CHECK (after_read_only_effect IN ('CRM_LOCKED_BILLING_RECOVERY_AND_SUPPORT_OPEN'));
 ALTER TABLE hon.saas_access_policy_terms DROP CONSTRAINT saas_access_policy_terms_suspended_effect_check;
 ALTER TABLE hon.saas_access_policy_terms ADD CONSTRAINT saas_access_policy_terms_suspended_effect_check CHECK (suspended_effect IN (
-  'STAFF_READ_ONLY_BILLING_OPEN_FAMILY_FEATURES_CONTINUE', 'STAFF_CRM_SUSPENDED_VERIFIED_OWNER_CRM_READ_ONLY_BILLING_OPEN'));
+  'STAFF_READ_ONLY_BILLING_OPEN_FAMILY_FEATURES_CONTINUE', 'STAFF_CRM_OFF_OWNER_CRM_READ_ONLY_BILLING_OPEN'));
 -- Version 2 has no separate restricted stage: suspension follows grace directly (restrict = suspend = grace).
 ALTER TABLE hon.saas_access_policy_terms DROP CONSTRAINT saas_access_policy_terms_check;
 ALTER TABLE hon.saas_access_policy_terms ADD CONSTRAINT saas_access_policy_terms_check
@@ -47,7 +47,7 @@ INSERT INTO hon.saas_access_policy_terms (policy_version, status, new_school_acc
   founder_price_rule, lifetime_rule, exception_max_days, exception_authority, data_deletion, recorded_at,
   grace_basis, grace_notice, owner_read_only_days, owner_read_only_scope, after_read_only_effect)
 VALUES (2, 'PROPOSED', 'NONE_UNTIL_FIRST_PAYMENT', 'ACTIVATE_ON_VERIFIED_PAYMENT', 7, 7, 7,
-  'PREMIUM_AI_SUSPENDED', 'STAFF_CRM_SUSPENDED_VERIFIED_OWNER_CRM_READ_ONLY_BILLING_OPEN', 'IMMEDIATE_ON_VERIFIED_PAYMENT',
+  'PREMIUM_AI_SUSPENDED', 'STAFF_CRM_OFF_OWNER_CRM_READ_ONLY_BILLING_OPEN', 'IMMEDIATE_ON_VERIFIED_PAYMENT',
   'END_OF_PAID_PERIOD', 'END_ACCESS_AT_VERIFIED_REFUND', 'SUSPEND_PENDING_HQ_REVIEW', 'KEPT_WHILE_CONTINUOUSLY_PAID_INCLUDING_GRACE',
   'NEVER_PAST_DUE_ENDS_ONLY_ON_REFUND_OR_LOST_DISPUTE', 90, 'HQ_OWNER', 'NEVER', clock_timestamp(),
   'FAILED_RENEWAL_DUE_DATE', 'OWNER_NOTIFIED_IN_APP', 90, 'VERIFIED_OWNER_HISTORICAL_CRM_LEADS_AND_TRIALS',
