@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { createActivationFixture, runActivationBrowserChecks } from './membership-activation-browser.mjs';
 import { createDateFixture, runDateBrowserChecks } from './membership-dates-browser.mjs';
+import { runSchoolMembershipJourneyBrowserChecks } from './school-membership-journey-browser.mjs';
+import { runCrmSessionPrivacyBrowserChecks } from './crm-session-privacy-browser.mjs';
 import { createCloseFixture, runCloseBrowserChecks } from './crm-close-browser.mjs';
 import { createFamilyFixture, runFamilyBrowserChecks } from './crm-family-browser.mjs';
 import { createServer } from 'node:http';
@@ -34,6 +36,7 @@ const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.school
 const program = { programId: id(38), name: 'Adult martial arts' };
 const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
 let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
+let language = 'en';
 const closeFixture = createCloseFixture({id,scope,date,origin,send,rejected});
 const activationFixture = createActivationFixture({id,scope,origin,send,rejected});
 const dateFixture = createDateFixture({id,scope,origin,send,rejected});
@@ -51,7 +54,7 @@ const api = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1:3001');
     let actor; try { actor = verifySession(cookieValue(req.headers.cookie, HON_SESSION_COOKIE) ?? '', session).externalSubject; } catch { send(res, 401, {}); return; }
     report.requests.push({ method: req.method, path: url.pathname });
-    if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: null, schoolDefault: null, effective: { language: 'en', source: 'SYSTEM_DEFAULT' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
+    if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: {language,version:1,updatedAt:date}, schoolDefault: null, effective: { language, source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
     if (actor === 'crm-staff-synthetic' && url.pathname === '/v1/staff/current-reporting-school' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({data:{state:'RESOLVED',...scope}})); return;
     }
@@ -194,6 +197,11 @@ try {
   browser = await chromium.launch({ executablePath: process.env.HON_CRM_CHROME, headless: true });
   await runDateBrowserChecks({fixture:dateFixture,open,visual,check,origin});
   await runActivationBrowserChecks({fixture:activationFixture,open,visual,check,origin});
+  await runCrmSessionPrivacyBrowserChecks({fixture:closeFixture,reset,open,visual,check});
+  await runSchoolMembershipJourneyBrowserChecks({ activationFixture, familyFixture, reset, open, visual, check, origin, scope, id, report,
+    setLanguage(value) { assert(['en','ko','es'].includes(value)); language = value; },
+    restoreSession: context => context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject:'crm-staff-synthetic' }, session), url: origin, httpOnly:true, sameSite:'Lax' }]),
+  });
   await runCloseBrowserChecks({fixture:closeFixture,reset,open,visual,check,captureFailure:async page=>{await page.screenshot({path:join(results,'close-first-failure.png'),fullPage:true});report.screenshots.push('close-first-failure.png');},replaceActor:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     await check(`${name}: connected registration/account/DRAFT/current confirmation; keyboard and accessibility`, async () => {
@@ -370,3 +378,4 @@ try {
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
 } finally { await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); await browser?.close(); app.kill('SIGTERM'); api.closeAllConnections(); await new Promise(done => api.close(done)); }
 console.log(`PASS: ${report.checks.length} browser checks; ${report.screenshots.length} actual application screenshots; synthetic API verification only.`);
+console.log(JSON.stringify({ sourceSha:report.sourceSha, browserChecks:report.checks.length, screenshots:report.screenshots.length, accessibilityScans:report.accessibility.length, accessibilityViolations:report.accessibility.reduce((sum,scan)=>sum+scan.violations.length,0), connectedMembershipCases:report.schoolMembershipJourney?.length ?? 0, pageErrors:report.pageErrors.length, syntheticFixturesOnly:true, databaseAccess:false, providerCalls:false }));

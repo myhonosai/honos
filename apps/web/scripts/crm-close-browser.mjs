@@ -53,7 +53,13 @@ export async function runCloseBrowserChecks({fixture,reset,open,visual,check,rep
       if(reason==='expired')await context.clearCookies();if(reason==='changed-user')await replaceActor(context);if(reason==='revoked')fixture.denyRead=true;if(reason==='missing')fixture.hideLead=true;
       if(reason==='school-switch'){await page.getByRole('checkbox',{name:'I understand and deliberately abandon local recovery.',exact:true}).check();await page.getByRole('button',{name:'Discard local view',exact:true}).click();await page.getByLabel('School UUID',{exact:true}).fill('00000000-0000-4000-8000-000000000099');assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));}
       else if(reason==='close-permission-revoked'){await restore(page);fixture.denyClose=true;await page.getByRole('button',{name:'Retry exact retained close request',exact:true}).click();await page.getByRole('main').getByRole('alert').waitFor();assert.equal(await page.getByRole('button',{name:'Retry exact retained close request',exact:true}).count(),0);assert.equal(fixture.commands.length,2);}
-      else{await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();await page.getByRole('main').getByRole('alert').waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));}
+      else{
+        const expired=reason==='expired'?page.waitForResponse(r=>new URL(r.url()).pathname==='/api/identity/me'&&r.status()===401):null;
+        await page.getByRole('button',{name:'Verify access and resume',exact:true}).click();
+        if(expired){await expired;await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();}
+        else await page.getByRole('main').getByRole('alert').waitFor();
+        assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));
+      }
       if(reason!=='close-permission-revoked')assert.equal(fixture.commands.length,1);
     }finally{await context.close();}
   });

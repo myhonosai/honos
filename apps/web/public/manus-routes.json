@@ -383,6 +383,10 @@
     {
       "path": "/hq/school-owner-invitations",
       "title": "HON HQ | Owner invitations"
+    },
+    {
+      "path": "/staff/crm/journey",
+      "title": "Human CRM leads"
     }
   ]
 }

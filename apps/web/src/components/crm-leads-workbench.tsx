@@ -16,7 +16,10 @@ import styles from './staff-availability-workbench.module.css';
 import privacyStyles from './crm-enrollment-privacy.module.css';
 import { verifyEnrollmentSession } from './crm-enrollment-privacy';
 import { useLocale } from './localization/provider';
+import type { KnownMembership } from './membership-activation-http';
 import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
+import { CrmJourneyLink } from './crm-journey/entry';
+import { HON_SESSION_INVALIDATED_EVENT } from './session-invalidation';
 
 function trialHref(organizationId: string, schoolId: string, leadId: string): string {
   return `/staff/crm/trials?${new URLSearchParams({ organizationId, schoolId, leadId }).toString()}`;
@@ -24,7 +27,7 @@ function trialHref(organizationId: string, schoolId: string, leadId: string): st
 
 export type CrmLeadsInitialScope = { organizationId?: string | undefined; schoolId?: string | undefined };
 
-export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initialScope?: CrmLeadsInitialScope; sessionSubject?: string } = {}): React.ReactElement {
+export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject, onMembershipReview }: { initialScope?: CrmLeadsInitialScope; sessionSubject?: string; onMembershipReview?(selectors: KnownMembership): void } = {}): React.ReactElement {
   const { date } = useLocale();
   const [concealed, setConcealed] = useState(false), [restoring, setRestoring] = useState(false), [privacyError, setPrivacyError] = useState('');
   const privacyEpoch = useRef(0), restoreActive = useRef(false), restoreAbort = useRef<AbortController | null>(null);
@@ -60,6 +63,9 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
   const familyReadActive = useRef(false), familyOpen = useRef(false), familyAbort = useRef<AbortController | null>(null);
   const sensitive = useRef(false), inputDirty = useRef(false), shielded = useRef(false);
   const activity = useRef({ adult: false, family: false, create: false, close: false });
+  const membershipEpoch = useRef(0);
+  const membershipContext = useRef({ organizationId, schoolId, adultId: '', familyId: '' });
+  membershipContext.current = { organizationId, schoolId, adultId: adult?.id ?? '', familyId: familyRow?.id ?? '' };
   sensitive.current = Boolean(leads?.length || adult || familyRow || selected || inputDirty.current);
   function busy(kind: keyof typeof activity.current, value: boolean): void {
     activity.current[kind] = value; if (value) inputDirty.current = true;
@@ -74,6 +80,7 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
   useEffect(() => { if (familyRow && !familyData) familyHeading.current?.focus(); }, [familyRow, familyData]);
 
   function clear(): void {
+    membershipEpoch.current++;
     closeEpoch.current++; closeOpen.current = false; setCloseCurrent(null); setCloseBusy(false);
     inputDirty.current = false; activity.current = { adult: false, family: false, create: false, close: false };
     privacyEpoch.current++; restoreActive.current = false; restoreAbort.current?.abort(); setRestoring(false); setPrivacyError('');
@@ -95,11 +102,15 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
       clear(); setCreateBusy(false); setCloseBusy(false); shielded.current = conceal; setConcealed(conceal);
       if (conceal && privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; }
     };
-    const hide = (): void => {
+    const hide = (event?: Event): void => {
+      membershipEpoch.current++;
       // An idle empty view has no facts or retry to conceal. Invalidate late
       // reads without inventing a school or installing a focus grace period.
       if (!shielded.current && !sensitive.current && !inputDirty.current && !unsettled()) { clear(); return; }
-      if (!familyOpen.current && !adultOpen.current && !closeOpen.current && !unsettled()) { clear(); setCreateBusy(false); setCloseBusy(false); }
+      // Confirmed session loss conceals mounted command capsules, including
+      // already-settled unknown outcomes. Do not destroy their immutable keys
+      // or instance-lifetime busy ownership; settlement must finish privately.
+      if (event?.type !== HON_SESSION_INVALIDATED_EVENT && !shielded.current && !familyOpen.current && !adultOpen.current && !closeOpen.current && !unsettled()) { clear(); setCreateBusy(false); setCloseBusy(false); }
       shielded.current = true;
       // Hide synchronously, including the accessibility tree. Mounted enrollment
       // components keep only their in-memory request state; no command is retried.
@@ -110,8 +121,8 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
       setLoading(false); setRecovering(false); setFamilyLoading(false);
     };
     const hidden = (): void => { if (document.visibilityState === 'hidden') hide(); };
-    window.addEventListener('pagehide', leave); window.addEventListener('blur', hide); document.addEventListener('visibilitychange', hidden);
-    return () => { closeEpoch.current++; closeOpen.current = false; readEpoch.current++; privacyEpoch.current++; restoreAbort.current?.abort(); recoveryAbort.current?.abort(); familyAbort.current?.abort(); window.removeEventListener('pagehide', leave); window.removeEventListener('blur', hide); document.removeEventListener('visibilitychange', hidden); };
+    window.addEventListener('pagehide', leave); window.addEventListener('blur', hide); window.addEventListener(HON_SESSION_INVALIDATED_EVENT, hide); document.addEventListener('visibilitychange', hidden);
+    return () => { membershipEpoch.current++; closeEpoch.current++; closeOpen.current = false; readEpoch.current++; privacyEpoch.current++; restoreAbort.current?.abort(); recoveryAbort.current?.abort(); familyAbort.current?.abort(); window.removeEventListener('pagehide', leave); window.removeEventListener('blur', hide); window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, hide); document.removeEventListener('visibilitychange', hidden); };
   }, []);
   async function load(event: FormEvent): Promise<void> {
     event.preventDefault(); if (unsettled() || closeOpen.current || closeBusy || createBusy || adultBusy || adult || familyRow || familyBusy || readActive.current) return;
@@ -126,11 +137,13 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
   }
 
   function closeAdult(): void {
+    membershipEpoch.current++;
     readEpoch.current++; recoveryAbort.current?.abort(); recoveryActive.current = false;
     setAdult(null); setAdultBusy(false); setResuming(false); setRecovery(null); setRecoveryError(''); setRecovering(false);
   }
   async function resume(lead: LeadListItem, fromFamily = false): Promise<void> {
     if (unsettled() || closeOpen.current || recoveryActive.current || readActive.current || loading || closeBusy || createBusy || adultBusy || selected || needsReload && !adult && !fromFamily) return;
+    membershipEpoch.current++;
     recoveryActive.current = true;
     const generation = readEpoch.current, abort = new AbortController(); recoveryAbort.current = abort;
     setAdult(lead); setResuming(true); setRecovery(null); setRecoveryError(''); setRecovering(true);
@@ -147,11 +160,13 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
   }
 
   function closeFamily(): void {
+    membershipEpoch.current++;
     readEpoch.current++; familyAbort.current?.abort(); familyReadActive.current = false; familyOpen.current = false;
     setFamilyRow(null); setFamilyData(null); setFamilyError(''); setFamilyLoading(false); setFamilyBusy(false);
   }
   async function resumeFamily(lead: LeadListItem): Promise<void> {
     if (unsettled() || closeOpen.current || familyReadActive.current || readActive.current || loading || closeBusy || createBusy || adult || adultBusy || familyBusy || selected || needsReload && !familyRow) return;
+    membershipEpoch.current++;
     const generation = readEpoch.current, controller = new AbortController(); familyAbort.current = controller;
     familyReadActive.current = true; familyOpen.current = true; setFamilyRow(lead); setFamilyData(null); setFamilyError(''); setFamilyLoading(true);
     try { const data = await readFamilyEnrollment({ organizationId, schoolId }, lead.id, lead.primaryPersonId, controller.signal); if (generation === readEpoch.current) setFamilyData(data); }
@@ -201,11 +216,22 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
   // scope, discard or session-mounted workbench instance.
   const closeInstance = closeEpoch.current;
   const ownsClose = (): boolean => closeOpen.current && closeInstance === closeEpoch.current;
+  const membershipInstance = membershipEpoch.current;
+  function reviewMembership(kind: 'adult' | 'family', leadId: string, selectors: KnownMembership): void {
+    const current = membershipContext.current;
+    if (!onMembershipReview || membershipInstance !== membershipEpoch.current || shielded.current || concealed || unsettled()
+      || readActive.current || recoveryActive.current || familyReadActive.current || restoreActive.current || closeOpen.current
+      || current[kind === 'adult' ? 'adultId' : 'familyId'] !== leadId
+      || current.organizationId !== selectors.organizationId || current.schoolId !== selectors.schoolId) return;
+    membershipEpoch.current++;
+    // Only selectors leave CRM. No receipt, person, child, plan or permission is passed as authority.
+    onMembershipReview({ organizationId: selectors.organizationId, schoolId: selectors.schoolId, membershipId: selectors.membershipId });
+  }
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><a href="/staff/billing/membership-plans">Membership plans</a><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><CrmJourneyLink /><a href="/staff/billing/membership-plans">Membership plans</a><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/crm/trials">Trial appointments</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
     {concealed && <section className={privacyStyles.shield} aria-labelledby="crm-privacy-title" aria-busy={restoring}>
       <h2 id="crm-privacy-title" ref={shieldHeading} tabIndex={-1}>CRM information hidden</h2>
-      <p>Focus left this window. CRM requests remain only in memory. No command will be resent automatically.</p>
+      <p>Focus or session access changed. CRM requests remain only in memory. No command will be resent automatically. Verify current access before revealing information.</p>
       <p>Verify your signed session, selected school and current CRM read and relevant enrollment permissions before revealing information.</p>
       {(familyBusy || adultBusy || closeBusy || createBusy) && <p role="status">An existing request is settling. You can verify access after it finishes. Local recovery cannot be discarded while a request is unsettled.</p>}
       {privacyError && <p role="alert">{privacyError}</p>}
@@ -221,11 +247,11 @@ export function CrmLeadsWorkbench({ initialScope = {}, sessionSubject }: { initi
     <div hidden={adult !== null || familyRow !== null}><CrmLeadCreatePanel key={`${organizationId}:${schoolId}:${draftEpoch}`} organizationId={organizationId} schoolId={schoolId} disabled={loading || closeBusy || selected !== null || adult !== null || familyRow !== null} onStarted={() => { setNeedsReload(true); setSelected(null); }} onBusy={value => busy('create', value)} onAccessLost={accessLost} /></div>
     {needsReload && <p role="status">Loaded list snapshot only — not refreshed after a close or create attempt. No row status, filter membership or count has been inferred. Explicitly reload to verify current CRM facts. {familyRow ? 'Close family setup first if it is open.' : 'Close adult setup first if it is open.'}</p>}
     {adult && (resuming && !recovery ? <CrmAdultRecoveryPending row={adult} busy={recovering} error={recoveryError} onRetry={() => void resume(adult)} onCancel={closeAdult} />
-      : <CrmAdultFlow key={`${organizationId}:${schoolId}:${adult.id}:${draftEpoch}`} row={adult} organizationId={organizationId} schoolId={schoolId} {...(recovery ? { initialRecovery: recovery } : {})} onRecover={() => void resume(adult)} onCancel={closeAdult} onBusy={value => busy('adult', value)} onStarted={() => setNeedsReload(true)} onAccessLost={accessLost} />)}
-    {familyRow && (familyData ? <CrmFamilyFlow key={`${organizationId}:${schoolId}:${familyRow.id}:${draftEpoch}`} scope={{ organizationId, schoolId }} row={familyRow} initialFamily={familyData} onCancel={closeFamily} onBusy={value => busy('family', value)} onStarted={() => setNeedsReload(true)} onAccessLost={accessLost} onAdult={() => { const lead = familyRow; closeFamily(); void resume(lead, true); }} />
+      : <CrmAdultFlow key={`${organizationId}:${schoolId}:${adult.id}:${draftEpoch}`} row={adult} organizationId={organizationId} schoolId={schoolId} {...(recovery ? { initialRecovery: recovery } : {})} onRecover={() => void resume(adult)} {...(onMembershipReview ? { onMembershipReview: (selectors: KnownMembership) => reviewMembership('adult', adult.id, selectors) } : {})} onCancel={closeAdult} onBusy={value => busy('adult', value)} onStarted={() => setNeedsReload(true)} onAccessLost={accessLost} />)}
+    {familyRow && (familyData ? <CrmFamilyFlow key={`${organizationId}:${schoolId}:${familyRow.id}:${draftEpoch}`} scope={{ organizationId, schoolId }} row={familyRow} initialFamily={familyData} {...(onMembershipReview ? { onMembershipReview: (selectors: KnownMembership) => reviewMembership('family', familyRow.id, selectors) } : {})} onCancel={closeFamily} onBusy={value => busy('family', value)} onStarted={() => setNeedsReload(true)} onAccessLost={accessLost} onAdult={() => { const lead = familyRow; closeFamily(); void resume(lead, true); }} />
       : <section aria-labelledby="family-recovery-title" aria-busy={familyLoading}><h2 id="family-recovery-title" tabIndex={-1} ref={familyHeading}>Resume family setup for {familyRow.givenName} {familyRow.familyName}</h2>{familyLoading && <p role="status">Checking current family setup. No records are being created.</p>}{familyError && <p role="alert">{familyError}</p>}{!familyLoading && <button type="button" onClick={() => void resumeFamily(familyRow)}>Retry family setup read</button>}<button type="button" onClick={closeFamily}>Close family setup</button></section>)}
     {selected && <CrmLeadClosePanel key={`${organizationId}:${schoolId}:${selected.id}:${closeInstance}`} row={selected} currentRow={closeCurrent ?? selected} organizationId={organizationId} schoolId={schoolId} onStarted={() => { if (ownsClose()) setNeedsReload(true); }} onBusy={value => { if (ownsClose()) busy('close', value); }} onCancel={() => { if (!ownsClose() || activity.current.close) return; closeEpoch.current++; closeOpen.current = false; setSelected(null); setCloseCurrent(null); }} />}
-    {leads && <section aria-labelledby="crm-lead-results"><h2 id="crm-lead-results">{leads.length === 0 ? 'No matching CRM leads' : `${leads.length} verified CRM ${leads.length === 1 ? 'lead' : 'leads'}`}</h2><p>Contact facts are the existing protected lead-list projection for this authorized current-school read. A trial handoff does not load or create an appointment; a follow-up handoff likewise only pre-fills an untrusted UUID after its own queue is authorized.</p>{leads.map((lead) => <article className={styles.row} key={lead.id}><div><strong>{lead.givenName} {lead.familyName}</strong><p>Status: {lead.status} · lead v{lead.version}</p><p>Email: {lead.email ?? 'Not recorded'} · Phone: {lead.phoneE164 ?? 'Not recorded'}</p><p>Next follow-up: {lead.nextFollowUpAt ? date(lead.nextFollowUpAt) : 'Not scheduled'} · Created: {date(lead.createdAt)}</p><p><code>{lead.id}</code></p></div><div className={styles.actions}>{lead.status === 'OPEN' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => { if (unsettled() || closeOpen.current) return; closeEpoch.current++; closeOpen.current = true; setSelected(lead); setCloseCurrent(lead); }}>Prepare CRM-only close</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => { if (unsettled() || closeOpen.current) return; setAdult(lead); setSelected(null); }}>Set up adult membership</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resume(lead)}>Resume setup</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resumeFamily(lead)}>Set up / resume family</button>}<a href={trialHref(organizationId, schoolId, lead.id)}>Prepare trial appointment</a>{crmFollowUpHref(lead.id) && <a href={crmFollowUpHref(lead.id)}>Create human follow-up</a>}</div></article>)}</section>}
+    {leads && <section aria-labelledby="crm-lead-results"><h2 id="crm-lead-results">{leads.length === 0 ? 'No matching CRM leads' : `${leads.length} verified CRM ${leads.length === 1 ? 'lead' : 'leads'}`}</h2><p>Contact facts are the existing protected lead-list projection for this authorized current-school read. A trial handoff does not load or create an appointment; a follow-up handoff likewise only pre-fills an untrusted UUID after its own queue is authorized.</p>{leads.map((lead) => <article className={styles.row} key={lead.id}><div><strong>{lead.givenName} {lead.familyName}</strong><p>Status: {lead.status} · lead v{lead.version}</p><p>Email: {lead.email ?? 'Not recorded'} · Phone: {lead.phoneE164 ?? 'Not recorded'}</p><p>Next follow-up: {lead.nextFollowUpAt ? date(lead.nextFollowUpAt) : 'Not scheduled'} · Created: {date(lead.createdAt)}</p><p><code>{lead.id}</code></p></div><div className={styles.actions}>{lead.status === 'OPEN' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => { if (unsettled() || closeOpen.current) return; closeEpoch.current++; closeOpen.current = true; setSelected(lead); setCloseCurrent(lead); }}>Prepare CRM-only close</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => { if (unsettled() || closeOpen.current) return; setAdult(lead); setSelected(null); }}>Set up adult membership</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resume(lead)}>Resume setup</button>}{lead.status !== 'ARCHIVED' && <button type="button" disabled={needsReload || closeBusy || createBusy || adult !== null || familyRow !== null || selected !== null} onClick={() => void resumeFamily(lead)}>Set up / resume family</button>}<CrmJourneyLink organizationId={organizationId} schoolId={schoolId} leadId={lead.id} /><a href={trialHref(organizationId, schoolId, lead.id)}>Prepare trial appointment</a>{crmFollowUpHref(lead.id) && <a href={crmFollowUpHref(lead.id)}>Create human follow-up</a>}</div></article>)}</section>}
     </div>
   </main>;
 }

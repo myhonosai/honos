@@ -4,6 +4,7 @@ import {
   type MembershipActivationContext, type MembershipActivationPreviewInput, type ConfirmMembershipActivationInput,
   type MembershipActivationPreview, type MembershipActivationReceipt,
 } from '@hon/contracts';
+import { reportConfirmedSessionInvalidation } from './session-invalidation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type KnownMembership = Pick<MembershipActivationContext, 'organizationId' | 'schoolId' | 'membershipId'>;
@@ -47,6 +48,10 @@ export function membershipActivationPath(value: KnownMembership): string {
   return `/api/v1/organizations/${s.organizationId}/schools/${s.schoolId}/billing/memberships/${s.membershipId}`;
 }
 async function result(response: Response, contextRead = false): Promise<{ data: unknown; replayed: boolean }> {
+  if (response.status === 401) {
+    reportConfirmedSessionInvalidation();
+    throw new MembershipActivationError('Your session has expired. Sign in again before verifying access.', 401);
+  }
   if (!response.ok) {
     let code = '';
     try { const raw = await response.text(); if (raw.length < 4000) { const e = JSON.parse(raw); if (typeof e?.code === 'string' && Object.hasOwn(messages, e.code)) code = e.code; } } catch { /* Never show raw backend text. */ }

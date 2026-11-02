@@ -183,6 +183,7 @@
     "0188_immutable_pricing_acceptance.sql": "fb7bd8bbb78f9fc92a45e3a6645fd435073b092a594e870ba84422c5eb396c8b",
     "0189_provider_subscription_schedule_foundation.sql": "0ed32867b17b9e606f9b76237f54ef6bc2238895ebab66fc23c96027f9c84d08",
     "0190_a2p_registration_preparation.sql": "266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638",
-    "0191_school_owner_invitations.sql": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f"
+    "0191_school_owner_invitations.sql": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f",
+    "0192_crm_suspended_owner_read_only.sql": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542"
   }
 }
