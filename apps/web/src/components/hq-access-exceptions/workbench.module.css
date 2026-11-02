@@ -10,6 +10,7 @@
 .page input:not([type=checkbox]), .page select, .page textarea { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 11px; border: 1px solid #7ca3b8; border-radius: 7px; background: #0b1f30; color: #fff; font: inherit; }
 .page textarea { min-height: 95px; resize: vertical; }
 .page button, .link { display: inline-block; box-sizing: border-box; min-height: 44px; padding: 12px 16px; margin: 14px 12px 0 0; border: 1px solid #8be1d8; border-radius: 8px; background: #8be1d8; color: #09202d; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.link.link { color: #09202d; text-decoration: underline; }
 .page button:disabled { opacity: .6; cursor: default; }
 .page :focus-visible, .link:focus-visible { outline: 3px solid #f5dd9a; outline-offset: 3px; }
 .confirm { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; line-height: 1.65; }
@@ -22,7 +23,8 @@
 .wide { grid-column: 1 / -1; }
 .view_big-button { font-size: 18px; }
 .view_big-button button { min-height: 52px; }
-.view_classic { color: #172b40; }
+.view_classic { color: #172b40; background: #f4f7fb; padding: 20px; border-radius: 14px; }
+.page.view_classic p { color: #3c5268; }
 .view_classic .panel, .view_classic .notice { background: #fff; border-color: #627c94; }
 .view_classic .facts dt { color: #3c5268; }
 .view_classic input:not([type=checkbox]), .view_classic select, .view_classic textarea { color: #172b40; background: #fff; border-color: #627c94; }
