@@ -40,8 +40,11 @@ export async function shippedPosture(client, migrationEvidence) {
   const records = (await client.query("SELECT to_jsonb(r) r FROM hon.saas_policy_records r WHERE policy_code='PAID_ACCESS' ORDER BY version")).rows.map(x => x.r);
   assert.equal(records.at(-1)?.status, 'PROPOSED');
   const terms = (await client.query('SELECT to_jsonb(t) t FROM hon.saas_access_policy_terms t ORDER BY policy_version')).rows.map(x => x.t);
-  assert.equal(terms.length, 1); assert.equal(terms[0].policy_version, 1); assert.equal(terms[0].status, 'PROPOSED');
-  assert.equal(terms[0].exception_max_days, 90); assert.equal(terms[0].exception_authority, 'HQ_OWNER');
+  // Version 1 (original recommendation) and version 2 (owner suspension policy, 0197) are both PROPOSED only.
+  assert.equal(terms.length, 2); assert.deepEqual(terms.map(t => [t.policy_version, t.status]), [[1, 'PROPOSED'], [2, 'PROPOSED']]);
+  for (const t of terms) { assert.equal(t.exception_max_days, 90); assert.equal(t.exception_authority, 'HQ_OWNER'); assert.equal(t.data_deletion, 'NEVER'); }
+  assert.deepEqual([terms[1].grace_days, terms[1].suspend_after_days, terms[1].grace_basis, terms[1].owner_read_only_days, terms[1].after_read_only_effect],
+    [7, 7, 'FAILED_RENEWAL_DUE_DATE', 90, 'CRM_LOCKED_BILLING_RECOVERY_AND_SUPPORT_OPEN']);
   const constraints = (await client.query(`SELECT conrelid::regclass::text relation,conname,pg_get_constraintdef(oid) definition
     FROM pg_constraint WHERE conrelid IN ('hon.saas_access_program'::regclass,'hon.saas_access_policy_terms'::regclass,'hon.saas_new_sales_policy'::regclass)
     ORDER BY 1,2`)).rows;

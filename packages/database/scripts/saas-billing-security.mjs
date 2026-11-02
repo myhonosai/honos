@@ -175,6 +175,8 @@ export const saasBillingFunctions = [
  ['hon.read_saas_school_invoice(text,uuid,uuid)',true,true],
  ['hon.read_saas_school_billing_account(text,uuid)',true,true],
  ['hon.read_saas_access_readiness_from_hq(text,uuid)',true,true],
+ // 0197 owner suspension policy: in-app access standing (billing.hon.view; open to a lapsed school)
+ ['hon.read_saas_school_access_standing(text,uuid)',true,true],
  // 0172 B6A first-payment activation (inactive program)
  ['hon.guard_saas_access()',false,false],
  ['hon.saas_access_program_active()',false,false],
