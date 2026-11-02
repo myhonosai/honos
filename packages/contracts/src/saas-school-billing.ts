@@ -115,7 +115,9 @@ export interface SaasAccessReadiness {
   program: { status: 'INACTIVE'; mutationsEnabled: false; activation: 'REVIEWED_MIGRATION_AFTER_OWNER_APPROVAL' };
   proposedTerms: { policyVersion: number; status: 'PROPOSED'; newSchoolAccess: string; firstPayment: string; graceDays: number; restrictAfterDays: number;
     suspendAfterDays: number; restrictedEffect: string; suspendedEffect: string; reactivation: string; cancellationTiming: string; refundEffect: string;
-    disputeEffect: string; founderPriceRule: string; lifetimeRule: string; exceptionMaxDays: number; exceptionAuthority: 'HQ_OWNER'; dataDeletion: 'NEVER' };
+    disputeEffect: string; founderPriceRule: string; lifetimeRule: string; exceptionMaxDays: number; exceptionAuthority: 'HQ_OWNER'; dataDeletion: 'NEVER';
+    graceBasis: string | null; graceNotice: string | null; ownerReadOnlyDays: number | null; ownerReadOnlyScope: string | null;
+    afterReadOnlyEffect: string | null };
   dryRun: { policyVersion: number; policyStatus: 'PROPOSED'; wouldBeState: SaasShadowAccessState; reason: string; daysUnpaid: number | null;
     graceDays: number; restrictAfterDays: number; suspendAfterDays: number; premiumAiWouldBeSuspended: boolean;
     condition: { entitlement: SaasEntitlementView | null; subscriptionStatus: string | null; paymentStatus: SaasSubscriptionPaymentStatus;
@@ -296,12 +298,15 @@ export function validateSaasAccessReadiness(value: unknown): SaasAccessReadiness
   if (p.status !== 'INACTIVE' || p.mutationsEnabled !== false || p.activation !== 'REVIEWED_MIGRATION_AFTER_OWNER_APPROVAL') drift();
   const t = record(r.proposedTerms, drift);
   exactKeys(t, ['policyVersion','status','newSchoolAccess','firstPayment','graceDays','restrictAfterDays','suspendAfterDays','restrictedEffect','suspendedEffect',
-    'reactivation','cancellationTiming','refundEffect','disputeEffect','founderPriceRule','lifetimeRule','exceptionMaxDays','exceptionAuthority','dataDeletion'], drift);
+    'reactivation','cancellationTiming','refundEffect','disputeEffect','founderPriceRule','lifetimeRule','exceptionMaxDays','exceptionAuthority','dataDeletion',
+    'graceBasis','graceNotice','ownerReadOnlyDays','ownerReadOnlyScope','afterReadOnlyEffect'], drift);
   if (!isInt(t.policyVersion, 1, 1000) || t.status !== 'PROPOSED' || !isInt(t.graceDays, 0, 30) || !isInt(t.restrictAfterDays, 0, 90)
-    || !isInt(t.suspendAfterDays, 1, 90) || (t.restrictAfterDays as number) < (t.graceDays as number) || (t.suspendAfterDays as number) <= (t.restrictAfterDays as number)
+    || !isInt(t.suspendAfterDays, 1, 90) || (t.restrictAfterDays as number) < (t.graceDays as number) || (t.suspendAfterDays as number) < (t.restrictAfterDays as number)
     || !isInt(t.exceptionMaxDays, 1, 90) || t.exceptionAuthority !== 'HQ_OWNER' || t.dataDeletion !== 'NEVER'
     || ![t.newSchoolAccess, t.firstPayment, t.restrictedEffect, t.suspendedEffect, t.reactivation, t.cancellationTiming, t.refundEffect, t.disputeEffect,
-      t.founderPriceRule, t.lifetimeRule].every(code)) drift();
+      t.founderPriceRule, t.lifetimeRule].every(code)
+    || ![t.graceBasis, t.graceNotice, t.ownerReadOnlyScope, t.afterReadOnlyEffect].every((v) => nullable(v, code))
+    || !nullable(t.ownerReadOnlyDays, (v: unknown) => isInt(v, 1, 365))) drift();
   const d = record(r.dryRun, drift);
   exactKeys(d, ['policyVersion','policyStatus','wouldBeState','reason','daysUnpaid','graceDays','restrictAfterDays','suspendAfterDays',
     'premiumAiWouldBeSuspended','condition','enforcement'], drift);
@@ -316,4 +321,29 @@ export function validateSaasAccessReadiness(value: unknown): SaasAccessReadiness
     || !nts(c.paidThroughAt) || !nts(c.unpaidSince) || !nullable(c.billingInterval, (x): x is string => has(['MONTHLY','ANNUAL','LIFETIME','NONE'], x))
     || !nullable(c.planMatchesEntitlement, (x): x is boolean => typeof x === 'boolean')) drift();
   return r as unknown as SaasAccessReadiness;
+}
+
+// In-app access standing for billing.hon.view at the exact school (owner suspension policy, terms v2). Read-only: it
+// reports the payment-issue grace end, the verified-owner CRM read-only window, or the CRM lock with billing open.
+export const SAAS_SCHOOL_ACCESS_STANDING_STATES = ['IN_GOOD_STANDING', 'PAYMENT_ISSUE_GRACE', 'PAYMENT_ISSUE_GRACE_ENDED',
+  'SUSPENDED_OWNER_READ_ONLY', 'CRM_LOCKED_BILLING_RECOVERY_OPEN', 'NO_ACCESS'] as const;
+export type SaasSchoolAccessStandingState = typeof SAAS_SCHOOL_ACCESS_STANDING_STATES[number];
+export interface SaasSchoolAccessStanding {
+  schoolId: string; organizationId: string; state: SaasSchoolAccessStandingState; paymentIssue: boolean;
+  paymentStatus: SaasSubscriptionPaymentStatus; renewalDueAt: string | null; graceEndsAt: string | null;
+  suspendedAt: string | null; ownerReadOnlyUntil: string | null; billingRecoveryOpen: true; dataDeletion: 'NEVER';
+  policyVersion: number; policyStatus: 'PROPOSED'; paidAccessProgram: 'ACTIVE' | 'INACTIVE'; asOf: string;
+}
+export function validateSaasSchoolAccessStanding(value: unknown): SaasSchoolAccessStanding {
+  const r = record(value, drift);
+  exactKeys(r, ['schoolId','organizationId','state','paymentIssue','paymentStatus','renewalDueAt','graceEndsAt','suspendedAt','ownerReadOnlyUntil',
+    'billingRecoveryOpen','dataDeletion','policyVersion','policyStatus','paidAccessProgram','asOf'], drift);
+  if (!isUuid(r.schoolId) || !isUuid(r.organizationId) || !has(SAAS_SCHOOL_ACCESS_STANDING_STATES, r.state) || typeof r.paymentIssue !== 'boolean'
+    || !has(SAAS_SUBSCRIPTION_PAYMENT_STATUSES, r.paymentStatus) || !nts(r.renewalDueAt) || !nts(r.graceEndsAt) || !nts(r.suspendedAt)
+    || !nts(r.ownerReadOnlyUntil) || r.billingRecoveryOpen !== true || r.dataDeletion !== 'NEVER' || !isInt(r.policyVersion, 1, 1000)
+    || r.policyStatus !== 'PROPOSED' || !has(['ACTIVE','INACTIVE'], r.paidAccessProgram) || !isTimestamp(r.asOf)
+    || (r.graceEndsAt === null) !== (r.renewalDueAt === null) || (r.suspendedAt === null) !== (r.ownerReadOnlyUntil === null)
+    || (r.state === 'SUSPENDED_OWNER_READ_ONLY' && r.suspendedAt === null)
+    || (has(['PAYMENT_ISSUE_GRACE','PAYMENT_ISSUE_GRACE_ENDED'], r.state) && r.graceEndsAt === null)) drift();
+  return r as unknown as SaasSchoolAccessStanding;
 }

@@ -82,6 +82,7 @@ import { LeadRegistrationRecoveryHumanUiGuard } from './crm/lead-registration-re
 import { TrialAppointmentController } from './crm/trial-appointment.controller.js';
 import { TrialAppointmentService } from './crm/trial-appointment.service.js';
 import { TrialAppointmentOutcomeController } from './crm/trial-appointment-outcome.controller.js';
+import { TrialAppointmentReadController } from './crm/trial-appointment-read.controller.js';
 import { TrialAppointmentOutcomeService } from './crm/trial-appointment-outcome.service.js';
 import { ActionEngineService } from './action/action-engine.service.js';
 import { InterfaceThemeController } from './preferences/interface-theme.controller.js';
@@ -309,6 +310,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadRegistrationRecoveryController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
+    TrialAppointmentReadController,
     PipelineController,
     CurriculumController,
     ProgramController,
