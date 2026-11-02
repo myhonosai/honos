@@ -18,8 +18,8 @@ export interface AiTeamAgentReadiness {
 export interface AiTeamReadiness {
   organizationId: string; schoolId: string; completeEntitlement: boolean;
   agentBudget: { committedCredits: number; ceilingCredits: number }; agents: AiTeamAgentReadiness[]; asOf: string;
-  /** No HON conversation backend exists yet; the composer must stay disabled. */
-  honConversation: { contract: false };
+  /** The C1 HON conversation contract exists; GET /hon/readiness gives the composer prerequisites. */
+  honConversation: { contract: true };
 }
 
 const isCount = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
@@ -50,7 +50,7 @@ export function validateAiTeamReadiness(value: unknown): AiTeamReadiness {
   const r = record(value, drift);
   exactKeys(r, ['organizationId', 'schoolId', 'completeEntitlement', 'agentBudget', 'agents', 'asOf', 'honConversation'], drift);
   const h = record(r.honConversation, drift); exactKeys(h, ['contract'], drift);
-  if (h.contract !== false || !Array.isArray(r.agents)) drift();
+  if (h.contract !== true || !Array.isArray(r.agents)) drift();
   const dbAgents = (r.agents as unknown[]).map((x) => {
     const { providerRuntime, ...rest } = record(x, drift);
     if (providerRuntime !== 'READY' && providerRuntime !== 'CONFIGURATION_REQUIRED') drift();
@@ -68,7 +68,7 @@ export function validateAiTeamReadiness(value: unknown): AiTeamReadiness {
 
 /** Composes the API shape from a validated database row and the server runtime state (no provider call). */
 export function composeAiTeamReadiness(row: ReturnType<typeof validateAiTeamReadinessRow>, runtime: (key: AiTeamReadyAgentKey) => AiTeamProviderRuntime): AiTeamReadiness {
-  return { ...row, honConversation: { contract: false }, agents: row.agents.map((a) => {
+  return { ...row, honConversation: { contract: true }, agents: row.agents.map((a) => {
     const providerRuntime = runtime(a.agentKey);
     return a.available && providerRuntime !== 'READY' ? { ...a, providerRuntime, available: false, blockedBy: 'PROVIDER_RUNTIME_NOT_CONFIGURED' } : { ...a, providerRuntime };
   }) };

@@ -28,7 +28,7 @@ test('AI-R1 contracts: closed agent list and consistent blockers; runtime refusa
     assert.throws(() => contracts.validateAiTeamReadinessRow(bad), JSON.stringify(bad).slice(0, 100));
   const composed = contracts.composeAiTeamReadiness(contracts.validateAiTeamReadinessRow(row()), (k) => (k === 'chad' ? 'READY' : 'CONFIGURATION_REQUIRED'));
   assert.deepEqual(composed.agents.map((a) => [a.agentKey, a.available, a.blockedBy]), [['marcus', false, 'PROVIDER_RUNTIME_NOT_CONFIGURED'], ['claire', false, 'PROVIDER_RUNTIME_NOT_CONFIGURED'], ['chad', true, null]]);
-  assert.deepEqual(composed.honConversation, { contract: false });
+  assert.deepEqual(composed.honConversation, { contract: true });
   assert.equal(contracts.validateAiTeamReadiness(composed).agents.length, 3);
   const paused = contracts.composeAiTeamReadiness(contracts.validateAiTeamReadinessRow(blocked), () => 'CONFIGURATION_REQUIRED');
   assert.equal(paused.agents[1].blockedBy, 'AI_PAUSED_BY_HQ', 'a database blocker is kept, never replaced by the runtime');

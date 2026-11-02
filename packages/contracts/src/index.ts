@@ -1027,3 +1027,4 @@ export * from './school-owner-invitations.js';
 export * from './ai-spend-pause.js';
 export * from './ai-unknown-resolution.js';
 export * from './ai-team-readiness.js';
+export * from './hon-conversation.js';

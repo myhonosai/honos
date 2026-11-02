@@ -121,6 +121,8 @@ const { ActionEngineService } = await import('../../../apps/api/dist/action/acti
 const { MarketingAssistantService } = await import('../../../apps/api/dist/marketing/marketing-assistant.service.js');
 const { TeachingAssistantService } = await import('../../../apps/api/dist/teaching-assistant/teaching-assistant.service.js');
 const { ChadFollowUpAssistantService } = await import('../../../apps/api/dist/chad-follow-up-assistant/chad-follow-up-assistant.service.js');
+const { HonConversationService } = await import('../../../apps/api/dist/hon-conversation/hon-conversation.controller.js');
+const { AiTeamReadinessService } = await import('../../../apps/api/dist/ai-team/ai-team-readiness.controller.js');
 const { ProviderRuntimeError } = await import('../../../apps/api/dist/ai/provider-runtime.js');
 const { ClaireProviderRuntimeError } = await import('../../../apps/api/dist/ai/claire-provider-runtime.js');
 const { ChadProviderRuntimeError } = await import('../../../apps/api/dist/ai/chad-provider-runtime.js');
@@ -760,6 +762,76 @@ try {
   const other = await makeOrg('inv-23-other');
   assert.equal((await settle(tenant(context(r0), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [other.subject])))).error?.code, '42501', 'another school’s owner');
   pass('INV-23', `AI-R1: team readiness reports all three agents available on a ready school, agrees with real requests across ${cases.length} gate changes (${Object.keys(seen).length} checks), names the budget and HQ pause blockers, refuses non-direct or foreign humans, and writes nothing or calls no provider`);
+  }
+
+  // ---- INV-24 (C1): HON conversation hands each turn to the named specialist once, approvals stay in Action Center ----
+  {
+  const c0 = await makeOrg('inv-24');
+  const scope = { organizationId: c0.id, schoolId: c0.school, principalId: c0.principal, externalSubject: c0.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad));
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? 'OK'; };
+  const calls = () => fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls;
+  const readiness = (await hon.readiness(scope)).data;
+  assert.deepEqual([readiness.contract, readiness.authorization, readiness.entitlement, readiness.providerRoute, readiness.availableAgentKeys], [true, true, true, true, ['marcus', 'claire', 'chad']]);
+  const k1 = K();
+  const conv = await hon.create(scope, { title: 'Spring enrollment push' }, k1);
+  assert.deepEqual([conv.status, conv.turnCount], ['READY', 0]);
+  assert.equal((await hon.create(scope, { title: 'Spring enrollment push' }, k1)).id, conv.id, 'conversation create is idempotent');
+  assert.equal(await code(hon.create(scope, { title: 'Other' }, k1)), 'HON_IDEMPOTENCY_CONFLICT');
+  const before = { calls: calls(), ledger: await ledgerRows(c0) };
+  const t1 = K();
+  const marcusTurn = { text: 'Draft a friendly spring beginner class post. Use placeholders for unprovided facts.', delegation: { agentKey: 'marcus', campaignId: c0.campaign } };
+  const r1 = await hon.sendTurn(scope, conv.id, marcusTurn, t1);
+  assert.equal(r1.status, 'AWAITING_APPROVAL'); assert.equal(r1.actionRequestIds.length, 1); assert.deepEqual(r1.delegatedAgentKeys, ['marcus']);
+  const inv = await row('SELECT * FROM hon.marketing_ai_invocations WHERE id=$1', [r1.invocationId]);
+  assert.deepEqual([inv.idempotency_key, inv.requested_by, inv.action_request_id, inv.work_item_id], [r1.turnId, c0.principal, r1.actionRequestIds[0], r1.workItemIds[0]], 'specialist record is found by turn id and requester only');
+  assert.equal((await row('SELECT status FROM hon.action_requests WHERE id=$1', [r1.actionRequestIds[0]])).status, 'AWAITING_APPROVAL', 'consequential step is an Action Center CONFIRM proposal');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.marketing_campaign_content WHERE organization_id=$1', [c0.id])).n, 0, 'nothing saved before human approval');
+  assert.deepEqual(await hon.sendTurn(scope, conv.id, marcusTurn, t1), r1, 'resend returns the same receipt');
+  assert.deepEqual([calls() - before.calls, (await ledgerRows(c0)) - before.ledger], [1, 1], 'one provider call and one ledger row despite the resend');
+  assert.equal(await code(hon.sendTurn(scope, conv.id, { ...marcusTurn, text: 'Something else' }, t1)), 'HON_IDEMPOTENCY_CONFLICT');
+  const r2 = await hon.sendTurn(scope, conv.id, { text: 'Outline a white belt practice.', delegation: { agentKey: 'claire', curriculumId: c0.curriculum } }, K());
+  const r3 = await hon.sendTurn(scope, conv.id, { text: 'Check in kindly about a trial class.', delegation: { agentKey: 'chad', leadId: c0.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' } }, K());
+  assert.deepEqual([r2.status, r3.status], ['AWAITING_APPROVAL', 'AWAITING_APPROVAL']);
+  assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Just chat with me' }, K())), 'INVALID_HON_TURN');
+  assert.equal((await settle(tenant(context(c0), (client) => client.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [c0.subject, conv.id, JSON.stringify({ text: 'hi', delegation: { agentKey: 'hon' } }), K()])))).error?.message, 'HON_DELEGATION_REQUIRED', 'no HON-authored answer path');
+  // A specialist refusal (entitlement suspended) is recorded before any provider call; the conversation itself stays readable.
+  await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [c0.id]);
+  const n = calls();
+  const refused = await hon.sendTurn(scope, conv.id, marcusTurn, K());
+  await restoreEntitlement(c0);
+  assert.deepEqual([refused.status, refused.reason, refused.invocationId, calls() - n], ['FAILED', 'AGENT_NOT_AUTHORIZED', null, 0]);
+  // An unknown provider outcome is reported as UNKNOWN, never success or failure.
+  fakes.marcus.mode = 'UNKNOWN';
+  const unknown = await hon.sendTurn(scope, conv.id, { ...marcusTurn, text: 'A second spring post.' }, K());
+  fakes.marcus.mode = 'RESULT';
+  assert.equal(unknown.status, 'UNKNOWN');
+  const thread = await hon.read(scope, conv.id);
+  assert.deepEqual(thread.turns.map((t) => t.role), ['HUMAN', 'marcus', 'HUMAN', 'claire', 'HUMAN', 'chad', 'HUMAN', 'marcus', 'HUMAN', 'marcus']);
+  assert.deepEqual(thread.turns.filter((t) => t.role !== 'HUMAN').map((t) => t.status), ['AWAITING_APPROVAL', 'AWAITING_APPROVAL', 'AWAITING_APPROVAL', 'FAILED', 'UNKNOWN']);
+  assert.ok(thread.turns.filter((t) => t.role !== 'HUMAN').every((t) => t.text === null), 'specialist drafts stay behind their own reads');
+  assert.equal(thread.status, 'UNKNOWN');
+  // Pagination: newest first, keyset cursor.
+  const c2 = await hon.create(scope, { title: 'Second' }, K()), c3 = await hon.create(scope, { title: 'Third' }, K());
+  const p1 = await hon.list(scope, { limit: '2' });
+  assert.deepEqual(p1.items.map((x) => x.id), [c3.id, c2.id]); assert.ok(p1.nextCursor);
+  const p2 = await hon.list(scope, { limit: '2', cursor: p1.nextCursor });
+  assert.deepEqual([p2.items.map((x) => x.id), p2.nextCursor], [[conv.id], null]);
+  // Isolation: another school's owner cannot see or extend it; a foreign subject in this tenant is refused.
+  const other = await makeOrg('inv-24-other');
+  const otherScope = { organizationId: other.id, schoolId: other.school, principalId: other.principal, externalSubject: other.subject };
+  assert.equal(await code(hon.read(otherScope, conv.id)), 'HON_CONVERSATION_NOT_FOUND');
+  assert.equal(await code(hon.sendTurn(otherScope, conv.id, marcusTurn, K())), 'HON_CONVERSATION_NOT_FOUND');
+  assert.deepEqual((await hon.list(otherScope, {})).items, []);
+  assert.equal(await code(hon.read({ ...scope, externalSubject: other.subject }, conv.id)), 'HON_CONVERSATION_FORBIDDEN');
+  assert.equal((await settle(tenant(context(c0), async (client) => { await client.query("SELECT set_config('app.hon_source','AI_AGENT',true)"); return client.query('SELECT hon.read_hon_conversation($1,$2)', [c0.subject, conv.id]); }))).error?.code, '42501', 'not the direct human source');
+  for (const t of ['hon_conversations', 'hon_conversation_turns']) {
+    assert.equal((await row(`SELECT has_table_privilege($1,'hon.${t}','SELECT') s`, [runtimeRole])).s, false, `${t}: functions only`);
+  }
+  for (const f of ['hon_conversation_actor(text)', 'hon_turn_view(hon.hon_conversation_turns)', 'hon_conversation_summary(hon.hon_conversations)']) {
+    assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
+  }
+  pass('INV-24', 'C1: HON conversation turns hand off once to the named specialist (turn id = specialist idempotency key, one provider call and one ledger row per turn despite resends), every draft lands as an Action Center CONFIRM proposal, refusals and unknown outcomes are reported honestly, no HON-authored answer path, requester- and school-scoped, functions-only tables');
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
