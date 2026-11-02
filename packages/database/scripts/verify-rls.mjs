@@ -101,6 +101,8 @@ const expectedRlsTables = [
   'ai_usage_ledger',
   'ai_spend_pauses',
   'ai_unknown_resolutions',
+  'hon_conversations',
+  'hon_conversation_turns',
   'ai_invocation_plans',
   'chad_follow_up_invocations',
   'chad_follow_up_drafts',
