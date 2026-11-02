@@ -433,8 +433,10 @@ try {
   await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [x.id]);
   assert.equal(await expectRefused('marcus', x, {}, 'suspended before exception'), 'HTTP_403');
   const view = await schoolBilling.readExceptionPolicy(hq.subject);
-  // Synthetic approval ONLY in this disposable database; never a seed or operational approval.
-  await schoolBilling.decideExceptionPolicy(hq.subject, { expectedRevision: view.current?.revision ?? 0, decision: 'APPROVED', termsVersion: 1, maxDays: 90,
+  // Synthetic approval ONLY in this disposable database; never a seed or operational approval. Decisions bind to the
+  // latest proposed paid-access terms version (2 since 0192), so a v1 approval cannot authorize a grant.
+  const termsVersion = Number((await row('SELECT max(policy_version) v FROM hon.saas_access_policy_terms')).v);
+  await schoolBilling.decideExceptionPolicy(hq.subject, { expectedRevision: view.current?.revision ?? 0, decision: 'APPROVED', termsVersion, maxDays: 90,
     validFrom: new Date(Date.now() - 60_000).toISOString(), validUntil: new Date(Date.now() + 86_400_000).toISOString(),
     reason: 'DISPOSABLE SYNTHETIC AI-0 TEST ONLY; no operational policy approval', confirmation: 'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY' }, K());
   const version = async () => (await row('SELECT version FROM hon.organization_entitlements WHERE organization_id=$1', [x.id])).version;
