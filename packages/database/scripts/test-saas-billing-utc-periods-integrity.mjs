@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, verifyChampionsProofConnection } from './champions-proof-target.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -11,8 +12,10 @@ import { DIVERGENT_PERIODS_SQL } from './saas-billing-utc-operator-check.mjs';
 // Runs on the disposable Champions Club fixture through the real API services (RuntimeDatabaseService +
 // SaasBillingService). Anchors are moved into the past with guards disabled (disposable fixture only);
 // the system clock is never changed. No provider, payment, entitlement or credit effect.
-const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
-if(owner.hostname!=='localhost'||owner.port!=='5432'||owner.pathname!=='/hon_champions_validation'||owner.username!=='hon_champions_owner'||runtime.hostname!==owner.hostname||runtime.port!==owner.port||runtime.pathname!==owner.pathname||runtime.username!=='hon_champions_runtime')throw new Error('Only exact disposable localhost validation URLs permitted; never remote DB.');
+// Fail-closed target guard (Manus review P2): exact disposable localhost fixture as node-postgres itself interprets
+// the URLs, no PG* overrides, explicit client configs, then a server-side database/role/loopback/marker check below.
+await import('./test-champions-proof-target.mjs');
+const targets=championsProofTargets(process.env),runtime={username:CHAMPIONS_RUNTIME_ROLE};
 if(Object.keys(process.env).some(key=>/^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(key)))throw new Error('Provider credentials/execution switches are forbidden.');
 // One pooled connection, so every API call below reuses the SAME backend session (connection-pool reuse).
 process.env.HON_RUNTIME_DATABASE_POOL_MAX='1';
@@ -21,7 +24,7 @@ const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saa
 const contracts=await import('@hon/contracts');
 const db=new RuntimeDatabaseService(),api=new SaasBillingService(db);
 const pool=db['getPool']();
-const admin=new pg.Client({connectionString:owner.toString(),ssl:false});
+const admin=new pg.Client(targets.owner);
 const saasTables=['saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions','saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions','saas_provider_cost_evidence','saas_payment_evidence','saas_invoice_lines','saas_invoices','saas_invoice_sequences','saas_outbox','saas_audit','saas_requests','saas_subscription_history','saas_subscriptions','saas_founder_reservations','saas_catalog_offers','saas_catalog_plans','saas_catalog_versions'];
 const K=()=>randomUUID(),iso=d=>new Date(d).toISOString(),NOW=Date.now(),HOUR=3600_000,DAY=24*HOUR;
@@ -71,6 +74,8 @@ const dstAroundNow=()=>{const doy=d=>Math.floor((Date.UTC(d.getUTCFullYear(),d.g
 
 let commands=0,advances=0,drafts=0;
 await admin.connect();
+await verifyChampionsProofConnection(admin,CHAMPIONS_OWNER_ROLE);
+await verifyChampionsProofConnection({query:(...a)=>pool.query(...a)},CHAMPIONS_RUNTIME_ROLE);
 let databaseDefaultChanged=false;
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
