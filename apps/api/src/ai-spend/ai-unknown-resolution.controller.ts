@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Body, Controller, ForbiddenException, Get, Headers, HttpCode, Injectable, Param, Post, Req, UseGuards } from '@nestjs/common';
-import { SAAS_COMMANDS, saasUuid, validateAiUnknownAgent, validateAiUnknownQueue, validateAiUnknownResolutionInput, validateAiUnknownResolutionReceipt } from '@hon/contracts';
+import { SAAS_COMMANDS, saasUuid, validateAiUnknownAgent, validateAiLateProviderExpenseInput, validateAiLateProviderExpenseReceipt, validateAiUnknownQueue, validateAiUnknownResolutionInput, validateAiUnknownResolutionReceipt } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { SaasCommandGuard, SaasCommandName, SaasReadGuard } from '../saas-billing/saas-billing.guards.js';
@@ -30,6 +30,12 @@ export class AiUnknownResolutionService {
     return this.billing.call('resolveAiUnknownInvocation', [subjectId, a, id, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
       validateAiUnknownResolutionReceipt);
   }
+  /** A verified provider charge found after a WRITE_OFF: recorded once, zero customer credits, original window. */
+  async lateExpense(subjectId: string, agent: unknown, invocationId: unknown, body: unknown, key: unknown) {
+    const [a, id, input, idempotencyKey] = parse(() => [validateAiUnknownAgent(agent), saasUuid(invocationId), validateAiLateProviderExpenseInput(body), saasUuid(key)] as const);
+    return this.billing.call('recordAiLateProviderExpense', [subjectId, a, id, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
+      validateAiLateProviderExpenseReceipt);
+  }
 }
 
 @Controller('hq/ai/unknown-invocations')
@@ -44,5 +50,10 @@ export class AiUnknownResolutionHqController {
   async resolve(@Req() req: HonRequest, @Param('agent') agent: string, @Param('invocationId') invocationId: string, @Body() body: unknown,
     @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.unknown.resolve(subject(req), agent, invocationId, body, key) };
+  }
+  @Post(':agent/:invocationId/late-provider-expense') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.aiLateProviderExpense)
+  async lateExpense(@Req() req: HonRequest, @Param('agent') agent: string, @Param('invocationId') invocationId: string, @Body() body: unknown,
+    @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.unknown.lateExpense(subject(req), agent, invocationId, body, key) };
   }
 }

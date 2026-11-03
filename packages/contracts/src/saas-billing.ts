@@ -95,6 +95,7 @@ export const SAAS_COMMANDS = {
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
   aiSpendPause: 'ai-spend-pause',
   aiUnknownResolve: 'ai-unknown-resolve',
+  aiLateProviderExpense: 'ai-late-provider-expense',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
