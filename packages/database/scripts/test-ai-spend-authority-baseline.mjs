@@ -1659,6 +1659,62 @@ try {
   }
   pass('INV-24S', `C1: each turn is bound to its specialist target and fingerprint: ${outcomes.join('; ')}; normal hand-over, resend and exact-target replay keep one record, one provider call and one Action Center proposal`);
   }
+
+  // ---- INV-24W (C1, Manus delta review P2): Marcus hand-overs use one canonical request text and fingerprint ----
+  // Whitespace that Marcus's own request contract trims (JavaScript trim) must not refuse a valid hand-over: the turn's
+  // target and fingerprint are computed from the same canonical text Marcus records. Equivalent texts share one
+  // fingerprint, different texts stay distinct, direct-key substitution stays refused, concurrent resends make one call.
+  {
+  const turnSql = 'SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) r';
+  const o = await makeOrg('inv-24w');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad));
+  const conv = await hon.create(scope, { title: 'Whitespace' }, K());
+  const plain = 'Draft a friendly spring beginner class post.';
+  const turn = (text) => ({ text, delegation: { agentKey: 'marcus', campaignId: o.campaign } });
+  const fingerprintOf = async (turnId) => (await row('SELECT delegation_fingerprint f, delegation d FROM hon.hon_conversation_turns WHERE id=$1', [turnId]));
+  const recordOf = async (turnId) => rows('SELECT id, request_hash, request_text FROM hon.marketing_ai_invocations WHERE organization_id=$1 AND idempotency_key=$2', [o.id, turnId]);
+  fakes.marcus.mode = 'RESULT';
+  const variants = [plain, `  ${plain}  `, `\n\t${plain}\r\n`, `\u00a0\u3000${plain}\u2028`, `\ufeff\u2003${plain}\u205f\u202f`, `\u2029\u1680${plain}\u2009 `];
+  const fps = new Set(), seenV = [];
+  for (const text of variants) {
+    assert.equal(text.trim(), plain, 'the variant is equivalent under Marcus\'s own trim');
+    const calls = fakes.marcus.calls;
+    const r = await settle(hon.sendTurn(scope, conv.id, turn(text), K()));
+    assert.equal(r.value?.status, 'AWAITING_APPROVAL', `variant ${JSON.stringify(text)}: valid hand-over must complete: ${JSON.stringify(r.value ?? r.error?.message)}`);
+    const t = await fingerprintOf(r.value.turnId), rec = await recordOf(r.value.turnId);
+    assert.deepEqual([rec.length, rec[0]?.request_hash, rec[0]?.request_text, t.d.request], [1, t.f, plain, plain], `variant ${JSON.stringify(text)}: one Marcus record bound to the turn's canonical target`);
+    assert.equal(fakes.marcus.calls - calls, 1);
+    // Direct-key substitution under this turn id stays refused; the same canonical request replays.
+    assert.ok((await settle(agents.marcus.service.submit(context(o, { idempotencyKey: r.value.turnId }), { campaignId: o.campaign, request: 'Write something completely different.' }))).error, 'substitution refused');
+    assert.equal((await agents.marcus.service.submit(context(o, { idempotencyKey: r.value.turnId }), { campaignId: o.campaign, request: text })).id, rec[0].id, 'the equivalent request replays');
+    assert.equal(fakes.marcus.calls - calls, 1, 'no second provider call');
+    fps.add(t.f); seenV.push(JSON.stringify(text));
+  }
+  assert.equal(fps.size, 1, 'canonically equivalent requests produce one fingerprint');
+  // Different semantic targets stay distinct (inner whitespace is content; another campaign is another target).
+  const inner = await hon.sendTurn(scope, conv.id, turn(plain.replace('spring ', 'spring  ')), K());
+  assert.notEqual((await fingerprintOf(inner.turnId)).f, [...fps][0], 'inner whitespace is not normalized away');
+  const start = new Date(Date.now() + 3_600_000).toISOString(), end = new Date(Date.now() + 30 * 86_400_000).toISOString();
+  const c2 = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0B', name: 'AI-0 synthetic campaign B', goal: 'Introduce beginner classes', offerLabel: '', channel: 'REFERRAL', startsAt: start, endsAt: end, plannedBudgetMinor: 0, currency: 'USD' })).campaign.id;
+  const t2 = await hon.sendTurn(scope, conv.id, { text: plain, delegation: { agentKey: 'marcus', campaignId: c2 } }, K());
+  assert.notEqual((await fingerprintOf(t2.turnId)).f, [...fps][0], 'another campaign is another fingerprint');
+  // Concurrent resends of one whitespace-variant turn: one Marcus record, one provider call.
+  const key = K(), calls = fakes.marcus.calls;
+  const [a, b] = await Promise.all([settle(hon.sendTurn(scope, conv.id, turn(`  ${plain}\n`), key)), settle(hon.sendTurn(scope, conv.id, turn(`  ${plain}\n`), key))]);
+  const turnId = (a.value ?? b.value).turnId;
+  assert.deepEqual([(await recordOf(turnId)).length, fakes.marcus.calls - calls], [1, 1], `concurrent resends: ${JSON.stringify([a.value ?? a.error?.message, b.value ?? b.error?.message])}`);
+  // The canonical function equals JavaScript trim for every whitespace-like code point, including ones trim keeps.
+  const points = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0, 0x1680, 0x180e, ...Array.from({ length: 11 }, (_, k) => 0x2000 + k), 0x200b, 0x200c, 0x200d,
+    0x2028, 0x2029, 0x202f, 0x205f, 0x2060, 0x3000, 0xfeff, 0x41];
+  for (const cp of points) {
+    const ch = String.fromCodePoint(cp), sample = `${ch}${ch}a${ch}b${ch}`;
+    assert.equal((await row('SELECT hon.hon_canonical_request_text($1) t', [sample])).t, sample.trim(), `U+${cp.toString(16).padStart(4, '0')}: same as JavaScript trim`);
+  }
+  // A text that is only whitespace under trim is refused before any turn is recorded.
+  assert.equal((await settle(tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turn('\u00a0\u3000\u2028')), K()])))).error?.code, '22023');
+  pass('INV-24W', `C1: Marcus hand-overs use one canonical request (JavaScript trim, ${points.length} code points checked): ${variants.length} whitespace variants hand over to one Marcus record each with the turn's fingerprint (one fingerprint for all), substitution refused and the equivalent request replays, inner whitespace and another campaign stay distinct, concurrent resends make one call, whitespace-only text refused`);
+  }
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
