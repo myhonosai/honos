@@ -14,8 +14,10 @@ const contracts = require('@hon/contracts');
 
 const U = () => randomUUID(), T = '2026-11-01T00:00:00.000Z';
 // amt(credits, providerReported, entries, estimate = 0, writeOffs = 0)
-const amt = (credits, cost, entries, estimate = 0, writeOffs = 0) => ({ credits, providerReportedCostMicrounits: cost, estimatedWriteOffCostMicrounits: estimate, entries, writeOffEntries: writeOffs });
-const totals = (cost, estimate, entries, writeOffs) => ({ providerReportedCostMicrounits: cost, estimatedWriteOffCostMicrounits: estimate, entries, writeOffEntries: writeOffs });
+// late(actual, lateEntries, superseded): a verified provider charge recorded after a WRITE_OFF, reported beside the totals.
+const late = (actual = 0, n = 0, superseded = 0) => ({ lateProviderCostMicrounits: actual, lateProviderExpenseEntries: n, supersededWriteOffEstimateMicrounits: superseded });
+const amt = (credits, cost, entries, estimate = 0, writeOffs = 0, l = late()) => ({ credits, providerReportedCostMicrounits: cost, estimatedWriteOffCostMicrounits: estimate, entries, writeOffEntries: writeOffs, ...l });
+const totals = (cost, estimate, entries, writeOffs, l = late()) => ({ providerReportedCostMicrounits: cost, estimatedWriteOffCostMicrounits: estimate, entries, writeOffEntries: writeOffs, ...l });
 // Mixed school: two Marcus rows (one an HQ write-off estimate of 900), one Chad row, one creative-media row.
 const school = (org, patch = {}) => ({ organizationId: org, schoolId: U(), ...totals(9000, 900, 4, 1), unreconciledInvocations: 1,
   byClass: { AGENT_INFERENCE: { ...amt(7, 6000, 3, 900, 1), byAgent: { MARKETING: amt(4, 4000, 2, 900, 1), CHAD_FOLLOW_UP: amt(3, 2000, 1) } },
@@ -29,6 +31,18 @@ test('S4-e contracts: per-school totals add up per class and per agent; credits 
   assert.equal(contracts.validateAiSchoolUsageReport(report()).schools.length, 1);
   assert.equal(contracts.validateAiSchoolUsageReport(report({ schools: [], organizations: [] })).schools.length, 0);
   const o = U();
+  // The write-off estimate (900) now has a late actual (1100): reported beside, the three classified totals unchanged.
+  const lateSchool = (patch = {}, l = late(1100, 1, 900)) => school(o, { ...totals(9000, 900, 4, 1, l),
+    byClass: { AGENT_INFERENCE: { ...amt(7, 6000, 3, 900, 1, l), byAgent: { MARKETING: amt(4, 4000, 2, 900, 1, l), CHAD_FOLLOW_UP: amt(3, 2000, 1) } },
+      CREATIVE_MEDIA: { ...amt(50, 3000, 1), byAgent: null } }, ...patch });
+  assert.equal(contracts.validateAiSchoolUsageReport(report({ schools: [lateSchool()], organizations: [org(o)] })).schools[0].lateProviderCostMicrounits, 1100);
+  for (const bad of [
+    lateSchool({ lateProviderCostMicrounits: 0 }),                       // totals do not add up
+    lateSchool({}, late(1100, 2, 900)),                                  // more late actuals than write-offs
+    lateSchool({}, late(1100, 0, 0)),                                    // an amount with no late entry
+    lateSchool({}, late(1100, 1, 1000)),                                 // superseded more than the estimate
+    lateSchool({ ...totals(10100, 900, 4, 1, late(1100, 1, 900)) })])    // late actual folded into provider-reported
+    assert.throws(() => contracts.validateAiSchoolUsageReport(report({ schools: [bad], organizations: [org(o)] })), JSON.stringify(bad).slice(0, 160));
   for (const bad of [
     report({ schools: [school(o, { entries: 5 })], organizations: [org(o)] }),
     report({ schools: [school(o, { providerReportedCostMicrounits: 9900 })], organizations: [org(o)] }),

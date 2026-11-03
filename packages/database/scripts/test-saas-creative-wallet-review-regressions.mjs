@@ -63,11 +63,14 @@ async function cleanup(){
  const orgs=[...created,...(await admin.query("SELECT s.organization_id id FROM hon.saas_access_transitions s WHERE s.reason='NEW_SCHOOL_REGISTERED'").catch(()=>({rows:[]}))).rows.map(r=>r.id)];
  const cts=[...creativeTables];for(const t of optionalCreativeTables)if(await tableExists(t))cts.unshift(t);
  await admin.query('BEGIN');try{
-  const all=[...cts,'saas_creative_program',...saasTables,'saas_credit_program','saas_reward_fulfillment','saas_payment_program','ai_spend_pauses'];
+  // 0195 (final review): immutable pause/resume command identities reference the pause rows.
+  const pauseTables=(await tableExists('ai_spend_pause_commands'))?['ai_spend_pause_commands','ai_spend_pauses']:['ai_spend_pauses'];
+  const all=[...cts,'saas_creative_program',...saasTables,'saas_credit_program','saas_reward_fulfillment','saas_payment_program',...pauseTables];
   for(const t of all)await admin.query(`ALTER TABLE hon.${t} DISABLE TRIGGER USER`);
   await admin.query('SET CONSTRAINTS ALL DEFERRED');
   for(const t of cts)await admin.query(`DELETE FROM hon.${t}`);
   await admin.query("UPDATE hon.saas_creative_program SET status='INACTIVE',version=1,authorization_reference=NULL,changed_by_principal_id=NULL");
+  if(pauseTables.length===2)await admin.query('DELETE FROM hon.ai_spend_pause_commands WHERE actor_principal_id=ANY($1::uuid[])',[Object.values(humans).map(h=>h.id)]);
   await admin.query('DELETE FROM hon.ai_spend_pauses WHERE paused_by_principal_id=ANY($1::uuid[])',[Object.values(humans).map(h=>h.id)]);
   await admin.query('DELETE FROM hon.ai_usage_ledger WHERE organization_id=ANY($1::uuid[])',[orgs]);
   for(const t of saasTables)await admin.query(`DELETE FROM hon.${t}`);
@@ -398,7 +401,7 @@ try{
  await setAccessProgram(false);programTouched=false;
 }finally{
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
- await cleanup().catch(e=>console.error(e));
+ await cleanup().catch(e=>{console.error(e);process.exitCode=1;});
  await Promise.allSettled([admin.end(),ownerPool.end(),database.onModuleDestroy?.()]);
 }
 const failed=results.filter(r=>r[1]==='FAIL');
