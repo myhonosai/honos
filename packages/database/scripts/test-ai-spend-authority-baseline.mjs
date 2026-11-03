@@ -973,8 +973,8 @@ try {
     assert.deepEqual([led.length, new Date(led[0].occurred_at).toISOString()], [1, new Date(after.held_at).toISOString()], `${name}: the late cost is booked in the original window`);
     seen.push(name);
   }
-  // No trustworthy origin (a hold from before held_at existed): fail closed. It always counts, shows no time, and can
-  // only be resolved NO_PROVIDER_CHARGE; a ledger decision would need an invented time and is refused.
+  // No trustworthy origin (a hold from before held_at existed): fail closed. It always counts, shows no time, and is
+  // never resolvable (Manus delta review P2): any decision would release capacity on an unproven origin.
   const legacy = await lostOutcome('inv-19w-legacy');
   await admin.query('BEGIN');
   await admin.query(`ALTER TABLE hon.${agents.marcus.table} DISABLE TRIGGER USER`);
@@ -986,8 +986,82 @@ try {
   assert.deepEqual([lq?.heldAt, lq?.countsAgainstCurrentWindow], [null, true]);
   assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, recordInput)).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
   assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 1 } })).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
-  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-legacy' } })).value?.rows[0].r.ledgerEntryId, null);
-  pass('INV-19W', `S4-d: immutable hold origin: for ${seen.join(', ')} a hold taken last window and recorded UNKNOWN now (updated_at current) stays in its original window (not counted now, HQ shows the original time, late cost booked there); held_at cannot be set; a NULL-origin hold counts always and refuses ledger decisions`);
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-legacy' } })).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
+  assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [legacy.o.id])).n), agents.marcus.estimate, 'a refused NULL-origin hold keeps counting');
+  pass('INV-19W', `S4-d: immutable hold origin: for ${seen.join(', ')} a hold taken last window and recorded UNKNOWN now (updated_at current) stays in its original window (not counted now, HQ shows the original time, late cost booked there); held_at cannot be set; a NULL-origin hold counts always and refuses every decision`);
+  }
+
+  // ---- INV-19N (S4-d, Manus delta review P2): a hold without a trustworthy origin is never released ----
+  // For each agent, a real SENDING hold whose held_at is missing (as for a hold taken before held_at existed): before
+  // and after the stale limit measured on the mutable updated_at/created_at, under concurrent resolution attempts, and
+  // after the provider outcome turns it UNKNOWN, no decision releases it: it keeps counting, nothing is written. A hold
+  // with a trustworthy origin is still resolved exactly once under concurrent attempts (one ledger row, one release).
+  {
+  const errors = { marcus: ProviderRuntimeError, claire: ClaireProviderRuntimeError, chad: ChadProviderRuntimeError };
+  const agentCode = { marcus: 'MARKETING', claire: 'TEACHING', chad: 'CHAD_FOLLOW_UP' };
+  const committed = async (o) => Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [o.id])).n);
+  const written = async (id) => row(`SELECT (SELECT count(*)::int FROM hon.ai_unknown_resolutions WHERE invocation_id=$1) res,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger WHERE source_invocation_id=$1) led,
+      (SELECT count(*)::int FROM hon.audit_events WHERE entity_id=$1 AND action_code='hq.ai.unknown_invocation.resolve') aud,
+      (SELECT count(*)::int FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='ai.unknown_invocation.resolved') obx`, [id]);
+  const adminPatch = async (table, id, set) => {
+    await admin.query('BEGIN');
+    await admin.query(`ALTER TABLE hon.${table} DISABLE TRIGGER USER`);
+    await admin.query(`UPDATE hon.${table} SET ${set} WHERE id=$1`, [id]);
+    await admin.query(`ALTER TABLE hon.${table} ENABLE TRIGGER USER`);
+    await admin.query('COMMIT');
+  };
+  const decisions = (name, tag) => [
+    { ...recordInput, evidence: { ...recordInput.evidence, providerGenerationId: `gen-ai0-19n-${name}-${tag}` } },
+    { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 900 } },
+    { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: `lookup-ai0-19n-${name}-${tag}` } }];
+  const allRefused = async (name, id, tag, label) => {
+    const key = K();
+    const attempts = await Promise.all([...decisions(name, tag), ...decisions(name, `${tag}-b`)].map((input, i) => resolve(hq.subject, agentCode[name], id, input, i === 5 ? key : K()))
+      .concat([resolve(hq.subject, agentCode[name], id, decisions(name, tag)[2], key)]));
+    for (const r of attempts) assert.equal(r.error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE', `${name} ${label}: ${r.error?.message ?? 'released'}`);
+  };
+  const seen = [];
+  for (const name of ['marcus', 'claire', 'chad']) {
+    const a = agents[name], o = await makeOrg(`inv-19n-${name}`);
+    const held = await startHeld(name, o);
+    assert.equal(held.sending, true, `${name}: the hold is taken`);
+    const inv = await row(`SELECT id FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id]);
+    await adminPatch(a.table, inv.id, 'held_at=NULL');
+    // Before the stale limit (updated_at fresh): every decision is refused, concurrently, with no write.
+    await allRefused(name, inv.id, 'fresh', 'NULL-origin SENDING before the stale limit');
+    assert.equal(await committed(o), a.estimate, `${name}: still counts`);
+    // After the stale limit measured only on the mutable timestamps: still refused; staleness is never inferred.
+    await adminPatch(a.table, inv.id, "updated_at=clock_timestamp()-interval '2 hours', created_at=created_at-interval '2 hours'");
+    await allRefused(name, inv.id, 'stale', 'NULL-origin SENDING past the stale limit by updated_at');
+    assert.deepEqual([await committed(o), (await reservedByAgent(o))[name], await sendingCount(o)], [a.estimate, a.estimate, 1], `${name}: the hold is untouched`);
+    // The provider outcome arrives as UNKNOWN: the NULL-origin UNKNOWN hold is refused too.
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    await held.submitted;
+    assert.equal((await row(`SELECT status FROM hon.${a.table} WHERE id=$1`, [inv.id])).status, 'UNKNOWN');
+    await allRefused(name, inv.id, 'unknown', 'NULL-origin UNKNOWN');
+    assert.deepEqual([await committed(o), (await reservedByAgent(o))[name]], [a.estimate, a.estimate], `${name}: no release`);
+    assert.deepEqual(await written(inv.id), { res: 0, led: 0, aud: 0, obx: 0 }, `${name}: nothing written`);
+    const q = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.open.find((x) => x.invocationId === inv.id);
+    assert.deepEqual([q?.heldAt, q?.countsAgainstCurrentWindow], [null, true], `${name}: HQ sees an open hold with no time that still counts`);
+    // With a trustworthy origin: a fresh SENDING hold is not resolvable; an UNKNOWN one resolves exactly once under
+    // concurrent attempts (one ledger row and one provider cost, one release).
+    const o2 = await makeOrg(`inv-19n-${name}-valid`);
+    const held2 = await startHeld(name, o2);
+    const inv2 = await row(`SELECT id, held_at FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o2.id]);
+    assert.ok(inv2.held_at);
+    await adminPatch(a.table, inv2.id, "updated_at=clock_timestamp()-interval '2 hours', created_at=created_at-interval '2 hours'");
+    assert.equal((await resolve(hq.subject, agentCode[name], inv2.id, decisions(name, 'v0')[2])).error?.message, 'AI_UNKNOWN_NOT_RESOLVABLE', `${name}: a SENDING hold with a fresh origin is in flight`);
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    await held2.submitted;
+    const race = await Promise.all([decisions(name, 'v1')[0], decisions(name, 'v2')[0], decisions(name, 'v3')[2]].map((input) => resolve(hq.subject, agentCode[name], inv2.id, input)));
+    assert.equal(race.filter((r) => r.value).length, 1, `${name}: exactly one concurrent resolution wins`);
+    for (const r of race.filter((x) => x.error)) assert.equal(r.error.message, 'AI_UNKNOWN_NOT_RESOLVABLE');
+    const w = await written(inv2.id);
+    assert.deepEqual([w.res, w.aud, w.obx, w.led <= 1, (await reservedByAgent(o2))[name]], [1, 1, 1, true, 0], `${name}: one release, no duplicate cost`);
+    seen.push(name);
+  }
+  pass('INV-19N', `S4-d: for ${seen.join(', ')} a SENDING hold without a trustworthy origin is never released (before and after the stale limit by updated_at, under 7 concurrent attempts incl. a key replay, and after it turns UNKNOWN): it keeps counting, the HQ queue shows it, no resolution/ledger/audit/outbox row; a hold with an origin: fresh SENDING refused, UNKNOWN resolved exactly once under 3 concurrent attempts (no duplicate provider cost)`);
   }
 
   // ---- INV-20L (S4-d, Manus final review P2): a verified provider charge after a WRITE_OFF is recorded once ----

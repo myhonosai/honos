@@ -14,7 +14,8 @@ BEGIN;
 -- 3. hon.read_ai_unknown_invocations_from_hq: the HQ queue (open items and recent resolutions).
 -- 4. (Manus final review P2) A hold's window comes from an immutable held_at stamped when the hold is taken, never
 --    from the mutable updated_at. A hold with no trustworthy held_at (taken before this migration) fails closed: it
---    always counts, and it can only be resolved NO_PROVIDER_CHARGE (no ledger row needs a time).
+--    always counts and is never resolvable (Manus delta review P2: a missing origin proves neither staleness nor the
+--    window, and its UNKNOWN status may have been inferred from updated_at), so no unverified release frees capacity.
 -- 5. (Manus final review P2) hon.record_ai_late_provider_expense: after a WRITE_OFF, an HQ owner may record the verified
 --    actual provider charge once, as separate immutable evidence attributed to the original hold window. It writes no
 --    ledger row (the write-off row stays the one ledger row per call), keeps the WRITE_OFF decision and estimate as
@@ -83,7 +84,7 @@ CREATE TABLE hon.ai_unknown_resolutions (
   organization_id uuid NOT NULL REFERENCES hon.organizations(id) ON DELETE RESTRICT,
   school_id uuid NOT NULL,
   prior_status text NOT NULL CHECK (prior_status IN ('UNKNOWN','SENDING')),
-  held_at timestamptz,
+  held_at timestamptz NOT NULL,
   released_credits integer NOT NULL CHECK (released_credits > 0),
   decision text NOT NULL CHECK (decision IN ('RECORD_PROVIDER_COST','NO_PROVIDER_CHARGE','WRITE_OFF')),
   reason text NOT NULL CHECK (reason = btrim(reason) AND length(reason) BETWEEN 10 AND 500),
@@ -95,8 +96,7 @@ CREATE TABLE hon.ai_unknown_resolutions (
   resolved_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   UNIQUE (agent, invocation_id),
   FOREIGN KEY (school_id, organization_id) REFERENCES hon.schools(id, organization_id) ON DELETE RESTRICT,
-  CHECK ((decision = 'NO_PROVIDER_CHARGE') = (ledger_entry_id IS NULL)),
-  CHECK (held_at IS NOT NULL OR decision = 'NO_PROVIDER_CHARGE')
+  CHECK ((decision = 'NO_PROVIDER_CHARGE') = (ledger_entry_id IS NULL))
 );
 ALTER TABLE hon.ai_unknown_resolutions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hon.ai_unknown_resolutions FORCE ROW LEVEL SECURITY;
@@ -183,13 +183,18 @@ BEGIN
   -- The invocation row lock can wait behind a recording or another resolution: check authority again after it.
   IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   IF v_org IS NULL THEN RAISE EXCEPTION 'AI_UNKNOWN_INVOCATION_NOT_FOUND' USING ERRCODE='P0002'; END IF;
-  IF v_usage IS NOT NULL OR v_reserved IS NULL OR v_reserved <= 0 OR v_plan IS NULL
-     OR NOT (v_status = 'UNKNOWN' OR (v_status = 'SENDING' AND v_held <= clock_timestamp() - hon.ai_sending_stale_after())) THEN
+  IF v_usage IS NOT NULL OR v_reserved IS NULL OR v_reserved <= 0 OR v_plan IS NULL OR v_status IS NULL OR v_status NOT IN ('UNKNOWN','SENDING') THEN
     RAISE EXCEPTION 'AI_UNKNOWN_NOT_RESOLVABLE' USING ERRCODE='23514';
   END IF;
-  -- A ledger row must carry the original hold time; never invent one. (A NULL-origin SENDING hold never reaches here:
-  -- the stale test above is NULL, so it is refused; such a hold stays UNKNOWN-only and fails closed in counting.)
-  IF v_held IS NULL AND d <> 'NO_PROVIDER_CHARGE' THEN RAISE EXCEPTION 'AI_UNKNOWN_ORIGIN_UNAVAILABLE' USING ERRCODE='23514'; END IF;
+  -- (Manus delta review P2) No trustworthy original hold time: fail closed for every decision and status. A missing
+  -- held_at can prove neither staleness (a SENDING call may still be in flight) nor the window, and the UNKNOWN status of
+  -- such a row may itself have been inferred from the mutable updated_at. The hold keeps counting (ai_hold_counts) and
+  -- is never released here; no ledger row, resolution, audit or outbox row is written.
+  IF v_held IS NULL THEN RAISE EXCEPTION 'AI_UNKNOWN_ORIGIN_UNAVAILABLE' USING ERRCODE='23514'; END IF;
+  -- A SENDING hold is resolvable only once its immutable origin proves it stale (never from updated_at).
+  IF v_status = 'SENDING' AND NOT (v_held <= clock_timestamp() - hon.ai_sending_stale_after()) THEN
+    RAISE EXCEPTION 'AI_UNKNOWN_NOT_RESOLVABLE' USING ERRCODE='23514';
+  END IF;
   SELECT * INTO STRICT p FROM hon.ai_invocation_plans WHERE id = v_plan;
   IF d = 'RECORD_PROVIDER_COST' THEN
     credits := ((e->>'inputTokens')::bigint + (e->>'outputTokens')::bigint + 999) / 1000;
