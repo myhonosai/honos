@@ -32,7 +32,7 @@ export interface AiLateProviderExpenseReceipt {
   estimatedProviderCostMicrounits: number; customerCredits: 0; occurredAt: string; recordedAt: string; replayed: boolean;
 }
 export interface AiUnknownResolvedItem extends Omit<AiUnknownResolutionReceipt, 'replayed'> {
-  reason: string; evidence: Record<string, unknown>; resolvedByPrincipalId: string; priorStatus: 'UNKNOWN' | 'SENDING'; heldAt: string | null;
+  reason: string; evidence: Record<string, unknown>; resolvedByPrincipalId: string; priorStatus: 'UNKNOWN' | 'SENDING'; heldAt: string;
   lateProviderExpense: AiLateProviderExpenseSummary | null;
 }
 /** At most 200 open items (oldest first) and the latest 100 resolutions. */
@@ -120,7 +120,7 @@ function validateResolved(value: unknown): AiUnknownResolvedItem {
     'reason', 'evidence', 'resolvedByPrincipalId', 'priorStatus', 'heldAt', 'lateProviderExpense'], drift);
   receiptCore(r);
   if (!isReason(r.reason) || !isUuid(r.resolvedByPrincipalId) || (r.priorStatus !== 'UNKNOWN' && r.priorStatus !== 'SENDING')
-    || (r.heldAt === null ? r.decision !== 'NO_PROVIDER_CHARGE' : !isTimestamp(r.heldAt))) drift();
+    || !isTimestamp(r.heldAt)) drift();
   if (r.lateProviderExpense !== null) {
     if (r.decision !== 'WRITE_OFF') drift();
     const l = record(r.lateProviderExpense, drift); exactKeys(l, ['expenseId', 'providerCostMicrounits', 'occurredAt', 'recordedAt'], drift);

@@ -64,9 +64,9 @@ export function validateAiSchoolUsageRange(from: unknown, to: unknown): { from: 
 
 const AMOUNT = ['providerReportedCostMicrounits', 'estimatedWriteOffCostMicrounits', 'entries', 'writeOffEntries',
   'lateProviderCostMicrounits', 'lateProviderExpenseEntries', 'supersededWriteOffEstimateMicrounits'];
-function amount(value: unknown, keys: string[]): Record<string, unknown> {
+function amount(value: unknown, keys: string[], minEntries = 1): Record<string, unknown> {
   const r = record(value, drift); exactKeys(r, keys, drift);
-  if (!isCount(r.providerReportedCostMicrounits) || !isCount(r.estimatedWriteOffCostMicrounits) || !isCount(r.entries) || (r.entries as number) < 1
+  if (!isCount(r.providerReportedCostMicrounits) || !isCount(r.estimatedWriteOffCostMicrounits) || !isCount(r.entries) || (r.entries as number) < minEntries
     || !isCount(r.writeOffEntries) || (r.writeOffEntries as number) > (r.entries as number)
     // An estimate exists only on write-off rows.
     || ((r.writeOffEntries as number) === 0 && (r.estimatedWriteOffCostMicrounits as number) !== 0)
@@ -91,11 +91,13 @@ function same(t: ReturnType<typeof sums>, r: Record<string, unknown>): boolean {
 }
 
 function validateSchool(value: unknown): AiSchoolUsage {
-  const r = amount(value, ['organizationId', 'schoolId', ...AMOUNT, 'unreconciledInvocations', 'byClass']);
+  // A school with only unresolved calls in scope has no ledger class at all: every amount is zero (checked below by
+  // same()) and it is listed only because unreconciledInvocations > 0. No cost is shown for those calls.
+  const r = amount(value, ['organizationId', 'schoolId', ...AMOUNT, 'unreconciledInvocations', 'byClass'], 0);
   if (!isUuid(r.organizationId) || !isUuid(r.schoolId) || !isCount(r.unreconciledInvocations)) drift();
   const byClass = record(r.byClass, drift);
   const classes = Object.keys(byClass);
-  if (classes.length === 0) drift();
+  if (classes.length === 0 && (r.unreconciledInvocations as number) < 1) drift();
   const school = sums();
   for (const k of classes) {
     if (!isClass(k)) drift();

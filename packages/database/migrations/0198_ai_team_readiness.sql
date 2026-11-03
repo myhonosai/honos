@@ -22,7 +22,9 @@ BEGIN;
 -- (the same grants as hon.require_saas_hq_actor(subject, false)), or the existing AI usage economics permission
 -- ai.usage.read at EVERY school of the organization. A school-only staff member or the owner of one school in a
 -- multi-school organization gets agentBudget null. A school that is not ACTIVE fails the per-school check, so the
--- totals stay hidden (fail closed) until HQ reads them. The per-agent blocker ORGANIZATION_AI_BUDGET_REACHED is still
+-- totals stay hidden (fail closed) until HQ reads them. (Manus delta review P2) School-derived authority also needs
+-- the organization's live entitlement (central rule, 0130) and, where the paid-access program has an access state, a
+-- state with access; the decision share-locks the rows it rests on so a concurrent suspension or revocation is seen. The per-agent blocker ORGANIZATION_AI_BUDGET_REACHED is still
 -- reported, because it is the same refusal a real request would return.
 
 CREATE FUNCTION hon.ai_team_route(p_org uuid, p_school uuid, p_units bigint, p_max bigint) RETURNS text
@@ -44,20 +46,46 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 $$;
 
 CREATE FUNCTION hon.ai_team_org_budget_authority(p_actor uuid, p_org uuid) RETURNS boolean
-LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-  SELECT p_actor IS NOT NULL AND p_org IS NOT NULL AND (
-    EXISTS (SELECT 1 FROM hon.principals p
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+BEGIN
+  IF p_actor IS NULL OR p_org IS NULL THEN RETURN false; END IF;
+  -- (Manus delta review P2) Live revalidation: share-lock the rows this decision rests on, so a concurrent suspension,
+  -- expiry, revocation or permission removal that is not yet committed is waited for and then seen (each statement
+  -- below takes a fresh snapshot); a committed one is seen directly. Nothing is written.
+  PERFORM 1 FROM hon.organization_entitlements WHERE organization_id = p_org FOR SHARE;
+  PERFORM 1 FROM hon.saas_access_states WHERE organization_id = p_org FOR SHARE;
+  PERFORM 1 FROM hon.principals WHERE id = p_actor FOR SHARE;
+  PERFORM 1 FROM hon.hq_operator_grants WHERE principal_id = p_actor FOR SHARE;
+  PERFORM 1 FROM hon.principal_role_grants WHERE principal_id = p_actor FOR SHARE;
+  PERFORM 1 FROM hon.role_permissions WHERE role_id IN (SELECT role_id FROM hon.principal_role_grants WHERE principal_id = p_actor) FOR SHARE;
+  -- A human HON HQ reader: unchanged (the HQ reader grants of hon.require_saas_hq_actor(subject, false)).
+  IF EXISTS (SELECT 1 FROM hon.principals p
       WHERE p.id = p_actor AND p.is_active AND p.principal_type = 'HUMAN_USER'
         AND (SELECT count(*) FROM hon.principals other WHERE other.user_id = p.user_id AND other.is_active) = 1
         AND EXISTS (SELECT 1 FROM hon.hq_operator_grants g WHERE g.principal_id = p.id
           AND g.effective_from <= clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until > clock_timestamp())
           AND (g.hq_role = 'HON_HQ_OWNER' OR (g.hq_role = 'HON_HQ_OPERATOR' AND 'hq.billing.manage' = ANY(g.permission_codes))))
         AND NOT EXISTS (SELECT 1 FROM hon.family_access_grants f WHERE f.principal_id = p.id
-          AND f.effective_from <= clock_timestamp() AND (f.effective_until IS NULL OR f.effective_until > clock_timestamp())))
-    OR (EXISTS (SELECT 1 FROM hon.schools s WHERE s.organization_id = p_org)
-        AND NOT EXISTS (SELECT 1 FROM hon.schools s WHERE s.organization_id = p_org
-          AND NOT hon.principal_has_school_permission(p_actor, p_org, s.id, 'ai.usage.read'))));
-$$;
+          AND f.effective_from <= clock_timestamp() AND (f.effective_until IS NULL OR f.effective_until > clock_timestamp()))) THEN
+    RETURN true;
+  END IF;
+  -- School-derived authority additionally needs the organization's access to be live (fail closed):
+  --  * the entitlement in effect by the central rule of hon.read_current_organization_entitlement() (0130): status
+  --    ACTIVE inside its effective window. A suspended, expired or missing entitlement hides the totals;
+  --  * when the paid-access program has an access state for the organization, a state with access: paid, scheduled
+  --    cancellation, an active trial, or the authorized grace period (owner policy 2026-11-02: normal access in grace).
+  --    Any other or unknown state (awaiting first payment, suspended, review hold, ended) hides the totals.
+  IF NOT EXISTS (SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id = p_org AND e.status = 'ACTIVE'
+        AND e.effective_from <= clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until > clock_timestamp()))
+     OR EXISTS (SELECT 1 FROM hon.saas_access_states s WHERE s.organization_id = p_org
+        AND s.state NOT IN ('PAYMENT_ACTIVE','CANCELLATION_SCHEDULED','TRIAL_ACTIVE','PAST_DUE_GRACE')) THEN
+    RETURN false;
+  END IF;
+  -- And the existing AI usage economics permission at EVERY school of the organization (unchanged).
+  RETURN EXISTS (SELECT 1 FROM hon.schools s WHERE s.organization_id = p_org)
+     AND NOT EXISTS (SELECT 1 FROM hon.schools s WHERE s.organization_id = p_org
+       AND NOT hon.principal_has_school_permission(p_actor, p_org, s.id, 'ai.usage.read'));
+END $$;
 
 CREATE FUNCTION hon.read_ai_team_readiness(p_subject text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
