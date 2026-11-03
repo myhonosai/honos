@@ -800,6 +800,77 @@ try {
   assert.equal(after.resolved.filter((x) => [old.id, cur.id, staleOld.id].includes(x.invocationId)).length, 3);
   pass('INV-20', 'S4-d: HQ-owner-only resolution: RECORD_PROVIDER_COST writes one ledger row in the original window, NO_PROVIDER_CHARGE writes none and frees the school, WRITE_OFF writes a zero-credit row; closed evidence, idempotent per key, once per call, in-flight and recorded calls refused, agent path still refused; immutable record, audit and inert outbox');
 
+  // ---- INV-20R (S4-d, Manus review P1): HQ authority holds through UNKNOWN resolution (two connections) ----
+  // Same pattern as INV-18R: authority is checked, then held by the shared lock on users/principals/HQ grants/family
+  // grants, and checked again after the key lock and after the invocation row lock. A refusal writes nothing: no
+  // resolution, ledger, audit or outbox row, and the hold stays as it was. No provider is involved (none is called).
+  {
+  const resolveSql = 'SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r';
+  const noCharge = { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-race-1' } };
+  const args = (h, id) => [h.subject, 'MARKETING', id, JSON.stringify(noCharge), K(), K(), K()];
+  const evidence = async (id) => row(`SELECT i.status, i.reserved_credits::int reserved, i.usage_id,
+      (SELECT count(*)::int FROM hon.ai_unknown_resolutions r WHERE r.invocation_id=i.id) resolutions,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger l WHERE l.source_invocation_id=i.id) ledger,
+      (SELECT count(*)::int FROM hon.audit_events a WHERE a.entity_id=i.id AND a.action_code='hq.ai.unknown_invocation.resolve') audits,
+      (SELECT count(*)::int FROM hon.outbox_events o WHERE o.aggregate_id=i.id AND o.event_type='ai.unknown_invocation.resolved') outbox
+    FROM hon.marketing_ai_invocations i WHERE i.id=$1`, [id]);
+  const untouched = (e) => e.status === 'UNKNOWN' && e.reserved === agents.marcus.estimate && e.usage_id === null && e.resolutions + e.ledger + e.audits + e.outbox === 0;
+  const outcomes = [];
+  for (const [label, change] of [['revoked', "effective_until=clock_timestamp()"], ['downgraded to operator', "hq_role='HON_HQ_OPERATOR',permission_codes='{hq.billing.manage}'"]]) {
+    const lost = await lostOutcome(`inv-20r-${label.split(' ')[0]}`);
+    const h = await makeHqOwner(`inv-20r-${label.split(' ')[0]}`);
+    const revoker = await openTx();
+    await revoker.query(`UPDATE hon.hq_operator_grants SET ${change} WHERE principal_id=$1`, [h.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'relation');
+    await revoker.query('COMMIT'); await revoker.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the resolution: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    const e = await evidence(lost.id);
+    assert(untouched(e), `${label}: nothing written: ${JSON.stringify(e)}`);
+    outcomes.push(`${label}: refused`);
+  }
+  // Expired by the clock while waiting on the invocation row lock (held by another transaction, e.g. a recording).
+  {
+    const lost = await lostOutcome('inv-20r-expiry');
+    const h = await makeHqOwner('inv-20r-expiry', "clock_timestamp()+interval '4 seconds'");
+    const other = await openTx();
+    await other.query('SELECT 1 FROM hon.marketing_ai_invocations WHERE id=$1 FOR UPDATE', [lost.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'transactionid');
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [h.until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the resolution: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    const e = await evidence(lost.id);
+    assert(untouched(e), `expired: nothing written: ${JSON.stringify(e)}`);
+    outcomes.push('expired while waiting on the invocation row: refused');
+  }
+  // A revocation issued while the resolution waits queues behind it; the resolution completes, then the revocation applies.
+  {
+    const lost = await lostOutcome('inv-20r-ordered');
+    const h = await makeHqOwner('inv-20r-ordered');
+    const other = await openTx();
+    await other.query('SELECT 1 FROM hon.marketing_ai_invocations WHERE id=$1 FOR UPDATE', [lost.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'transactionid');
+    const revoke = await startBlocked('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h.id], 'relation', { tx: true });
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.value?.rows[0].r.decision, 'NO_PROVIDER_CHARGE', `the resolution decided before the revocation: ${JSON.stringify(r.error?.message)}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    const again = await lostOutcome('inv-20r-after');
+    assert.equal((await settle(admin.query(resolveSql, args(h, again.id)))).error?.code, '42501', 'the revoked owner is refused afterwards');
+    assert(untouched(await evidence(again.id)));
+    outcomes.push('revocation during the resolution: waits, applies after');
+  }
+  pass('INV-20R', `S4-d: HQ UNKNOWN-resolution authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; refusals write no resolution, ledger, audit or outbox row and keep the hold`);
+  }
+
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
