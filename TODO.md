@@ -1,3 +1,9 @@
+## 2026-11-03 — Connected student booking and attendance (dependency draft)
+
+- Connect the verified adult/child membership-discovery student reference to the existing bounded sessions, canonical booking, and exact attendance APIs. No new backend, roster, eligibility, financial or provider logic.
+- Keep selections and exact unknown requests in private mounted memory; shield/reauthorize, prevent mounted replacement bookings, require attendance reads and versions, and preserve EN/KO/ES and Modern/Classic/Big Button.
+- Reusable workbench first committed on accepted main; connected handoff depends on #126/#122, without changing those PRs. Signed-session/disposable-DB and mounted browser evidence run in the dedicated draft-safe workflow. See docs/architecture/CONNECTED_STUDENT_BOOKING_ATTENDANCE.md for actual boundaries and dependencies.
+
 ## 2026-11-03 — Lead-bound membership recovery frontend (dependency draft)
 
 - Implement actual CRM-list/journey navigation to an idle, signed-session-gated saved-memberships screen. Reuse PR #122's exact closed discovery validator; reopen each adult/child record through existing activation/date/history components, with original lead selectors retained for an authorized return. No school directory, matching, new backend or migration.

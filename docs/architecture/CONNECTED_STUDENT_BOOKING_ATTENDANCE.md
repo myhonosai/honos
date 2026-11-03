@@ -1,0 +1,31 @@
+# Connected student booking and attendance
+
+Frontend-only operational integration, not a new booking service or membership-benefit rule. The reusable workbench was first committed independently on accepted main `fac44beba30f5bec3d06d32022c6875ac7019f41` (`cee6be6`). The complete connected draft is based on PR #126 head `67e01f2a346dbdb0390824b2ebaf856f248750a1`; it does not change #126 or Claude's backend branches. Its effective diff against #126 contains no API, contract-package, database, migration, billing, S4 or provider implementation changes.
+
+## Real connections
+
+From the freshly authorized lead-membership list, choose **Classes and attendance** for an adult or child. The selected school's student-profile reference stays in mounted private memory. Each protected load and command verifies the signed identity and re-reads the original lead's discovery result to check the exact membership/student pair. These are continuity checks, never booking authority: the existing API and database reauthorize the canonical operation.
+
+1. Explicit GET `/organizations/:org/schools/:school/schedule/sessions`: at most 50 operational records, UTC window from 30 days before today through 90 days after. Display only name, start/end, room, configured capacity, persisted status and booking policy. No roster, remaining seats, availability, program ID or benefit inference. Language & Region formats the returned instants in the user's existing timezone.
+2. Explicit confirmed POST `/organizations/:org/schools/:school/schedule/sessions/:session/bookings`: exactly `studentProfileId` and one canonical booking kind (REGULAR/TRIAL/MAKEUP/PRIVATE_LESSON/EVENT). Shared receipt validator and existing human marker/idempotency semantics. Cancelled sessions cannot be submitted; every backend conflict remains authoritative. A receipt is historical command evidence, never payment, current availability, eligibility or financially complete enrollment.
+3. Explicit exact attendance GET `/organizations/:org/schools/:school/schedule/sessions/:session/attendance?studentProfileId=…`, then a separately confirmed POST. Existing statuses/categories only. Existing records supply expectedVersion; a confirmed save requires a fresh read before another change. The response must match the exact session/student/status/category/normalized note. Opening the screen never marks attendance.
+
+The session list intentionally has no program ID. This flow does not call the program attendance-policy editor and does not manufacture a program selector. Attendance's student query exists only in its canonical protected API request; no student reference enters navigation URLs, analytics, localStorage, sessionStorage or cookies.
+
+## Privacy and retry
+
+Blur, hidden document, pagehide and confirmed session invalidation synchronously hide/inert private DOM, clear displayed results/notes, abort reads and invalidate late responses. Focus never reloads or reveals information. Restoration explicitly verifies identity, the original lead membership/student pair and current-school session access, then verifies identity again. A school-context-change signal refuses restoration of the previous student's view and requires returning to current-school recovery. 401 broadcasts the existing shared invalidation event; 403 stays local.
+
+An in-flight command has a separate instance/request owner. Blur cannot prevent its busy state from settling. Path/body/key are frozen before transmission, retained only in mounted private memory on unknown outcomes, and never automatically resent. Retry is a deliberate action after reauthorization. New commands and navigation are blocked while unsettled/unknown. Discard is disabled while in flight; afterward it requires explicit acknowledgment that abandonment cannot cancel or reverse a server operation.
+
+A mounted-lifetime session set prevents replacement bookings after a successful or uncertain attempt, including class switching and deliberate abandonment. This is not cross-session booking discovery. Destruction of the component/document loses exact retries; beforeunload warns while a command/retry exists. Return to membership recovery clears its old observation and requires an explicit fresh read. There is no school-wide roster or student booking-history API in this feature.
+
+## Verification and dependencies
+
+- Interaction and actual-transport regressions: idle selection, adult/child binding, stale callbacks, duplicate clicks, exact retries, 401/403 distinction, hidden/late results, school changes, settlement behind the shield, attendance versioning and EN/KO/ES.
+- Mounted production Next/browser checks use **synthetic localhost API fixtures** and signed synthetic web sessions; screenshots cover 1440/834/390 widths, all languages and all presentation modes, plus axe scans and unknown-result recovery without reload. These fixtures are scripts, not application endpoints or authentication bypasses.
+- `connected-student-operations-api-verification.mjs` runs actual frontend transports, signed sessions, real Nest guards/controllers/resolver/domain services and restricted PostgreSQL on a guarded disposable fixture. It exercises real booking/attendance commits, lost-response exact retry, duplicate and concurrent requests, separate child references, version conflicts, revoked permission after the real scope read, expired sessions and two independently authorized organizations. Financial/AI/membership/provider/communication tables are compared for zero effects. No provider adapter is called.
+- The dedicated draft-safe workflow runs full workspace tests/typecheck/build/migration validation, complete existing DB proofs, guarded commercial regressions, signed API/database verification and browser/axe checks. No credentials or deployment actions.
+- Dependencies remain PR #126 and its unmerged #122/S4 ancestry. Do not merge this feature by bypassing their independent security/owner gates. No migration identifier or checksum is changed. A backend-authorized student directory, student booking-history/reconciliation reader and cross-session recovery of lost booking keys remain separate capabilities, not fabricated here.
+
+No service activation, provider call, payment, credit issuance, parent access, automated attendance or production operation is authorized by this source change.
