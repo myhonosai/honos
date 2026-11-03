@@ -6,6 +6,7 @@ import { CrmLeadsWorkbench } from '../src/components/crm-leads-workbench';
 import { CrmAdultFlow } from '../src/components/crm-adult-flow';
 import { CrmFamilyFlow } from '../src/components/crm-family-flow';
 import { MembershipActivationWorkbench } from '../src/components/membership-activation-workbench';
+import { MembershipDatesWorkbench } from '../src/components/membership-dates-workbench';
 import { AdultMembershipPlanPicker } from '../src/components/membership-plans/picker';
 import { membershipJourneyCopy } from '../src/components/crm-membership-journey-copy';
 import { family, scope, row, id, receipt, plan, date, response } from './crm-family-fixtures';
@@ -118,6 +119,13 @@ it('switches only on explicit callback, passes frozen selectors and returns to a
 it('does not accept invalid selectors or synthesize a preview when navigation is requested', () => {
   const fetch = vi.spyOn(globalThis, 'fetch'); view = () => CrmMembershipJourney({ sessionSubject: 'synthetic-staff' });
   component(CrmLeadsWorkbench).props.onMembershipReview({ ...target, membershipId: '../unsafe' }); expect(component(MembershipActivationWorkbench)).toBeUndefined(); expect(fetch).not.toHaveBeenCalled();
+});
+it('hands current membership selectors into a separate idle date view and rejects stale or cross-school navigation',()=>{
+  const f=vi.spyOn(globalThis,'fetch');view=()=>CrmMembershipJourney({sessionSubject:'synthetic-staff',initialScope:scope});component(CrmLeadsWorkbench).props.onMembershipReview(target);
+  const old=component(MembershipActivationWorkbench);old.props.onManageDates({...target,schoolId:id(999)});expect(component(MembershipDatesWorkbench)).toBeUndefined();
+  old.props.onManageDates(target);const dates=component(MembershipDatesWorkbench);expect(dates.props.initialMembership).toEqual(target);expect(Object.isFrozen(dates.props.initialMembership)).toBe(true);expect(component(MembershipActivationWorkbench)).toBeUndefined();expect(f).not.toHaveBeenCalled();
+  old.props.onReturn();expect(component(MembershipDatesWorkbench)).toBeDefined();dates.props.onReturn();const active=component(MembershipActivationWorkbench);expect(active.key).not.toBe(old.key);expect(active.props.initialMembership).toEqual(target);
+  dates.props.onAbandon();expect(component(MembershipActivationWorkbench)).toBeDefined();active.props.onManageDates(target);component(MembershipDatesWorkbench).props.onAbandon();expect(component(CrmLeadsWorkbench)).toBeDefined();expect(f).not.toHaveBeenCalled();
 });
 
 async function openAdultWorkbench() {
