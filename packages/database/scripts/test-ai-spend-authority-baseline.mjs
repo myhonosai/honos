@@ -678,12 +678,74 @@ try {
   pass('INV-18R', `S4-c: HQ pause authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; no refused pause row`);
   }
 
+  // ---- INV-18K (S4-c, Manus final review P2): one immutable identity per pause/resume command key ----
+  // PAUSE and RESUME share one key space bound to action, scope, spend class, reason and actor. Any other command
+  // presented with a claimed key is refused (sequentially and concurrently); an exact replay returns the receipt.
+  {
+  const pauseSql = 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r';
+  const [ka, kb, kc] = [await makeOrg('inv-18k-a'), await makeOrg('inv-18k-b'), await makeOrg('inv-18k-c')];
+  const active = async (o) => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1 AND ended_at IS NULL', [o.id])).n;
+  const reused = (r, label) => assert.equal(r.error?.message, 'AI_SPEND_PAUSE_KEY_REUSED', `${label}: ${JSON.stringify(r.value?.rows[0]?.r ?? r.error?.message)}`);
+  const checks = [];
+  // Sequential: a PAUSE key presented as a RESUME (same scope) is refused and the pause stays active.
+  const k1 = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k1)).value?.rows[0].r.status, 'ACTIVE');
+  reused(await pauseCmd(hq.subject, pIn('RESUME', ka.id), k1), 'PAUSE key reused for RESUME');
+  assert.equal(await active(ka), 1, 'the pause is still active');
+  // Same key, other scope or other class: refused, nothing written.
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', kb.id), k1), 'PAUSE key reused for another organization');
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', ka.id, 'CREATIVE_MEDIA'), k1), 'PAUSE key reused for another class');
+  assert.equal(await active(kb), 0);
+  // A RESUME key presented as a PAUSE is refused (no new pause is created).
+  const k2 = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', ka.id), k2)).value?.rows[0].r.status, 'ENDED');
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k2), 'RESUME key reused for PAUSE');
+  assert.equal(await active(ka), 0, 'no pause was created from a RESUME key');
+  checks.push('PAUSE<->RESUME, other scope and other class reuse refused');
+  // Exact replays return the original receipt, even after the state moved on.
+  const r1 = (await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k1)).value?.rows[0].r;
+  assert.deepEqual([r1?.replayed, r1?.status], [true, 'ENDED'], 'PAUSE replay after the resume');
+  const r2 = (await pauseCmd(hq.subject, pIn('RESUME', ka.id), k2)).value?.rows[0].r;
+  assert.deepEqual([r2?.replayed, r2?.status], [true, 'ENDED'], 'RESUME replay');
+  checks.push('exact replays return the original receipt');
+  // Another HQ owner replaying the same input with the key is a different command; a revoked owner cannot replay.
+  const h2 = await makeHqOwner('inv-18k-other');
+  reused(await pauseCmd(h2.subject, pIn('PAUSE', ka.id), k1), 'another actor replaying the key');
+  const h3 = await makeHqOwner('inv-18k-revoked');
+  const k3 = K();
+  assert.equal((await pauseCmd(h3.subject, pIn('PAUSE', kb.id), k3)).value?.rows[0].r.status, 'ACTIVE');
+  await admin.query('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h3.id]);
+  assert.equal((await pauseCmd(h3.subject, pIn('PAUSE', kb.id), k3)).error?.code, '42501', 'a revoked owner cannot replay');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', kb.id), K())).value?.rows[0].r.status, 'ENDED');
+  checks.push('other actor refused, revoked owner cannot replay');
+  // Concurrent: two incompatible commands with one key (a PAUSE for one organization and a RESUME for another) both
+  // wait on the key lock (pg_locks); on release exactly one is applied and the other is refused.
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', kc.id), K())).value?.rows[0].r.status, 'ACTIVE');
+  const k4 = K();
+  const holder = await openTx();
+  await holder.query("SELECT pg_advisory_xact_lock(hashtextextended('ai.pause.key:' || $1::text, 0))", [k4]);
+  const c1 = await startBlocked(pauseSql, [hq.subject, JSON.stringify(pIn('PAUSE', kb.id)), k4], 'advisory');
+  const c2 = await startBlocked(pauseSql, [hq.subject, JSON.stringify(pIn('RESUME', kc.id)), k4], 'advisory');
+  await holder.query('COMMIT'); await holder.end();
+  const both = [await c1.result, await c2.result];
+  assert.equal(both.filter((r) => r.value).length, 1, `exactly one applied: ${JSON.stringify(both.map((r) => r.value?.rows[0].r ?? r.error?.message))}`);
+  reused(both.find((r) => r.error), 'the concurrent loser');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_spend_pause_commands WHERE command_key=$1', [k4])).n, 1);
+  // PAUSE won: kb paused, kc still paused. RESUME won: kb not paused, kc resumed.
+  const pauseWon = both[0].value !== undefined;
+  assert.deepEqual([await active(kb), await active(kc)], pauseWon ? [1, 1] : [0, 0], 'only the winning command changed state');
+  for (const o of [kb, kc]) if (await active(o)) await pauseCmd(hq.subject, pIn('RESUME', o.id), K());
+  checks.push('concurrent incompatible reuse: one applied, one refused');
+  assert.equal((await settle(admin.query('UPDATE hon.ai_spend_pause_commands SET reason=$1', ['Tampered synthetic command reason']))).error?.code, '55000', 'command identities are immutable');
+  pass('INV-18K', `S4-c: one immutable command-key identity for pause/resume (action, scope, class, reason, actor): ${checks.join('; ')}`);
+  }
+
   // ---- INV-19 (S4-d, replaces KF-AI8): lost outcomes count only in the window in which they were held ----
   {
   const backdate = async (table, id, interval, status = null) => {
     await admin.query('BEGIN');
     await admin.query(`ALTER TABLE hon.${table} DISABLE TRIGGER USER`);
-    await admin.query(`UPDATE hon.${table} SET status=coalesce($3,status),created_at=created_at-$2::interval,updated_at=clock_timestamp()-$2::interval WHERE id=$1`, [id, interval, status]);
+    await admin.query(`UPDATE hon.${table} SET status=coalesce($3,status),created_at=created_at-$2::interval,updated_at=clock_timestamp()-$2::interval,held_at=held_at-$2::interval WHERE id=$1`, [id, interval, status]);
     await admin.query(`ALTER TABLE hon.${table} ENABLE TRIGGER USER`);
     await admin.query('COMMIT');
   };
@@ -871,6 +933,108 @@ try {
   pass('INV-20R', `S4-d: HQ UNKNOWN-resolution authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; refusals write no resolution, ledger, audit or outbox row and keep the hold`);
   }
 
+  // ---- INV-19W (S4-d, Manus final review P2): a hold's window is its immutable held_at, never updated_at ----
+  // Natural cross-window progression in real transactions, for each agent: the hold is taken (SENDING, provider call
+  // pending), its origin is moved to the previous window (simulated clock), then the real service records the provider
+  // outcome as UNKNOWN now, which rewrites updated_at in the current window. The hold must stay in its original window:
+  // it no longer limits the school, the HQ queue shows the original time, and a late resolution books the cost there.
+  {
+  const errors = { marcus: ProviderRuntimeError, claire: ClaireProviderRuntimeError, chad: ChadProviderRuntimeError };
+  const agentCode = { marcus: 'MARKETING', claire: 'TEACHING', chad: 'CHAD_FOLLOW_UP' };
+  const inWindow = async (o, t) => (await row('SELECT $2::timestamptz <@ hon.ai_spend_window($1, clock_timestamp()) r', [o.id, t])).r;
+  const seen = [];
+  for (const name of ['marcus', 'claire', 'chad']) {
+    const a = agents[name], o = await makeOrg(`inv-19w-${name}`);
+    const held = await startHeld(name, o);
+    assert.equal(held.sending, true, `${name}: the hold is taken`);
+    const inv = await row(`SELECT id, held_at FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id]);
+    assert.ok(inv.held_at, `${name}: held_at is stamped when the hold is taken`);
+    // Tampering with the origin is refused, even by the table owner.
+    // The table's column guard refuses it first (42501); the stamping trigger would refuse it too (55000).
+    assert.ok(['42501', '55000'].includes((await settle(admin.query(`UPDATE hon.${a.table} SET held_at=clock_timestamp() WHERE id=$1`, [inv.id]))).error?.code), `${name}: held_at is immutable`);
+    await admin.query('BEGIN');
+    await admin.query(`ALTER TABLE hon.${a.table} DISABLE TRIGGER USER`);
+    await admin.query(`UPDATE hon.${a.table} SET held_at=held_at-interval '40 days', created_at=created_at-interval '40 days' WHERE id=$1`, [inv.id]);
+    await admin.query(`ALTER TABLE hon.${a.table} ENABLE TRIGGER USER`);
+    await admin.query('COMMIT');
+    // The provider outcome arrives now, as UNKNOWN, through the real service and its own fail_* transaction.
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    const settled = await held.submitted;
+    assert.equal(settled.value?.status ?? settled.error?.getResponse?.()?.code, 'UNKNOWN', `${name}: outcome recorded as UNKNOWN`);
+    const after = await row(`SELECT status, held_at, updated_at, reserved_credits FROM hon.${a.table} WHERE id=$1`, [inv.id]);
+    assert.deepEqual([after.status, after.reserved_credits > 0, await inWindow(o, after.updated_at), await inWindow(o, after.held_at)], ['UNKNOWN', true, true, false],
+      `${name}: updated_at moved to the current window, held_at stayed in the original one`);
+    assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [o.id])).n), 0, `${name}: the old-window hold no longer limits the school`);
+    const q = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.open.find((x) => x.invocationId === inv.id);
+    assert.deepEqual([q?.countsAgainstCurrentWindow, q?.heldAt === new Date(after.held_at).toISOString()], [false, true], `${name}: HQ queue shows the original time`);
+    const rec = await resolve(hq.subject, agentCode[name], inv.id, { ...recordInput, evidence: { ...recordInput.evidence, providerGenerationId: `gen-ai0-19w-${name}` } });
+    assert.ok(rec.value, `${name}: ${rec.error?.message}`);
+    const led = await ledgerFor(inv.id);
+    assert.deepEqual([led.length, new Date(led[0].occurred_at).toISOString()], [1, new Date(after.held_at).toISOString()], `${name}: the late cost is booked in the original window`);
+    seen.push(name);
+  }
+  // No trustworthy origin (a hold from before held_at existed): fail closed. It always counts, shows no time, and can
+  // only be resolved NO_PROVIDER_CHARGE; a ledger decision would need an invented time and is refused.
+  const legacy = await lostOutcome('inv-19w-legacy');
+  await admin.query('BEGIN');
+  await admin.query(`ALTER TABLE hon.${agents.marcus.table} DISABLE TRIGGER USER`);
+  await admin.query(`UPDATE hon.${agents.marcus.table} SET held_at=NULL, updated_at=updated_at-interval '40 days' WHERE id=$1`, [legacy.id]);
+  await admin.query(`ALTER TABLE hon.${agents.marcus.table} ENABLE TRIGGER USER`);
+  await admin.query('COMMIT');
+  assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [legacy.o.id])).n), agents.marcus.estimate, 'a NULL-origin hold always counts');
+  const lq = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.open.find((x) => x.invocationId === legacy.id);
+  assert.deepEqual([lq?.heldAt, lq?.countsAgainstCurrentWindow], [null, true]);
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, recordInput)).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 1 } })).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-legacy' } })).value?.rows[0].r.ledgerEntryId, null);
+  pass('INV-19W', `S4-d: immutable hold origin: for ${seen.join(', ')} a hold taken last window and recorded UNKNOWN now (updated_at current) stays in its original window (not counted now, HQ shows the original time, late cost booked there); held_at cannot be set; a NULL-origin hold counts always and refuses ledger decisions`);
+  }
+
+  // ---- INV-20L (S4-d, Manus final review P2): a verified provider charge after a WRITE_OFF is recorded once ----
+  {
+  const lateSql = 'SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r';
+  const late = (subject, agent, id, input, key = K()) => settle(admin.query(lateSql, [subject, agent, id, JSON.stringify(input), key, K(), K()]));
+  const lateIn = (gen, cost) => ({ reason: 'Provider usage export showed the actual charge', evidence: { providerGenerationId: gen, inputTokens: 1000, outputTokens: 500, providerCostMicrounits: cost } });
+  const res = await row("SELECT * FROM hon.ai_unknown_resolutions WHERE invocation_id=$1", [staleOld.id]);
+  assert.equal(res.decision, 'WRITE_OFF');
+  const committedBefore = Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleOld.o.id])).n);
+  const audits0 = (await row("SELECT count(*)::int n FROM hon.audit_events WHERE action_code='hq.ai.late_provider_expense.record'")).n;
+  assert.equal((await late(staleOld.o.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1100))).error?.code, '42501', 'a school owner cannot record it');
+  for (const bad of [{ ...lateIn('gen-ai0-late-1', 1100), extra: 1 }, { reason: 'short', evidence: lateIn('x', 1).evidence }, { ...lateIn('gen ai0', 1), evidence: { ...lateIn('g', 1).evidence, providerGenerationId: 'bad id' } }])
+    assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, bad)).error?.code, '22023', JSON.stringify(bad));
+  const key = K();
+  const first = await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1100), key);
+  const receipt = first.value?.rows[0].r;
+  assert.deepEqual([receipt?.customerCredits, receipt?.providerCostMicrounits, receipt?.estimatedProviderCostMicrounits, receipt?.replayed], [0, 1100, 900, false], JSON.stringify(first.error?.message ?? receipt));
+  const led = await rows('SELECT id, customer_credits::int c, provider_cost_microunits::bigint cost FROM hon.ai_usage_ledger WHERE source_invocation_id=$1', [staleOld.id]);
+  assert.deepEqual(led.map((l) => [l.id, l.c, Number(l.cost)]), [[res.ledger_entry_id, 0, 900]], 'the WRITE_OFF ledger row is the only ledger row for the call, unchanged; the actual is separate evidence');
+  const exp = await row('SELECT occurred_at, provider_cost_microunits::bigint cost, estimated_provider_cost_microunits::bigint est FROM hon.ai_late_provider_expenses WHERE invocation_id=$1', [staleOld.id]);
+  assert.deepEqual([new Date(exp.occurred_at).toISOString(), Number(exp.cost), Number(exp.est)], [new Date(res.held_at).toISOString(), 1100, 900], 'attributed to the original hold window');
+  const resAfter = await row("SELECT decision, evidence, ledger_entry_id FROM hon.ai_unknown_resolutions WHERE id=$1", [res.id]);
+  assert.deepEqual([resAfter.decision, resAfter.evidence, resAfter.ledger_entry_id], [res.decision, res.evidence, res.ledger_entry_id], 'the WRITE_OFF decision and estimate are unchanged');
+  assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleOld.o.id])).n), committedBefore, 'no customer credit is deducted again');
+  // Replay, key reuse, a second actual for the same call, and a duplicate provider generation are all refused.
+  assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1100), key)).value?.rows[0].r.replayed, true, 'exact replay');
+  assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1200), key)).error?.message, 'AI_LATE_EXPENSE_KEY_REUSED');
+  assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-2', 1200))).error?.message, 'AI_LATE_EXPENSE_ALREADY_RECORDED');
+  // Zero estimate: a WRITE_OFF of 0, then the actual charge; a reused generation id on it is refused first.
+  const zero = await lostOutcome('inv-20l-zero', 'chad');
+  assert.ok((await resolve(hq.subject, 'CHAD_FOLLOW_UP', zero.id, { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 0 } })).value);
+  assert.equal((await late(hq.subject, 'CHAD_FOLLOW_UP', zero.id, lateIn('gen-ai0-late-1', 700))).error?.message, 'AI_LATE_EXPENSE_DUPLICATE_GENERATION');
+  assert.equal((await late(hq.subject, 'CHAD_FOLLOW_UP', zero.id, lateIn('gen-ai0-late-zero', 700))).value?.rows[0].r.providerCostMicrounits, 700);
+  assert.deepEqual((await rows('SELECT customer_credits::int c, provider_cost_microunits::bigint cost FROM hon.ai_usage_ledger WHERE source_invocation_id=$1', [zero.id])).map((l) => [l.c, Number(l.cost)]), [[0, 0]], 'zero estimate: one zero-credit ledger row');
+  assert.equal(Number((await row('SELECT count(*) n FROM hon.ai_late_provider_expenses WHERE invocation_id=$1', [zero.id])).n), 1);
+  // Only after a WRITE_OFF: a recorded cost or a no-charge resolution cannot take a late actual.
+  assert.equal((await late(hq.subject, 'MARKETING', old.id, lateIn('gen-ai0-late-3', 1))).error?.message, 'AI_LATE_EXPENSE_NOT_WRITTEN_OFF');
+  assert.equal((await late(hq.subject, 'MARKETING', cur.id, lateIn('gen-ai0-late-4', 1))).error?.message, 'AI_LATE_EXPENSE_NOT_WRITTEN_OFF');
+  assert.equal((await late(hq.subject, 'MARKETING', K(), lateIn('gen-ai0-late-5', 1))).error?.code, 'P0002');
+  assert.equal((await row("SELECT count(*)::int n FROM hon.audit_events WHERE action_code='hq.ai.late_provider_expense.record'")).n - audits0, 2, 'one audit row per recorded expense');
+  assert.equal((await settle(admin.query('UPDATE hon.ai_late_provider_expenses SET reason=$1', ['Tampered synthetic late expense']))).error?.code, '55000');
+  const item = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.resolved.find((x) => x.invocationId === staleOld.id);
+  assert.equal(item?.lateProviderExpense?.providerCostMicrounits, 1100, 'the HQ queue shows the late actual next to the write-off');
+  pass('INV-20L', 'S4-d: a verified provider charge after a WRITE_OFF is recorded once as separate immutable evidence (no second ledger row; original hold window), the WRITE_OFF decision, estimate and ledger row stay, no credit is deducted again; replay, key reuse, a second actual and a duplicate provider generation are refused (also for a zero estimate); HQ-owner only; audited');
+  }
+
   // ---- INV-21 (S4-e): HQ per-school AI usage and actual provider cost, read only ----
   {
   const usage = (subject, from, to) => settle(admin.query('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r', [subject, from, to]));
@@ -908,6 +1072,14 @@ try {
   const offTeaching = offSchool.byClass.AGENT_INFERENCE.byAgent.TEACHING;
   assert.deepEqual([offTeaching?.providerReportedCostMicrounits, offTeaching?.estimatedWriteOffCostMicrounits, offTeaching?.writeOffEntries], [0, 900, 1], JSON.stringify(offSchool));
   assert.equal(offSchool.estimatedWriteOffCostMicrounits, 900);
+  // Manus final review P2: the late verified actual (1100, INV-20L) is reported beside the estimate, never inside the
+  // provider-reported total or the estimate; the estimate it supersedes is shown, and no credits or entries are added.
+  assert.deepEqual([offTeaching?.lateProviderCostMicrounits, offTeaching?.lateProviderExpenseEntries, offTeaching?.supersededWriteOffEstimateMicrounits, offTeaching?.entries, offTeaching?.credits],
+    [1100, 1, 900, 1, 0], JSON.stringify(offTeaching));
+  assert.deepEqual([offSchool.lateProviderCostMicrounits, offSchool.supersededWriteOffEstimateMicrounits], [1100, 900]);
+  const lateTotals = await row(`SELECT coalesce(sum(provider_cost_microunits),0)::bigint c, count(*)::int n FROM hon.ai_late_provider_expenses WHERE occurred_at >= $1 AND occurred_at < $2`, [from, to]);
+  assert.deepEqual([report.schools.reduce((t, x) => t + x.lateProviderCostMicrounits, 0), report.schools.reduce((t, x) => t + x.lateProviderExpenseEntries, 0)],
+    [Number(lateTotals.c), lateTotals.n], 'every late actual in range is reported once (incl. the zero-estimate Chad call)');
   assert.equal(offSchool.providerReportedCostMicrounits, Object.values(offSchool.byClass).reduce((a, c) => a + c.providerReportedCostMicrounits, 0));
   // Unknown outcomes carry no amount: they are counted per school, separately from both cost totals.
   const staleSchool = report.schools.find((x) => x.schoolId === staleCur.o.school);
@@ -930,7 +1102,7 @@ try {
     assert.equal((await usage(hq.subject, a, b)).error?.code, '22023', label);
   assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n, ledgerBefore, 'the read writes nothing');
   assert.equal((await row("SELECT provolatile v, prosecdef d FROM pg_proc WHERE oid='hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)'::regprocedure")).v, 's');
-  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates and unreconciled calls kept separate (mixed agent + creative), org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
+  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates, late actuals (with the estimate they supersede) and unreconciled calls kept separate (mixed agent + creative), org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
   }
 
   }
@@ -1036,6 +1208,51 @@ try {
   const other = await makeOrg('inv-23-other');
   assert.equal((await settle(tenant(context(r0), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [other.subject])))).error?.code, '42501', 'another school’s owner');
   pass('INV-23', `AI-R1: team readiness reports all three agents available on a ready school, agrees with real requests across ${cases.length} gate changes (${Object.keys(seen).length} checks), names the budget and HQ pause blockers, refuses non-direct or foreign humans, and writes nothing or calls no provider`);
+  }
+
+  // ---- INV-23V (AI-R1, Manus final review P2): organization budget totals need independent organization-wide authority ----
+  // Two schools in one organization; usage at school B. Readiness is read at school A. Only an HQ reader, or a human with
+  // ai.usage.read at every school of the organization, sees committed/ceiling credits; everyone else gets null.
+  {
+  const v = await makeOrg('inv-23v'), schoolB = K(), staffRole = K();
+  await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1::uuid,$2,'AI-0 synthetic school B',$1::uuid::text,'UTC')", [schoolB, v.id]);
+  await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,correlation_id) VALUES($1,$2,'OPENROUTER','ai0-used-fixture','TEXT',500,$3)", [v.id, schoolB, K()]);
+  // School-only staff: every school permission except the AI usage economics permission, at school A only.
+  await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'AI0_STAFF','AI-0 synthetic staff',false)", [staffRole, v.id]);
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) SELECT $1,$2,code FROM hon.permissions WHERE code <> 'ai.usage.read'", [staffRole, v.id]);
+  const human = async (label, hqGrant = null) => {
+    const h = { user: K(), principal: K(), subject: `ai0-23v-${label}-${K()}` };
+    await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','AI-0 synthetic staff')", [h.user, h.subject]);
+    await admin.query("INSERT INTO hon.principals(id,principal_type,user_id,display_name) VALUES($1,'HUMAN_USER',$2,'AI-0 synthetic staff')", [h.principal, h.user]);
+    await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 day')", [v.id, v.school, h.principal, staffRole, v.principal]);
+    if (hqGrant) await admin.query(`INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,$2,$3,clock_timestamp()-interval '2 days',${hqGrant.until ?? 'NULL'})`, [h.principal, hqGrant.role, hqGrant.perms ?? []]);
+    return h;
+  };
+  const budgetOf = async (h) => (await tenant(context(v, { principalId: h.principal, externalSubject: h.subject }), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [h.subject]))).rows[0].r.agentBudget;
+  const committedNow = async () => Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [v.id])).n);
+  const owner = { principal: v.principal, subject: v.subject };
+  const outcomes = [];
+  const expectHidden = async (h, label) => { assert.equal(await budgetOf(h), null, `${label}: organization totals must be hidden`); outcomes.push(`${label}: hidden`); };
+  const expectShown = async (h, label) => {
+    assert.deepEqual(await budgetOf(h), { committedCredits: await committedNow(), ceilingCredits: 12000 }, `${label}: organization totals shown`);
+    outcomes.push(`${label}: shown`);
+  };
+  await expectHidden(await human('staff'), 'school-only staff');
+  await expectHidden(owner, 'owner of school A only');
+  await expectHidden(await human('hq-operator-no-billing', { role: 'HON_HQ_OPERATOR', perms: ['hq.dashboard.view'] }), 'HQ operator without billing authority');
+  await expectHidden(await human('hq-expired', { role: 'HON_HQ_OWNER', until: "clock_timestamp()-interval '1 minute'" }), 'expired HQ owner');
+  await expectShown(await human('hq-owner', { role: 'HON_HQ_OWNER' }), 'HQ owner');
+  await expectShown(await human('hq-billing', { role: 'HON_HQ_OPERATOR', perms: ['hq.billing.manage'] }), 'HQ billing operator');
+  assert.ok((await committedNow()) >= 500, 'the totals include school B usage');
+  // Owner at both schools: organization-wide authority from existing grants.
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 day')", [v.id, schoolB, v.principal, v.role]);
+  await expectShown(owner, 'owner of both schools');
+  // A school that is not ACTIVE fails closed for school-derived authority; HQ still sees the totals.
+  await admin.query("UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1", [schoolB]);
+  await expectHidden(owner, 'owner of both schools, school B suspended');
+  await admin.query("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [schoolB]);
+  await expectShown(owner, 'owner of both schools, school B active again');
+  pass('INV-23V', `AI-R1: school-scoped readiness discloses organization budget totals only with independent organization-wide authority (${outcomes.join('; ')})`);
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----

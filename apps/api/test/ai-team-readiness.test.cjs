@@ -19,6 +19,12 @@ const row = (patch = {}) => ({ organizationId: ORG, schoolId: SCHOOL, completeEn
 
 test('AI-R1 contracts: closed agent list and consistent blockers; runtime refusal only where the database allowed', () => {
   assert.equal(contracts.validateAiTeamReadinessRow(row()).agents.length, 3);
+  // Organization-wide totals are hidden (null) without organization-wide authority; never a partial or school-only object.
+  assert.equal(contracts.validateAiTeamReadinessRow(row({ agentBudget: null })).agentBudget, null);
+  for (const bad of [row({ agentBudget: {} }), row({ agentBudget: { committedCredits: 10 } }), row({ agentBudget: { committedCredits: 10, ceilingCredits: 12000, schoolCommittedCredits: 1 } }),
+    row({ agentBudget: { committedCredits: -1, ceilingCredits: 12000 } })])
+    assert.throws(() => contracts.validateAiTeamReadinessRow(bad), JSON.stringify(bad.agentBudget));
+  assert.equal(contracts.validateAiTeamReadiness(contracts.composeAiTeamReadiness(contracts.validateAiTeamReadinessRow(row({ agentBudget: null })), () => 'READY')).agentBudget, null);
   const blocked = row({ agents: [agent('marcus', 'MARKETING', 6, { authorized: false, available: false, blockedBy: 'NOT_AUTHORIZED' }), agent('claire', 'TEACHING', 6, { spendDecision: 'AI_PAUSED_BY_HQ', available: false, blockedBy: 'AI_PAUSED_BY_HQ' }), agent('chad', 'CHAD_FOLLOW_UP', 3, { route: 'NO_ELIGIBLE_ROUTE', available: false, blockedBy: 'NO_ELIGIBLE_ROUTE' })] });
   assert.equal(contracts.validateAiTeamReadinessRow(blocked).agents[0].blockedBy, 'NOT_AUTHORIZED');
   for (const bad of [row({ agents: row().agents.slice(0, 2) }), row({ agents: [agent('kai', 'TEACHING', 6), ...row().agents.slice(1)] }),

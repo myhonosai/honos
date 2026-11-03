@@ -4,6 +4,9 @@
 // Cost basis is explicit: providerReportedCostMicrounits is only cost the provider itself reported (or provider evidence
 // an HQ owner recorded); estimatedWriteOffCostMicrounits is an HQ write-off ESTIMATE and is never a provider charge;
 // unreconciledInvocations are calls whose outcome is still unknown, so they carry no amount at all.
+// Late actuals (a verified provider charge an HQ owner recorded after a WRITE_OFF) are reported beside these values,
+// never inside them: lateProviderCostMicrounits is that provider charge; supersededWriteOffEstimateMicrounits is the
+// part of the write-off estimate whose call now has a late actual. Late actuals carry no credits and no ledger entry.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsTimestamp as isTimestamp,
   championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
 
@@ -20,11 +23,17 @@ export interface AiUsageAmount {
   estimatedWriteOffCostMicrounits: number;
   entries: number;
   writeOffEntries: number;
+  /** Verified provider charges recorded after a WRITE_OFF (not ledger entries; no customer credits). */
+  lateProviderCostMicrounits: number;
+  lateProviderExpenseEntries: number;
+  /** The part of estimatedWriteOffCostMicrounits whose call now has a late actual. */
+  supersededWriteOffEstimateMicrounits: number;
 }
 export interface AiUsageClassTotals extends AiUsageAmount { byAgent: Partial<Record<AiUsageAgent, AiUsageAmount>> | null }
 export interface AiSchoolUsage {
   organizationId: string; schoolId: string; providerReportedCostMicrounits: number; estimatedWriteOffCostMicrounits: number;
   entries: number; writeOffEntries: number;
+  lateProviderCostMicrounits: number; lateProviderExpenseEntries: number; supersededWriteOffEstimateMicrounits: number;
   /** Open lost outcomes at this school (UNKNOWN or stale SENDING with a hold): no ledger row, cost unknown. */
   unreconciledInvocations: number;
   byClass: Partial<Record<AiUsageSpendClass, AiUsageClassTotals>>;
@@ -53,23 +62,32 @@ export function validateAiSchoolUsageRange(from: unknown, to: unknown): { from: 
   return { from: new Date(a).toISOString(), to: new Date(b).toISOString() };
 }
 
-const AMOUNT = ['providerReportedCostMicrounits', 'estimatedWriteOffCostMicrounits', 'entries', 'writeOffEntries'];
+const AMOUNT = ['providerReportedCostMicrounits', 'estimatedWriteOffCostMicrounits', 'entries', 'writeOffEntries',
+  'lateProviderCostMicrounits', 'lateProviderExpenseEntries', 'supersededWriteOffEstimateMicrounits'];
 function amount(value: unknown, keys: string[]): Record<string, unknown> {
   const r = record(value, drift); exactKeys(r, keys, drift);
   if (!isCount(r.providerReportedCostMicrounits) || !isCount(r.estimatedWriteOffCostMicrounits) || !isCount(r.entries) || (r.entries as number) < 1
     || !isCount(r.writeOffEntries) || (r.writeOffEntries as number) > (r.entries as number)
     // An estimate exists only on write-off rows.
     || ((r.writeOffEntries as number) === 0 && (r.estimatedWriteOffCostMicrounits as number) !== 0)
+    // A late actual exists only after a write-off (at most one per written-off call); only an estimate can be superseded.
+    || !isCount(r.lateProviderCostMicrounits) || !isCount(r.lateProviderExpenseEntries) || !isCount(r.supersededWriteOffEstimateMicrounits)
+    || (r.lateProviderExpenseEntries as number) > (r.writeOffEntries as number)
+    || ((r.lateProviderExpenseEntries as number) === 0 && ((r.lateProviderCostMicrounits as number) !== 0 || (r.supersededWriteOffEstimateMicrounits as number) !== 0))
+    || (r.supersededWriteOffEstimateMicrounits as number) > (r.estimatedWriteOffCostMicrounits as number)
     || (keys.includes('credits') && !isCount(r.credits))) drift();
   return r;
 }
-const sums = () => ({ entries: 0, cost: 0, estimate: 0, writeOffs: 0 });
+const sums = () => ({ entries: 0, cost: 0, estimate: 0, writeOffs: 0, late: 0, lateEntries: 0, superseded: 0 });
 function add(t: ReturnType<typeof sums>, r: Record<string, unknown>): void {
   t.entries += r.entries as number; t.cost += r.providerReportedCostMicrounits as number;
   t.estimate += r.estimatedWriteOffCostMicrounits as number; t.writeOffs += r.writeOffEntries as number;
+  t.late += r.lateProviderCostMicrounits as number; t.lateEntries += r.lateProviderExpenseEntries as number;
+  t.superseded += r.supersededWriteOffEstimateMicrounits as number;
 }
 function same(t: ReturnType<typeof sums>, r: Record<string, unknown>): boolean {
-  return t.entries === r.entries && t.cost === r.providerReportedCostMicrounits && t.estimate === r.estimatedWriteOffCostMicrounits && t.writeOffs === r.writeOffEntries;
+  return t.entries === r.entries && t.cost === r.providerReportedCostMicrounits && t.estimate === r.estimatedWriteOffCostMicrounits && t.writeOffs === r.writeOffEntries
+    && t.late === r.lateProviderCostMicrounits && t.lateEntries === r.lateProviderExpenseEntries && t.superseded === r.supersededWriteOffEstimateMicrounits;
 }
 
 function validateSchool(value: unknown): AiSchoolUsage {
