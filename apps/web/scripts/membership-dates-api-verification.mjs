@@ -91,7 +91,7 @@ try {
   const concurrent = await Promise.all([dateWeb.reviseMembershipDates(command), dateWeb.reviseMembershipDates(command)]);
   assert.deepEqual(concurrent.map(r => r.replayed).sort(), [false, true]); assert.deepEqual(concurrent[0].receipt, concurrent[1].receipt); assert.deepEqual(await snapshot(separated), safe);
   assert.equal((await sql('SELECT count(*)::int n FROM hon.membership_date_revisions WHERE membership_id=$1', [a.scope.membershipId])).rows[0].n, 1);
-  const h = await unchanged(() => dateWeb.loadMembershipDateHistory(a.scope)); assert.equal(h.currentPeriod.periodVersion, 2); assert.equal(h.versions[0].periodVersion, 2); assert.equal(h.versions.at(-1).periodVersion, 1); assert.equal(h.versions[0].reasonText, JSON.parse(command.body).reasonText); assert.equal(concurrent[0].receipt.reasonText, JSON.parse(command.body).reasonText);
+  const h = await unchanged(() => dateWeb.loadMembershipDateHistory(a.scope)); assert.equal(h.currentPeriod.periodVersion, 2); assert.equal(h.versions[0].periodVersion, 2); assert.equal(h.versions.at(-1).periodVersion, 1); assert.equal(h.versions[0].reasonText, JSON.parse(command.body).reasonText); assert.equal(concurrent[0].receipt.reasonCode, JSON.parse(command.body).reasonCode);
   await unchanged(() => dateWeb.loadMembershipDateQueue(schoolScope, { limit: 1 }));
   const summary = await unchanged(() => dateWeb.loadMembershipStatusSummary(schoolScope)); assert.equal(summary.lifecycle.ACTIVE, 1);
   const nextPreview = await readDates({ ...proposed, endDate: addDays(start, 31) }), exact = dateCommand(nextPreview); loseResponse = true;
