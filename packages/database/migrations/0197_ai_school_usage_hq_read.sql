@@ -21,7 +21,17 @@ BEGIN;
 --   estimatedWriteOffCostMicrounits rows written by WRITE_OFF (counted separately in writeOffEntries);
 --   unreconciledInvocations         calls whose outcome is still unknown (UNKNOWN, or SENDING past the stale limit,
 --                                   with a hold): they have no ledger row and no known cost, so no amount is shown.
--- The ledger and the resolution records are unchanged; this read only labels them.
+--                                   The stale test uses the immutable hold origin held_at (0196), the same predicate
+--                                   as the HQ UNKNOWN queue, never the mutable updated_at.
+-- Late actuals after a write-off (Manus final review P2, 2026-11-03) are reported beside, never inside, the three
+-- values above, so their classification is unchanged:
+--   lateProviderCostMicrounits      verified provider charges an HQ owner recorded after a WRITE_OFF
+--                                   (hon.ai_late_provider_expenses, 0196), in the original hold window;
+--   lateProviderExpenseEntries      how many such charges;
+--   supersededWriteOffEstimateMicrounits  the part of estimatedWriteOffCostMicrounits whose call now has a late actual
+--                                   (estimate minus superseded is the estimate still standing in for an unknown cost).
+-- Late actuals carry no customer credits and write no ledger row, so credits and entries are unchanged.
+-- The ledger, the resolution and the late-expense records are unchanged; this read only labels them.
 
 CREATE FUNCTION hon.read_ai_school_usage_from_hq(p_subject text, p_from timestamptz, p_to timestamptz) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -38,37 +48,51 @@ BEGIN
            WHEN EXISTS (SELECT 1 FROM hon.teaching_ai_invocations i WHERE i.id = u.source_invocation_id) THEN 'TEACHING'
            WHEN EXISTS (SELECT 1 FROM hon.chad_follow_up_invocations i WHERE i.id = u.source_invocation_id) THEN 'CHAD_FOLLOW_UP'
            ELSE 'UNATTRIBUTED' END AS agent,
-      EXISTS (SELECT 1 FROM hon.ai_unknown_resolutions r WHERE r.ledger_entry_id = u.id AND r.decision = 'WRITE_OFF') AS write_off
+      EXISTS (SELECT 1 FROM hon.ai_unknown_resolutions r WHERE r.ledger_entry_id = u.id AND r.decision = 'WRITE_OFF') AS write_off,
+      EXISTS (SELECT 1 FROM hon.ai_unknown_resolutions r JOIN hon.ai_late_provider_expenses l ON l.resolution_id = r.id
+              WHERE r.ledger_entry_id = u.id AND r.decision = 'WRITE_OFF') AS superseded,
+      false AS late
     FROM hon.ai_usage_ledger u
     WHERE u.occurred_at >= p_from AND u.occurred_at < p_to
+    UNION ALL
+    -- Late actuals: provider expense evidence only (no ledger row, no customer credits), in their original window.
+    SELECT l.organization_id, l.school_id, 'AGENT_INFERENCE', 0, l.provider_cost_microunits, l.agent, false, false, true
+    FROM hon.ai_late_provider_expenses l
+    WHERE l.occurred_at >= p_from AND l.occurred_at < p_to
   ), totals AS (
     SELECT organization_id, school_id, spend_class, agent, sum(customer_credits)::bigint credits,
-      coalesce(sum(provider_cost_microunits) FILTER (WHERE NOT write_off), 0)::bigint cost,
+      coalesce(sum(provider_cost_microunits) FILTER (WHERE NOT write_off AND NOT late), 0)::bigint cost,
       coalesce(sum(provider_cost_microunits) FILTER (WHERE write_off), 0)::bigint estimate,
-      count(*)::bigint entries, count(*) FILTER (WHERE write_off)::bigint write_offs
+      count(*) FILTER (WHERE NOT late)::bigint entries, count(*) FILTER (WHERE write_off)::bigint write_offs,
+      coalesce(sum(provider_cost_microunits) FILTER (WHERE late), 0)::bigint late_cost, count(*) FILTER (WHERE late)::bigint late_entries,
+      coalesce(sum(provider_cost_microunits) FILTER (WHERE superseded), 0)::bigint superseded
     FROM rows GROUP BY organization_id, school_id, spend_class, agent
   ), schools AS (
     SELECT t.organization_id, t.school_id,
       jsonb_build_object('organizationId', t.organization_id, 'schoolId', t.school_id,
         'providerReportedCostMicrounits', sum(t.cost), 'estimatedWriteOffCostMicrounits', sum(t.estimate),
         'entries', sum(t.entries), 'writeOffEntries', sum(t.write_offs),
+        'lateProviderCostMicrounits', sum(t.late_cost), 'lateProviderExpenseEntries', sum(t.late_entries),
+        'supersededWriteOffEstimateMicrounits', sum(t.superseded),
         'unreconciledInvocations', (SELECT count(*) FROM (
-            SELECT status, updated_at, reserved_credits FROM hon.marketing_ai_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id
-            UNION ALL SELECT status, updated_at, reserved_credits FROM hon.teaching_ai_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id
-            UNION ALL SELECT status, updated_at, reserved_credits FROM hon.chad_follow_up_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id) h
-          WHERE h.reserved_credits > 0 AND (h.status = 'UNKNOWN' OR (h.status = 'SENDING' AND h.updated_at <= at - hon.ai_sending_stale_after()))),
+            SELECT status, held_at, reserved_credits FROM hon.marketing_ai_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id
+            UNION ALL SELECT status, held_at, reserved_credits FROM hon.teaching_ai_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id
+            UNION ALL SELECT status, held_at, reserved_credits FROM hon.chad_follow_up_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id) h
+          WHERE h.reserved_credits > 0 AND (h.status = 'UNKNOWN' OR (h.status = 'SENDING' AND h.held_at <= at - hon.ai_sending_stale_after()))),
         'byClass', jsonb_object_agg(t.k, t.v)) AS j,
       sum(t.cost) AS cost, sum(t.estimate) AS estimate
     FROM (
       SELECT organization_id, school_id, spend_class AS k, sum(credits) credits, sum(cost) cost, sum(estimate) estimate,
-        sum(entries) entries, sum(write_offs) write_offs,
+        sum(entries) entries, sum(write_offs) write_offs, sum(late_cost) late_cost, sum(late_entries) late_entries, sum(superseded) superseded,
         jsonb_build_object('credits', sum(credits), 'providerReportedCostMicrounits', sum(cost), 'estimatedWriteOffCostMicrounits', sum(estimate),
           'entries', sum(entries), 'writeOffEntries', sum(write_offs),
+          'lateProviderCostMicrounits', sum(late_cost), 'lateProviderExpenseEntries', sum(late_entries), 'supersededWriteOffEstimateMicrounits', sum(superseded),
           -- Aggregates are computed for every class group regardless of the CASE, so the per-agent aggregate skips rows
         -- without an agent (CREATIVE_MEDIA, HQ_INTERNAL); otherwise a NULL key fails the whole read.
         'byAgent', CASE WHEN spend_class = 'AGENT_INFERENCE'
             THEN jsonb_object_agg(agent, jsonb_build_object('credits', credits, 'providerReportedCostMicrounits', cost,
-                'estimatedWriteOffCostMicrounits', estimate, 'entries', entries, 'writeOffEntries', write_offs))
+                'estimatedWriteOffCostMicrounits', estimate, 'entries', entries, 'writeOffEntries', write_offs,
+                'lateProviderCostMicrounits', late_cost, 'lateProviderExpenseEntries', late_entries, 'supersededWriteOffEstimateMicrounits', superseded))
               FILTER (WHERE agent IS NOT NULL)
             ELSE NULL END) AS v
       FROM totals GROUP BY organization_id, school_id, spend_class
@@ -89,10 +113,10 @@ BEGIN
         'agentCommittedCredits', hon.ai_org_committed_credits(o.organization_id, at),
         'agentCeilingCredits', hon.ai_org_ceiling(o.organization_id, at),
         'openUnknownHolds', (SELECT count(*) FROM (
-            SELECT status, updated_at, reserved_credits FROM hon.marketing_ai_invocations WHERE organization_id = o.organization_id
-            UNION ALL SELECT status, updated_at, reserved_credits FROM hon.teaching_ai_invocations WHERE organization_id = o.organization_id
-            UNION ALL SELECT status, updated_at, reserved_credits FROM hon.chad_follow_up_invocations WHERE organization_id = o.organization_id) h
-          WHERE h.reserved_credits > 0 AND (h.status = 'UNKNOWN' OR (h.status = 'SENDING' AND h.updated_at <= at - hon.ai_sending_stale_after()))),
+            SELECT status, held_at, reserved_credits FROM hon.marketing_ai_invocations WHERE organization_id = o.organization_id
+            UNION ALL SELECT status, held_at, reserved_credits FROM hon.teaching_ai_invocations WHERE organization_id = o.organization_id
+            UNION ALL SELECT status, held_at, reserved_credits FROM hon.chad_follow_up_invocations WHERE organization_id = o.organization_id) h
+          WHERE h.reserved_credits > 0 AND (h.status = 'UNKNOWN' OR (h.status = 'SENDING' AND h.held_at <= at - hon.ai_sending_stale_after()))),
         'aiPaused', EXISTS (SELECT 1 FROM hon.ai_spend_pauses p WHERE p.ended_at IS NULL AND (p.organization_id = o.organization_id OR p.organization_id IS NULL)))
         ORDER BY o.organization_id)
       FROM orgs o CROSS JOIN LATERAL (SELECT hon.ai_spend_window(o.organization_id, at) AS r) w), '[]'::jsonb),
