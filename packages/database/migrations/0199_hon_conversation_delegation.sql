@@ -63,6 +63,30 @@ BEGIN
   RETURN actor;
 END $$;
 
+-- Manus review P2 (2026-11-03): authority must hold through a mutation that waited. Called after the conversation row
+-- lock: it share-locks the rows that decide hon_conversation_actor (organization, school, user, principal, the
+-- principal's role grants at this school, those roles and their ai.invocation.plan permission rows), in the same
+-- organization -> school -> user -> principal -> grants order the attendance and owner-launch actor locks use, then
+-- checks authority again. A revocation, expiry, deactivation or permission removal that committed while this
+-- transaction waited is refused here; one issued after this point waits until this transaction ends.
+CREATE FUNCTION hon.hon_conversation_hold_actor(p_subject text, p_actor uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE org uuid := hon.current_organization_id(); school uuid := hon.current_school_id();
+BEGIN
+  PERFORM 1 FROM hon.organizations WHERE id = org FOR SHARE;
+  PERFORM 1 FROM hon.schools WHERE id = school AND organization_id = org FOR SHARE;
+  PERFORM 1 FROM hon.users WHERE external_subject = p_subject FOR SHARE;
+  PERFORM 1 FROM hon.principals WHERE id = p_actor FOR SHARE;
+  PERFORM 1 FROM hon.principal_role_grants WHERE principal_id = p_actor AND organization_id = org AND school_id = school ORDER BY id FOR SHARE;
+  PERFORM 1 FROM hon.roles WHERE id IN (SELECT role_id FROM hon.principal_role_grants WHERE principal_id = p_actor AND organization_id = org AND school_id = school) ORDER BY id FOR SHARE;
+  PERFORM 1 FROM hon.role_permissions WHERE permission_code = 'ai.invocation.plan'
+    AND role_id IN (SELECT role_id FROM hon.principal_role_grants WHERE principal_id = p_actor AND organization_id = org AND school_id = school)
+    ORDER BY role_id FOR SHARE;
+  IF hon.hon_conversation_actor(p_subject) IS DISTINCT FROM p_actor THEN
+    RAISE EXCEPTION 'HON_CONVERSATION_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
+END $$;
+
 -- Live specialist state for one turn, found only by (school, requester, idempotency key = turn id).
 CREATE FUNCTION hon.hon_turn_view(t hon.hon_conversation_turns) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -119,9 +143,12 @@ BEGIN
   fingerprint := encode(sha256(convert_to(p_input::text, 'UTF8')), 'hex');
   SELECT * INTO c FROM hon.hon_conversations WHERE organization_id = org AND school_id = school AND owner_principal_id = actor AND idempotency_key = p_key FOR UPDATE;
   IF FOUND THEN
+    -- A replay can wait behind the first request's row lock: authority is held and checked again first.
+    PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
     IF c.request_hash <> fingerprint THEN RAISE EXCEPTION 'HON_CONVERSATION_REPLAY_SWAP' USING ERRCODE = '23505'; END IF;
     RETURN hon.hon_conversation_summary(c);
   END IF;
+  PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
   INSERT INTO hon.hon_conversations (organization_id, school_id, owner_principal_id, title, idempotency_key, request_hash)
   VALUES (org, school, actor, btrim(p_input->>'title'), p_key, fingerprint) RETURNING * INTO c;
   RETURN hon.hon_conversation_summary(c);
@@ -199,6 +226,8 @@ BEGIN
   fingerprint := encode(sha256(convert_to(p_input::text, 'UTF8')), 'hex');
   SELECT * INTO c FROM hon.hon_conversations WHERE id = p_conversation AND organization_id = hon.current_organization_id() AND school_id = hon.current_school_id() AND owner_principal_id = actor FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_CONVERSATION_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
+  -- The conversation row lock can wait behind another turn: authority is held and checked again before any turn row.
+  PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
   SELECT * INTO t FROM hon.hon_conversation_turns WHERE conversation_id = c.id AND idempotency_key = p_key;
   IF FOUND THEN
     IF t.request_hash <> fingerprint THEN RAISE EXCEPTION 'HON_TURN_REPLAY_SWAP' USING ERRCODE = '23505'; END IF;
@@ -251,7 +280,7 @@ DO $$ DECLARE f regprocedure; r text; BEGIN
       'hon.hon_conversation_summary(hon.hon_conversations)'::regprocedure, 'hon.begin_hon_conversation(text,jsonb,uuid)'::regprocedure,
       'hon.list_my_hon_conversations(text,timestamptz,uuid,integer)'::regprocedure, 'hon.read_hon_conversation(text,uuid)'::regprocedure,
       'hon.begin_hon_turn(text,uuid,jsonb,uuid)'::regprocedure, 'hon.fail_hon_turn(text,uuid,text)'::regprocedure,
-      'hon.read_hon_turn_receipt(text,uuid)'::regprocedure] LOOP
+      'hon.read_hon_turn_receipt(text,uuid)'::regprocedure, 'hon.hon_conversation_hold_actor(text,uuid)'::regprocedure] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);

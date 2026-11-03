@@ -1104,10 +1104,98 @@ try {
   for (const t of ['hon_conversations', 'hon_conversation_turns']) {
     assert.equal((await row(`SELECT has_table_privilege($1,'hon.${t}','SELECT') s`, [runtimeRole])).s, false, `${t}: functions only`);
   }
-  for (const f of ['hon_conversation_actor(text)', 'hon_turn_view(hon.hon_conversation_turns)', 'hon_conversation_summary(hon.hon_conversations)']) {
+  for (const f of ['hon_conversation_actor(text)', 'hon_conversation_hold_actor(text,uuid)', 'hon_turn_view(hon.hon_conversation_turns)', 'hon_conversation_summary(hon.hon_conversations)']) {
     assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
   }
   pass('INV-24', 'C1: HON conversation turns hand off once to the named specialist (turn id = specialist idempotency key, one provider call and one ledger row per turn despite resends), every draft lands as an Action Center CONFIRM proposal, refusals and unknown outcomes are reported honestly, no HON-authored answer path, requester- and school-scoped, functions-only tables');
+
+  // ---- INV-24R (C1, Manus review P2): requester authority holds through turn creation (two connections) ----
+  // Another transaction holds the conversation row (as a concurrent turn would). The turn command, started with valid
+  // authority, is seen WAITING in pg_locks; authority changes and commits; on release the command must refuse with no
+  // turn row, no specialist record and no provider call. A revocation issued after the command took its hold waits.
+  {
+  const others = new Set();
+  const turnSql = 'SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)';
+  const turnInput = (o) => JSON.stringify({ text: 'Draft a friendly spring beginner class post.', delegation: { agentKey: 'marcus', campaignId: o.campaign } });
+  const turnRows = async (conversationId) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [conversationId])).n;
+  /** Starts begin_hon_turn in the real tenant transaction and resolves once a non-excluded backend waits on `locktypes`. */
+  const startTurn = async (o, conversationId) => {
+    const exclude = [...others];
+    let done = null;
+    const result = settle(tenant(context(o), (client) => client.query(turnSql, [o.subject, conversationId, turnInput(o), K()]))).then((r) => { done = r; return r; });
+    for (const end = Date.now() + 5000; ; await sleep(20)) {
+      const waits = await rows("SELECT pid FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid','tuple') AND NOT (pid = ANY($1::int[]))", [exclude]);
+      if (waits.length) return { pid: waits[0].pid, result };
+      if (done || Date.now() > end) throw new Error(`expected the turn to wait on the conversation row first; it ${done ? `settled (${done.error ? done.error.code + ' ' + done.error.message : 'succeeded'})` : 'never waited'}`);
+    }
+  };
+  const holdConversation = async (conversationId) => {
+    const c = await openTx();
+    others.add((await c.query('SELECT pg_backend_pid() p')).rows[0].p);
+    await c.query('SELECT 1 FROM hon.hon_conversations WHERE id=$1 FOR UPDATE', [conversationId]);
+    return c;
+  };
+  others.add((await row('SELECT pg_backend_pid() p')).p);
+  const outcomes = [];
+  const cases = [
+    ['role grant revoked', (o) => admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1 AND school_id=$2', [o.principal, o.school])],
+    ['ai.invocation.plan removed from the role', (o) => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='ai.invocation.plan'", [o.role])],
+    ['principal deactivated', (o) => admin.query('UPDATE hon.principals SET is_active=false WHERE id=$1', [o.principal])],
+  ];
+  for (const [label, change] of cases) {
+    const o = await makeOrg(`inv-24r-${outcomes.length}`);
+    const sc = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+    const conv = await hon.create(sc, { title: 'Race proof' }, K());
+    const callsBefore = calls();
+    const holder = await holdConversation(conv.id);
+    const cmd = await startTurn(o, conv.id);
+    await change(o);
+    await holder.query('COMMIT'); await holder.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the turn: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.deepEqual([await turnRows(conv.id), calls() - callsBefore, (await row('SELECT count(*)::int n FROM hon.marketing_ai_invocations WHERE organization_id=$1', [o.id])).n], [0, 0, 0], `${label}: no turn, provider call or specialist record`);
+    outcomes.push(`${label}: refused`);
+  }
+  // Role grant expired by the clock while waiting.
+  {
+    const o = await makeOrg('inv-24r-expiry');
+    const sc = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+    const conv = await hon.create(sc, { title: 'Race proof' }, K());
+    await admin.query("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()+interval '4 seconds' WHERE principal_id=$1 AND school_id=$2", [o.principal, o.school]);
+    const until = (await row('SELECT max(effective_until) u FROM hon.principal_role_grants WHERE principal_id=$1', [o.principal])).u;
+    const holder = await holdConversation(conv.id);
+    const cmd = await startTurn(o, conv.id);
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await holder.query('COMMIT'); await holder.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the turn: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await turnRows(conv.id), 0);
+    outcomes.push('role grant expired while waiting: refused');
+  }
+  // After the hold: the turn's transaction is kept open once begin_hon_turn has returned. A revocation then waits for
+  // that transaction (pg_locks), the turn commits once, and only then does the revocation apply.
+  {
+    const o = await makeOrg('inv-24r-ordered');
+    const sc = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+    const conv = await hon.create(sc, { title: 'Race proof' }, K());
+    let release, turned = null;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const result = settle(tenant(context(o), async (client) => { const r = await client.query(turnSql, [o.subject, conv.id, turnInput(o), K()]); turned = r; await gate; return r; }));
+    let revoke;
+    try {
+      for (const end = Date.now() + 5000; !turned; await sleep(20)) if (Date.now() > end) throw new Error('the turn did not complete inside its transaction');
+      revoke = await startBlocked('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1 AND school_id=$2', [o.principal, o.school], 'transactionid', { tx: true });
+    } finally { release(); }
+    const r = await result;
+    assert.equal(r.value?.rows[0]?.begin_hon_turn?.handOff, true, `the turn decided before the revocation: ${JSON.stringify(r.error?.message ?? r.value?.rows[0])}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    assert.equal(await turnRows(conv.id), 1, 'recorded once');
+    assert.equal((await settle(tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, turnInput(o), K()])))).error?.code, '42501', 'refused after the revocation');
+    outcomes.push('revocation after the hold: waits, applies after');
+  }
+  pass('INV-24R', `C1: requester authority holds through turn creation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; refusals leave no turn, specialist record or provider call`);
+  }
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
