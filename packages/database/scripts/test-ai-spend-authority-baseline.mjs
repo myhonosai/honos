@@ -701,6 +701,9 @@ try {
   {
   const usage = (subject, from, to) => settle(admin.query('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r', [subject, from, to]));
   const from = new Date(Date.now() - 90 * 86_400_000).toISOString(), to = new Date(Date.now() + 3_600_000).toISOString();
+  // A non-agent (CREATIVE_MEDIA) provider expense row, as the creative wallet (CW1) records them: it has no agent, so
+  // the per-agent breakdown must skip it rather than fail the whole HQ read (CW1 review P2-A regression).
+  await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'OPENROUTER','ai0-creative','IMAGE',0,5000,$3,'CREATIVE_MEDIA')", [old.o.id, old.o.school, K()]);
   const ledgerBefore = (await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n;
   const read = await usage(hq.subject, from, to);
   const report = read.value?.rows[0].r;
@@ -723,6 +726,7 @@ try {
   const offSchool = report.schools.find((x) => x.schoolId === staleOld.o.school);
   assert.equal(offSchool.byClass.AGENT_INFERENCE.byAgent.TEACHING?.providerCostMicrounits >= 900, true, 'a WRITE_OFF row keeps its best-known cost');
   for (const sch of report.schools) assert.equal(sch.byClass.CREATIVE_MEDIA?.byAgent ?? null, null, 'creative rows are never attributed to an agent budget');
+  assert.deepEqual([oldSchool.byClass.CREATIVE_MEDIA?.credits, oldSchool.byClass.CREATIVE_MEDIA?.providerCostMicrounits >= 5000], [0, true], 'creative expense is reported in its own class');
   // Organization budget picture equals the S4-b/S4-d functions; open lost outcomes are counted.
   const orgOf = (o) => report.organizations.find((x) => x.organizationId === o.id);
   const committedNow = Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleCur.o.id])).n);

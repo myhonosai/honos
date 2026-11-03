@@ -44,8 +44,11 @@ BEGIN
     FROM (
       SELECT organization_id, school_id, spend_class AS k, sum(credits) credits, sum(cost) cost, sum(entries) entries,
         jsonb_build_object('credits', sum(credits), 'providerCostMicrounits', sum(cost), 'entries', sum(entries),
-          'byAgent', CASE WHEN spend_class = 'AGENT_INFERENCE'
+          -- Aggregates are computed for every class group regardless of the CASE, so the per-agent aggregate skips rows
+        -- without an agent (CREATIVE_MEDIA, HQ_INTERNAL); otherwise a NULL key fails the whole read.
+        'byAgent', CASE WHEN spend_class = 'AGENT_INFERENCE'
             THEN jsonb_object_agg(agent, jsonb_build_object('credits', credits, 'providerCostMicrounits', cost, 'entries', entries))
+              FILTER (WHERE agent IS NOT NULL)
             ELSE NULL END) AS v
       FROM totals GROUP BY organization_id, school_id, spend_class
     ) t
