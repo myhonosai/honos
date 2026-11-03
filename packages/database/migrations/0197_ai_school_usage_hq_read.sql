@@ -13,6 +13,15 @@ BEGIN;
 -- provider cost (micro-USD) is summed per school across classes.
 -- Organization rows add the live budget picture HQ needs to act: the current window, committed credits against the
 -- interim legacy ceiling (OD-23: not the creative-credit wallet), open UNKNOWN holds and any active HQ AI pause.
+--
+-- Cost basis is explicit (Manus review P2, 2026-11-03): a ledger row written by an HQ WRITE_OFF resolution (0196)
+-- carries the owner's ESTIMATE, not a provider charge, so it is never added to the provider-reported total.
+--   providerReportedCostMicrounits  rows whose cost came from the provider's own result (the S4-a evidence path) or
+--                                   from provider evidence an HQ owner recorded (RECORD_PROVIDER_COST);
+--   estimatedWriteOffCostMicrounits rows written by WRITE_OFF (counted separately in writeOffEntries);
+--   unreconciledInvocations         calls whose outcome is still unknown (UNKNOWN, or SENDING past the stale limit,
+--                                   with a hold): they have no ledger row and no known cost, so no amount is shown.
+-- The ledger and the resolution records are unchanged; this read only labels them.
 
 CREATE FUNCTION hon.read_ai_school_usage_from_hq(p_subject text, p_from timestamptz, p_to timestamptz) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -28,40 +37,52 @@ BEGIN
            WHEN EXISTS (SELECT 1 FROM hon.marketing_ai_invocations i WHERE i.id = u.source_invocation_id) THEN 'MARKETING'
            WHEN EXISTS (SELECT 1 FROM hon.teaching_ai_invocations i WHERE i.id = u.source_invocation_id) THEN 'TEACHING'
            WHEN EXISTS (SELECT 1 FROM hon.chad_follow_up_invocations i WHERE i.id = u.source_invocation_id) THEN 'CHAD_FOLLOW_UP'
-           ELSE 'UNATTRIBUTED' END AS agent
+           ELSE 'UNATTRIBUTED' END AS agent,
+      EXISTS (SELECT 1 FROM hon.ai_unknown_resolutions r WHERE r.ledger_entry_id = u.id AND r.decision = 'WRITE_OFF') AS write_off
     FROM hon.ai_usage_ledger u
     WHERE u.occurred_at >= p_from AND u.occurred_at < p_to
   ), totals AS (
     SELECT organization_id, school_id, spend_class, agent, sum(customer_credits)::bigint credits,
-      sum(provider_cost_microunits)::bigint cost, count(*)::bigint entries
+      coalesce(sum(provider_cost_microunits) FILTER (WHERE NOT write_off), 0)::bigint cost,
+      coalesce(sum(provider_cost_microunits) FILTER (WHERE write_off), 0)::bigint estimate,
+      count(*)::bigint entries, count(*) FILTER (WHERE write_off)::bigint write_offs
     FROM rows GROUP BY organization_id, school_id, spend_class, agent
   ), schools AS (
     SELECT t.organization_id, t.school_id,
       jsonb_build_object('organizationId', t.organization_id, 'schoolId', t.school_id,
-        'providerCostMicrounits', sum(t.cost), 'entries', sum(t.entries),
+        'providerReportedCostMicrounits', sum(t.cost), 'estimatedWriteOffCostMicrounits', sum(t.estimate),
+        'entries', sum(t.entries), 'writeOffEntries', sum(t.write_offs),
+        'unreconciledInvocations', (SELECT count(*) FROM (
+            SELECT status, updated_at, reserved_credits FROM hon.marketing_ai_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id
+            UNION ALL SELECT status, updated_at, reserved_credits FROM hon.teaching_ai_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id
+            UNION ALL SELECT status, updated_at, reserved_credits FROM hon.chad_follow_up_invocations WHERE organization_id = t.organization_id AND school_id = t.school_id) h
+          WHERE h.reserved_credits > 0 AND (h.status = 'UNKNOWN' OR (h.status = 'SENDING' AND h.updated_at <= at - hon.ai_sending_stale_after()))),
         'byClass', jsonb_object_agg(t.k, t.v)) AS j,
-      sum(t.cost) AS cost
+      sum(t.cost) AS cost, sum(t.estimate) AS estimate
     FROM (
-      SELECT organization_id, school_id, spend_class AS k, sum(credits) credits, sum(cost) cost, sum(entries) entries,
-        jsonb_build_object('credits', sum(credits), 'providerCostMicrounits', sum(cost), 'entries', sum(entries),
+      SELECT organization_id, school_id, spend_class AS k, sum(credits) credits, sum(cost) cost, sum(estimate) estimate,
+        sum(entries) entries, sum(write_offs) write_offs,
+        jsonb_build_object('credits', sum(credits), 'providerReportedCostMicrounits', sum(cost), 'estimatedWriteOffCostMicrounits', sum(estimate),
+          'entries', sum(entries), 'writeOffEntries', sum(write_offs),
           -- Aggregates are computed for every class group regardless of the CASE, so the per-agent aggregate skips rows
         -- without an agent (CREATIVE_MEDIA, HQ_INTERNAL); otherwise a NULL key fails the whole read.
         'byAgent', CASE WHEN spend_class = 'AGENT_INFERENCE'
-            THEN jsonb_object_agg(agent, jsonb_build_object('credits', credits, 'providerCostMicrounits', cost, 'entries', entries))
+            THEN jsonb_object_agg(agent, jsonb_build_object('credits', credits, 'providerReportedCostMicrounits', cost,
+                'estimatedWriteOffCostMicrounits', estimate, 'entries', entries, 'writeOffEntries', write_offs))
               FILTER (WHERE agent IS NOT NULL)
             ELSE NULL END) AS v
       FROM totals GROUP BY organization_id, school_id, spend_class
     ) t
     GROUP BY t.organization_id, t.school_id
   ), limited AS (
-    SELECT * FROM schools ORDER BY cost DESC, organization_id, school_id LIMIT 500
+    SELECT * FROM schools ORDER BY cost DESC, estimate DESC, organization_id, school_id LIMIT 500
   ), orgs AS (
     SELECT DISTINCT organization_id FROM limited
   )
   SELECT jsonb_build_object(
     'from', hon.saas_ts(p_from), 'to', hon.saas_ts(p_to), 'asOf', hon.saas_ts(at),
     'truncated', (SELECT count(*) FROM schools) > 500,
-    'schools', coalesce((SELECT jsonb_agg(l.j ORDER BY l.cost DESC, l.organization_id, l.school_id) FROM limited l), '[]'::jsonb),
+    'schools', coalesce((SELECT jsonb_agg(l.j ORDER BY l.cost DESC, l.estimate DESC, l.organization_id, l.school_id) FROM limited l), '[]'::jsonb),
     'organizations', coalesce((SELECT jsonb_agg(jsonb_build_object(
         'organizationId', o.organization_id,
         'agentWindowStart', hon.saas_ts(lower(w.r)), 'agentWindowEnd', hon.saas_ts(upper(w.r)),
