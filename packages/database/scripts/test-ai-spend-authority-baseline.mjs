@@ -212,6 +212,46 @@ const humanSource = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_con
 const tenant = (c, work) => db.withTenantTransaction(c, async (client) => { await client.query(humanSource); return work(client); });
 const settle = (promise) => promise.then((value) => ({ value }), (error) => ({ error }));
 
+/** A further disposable human HQ owner whose authority the race proofs change (the shared `hq` is never touched). */
+async function makeHqOwner(label, untilSql = 'NULL') {
+  const h = { id: K(), user: K(), subject: `ai0-hq-${label}-${K()}` };
+  await admin.query('BEGIN');
+  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','AI-0 synthetic HQ owner')", [h.user, h.subject]);
+  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','AI-0 synthetic HQ owner',true)", [h.id, h.user]);
+  await admin.query(`INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,'HON_HQ_OWNER','{}',clock_timestamp()-interval '2 days',${untilSql})`, [h.id]);
+  await admin.query('COMMIT');
+  h.until = (await row('SELECT effective_until FROM hon.hq_operator_grants WHERE principal_id=$1', [h.id])).effective_until;
+  return h;
+}
+/** A second connection with an open transaction (the "other" transaction of a two-connection proof). */
+async function openTx() {
+  const c = new pg.Client({ connectionString: ownerUrl, ssl: false });
+  await c.connect();
+  await c.query('BEGIN');
+  return c;
+}
+/**
+ * Runs `sql` on its own connection and resolves once pg_locks shows that backend WAITING on a lock of `locktype`
+ * (deterministic: the proof never relies on timing for the interleaving). Throws if it settles without waiting.
+ */
+async function startBlocked(sql, args, locktype, { tx = false } = {}) {
+  const c = new pg.Client({ connectionString: ownerUrl, ssl: false });
+  await c.connect();
+  const pid = (await c.query('SELECT pg_backend_pid() p')).rows[0].p;
+  if (tx) await c.query('BEGIN');
+  let done = null;
+  const result = settle(c.query(sql, args)).then((r) => { done = r; return r; });
+  for (const end = Date.now() + 5000; ; await sleep(20)) {
+    const waits = await rows('SELECT locktype FROM pg_locks WHERE pid=$1 AND NOT granted', [pid]);
+    if (waits.some((w) => w.locktype === locktype)) break;
+    if (done || Date.now() > end) {
+      await c.end().catch(() => {});
+      throw new Error(`expected the command to wait on a ${locktype} lock first; it ${done ? `settled (${done.error ? done.error.code + ' ' + done.error.message : 'succeeded'})` : 'never waited'}`);
+    }
+  }
+  return { client: c, pid, result: tx ? result : result.finally(() => c.end()) };
+}
+
 /** Starts a submit and resolves when its invocation is SENDING (held) or when the submit settles without sending. */
 async function startHeld(name, o, patch = {}) {
   const a = agents[name], before = (await row(`SELECT count(*)::int n FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id])).n;
@@ -577,6 +617,69 @@ try {
   assert.equal((await settle(admin.query('SELECT hon.read_ai_spend_pauses_from_hq($1)', [paused.subject]))).error?.code, '42501', 'a school owner cannot read HQ pauses');
   pass('INV-18', 'S4-c: HQ-owner-only organization and platform AI pause/resume, idempotent per key, one active pause per scope, class-scoped, append-only; agents refused while paused and resume afterwards');
 
+  // ---- INV-18R (S4-c, Manus review P1): HQ authority holds through the pause command (two connections) ----
+  // The command checks authority, then takes a shared lock on users/principals/HQ grants/family grants and checks
+  // again, and checks once more after the per-scope advisory lock. Each case below makes the command WAIT (seen in
+  // pg_locks) while authority changes, then shows the outcome. A refusal leaves no pause row.
+  {
+  const raceOrg = await makeOrg('inv-18r');
+  const pauseSql = 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r';
+  const activePauses = async () => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1 AND ended_at IS NULL', [raceOrg.id])).n;
+  const allPauses = async () => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1', [raceOrg.id])).n;
+  const scopeLock = "SELECT pg_advisory_xact_lock(hashtextextended('ai.pause:' || $1::text || ':AGENT_INFERENCE', 0))";
+  const outcomes = [];
+  // (a) Revoked while waiting: the revocation is uncommitted when the command starts (its first check passes), the
+  // command waits for the shared lock, the revocation commits, and the recheck refuses.
+  // (b) Permission change while waiting: the grant becomes an operator grant (owner-only command): refused.
+  for (const [label, change] of [['revoked', "effective_until=clock_timestamp()"], ['downgraded to operator', "hq_role='HON_HQ_OPERATOR',permission_codes='{hq.billing.manage}'"]]) {
+    const h = await makeHqOwner(`inv-18r-${label.split(' ')[0]}`);
+    const before = await allPauses();
+    const revoker = await openTx();
+    await revoker.query(`UPDATE hon.hq_operator_grants SET ${change} WHERE principal_id=$1`, [h.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'relation');
+    await revoker.query('COMMIT'); await revoker.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the pause: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await allPauses(), before, `${label}: no pause row`);
+    outcomes.push(`${label}: refused`);
+  }
+  // (c) Expired by the clock while waiting on the per-scope lock held by another pause command.
+  {
+    const h = await makeHqOwner('inv-18r-expiry', "clock_timestamp()+interval '4 seconds'");
+    const before = await allPauses();
+    const other = await openTx();
+    await other.query(scopeLock, [raceOrg.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'advisory');
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [h.until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the pause: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await allPauses(), before, 'expired: no pause row');
+    outcomes.push('expired while waiting: refused');
+  }
+  // (d) A revocation cannot race past the final decision: while the command waits, a revocation of that owner waits
+  // behind the command's shared lock; the command completes with the authority it held, then the revocation applies
+  // and the same owner is refused afterwards.
+  {
+    const h = await makeHqOwner('inv-18r-ordered');
+    const other = await openTx();
+    await other.query(scopeLock, [raceOrg.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'advisory');
+    const revoke = await startBlocked('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h.id], 'relation', { tx: true });
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(r.value?.rows[0].r.status, 'ACTIVE', `the command decided before the revocation: ${JSON.stringify(r.error?.message)}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    assert.equal((await pauseCmd(h.subject, pIn('RESUME', raceOrg.id), K())).error?.code, '42501', 'the revoked owner is refused afterwards');
+    assert.equal(await activePauses(), 1);
+    assert.equal((await pauseCmd(hq.subject, pIn('RESUME', raceOrg.id), K())).value?.rows[0].r.status, 'ENDED');
+    outcomes.push('revocation during the command: waits, applies after');
+  }
+  assert.equal(await activePauses(), 0);
+  pass('INV-18R', `S4-c: HQ pause authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; no refused pause row`);
+  }
+
   // ---- INV-19 (S4-d, replaces KF-AI8): lost outcomes count only in the window in which they were held ----
   {
   const backdate = async (table, id, interval, status = null) => {
@@ -699,6 +802,77 @@ try {
   assert.equal(after.resolved.filter((x) => [old.id, cur.id, staleOld.id].includes(x.invocationId)).length, 3);
   pass('INV-20', 'S4-d: HQ-owner-only resolution: RECORD_PROVIDER_COST writes one ledger row in the original window, NO_PROVIDER_CHARGE writes none and frees the school, WRITE_OFF writes a zero-credit row; closed evidence, idempotent per key, once per call, in-flight and recorded calls refused, agent path still refused; immutable record, audit and inert outbox');
 
+  // ---- INV-20R (S4-d, Manus review P1): HQ authority holds through UNKNOWN resolution (two connections) ----
+  // Same pattern as INV-18R: authority is checked, then held by the shared lock on users/principals/HQ grants/family
+  // grants, and checked again after the key lock and after the invocation row lock. A refusal writes nothing: no
+  // resolution, ledger, audit or outbox row, and the hold stays as it was. No provider is involved (none is called).
+  {
+  const resolveSql = 'SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r';
+  const noCharge = { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-race-1' } };
+  const args = (h, id) => [h.subject, 'MARKETING', id, JSON.stringify(noCharge), K(), K(), K()];
+  const evidence = async (id) => row(`SELECT i.status, i.reserved_credits::int reserved, i.usage_id,
+      (SELECT count(*)::int FROM hon.ai_unknown_resolutions r WHERE r.invocation_id=i.id) resolutions,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger l WHERE l.source_invocation_id=i.id) ledger,
+      (SELECT count(*)::int FROM hon.audit_events a WHERE a.entity_id=i.id AND a.action_code='hq.ai.unknown_invocation.resolve') audits,
+      (SELECT count(*)::int FROM hon.outbox_events o WHERE o.aggregate_id=i.id AND o.event_type='ai.unknown_invocation.resolved') outbox
+    FROM hon.marketing_ai_invocations i WHERE i.id=$1`, [id]);
+  const untouched = (e) => e.status === 'UNKNOWN' && e.reserved === agents.marcus.estimate && e.usage_id === null && e.resolutions + e.ledger + e.audits + e.outbox === 0;
+  const outcomes = [];
+  for (const [label, change] of [['revoked', "effective_until=clock_timestamp()"], ['downgraded to operator', "hq_role='HON_HQ_OPERATOR',permission_codes='{hq.billing.manage}'"]]) {
+    const lost = await lostOutcome(`inv-20r-${label.split(' ')[0]}`);
+    const h = await makeHqOwner(`inv-20r-${label.split(' ')[0]}`);
+    const revoker = await openTx();
+    await revoker.query(`UPDATE hon.hq_operator_grants SET ${change} WHERE principal_id=$1`, [h.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'relation');
+    await revoker.query('COMMIT'); await revoker.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the resolution: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    const e = await evidence(lost.id);
+    assert(untouched(e), `${label}: nothing written: ${JSON.stringify(e)}`);
+    outcomes.push(`${label}: refused`);
+  }
+  // Expired by the clock while waiting on the invocation row lock (held by another transaction, e.g. a recording).
+  {
+    const lost = await lostOutcome('inv-20r-expiry');
+    const h = await makeHqOwner('inv-20r-expiry', "clock_timestamp()+interval '4 seconds'");
+    const other = await openTx();
+    await other.query('SELECT 1 FROM hon.marketing_ai_invocations WHERE id=$1 FOR UPDATE', [lost.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'transactionid');
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [h.until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the resolution: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    const e = await evidence(lost.id);
+    assert(untouched(e), `expired: nothing written: ${JSON.stringify(e)}`);
+    outcomes.push('expired while waiting on the invocation row: refused');
+  }
+  // A revocation issued while the resolution waits queues behind it; the resolution completes, then the revocation applies.
+  {
+    const lost = await lostOutcome('inv-20r-ordered');
+    const h = await makeHqOwner('inv-20r-ordered');
+    const other = await openTx();
+    await other.query('SELECT 1 FROM hon.marketing_ai_invocations WHERE id=$1 FOR UPDATE', [lost.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'transactionid');
+    const revoke = await startBlocked('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h.id], 'relation', { tx: true });
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.value?.rows[0].r.decision, 'NO_PROVIDER_CHARGE', `the resolution decided before the revocation: ${JSON.stringify(r.error?.message)}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    const again = await lostOutcome('inv-20r-after');
+    assert.equal((await settle(admin.query(resolveSql, args(h, again.id)))).error?.code, '42501', 'the revoked owner is refused afterwards');
+    assert(untouched(await evidence(again.id)));
+    outcomes.push('revocation during the resolution: waits, applies after');
+  }
+  pass('INV-20R', `S4-d: HQ UNKNOWN-resolution authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; refusals write no resolution, ledger, audit or outbox row and keep the hold`);
+  }
+
   // ---- INV-21 (S4-e): HQ per-school AI usage and actual provider cost, read only ----
   {
   const usage = (subject, from, to) => settle(admin.query('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r', [subject, from, to]));
@@ -711,24 +885,38 @@ try {
   const report = read.value?.rows[0].r;
   assert(report, JSON.stringify(read.error?.message));
   // Independent per-school totals straight from the ledger: each school is reported exactly once and only with its own rows.
-  const expected = await rows(`SELECT organization_id o, school_id s, spend_class c, sum(customer_credits)::bigint credits, sum(provider_cost_microunits)::bigint cost, count(*)::int n
-    FROM hon.ai_usage_ledger WHERE occurred_at >= $1 AND occurred_at < $2 GROUP BY 1,2,3`, [from, to]);
+  // Cost basis comes from the resolution records: a WRITE_OFF row's cost is an estimate, never a provider charge.
+  const expected = await rows(`SELECT u.organization_id o, u.school_id s, u.spend_class c, sum(u.customer_credits)::bigint credits,
+      coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NULL),0)::bigint cost, coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NOT NULL),0)::bigint estimate,
+      count(*)::int n, count(r.id)::int w
+    FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF'
+    WHERE u.occurred_at >= $1 AND u.occurred_at < $2 GROUP BY 1,2,3`, [from, to]);
   const schoolsSeen = new Set(expected.map((e) => `${e.o}/${e.s}`));
   assert.equal(report.schools.length, schoolsSeen.size, 'one entry per school with usage');
   assert.equal(new Set(report.schools.map((x) => `${x.organizationId}/${x.schoolId}`)).size, report.schools.length, 'no school reported twice');
   for (const e of expected) {
     const sch = report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s);
     const cls = sch?.byClass?.[e.c];
-    assert.deepEqual([cls?.credits, cls?.providerCostMicrounits, cls?.entries], [Number(e.credits), Number(e.cost), e.n], `school ${e.s} class ${e.c}`);
+    assert.deepEqual([cls?.credits, cls?.providerReportedCostMicrounits, cls?.estimatedWriteOffCostMicrounits, cls?.entries, cls?.writeOffEntries],
+      [Number(e.credits), Number(e.cost), Number(e.estimate), e.n, e.w], `school ${e.s} class ${e.c}`);
   }
   // Agent attribution comes from the S4-a source invocation; pre-S4-a style rows are UNATTRIBUTED, never guessed.
   const oldSchool = report.schools.find((x) => x.schoolId === old.o.school);
-  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.providerCostMicrounits >= 2400, true, JSON.stringify(oldSchool));
+  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.providerReportedCostMicrounits >= 2400, true, JSON.stringify(oldSchool));
+  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.estimatedWriteOffCostMicrounits, 0, 'RECORD_PROVIDER_COST is provider evidence, not an estimate');
   assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.UNATTRIBUTED?.credits, 11990, 'the synthetic used-credit fixture row has no source invocation');
   const offSchool = report.schools.find((x) => x.schoolId === staleOld.o.school);
-  assert.equal(offSchool.byClass.AGENT_INFERENCE.byAgent.TEACHING?.providerCostMicrounits >= 900, true, 'a WRITE_OFF row keeps its best-known cost');
+  // Manus review P2: the WRITE_OFF estimate (900) is reported as an estimate and is NOT in the provider-reported total.
+  const offTeaching = offSchool.byClass.AGENT_INFERENCE.byAgent.TEACHING;
+  assert.deepEqual([offTeaching?.providerReportedCostMicrounits, offTeaching?.estimatedWriteOffCostMicrounits, offTeaching?.writeOffEntries], [0, 900, 1], JSON.stringify(offSchool));
+  assert.equal(offSchool.estimatedWriteOffCostMicrounits, 900);
+  assert.equal(offSchool.providerReportedCostMicrounits, Object.values(offSchool.byClass).reduce((a, c) => a + c.providerReportedCostMicrounits, 0));
+  // Unknown outcomes carry no amount: they are counted per school, separately from both cost totals.
+  const staleSchool = report.schools.find((x) => x.schoolId === staleCur.o.school);
+  assert.equal(staleSchool?.unreconciledInvocations, 1, 'an open stale SENDING hold is reported as unreconciled');
+  assert.equal(oldSchool.unreconciledInvocations, 0, 'a resolved outcome is not unreconciled');
   for (const sch of report.schools) assert.equal(sch.byClass.CREATIVE_MEDIA?.byAgent ?? null, null, 'creative rows are never attributed to an agent budget');
-  assert.deepEqual([oldSchool.byClass.CREATIVE_MEDIA?.credits, oldSchool.byClass.CREATIVE_MEDIA?.providerCostMicrounits >= 5000], [0, true], 'creative expense is reported in its own class');
+  assert.deepEqual([oldSchool.byClass.CREATIVE_MEDIA?.credits, oldSchool.byClass.CREATIVE_MEDIA?.providerReportedCostMicrounits >= 5000, oldSchool.byClass.CREATIVE_MEDIA?.estimatedWriteOffCostMicrounits], [0, true, 0], 'creative expense is reported in its own class');
   // Organization budget picture equals the S4-b/S4-d functions; open lost outcomes are counted.
   const orgOf = (o) => report.organizations.find((x) => x.organizationId === o.id);
   const committedNow = Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleCur.o.id])).n);
@@ -744,7 +932,7 @@ try {
     assert.equal((await usage(hq.subject, a, b)).error?.code, '22023', label);
   assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n, ledgerBefore, 'the read writes nothing');
   assert.equal((await row("SELECT provolatile v, prosecdef d FROM pg_proc WHERE oid='hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)'::regprocedure")).v, 's');
-  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), actual provider cost in micro-USD, org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
+  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates and unreconciled calls kept separate (mixed agent + creative), org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
   }
 
   }

@@ -187,9 +187,9 @@
     "0192_crm_suspended_owner_read_only.sql": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542",
     "0193_ai_spend_durable_evidence.sql": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5",
     "0194_ai_org_budget_lock.sql": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b",
-    "0195_ai_spend_access_decision.sql": "0d4d1e8ec8e5f9d1b9a3d684471af8f3b7d1fc3bd2a558c75e932ddce467e484",
-    "0196_ai_unknown_resolution.sql": "d44dd87c39d2e21e8a3c1093edb1dbfe7c8c9e5a4a690c70de9542191a56ece9",
-    "0197_ai_school_usage_hq_read.sql": "64fcd3e4d382d1963e3936aa32a263e9675623fcf297263b17bd74b5b94c1126",
+    "0195_ai_spend_access_decision.sql": "135a8900fd98a322e369a33fb2ec8519fb2ee87ddaca5d4d2fe2c0a69eb06a27",
+    "0196_ai_unknown_resolution.sql": "f244901a47e3750533fbeae387155f14015f14078afb72a86bd54d1c87ba4aee",
+    "0197_ai_school_usage_hq_read.sql": "be731f19d70556a14f3ef42a1e3d0e7b105aa209e9f2ad9a194c84ca0e74fbf7",
     "0198_ai_team_readiness.sql": "2bf9e1ce874190012ed63a13d4be5791fefe269a22ba3c2de4b9242b8bae3530",
     "0199_hon_conversation_delegation.sql": "6cb2e904236f0587bc913ee1562bf38e2d60e428798d4c153b8aa6ec9de0364b"
   }
