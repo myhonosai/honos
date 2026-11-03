@@ -129,8 +129,14 @@ BEGIN
   PERFORM hon.ai_unknown_validate(p_agent, p_input);
   d := p_input->>'decision'; e := p_input->'evidence';
   fp := encode(sha256(convert_to(jsonb_build_object('agent',p_agent,'id',p_id,'input',p_input,'by',actor)::text,'UTF8')),'hex');
+  -- Authority holds through the mutation (the D9/0185 pattern): the shared lock stops any user, principal, HQ grant
+  -- or family grant change until this transaction ends, and authority is checked again after every wait, so an owner
+  -- revoked or expired while this command waited is refused before any replay, ledger, audit or outbox write.
+  LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants IN SHARE MODE;
+  IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   -- Replays and concurrent attempts with one key resolve to one row.
   PERFORM pg_advisory_xact_lock(hashtextextended('ai.unknown:' || p_key::text, 0));
+  IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   SELECT * INTO r FROM hon.ai_unknown_resolutions WHERE resolution_key = p_key;
   IF FOUND THEN
     IF r.resolution_fingerprint <> fp THEN RAISE EXCEPTION 'AI_UNKNOWN_KEY_REUSED' USING ERRCODE='23505'; END IF;
@@ -140,6 +146,8 @@ BEGIN
   -- The invocation row is the only row lock taken; no budget lock is needed because a resolution only releases holds.
   EXECUTE format('SELECT organization_id,school_id,requested_by,work_item_id,plan_id,status,reserved_credits,usage_id,updated_at FROM hon.%I WHERE id=$1 FOR UPDATE', tbl)
     INTO v_org, v_school, v_requester, v_work, v_plan, v_status, v_reserved, v_usage, v_held USING p_id;
+  -- The invocation row lock can wait behind a recording or another resolution: check authority again after it.
+  IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   IF v_org IS NULL THEN RAISE EXCEPTION 'AI_UNKNOWN_INVOCATION_NOT_FOUND' USING ERRCODE='P0002'; END IF;
   IF v_usage IS NOT NULL OR v_reserved IS NULL OR v_reserved <= 0 OR v_plan IS NULL
      OR NOT (v_status = 'UNKNOWN' OR (v_status = 'SENDING' AND v_held <= clock_timestamp() - hon.ai_sending_stale_after())) THEN
