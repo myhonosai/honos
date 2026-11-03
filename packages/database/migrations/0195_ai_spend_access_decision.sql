@@ -144,8 +144,15 @@ BEGIN
   v_action := p_input->>'action'; v_org := nullif(p_input->>'organizationId','')::uuid; v_class := p_input->>'spendClass'; v_reason := p_input->>'reason';
   fp := encode(sha256(convert_to(jsonb_build_object('a',v_action,'o',v_org,'c',v_class,'r',v_reason,'by',actor)::text,'UTF8')),'hex');
   IF v_org IS NOT NULL AND NOT EXISTS (SELECT 1 FROM hon.organizations WHERE id = v_org) THEN RAISE EXCEPTION 'AI_SPEND_PAUSE_ORGANIZATION_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  -- Authority holds through the mutation (the D9/0185 pattern): the shared lock stops any user, principal, HQ grant
+  -- or family grant change until this transaction ends, and authority is checked again after every wait, so an owner
+  -- revoked or expired while this command waited is refused before any row is read or written.
+  LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants IN SHARE MODE;
+  IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   -- One pause command at a time per scope: replays and races resolve to one row.
   PERFORM pg_advisory_xact_lock(hashtextextended('ai.pause:' || coalesce(v_org::text,'platform') || ':' || v_class, 0));
+  -- The scope lock can wait behind another pause command: the grant may have lapsed by the clock meanwhile.
+  IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   IF v_action = 'PAUSE' THEN
     SELECT * INTO p FROM hon.ai_spend_pauses WHERE pause_key = p_key;
     IF FOUND THEN

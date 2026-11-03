@@ -210,6 +210,46 @@ const humanSource = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_con
 const tenant = (c, work) => db.withTenantTransaction(c, async (client) => { await client.query(humanSource); return work(client); });
 const settle = (promise) => promise.then((value) => ({ value }), (error) => ({ error }));
 
+/** A further disposable human HQ owner whose authority the race proofs change (the shared `hq` is never touched). */
+async function makeHqOwner(label, untilSql = 'NULL') {
+  const h = { id: K(), user: K(), subject: `ai0-hq-${label}-${K()}` };
+  await admin.query('BEGIN');
+  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','AI-0 synthetic HQ owner')", [h.user, h.subject]);
+  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','AI-0 synthetic HQ owner',true)", [h.id, h.user]);
+  await admin.query(`INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,'HON_HQ_OWNER','{}',clock_timestamp()-interval '2 days',${untilSql})`, [h.id]);
+  await admin.query('COMMIT');
+  h.until = (await row('SELECT effective_until FROM hon.hq_operator_grants WHERE principal_id=$1', [h.id])).effective_until;
+  return h;
+}
+/** A second connection with an open transaction (the "other" transaction of a two-connection proof). */
+async function openTx() {
+  const c = new pg.Client({ connectionString: ownerUrl, ssl: false });
+  await c.connect();
+  await c.query('BEGIN');
+  return c;
+}
+/**
+ * Runs `sql` on its own connection and resolves once pg_locks shows that backend WAITING on a lock of `locktype`
+ * (deterministic: the proof never relies on timing for the interleaving). Throws if it settles without waiting.
+ */
+async function startBlocked(sql, args, locktype, { tx = false } = {}) {
+  const c = new pg.Client({ connectionString: ownerUrl, ssl: false });
+  await c.connect();
+  const pid = (await c.query('SELECT pg_backend_pid() p')).rows[0].p;
+  if (tx) await c.query('BEGIN');
+  let done = null;
+  const result = settle(c.query(sql, args)).then((r) => { done = r; return r; });
+  for (const end = Date.now() + 5000; ; await sleep(20)) {
+    const waits = await rows('SELECT locktype FROM pg_locks WHERE pid=$1 AND NOT granted', [pid]);
+    if (waits.some((w) => w.locktype === locktype)) break;
+    if (done || Date.now() > end) {
+      await c.end().catch(() => {});
+      throw new Error(`expected the command to wait on a ${locktype} lock first; it ${done ? `settled (${done.error ? done.error.code + ' ' + done.error.message : 'succeeded'})` : 'never waited'}`);
+    }
+  }
+  return { client: c, pid, result: tx ? result : result.finally(() => c.end()) };
+}
+
 /** Starts a submit and resolves when its invocation is SENDING (held) or when the submit settles without sending. */
 async function startHeld(name, o, patch = {}) {
   const a = agents[name], before = (await row(`SELECT count(*)::int n FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id])).n;
@@ -574,6 +614,69 @@ try {
   assert.equal(listed.filter((p) => p.status === 'ENDED').length >= 2, true);
   assert.equal((await settle(admin.query('SELECT hon.read_ai_spend_pauses_from_hq($1)', [paused.subject]))).error?.code, '42501', 'a school owner cannot read HQ pauses');
   pass('INV-18', 'S4-c: HQ-owner-only organization and platform AI pause/resume, idempotent per key, one active pause per scope, class-scoped, append-only; agents refused while paused and resume afterwards');
+
+  // ---- INV-18R (S4-c, Manus review P1): HQ authority holds through the pause command (two connections) ----
+  // The command checks authority, then takes a shared lock on users/principals/HQ grants/family grants and checks
+  // again, and checks once more after the per-scope advisory lock. Each case below makes the command WAIT (seen in
+  // pg_locks) while authority changes, then shows the outcome. A refusal leaves no pause row.
+  {
+  const raceOrg = await makeOrg('inv-18r');
+  const pauseSql = 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r';
+  const activePauses = async () => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1 AND ended_at IS NULL', [raceOrg.id])).n;
+  const allPauses = async () => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1', [raceOrg.id])).n;
+  const scopeLock = "SELECT pg_advisory_xact_lock(hashtextextended('ai.pause:' || $1::text || ':AGENT_INFERENCE', 0))";
+  const outcomes = [];
+  // (a) Revoked while waiting: the revocation is uncommitted when the command starts (its first check passes), the
+  // command waits for the shared lock, the revocation commits, and the recheck refuses.
+  // (b) Permission change while waiting: the grant becomes an operator grant (owner-only command): refused.
+  for (const [label, change] of [['revoked', "effective_until=clock_timestamp()"], ['downgraded to operator', "hq_role='HON_HQ_OPERATOR',permission_codes='{hq.billing.manage}'"]]) {
+    const h = await makeHqOwner(`inv-18r-${label.split(' ')[0]}`);
+    const before = await allPauses();
+    const revoker = await openTx();
+    await revoker.query(`UPDATE hon.hq_operator_grants SET ${change} WHERE principal_id=$1`, [h.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'relation');
+    await revoker.query('COMMIT'); await revoker.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the pause: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await allPauses(), before, `${label}: no pause row`);
+    outcomes.push(`${label}: refused`);
+  }
+  // (c) Expired by the clock while waiting on the per-scope lock held by another pause command.
+  {
+    const h = await makeHqOwner('inv-18r-expiry', "clock_timestamp()+interval '4 seconds'");
+    const before = await allPauses();
+    const other = await openTx();
+    await other.query(scopeLock, [raceOrg.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'advisory');
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [h.until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the pause: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await allPauses(), before, 'expired: no pause row');
+    outcomes.push('expired while waiting: refused');
+  }
+  // (d) A revocation cannot race past the final decision: while the command waits, a revocation of that owner waits
+  // behind the command's shared lock; the command completes with the authority it held, then the revocation applies
+  // and the same owner is refused afterwards.
+  {
+    const h = await makeHqOwner('inv-18r-ordered');
+    const other = await openTx();
+    await other.query(scopeLock, [raceOrg.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'advisory');
+    const revoke = await startBlocked('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h.id], 'relation', { tx: true });
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(r.value?.rows[0].r.status, 'ACTIVE', `the command decided before the revocation: ${JSON.stringify(r.error?.message)}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    assert.equal((await pauseCmd(h.subject, pIn('RESUME', raceOrg.id), K())).error?.code, '42501', 'the revoked owner is refused afterwards');
+    assert.equal(await activePauses(), 1);
+    assert.equal((await pauseCmd(hq.subject, pIn('RESUME', raceOrg.id), K())).value?.rows[0].r.status, 'ENDED');
+    outcomes.push('revocation during the command: waits, applies after');
+  }
+  assert.equal(await activePauses(), 0);
+  pass('INV-18R', `S4-c: HQ pause authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; no refused pause row`);
+  }
 
   // ---- INV-19 (S4-d, replaces KF-AI8): lost outcomes count only in the window in which they were held ----
   {
