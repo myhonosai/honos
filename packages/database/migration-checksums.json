@@ -189,6 +189,6 @@
     "0194_ai_org_budget_lock.sql": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b",
     "0195_ai_spend_access_decision.sql": "135a8900fd98a322e369a33fb2ec8519fb2ee87ddaca5d4d2fe2c0a69eb06a27",
     "0196_ai_unknown_resolution.sql": "f244901a47e3750533fbeae387155f14015f14078afb72a86bd54d1c87ba4aee",
-    "0197_ai_school_usage_hq_read.sql": "64fcd3e4d382d1963e3936aa32a263e9675623fcf297263b17bd74b5b94c1126"
+    "0197_ai_school_usage_hq_read.sql": "be731f19d70556a14f3ef42a1e3d0e7b105aa209e9f2ad9a194c84ca0e74fbf7"
   }
 }

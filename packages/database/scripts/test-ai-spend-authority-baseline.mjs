@@ -883,24 +883,38 @@ try {
   const report = read.value?.rows[0].r;
   assert(report, JSON.stringify(read.error?.message));
   // Independent per-school totals straight from the ledger: each school is reported exactly once and only with its own rows.
-  const expected = await rows(`SELECT organization_id o, school_id s, spend_class c, sum(customer_credits)::bigint credits, sum(provider_cost_microunits)::bigint cost, count(*)::int n
-    FROM hon.ai_usage_ledger WHERE occurred_at >= $1 AND occurred_at < $2 GROUP BY 1,2,3`, [from, to]);
+  // Cost basis comes from the resolution records: a WRITE_OFF row's cost is an estimate, never a provider charge.
+  const expected = await rows(`SELECT u.organization_id o, u.school_id s, u.spend_class c, sum(u.customer_credits)::bigint credits,
+      coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NULL),0)::bigint cost, coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NOT NULL),0)::bigint estimate,
+      count(*)::int n, count(r.id)::int w
+    FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF'
+    WHERE u.occurred_at >= $1 AND u.occurred_at < $2 GROUP BY 1,2,3`, [from, to]);
   const schoolsSeen = new Set(expected.map((e) => `${e.o}/${e.s}`));
   assert.equal(report.schools.length, schoolsSeen.size, 'one entry per school with usage');
   assert.equal(new Set(report.schools.map((x) => `${x.organizationId}/${x.schoolId}`)).size, report.schools.length, 'no school reported twice');
   for (const e of expected) {
     const sch = report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s);
     const cls = sch?.byClass?.[e.c];
-    assert.deepEqual([cls?.credits, cls?.providerCostMicrounits, cls?.entries], [Number(e.credits), Number(e.cost), e.n], `school ${e.s} class ${e.c}`);
+    assert.deepEqual([cls?.credits, cls?.providerReportedCostMicrounits, cls?.estimatedWriteOffCostMicrounits, cls?.entries, cls?.writeOffEntries],
+      [Number(e.credits), Number(e.cost), Number(e.estimate), e.n, e.w], `school ${e.s} class ${e.c}`);
   }
   // Agent attribution comes from the S4-a source invocation; pre-S4-a style rows are UNATTRIBUTED, never guessed.
   const oldSchool = report.schools.find((x) => x.schoolId === old.o.school);
-  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.providerCostMicrounits >= 2400, true, JSON.stringify(oldSchool));
+  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.providerReportedCostMicrounits >= 2400, true, JSON.stringify(oldSchool));
+  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.estimatedWriteOffCostMicrounits, 0, 'RECORD_PROVIDER_COST is provider evidence, not an estimate');
   assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.UNATTRIBUTED?.credits, 11990, 'the synthetic used-credit fixture row has no source invocation');
   const offSchool = report.schools.find((x) => x.schoolId === staleOld.o.school);
-  assert.equal(offSchool.byClass.AGENT_INFERENCE.byAgent.TEACHING?.providerCostMicrounits >= 900, true, 'a WRITE_OFF row keeps its best-known cost');
+  // Manus review P2: the WRITE_OFF estimate (900) is reported as an estimate and is NOT in the provider-reported total.
+  const offTeaching = offSchool.byClass.AGENT_INFERENCE.byAgent.TEACHING;
+  assert.deepEqual([offTeaching?.providerReportedCostMicrounits, offTeaching?.estimatedWriteOffCostMicrounits, offTeaching?.writeOffEntries], [0, 900, 1], JSON.stringify(offSchool));
+  assert.equal(offSchool.estimatedWriteOffCostMicrounits, 900);
+  assert.equal(offSchool.providerReportedCostMicrounits, Object.values(offSchool.byClass).reduce((a, c) => a + c.providerReportedCostMicrounits, 0));
+  // Unknown outcomes carry no amount: they are counted per school, separately from both cost totals.
+  const staleSchool = report.schools.find((x) => x.schoolId === staleCur.o.school);
+  assert.equal(staleSchool?.unreconciledInvocations, 1, 'an open stale SENDING hold is reported as unreconciled');
+  assert.equal(oldSchool.unreconciledInvocations, 0, 'a resolved outcome is not unreconciled');
   for (const sch of report.schools) assert.equal(sch.byClass.CREATIVE_MEDIA?.byAgent ?? null, null, 'creative rows are never attributed to an agent budget');
-  assert.deepEqual([oldSchool.byClass.CREATIVE_MEDIA?.credits, oldSchool.byClass.CREATIVE_MEDIA?.providerCostMicrounits >= 5000], [0, true], 'creative expense is reported in its own class');
+  assert.deepEqual([oldSchool.byClass.CREATIVE_MEDIA?.credits, oldSchool.byClass.CREATIVE_MEDIA?.providerReportedCostMicrounits >= 5000, oldSchool.byClass.CREATIVE_MEDIA?.estimatedWriteOffCostMicrounits], [0, true, 0], 'creative expense is reported in its own class');
   // Organization budget picture equals the S4-b/S4-d functions; open lost outcomes are counted.
   const orgOf = (o) => report.organizations.find((x) => x.organizationId === o.id);
   const committedNow = Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleCur.o.id])).n);
@@ -916,7 +930,7 @@ try {
     assert.equal((await usage(hq.subject, a, b)).error?.code, '22023', label);
   assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n, ledgerBefore, 'the read writes nothing');
   assert.equal((await row("SELECT provolatile v, prosecdef d FROM pg_proc WHERE oid='hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)'::regprocedure")).v, 's');
-  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), actual provider cost in micro-USD, org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
+  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates and unreconciled calls kept separate (mixed agent + creative), org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
   }
 
   }
