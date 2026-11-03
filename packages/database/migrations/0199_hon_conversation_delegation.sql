@@ -23,6 +23,11 @@ BEGIN;
 -- turn id of the same requester at the same school unless it is that turn's specialist with that exact target and
 -- fingerprint (HON_TURN_DELEGATION_MISMATCH, 42501): a request sent straight to Marcus, Claire or Chad with a turn's
 -- id as its Idempotency-Key cannot substitute another target. hon_turn_view also links only a matching fingerprint.
+-- One hand-over at a time: begin_hon_turn (serialized by the conversation row lock) claims the hand-over in
+-- handoff_claimed_at and returns handOff true to exactly one caller. A concurrent resend gets handOff false and reads
+-- the turn's live state instead of starting a second, competing hand-over of the same specialist request. A claim
+-- that has not produced a specialist record within five minutes (the turn then reads UNKNOWN) may be claimed again
+-- by a resend with the same Idempotency-Key, which resumes it.
 
 CREATE TABLE hon.hon_conversations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL, school_id uuid NOT NULL,
@@ -41,6 +46,7 @@ CREATE TABLE hon.hon_conversation_turns (
   conversation_id uuid NOT NULL, requested_by uuid NOT NULL REFERENCES hon.principals(id), seq integer NOT NULL CHECK (seq BETWEEN 1 AND 200),
   text text NOT NULL, agent_key text NOT NULL CHECK (agent_key IN ('marcus', 'claire', 'chad')), delegation jsonb NOT NULL,
   delegation_fingerprint text NOT NULL CHECK (delegation_fingerprint ~ '^[a-f0-9]{64}$'),
+  handoff_claimed_at timestamptz,
   idempotency_key uuid NOT NULL, request_hash text NOT NULL CHECK (request_hash ~ '^[a-f0-9]{64}$'),
   failure_reason text CHECK (failure_reason IN ('AGENT_NOT_AUTHORIZED', 'AGENT_REQUEST_INVALID', 'AGENT_TARGET_NOT_FOUND', 'AGENT_REQUEST_CONFLICT')),
   failed_at timestamptz, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -117,7 +123,7 @@ BEGIN
   IF inv_id IS NULL THEN
     -- Not yet handed over (or the hand-over never started): a recorded refusal is FAILED; a hand-over that did not
     -- finish within five minutes is UNKNOWN (resending with the same Idempotency-Key resumes it); otherwise PROCESSING.
-    status := CASE WHEN t.failure_reason IS NOT NULL THEN 'FAILED' WHEN t.created_at <= clock_timestamp() - interval '5 minutes' THEN 'UNKNOWN' ELSE 'PROCESSING' END;
+    status := CASE WHEN t.failure_reason IS NOT NULL THEN 'FAILED' WHEN coalesce(t.handoff_claimed_at, t.created_at) <= clock_timestamp() - interval '5 minutes' THEN 'UNKNOWN' ELSE 'PROCESSING' END;
     reason := coalesce(t.failure_reason, CASE WHEN status = 'UNKNOWN' THEN 'HANDOFF_NOT_CONFIRMED' END);
   ELSE
     -- Specialist state is authoritative. Anything not listed is UNKNOWN, never success.
@@ -210,7 +216,7 @@ END $$;
 CREATE FUNCTION hon.begin_hon_turn(p_subject text, p_conversation uuid, p_input jsonb, p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.hon_conversation_actor(p_subject); c hon.hon_conversations%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
-  fingerprint text; d jsonb; agent text; target jsonb; v jsonb;
+  fingerprint text; d jsonb; agent text; target jsonb; v jsonb; handoff boolean;
 BEGIN
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object' OR NOT p_input ?& ARRAY['text', 'delegation']
      OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_input) k WHERE k NOT IN ('text', 'delegation'))
@@ -249,11 +255,16 @@ BEGIN
         idempotency_key, request_hash)
     VALUES (c.organization_id, c.school_id, c.id, actor, c.turn_count + 1, btrim(p_input->>'text'), agent, target,
         encode(sha256(convert_to(target::text, 'UTF8')), 'hex'), p_key, fingerprint) RETURNING * INTO t;
+    handoff := true;
     UPDATE hon.hon_conversations SET turn_count = turn_count + 1, updated_at = clock_timestamp() WHERE id = c.id;
   END IF;
   v := hon.hon_turn_view(t);
-  RETURN jsonb_build_object('turnId', t.id, 'agentKey', t.agent_key, 'delegation', t.delegation,
-    'handOff', t.failure_reason IS NULL AND v->>'invocationId' IS NULL);
+  IF handoff IS NULL THEN
+    handoff := t.failure_reason IS NULL AND v->>'invocationId' IS NULL
+      AND (t.handoff_claimed_at IS NULL OR t.handoff_claimed_at <= clock_timestamp() - interval '5 minutes');
+  END IF;
+  IF handoff THEN UPDATE hon.hon_conversation_turns SET handoff_claimed_at = clock_timestamp() WHERE id = t.id; END IF;
+  RETURN jsonb_build_object('turnId', t.id, 'agentKey', t.agent_key, 'delegation', t.delegation, 'handOff', handoff);
 END $$;
 
 -- Binds a specialist request to the turn whose id it uses as its idempotency key (see header). Requests with any other
