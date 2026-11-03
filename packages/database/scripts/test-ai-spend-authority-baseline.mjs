@@ -1360,6 +1360,71 @@ try {
   await expectHidden(owner, 'owner of both schools, school B suspended');
   await admin.query("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [schoolB]);
   await expectShown(owner, 'owner of both schools, school B active again');
+  // (Manus delta review P2) Live entitlement: suspended, expired or missing entitlement and an access state without
+  // access hide the totals from school-derived authority (owner of both schools, and staff granted ai.usage.read at
+  // both schools); HQ billing readers are unchanged; restoring the entitlement shows them again.
+  const hqOwner = await human('hq-owner-ent', { role: 'HON_HQ_OWNER' }), hqBilling = await human('hq-billing-ent', { role: 'HON_HQ_OPERATOR', perms: ['hq.billing.manage'] });
+  const usageStaff = await human('usage-staff');
+  const usageRole = K();
+  await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'AI0_USAGE','AI-0 synthetic usage reader',false)", [usageRole, v.id]);
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.usage.read')", [usageRole, v.id]);
+  for (const sch of [v.school, schoolB])
+    await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 day')", [v.id, sch, usageStaff.principal, usageRole, v.principal]);
+  await expectShown(usageStaff, 'staff with ai.usage.read at every school');
+  const schoolDerived = [[owner, 'owner of both schools'], [usageStaff, 'staff with ai.usage.read at every school']];
+  const lapses = [
+    ['entitlement SUSPENDED', "UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1"],
+    ['entitlement expired', "UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '1 minute' WHERE organization_id=$1"],
+    ['entitlement not yet effective', "UPDATE hon.organization_entitlements SET effective_from=clock_timestamp()+interval '1 day' WHERE organization_id=$1"],
+    ['access state awaiting first payment', "INSERT INTO hon.saas_access_states(organization_id,state,reason,version,changed_by_principal_id,created_at,updated_at) VALUES($1,'AWAITING_FIRST_PAYMENT','AWAITING_INITIAL_PAYMENT',1,$2,clock_timestamp(),clock_timestamp())"]];
+  for (const [label, sql] of lapses) {
+    await admin.query(sql, sql.includes('$2') ? [v.id, v.principal] : [v.id]);
+    for (const [h, who] of schoolDerived) await expectHidden(h, `${who}, ${label}`);
+    await expectShown(hqOwner, `HQ owner, ${label}`);
+    await expectShown(hqBilling, `HQ billing operator, ${label}`);
+    // Fixture cleanup only (the access-state table refuses deletes by design): the end-of-proof check expects it empty.
+    if (sql.includes('saas_access_states')) {
+      await admin.query('BEGIN'); await admin.query('ALTER TABLE hon.saas_access_states DISABLE TRIGGER USER');
+      await admin.query('DELETE FROM hon.saas_access_states WHERE organization_id=$1', [v.id]);
+      await admin.query('ALTER TABLE hon.saas_access_states ENABLE TRIGGER USER'); await admin.query('COMMIT');
+    }
+    await restoreEntitlement(v);
+    for (const [h, who] of schoolDerived) await expectShown(h, `${who}, restored after ${label}`);
+  }
+  // Revalidation during authorization (two connections, pg_locks-observed): an uncommitted suspension, role-grant
+  // revocation, permission removal or HQ grant expiry makes the read wait, and it then fails closed once committed.
+  const waitsOn = async (blocker) => {
+    const xid = (await blocker.query('SELECT txid_current()::text x')).rows[0].x;
+    for (const end = Date.now() + 5000; Date.now() < end; await sleep(20))
+      if ((await rows("SELECT 1 FROM pg_locks WHERE locktype='transactionid' AND NOT granted AND transactionid::text=$1", [xid])).length) return true;
+    return false;
+  };
+  const races = [
+    ['entitlement suspended', owner, "UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [v.id], () => restoreEntitlement(v)],
+    ['school B role grant revoked', usageStaff, "UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE principal_id=$1 AND school_id=$3",
+      [usageStaff.principal, v.principal, schoolB], () => admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')", [v.id, schoolB, usageStaff.principal, usageRole, v.principal])],
+    ['ai.usage.read removed from the role', usageStaff, "DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='ai.usage.read'", [usageRole],
+      () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.usage.read')", [usageRole, v.id])],
+    ['HQ owner grant expired', hqOwner, "UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1", [hqOwner.principal],
+      () => admin.query('UPDATE hon.hq_operator_grants SET effective_until=NULL WHERE principal_id=$1', [hqOwner.principal])]];
+  for (const [label, h, sql, args, restore] of races) {
+    await expectShown(h, `${label}: before`);
+    const blocker = await openTx();
+    try {
+      await blocker.query(sql, args);
+      const read = settle(budgetOf(h));
+      assert.equal(await waitsOn(blocker), true, `${label}: the read must wait for the uncommitted change`);
+      await blocker.query('COMMIT');
+      const r = await read;
+      assert.equal(r.value, null, `${label}: after the change commits the totals are hidden: ${JSON.stringify(r.value ?? r.error?.message)}`);
+      outcomes.push(`${label} during the read: waits, then hidden`);
+    } finally { await blocker.end().catch(() => {}); }
+    await restore();
+    await expectShown(h, `${label}: restored`);
+  }
+  // Cross-organization isolation: authority over another organization's schools gives nothing here.
+  const foreign = await makeOrg('inv-23v-foreign');
+  assert.equal((await settle(tenant(context(v, { principalId: foreign.principal, externalSubject: foreign.subject }), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [foreign.subject])))).error?.code, '42501', 'another organization’s owner is refused');
   pass('INV-23V', `AI-R1: school-scoped readiness discloses organization budget totals only with independent organization-wide authority (${outcomes.join('; ')})`);
   }
 
