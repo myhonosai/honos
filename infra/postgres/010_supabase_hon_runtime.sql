@@ -2092,6 +2092,8 @@ DO $$ DECLARE r text; BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.read_crm_lead_memberships(text,uuid) FROM '||quote_ident(r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_crm_lead_memberships(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
 
 -- CW1 0202 HON OS creative credit wallet: private deny-all tables; HQ and school commands/reads are the only runtime
 -- entry points. Internal helpers and the top-up fulfillment contract stay private (fulfillment is not wired to any
