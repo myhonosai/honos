@@ -187,7 +187,7 @@
     "0192_crm_suspended_owner_read_only.sql": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542",
     "0193_ai_spend_durable_evidence.sql": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5",
     "0194_ai_org_budget_lock.sql": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b",
-    "0195_ai_spend_access_decision.sql": "135a8900fd98a322e369a33fb2ec8519fb2ee87ddaca5d4d2fe2c0a69eb06a27",
+    "0195_ai_spend_access_decision.sql": "08cb95ab587101cd031a003c19f3631d865676815413fb62bafc90f625adb858",
     "0196_ai_unknown_resolution.sql": "f244901a47e3750533fbeae387155f14015f14078afb72a86bd54d1c87ba4aee"
   }
 }
