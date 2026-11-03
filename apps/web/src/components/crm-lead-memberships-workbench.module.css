@@ -1,0 +1,13 @@
+.page { composes: page from './membership-activation-workbench.module.css'; }
+.mode_modern { composes: mode_modern from './membership-activation-workbench.module.css'; }
+.mode_classic { composes: mode_classic from './membership-activation-workbench.module.css'; }
+.mode_big { composes: mode_big from './membership-activation-workbench.module.css'; }
+.status { min-height: 1.5em; margin: 16px 0; }
+.actions { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+.records { list-style:none; padding:0; display:grid; gap:20px; }
+.record { border:1px solid currentColor; border-radius:12px; padding:20px; min-width:0; }
+.page code,.page dd { overflow-wrap:anywhere; min-width:0; }
+.page h1:focus,.page h2:focus { outline:3px solid #76a5ff; outline-offset:5px; }
+.page a { padding:12px 0; }
+.mode_big button { min-height:52px; }
+@media(max-width:640px) { .page button { width:100%; } .page dl { display:block; } .page dd { margin:4px 0 16px; } }
