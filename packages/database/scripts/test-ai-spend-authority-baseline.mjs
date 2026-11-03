@@ -975,8 +975,8 @@ try {
     assert.deepEqual([led.length, new Date(led[0].occurred_at).toISOString()], [1, new Date(after.held_at).toISOString()], `${name}: the late cost is booked in the original window`);
     seen.push(name);
   }
-  // No trustworthy origin (a hold from before held_at existed): fail closed. It always counts, shows no time, and can
-  // only be resolved NO_PROVIDER_CHARGE; a ledger decision would need an invented time and is refused.
+  // No trustworthy origin (a hold from before held_at existed): fail closed. It always counts, shows no time, and is
+  // never resolvable (Manus delta review P2): any decision would release capacity on an unproven origin.
   const legacy = await lostOutcome('inv-19w-legacy');
   await admin.query('BEGIN');
   await admin.query(`ALTER TABLE hon.${agents.marcus.table} DISABLE TRIGGER USER`);
@@ -988,8 +988,82 @@ try {
   assert.deepEqual([lq?.heldAt, lq?.countsAgainstCurrentWindow], [null, true]);
   assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, recordInput)).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
   assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 1 } })).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
-  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-legacy' } })).value?.rows[0].r.ledgerEntryId, null);
-  pass('INV-19W', `S4-d: immutable hold origin: for ${seen.join(', ')} a hold taken last window and recorded UNKNOWN now (updated_at current) stays in its original window (not counted now, HQ shows the original time, late cost booked there); held_at cannot be set; a NULL-origin hold counts always and refuses ledger decisions`);
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-legacy' } })).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
+  assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [legacy.o.id])).n), agents.marcus.estimate, 'a refused NULL-origin hold keeps counting');
+  pass('INV-19W', `S4-d: immutable hold origin: for ${seen.join(', ')} a hold taken last window and recorded UNKNOWN now (updated_at current) stays in its original window (not counted now, HQ shows the original time, late cost booked there); held_at cannot be set; a NULL-origin hold counts always and refuses every decision`);
+  }
+
+  // ---- INV-19N (S4-d, Manus delta review P2): a hold without a trustworthy origin is never released ----
+  // For each agent, a real SENDING hold whose held_at is missing (as for a hold taken before held_at existed): before
+  // and after the stale limit measured on the mutable updated_at/created_at, under concurrent resolution attempts, and
+  // after the provider outcome turns it UNKNOWN, no decision releases it: it keeps counting, nothing is written. A hold
+  // with a trustworthy origin is still resolved exactly once under concurrent attempts (one ledger row, one release).
+  {
+  const errors = { marcus: ProviderRuntimeError, claire: ClaireProviderRuntimeError, chad: ChadProviderRuntimeError };
+  const agentCode = { marcus: 'MARKETING', claire: 'TEACHING', chad: 'CHAD_FOLLOW_UP' };
+  const committed = async (o) => Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [o.id])).n);
+  const written = async (id) => row(`SELECT (SELECT count(*)::int FROM hon.ai_unknown_resolutions WHERE invocation_id=$1) res,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger WHERE source_invocation_id=$1) led,
+      (SELECT count(*)::int FROM hon.audit_events WHERE entity_id=$1 AND action_code='hq.ai.unknown_invocation.resolve') aud,
+      (SELECT count(*)::int FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='ai.unknown_invocation.resolved') obx`, [id]);
+  const adminPatch = async (table, id, set) => {
+    await admin.query('BEGIN');
+    await admin.query(`ALTER TABLE hon.${table} DISABLE TRIGGER USER`);
+    await admin.query(`UPDATE hon.${table} SET ${set} WHERE id=$1`, [id]);
+    await admin.query(`ALTER TABLE hon.${table} ENABLE TRIGGER USER`);
+    await admin.query('COMMIT');
+  };
+  const decisions = (name, tag) => [
+    { ...recordInput, evidence: { ...recordInput.evidence, providerGenerationId: `gen-ai0-19n-${name}-${tag}` } },
+    { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 900 } },
+    { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: `lookup-ai0-19n-${name}-${tag}` } }];
+  const allRefused = async (name, id, tag, label) => {
+    const key = K();
+    const attempts = await Promise.all([...decisions(name, tag), ...decisions(name, `${tag}-b`)].map((input, i) => resolve(hq.subject, agentCode[name], id, input, i === 5 ? key : K()))
+      .concat([resolve(hq.subject, agentCode[name], id, decisions(name, tag)[2], key)]));
+    for (const r of attempts) assert.equal(r.error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE', `${name} ${label}: ${r.error?.message ?? 'released'}`);
+  };
+  const seen = [];
+  for (const name of ['marcus', 'claire', 'chad']) {
+    const a = agents[name], o = await makeOrg(`inv-19n-${name}`);
+    const held = await startHeld(name, o);
+    assert.equal(held.sending, true, `${name}: the hold is taken`);
+    const inv = await row(`SELECT id FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id]);
+    await adminPatch(a.table, inv.id, 'held_at=NULL');
+    // Before the stale limit (updated_at fresh): every decision is refused, concurrently, with no write.
+    await allRefused(name, inv.id, 'fresh', 'NULL-origin SENDING before the stale limit');
+    assert.equal(await committed(o), a.estimate, `${name}: still counts`);
+    // After the stale limit measured only on the mutable timestamps: still refused; staleness is never inferred.
+    await adminPatch(a.table, inv.id, "updated_at=clock_timestamp()-interval '2 hours', created_at=created_at-interval '2 hours'");
+    await allRefused(name, inv.id, 'stale', 'NULL-origin SENDING past the stale limit by updated_at');
+    assert.deepEqual([await committed(o), (await reservedByAgent(o))[name], await sendingCount(o)], [a.estimate, a.estimate, 1], `${name}: the hold is untouched`);
+    // The provider outcome arrives as UNKNOWN: the NULL-origin UNKNOWN hold is refused too.
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    await held.submitted;
+    assert.equal((await row(`SELECT status FROM hon.${a.table} WHERE id=$1`, [inv.id])).status, 'UNKNOWN');
+    await allRefused(name, inv.id, 'unknown', 'NULL-origin UNKNOWN');
+    assert.deepEqual([await committed(o), (await reservedByAgent(o))[name]], [a.estimate, a.estimate], `${name}: no release`);
+    assert.deepEqual(await written(inv.id), { res: 0, led: 0, aud: 0, obx: 0 }, `${name}: nothing written`);
+    const q = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.open.find((x) => x.invocationId === inv.id);
+    assert.deepEqual([q?.heldAt, q?.countsAgainstCurrentWindow], [null, true], `${name}: HQ sees an open hold with no time that still counts`);
+    // With a trustworthy origin: a fresh SENDING hold is not resolvable; an UNKNOWN one resolves exactly once under
+    // concurrent attempts (one ledger row and one provider cost, one release).
+    const o2 = await makeOrg(`inv-19n-${name}-valid`);
+    const held2 = await startHeld(name, o2);
+    const inv2 = await row(`SELECT id, held_at FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o2.id]);
+    assert.ok(inv2.held_at);
+    await adminPatch(a.table, inv2.id, "updated_at=clock_timestamp()-interval '2 hours', created_at=created_at-interval '2 hours'");
+    assert.equal((await resolve(hq.subject, agentCode[name], inv2.id, decisions(name, 'v0')[2])).error?.message, 'AI_UNKNOWN_NOT_RESOLVABLE', `${name}: a SENDING hold with a fresh origin is in flight`);
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    await held2.submitted;
+    const race = await Promise.all([decisions(name, 'v1')[0], decisions(name, 'v2')[0], decisions(name, 'v3')[2]].map((input) => resolve(hq.subject, agentCode[name], inv2.id, input)));
+    assert.equal(race.filter((r) => r.value).length, 1, `${name}: exactly one concurrent resolution wins`);
+    for (const r of race.filter((x) => x.error)) assert.equal(r.error.message, 'AI_UNKNOWN_NOT_RESOLVABLE');
+    const w = await written(inv2.id);
+    assert.deepEqual([w.res, w.aud, w.obx, w.led <= 1, (await reservedByAgent(o2))[name]], [1, 1, 1, true, 0], `${name}: one release, no duplicate cost`);
+    seen.push(name);
+  }
+  pass('INV-19N', `S4-d: for ${seen.join(', ')} a SENDING hold without a trustworthy origin is never released (before and after the stale limit by updated_at, under 7 concurrent attempts incl. a key replay, and after it turns UNKNOWN): it keeps counting, the HQ queue shows it, no resolution/ledger/audit/outbox row; a hold with an origin: fresh SENDING refused, UNKNOWN resolved exactly once under 3 concurrent attempts (no duplicate provider cost)`);
   }
 
   // ---- INV-20L (S4-d, Manus final review P2): a verified provider charge after a WRITE_OFF is recorded once ----
@@ -1044,6 +1118,16 @@ try {
   // A non-agent (CREATIVE_MEDIA) provider expense row, as the creative wallet (CW1) records them: it has no agent, so
   // the per-agent breakdown must skip it rather than fail the whole HQ read (CW1 review P2-A regression).
   await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'OPENROUTER','ai0-creative','IMAGE',0,5000,$3,'CREATIVE_MEDIA')", [old.o.id, old.o.school, K()]);
+  // Manus delta review P2: a school whose only activity is unresolved calls (no ledger row at all) must still be listed;
+  // a school with no activity at all is not. One org with an UNKNOWN hold from each agent and nothing recorded, and one
+  // org with nothing.
+  const unresolvedOnly = await lostOutcome('inv-21-unresolved-only', 'marcus');
+  for (const name of ['claire', 'chad']) {
+    fakes[name].mode = 'UNKNOWN';
+    assert.equal((await agents[name].service.submit(context(unresolvedOnly.o), agents[name].input(unresolvedOnly.o))).status, 'UNKNOWN');
+    fakes[name].mode = 'RESULT';
+  }
+  const idle = await makeOrg('inv-21-zero-activity');
   const ledgerBefore = (await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n;
   const read = await usage(hq.subject, from, to);
   const report = read.value?.rows[0].r;
@@ -1055,9 +1139,33 @@ try {
       count(*)::int n, count(r.id)::int w
     FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF'
     WHERE u.occurred_at >= $1 AND u.occurred_at < $2 GROUP BY 1,2,3`, [from, to]);
-  const schoolsSeen = new Set(expected.map((e) => `${e.o}/${e.s}`));
-  assert.equal(report.schools.length, schoolsSeen.size, 'one entry per school with usage');
+  // Independent unresolved counts per school (the HQ queue predicate on the immutable origin).
+  const unresolvedExpected = await rows(`SELECT organization_id o, school_id s, count(*)::int n FROM (
+      SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.marketing_ai_invocations
+      UNION ALL SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.teaching_ai_invocations
+      UNION ALL SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.chad_follow_up_invocations) h
+    WHERE reserved_credits > 0 AND (status = 'UNKNOWN' OR (status = 'SENDING' AND held_at <= clock_timestamp() - interval '1 hour')) GROUP BY 1,2`);
+  const schoolsSeen = new Set([...expected, ...unresolvedExpected].map((e) => `${e.o}/${e.s}`));
+  assert.equal(report.truncated, false);
+  assert.equal(report.schools.length, schoolsSeen.size, 'one entry per school with usage in range or unresolved calls now');
   assert.equal(new Set(report.schools.map((x) => `${x.organizationId}/${x.schoolId}`)).size, report.schools.length, 'no school reported twice');
+  for (const e of unresolvedExpected)
+    assert.equal(report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s)?.unreconciledInvocations, e.n, `school ${e.s} unresolved count`);
+  for (const x of report.schools)
+    if (!unresolvedExpected.some((e) => e.o === x.organizationId && e.s === x.schoolId)) assert.equal(x.unreconciledInvocations, 0, `school ${x.schoolId} has no unresolved call`);
+  // The unresolved-only school is listed once, with its three unresolved calls and no amount at all (no ledger class,
+  // no invented cost); the zero-activity school is not listed; the totals reconcile with the ledger (no double count).
+  const uo = report.schools.filter((x) => x.schoolId === unresolvedOnly.o.school);
+  assert.equal(uo.length, 1, 'an unresolved-only school is listed exactly once');
+  assert.deepEqual([uo[0].unreconciledInvocations, uo[0].entries, uo[0].providerReportedCostMicrounits, uo[0].estimatedWriteOffCostMicrounits,
+    uo[0].lateProviderCostMicrounits, uo[0].writeOffEntries, uo[0].byClass], [3, 0, 0, 0, 0, 0, {}], JSON.stringify(uo[0]));
+  assert.equal(report.schools.some((x) => x.schoolId === idle.school || x.organizationId === idle.id), false, 'a zero-activity school is not listed');
+  assert.equal(report.organizations.find((x) => x.organizationId === unresolvedOnly.o.id)?.openUnknownHolds, 3, 'its organization is listed with its open holds');
+  const ledgerTotals = await row(`SELECT count(*)::int n, coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NULL),0)::bigint cost,
+      coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NOT NULL),0)::bigint estimate
+    FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF' WHERE u.occurred_at >= $1 AND u.occurred_at < $2`, [from, to]);
+  assert.deepEqual([report.schools.reduce((t, x) => t + x.entries, 0), report.schools.reduce((t, x) => t + x.providerReportedCostMicrounits, 0), report.schools.reduce((t, x) => t + x.estimatedWriteOffCostMicrounits, 0)],
+    [ledgerTotals.n, Number(ledgerTotals.cost), Number(ledgerTotals.estimate)], 'entries, provider cost and estimates reconcile with the ledger exactly once');
   for (const e of expected) {
     const sch = report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s);
     const cls = sch?.byClass?.[e.c];
@@ -1104,7 +1212,7 @@ try {
     assert.equal((await usage(hq.subject, a, b)).error?.code, '22023', label);
   assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n, ledgerBefore, 'the read writes nothing');
   assert.equal((await row("SELECT provolatile v, prosecdef d FROM pg_proc WHERE oid='hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)'::regprocedure")).v, 's');
-  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates, late actuals (with the estimate they supersede) and unreconciled calls kept separate (mixed agent + creative), org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
+  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates, late actuals (with the estimate they supersede) and unreconciled calls kept separate (mixed agent + creative), an unresolved-only school listed once with no amount, a zero-activity school not listed, totals reconcile with the ledger, org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
   }
 
   }
@@ -1254,6 +1362,71 @@ try {
   await expectHidden(owner, 'owner of both schools, school B suspended');
   await admin.query("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [schoolB]);
   await expectShown(owner, 'owner of both schools, school B active again');
+  // (Manus delta review P2) Live entitlement: suspended, expired or missing entitlement and an access state without
+  // access hide the totals from school-derived authority (owner of both schools, and staff granted ai.usage.read at
+  // both schools); HQ billing readers are unchanged; restoring the entitlement shows them again.
+  const hqOwner = await human('hq-owner-ent', { role: 'HON_HQ_OWNER' }), hqBilling = await human('hq-billing-ent', { role: 'HON_HQ_OPERATOR', perms: ['hq.billing.manage'] });
+  const usageStaff = await human('usage-staff');
+  const usageRole = K();
+  await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'AI0_USAGE','AI-0 synthetic usage reader',false)", [usageRole, v.id]);
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.usage.read')", [usageRole, v.id]);
+  for (const sch of [v.school, schoolB])
+    await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 day')", [v.id, sch, usageStaff.principal, usageRole, v.principal]);
+  await expectShown(usageStaff, 'staff with ai.usage.read at every school');
+  const schoolDerived = [[owner, 'owner of both schools'], [usageStaff, 'staff with ai.usage.read at every school']];
+  const lapses = [
+    ['entitlement SUSPENDED', "UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1"],
+    ['entitlement expired', "UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '1 minute' WHERE organization_id=$1"],
+    ['entitlement not yet effective', "UPDATE hon.organization_entitlements SET effective_from=clock_timestamp()+interval '1 day' WHERE organization_id=$1"],
+    ['access state awaiting first payment', "INSERT INTO hon.saas_access_states(organization_id,state,reason,version,changed_by_principal_id,created_at,updated_at) VALUES($1,'AWAITING_FIRST_PAYMENT','AWAITING_INITIAL_PAYMENT',1,$2,clock_timestamp(),clock_timestamp())"]];
+  for (const [label, sql] of lapses) {
+    await admin.query(sql, sql.includes('$2') ? [v.id, v.principal] : [v.id]);
+    for (const [h, who] of schoolDerived) await expectHidden(h, `${who}, ${label}`);
+    await expectShown(hqOwner, `HQ owner, ${label}`);
+    await expectShown(hqBilling, `HQ billing operator, ${label}`);
+    // Fixture cleanup only (the access-state table refuses deletes by design): the end-of-proof check expects it empty.
+    if (sql.includes('saas_access_states')) {
+      await admin.query('BEGIN'); await admin.query('ALTER TABLE hon.saas_access_states DISABLE TRIGGER USER');
+      await admin.query('DELETE FROM hon.saas_access_states WHERE organization_id=$1', [v.id]);
+      await admin.query('ALTER TABLE hon.saas_access_states ENABLE TRIGGER USER'); await admin.query('COMMIT');
+    }
+    await restoreEntitlement(v);
+    for (const [h, who] of schoolDerived) await expectShown(h, `${who}, restored after ${label}`);
+  }
+  // Revalidation during authorization (two connections, pg_locks-observed): an uncommitted suspension, role-grant
+  // revocation, permission removal or HQ grant expiry makes the read wait, and it then fails closed once committed.
+  const waitsOn = async (blocker) => {
+    const xid = (await blocker.query('SELECT txid_current()::text x')).rows[0].x;
+    for (const end = Date.now() + 5000; Date.now() < end; await sleep(20))
+      if ((await rows("SELECT 1 FROM pg_locks WHERE locktype='transactionid' AND NOT granted AND transactionid::text=$1", [xid])).length) return true;
+    return false;
+  };
+  const races = [
+    ['entitlement suspended', owner, "UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [v.id], () => restoreEntitlement(v)],
+    ['school B role grant revoked', usageStaff, "UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE principal_id=$1 AND school_id=$3",
+      [usageStaff.principal, v.principal, schoolB], () => admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')", [v.id, schoolB, usageStaff.principal, usageRole, v.principal])],
+    ['ai.usage.read removed from the role', usageStaff, "DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='ai.usage.read'", [usageRole],
+      () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.usage.read')", [usageRole, v.id])],
+    ['HQ owner grant expired', hqOwner, "UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1", [hqOwner.principal],
+      () => admin.query('UPDATE hon.hq_operator_grants SET effective_until=NULL WHERE principal_id=$1', [hqOwner.principal])]];
+  for (const [label, h, sql, args, restore] of races) {
+    await expectShown(h, `${label}: before`);
+    const blocker = await openTx();
+    try {
+      await blocker.query(sql, args);
+      const read = settle(budgetOf(h));
+      assert.equal(await waitsOn(blocker), true, `${label}: the read must wait for the uncommitted change`);
+      await blocker.query('COMMIT');
+      const r = await read;
+      assert.equal(r.value, null, `${label}: after the change commits the totals are hidden: ${JSON.stringify(r.value ?? r.error?.message)}`);
+      outcomes.push(`${label} during the read: waits, then hidden`);
+    } finally { await blocker.end().catch(() => {}); }
+    await restore();
+    await expectShown(h, `${label}: restored`);
+  }
+  // Cross-organization isolation: authority over another organization's schools gives nothing here.
+  const foreign = await makeOrg('inv-23v-foreign');
+  assert.equal((await settle(tenant(context(v, { principalId: foreign.principal, externalSubject: foreign.subject }), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [foreign.subject])))).error?.code, '42501', 'another organization’s owner is refused');
   pass('INV-23V', `AI-R1: school-scoped readiness discloses organization budget totals only with independent organization-wide authority (${outcomes.join('; ')})`);
   }
 
@@ -1485,6 +1658,62 @@ try {
     outcomes.push(`${name}: substitution refused before and after the hand-over and under concurrency (${[a, b].filter((r) => r.value).length}/2 concurrent hand-overs returned the receipt)`);
   }
   pass('INV-24S', `C1: each turn is bound to its specialist target and fingerprint: ${outcomes.join('; ')}; normal hand-over, resend and exact-target replay keep one record, one provider call and one Action Center proposal`);
+  }
+
+  // ---- INV-24W (C1, Manus delta review P2): Marcus hand-overs use one canonical request text and fingerprint ----
+  // Whitespace that Marcus's own request contract trims (JavaScript trim) must not refuse a valid hand-over: the turn's
+  // target and fingerprint are computed from the same canonical text Marcus records. Equivalent texts share one
+  // fingerprint, different texts stay distinct, direct-key substitution stays refused, concurrent resends make one call.
+  {
+  const turnSql = 'SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) r';
+  const o = await makeOrg('inv-24w');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad));
+  const conv = await hon.create(scope, { title: 'Whitespace' }, K());
+  const plain = 'Draft a friendly spring beginner class post.';
+  const turn = (text) => ({ text, delegation: { agentKey: 'marcus', campaignId: o.campaign } });
+  const fingerprintOf = async (turnId) => (await row('SELECT delegation_fingerprint f, delegation d FROM hon.hon_conversation_turns WHERE id=$1', [turnId]));
+  const recordOf = async (turnId) => rows('SELECT id, request_hash, request_text FROM hon.marketing_ai_invocations WHERE organization_id=$1 AND idempotency_key=$2', [o.id, turnId]);
+  fakes.marcus.mode = 'RESULT';
+  const variants = [plain, `  ${plain}  `, `\n\t${plain}\r\n`, `\u00a0\u3000${plain}\u2028`, `\ufeff\u2003${plain}\u205f\u202f`, `\u2029\u1680${plain}\u2009 `];
+  const fps = new Set(), seenV = [];
+  for (const text of variants) {
+    assert.equal(text.trim(), plain, 'the variant is equivalent under Marcus\'s own trim');
+    const calls = fakes.marcus.calls;
+    const r = await settle(hon.sendTurn(scope, conv.id, turn(text), K()));
+    assert.equal(r.value?.status, 'AWAITING_APPROVAL', `variant ${JSON.stringify(text)}: valid hand-over must complete: ${JSON.stringify(r.value ?? r.error?.message)}`);
+    const t = await fingerprintOf(r.value.turnId), rec = await recordOf(r.value.turnId);
+    assert.deepEqual([rec.length, rec[0]?.request_hash, rec[0]?.request_text, t.d.request], [1, t.f, plain, plain], `variant ${JSON.stringify(text)}: one Marcus record bound to the turn's canonical target`);
+    assert.equal(fakes.marcus.calls - calls, 1);
+    // Direct-key substitution under this turn id stays refused; the same canonical request replays.
+    assert.ok((await settle(agents.marcus.service.submit(context(o, { idempotencyKey: r.value.turnId }), { campaignId: o.campaign, request: 'Write something completely different.' }))).error, 'substitution refused');
+    assert.equal((await agents.marcus.service.submit(context(o, { idempotencyKey: r.value.turnId }), { campaignId: o.campaign, request: text })).id, rec[0].id, 'the equivalent request replays');
+    assert.equal(fakes.marcus.calls - calls, 1, 'no second provider call');
+    fps.add(t.f); seenV.push(JSON.stringify(text));
+  }
+  assert.equal(fps.size, 1, 'canonically equivalent requests produce one fingerprint');
+  // Different semantic targets stay distinct (inner whitespace is content; another campaign is another target).
+  const inner = await hon.sendTurn(scope, conv.id, turn(plain.replace('spring ', 'spring  ')), K());
+  assert.notEqual((await fingerprintOf(inner.turnId)).f, [...fps][0], 'inner whitespace is not normalized away');
+  const start = new Date(Date.now() + 3_600_000).toISOString(), end = new Date(Date.now() + 30 * 86_400_000).toISOString();
+  const c2 = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0B', name: 'AI-0 synthetic campaign B', goal: 'Introduce beginner classes', offerLabel: '', channel: 'REFERRAL', startsAt: start, endsAt: end, plannedBudgetMinor: 0, currency: 'USD' })).campaign.id;
+  const t2 = await hon.sendTurn(scope, conv.id, { text: plain, delegation: { agentKey: 'marcus', campaignId: c2 } }, K());
+  assert.notEqual((await fingerprintOf(t2.turnId)).f, [...fps][0], 'another campaign is another fingerprint');
+  // Concurrent resends of one whitespace-variant turn: one Marcus record, one provider call.
+  const key = K(), calls = fakes.marcus.calls;
+  const [a, b] = await Promise.all([settle(hon.sendTurn(scope, conv.id, turn(`  ${plain}\n`), key)), settle(hon.sendTurn(scope, conv.id, turn(`  ${plain}\n`), key))]);
+  const turnId = (a.value ?? b.value).turnId;
+  assert.deepEqual([(await recordOf(turnId)).length, fakes.marcus.calls - calls], [1, 1], `concurrent resends: ${JSON.stringify([a.value ?? a.error?.message, b.value ?? b.error?.message])}`);
+  // The canonical function equals JavaScript trim for every whitespace-like code point, including ones trim keeps.
+  const points = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0, 0x1680, 0x180e, ...Array.from({ length: 11 }, (_, k) => 0x2000 + k), 0x200b, 0x200c, 0x200d,
+    0x2028, 0x2029, 0x202f, 0x205f, 0x2060, 0x3000, 0xfeff, 0x41];
+  for (const cp of points) {
+    const ch = String.fromCodePoint(cp), sample = `${ch}${ch}a${ch}b${ch}`;
+    assert.equal((await row('SELECT hon.hon_canonical_request_text($1) t', [sample])).t, sample.trim(), `U+${cp.toString(16).padStart(4, '0')}: same as JavaScript trim`);
+  }
+  // A text that is only whitespace under trim is refused before any turn is recorded.
+  assert.equal((await settle(tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turn('\u00a0\u3000\u2028')), K()])))).error?.code, '22023');
+  pass('INV-24W', `C1: Marcus hand-overs use one canonical request (JavaScript trim, ${points.length} code points checked): ${variants.length} whitespace variants hand over to one Marcus record each with the turn's fingerprint (one fingerprint for all), substitution refused and the equivalent request replays, inner whitespace and another campaign stay distinct, concurrent resends make one call, whitespace-only text refused`);
   }
   }
 

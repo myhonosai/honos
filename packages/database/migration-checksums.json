@@ -188,10 +188,10 @@
     "0193_ai_spend_durable_evidence.sql": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5",
     "0194_ai_org_budget_lock.sql": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b",
     "0195_ai_spend_access_decision.sql": "08cb95ab587101cd031a003c19f3631d865676815413fb62bafc90f625adb858",
-    "0196_ai_unknown_resolution.sql": "766a8d1c08c4ccc51c3f7d2d90546c7bc0d8ea860a68798265c220230ad8a1a3",
-    "0197_ai_school_usage_hq_read.sql": "6fa30b7af0f1a9046dd1d1037a174e0d36780a46d1881bce7a9224a14a4da8ba",
-    "0198_ai_team_readiness.sql": "71fd59380496ad85a25f1898daa9774095744426b5e432e4349aae4f51cb94fd",
-    "0199_hon_conversation_delegation.sql": "f47e07603647e0063b0af42de7cd0d7bcbad996c4bf06a7c5c76129cdc280be4",
+    "0196_ai_unknown_resolution.sql": "bcdfc97fc19cda882717b24d7c23add4e53cc64372bfe6f1a765403e2cacba40",
+    "0197_ai_school_usage_hq_read.sql": "6676e39bf0c523d4bb88c7fd82daf8f107196c005cc29741e415e951658743f6",
+    "0198_ai_team_readiness.sql": "f9d5a499f3ffa1ddd5da1ad718131122175331842badefc6fc515e704e73b796",
+    "0199_hon_conversation_delegation.sql": "3e7ff3b67c55bcdec206993f7610c3a1b8a4ece0645c68d9d757461d4eb5ff9b",
     "0200_crm_lead_membership_discovery.sql": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c",
     "0201_saas_billing_utc_calendar_periods.sql": "ea21b3ea4b4096026da07cd4a547dc0c5c3863b1c7780dd449a375ac66fedd3b"
   }

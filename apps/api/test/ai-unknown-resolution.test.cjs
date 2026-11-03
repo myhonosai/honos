@@ -43,6 +43,10 @@ test('S4-d contracts: closed evidence per decision; consistent receipts and queu
   // No trustworthy origin: heldAt null is only valid while the hold still counts (fail closed).
   assert.equal(contracts.validateAiUnknownQueue({ open: [open({ heldAt: null })], resolved: [], staleAfterSeconds: 3600, asOf: T }).open[0].heldAt, null);
   assert.throws(() => contracts.validateAiUnknownQueue({ open: [open({ heldAt: null, countsAgainstCurrentWindow: false })], resolved: [], staleAfterSeconds: 3600, asOf: T }));
+  // A resolution always carries its original hold time: a NULL-origin hold is never resolvable (fail closed).
+  const noCharge = { ...resolved, decision: 'NO_PROVIDER_CHARGE', ledgerEntryId: null, customerCredits: null, reason: REASON, evidence: { providerLookupReference: 'lookup-1' }, resolvedByPrincipalId: U(), priorStatus: 'UNKNOWN', lateProviderExpense: null };
+  assert.equal(contracts.validateAiUnknownQueue({ open: [], staleAfterSeconds: 3600, asOf: T, resolved: [{ ...noCharge, heldAt: T }] }).resolved.length, 1);
+  assert.throws(() => contracts.validateAiUnknownQueue({ open: [], staleAfterSeconds: 3600, asOf: T, resolved: [{ ...noCharge, heldAt: null }] }));
   // A late provider expense may only sit on a WRITE_OFF and carries no ledger entry of its own.
   const writeOff = { ...resolved, decision: 'WRITE_OFF', customerCredits: 0, reason: REASON, evidence: { estimatedProviderCostMicrounits: 900 }, resolvedByPrincipalId: U(), priorStatus: 'UNKNOWN', heldAt: T };
   const lateSummary = { expenseId: U(), providerCostMicrounits: 1100, occurredAt: T, recordedAt: T };
