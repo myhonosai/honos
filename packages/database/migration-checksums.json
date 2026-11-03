@@ -190,7 +190,7 @@
     "0195_ai_spend_access_decision.sql": "08cb95ab587101cd031a003c19f3631d865676815413fb62bafc90f625adb858",
     "0196_ai_unknown_resolution.sql": "bcdfc97fc19cda882717b24d7c23add4e53cc64372bfe6f1a765403e2cacba40",
     "0197_ai_school_usage_hq_read.sql": "6676e39bf0c523d4bb88c7fd82daf8f107196c005cc29741e415e951658743f6",
-    "0198_ai_team_readiness.sql": "f9d5a499f3ffa1ddd5da1ad718131122175331842badefc6fc515e704e73b796",
+    "0198_ai_team_readiness.sql": "7eb7cb3b0e64560136a783a97752772e6c67bc7695a57c89e90d6cc172e8d552",
     "0199_hon_conversation_delegation.sql": "3e7ff3b67c55bcdec206993f7610c3a1b8a4ece0645c68d9d757461d4eb5ff9b"
   }
 }
