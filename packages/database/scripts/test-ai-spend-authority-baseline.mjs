@@ -1418,7 +1418,8 @@ try {
   // For each specialist: a turn is recorded (not yet handed over); a request sent straight to that specialist with the
   // turn id as its Idempotency-Key and a different target is refused and never shows on the turn; the normal hand-over
   // then completes, a resend replays it, and a concurrent substitution racing two concurrent hand-overs leaves exactly
-  // one specialist record (the turn's target), one provider call and one Action Center proposal.
+  // one specialist record (the turn's target), one provider call and one Action Center proposal: the turn's hand-over
+  // claim lets only one of the concurrent resends hand over (the other reads the live state).
   {
   const turnSql = 'SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) r';
   const receiptOf = async (o, turnId) => (await tenant(context(o), (client) => client.query('SELECT hon.read_hon_turn_receipt($1,$2) r', [o.subject, turnId]))).rows[0].r;
@@ -1447,6 +1448,11 @@ try {
     const begun = (await tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turnInput), key]))).rows[0].r;
     assert.equal(begun.handOff, true);
     const turnId = begun.turnId;
+    // That caller holds the hand-over claim: a resend now does not start a second, competing hand-over.
+    assert.equal((await tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turnInput), key]))).rows[0].r.handOff, false, `${name}: one hand-over at a time`);
+    // The claimed hand-over never ran (simulated crash): after five minutes a resend may claim it again.
+    const abandon = (id) => admin.query("UPDATE hon.hon_conversation_turns SET handoff_claimed_at=clock_timestamp()-interval '6 minutes' WHERE id=$1", [id]);
+    await abandon(turnId);
     // Direct-key substitution: the specialist's own endpoint, the turn id as Idempotency-Key, another target.
     const direct = await settle(agents[name].service.submit(context(o, { idempotencyKey: turnId }), substitute));
     assert.ok(direct.error, `${name}: a substituted target under a turn id must be refused: ${JSON.stringify(direct.value)}`);
@@ -1465,6 +1471,7 @@ try {
     // Concurrent: two hand-overs of a new turn and a substitution under its id, all at once.
     const key2 = K();
     const begun2 = (await tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turnInput), key2]))).rows[0].r;
+    await abandon(begun2.turnId);
     const calls1 = fakes[name].calls;
     const [a, b, sub] = await Promise.all([settle(hon.sendTurn(scope, conv.id, turnInput, key2)), settle(hon.sendTurn(scope, conv.id, turnInput, key2)),
       settle(agents[name].service.submit(context(o, { idempotencyKey: begun2.turnId }), substitute))]);
