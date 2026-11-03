@@ -15,7 +15,7 @@ Frontend integration of the merged 0178 contracts, not a production release. Rou
 
 ## Security and exclusions
 
-No backend, shared contract, database migration, protected runtime function, parent screen, billing/payment, entitlement, provider or AI changes. No financial action is reachable. No sensitive records or retry keys in URL, browser storage or telemetry. Internal DRAFTs are not published to parents; E1b-2/D10 publication is not implemented. E1c, renewals and payment schedules remain excluded. Adult/family enrollment, cancellation and E1a activation remain unchanged except for the navigation link.
+No backend, shared contract, database migration, protected runtime function, parent screen, billing/payment, entitlement, provider or AI changes. No financial action is reachable. No sensitive records or retry keys in URL, browser storage or telemetry. Internal DRAFTs are not published to parents; E1b-2/D10 publication is not implemented. E1c, renewals and payment schedules remain excluded. Adult/family enrollment, cancellation and E1a preview/activation contracts remain unchanged. A guarded handoff from a fresh ACTIVE lifecycle observation opens a separately authorized date/history stage; a historical activation receipt cannot open it.
 
 ## Verification and evidence
 
@@ -28,14 +28,14 @@ No backend, shared contract, database migration, protected runtime function, par
 
 - All E1a and E1b-1 release prerequisites remain: known-minor registration recovery, persistent migration-history and runtime verification, coordinated frontend/backend rollout, parent DRAFT publication/privacy work, and documented older manual fixture failures. See `MEMBERSHIP_DATE_REVISIONS.md` and `MEMBERSHIP_ACTIVATION_GATE_DEPLOYMENT_AND_RISKS.md`. No persistent migrations were executed.
 - Full document destruction (reload/close/navigation out) loses in-memory recovery. Never start another command on the assumption that losing a browser request reverses the server action. Restoring a queue restarts its first page; restoration reads never mutate anything.
-- New screen copy is English. Dates/numbers use the shared Language & Region utilities. Korean/Spanish copy, physical-device/screen-reader/zoom review remain follow-ups; do not claim full localization or manual-device verification.
+- The integrated date screen now has EN/KO/ES labels, reasons, warning/block explanations, financial disclaimers, privacy/discard controls, errors and receipts. Human-entered reasons, names, published plan names, identifiers and timezone evidence remain verbatim. Dates/numbers use the shared Language & Region utilities. Physical-device, actual screen-reader and zoom review remain separate from automated accessibility evidence.
 - The pre-existing CRM recovery list is still bounded to 50 leads; this work does not change that contract. Date history is bounded by the shared 200-period contract; the legacy queue uses the server cursor.
 - The current main's patched Node/toolchain and merged one-product commercial foundations are retained. Operational customer checkout still requires its separate Commercial B/C and policy gates. No public tier, pricing or purchase changes are included here. Manus's [consolidated full-product backlog PR #103](https://github.com/myhonosai/honos/pull/103) coordinates the remaining parallel workstreams; preview-only PRs #101/#102 stay paused.
 
 One focused unmerged PR. Owner approval is required for merge; production deployment remains NO-GO.
 
 
-## Dependent reconciliation checkpoint — 2026-11-02
+## Historical dependent reconciliation checkpoint — 2026-11-02
 
 Prepared on `codex/membership-dates-dependent-117` from the preserved PR #104 head `c4b607ae9e05cbb67e54753ebccd5db02b5e232c` plus PR #117 `1b1ddef16d6e8cffaf98373d5b070f87d6241648` and accepted main `e12a7fc4d71282037d196a5f3922c480ddd5164d`. The original PR #104 branch and accepted main are unchanged. This is a dependent checkpoint, not approval to merge either PR.
 
@@ -45,3 +45,15 @@ Prepared on `codex/membership-dates-dependent-117` from the preserved PR #104 he
 - Fresh signed-session API/database, browser screenshots/accessibility and commercial rehearsal results on this dependent tree are still required. Earlier PR #104 results above are historical evidence, not executions of this combined tree. Local listeners, PostgreSQL and Chromium are unavailable; no local run is claimed for them.
 - The broader date screen still has the previously documented English-copy limitation. Shared language/region date formatting and existing activation translations/modes are preserved; full date-screen EN/KO/ES and presentation verification is not claimed complete.
 - After owner-authorized PR #117 merge, reconcile this checkpoint into the existing PR #104 branch, rerun the complete current-main checks, and request focused delta review. No competing implementation PR is opened. Durable discovery of ACTIVE memberships after reload remains a separate backend contract dependency: the current context/history routes require an already-known membership ID, the legacy queue excludes normally confirmed memberships, and summary counts are not record lookup.
+
+
+## Completed frontend reconciliation after accepted PR #117
+
+Accepted baseline: `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`. The original PR #104 head `c4b607ae9e05cbb67e54753ebccd5db02b5e232c` and prepared `99cac87a0c7b63ca4f902d1ed52438a2c3d7b8d6` remain in the commit ancestry. Continue the existing draft PR by normal fast-forward; retain an explicit original-head branch as additional preservation. No competing implementation PR is needed.
+
+- CRM → verified current DRAFT → two-step activation → explicit fresh ACTIVE observation → date/history stage. Only immutable organization/school/membership selectors pass in mounted private memory; no history read or command is automatic. Date history/preview/confirmation independently authorize the original signed identity and exact school. Bound selectors are readonly. Unknown activation results block this in-page handoff; in-flight or unknown date changes block Return. Deliberate abandonment returns to an idle CRM rather than revealing bound selectors.
+- English, Korean and Spanish copy covers all date change kinds, reasons, warning/block codes, forms, errors, final acknowledgement, privacy/discard controls, financial limitations and receipts. Unknown factual values are preserved, not replaced by an invented translation. Modern, Classic and Big Button reuse the existing activation presentation styles; mode changes make no protected requests.
+- Current effective dates/status and newest-first immutable history come from the backend. Last valid day remains inclusive and calendar formatting remains school-date-safe. Historical receipts are distinct from a fresh history read. Version/digest checks, explicit final confirmation, exact retained keys and post-wait backend authority remain unchanged. Stale confirmation or deliberately abandoned retry callbacks cannot dispatch orphaned commands.
+- School-operation links open existing bookings and attendance screens; they create no records and establish no financial or eligibility fact. No new student/membership directory is fabricated. Durable ACTIVE discovery after document loss remains the separate Claude backend dependency already recorded on PR #104.
+- The activation transport's session-invalidation test import is resolved in both E1a and date harnesses. Real signed-session API/disposable PostgreSQL verification now also reads inclusive current adult and child periods after CRM activation, checks scheduled child status and tenant denial, and verifies multilingual human reasons survive an actual date revision/history read. Browser fixtures remain explicitly synthetic and separate from database proofs.
+- Exact-head test counts, CI links, screenshots and independent-review status are recorded in the PR. Local HTTP listeners, PostgreSQL and Chromium remain unavailable; no remote/shared or production database is used. Existing migration bytes, reserved identifiers, S4, billing/payment/provider authority and Issue #121's separate P3 scope are unchanged.

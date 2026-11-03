@@ -20,7 +20,7 @@ import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from 
 import styles from './membership-activation-workbench.module.css';
 
 type Dates = { startDate: string; endDate: string | null };
-export function MembershipActivationWorkbench({ sessionSubject, initialMembership, onReturn }: { sessionSubject?: string; initialMembership?: KnownMembership; onReturn?(): void }): React.ReactElement {
+export function MembershipActivationWorkbench({ sessionSubject, initialMembership, onReturn, onManageDates }: { sessionSubject?: string; initialMembership?: KnownMembership; onReturn?(): void; onManageDates?(selection: KnownMembership): void }): React.ReactElement {
   const { preferences, date } = useLocale();
   const t = (key: string, vars?: ActivationVariables) => activationText(preferences.language, key as ActivationTextKey, vars);
   const calendar = (value: string | null) => value === null ? t('Open-ended · no last day') : formatLocaleCalendarDate(preferences, value);
@@ -39,6 +39,7 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
   const readEpoch = useRef(0), readAbort = useRef<AbortController | null>(null), concealed = useRef(false), sensitive = useRef(false);
   const instance = useRef(0), activeCommand = useRef<ActivationRequest | null>(null), retained = useRef<ActivationRequest | null>(null);
   const finalHeading = useRef<HTMLHeadingElement | null>(null), shieldHeading = useRef<HTMLHeadingElement | null>(null), reviewHeading = useRef<HTMLHeadingElement | null>(null);
+  const entryHeading = useRef<HTMLHeadingElement | null>(null);
   const privateArea = useRef<HTMLDivElement | null>(null), sessionOwner = useRef(sessionSubject), restoreAttempt = useRef(0);
   sensitive.current = !!(scope.organizationId || scope.schoolId || scope.membershipId || preview || saved || pending || reading);
   const locked = commandBusy || pending !== null;
@@ -60,6 +61,7 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
     return () => { instance.current++; readEpoch.current++; readAbort.current?.abort(); activeCommand.current = null; for (const event of events) window.removeEventListener(event, blur); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('beforeunload', leave); };
   }, [sessionSubject]);
   useEffect(() => { if (hidden) shieldHeading.current?.focus(); else if (summary) finalHeading.current?.focus(); }, [hidden, summary]);
+  useEffect(() => { if (initialMembership) entryHeading.current?.focus(); }, []);
   function editScope(key: keyof KnownMembership, value: string): void {
     if (initialMembership || activeCommand.current || retained.current || concealed.current) return;
     invalidateRead(); setPreview(null); setDates(null); setSaved(null); setObserved(null); resetReview(); setError(''); setNotice(''); setScope(old => ({ ...old, [key]: value }));
@@ -180,12 +182,18 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
       setError('Current membership state could not be verified. No current activation or effective status is assumed.');
     } finally { if (run === readEpoch.current) setReading(false); }
   }
+  const managementEpoch = readEpoch.current, managementLife = instance.current;
+  function manageDates(): void {
+    if (!onManageDates || observed?.state !== 'ACTIVE' || activeCommand.current || retained.current || concealed.current || reading
+      || managementEpoch !== readEpoch.current || managementLife !== instance.current) return;
+    onManageDates(Object.freeze({ organizationId: scope.organizationId, schoolId: scope.schoolId, membershipId: scope.membershipId }));
+  }
   return <main className={`${styles.page} ${styles[`mode_${presentation}`]}`} data-membership-activation>
     <label>{t('Presentation')}<select aria-label={t('Presentation')} value={presentation} onChange={event => setPresentation(event.target.value as typeof presentation)}><option value="modern">{t('Modern')}</option><option value="classic">{t('Classic')}</option><option value="big">{t('Big Button')}</option></select></label>
     <div role="status" aria-live="polite" aria-atomic="true" className={`${styles.status} ${notice ? styles.notice : ''}`}>{commandBusy ? t('Activation request in progress') : reading ? t('Verifying current session, school access and membership facts…') : hidden ? t('Membership information hidden') : notice ? t(notice) : ''}</div>
     <nav aria-label={t("Membership navigation")}><a href="/staff/dashboard">{t("Staff dashboard")}</a><a href="/staff/crm/leads">{t("CRM enrollment")}</a><a href="/staff/billing/membership-dates">{t("Membership dates and history")}</a></nav>
     {onReturn && <button type="button" disabled={locked || reading} onClick={() => { if (!activeCommand.current && !retained.current && !reading) onReturn(); }}>{t("Return to CRM registration")}</button>}
-    <header><p>{t("DIRECT HUMAN STAFF · MEMBERSHIP LIFECYCLE")}</p><h1>{t("Review and confirm membership activation")}</h1><p>{t("1. Review the server preview. 2. Confirm this membership and its exact dates.")}</p></header>
+    <header><p>{t("DIRECT HUMAN STAFF · MEMBERSHIP LIFECYCLE")}</p><h1 ref={entryHeading} tabIndex={-1}>{t("Review and confirm membership activation")}</h1><p>{t("1. Review the server preview. 2. Confirm this membership and its exact dates.")}</p></header>
     <aside><strong>{t("Membership confirmation is separate from financial enrollment.")}</strong><p>{t("This does not collect tuition, sign an agreement, record customer consent, authorize recurring payments or complete financial enrollment. No billing schedule is created. Card collection never authorizes recurring billing.")}</p></aside>
     {hidden ? <section aria-labelledby="activation-shield"><h2 id="activation-shield" tabIndex={-1} ref={shieldHeading}>{t("Membership information hidden")}</h2>
       <p>{t("Focus loss immediately conceals sensitive information. Verify your signed session and current exact-school activation access before revealing it. Commands are never resent automatically.")}</p>
@@ -200,7 +208,9 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
           <button type="submit" disabled={reading}>{t("Review activation")}</button>
         </fieldset></form>
       </section>
-      {observed && <section><h2>{t("Current membership observation")}</h2><p>{t(observed.state)} · {t('version {version}', { version: observed.version })}. {t('This live observation is separate from any historical confirmation receipt. ACTIVE alone does not prove current effective dates, payment or agreement.')}</p></section>}
+      {observed && <section><h2>{t("Current membership observation")}</h2><p>{t(observed.state)} · {t('version {version}', { version: observed.version })}. {t('This live observation is separate from any historical confirmation receipt. ACTIVE alone does not prove current effective dates, payment or agreement.')}</p>
+        {onManageDates && observed.state === 'ACTIVE' && <><p>{t('Date history requires a separate authorized read. This handoff carries selectors only and does not change dates.')}</p><button type="button" disabled={locked || reading} onClick={manageDates}>{t('Review membership dates and history')}</button></>}
+      </section>}
       {dates && !saved && <section><h2>{t("Membership dates")}</h2><p>{t("Dates use the school timezone. The end is the last valid membership day. Every valid edit requests a fresh preview and clears all previous acknowledgements.")}</p>
         <fieldset disabled={locked}><div className={styles.row}>
           <label>{t("Start date")}<input type="date" required value={dates.startDate} onChange={event => changeDates({ ...dates, startDate: event.target.value })} /></label>

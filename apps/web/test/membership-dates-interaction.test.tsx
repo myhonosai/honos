@@ -17,7 +17,8 @@ import { MembershipDatesWorkbench } from '../src/components/membership-dates-wor
 import { scope, id, history, preview, receipt, period, report, envelope, rejected } from './membership-dates-fixtures';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from '../src/components/session-invalidation';
 import { PlanAccessError } from '../src/components/membership-plans/http';
-const render = () => { harness.cursor = 0; return MembershipDatesWorkbench({ sessionSubject: 'synthetic-staff' }); };
+let props: Parameters<typeof MembershipDatesWorkbench>[0] = { sessionSubject: 'synthetic-staff' };
+const render = () => { harness.cursor = 0; return MembershipDatesWorkbench(props); };
 const nodes = (tree: any, type: string): any[] => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(value => nodes(value, type)) : [...(tree.type === type ? [tree] : []), ...nodes(tree.props?.children, type)];
 const text = (tree: any): string => typeof tree === 'string' ? tree : Array.isArray(tree) ? tree.map(text).join('') : tree && typeof tree === 'object' ? text(tree.props?.children) : '';
 const html = () => renderToStaticMarkup(render());
@@ -30,9 +31,29 @@ function selectors() { render(); fill('Organization ID', scope.organizationId); 
 async function load() { selectors(); nodes(render(), 'form')[0].props.onSubmit({ preventDefault: vi.fn() }); await flush(); }
 function final() { fill('Reason category', 'DATA_ENTRY_ERROR'); fill('Reason for this change', 'Staff verified the correct membership dates.'); nodes(render(), 'form')[1].props.onSubmit({ preventDefault: vi.fn() }); }
 function confirm() { final(); tick('I confirm this exact date change'); button('Confirm membership date change').props.onClick(); }
-beforeEach(() => { harness.slots = []; harness.cursor = 0; harness.effects = []; harness.session.mockReset().mockResolvedValue(undefined); vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
+beforeEach(() => { props={sessionSubject:'synthetic-staff'};harness.slots = []; harness.cursor = 0; harness.effects = []; harness.session.mockReset().mockResolvedValue(undefined); vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('E1b-1 independent staff date-management lifecycle', () => {
+  it('rejects a captured exact retry after deliberate abandonment rather than resending an orphaned command',async()=>{
+    const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(envelope(history(),false,true)).mockResolvedValueOnce(envelope(preview())).mockRejectedValueOnce(new Error('unknown'));
+    await load();confirm();await flush();const stale=button('Retry exact retained date change').props.onClick;
+    const all=(n:any):any[]=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(all):[n,...all(n.props?.children)];all(render()).find(n=>n.type?.name==='CrmEnrollmentDiscard').props.onDiscard();
+    stale();await flush();expect(f).toHaveBeenCalledTimes(3);expect(html()).not.toContain('Retained date-change request');
+  });
+  it('prefills immutable bound selectors without a read, blocks edits and changes presentation without reading',()=>{
+    props={...props,initialMembership:scope};const f=vi.spyOn(globalThis,'fetch');
+    expect(field('Organization ID').props.readOnly).toBe(true);fill('School ID',id('9'));expect(field('School ID').props.value).toBe(scope.schoolId);
+    for(const value of ['modern','classic','big']){field('Presentation').props.onChange({target:{value}});expect(html()).toContain('mode_'+value);}
+    expect(f).not.toHaveBeenCalled();expect(html()).not.toContain('Verified current membership');
+  });
+  it('protects bound return/abandonment while a command settles and discards a concealed view through the safe parent callback',async()=>{
+    const back=vi.fn(),abandon=vi.fn();props={...props,initialMembership:scope,onReturn:back,onAbandon:abandon};
+    let reject!:(e:Error)=>void;vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(envelope(history(),false,true)).mockResolvedValueOnce(envelope(preview())).mockImplementationOnce(()=>new Promise((_,no)=>{reject=no;}));
+    await load();harness.effects[0]!();confirm();await flush();button('Return to activation review').props.onClick();expect(back).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event(HON_SESSION_INVALIDATED_EVENT));reject(new Error('unknown'));await flush();
+    expect(html()).toContain('Membership information hidden');expect(html()).not.toContain(scope.membershipId);button('Return to activation review').props.onClick();expect(back).not.toHaveBeenCalled();
+    const all=(n:any):any[]=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(all):[n,...all(n.props?.children)];const control=all(render()).find(n=>n.type?.name==='CrmEnrollmentDiscard');expect(control.props.disabled).toBe(false);control.props.onDiscard();expect(abandon).toHaveBeenCalledOnce();expect(back).not.toHaveBeenCalled();
+  });
   it.each(['pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT])('conceals on %s and rejects late reads until an explicit authorized restoration', async event => {
     let settle!: (value: Response) => void;
     const f = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(done => { settle = done; }))

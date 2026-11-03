@@ -4,6 +4,11 @@
 .error { composes: error from './membership-activation-workbench.module.css'; }
 .notice { composes: notice from './membership-activation-workbench.module.css'; }
 .check { composes: check from './membership-activation-workbench.module.css'; }
+.status { min-height: 1.5em; margin: 12px 0; }
+.mode_modern { composes: mode_modern from './membership-activation-workbench.module.css'; }
+.mode_classic { composes: mode_classic from './membership-activation-workbench.module.css'; }
+.mode_big { composes: mode_big from './membership-activation-workbench.module.css'; }
+.page small, .check { overflow-wrap: anywhere; min-width: 0; }
 .page nav { display: flex; flex-wrap: wrap; gap: 16px; }
 .page fieldset { min-width: 0; }
 .page details { padding: 16px 0; }

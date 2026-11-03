@@ -1,3 +1,11 @@
+## 2026-11-02 — PR #104 dates/history integration after merged #117
+
+- Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
+- Connect a fresh authorized ACTIVE lifecycle observation to independently authorized current effective dates/history, two-step date changes, exact-request recovery, and existing bookings/attendance links. Historical receipts cannot establish current status, eligibility or payment. No automatic reads or consequential retries.
+- Complete EN/KO/ES date copy, three presentation modes, persistent accessible status, bound-stage keyboard focus, readonly handoff selectors, stale callback rejection and safe deliberate retry abandonment. Preserve merged #117 privacy/session invalidation and adult/family activation.
+- Executed local evidence: 81 focused safety/localization tests; 1,308 complete web tests in 148 files; web typecheck and production build; 184 unchanged checksum-locked migrations. Fresh final-head GitHub repository, signed-session API/disposable PostgreSQL, commercial, browser/screenshots and accessibility results remain pending publication; do not infer those results from local source checks.
+- Durable ACTIVE discovery after full reload is the next separate backend lookup dependency, already handed off to Claude on PR #104. Issue #121 remains separate. No backend, contract, migration, S4, billing, provider, entitlement or production changes.
+
 ## Current full-product frontend delivery — Codex
 
 - Owner direction: preview-only PRs #101/#102 are paused; retain their work without merging preview scaffolding into production. Continue the actual application in small reviewed PRs, with Manus coordinating and Claude owning backend/S4/financial boundaries. Use Manus's [consolidated full-product backlog PR #103](https://github.com/myhonosai/honos/pull/103) for coordination; do not maintain a competing roadmap here.

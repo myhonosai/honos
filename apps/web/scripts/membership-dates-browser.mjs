@@ -3,27 +3,33 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { MEMBERSHIP_DATE_REVISION_CONFIRMATION, MEMBERSHIP_REQUIREMENTS_NOT_EVALUATED, validateMembershipDateRevisionPreviewInput,
   validateConfirmMembershipDateRevisionInput, validateMembershipDateConfirmationQueueInput, verifyMembershipDateRevisionPreview,
-  verifyMembershipDateRevisionReceipt, verifyMembershipDateHistory, verifySchoolMembershipStatusSummary } from '@hon/contracts';
+  verifyMembershipDateRevisionReceipt, verifyMembershipDateHistory, verifySchoolMembershipStatusSummary, verifyMembershipActivationReceipt } from '@hon/contracts';
 
 export function createDateFixture({ id, scope, origin, send, rejected }) {
-  const membershipId = id(90), prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`, root = `${prefix}/billing/memberships`;
+  let membershipId = id(90), boundPlan = null, planCode = 'JUNIOR-MONTHLY';
+  const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`, root = `${prefix}/billing/memberships`;
   const original = { source: 'ACTIVATION', periodVersion: 1, changeKind: 'INITIAL', startDate: '2026-10-01', endDate: '2026-10-31', endDateInclusive: true, schoolTimezone: 'America/Los_Angeles', termStartedAt: '2026-10-01T07:00:00.000Z', termEndsAt: '2026-11-01T07:00:00.000Z' };
-  let mode, version, period, keys, commands, reads, finish, held, signalHeld;
-  function reset(next = 'routine') { mode = next; version = 2; period = next === 'legacy' ? null : { ...original }; keys = new Map(); commands = []; reads = []; finish = null; held = new Promise(done => { signalHeld = done; }); }
+  let mode, version, period, keys, commands, reads, finish, held, signalHeld, lastReason, lastReasonCode;
+  function reset(next = 'routine') { membershipId = id(90); boundPlan = null; planCode = 'JUNIOR-MONTHLY'; mode = next; lastReason='Synthetic staff reviewed the dates.'; lastReasonCode='MEMBER_REQUESTED'; version = 2; period = next === 'legacy' ? null : { ...original }; keys = new Map(); commands = []; reads = []; finish = null; held = new Promise(done => { signalHeld = done; }); }
+  function bindActivation(recorded) {
+    assert(recorded); const receipt = verifyMembershipActivationReceipt(recorded.receipt, recorded.receipt.membershipId);
+    assert([id(7),id(70),id(71),id(80)].includes(receipt.membershipId)); reset(); membershipId = receipt.membershipId; version = receipt.version; boundPlan = recorded.plan; planCode = recorded.planCode;
+    const p = receipt.effectivePeriod; period = {source:'ACTIVATION',changeKind:'INITIAL',periodVersion:p.periodVersion,startDate:p.startDate,endDate:p.endDate,endDateInclusive:true,schoolTimezone:p.schoolTimezone,termStartedAt:p.termStartedAt,termEndsAt:p.termEndsAt};
+  }
   reset();
   const postRead = (res, data) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data, meta: { requestId: id(8), correlationId: id(8) } })); };
   function history() {
-    return verifyMembershipDateHistory({ membershipId, state: 'ACTIVE', version, schoolTimezone: original.schoolTimezone, localToday: '2026-10-23', effectiveStatus: period ? 'IN_EFFECT' : 'UNDATED', datesConfirmed: !!period, currentPeriod: period, legacyStoredTerm: period ? null : { termStartedAt: null, termEndsAt: null }, versions: period ? [{ periodVersion: period.periodVersion, changeKind: period.changeKind, startDate: period.startDate, endDate: period.endDate, schoolTimezone: period.schoolTimezone, dateSource: 'SUGGESTED', reasonCode: 'MEMBER_REQUESTED', reasonText: 'Synthetic staff reviewed the dates.', actorDisplayName: 'Synthetic Staff', recordedAt: '2026-10-23T12:00:00.000Z', retroactiveDays: null, acknowledgedWarnings: [] }] : [] });
+    return verifyMembershipDateHistory({ membershipId, state: 'ACTIVE', version, schoolTimezone: original.schoolTimezone, localToday: '2026-10-23', effectiveStatus: period ? period.startDate > '2026-10-23' ? 'SCHEDULED' : period.endDate && period.endDate < '2026-10-23' ? 'ENDED' : 'IN_EFFECT' : 'UNDATED', datesConfirmed: !!period, currentPeriod: period, legacyStoredTerm: period ? null : { termStartedAt: null, termEndsAt: null }, versions: period ? [{ periodVersion: period.periodVersion, changeKind: period.changeKind, startDate: period.startDate, endDate: period.endDate, schoolTimezone: period.schoolTimezone, dateSource: 'SUGGESTED', reasonCode: lastReasonCode, reasonText: lastReason, actorDisplayName: 'Synthetic Staff', recordedAt: '2026-10-23T12:00:00.000Z', retroactiveDays: null, acknowledgedWarnings: [] }] : [] });
   }
   function preview(input) {
     const suggested = { startDate: period?.startDate ?? '2026-11-01', endDate: input.changeKind === 'EXTENSION' ? '2026-11-30' : period?.endDate ?? null };
     const dates = 'startDate' in input ? { startDate: input.startDate, endDate: input.endDate } : suggested;
     const future = dates.startDate > '2026-10-23', retro = mode === 'retroactive', financial = mode === 'financial';
     const unchanged = period && dates.startDate === period.startDate && dates.endDate === period.endDate;
-    const data = { membershipId, state: 'ACTIVE', version, participantPersonId: id(91), participantDisplayName: 'Synthetic Morgan Lee', planCode: 'JUNIOR-MONTHLY', plan: { membershipPlanId: id(92), membershipPlanVersion: 2, terms: { displayName: 'Junior martial arts', termKind: 'FIXED_MONTHS', termMonths: 1 } },
+    const data = { membershipId, state: 'ACTIVE', version, participantPersonId: id(91), participantDisplayName: 'Synthetic Morgan Lee', planCode, plan: boundPlan ?? { membershipPlanId: id(92), membershipPlanVersion: 2, terms: { displayName: 'Junior martial arts', termKind: 'FIXED_MONTHS', termMonths: 1 } },
       schoolTimezone: original.schoolTimezone, localToday: '2026-10-23', changeKind: input.changeKind, currentPeriod: period, legacyStoredTerm: period ? null : { termStartedAt: null, termEndsAt: null },
       suggestedDates: { ...suggested, startBasis: period ? 'CURRENT_START' : 'LEGACY_STORED_START', endBasis: 'PLAN_FIXED_TERM_ANCHORED' }, proposedDates: { ...dates, dateSource: dates.startDate === suggested.startDate && dates.endDate === suggested.endDate ? 'SUGGESTED' : 'STAFF_ADJUSTED' },
-      projection: { termStartedAt: `${dates.startDate}T07:00:00.000Z`, termEndsAt: dates.endDate === null ? null : '2026-12-01T08:00:00.000Z' }, effectiveStatusNow: period ? 'IN_EFFECT' : 'UNDATED', effectiveStatusIfConfirmedNow: future ? 'SCHEDULED' : 'IN_EFFECT',
+      projection: unchanged ? {termStartedAt:period.termStartedAt,termEndsAt:period.termEndsAt} : { termStartedAt: `${dates.startDate}T07:00:00.000Z`, termEndsAt: dates.endDate === null ? null : '2026-12-01T08:00:00.000Z' }, effectiveStatusNow: history().effectiveStatus, effectiveStatusIfConfirmedNow: future ? 'SCHEDULED' : 'IN_EFFECT',
       retroactiveDays: { added: retro ? 2 : 0, removed: 0 }, financialFacts: { invoices: financial ? [{ invoiceId: id(93), status: 'PAID', dueDate: '2026-10-01' }] : [], invoicesTruncated: false, schedules: [], schedulesTruncated: false },
       warnings: [...(future ? [{ code: 'START_DATE_IN_FUTURE', days: 9 }] : []), ...(retro ? [{ code: 'RETROACTIVE_CHANGE', added: 2, removed: 0 }] : []), ...(financial ? [{ code: 'PAID_INVOICE_NOT_REFUNDED_OR_CREDITED', count: 1 }] : [])],
       blocks: mode === 'blocked' ? [{ code: 'DATE_CHANGE_CONFLICTS_WITH_OPEN_INVOICE' }] : unchanged ? [{ code: 'DATES_UNCHANGED' }] : [], requiredPermissions: ['billing.membership.dates.revise', ...(retro ? ['billing.membership.dates.retroactive'] : [])], requirementsNotEvaluated: [...MEMBERSHIP_REQUIREMENTS_NOT_EVALUATED], canConfirm: !retro && mode !== 'blocked' && !unchanged, previewDigest: 'a'.repeat(64), confirmation: MEMBERSHIP_DATE_REVISION_CONFIRMATION };
@@ -53,12 +59,12 @@ export function createDateFixture({ id, scope, origin, send, rejected }) {
     const data = verifyMembershipDateRevisionReceipt({ membershipId, state: 'ACTIVE', previousVersion: version, version: version + 1, revisionId: id(94), changeKind: input.changeKind, decisionBasis: 'STAFF_REVISION_PRE_POLICY', authorizingPermission: 'billing.membership.dates.revise', retroactivePermission: null,
       previousPeriod: { periodVersion: period?.periodVersion ?? null, startDate: period?.startDate ?? null, endDate: period?.endDate ?? null, legacyTermStartedAt: null, legacyTermEndsAt: null },
       effectivePeriod: { periodVersion: (period?.periodVersion ?? 0) + 1, startDate: input.startDate, endDate: input.endDate, endDateInclusive: true, schoolTimezone: p.schoolTimezone, dateSource: input.dateSource, ...p.projection }, effectiveStatusAtRevision: p.effectiveStatusIfConfirmedNow, retroactiveDays: p.retroactiveDays, acknowledgedWarnings: input.acknowledgedWarnings, reasonCode: input.reasonCode, financialEffects: [], followUps: mode === 'financial' ? [{ kind: 'BILLING_REVIEW', workItemId: id(95) }] : [], requirementsNotEvaluated: [...MEMBERSHIP_REQUIREMENTS_NOT_EVALUATED], approval: null, recordedAt: '2026-10-23T12:00:00.000Z' });
-    keys.set(key, { raw, data }); version++; period = { source: 'REVISION', changeKind: input.changeKind, ...data.effectivePeriod }; delete period.dateSource;
+    keys.set(key, { raw, data }); lastReason=input.reasonText; lastReasonCode=input.reasonCode; version++; period = { source: 'REVISION', changeKind: input.changeKind, ...data.effectivePeriod }; delete period.dateSource;
     if (mode.startsWith('hold-')) await new Promise(done => { finish = done; signalHeld(); });
     if (mode.includes('unknown')) { mode = 'routine'; rejected(res, 503, 'MEMBERSHIP_LIFECYCLE_UNAVAILABLE'); } else send(res, 200, data);
     return true;
   }
-  return { reset, handle, scope, membershipId, get commands() { return commands; }, get reads() { return reads; }, waitUntilHeld: () => held, release() { assert(finish); finish(); }, setMode(next) { mode = next; } };
+  return { reset, bindActivation, handle, scope, get membershipId() { return membershipId; }, get commands() { return commands; }, get reads() { return reads; }, waitUntilHeld: () => held, release() { assert(finish); finish(); }, setMode(next) { mode = next; } };
 }
 
 export async function runDateBrowserChecks({ fixture, open, visual, check, origin }) {
