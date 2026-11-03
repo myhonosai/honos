@@ -117,6 +117,7 @@
     "db:test-marketing-assistant": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-marketing-assistant-integrity.mjs",
     "db:setup-chad-follow-up-assistant": "node scripts/setup-chad-follow-up-assistant-validation.mjs",
     "db:test-chad-follow-up-assistant": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-chad-follow-up-assistant-integrity.mjs",
+    "db:test-ai-spend-baseline": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-spend-authority-baseline.mjs",
     "db:test-ai-employee-slices-verifier": "node scripts/test-ai-employee-slices-verifier.mjs",
     "db:test-testing-certificates": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-testing-certificate-integrity.mjs",
     "db:setup-testing-certificates": "node scripts/setup-testing-certificate-validation.mjs",

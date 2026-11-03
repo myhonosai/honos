@@ -30,6 +30,7 @@ export * from './crm-lead-registration-recovery.js';
 export * from './school-membership-plans.js';
 export * from './crm-guardian-child-enrollment.js';
 export * from './membership-activation.js';
+export * from './crm-lead-memberships.js';
 export * from './membership-date-revision.js';
 export * from './kiosk.js';
 
@@ -1025,3 +1026,8 @@ export * from './saas-price-acceptance.js';
 export * from './saas-subscription-generation.js';
 
 export * from './school-owner-invitations.js';
+export * from './ai-spend-pause.js';
+export * from './ai-unknown-resolution.js';
+export * from './ai-school-usage.js';
+export * from './ai-team-readiness.js';
+export * from './hon-conversation.js';
