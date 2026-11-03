@@ -2020,7 +2020,7 @@ END $$;
 
 -- S4-c 0195 AI access decision: decision, hooks and guards stay internal; only the HQ pause command and read are runtime boundaries.
 DO $$ DECLARE r text; f text; BEGIN
-  FOREACH f IN ARRAY ARRAY['guard_ai_spend_pauses()','ai_promotional_access(uuid,timestamptz,text)','ai_trial_funding_available(uuid,timestamptz,text)',
+  FOREACH f IN ARRAY ARRAY['guard_ai_spend_pauses()','guard_ai_spend_pause_commands()','ai_promotional_access(uuid,timestamptz,text)','ai_trial_funding_available(uuid,timestamptz,text)',
     'ai_access_state_decision(text,boolean,boolean)','ai_spend_allowed(uuid,timestamptz,text)','ai_spend_start_guard()','ai_spend_b3_guard()',
     'command_ai_spend_pause(text,jsonb,uuid)','read_ai_spend_pauses_from_hq(text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
@@ -2028,6 +2028,8 @@ DO $$ DECLARE r text; f text; BEGIN
   END LOOP;
   REVOKE ALL ON TABLE hon.ai_spend_pauses FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_spend_pauses FROM '||quote_ident(r); END LOOP;
+  REVOKE ALL ON TABLE hon.ai_spend_pause_commands FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_spend_pause_commands FROM '||quote_ident(r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.command_ai_spend_pause(text,jsonb,uuid), hon.read_ai_spend_pauses_from_hq(text) TO hon_runtime;
   END IF;
