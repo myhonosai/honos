@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, verifyChampionsProofConnection } from './champions-proof-target.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { addUtcMonthsClamped } from './commercial-staging-month-fixtures.mjs';
@@ -14,8 +15,10 @@ import { runUtcOperatorChecks } from './saas-billing-utc-operator-check.mjs';
 // session. The pre-0201 drift is reproduced on this same path with the pins removed (disposable database only), and
 // the read-only operator checks find exactly the drifted rows. Paid access is simulated ACTIVE here (disposable only)
 // and restored; payment events are STRIPE_SIMULATED; no real provider, card, credit or production data is involved.
-const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
-if(owner.hostname!=='localhost'||owner.port!=='5432'||owner.pathname!=='/hon_champions_validation'||owner.username!=='hon_champions_owner'||runtime.hostname!==owner.hostname||runtime.port!==owner.port||runtime.pathname!==owner.pathname||runtime.username!=='hon_champions_runtime')throw new Error('Only exact disposable localhost validation URLs permitted; never remote DB.');
+// Fail-closed target guard (Manus review P2): exact disposable localhost fixture as node-postgres itself interprets
+// the URLs, no PG* overrides, explicit client configs, then a server-side database/role/loopback/marker check below.
+await import('./test-champions-proof-target.mjs');
+const targets=championsProofTargets(process.env),runtime={username:CHAMPIONS_RUNTIME_ROLE};
 if(Object.keys(process.env).some(key=>/^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HEYGEN|HIGGSFIELD|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(key)))throw new Error('Provider credentials/execution switches are forbidden.');
 process.env.HON_PUBLIC_ORIGIN='https://hon.example';
 // One pooled connection: every webhook below reuses the SAME backend session (connection-pool reuse).
@@ -36,7 +39,7 @@ const adapter=()=>new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database);
 const payments=new SaasPaymentsService(billing,database,adapter());
 const pool=database['getPool']();
-const admin=new pg.Client({connectionString:owner.toString(),ssl:false});
+const admin=new pg.Client(targets.owner);
 const offerTables=['saas_offer_sales_stops','saas_offer_set_offers','saas_offer_sets'];
 const saasTables=['saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
  'saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
@@ -109,6 +112,8 @@ const WEBHOOK_PATH=saasUtcCalendarFunctions.filter(f=>/^(saas_activate_hon_os_ch
 
 let deliveries=0,renewals=0;
 await admin.connect();
+await verifyChampionsProofConnection(admin,CHAMPIONS_OWNER_ROLE);
+await verifyChampionsProofConnection({query:(...a)=>database['getPool']().query(...a)},CHAMPIONS_RUNTIME_ROLE);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  assert.deepEqual(await pinned(),{ok:saasUtcCalendarFunctions.length,n:saasUtcCalendarFunctions.length},'every month-adding SaaS function is pinned (0201)');
