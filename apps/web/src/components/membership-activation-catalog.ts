@@ -5,6 +5,9 @@ import type {
 
 // English strings are stable lookup keys. Captions contain no stored participant, membership or request facts.
 const rows = [
+  ['Review membership dates and history', '회원권 날짜 및 이력 검토', 'Revisar fechas e historial de membresía'],
+  ['Date history requires a separate authorized read. This handoff carries selectors only and does not change dates.', '날짜 이력은 별도로 권한을 확인하여 조회해야 합니다. 이 단계는 선택값만 전달하며 날짜를 변경하지 않습니다.', 'El historial de fechas requiere una lectura autorizada por separado. Este paso solo transmite selectores y no cambia fechas.'],
+  ['Membership dates and history', '회원권 날짜 및 이력', 'Fechas e historial de membresía'],
   ['Session verification failed before dispatch. No activation request was sent.', '요청 전 세션을 확인하지 못했습니다. 회원권 활성화 요청은 전송하지 않았습니다.', 'Falló la verificación de sesión antes del envío. No se envió ninguna solicitud de activación.'],
   ['Current membership state could not be verified. No current activation or effective status is assumed.', '현재 회원권 상태를 확인하지 못했습니다. 현재 활성화 또는 유효 상태를 추정하지 않습니다.', 'No se pudo verificar el estado actual de la membresía. No se supone ninguna activación ni vigencia actual.'],
   ['Open-ended · no last day', '종료일 없음 · 무기한', 'Sin fecha final · duración indefinida'],
