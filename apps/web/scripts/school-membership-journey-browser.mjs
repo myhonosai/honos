@@ -3,21 +3,26 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 
-async function copyModule(name) {
+export async function loadMembershipBrowserCopy(name) {
   const requireWeb = createRequire(new URL('../package.json', import.meta.url));
   const ts = requireWeb('typescript');
   const source = await readFile(new URL(`../src/components/${name}.ts`, import.meta.url), 'utf8');
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
+  let compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
+  if (name === 'membership-dates-copy') {
+    const dependency = ts.transpileModule(await readFile(new URL('../src/components/membership-activation-catalog.ts', import.meta.url), 'utf8'), {compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
+    compiled = compiled.replace(/from\s+['"]\.\/membership-activation-catalog['"]/g, 'from '+JSON.stringify('data:text/javascript;base64,'+Buffer.from(dependency).toString('base64')));
+  }
   return import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 }
 
 /** Hooks are supplied by crm-adult-flow-browser.mjs; this helper creates no server and replaces no API response. */
-export async function runSchoolMembershipJourneyBrowserChecks({ activationFixture, familyFixture, reset, open, check, visual, origin, scope, id, report, setLanguage, restoreSession }) {
+export async function runSchoolMembershipJourneyBrowserChecks({ activationFixture, dateFixture, familyFixture, reset, open, check, visual, origin, scope, id, report, setLanguage, restoreSession }) {
   assert.equal(report.syntheticFixturesOnly, true);
   assert(['127.0.0.1', 'localhost'].includes(new URL(origin).hostname), 'Only the isolated localhost application may be exercised.');
   assert.equal(typeof setLanguage, 'function'); assert.equal(typeof restoreSession, 'function');
-  const { activationText: text, activationWarning: warning } = await copyModule('membership-activation-catalog');
-  const { membershipJourneyText: journeyText } = await copyModule('crm-membership-journey-copy');
+  const { activationText: text, activationWarning: warning } = await loadMembershipBrowserCopy('membership-activation-catalog');
+  const { dateText } = await loadMembershipBrowserCopy('membership-dates-copy');
+  const { membershipJourneyText: journeyText } = await loadMembershipBrowserCopy('crm-membership-journey-copy');
   const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
   const modes = [
     { value: 'modern', viewport: { width: 1440, height: 1000 } },
@@ -151,6 +156,32 @@ export async function runSchoolMembershipJourneyBrowserChecks({ activationFixtur
           assert.equal(await root(page).getByRole('link', { name: text(language, 'Class bookings'), exact: true }).getAttribute('href'), '/staff/schedule/bookings');
           assert.equal(await root(page).getByRole('link', { name: text(language, 'Attendance'), exact: true }).getAttribute('href'), '/staff/attendance');
           assert(!requests(start).some(r => r.method === 'POST' && [prefix + '/crm/leads/' + id(3) + '/register', prefix + '/billing/accounts', prefix + '/billing/crm-adult-membership-drafts'].includes(r.path)), 'Creator-current recovery must not register, create an account or create another DRAFT.');
+          dateFixture.bindActivation(activationFixture.recorded);
+          const oldReads = dateFixture.reads.length, oldCommands = activationFixture.commands.length;
+          await keyboardActivate(page, button(page, language, 'Review membership dates and history'));
+          const datesRoot = page.locator('[data-membership-dates]');
+          await datesRoot.getByRole('heading',{name:dateText(language,'Membership dates and history'),exact:true}).waitFor();
+          assert(await datesRoot.getByRole('heading',{name:dateText(language,'Membership dates and history'),exact:true}).evaluate(el=>el===document.activeElement),'Connected date navigation moves keyboard focus to its heading');
+          assert.equal(dateFixture.reads.length,oldReads,'Handoff must not read date facts automatically');
+          const select=datesRoot.getByRole('combobox',{name:dateText(language,'Presentation'),exact:true});await select.selectOption(mode);
+          assert.equal(dateFixture.reads.length,oldReads);assert.equal(await datesRoot.getByLabel(dateText(language,'Already-known membership ID'),{exact:true}).inputValue(),id(7));
+          assert.equal(await datesRoot.getByLabel(dateText(language,'Already-known membership ID'),{exact:true}).isEditable(),false);assert(!page.url().includes(id(7)));
+          await keyboardActivate(page,datesRoot.getByRole('button',{name:dateText(language,'Load membership dates'),exact:true}));
+          await datesRoot.getByRole('heading',{name:dateText(language,'Verified current membership'),exact:true}).waitFor();
+          assert((await datesRoot.innerText()).includes(dateText(language,'SCHEDULED')));assert.equal(dateFixture.commands.length,0);assert.equal(activationFixture.commands.length,oldCommands);
+          assert.equal(await datesRoot.getByRole('link',{name:dateText(language,'Class bookings'),exact:true}).getAttribute('href'),'/staff/schedule/bookings');
+          await capture(page,`membership-dates-${language}-${mode}-connected-history`);
+          await page.evaluate(()=>window.dispatchEvent(new Event('hon:session-invalidated')));
+          await datesRoot.getByRole('heading',{name:dateText(language,'Membership information hidden'),exact:true}).waitFor();
+          assert.equal(await datesRoot.locator('[data-dates-private]').count(),0);
+          const hiddenReads=dateFixture.reads.length;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));assert.equal(dateFixture.reads.length,hiddenReads);
+          await keyboardActivate(page,datesRoot.getByRole('button',{name:dateText(language,'Verify access and resume'),exact:true}));
+          await datesRoot.getByRole('heading',{name:dateText(language,'Verified current membership'),exact:true}).waitFor();
+          await capture(page,`membership-dates-${language}-${mode}-authorized-restoration`);
+          await keyboardActivate(page,datesRoot.getByRole('button',{name:dateText(language,'Return to activation review'),exact:true}));
+          await root(page).getByRole('heading',{name:text(language,'Review and confirm membership activation'),exact:true}).waitFor();
+          assert.equal(dateFixture.commands.length,0);assert.equal(activationFixture.commands.length,oldCommands);
+          assert.equal(await root(page).getByRole('heading',{name:text(language,'Current membership observation'),exact:true}).count(),0,'Returning mounts an idle activation view');
           evidence.push({ kind: 'adult-current', language, mode, activationCommands: 1, explicitRestoration: true, syntheticFixturesOnly: true });
         } finally { await context.close(); setLanguage('en'); }
       });
