@@ -1422,6 +1422,39 @@ try {
     await restore();
     await expectShown(h, `${label}: restored`);
   }
+  // (Manus delta review P2, entitlement time) Activation is judged at transaction start, exactly as the central rule
+  // (0130); expiry on the fresh clock. Deterministic: a blocker row-locks (FOR UPDATE) the entitlement row, the read
+  // begins its transaction and is seen WAITING on it (pg_locks), the activation or expiry instant passes, then the lock
+  // is released. Owner of both schools (school-derived authority) throughout.
+  const timeRace = async (label, setSql, waitMs, expectBudget) => {
+    await admin.query(setSql, [v.id]);
+    const blocker = await openTx();
+    try {
+      await blocker.query('SELECT 1 FROM hon.organization_entitlements WHERE organization_id=$1 FOR UPDATE', [v.id]);
+      const read = settle(budgetOf(owner));
+      assert.equal(await waitsOn(blocker), true, `${label}: the read must wait on the entitlement row`);
+      await sleep(waitMs);
+      await blocker.query('COMMIT');
+      const r = await read;
+      if (expectBudget) assert.deepEqual(r.value, { committedCredits: await committedNow(), ceilingCredits: 12000 }, `${label}: ${JSON.stringify(r.value ?? r.error?.message)}`);
+      else assert.equal(r.value, null, `${label}: ${JSON.stringify(r.value ?? r.error?.message)}`);
+      outcomes.push(`${label}: ${expectBudget ? 'shown' : 'hidden'}`);
+    } finally { await blocker.end().catch(() => {}); }
+  };
+  // Case A: the transaction began before activation; activation passes during the wait: still denied.
+  await timeRace('activation during the wait (transaction began before effective_from)',
+    "UPDATE hon.organization_entitlements SET status='ACTIVE',effective_from=clock_timestamp()+interval '1500 milliseconds',effective_until=NULL WHERE organization_id=$1", 2500, false);
+  // Case B: a read that starts after activation, with every other requirement met: shown.
+  await expectShown(owner, 'read started after activation');
+  // Case C: active at transaction start, expires during the wait: denied on the fresh clock.
+  await timeRace('expiry during the wait (active when the transaction began)',
+    "UPDATE hon.organization_entitlements SET status='ACTIVE',effective_from=clock_timestamp()-interval '1 day',effective_until=clock_timestamp()+interval '1500 milliseconds' WHERE organization_id=$1", 2500, false);
+  await restoreEntitlement(v);
+  // Control: no time boundary crossed during the same wait: shown (the wait itself never hides valid access).
+  await timeRace('no boundary crossed during the wait', "UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1", 300, true);
+  // Case E reconfirmed after the time races: one-school owner and staff stay hidden, full authority still shown.
+  await expectHidden(await human('staff-after-time'), 'school-only staff after the time races');
+  await expectShown(usageStaff, 'staff with ai.usage.read at every school after the time races');
   // Cross-organization isolation: authority over another organization's schools gives nothing here.
   const foreign = await makeOrg('inv-23v-foreign');
   assert.equal((await settle(tenant(context(v, { principalId: foreign.principal, externalSubject: foreign.subject }), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [foreign.subject])))).error?.code, '42501', 'another organization’s owner is refused');
