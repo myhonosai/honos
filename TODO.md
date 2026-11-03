@@ -1,3 +1,18 @@
+## 2026-11-02 — PR #104 dates/history integration after merged #117
+
+- Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
+- Connect a fresh authorized ACTIVE lifecycle observation to independently authorized current effective dates/history, two-step date changes, exact-request recovery, and existing bookings/attendance links. Historical receipts cannot establish current status, eligibility or payment. No automatic reads or consequential retries.
+- Complete EN/KO/ES date copy, three presentation modes, persistent accessible status, bound-stage keyboard focus, readonly handoff selectors, stale callback rejection and safe deliberate retry abandonment. Preserve merged #117 privacy/session invalidation and adult/family activation.
+- Executed local evidence: 81 focused safety/localization tests; 1,308 complete web tests in 148 files; web typecheck and production build; 184 unchanged checksum-locked migrations. Fresh final-head GitHub repository, signed-session API/disposable PostgreSQL, commercial, browser/screenshots and accessibility results remain pending publication; do not infer those results from local source checks.
+- Durable ACTIVE discovery after full reload is the next separate backend lookup dependency, already handed off to Claude on PR #104. Issue #121 remains separate. No backend, contract, migration, S4, billing, provider, entitlement or production changes.
+
+## Current full-product frontend delivery — Codex
+
+- Owner direction: preview-only PRs #101/#102 are paused; retain their work without merging preview scaffolding into production. Continue the actual application in small reviewed PRs, with Manus coordinating and Claude owning backend/S4/financial boundaries. Use Manus's [consolidated full-product backlog PR #103](https://github.com/myhonosai/honos/pull/103) for coordination; do not maintain a competing roadmap here.
+- Resume authorized membership-date issue #56 from preserved `fb767a874469bb82bf242d474f42fe3c8c09351b` on main `6ab871cd781935fc633dfec7685075b3d95432be`; retain all newer application and migration changes. Original checkpoint code is preserved, with current shared session invalidation/pagehide/school-context protection, final identity checks and narrow regression tests added.
+- Local verification: 51 focused date frontend tests, web typecheck and all 183 historical migration checksums pass. Full exact-head repository, signed-session API/disposable PostgreSQL, browser/accessibility and commercial evidence remain pending publication. No backend, migration, billing, provider, entitlement or parent-publication behavior changes.
+- #94/#95 corrected heads are independently source-reviewed; await current regular CI and owner merge authorization. #97 is AI-0 test-only evidence, not S4; its separately reported P2 connection-guard correction is required before source readiness. #90 retains its migration-ledger/policy gates. No merge, activation, paid call or deployment is authorized here.
+
 ## 2026-11-02 — Connected school membership integration (in review)
 
 - Existing CRM registration and creator-visible current adult/child DRAFTs now hand off to the existing independently authorized E1a two-step activation UI without manual IDs. No backend, contract, migration, billing or provider behavior is added.

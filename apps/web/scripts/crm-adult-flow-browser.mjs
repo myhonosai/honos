@@ -1,6 +1,8 @@
 /** Actual production Next application, real session gate, synthetic localhost API contracts. No database/provider access. */
 import assert from 'node:assert/strict';
 import { createActivationFixture, runActivationBrowserChecks } from './membership-activation-browser.mjs';
+import { createDateFixture, runDateBrowserChecks } from './membership-dates-browser.mjs';
+import { runLocalizedDateBrowserChecks } from './membership-dates-localized-browser.mjs';
 import { runSchoolMembershipJourneyBrowserChecks } from './school-membership-journey-browser.mjs';
 import { runCrmSessionPrivacyBrowserChecks } from './crm-session-privacy-browser.mjs';
 import { createCloseFixture, runCloseBrowserChecks } from './crm-close-browser.mjs';
@@ -38,6 +40,7 @@ let publishedPlans, mode, registered, accounted, drafted, keys, commands, recove
 let language = 'en';
 const closeFixture = createCloseFixture({id,scope,date,origin,send,rejected});
 const activationFixture = createActivationFixture({id,scope,origin,send,rejected});
+const dateFixture = createDateFixture({id,scope,origin,send,rejected});
 const familyFixture = createFamilyFixture({ id, scope, date, origin, send, rejected, plans: () => publishedPlans });
 function plainPlan(p) { const { programName, ...terms } = p; return terms; }
 function rejected(res, status, code) { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({code})); }
@@ -57,6 +60,7 @@ const api = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({data:{state:'RESOLVED',...scope}})); return;
     }
     if (actor !== 'crm-staff-synthetic' || !url.pathname.startsWith(prefix + '/')) { send(res, 403, { secret: 'private-canary' }); return; }
+    if (await dateFixture.handle(req,res,url)) return;
     if (await activationFixture.handle(req,res,url)) return;
     if (await closeFixture.handle(req,res,url)) return;
     if (req.method === 'GET' && url.pathname === `${prefix}/crm/leads`) { send(res, 200, [lead]); return; }
@@ -192,9 +196,11 @@ async function visual(page, name) {
 try {
   let started = false; for (let i = 0; i < 100; i++) { try { await fetch(origin); started = true; break; } catch {} await new Promise(done => setTimeout(done, 250)); } assert(started, log.slice(-1200));
   browser = await chromium.launch({ executablePath: process.env.HON_CRM_CHROME, headless: true });
+  await runDateBrowserChecks({fixture:dateFixture,open,visual,check,origin});
+  await runLocalizedDateBrowserChecks({fixture:dateFixture,open,visual,check,origin,setLanguage(value){language=value;},report});
   await runActivationBrowserChecks({fixture:activationFixture,open,visual,check,origin});
   await runCrmSessionPrivacyBrowserChecks({fixture:closeFixture,reset,open,visual,check});
-  await runSchoolMembershipJourneyBrowserChecks({ activationFixture, familyFixture, reset, open, visual, check, origin, scope, id, report,
+  await runSchoolMembershipJourneyBrowserChecks({ activationFixture, dateFixture, familyFixture, reset, open, visual, check, origin, scope, id, report,
     setLanguage(value) { assert(['en','ko','es'].includes(value)); language = value; },
     restoreSession: context => context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject:'crm-staff-synthetic' }, session), url: origin, httpOnly:true, sameSite:'Lax' }]),
   });
