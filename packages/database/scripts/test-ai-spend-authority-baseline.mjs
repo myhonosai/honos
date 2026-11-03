@@ -678,6 +678,68 @@ try {
   pass('INV-18R', `S4-c: HQ pause authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; no refused pause row`);
   }
 
+  // ---- INV-18K (S4-c, Manus final review P2): one immutable identity per pause/resume command key ----
+  // PAUSE and RESUME share one key space bound to action, scope, spend class, reason and actor. Any other command
+  // presented with a claimed key is refused (sequentially and concurrently); an exact replay returns the receipt.
+  {
+  const pauseSql = 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r';
+  const [ka, kb, kc] = [await makeOrg('inv-18k-a'), await makeOrg('inv-18k-b'), await makeOrg('inv-18k-c')];
+  const active = async (o) => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1 AND ended_at IS NULL', [o.id])).n;
+  const reused = (r, label) => assert.equal(r.error?.message, 'AI_SPEND_PAUSE_KEY_REUSED', `${label}: ${JSON.stringify(r.value?.rows[0]?.r ?? r.error?.message)}`);
+  const checks = [];
+  // Sequential: a PAUSE key presented as a RESUME (same scope) is refused and the pause stays active.
+  const k1 = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k1)).value?.rows[0].r.status, 'ACTIVE');
+  reused(await pauseCmd(hq.subject, pIn('RESUME', ka.id), k1), 'PAUSE key reused for RESUME');
+  assert.equal(await active(ka), 1, 'the pause is still active');
+  // Same key, other scope or other class: refused, nothing written.
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', kb.id), k1), 'PAUSE key reused for another organization');
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', ka.id, 'CREATIVE_MEDIA'), k1), 'PAUSE key reused for another class');
+  assert.equal(await active(kb), 0);
+  // A RESUME key presented as a PAUSE is refused (no new pause is created).
+  const k2 = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', ka.id), k2)).value?.rows[0].r.status, 'ENDED');
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k2), 'RESUME key reused for PAUSE');
+  assert.equal(await active(ka), 0, 'no pause was created from a RESUME key');
+  checks.push('PAUSE<->RESUME, other scope and other class reuse refused');
+  // Exact replays return the original receipt, even after the state moved on.
+  const r1 = (await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k1)).value?.rows[0].r;
+  assert.deepEqual([r1?.replayed, r1?.status], [true, 'ENDED'], 'PAUSE replay after the resume');
+  const r2 = (await pauseCmd(hq.subject, pIn('RESUME', ka.id), k2)).value?.rows[0].r;
+  assert.deepEqual([r2?.replayed, r2?.status], [true, 'ENDED'], 'RESUME replay');
+  checks.push('exact replays return the original receipt');
+  // Another HQ owner replaying the same input with the key is a different command; a revoked owner cannot replay.
+  const h2 = await makeHqOwner('inv-18k-other');
+  reused(await pauseCmd(h2.subject, pIn('PAUSE', ka.id), k1), 'another actor replaying the key');
+  const h3 = await makeHqOwner('inv-18k-revoked');
+  const k3 = K();
+  assert.equal((await pauseCmd(h3.subject, pIn('PAUSE', kb.id), k3)).value?.rows[0].r.status, 'ACTIVE');
+  await admin.query('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h3.id]);
+  assert.equal((await pauseCmd(h3.subject, pIn('PAUSE', kb.id), k3)).error?.code, '42501', 'a revoked owner cannot replay');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', kb.id), K())).value?.rows[0].r.status, 'ENDED');
+  checks.push('other actor refused, revoked owner cannot replay');
+  // Concurrent: two incompatible commands with one key (a PAUSE for one organization and a RESUME for another) both
+  // wait on the key lock (pg_locks); on release exactly one is applied and the other is refused.
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', kc.id), K())).value?.rows[0].r.status, 'ACTIVE');
+  const k4 = K();
+  const holder = await openTx();
+  await holder.query("SELECT pg_advisory_xact_lock(hashtextextended('ai.pause.key:' || $1::text, 0))", [k4]);
+  const c1 = await startBlocked(pauseSql, [hq.subject, JSON.stringify(pIn('PAUSE', kb.id)), k4], 'advisory');
+  const c2 = await startBlocked(pauseSql, [hq.subject, JSON.stringify(pIn('RESUME', kc.id)), k4], 'advisory');
+  await holder.query('COMMIT'); await holder.end();
+  const both = [await c1.result, await c2.result];
+  assert.equal(both.filter((r) => r.value).length, 1, `exactly one applied: ${JSON.stringify(both.map((r) => r.value?.rows[0].r ?? r.error?.message))}`);
+  reused(both.find((r) => r.error), 'the concurrent loser');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_spend_pause_commands WHERE command_key=$1', [k4])).n, 1);
+  // PAUSE won: kb paused, kc still paused. RESUME won: kb not paused, kc resumed.
+  const pauseWon = both[0].value !== undefined;
+  assert.deepEqual([await active(kb), await active(kc)], pauseWon ? [1, 1] : [0, 0], 'only the winning command changed state');
+  for (const o of [kb, kc]) if (await active(o)) await pauseCmd(hq.subject, pIn('RESUME', o.id), K());
+  checks.push('concurrent incompatible reuse: one applied, one refused');
+  assert.equal((await settle(admin.query('UPDATE hon.ai_spend_pause_commands SET reason=$1', ['Tampered synthetic command reason']))).error?.code, '55000', 'command identities are immutable');
+  pass('INV-18K', `S4-c: one immutable command-key identity for pause/resume (action, scope, class, reason, actor): ${checks.join('; ')}`);
+  }
+
   // ---- KNOWN FAILURE KF-AI8: UNKNOWN holds never release and are not month-scoped ----
   const k3 = await makeOrg('kf-ai8');
   fakes.marcus.mode = 'UNKNOWN';
