@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "61468b0489263cc85307b66fce219bda1277b481b34e483504d96a46790ff652",
+  "chainSha256": "802f7af1dec8041e84259c75f22c1fb19b8e36f768fc4306f8e9ef856eb92d5e",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -81,6 +81,10 @@
     {
       "file": "0200_crm_lead_membership_discovery.sql",
       "sha256": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c"
+    },
+    {
+      "file": "0201_saas_billing_utc_calendar_periods.sql",
+      "sha256": "ea21b3ea4b4096026da07cd4a547dc0c5c3863b1c7780dd449a375ac66fedd3b"
     },
     {
       "file": "0202_hon_os_creative_credit_wallet.sql",

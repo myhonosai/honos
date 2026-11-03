@@ -317,6 +317,22 @@ export const saasBillingFunctions = [
  ['hon.saas_fulfill_creative_topup(uuid,jsonb,timestamp with time zone)',false,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
+// Issue #100 (0201): functions that add calendar months to timestamptz run with TimeZone=UTC so billing
+// periods never depend on the caller's session, role, database or pooler TimeZone.
+export const saasUtcCalendarFunctions = Object.freeze([
+  'command_saas_subscription(text,uuid,jsonb,uuid,uuid,uuid)',
+  'create_saas_invoice_draft(text,jsonb,uuid,uuid,uuid)',
+  'saas_provider_invoice(hon.saas_subscriptions,integer,integer,timestamp with time zone,text,jsonb,timestamp with time zone)',
+  'saas_apply_renewal(jsonb,timestamp with time zone)',
+  'saas_activate_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',
+  'saas_activate_hon_os_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',
+]);
+// Reviewed: these add months only to UTC wall-clock `timestamp` values (explicit AT TIME ZONE 'UTC'),
+// which is already independent of the session TimeZone.
+export const saasUtcExplicitCalendarFunctions = Object.freeze([
+  'saas_allowance_period(hon.saas_subscriptions,timestamp with time zone)',
+  'read_saas_organization_credits_from_hq(text,uuid)',
+]);
 const crossTriggers = [
  ['saas_subscription_generations','saas_generation_authority',7,'guard_saas_generation_insert'],
  ['saas_subscription_generations','saas_generation_evidence',5,'verify_saas_generation_evidence'],
@@ -385,13 +401,21 @@ export async function verifySaasBillingSecurity(client, runtime) {
  const total=(await client.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname ~ 'saas'")).rows[0].n;
  if (total!==saasBillingFunctions.length) throw new Error(`Untracked HON subscription functions: ${total}`);
  for (const [signature,execute,definer] of saasBillingFunctions) {
-  const r=(await client.query(`SELECT p.prosecdef=$3 AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>$2
+  const r=(await client.query(`SELECT p.prosecdef=$3 AND p.proconfig=CASE WHEN p.oid=ANY(SELECT ('hon.'||f)::regprocedure FROM unnest($5::text[]) f)
+     THEN ARRAY['search_path=pg_catalog, hon','TimeZone=UTC'] ELSE ARRAY['search_path=pg_catalog, hon'] END::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>$2
    AND has_function_privilege($2,p.oid,'EXECUTE')=$4
    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname=$2) OR NOT $4 OR a.is_grantable OR a.privilege_type<>'EXECUTE')) safe
-   FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=$1::regprocedure`,[signature,runtime,definer,execute])).rows[0];
+   FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=$1::regprocedure`,[signature,runtime,definer,execute,saasUtcCalendarFunctions])).rows[0];
   if (r?.safe!==true) throw new Error(`Unsafe HON subscription function ${signature}`);
   for (const role of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
    if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role.rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client HON subscription function ${role.rolname}`);
   }
  }
+ // Any SaaS function that adds calendar months to a timestamptz must be pinned to UTC (or reviewed as
+ // UTC-explicit). A CREATE OR REPLACE that drops the 0201 setting, or a new unpinned function, fails here.
+ const unpinned=(await client.query(`SELECT p.oid::regprocedure::text f FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname ~ 'saas'
+   AND p.prosrc ~* '(make_interval\\s*\\(\\s*months|interval\\s*''[0-9 ]*(month|year)s?'')'
+   AND NOT coalesce('TimeZone=UTC'=ANY(p.proconfig),false)
+   AND p.oid<>ALL(SELECT ('hon.'||f)::regprocedure FROM unnest($1::text[]) f) ORDER BY 1`,[saasUtcExplicitCalendarFunctions])).rows.map(r=>r.f);
+ if (unpinned.length) throw new Error(`SaaS calendar arithmetic not pinned to UTC: ${unpinned.join(', ')}`);
 }
