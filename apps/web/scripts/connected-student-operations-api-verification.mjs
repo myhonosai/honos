@@ -55,6 +55,15 @@ try{
  const protectedTables=(await q("SELECT relname FROM pg_class WHERE relnamespace='hon'::regnamespace AND relkind='r' AND relname ~ '^(saas_|payment|invoice|refund|membership|organization_entitlement|document_ack|agreement|consent|communication_|action_|ai_|school_payment|stripe|provider)' ORDER BY relname")).rows.map(r=>r.relname);
  const snapshot=async tables=>{const s={};for(const table of tables){assert.match(table,/^[a-z_]+$/);s[table]=(await q(`SELECT md5(coalesce(string_agg(t::text,'|' ORDER BY t::text),'')) h FROM hon.${table} t`)).rows[0].h;}return s;};
  const protectedBefore=await snapshot(protectedTables);
+ // Existing 0147 fixture boundary: canonical 010 reconciliation removes this named function grant.
+ // Prove the inherited denial first; do not claim the unmodified production reconciliation works.
+ const sessionReadGranted=(await q("SELECT has_function_privilege($1,'hon.read_current_school_class_sessions(text)','EXECUTE') allowed",[flexibleBillingAccountsFixture.runtime])).rows[0].allowed;
+ if(!sessionReadGranted){
+  await assert.rejects(sessions.loadCurrentSchoolClassSessions(a.org,a.school),denied(403));
+  assert.match(flexibleBillingAccountsFixture.runtime,/^hon_[a-z_]+_runtime$/);
+  await q(`GRANT EXECUTE ON FUNCTION hon.read_current_school_class_sessions(text) TO "${flexibleBillingAccountsFixture.runtime}"`);
+  groups.push('inherited canonical ACL gap proved; disposable-only 0147 named-function fixture grant restored, no table access');
+ }
  const list=await sessions.loadCurrentSchoolClassSessions(a.org,a.school);assert.equal(list.length,2);assert(list.every(s=>a.sessions.includes(s.sessionId)));groups.push('signed-session bounded session read with real school resolver');
  const exact=booking.prepareClassBooking({...scope(a.students[0]),sessionId:a.sessions[0]},'REGULAR',randomUUID());lose=true;await assert.rejects(booking.submitClassBooking(exact),e=>e instanceof booking.ClassBookingUncertainError);const recovered=await booking.submitClassBooking(exact);assert.equal(recovered.replayed,true);assert.equal((await q('SELECT count(*)::int n FROM hon.class_bookings WHERE class_session_id=$1 AND student_profile_id=$2',[a.sessions[0],a.students[0]])).rows[0].n,1);groups.push('actual commit + lost response + exact-key replay without duplicate booking');
  const duplicate=await booking.submitClassBooking(booking.prepareClassBooking({...scope(a.students[0]),sessionId:a.sessions[0]},'REGULAR',randomUUID()));assert.equal(duplicate.booking.id,recovered.booking.id);groups.push('canonical semantic duplicate prevention');
