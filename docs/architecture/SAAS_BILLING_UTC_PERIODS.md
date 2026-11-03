@@ -53,22 +53,18 @@ A billing period is the **original anchor plus whole UTC calendar months** (12 f
 5. Six B2 invoice drafts (periods 0, 1, 12, 13, 24, 25) in different zones: service periods and the printed description dates are UTC-correct.
 6. Exact request/audit/outbox evidence, nothing billed, no payment evidence or credit allowance, no rows outside the fixture organizations.
 
-The webhook-only functions (`saas_provider_invoice`, `saas_apply_renewal`, both activation cores) are covered by the pin, the verifier and the existing B5/0182/0183/0184 proofs; they have no dedicated month-end webhook scenario in this proof.
+**Webhook path (review follow-up).** `packages/database/scripts/test-saas-billing-utc-webhook-periods.mjs` (`pnpm --filter @hon/database db:test-saas-billing-utc-webhook-periods`). It sends signed TEST MODE Stripe webhooks through `SaasPaymentsService.handleWebhook` → ingestion → `saas_activate_hon_os_checkout_core` / `saas_apply_renewal` → `saas_provider_invoice`. The deliveries are the real production path; the provider is the deterministic simulator.
+
+- **Subscriptions:** monthly and annual auto-renewing HON OS subscriptions.
+- **Anchors:**
+  - month ends (`2024-01-31T23:59:59Z`, `2025-08-31T23:30Z`);
+  - a leap day (`2024-02-29T12:00Z`, annual: renews on 28 February);
+  - DST-change days (`2025-03-09T07:30Z`, `2025-10-26T00:30Z`, and annual `2024-10-31T04:30Z`).
+- **Sessions:** every activation and renewal up to today runs on **one reused pooled backend**, left in a different zone (UTC included) by the previous borrower. One activation runs on a fresh pool under a non-UTC **database default**.
+- **What must match:** subscription periods, immutable history and provider-paid invoices must equal UTC month arithmetic. A duplicate delivery changes nothing.
+- **Pre-0201 reproduction on this path:** with the three webhook functions unpinned (disposable DB only), a New York session stores `2026-03-01T02:00Z` instead of `2026-02-28T02:00Z`, then `2026-03-01T02:00Z`–`2026-03-31T01:00Z` on renewal. The security verifier refuses the unpinned functions.
+- **Operator checks:** the read-only checks find exactly those drifted rows (current period, both history rows, both invoices) and change nothing. After re-pinning, the next renewal is UTC from the original anchor, and the drifted history stays as recorded.
 
 ## Existing data and deployment
 
-Rows written by a non-UTC session before 0201 keep their stored values (0201 never rewrites history). The next `ADVANCE_PERIOD` or renewal recomputes from the original anchor in UTC. Before deploying, an operator should run this **read-only** query against production and review any rows it returns with the owner before the next period advance (the proof runs the same query):
-
-```sql
-SELECT s.id, s.organization_id, s.billing_interval, s.period_index, s.current_period_start, s.current_period_end,
-  ((s.period_anchor_at AT TIME ZONE 'UTC') + make_interval(months => s.period_index * m.n)) AT TIME ZONE 'UTC' AS utc_period_start,
-  ((s.period_anchor_at AT TIME ZONE 'UTC') + make_interval(months => (s.period_index + 1) * m.n)) AT TIME ZONE 'UTC' AS utc_period_end
-FROM hon.saas_subscriptions s
-CROSS JOIN LATERAL (SELECT CASE s.billing_interval WHEN 'ANNUAL' THEN 12 ELSE 1 END n) m
-WHERE s.billing_interval IN ('MONTHLY','ANNUAL') AND s.period_index IS NOT NULL AND s.period_anchor_at IS NOT NULL
-  AND (s.current_period_start, s.current_period_end) IS DISTINCT FROM
-    (((s.period_anchor_at AT TIME ZONE 'UTC') + make_interval(months => s.period_index * m.n)) AT TIME ZONE 'UTC',
-     ((s.period_anchor_at AT TIME ZONE 'UTC') + make_interval(months => (s.period_index + 1) * m.n)) AT TIME ZONE 'UTC');
-```
-
-Also record `SHOW TimeZone` for the runtime role and the database default as deployment evidence. Pinning the pool or role to UTC is optional defense in depth and not required by this change.
+Rows written by a non-UTC session before 0201 keep their stored values (0201 never rewrites history and nothing is corrected automatically). The next `ADVANCE_PERIOD` or renewal recomputes from the original anchor in UTC. Before deploying, an operator runs the **read-only** checks in [SAAS_BILLING_UTC_PERIODS_OPERATOR_CHECK.md](SAAS_BILLING_UTC_PERIODS_OPERATOR_CHECK.md) (current subscription periods, immutable history, subscription-period invoices; the proofs execute the same text from `packages/database/scripts/saas-billing-utc-operator-check.mjs`) and sends any rows found to the owner for a decision. Pinning the pool or role to UTC is optional defense in depth and not required by this change.

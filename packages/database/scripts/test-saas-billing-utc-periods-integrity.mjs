@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import { addUtcMonthsClamped, verifyUtcMonthFixtures } from './commercial-staging-month-fixtures.mjs';
 import { saasUtcCalendarFunctions, verifySaasBillingSecurity } from './saas-billing-security.mjs';
+import { DIVERGENT_PERIODS_SQL } from './saas-billing-utc-operator-check.mjs';
 // Issue #100 / migration 0201: HON SaaS billing periods are UTC calendar months from the ORIGINAL anchor,
 // whatever TimeZone the calling session, database default or reused pooled connection carries.
 // Runs on the disposable Champions Club fixture through the real API services (RuntimeDatabaseService +
@@ -26,17 +27,7 @@ const saasTables=['saas_provider_payment_refs','saas_provider_events','saas_chec
 const K=()=>randomUUID(),iso=d=>new Date(d).toISOString(),NOW=Date.now(),HOUR=3600_000,DAY=24*HOUR;
 // Zones with DST in both hemispheres, half-hour/large offsets and both date-line extremes.
 const ZONES=['UTC','America/New_York','Pacific/Kiritimati','Australia/Sydney','America/Los_Angeles','Asia/Kolkata','Pacific/Pago_Pago','Europe/London','America/St_Johns','Australia/Lord_Howe','Pacific/Chatham'];
-// The exact read-only check an operator runs before/after deploying 0201: stored periods that differ from the
-// UTC recomputation (made by a non-UTC session before 0201). Kept here so the proof exercises the same query.
-export const DIVERGENT_PERIODS_SQL=`SELECT s.id,s.organization_id,s.billing_interval,s.period_index,s.current_period_start,s.current_period_end,
-  ((s.period_anchor_at AT TIME ZONE 'UTC')+make_interval(months=>s.period_index*m.n)) AT TIME ZONE 'UTC' AS utc_period_start,
-  ((s.period_anchor_at AT TIME ZONE 'UTC')+make_interval(months=>(s.period_index+1)*m.n)) AT TIME ZONE 'UTC' AS utc_period_end
- FROM hon.saas_subscriptions s CROSS JOIN LATERAL (SELECT CASE s.billing_interval WHEN 'ANNUAL' THEN 12 ELSE 1 END n) m
- WHERE s.billing_interval IN ('MONTHLY','ANNUAL') AND s.period_index IS NOT NULL AND s.period_anchor_at IS NOT NULL
-  AND (s.current_period_start,s.current_period_end) IS DISTINCT FROM
-   (((s.period_anchor_at AT TIME ZONE 'UTC')+make_interval(months=>s.period_index*m.n)) AT TIME ZONE 'UTC',
-    ((s.period_anchor_at AT TIME ZONE 'UTC')+make_interval(months=>(s.period_index+1)*m.n)) AT TIME ZONE 'UTC')
- ORDER BY s.id`;
+// The exact read-only check an operator runs before deploying 0201 (shared module, so the tested text is the documented text).
 const http=(n,code)=>e=>{assert.equal(e.getStatus?.(),n,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;};
 const deny=(p,n,code)=>assert.rejects(p,http(n,code));
 const O=Object.fromEntries([1,2,3,4,5,6,7].map(n=>[n,{id:randomUUID()}]));
