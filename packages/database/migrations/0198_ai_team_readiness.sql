@@ -71,12 +71,15 @@ BEGIN
   END IF;
   -- School-derived authority additionally needs the organization's access to be live (fail closed):
   --  * the entitlement in effect by the central rule of hon.read_current_organization_entitlement() (0130): status
-  --    ACTIVE inside its effective window. A suspended, expired or missing entitlement hides the totals;
+  --    ACTIVE, activation judged at transaction start (effective_from <= current_timestamp, exactly as 0130, so a
+  --    transaction that began before activation stays denied even after a lock wait), and expiry judged on the fresh
+  --    clock (effective_until > clock_timestamp(), at least as strict as 0130's statement_timestamp(), so an
+  --    entitlement that expires during a lock wait is denied). A suspended, expired or missing entitlement hides the totals;
   --  * when the paid-access program has an access state for the organization, a state with access: paid, scheduled
   --    cancellation, an active trial, or the authorized grace period (owner policy 2026-11-02: normal access in grace).
   --    Any other or unknown state (awaiting first payment, suspended, review hold, ended) hides the totals.
   IF NOT EXISTS (SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id = p_org AND e.status = 'ACTIVE'
-        AND e.effective_from <= clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until > clock_timestamp()))
+        AND e.effective_from <= current_timestamp AND (e.effective_until IS NULL OR e.effective_until > clock_timestamp()))
      OR EXISTS (SELECT 1 FROM hon.saas_access_states s WHERE s.organization_id = p_org
         AND s.state NOT IN ('PAYMENT_ACTIVE','CANCELLATION_SCHEDULED','TRIAL_ACTIVE','PAST_DUE_GRACE')) THEN
     RETURN false;
