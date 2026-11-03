@@ -26,7 +26,8 @@ const button = (key: Parameters<typeof t>[1]) => all(render()).find(e => e.type 
 const click = (key: Parameters<typeof t>[1]) => button(key).props.onClick();
 const field = (key: Parameters<typeof t>[1]) => all(render()).filter(e => e.type === 'label').find(e => text(e).startsWith(t(h.language,key)))!;
 const change = (key: Parameters<typeof t>[1], value: string | boolean) => all(field(key)).find(e => ['input','select','textarea'].includes(e.type as string))!.props.onChange({ target: { value, checked: value } });
-const flush = async () => { for (let i=0;i<160;i++) await Promise.resolve(); render(); };
+const settle = async () => { for (let i=0;i<160;i++) await Promise.resolve(); };
+const flush = async () => { await settle(); render(); };
 const unmount = () => h.values.forEach(v => v?.cleanup?.());
 let posts: RequestInit[], getAttendance: unknown;
 let bookingSend: () => Promise<Response>, attendanceSend: () => Promise<Response>;
@@ -66,5 +67,46 @@ it('school switching prevents old context restoration; no automatically repeated
 it('revoked student access denies the command before the POST',async()=>{await prepareBooking();vi.mocked(props.verifyStudent).mockRejectedValue({status:403});click('book');await flush();expect(posts).toHaveLength(0);expect(text(render())).not.toContain(id(4));});
 it('uncertain attendance retains its exact version/body/key and never saves a replacement automatically',async()=>{await choose();click('readAttendance');await flush();change('attendanceConfirm',true);attendanceSend=async()=>{throw Error('lost');};click('save');await flush();expect(posts).toHaveLength(1);expect(button('save').props.disabled).toBe(false);expect(all(render()).find(e=>e.type==='fieldset'&&all(e).some(n=>n.type==='textarea'))!.props.disabled).toBe(true);attendanceSend=async()=>envelope(attendance,200,true,true);click('retry');await flush();expect(posts).toHaveLength(2);expect(posts[0]).toMatchObject({body:posts[1]!.body,headers:posts[1]!.headers});expect(text(render())).toContain(t('en','saved'));});
 it('attendance conflict requires a fresh record read before another confirmed change',async()=>{await choose();click('readAttendance');await flush();change('attendanceConfirm',true);attendanceSend=async()=>new Response('',{status:409});click('save');await flush();expect(text(render())).toContain(t('en','CONFLICT'));expect(all(render()).find(e=>e.type==='fieldset'&&all(e).some(n=>n.type==='textarea'))!.props.disabled).toBe(true);expect(posts).toHaveLength(1);});
+it.each(['SUCCESS','CONFLICT'])('retained attendance submit after %s cannot allocate another key or command, even before React renders settlement',async outcome=>{
+  getAttendance=attendance;await choose();click('readAttendance');await flush();change('attendanceConfirm',true);
+  if(outcome==='CONFLICT')attendanceSend=async()=>new Response('',{status:409});
+  const old=button('save').props.onClick,uuid=vi.spyOn(crypto,'randomUUID');old();await settle();
+  expect(posts).toHaveLength(1);old();await settle();expect(posts).toHaveLength(1);expect(uuid).toHaveBeenCalledOnce();
+});
+it.each(['SUCCESS','CONFLICT'])('after %s only a fresh attendance read and deliberate confirmation permits a new version-bound command',async outcome=>{
+  getAttendance=attendance;await choose();click('readAttendance');await flush();change('attendanceConfirm',true);
+  if(outcome==='CONFLICT')attendanceSend=async()=>new Response('',{status:409});
+  const old=button('save').props.onClick;old();await flush();const uuid=vi.spyOn(crypto,'randomUUID');
+  getAttendance={...attendance,version:2};click('readAttendance');await flush();old();await flush();expect(uuid).not.toHaveBeenCalled();expect(posts).toHaveLength(1);
+  const freshUnconfirmed=button('save').props.onClick;freshUnconfirmed();await flush();expect(uuid).not.toHaveBeenCalled();
+  change('status','LATE');change('attendanceConfirm',true);attendanceSend=async()=>envelope({...attendance,status:'LATE',version:3},201,true);click('save');await flush();
+  expect(posts).toHaveLength(2);expect(uuid).toHaveBeenCalledOnce();expect(JSON.parse(posts[1]!.body as string)).toMatchObject({expectedVersion:2,status:'LATE'});
+});
+it('attendance read replacement invalidates a callback captured during that read before any render of the replacement',async()=>{
+  getAttendance=attendance;await choose();click('readAttendance');await flush();change('attendanceConfirm',true);
+  let finish!:(v:Response)=>void;vi.mocked(fetch).mockImplementationOnce(()=>new Promise(r=>finish=r));click('readAttendance');await settle();
+  const duringRead=button('save').props.onClick,uuid=vi.spyOn(crypto,'randomUUID');finish(envelope({...attendance,version:2}));await settle();duringRead();await settle();
+  expect(posts).toHaveLength(0);expect(uuid).not.toHaveBeenCalled();
+});
+it('UNKNOWN attendance exposes only the original exact retry; retained submits cannot replace it before or after deliberate abandonment',async()=>{
+  getAttendance=attendance;await choose();click('readAttendance');await flush();change('attendanceConfirm',true);
+  const old=button('save').props.onClick,uuid=vi.spyOn(crypto,'randomUUID');attendanceSend=async()=>{throw Error('lost');};old();await flush();
+  old();const whileUnknown=button('save').props.onClick;whileUnknown();await flush();expect(posts).toHaveLength(1);expect(uuid).toHaveBeenCalledOnce();
+  change('abandonConfirm',true);click('abandon');whileUnknown();old();await settle();expect(posts).toHaveLength(1);expect(uuid).toHaveBeenCalledOnce();
+});
+it('UNKNOWN attendance retry preserves the original URL, body, expectedVersion and key without allocating a replacement',async()=>{
+  getAttendance=attendance;await choose();click('readAttendance');await flush();change('attendanceConfirm',true);
+  const old=button('save').props.onClick,uuid=vi.spyOn(crypto,'randomUUID');attendanceSend=async()=>{throw Error('lost');};old();await flush();old();await flush();
+  const original=vi.mocked(fetch).mock.calls.filter(([,init])=>init?.method==='POST')[0]!;
+  attendanceSend=async()=>envelope({...attendance,version:2},200,true,true);click('retry');click('retry');await flush();old();await settle();
+  const attempts=vi.mocked(fetch).mock.calls.filter(([,init])=>init?.method==='POST');expect(attempts).toHaveLength(2);expect(attempts[1]).toEqual(original);expect(JSON.parse(attempts[1]![1]!.body as string).expectedVersion).toBe(1);expect(uuid).toHaveBeenCalledOnce();
+});
+it.each(['hon:school-context-changed','hon:session-invalidated','blur'])('%s plus a late attendance read cannot resurrect retained submission after restoration',async event=>{
+  getAttendance=attendance;await choose();click('readAttendance');await flush();change('attendanceConfirm',true);const old=button('save').props.onClick;
+  let finish!:(v:Response)=>void;vi.mocked(fetch).mockImplementationOnce(()=>new Promise(r=>finish=r));click('readAttendance');await settle();const duringRead=button('save').props.onClick;
+  window.dispatchEvent(new Event(event));finish(envelope({...attendance,version:2}));await flush();const uuid=vi.spyOn(crypto,'randomUUID');old();duringRead();await flush();
+  expect(text(render())).not.toContain(selection.studentProfileId);expect(posts).toHaveLength(0);expect(uuid).not.toHaveBeenCalled();
+  click('verify');await flush();old();duringRead();await flush();expect(posts).toHaveLength(0);expect(uuid).not.toHaveBeenCalled();
+});
 it('unmounted handlers perform no new requests',async()=>{await prepareBooking();const old=button('book').props.onClick;unmount();const reads=vi.mocked(fetch).mock.calls.length;old();await flush();expect(posts).toHaveLength(0);expect(fetch).toHaveBeenCalledTimes(reads);});
 it.each(['en','ko','es'])('%s keeps persistent live status and localized operational controls',language=>{h.language=language;const tree=render();expect(text(tree)).toContain(t(language,'title'));expect(all(tree).some(e=>e.props.role==='status'&&e.props['aria-live']==='polite')).toBe(true);});

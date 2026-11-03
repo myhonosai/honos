@@ -20,6 +20,12 @@ An in-flight command has a separate instance/request owner. Blur cannot prevent 
 
 A mounted-lifetime session set prevents replacement bookings after a successful or uncertain attempt, including class switching and deliberate abandonment. This is not cross-session booking discovery. Destruction of the component/document loses exact retries; beforeunload warns while a command/retry exists. Return to membership recovery clears its old observation and requires an explicit fresh read. There is no school-wide roster or student booking-history API in this feature.
 
+### PR #127 retained attendance callback correction
+
+The synchronous form revision is retired on command settlement **before clearing the active command lock**, on replacement/failed read evidence, and before deliberate retry abandonment. A callback captured against an earlier confirmation or attendance version therefore cannot allocate a new key or prepare a replacement command even if React has not rendered the new reread requirement. This does not change the frozen UNKNOWN request: only the explicit retry path may reuse its original URL/body/key, after current authorization. A new command requires a fresh attendance read and deliberate confirmation.
+
+Ten component regression cases retain actual submit closures, settle promises without rendering, verify no replacement POST/key after SUCCESS or CONFLICT, cover replacement reads, UNKNOWN/retry/abandonment, and reject late reads through school/session/focus changes. Against the reviewed source, five of these cases failed (including both reported settlement cases); all pass after the correction. Mounted production React/browser cases also retain the real button handler after SUCCESS/CONFLICT and exercise a legitimate next version and UNKNOWN privacy restoration. Browser responses remain synthetic; the separate existing signed-session/disposable-PostgreSQL proof remains the real persistence evidence. No backend API, runtime grant or migration changes are part of the correction.
+
 ## Verification and dependencies
 
 - Interaction and actual-transport regressions: idle selection, adult/child binding, stale callbacks, duplicate clicks, exact retries, 401/403 distinction, hidden/late results, school changes, settlement behind the shield, attendance versioning and EN/KO/ES.

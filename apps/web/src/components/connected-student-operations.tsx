@@ -76,6 +76,8 @@ function StudentOperations({ selection, sessionSubject, verifyStudent, onReturn,
       const fresh = attendanceOnly && current ? await readStudentAttendance(attendanceSelection(selection, current.sessionId), ctrl.signal) : undefined;
       await verifyEnrollmentSession(owner.current, ctrl.signal);
       if (!mounted.current || run !== epoch.current || ctrl.signal.aborted || document.visibilityState !== 'visible') return;
+      // Replacing read evidence also retires callbacks rendered while that read was pending.
+      revision.current++;
       if (attendanceOnly) { setRecord(fresh); setMustRead(false); setAttendanceConfirmed(false); if (fresh) { setStatus(fresh.status); setCategory(fresh.category); setNote(fresh.note ?? ''); } }
       else {
         setSessions(list); const restored = list?.find(s => s.sessionId === current?.sessionId) ?? null;
@@ -84,6 +86,7 @@ function StudentOperations({ selection, sessionSubject, verifyStudent, onReturn,
       concealed.current = false; setHidden(false);
     } catch (e) {
       if (mounted.current && run === epoch.current) {
+        revision.current++;
         const key = errorKey(e); if (key === 'SESSION' || key === 'DENIED') conceal(key);
         else { if (attendanceOnly) { setRecord(undefined); setMustRead(true); } else { setSessions(null); setSelected(null); } setFailure(key); }
       }
@@ -117,6 +120,8 @@ function StudentOperations({ selection, sessionSubject, verifyStudent, onReturn,
     } finally {
       // Command settlement belongs to the instance/request, not the read epoch invalidated by blur.
       if (mounted.current && lifetime.current === life && command.current === request) {
+        // Retire confirmed submit closures before releasing the lock, even before React renders.
+        revision.current++;
         if (!sent && !retry) { retained.current = null; setPending(null); }
         command.current = null; setBusy(false);
       }
@@ -156,6 +161,6 @@ function StudentOperations({ selection, sessionSubject, verifyStudent, onReturn,
       </section></>}
     </>}</div>
     {failure && <p role="alert" className={styles.error}>{t(failure)}</p>}
-    {pending && <section><p>{t(busy ? 'pending' : 'unknown')}</p><button type="button" disabled={busy || hidden || reading} onClick={() => { if (retained.current) void send(retained.current, true); }}>{t('retry')}</button><p>{t('abandonWarning')}</p><label className={styles.check}><input type="checkbox" disabled={busy} checked={abandon} onChange={e => setAbandon(e.target.checked)} />{t('abandonConfirm')}</label><button type="button" disabled={busy || !abandon} onClick={() => { if (command.current || !abandon || retained.current !== pending) return; retained.current = null; setPending(null); setAbandon(false); setMustRead(true); setFailure(''); }}>{t('abandon')}</button></section>}
+    {pending && <section><p>{t(busy ? 'pending' : 'unknown')}</p><button type="button" disabled={busy || hidden || reading} onClick={() => { if (retained.current) void send(retained.current, true); }}>{t('retry')}</button><p>{t('abandonWarning')}</p><label className={styles.check}><input type="checkbox" disabled={busy} checked={abandon} onChange={e => setAbandon(e.target.checked)} />{t('abandonConfirm')}</label><button type="button" disabled={busy || !abandon} onClick={() => { if (command.current || !abandon || retained.current !== pending) return; revision.current++; retained.current = null; setPending(null); setAbandon(false); setMustRead(true); setFailure(''); }}>{t('abandon')}</button></section>}
   </main>;
 }
