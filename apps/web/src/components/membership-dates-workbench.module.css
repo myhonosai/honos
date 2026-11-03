@@ -1,0 +1,18 @@
+.page { composes: page from './membership-activation-workbench.module.css'; }
+.row { composes: row from './membership-activation-workbench.module.css'; }
+.actions { composes: actions from './membership-activation-workbench.module.css'; }
+.error { composes: error from './membership-activation-workbench.module.css'; }
+.notice { composes: notice from './membership-activation-workbench.module.css'; }
+.check { composes: check from './membership-activation-workbench.module.css'; }
+.status { min-height: 1.5em; margin: 12px 0; }
+.mode_modern { composes: mode_modern from './membership-activation-workbench.module.css'; }
+.mode_classic { composes: mode_classic from './membership-activation-workbench.module.css'; }
+.mode_big { composes: mode_big from './membership-activation-workbench.module.css'; }
+.page small, .check { overflow-wrap: anywhere; min-width: 0; }
+.page nav { display: flex; flex-wrap: wrap; gap: 16px; }
+.page fieldset { min-width: 0; }
+.page details { padding: 16px 0; }
+.page details summary { cursor: pointer; padding: 12px 0; }
+.page li { overflow-wrap: anywhere; }
+.page h2:focus { outline: 3px solid #76a5ff; outline-offset: 6px; }
+@media (max-width: 640px) { .page button { width: 100%; } .page dl { display: block; } .page dd { margin: 4px 0 16px; } }
