@@ -38,8 +38,25 @@ test('S4-d contracts: closed evidence per decision; consistent receipts and queu
     assert.throws(() => contracts.validateAiUnknownResolutionReceipt(bad), JSON.stringify(bad));
   const { replayed, ...resolved } = receipt();
   const q = contracts.validateAiUnknownQueue({ open: [open(), open({ status: 'SENDING', countsAgainstCurrentWindow: false })],
-    resolved: [{ ...resolved, reason: REASON, evidence: record().evidence, resolvedByPrincipalId: U(), priorStatus: 'UNKNOWN', heldAt: T }], staleAfterSeconds: 3600, asOf: T });
+    resolved: [{ ...resolved, reason: REASON, evidence: record().evidence, resolvedByPrincipalId: U(), priorStatus: 'UNKNOWN', heldAt: T, lateProviderExpense: null }], staleAfterSeconds: 3600, asOf: T });
   assert.equal(q.open.length, 2);
+  // No trustworthy origin: heldAt null is only valid while the hold still counts (fail closed).
+  assert.equal(contracts.validateAiUnknownQueue({ open: [open({ heldAt: null })], resolved: [], staleAfterSeconds: 3600, asOf: T }).open[0].heldAt, null);
+  assert.throws(() => contracts.validateAiUnknownQueue({ open: [open({ heldAt: null, countsAgainstCurrentWindow: false })], resolved: [], staleAfterSeconds: 3600, asOf: T }));
+  // A late provider expense may only sit on a WRITE_OFF and carries no ledger entry of its own.
+  const writeOff = { ...resolved, decision: 'WRITE_OFF', customerCredits: 0, reason: REASON, evidence: { estimatedProviderCostMicrounits: 900 }, resolvedByPrincipalId: U(), priorStatus: 'UNKNOWN', heldAt: T };
+  const lateSummary = { expenseId: U(), providerCostMicrounits: 1100, occurredAt: T, recordedAt: T };
+  assert.equal(contracts.validateAiUnknownQueue({ open: [], resolved: [{ ...writeOff, lateProviderExpense: lateSummary }], staleAfterSeconds: 3600, asOf: T }).resolved[0].lateProviderExpense.providerCostMicrounits, 1100);
+  for (const bad of [{ ...writeOff, decision: 'RECORD_PROVIDER_COST', customerCredits: 2, lateProviderExpense: lateSummary }, { ...writeOff, lateProviderExpense: { ...lateSummary, ledgerEntryId: U() } }])
+    assert.throws(() => contracts.validateAiUnknownQueue({ open: [], resolved: [bad], staleAfterSeconds: 3600, asOf: T }), JSON.stringify(bad));
+  const late = { reason: 'Provider usage export showed the actual charge', evidence: { providerGenerationId: 'gen-late-1', inputTokens: 10, outputTokens: 5, providerCostMicrounits: 1100 } };
+  assert.equal(contracts.validateAiLateProviderExpenseInput(late).evidence.providerCostMicrounits, 1100);
+  for (const bad of [{ ...late, extra: 1 }, { ...late, evidence: { ...late.evidence, customerCredits: 1 } }, { ...late, evidence: { ...late.evidence, providerCostMicrounits: -1 } }, { ...late, reason: 'short' }])
+    assert.throws(() => contracts.validateAiLateProviderExpenseInput(bad), JSON.stringify(bad));
+  const lateReceipt = { expenseId: U(), resolutionId: U(), agent: 'TEACHING', invocationId: U(), providerCostMicrounits: 1100, estimatedProviderCostMicrounits: 900, customerCredits: 0, occurredAt: T, recordedAt: T, replayed: false };
+  assert.equal(contracts.validateAiLateProviderExpenseReceipt(lateReceipt).customerCredits, 0);
+  for (const bad of [{ ...lateReceipt, customerCredits: 1 }, { ...lateReceipt, ledgerEntryId: U() }, { ...lateReceipt, occurredAt: null }])
+    assert.throws(() => contracts.validateAiLateProviderExpenseReceipt(bad), JSON.stringify(bad));
   for (const bad of [open({ status: 'RESULT_RECORDED' }), open({ reservedCredits: 0 }), { ...open(), extra: 1 }])
     assert.throws(() => contracts.validateAiUnknownQueue({ open: [bad], resolved: [], staleAfterSeconds: 3600, asOf: T }), JSON.stringify(bad));
   assert.throws(() => contracts.validateAiUnknownQueue({ open: Array.from({ length: 201 }, () => open()), resolved: [], staleAfterSeconds: 3600, asOf: T }));
@@ -69,6 +86,8 @@ test('HTTP: UNKNOWN resolution is an exact HQ human command bound to the verifie
     if (next) { const e = new Error(next.message); e.code = next.code; next = null; throw e; }
     if (operation === 'readAiUnknownInvocations') return { open: [open()], resolved: [], staleAfterSeconds: 3600, asOf: T };
     if (operation === 'resolveAiUnknownInvocation') return receipt({ agent: params[1], invocationId: params[2] });
+    if (operation === 'recordAiLateProviderExpense') return { expenseId: U(), resolutionId: U(), agent: params[1], invocationId: params[2], providerCostMicrounits: 1100,
+      estimatedProviderCostMicrounits: 900, customerCredits: 0, occurredAt: T, recordedAt: T, replayed: false };
     throw new Error('unexpected');
   });
   const url = `${base}/hq/ai/unknown-invocations/MARKETING/${id}/resolve`;
@@ -104,5 +123,24 @@ test('HTTP: UNKNOWN resolution is an exact HQ human command bound to the verifie
       assert.ok([400, 403].includes((await send(target, { method: 'POST', headers: h, body: payload })).status), label);
     assert.equal((await send(`${base}/hq/ai/unknown-invocations?organizationId=${U()}`)).status, 400, 'reads take no query');
     assert.equal(calls.length, n, 'refused requests never reach the database');
+    // Late provider expense after a WRITE_OFF: its own exact HQ human command.
+    const lateUrl = `${base}/hq/ai/unknown-invocations/TEACHING/${id}/late-provider-expense`;
+    const lateBody = JSON.stringify({ reason: 'Provider usage export showed the actual charge', evidence: { providerGenerationId: 'gen-late-1', inputTokens: 10, outputTokens: 5, providerCostMicrounits: 1100 } });
+    const lateHeaders = human(contracts.SAAS_COMMANDS.aiLateProviderExpense);
+    const lateOk = await send(lateUrl, { method: 'POST', headers: lateHeaders, body: lateBody });
+    assert.equal(lateOk.status, 200, lateOk.body); assert.equal(JSON.parse(lateOk.body).data.customerCredits, 0);
+    assert.deepEqual(calls.at(-1)[1].slice(0, 5), ['verified-human', 'TEACHING', id, lateBody, lateHeaders['idempotency-key']]);
+    for (const message of ['AI_LATE_EXPENSE_NOT_WRITTEN_OFF', 'AI_LATE_EXPENSE_ALREADY_RECORDED', 'AI_LATE_EXPENSE_DUPLICATE_GENERATION']) {
+      next = { message, code: '23514' };
+      const r = await send(lateUrl, { method: 'POST', headers: human(contracts.SAAS_COMMANDS.aiLateProviderExpense), body: lateBody });
+      assert.deepEqual([r.status, JSON.parse(r.body).code], [422, message]);
+    }
+    next = { message: 'AI_LATE_EXPENSE_KEY_REUSED', code: '23505' };
+    assert.equal((await send(lateUrl, { method: 'POST', headers: human(contracts.SAAS_COMMANDS.aiLateProviderExpense), body: lateBody })).status, 409);
+    const m = calls.length;
+    for (const [h, payload, label] of [[human(), lateBody, 'resolve command header on the late route'],
+      [human(contracts.SAAS_COMMANDS.aiLateProviderExpense), JSON.stringify({ ...JSON.parse(lateBody), customerCredits: 1 }), 'browser names credits']])
+      assert.ok([400, 403].includes((await send(lateUrl, { method: 'POST', headers: h, body: payload })).status), label);
+    assert.equal(calls.length, m, 'refused late-expense requests never reach the database');
   } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
 });

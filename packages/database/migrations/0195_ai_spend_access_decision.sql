@@ -125,11 +125,37 @@ BEGIN
 END $$;
 CREATE TRIGGER ai_spend_b3_guard BEFORE INSERT ON hon.saas_credit_reservations FOR EACH ROW EXECUTE FUNCTION hon.ai_spend_b3_guard();
 
+-- One immutable identity per command key (Manus review P2, 2026-11-03): PAUSE and RESUME share one key space, and the
+-- key is bound to the whole command (action, scope, spend class, reason, actor). A key can be claimed once; any other
+-- command presented with it is refused, whatever its action, and a replay returns the original receipt.
+CREATE TABLE hon.ai_spend_pause_commands (
+  command_key uuid PRIMARY KEY,
+  action text NOT NULL CHECK (action IN ('PAUSE','RESUME')),
+  organization_id uuid REFERENCES hon.organizations(id) ON DELETE RESTRICT,
+  spend_class text NOT NULL CHECK (spend_class IN ('AGENT_INFERENCE','CREATIVE_MEDIA','ALL')),
+  reason text NOT NULL,
+  actor_principal_id uuid NOT NULL REFERENCES hon.principals(id) ON DELETE RESTRICT,
+  fingerprint text NOT NULL CHECK (fingerprint ~ '^[0-9a-f]{64}$'),
+  pause_id uuid NOT NULL REFERENCES hon.ai_spend_pauses(id) ON DELETE RESTRICT,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE FUNCTION hon.guard_ai_spend_pause_commands() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
+BEGIN RAISE EXCEPTION 'AI_SPEND_PAUSE_COMMAND_IMMUTABLE' USING ERRCODE='55000'; END $$;
+CREATE TRIGGER ai_spend_pause_commands_immutable BEFORE UPDATE OR DELETE ON hon.ai_spend_pause_commands FOR EACH ROW EXECUTE FUNCTION hon.guard_ai_spend_pause_commands();
+ALTER TABLE hon.ai_spend_pause_commands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hon.ai_spend_pause_commands FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE hon.ai_spend_pause_commands FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.ai_spend_pause_commands FROM %I', r);
+  END LOOP;
+END $$;
+
 -- HQ owner pause / resume. Human HQ owner only (operators, support, school owners, agents and delegated or tenant
 -- contexts refused). Idempotent per key with a fingerprint; applies at the next begin, prepare or reserve.
 -- In-flight calls still record. The pause row itself is the durable evidence (actor, reason, timestamps).
 CREATE FUNCTION hon.command_ai_spend_pause(p_subject text, p_input jsonb, p_key uuid) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE actor uuid; v_action text; v_org uuid; v_class text; v_reason text; fp text; p hon.ai_spend_pauses%ROWTYPE;
+DECLARE actor uuid; v_action text; v_org uuid; v_class text; v_reason text; fp text; p hon.ai_spend_pauses%ROWTYPE; cmd hon.ai_spend_pause_commands%ROWTYPE;
 BEGIN
   actor := hon.require_saas_hq_actor(p_subject, true);
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object'
@@ -149,34 +175,34 @@ BEGIN
   -- revoked or expired while this command waited is refused before any row is read or written.
   LOCK TABLE hon.users, hon.principals, hon.hq_operator_grants, hon.family_access_grants IN SHARE MODE;
   IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
-  -- One pause command at a time per scope: replays and races resolve to one row.
+  -- Lock order: authority tables, then the command key (one claim per key across PAUSE and RESUME and across scopes),
+  -- then the scope (one pause command at a time per scope and class).
+  PERFORM pg_advisory_xact_lock(hashtextextended('ai.pause.key:' || p_key::text, 0));
   PERFORM pg_advisory_xact_lock(hashtextextended('ai.pause:' || coalesce(v_org::text,'platform') || ':' || v_class, 0));
-  -- The scope lock can wait behind another pause command: the grant may have lapsed by the clock meanwhile.
+  -- Either lock can wait behind another pause command: the grant may have lapsed by the clock meanwhile.
   IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  SELECT * INTO cmd FROM hon.ai_spend_pause_commands WHERE command_key = p_key;
+  IF FOUND THEN
+    IF cmd.fingerprint <> fp THEN RAISE EXCEPTION 'AI_SPEND_PAUSE_KEY_REUSED' USING ERRCODE='23505'; END IF;
+    SELECT * INTO p FROM hon.ai_spend_pauses WHERE id = cmd.pause_id;
+    RETURN jsonb_build_object('pauseId',p.id,'organizationId',p.organization_id,'spendClass',p.spend_class,
+      'status',CASE WHEN cmd.action = 'PAUSE' AND p.ended_at IS NULL THEN 'ACTIVE' ELSE 'ENDED' END,'replayed',true);
+  END IF;
   IF v_action = 'PAUSE' THEN
-    SELECT * INTO p FROM hon.ai_spend_pauses WHERE pause_key = p_key;
-    IF FOUND THEN
-      IF p.pause_fingerprint <> fp THEN RAISE EXCEPTION 'AI_SPEND_PAUSE_KEY_REUSED' USING ERRCODE='23505'; END IF;
-      RETURN jsonb_build_object('pauseId',p.id,'organizationId',p.organization_id,'spendClass',p.spend_class,'status',CASE WHEN p.ended_at IS NULL THEN 'ACTIVE' ELSE 'ENDED' END,'replayed',true);
-    END IF;
     IF EXISTS (SELECT 1 FROM hon.ai_spend_pauses WHERE ended_at IS NULL AND organization_id IS NOT DISTINCT FROM v_org AND spend_class = v_class) THEN
       RAISE EXCEPTION 'AI_SPEND_PAUSE_ALREADY_ACTIVE' USING ERRCODE='23514';
     END IF;
     INSERT INTO hon.ai_spend_pauses(organization_id, spend_class, reason, pause_key, pause_fingerprint, paused_by_principal_id)
       VALUES (v_org, v_class, v_reason, p_key, fp, actor) RETURNING * INTO p;
-    RETURN jsonb_build_object('pauseId',p.id,'organizationId',p.organization_id,'spendClass',p.spend_class,'status','ACTIVE','replayed',false);
+  ELSE
+    UPDATE hon.ai_spend_pauses SET end_key = p_key, end_reason = v_reason, ended_by_principal_id = actor, ended_at = clock_timestamp()
+     WHERE ended_at IS NULL AND organization_id IS NOT DISTINCT FROM v_org AND spend_class = v_class RETURNING * INTO p;
+    IF NOT FOUND THEN RAISE EXCEPTION 'AI_SPEND_PAUSE_NOT_ACTIVE' USING ERRCODE='23514'; END IF;
   END IF;
-  SELECT * INTO p FROM hon.ai_spend_pauses WHERE end_key = p_key;
-  IF FOUND THEN
-    IF p.organization_id IS DISTINCT FROM v_org OR p.spend_class <> v_class OR p.end_reason <> v_reason OR p.ended_by_principal_id <> actor THEN
-      RAISE EXCEPTION 'AI_SPEND_PAUSE_KEY_REUSED' USING ERRCODE='23505';
-    END IF;
-    RETURN jsonb_build_object('pauseId',p.id,'organizationId',p.organization_id,'spendClass',p.spend_class,'status','ENDED','replayed',true);
-  END IF;
-  UPDATE hon.ai_spend_pauses SET end_key = p_key, end_reason = v_reason, ended_by_principal_id = actor, ended_at = clock_timestamp()
-   WHERE ended_at IS NULL AND organization_id IS NOT DISTINCT FROM v_org AND spend_class = v_class RETURNING * INTO p;
-  IF NOT FOUND THEN RAISE EXCEPTION 'AI_SPEND_PAUSE_NOT_ACTIVE' USING ERRCODE='23514'; END IF;
-  RETURN jsonb_build_object('pauseId',p.id,'organizationId',p.organization_id,'spendClass',p.spend_class,'status','ENDED','replayed',false);
+  INSERT INTO hon.ai_spend_pause_commands(command_key, action, organization_id, spend_class, reason, actor_principal_id, fingerprint, pause_id)
+    VALUES (p_key, v_action, v_org, v_class, v_reason, actor, fp, p.id);
+  RETURN jsonb_build_object('pauseId',p.id,'organizationId',p.organization_id,'spendClass',p.spend_class,
+    'status',CASE WHEN v_action = 'PAUSE' THEN 'ACTIVE' ELSE 'ENDED' END,'replayed',false);
 END $$;
 
 CREATE FUNCTION hon.read_ai_spend_pauses_from_hq(p_subject text) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -190,7 +216,7 @@ BEGIN
 END $$;
 
 DO $$ DECLARE f regprocedure; BEGIN
- FOREACH f IN ARRAY ARRAY['hon.guard_ai_spend_pauses()'::regprocedure,'hon.ai_promotional_access(uuid,timestamptz,text)'::regprocedure,
+ FOREACH f IN ARRAY ARRAY['hon.guard_ai_spend_pauses()'::regprocedure,'hon.guard_ai_spend_pause_commands()'::regprocedure,'hon.ai_promotional_access(uuid,timestamptz,text)'::regprocedure,
   'hon.ai_trial_funding_available(uuid,timestamptz,text)'::regprocedure,'hon.ai_access_state_decision(text,boolean,boolean)'::regprocedure,
   'hon.ai_spend_allowed(uuid,timestamptz,text)'::regprocedure,'hon.ai_spend_start_guard()'::regprocedure,'hon.ai_spend_b3_guard()'::regprocedure,
   'hon.command_ai_spend_pause(text,jsonb,uuid)'::regprocedure,'hon.read_ai_spend_pauses_from_hq(text)'::regprocedure] LOOP
