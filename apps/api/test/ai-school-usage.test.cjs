@@ -31,6 +31,13 @@ test('S4-e contracts: per-school totals add up per class and per agent; credits 
   assert.equal(contracts.validateAiSchoolUsageReport(report()).schools.length, 1);
   assert.equal(contracts.validateAiSchoolUsageReport(report({ schools: [], organizations: [] })).schools.length, 0);
   const o = U();
+  // Manus delta review P2: a school with only unresolved calls is listed with every amount zero and no class; it must
+  // carry at least one unresolved call, and no amount may appear without a class (no invented cost).
+  const unresolvedOnly = (patch = {}) => school(o, { ...totals(0, 0, 0, 0), unreconciledInvocations: 2, byClass: {}, ...patch });
+  assert.equal(contracts.validateAiSchoolUsageReport(report({ schools: [unresolvedOnly()], organizations: [org(o, { openUnknownHolds: 2 })] })).schools[0].unreconciledInvocations, 2);
+  for (const bad of [unresolvedOnly({ unreconciledInvocations: 0 }), unresolvedOnly({ providerReportedCostMicrounits: 1 }), unresolvedOnly({ entries: 1 }),
+    unresolvedOnly({ estimatedWriteOffCostMicrounits: 1 }), unresolvedOnly({ lateProviderCostMicrounits: 1 }), unresolvedOnly({ entries: -1 })])
+    assert.throws(() => contracts.validateAiSchoolUsageReport(report({ schools: [bad], organizations: [org(o)] })), JSON.stringify(bad).slice(0, 160));
   // The write-off estimate (900) now has a late actual (1100): reported beside, the three classified totals unchanged.
   const lateSchool = (patch = {}, l = late(1100, 1, 900)) => school(o, { ...totals(9000, 900, 4, 1, l),
     byClass: { AGENT_INFERENCE: { ...amt(7, 6000, 3, 900, 1, l), byAgent: { MARKETING: amt(4, 4000, 2, 900, 1, l), CHAD_FOLLOW_UP: amt(3, 2000, 1) } },
