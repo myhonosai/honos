@@ -164,4 +164,12 @@ describe('E1a explicit two-step activation lifecycle', () => {
     await load(); confirm(); await flush(); button('Check current membership status').props.onClick(); await flush();
     expect(html()).toContain('Current membership observation'); expect(html()).toContain('ACTIVE alone does not prove current effective dates, payment or agreement.'); expect(harness.session).toHaveBeenCalledTimes(6);
   });
+  it('requires a fresh ACTIVE read for date handoff and invalidates captured handoffs on session loss or another read',async()=>{
+    const manage=vi.fn();props={...props,initialMembership:scope,onManageDates:manage};
+    const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(envelope(preview())).mockResolvedValueOnce(envelope(receipt())).mockResolvedValueOnce(envelope({...current,state:'ACTIVE',version:2},false,true));
+    await load();expect(button('Review membership dates and history')).toBeUndefined();confirm();await flush();expect(button('Review membership dates and history')).toBeUndefined();
+    button('Check current membership status').props.onClick();await flush();const old=button('Review membership dates and history').props.onClick;old();expect(manage).toHaveBeenCalledExactlyOnceWith(scope);expect(Object.isFrozen(manage.mock.calls[0]![0])).toBe(true);manage.mockClear();
+    harness.effects[0]!();window.dispatchEvent(new Event('hon:session-invalidated'));old();expect(manage).not.toHaveBeenCalled();expect(html()).toContain('Membership information hidden');
+    expect(f.mock.calls.filter(([,o])=>String(o?.method)==='POST')).toHaveLength(2);
+  });
 });

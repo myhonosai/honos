@@ -58,12 +58,12 @@ export function createActivationFixture({ id, scope, origin, send, rejected }) {
       effectiveStatusAtActivation: reviewed.effectiveStatusIfConfirmedNow, acknowledgedWarnings: body.acknowledgedWarnings, overridesUsed: body.overrides.map(o => ({ code: o.code, resolved: false })),
       followUps: [...(reviewed.birthDateRecorded ? [] : [{ kind: 'BIRTH_DATE_MISSING', workItemId: id(85) }]), ...(body.overrides.length ? [{ kind: 'IDENTITY_REVIEW_UNRESOLVED', workItemId: id(86) }] : [])],
       adultVerification: body.adultVerification ? { kind: 'STAFF_ATTESTATION', method: body.adultVerification.method } : null, reasonCode: body.reasonCode, requirementsNotEvaluated: [...MEMBERSHIP_REQUIREMENTS_NOT_EVALUATED], recordedAt: '2026-10-22T12:00:00.000Z' }, membershipId);
-    keys.set(key, { raw, data }); state = 'ACTIVE'; version++;
+    keys.set(key, { raw, data, reviewed }); state = 'ACTIVE'; version++;
     if (mode.startsWith('hold-')) await new Promise(done => { finish = done; signalHeld(); });
     if (mode.includes('unknown')) { mode = 'routine'; send(res, 503, {}); } else send(res, 200, data);
     return true;
   }
-  return { reset, handle, get membershipId() { return membershipId; }, scope, get commands() { return commands; }, get reads() { return reads; }, waitUntilHeld: () => held, release() { assert(finish); finish(); }, setMode(value) { mode = value; } };
+  return { reset, handle, get membershipId() { return membershipId; }, scope, get recorded() { const last = [...keys.values()].at(-1); return last ? { receipt: last.data, planCode: last.reviewed.planCode, plan: last.reviewed.plan } : null; }, get commands() { return commands; }, get reads() { return reads; }, waitUntilHeld: () => held, release() { assert(finish); finish(); }, setMode(value) { mode = value; } };
 }
 
 export async function runActivationBrowserChecks({ fixture, open, visual, check, origin }) {
