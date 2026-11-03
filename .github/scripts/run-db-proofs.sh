@@ -113,6 +113,7 @@ proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Cl
 proof champions-club test-champions-club-contests-integrity.mjs "Champions Club contests: HQ lifecycle, frozen standings, winner review, liabilities"
 proof champions-club test-champions-club-journey-integrity.mjs "Champions Club end-to-end journey: code to winner, automatic reward reconciliation, audit"
 proof champions-club test-saas-subscription-integrity.mjs "HON subscription catalog (B1): owner-only offers, atomic founder inventory, entitlement-linked records, no billing effect"
+proof champions-club test-saas-billing-utc-periods-integrity.mjs "Issue #100 (0201): SaaS billing periods are UTC calendar months from the original anchor (month-end clamping, leap years, DST, time of day) whatever the session, database default or reused pooled connection TimeZone; pre-0201 drift reproduced only with the pin removed"
 proof champions-club test-saas-invoicing-integrity.mjs "HON invoices and payment evidence (B2): gapless numbering, verified tax before issue, HQ attestation only, no collection or reward effect"
 proof champions-club test-saas-credits-integrity.mjs "HON premium credits (B3): owner-gated program, verified-cost pricing, reserve/finalize/release/expire ledger, concurrency-safe balance"
 proof champions-club test-saas-refunds-rewards-integrity.mjs "HON refunds and Champions rewards (B4): 30-day first-purchase guarantee records, owner-gated reward application, alerts block fulfillment, no execution or payout"

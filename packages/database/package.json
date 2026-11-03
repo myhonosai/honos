@@ -43,6 +43,7 @@
     "db:test-champions-club-contests": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-champions-club-contests-integrity.mjs",
     "db:test-champions-club-journey": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-champions-club-journey-integrity.mjs",
     "db:test-saas-subscription": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-subscription-integrity.mjs",
+    "db:test-saas-billing-utc-periods": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-billing-utc-periods-integrity.mjs",
     "db:test-saas-invoicing": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-invoicing-integrity.mjs",
     "db:test-saas-credits": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-credits-integrity.mjs",
     "db:test-saas-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-payments-integrity.mjs",

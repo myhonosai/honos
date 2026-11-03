@@ -1,6 +1,6 @@
 {
   "baseline": "be3a26e097a4ceb355d08d93d57dd73297b6048f",
-  "chainSha256": "4d133cb9cb5d924d6aede70fb897b519778836354182b4079e073fb0023d5192",
+  "chainSha256": "5e3b2611067fcbaf24aba6c9b9164f03ffe7f02134b86bb450022995a7f37f56",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -49,6 +49,10 @@
     {
       "file": "0192_crm_suspended_owner_read_only.sql",
       "sha256": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542"
+    },
+    {
+      "file": "0201_saas_billing_utc_calendar_periods.sql",
+      "sha256": "ea21b3ea4b4096026da07cd4a547dc0c5c3863b1c7780dd449a375ac66fedd3b"
     }
   ]
 }
