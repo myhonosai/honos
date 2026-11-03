@@ -153,6 +153,10 @@
       "title": "Human membership activation only"
     },
     {
+      "path": "/staff/billing/membership-dates",
+      "title": "HON OS | Membership dates and history"
+    },
+    {
       "path": "/staff/billing/invoices",
       "title": "HON | Human Invoice Workbench"
     },
