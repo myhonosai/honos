@@ -16,7 +16,7 @@ export function createLeadMembershipRecoveryFixture({id,scope,origin,send,reject
       assert.equal(req.method,'GET');assert.equal(url.search,'');assert.equal(req.headers['idempotency-key'],undefined);reads.push({path:url.pathname});
       if(['denied','missing','conflict','unavailable','session'].includes(mode)){const status={denied:403,missing:404,conflict:409,unavailable:503,session:401}[mode];rejected(res,status,'CRM_LEAD_MEMBERSHIPS_UNAVAILABLE');return true;}
       const payload=body();
-      const complete=()=>send(res,200,payload);
+      const complete=()=>{res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'private, no-store'});res.end(JSON.stringify({data:payload,meta:{requestId:id(8),correlationId:id(8)}}));};
       if(mode==='held'){finish=complete;signalHeld();}else complete();return true;
     }
     for(const fixture of dates)if(await fixture.handle(req,res,url))return true;
