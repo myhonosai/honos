@@ -27,7 +27,7 @@ const database=new RuntimeDatabaseService(),billing=new SaasBillingService(datab
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
 const ownerPool=new pg.Pool({connectionString:owner.toString(),ssl:false,max:5});
-const creativeTables=['saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
+const creativeTables=['saas_creative_cost_events','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
 const offerTables=['saas_offer_sales_stops','saas_offer_set_offers','saas_offer_sets'];
 const saasTables=['saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
@@ -95,11 +95,11 @@ const offer=(code,kind,priceMinor,displayName)=>{const interval=contracts.saasHo
  salesOpensAt:iso(NOW-HOUR),salesClosesAt:null,eligibility:'ANY_ACTIVE_ORGANIZATION',saleLimit:null,priceLock:'WHILE_CONTINUOUSLY_SUBSCRIBED',priceLockMonths:null,
  annualRenewal:interval==='ANNUAL'?'AUTO_RENEW_AT_LOCKED_PRICE':null,plannedMonthlyPremiumCredits:12000,aiFairUseReference:null,refundWindowDays:30,cancellationTiming:'END_OF_PAID_PERIOD'};};
 const schoolWallet=k=>wallet.readSchoolWallet(H(`owner${k}`),school(k));
-const hqWallet=k=>wallet.readOrganizationWallet(H('owner'),org(k));
+const hqWallet=k=>wallet.readSchoolWalletFromHq(H('owner'),school(k));
 const video=(units,key=K(),who='ownerA',k='A')=>wallet.reserveCredits(H(who),school(k),{operationCode:'video.generate',units,providerId:'HIGGSFIELD',modelCode:'fixture-video-1'},key);
 const settle=(r,body,key=K(),who='ownerA')=>wallet.settleCredits(H(who),r.reservationId,{expectedVersion:r.version,...body},key);
 const usage=async ids=>(await admin.query('SELECT provider_code,modality::text,customer_credits::int,provider_cost_microunits::bigint cost,output_units::int units,correlation_id FROM hon.ai_usage_ledger WHERE correlation_id=ANY($1::uuid[]) ORDER BY occurred_at,id',[ids])).rows;
-const ledgerTotals=async o=>(await admin.query("SELECT entry_kind,sum(credits)::int c FROM hon.saas_creative_ledger WHERE organization_id=$1 GROUP BY 1 ORDER BY 1",[o])).rows.reduce((a,r)=>({...a,[r.entry_kind]:r.c}),{});
+const ledgerTotals=async o=>(await admin.query("SELECT entry_kind,sum(credits)::int c FROM hon.saas_creative_ledger WHERE school_id=$1 GROUP BY 1 ORDER BY 1",[o])).rows.reduce((a,r)=>({...a,[r.entry_kind]:r.c}),{});
 const fulfill=(purchaseId,payment,at=new Date(),client=ownerPool)=>client.query('SELECT hon.saas_fulfill_creative_topup($1,$2::jsonb,$3) r',[purchaseId,JSON.stringify(payment),at]).then(r=>r.rows[0].r);
 const creativeAudit=async()=>(await admin.query("SELECT action_code,count(*)::int c FROM hon.saas_audit WHERE action_code LIKE 'saas.creative.%' GROUP BY 1 ORDER BY 1")).rows.reduce((a,r)=>({...a,[r.action_code]:r.c}),{});
 const creativeOutbox=async()=>(await admin.query("SELECT count(*)::int n FROM hon.saas_outbox WHERE event_type LIKE 'saas.creative.%'")).rows[0].n;
@@ -195,7 +195,7 @@ try{
  await deny(wallet.openWindow(H('staffP'),P.school,K()),422,'SAAS_CREATIVE_PAID_ACCESS_REQUIRED');// provisioned/pilot/trial-like: never the paid allowance
  await deny(wallet.reserveCredits(H('staffP'),P.school,{operationCode:'image.generate',units:1,providerId:'HIGGSFIELD',modelCode:'fixture-image-1'},K()),422,'SAAS_CREATIVE_PAID_ACCESS_REQUIRED');
  await deny(wallet.createTopupPurchase(H('staffP'),P.school,{packageCode:'STARTER'},K()),422,'SAAS_CREATIVE_PAID_ACCESS_REQUIRED');
- const hqP=await wallet.readOrganizationWallet(H('operator'),P.id);
+ const hqP=await wallet.readSchoolWalletFromHq(H('operator'),P.school);
  assert.deepEqual([hqP.eligibility.reason,hqP.lots.length],['PAID_ACCESS_REQUIRED',0]);
  for(const who of ['ownerB','owner','operator','staffP'])await deny(wallet.openWindow(H(who),school('A'),K()),403,'SAAS_FORBIDDEN');
 
@@ -207,13 +207,13 @@ try{
  assert.equal(lotIds.size,1,'eight concurrent opens, one lot');
  const includedA=[...lotIds][0];
  assert.equal((await wallet.openWindow(H('ownerA'),school('A'),winKey)).replayed,true);
- assert.deepEqual(await ledgerTotals(org('A')),{GRANT:12000},'one 12,000 grant');
+ assert.deepEqual(await ledgerTotals(school('A')),{GRANT:12000},'one 12,000 grant');
  const subA=await row("SELECT id,current_period_start,current_period_end FROM hon.saas_subscriptions WHERE organization_id=$1 AND status<>'VOIDED'",[org('A')]);
  const lotA=await row('SELECT * FROM hon.saas_creative_lots WHERE id=$1',[includedA]);
  assert.deepEqual([lotA.lot_kind,lotA.credits,lotA.window_index,lotA.subscription_id,iso(lotA.window_start),iso(lotA.window_end),iso(lotA.expires_at)],
   ['INCLUDED_MONTHLY',12000,0,subA.id,iso(subA.current_period_start),iso(subA.current_period_end),iso(subA.current_period_end)],'window = paid UTC month, expires at its end (no rollover)');
- await sqlDeny(admin.query("INSERT INTO hon.saas_creative_lots(organization_id,lot_kind,credits,subscription_id,window_index,window_start,window_end,expires_at,granted_by_principal_id,granted_at) VALUES($1,'INCLUDED_MONTHLY',12000,$2,0,$3,$4,$4,$5,now())",
-  [org('A'),subA.id,lotA.window_start,lotA.window_end,humans.owner.id]),'23505');
+ await sqlDeny(admin.query("INSERT INTO hon.saas_creative_lots(school_id,organization_id,lot_kind,credits,subscription_id,window_index,window_start,window_end,expires_at,granted_by_principal_id,granted_at) VALUES($6,$1,'INCLUDED_MONTHLY',12000,$2,0,$3,$4,$4,$5,now())",
+  [org('A'),subA.id,lotA.window_start,lotA.window_end,humans.owner.id,school('A')]),'23505');
  await wallet.openWindow(H('ownerB'),school('B'),K());
  const includedB=(await hqWallet('B')).lots[0].lotId;
 
@@ -273,13 +273,13 @@ try{
 
  // ---------- 9. HQ owner grants, adjustments and corrections (no preset limit; idempotent; audited) ----------
  const promo={kind:'PROMOTIONAL',credits:1000,reasonCode:'PROMOTION',note:'Fixture launch promotion'};
- for(const who of ['operator','support','ownerA'])await deny(wallet.grantCredits(H(who),org('A'),promo,K()),403,'SAAS_FORBIDDEN');
- await deny(wallet.grantCredits(H('owner'),org('A'),{...promo,credits:0},K()),400,'INVALID_SAAS_INPUT');
- const gKey=K(),gp=await wallet.grantCredits(H('owner'),org('A'),promo,gKey);
+ for(const who of ['operator','support','ownerA'])await deny(wallet.grantCredits(H(who),school('A'),promo,K()),403,'SAAS_FORBIDDEN');
+ await deny(wallet.grantCredits(H('owner'),school('A'),{...promo,credits:0},K()),400,'INVALID_SAAS_INPUT');
+ const gKey=K(),gp=await wallet.grantCredits(H('owner'),school('A'),promo,gKey);
  assert.deepEqual([gp.adjustment.lot.kind,gp.adjustment.lot.credits,gp.adjustment.lot.expiresAt],['PROMOTIONAL',1000,null]);
- assert.equal((await wallet.grantCredits(H('owner'),org('A'),promo,gKey)).replayed,true);
- await deny(wallet.grantCredits(H('owner'),org('A'),{...promo,credits:999},gKey),409,'IDEMPOTENCY_KEY_REUSED');
- const big=await wallet.grantCredits(H('owner'),org('A'),{kind:'ADJUSTMENT',credits:50_000_000,reasonCode:'SERVICE_RECOVERY',note:'Fixture large adjustment (no preset cap)'},K());
+ assert.equal((await wallet.grantCredits(H('owner'),school('A'),promo,gKey)).replayed,true);
+ await deny(wallet.grantCredits(H('owner'),school('A'),{...promo,credits:999},gKey),409,'IDEMPOTENCY_KEY_REUSED');
+ const big=await wallet.grantCredits(H('owner'),school('A'),{kind:'ADJUSTMENT',credits:50_000_000,reasonCode:'SERVICE_RECOVERY',note:'Fixture large adjustment (no preset cap)'},K());
  await deny(wallet.debitLot(H('operator'),big.adjustment.lot.lotId,{credits:1,reasonCode:'RECORDED_IN_ERROR',note:'x'},K()),403,'SAAS_FORBIDDEN');
  await deny(wallet.debitLot(H('owner'),big.adjustment.lot.lotId,{credits:50_000_001,reasonCode:'RECORDED_IN_ERROR',note:'Too much'},K()),422,'SAAS_CREATIVE_DEBIT_EXCEEDS_AVAILABLE');
  const db1=await wallet.debitLot(H('owner'),big.adjustment.lot.lotId,{credits:49_999_000,reasonCode:'RECORDED_IN_ERROR',note:'Fixture correction of an over-grant'},K());
@@ -310,7 +310,7 @@ try{
  assert.equal((await fulfill(pg1.purchase.purchaseId,pay(REF))).replayed,true);
  const dup=await fulfill(pg1.purchase.purchaseId,pay('pi_cw1Growth0002'));
  assert.deepEqual([dup.outcome,dup.lotId],['DUPLICATE_PAYMENT_REVIEW',null],'a second payment for the same purchase never grants again');
- assert.equal(await n("SELECT count(*)::int n FROM hon.saas_creative_lots WHERE lot_kind='PURCHASED_TOPUP' AND organization_id=$1",[org('A')]),1);
+ assert.equal(await n("SELECT count(*)::int n FROM hon.saas_creative_lots WHERE lot_kind='PURCHASED_TOPUP' AND school_id=$1",[school('A')]),1);
  const pl=await row('SELECT credits,base_credits,bonus_credits,expires_at FROM hon.saas_creative_lots WHERE id=$1',[purchasedLot]);
  assert.deepEqual(pl,{credits:7200,base_credits:6000,bonus_credits:1200,expires_at:null},'purchased credits keep base and bonus separately; no invented expiry');
  const pg2=await wallet.createTopupPurchase(H('ownerA'),school('A'),{packageCode:'STARTER'},K());
@@ -337,19 +337,19 @@ try{
  // ---------- 13. monthly renewal: no next window until the next period is paid; unused included credits expire ----------
  const T1=new Date(new Date(subA.current_period_end).getTime()+HOUR);
  await admin.query('BEGIN');
- await admin.query('SELECT hon.saas_creative_lock_wallet($1,$2)',[org('A'),T1]);
- assert.equal((await row('SELECT hon.saas_creative_eligibility($1,$2) e',[org('A'),T1])).e.reason,'WINDOW_UNAVAILABLE');// monthly windows follow the renewed (paid) subscription period
- assert.equal((await row('SELECT hon.saas_creative_open_window($1,$2,$3) l',[org('A'),humans.ownerA.id,T1])).l,null);
+ await admin.query('SELECT hon.saas_creative_lock_wallet($1,$2)',[school('A'),T1]);
+ assert.equal((await row('SELECT hon.saas_creative_eligibility($1,$2) e',[school('A'),T1])).e.reason,'WINDOW_UNAVAILABLE');// monthly windows follow the renewed (paid) subscription period
+ assert.equal((await row('SELECT hon.saas_creative_open_window($1,$2,$3) l',[school('A'),humans.ownerA.id,T1])).l,null);
  await admin.query('ROLLBACK');
  const ren=await deliver(sim.renewal(S.A.paid.subscription,Math.floor(new Date(subA.current_period_end).getTime()/1000),24900).delivery);
  assert.deepEqual([ren.event.outcome,ren.event.detail],['APPLIED','RENEWAL_RECORDED']);
  await admin.query('BEGIN');
  try{
-  await admin.query('SELECT hon.saas_creative_lock_wallet($1,$2)',[org('A'),T1]);
-  const next=(await row('SELECT hon.saas_creative_open_window($1,$2,$3) l',[org('A'),humans.ownerA.id,T1])).l;
+  await admin.query('SELECT hon.saas_creative_lock_wallet($1,$2)',[school('A'),T1]);
+  const next=(await row('SELECT hon.saas_creative_open_window($1,$2,$3) l',[school('A'),humans.ownerA.id,T1])).l;
   const nl=await row('SELECT window_index,credits FROM hon.saas_creative_lots WHERE id=$1',[next]);
   assert.deepEqual(nl,{window_index:1,credits:12000},'next paid window grants a fresh 12,000');
-  assert.equal((await row('SELECT hon.saas_creative_open_window($1,$2,$3) l',[org('A'),humans.ownerA.id,T1])).l,next,'idempotent per window');
+  assert.equal((await row('SELECT hon.saas_creative_open_window($1,$2,$3) l',[school('A'),humans.ownerA.id,T1])).l,next,'idempotent per window');
   const exp=await row("SELECT sum(credits)::int c FROM hon.saas_creative_ledger WHERE lot_id=$1 AND entry_kind='EXPIRE'",[includedA]);
   assert.equal(exp.c,null,'window 0 has nothing unreserved left to expire (all of it is held or used)');
   // The held c1 share of window 0 is released after the window ended: it expires immediately (no rollover).
@@ -357,7 +357,7 @@ try{
   await admin.query('SELECT hon.saas_creative_settle_lots($1::hon.saas_creative_reservations,0,$2,$3)',[c1row.r,humans.ownerA.id,T1]);
   const t=await row("SELECT hon.saas_creative_lot_remaining($1) rem,(SELECT sum(credits)::int FROM hon.saas_creative_ledger WHERE lot_id=$1 AND entry_kind='EXPIRE') e",[includedA]);
   assert.deepEqual([t.rem,t.e],[0,1000]);
-  const pr=await row("SELECT hon.saas_creative_lot_remaining(id) rem FROM hon.saas_creative_lots WHERE organization_id=$1 AND lot_kind='PROMOTIONAL'",[org('A')]);
+  const pr=await row("SELECT hon.saas_creative_lot_remaining(id) rem FROM hon.saas_creative_lots WHERE school_id=$1 AND lot_kind='PROMOTIONAL'",[school('A')]);
   assert.equal(pr.rem,1000,'promotional credits released back, no invented expiry');
  }finally{await admin.query('ROLLBACK');}
 
@@ -367,17 +367,17 @@ try{
   [12000,0,[includedB],0,0,0],'school B unaffected by every A operation');
  await deny(wallet.readSchoolWallet(H('ownerA'),school('B')),403,'SAAS_FORBIDDEN');
  await deny(wallet.readSchoolWallet(H('ownerB'),school('A')),403,'SAAS_FORBIDDEN');
- await deny(wallet.readOrganizationWallet(H('ownerA'),org('A')),403,'SAAS_FORBIDDEN');
+ await deny(wallet.readSchoolWalletFromHq(H('ownerA'),school('A')),403,'SAAS_FORBIDDEN');
  await deny(wallet.readWallets(H('ownerA')),403,'SAAS_FORBIDDEN');
- assert.equal(await n("SELECT count(*)::int n FROM hon.saas_creative_ledger e JOIN hon.saas_creative_lots l ON l.id=e.lot_id WHERE e.organization_id<>l.organization_id"),0);
- assert.equal(await n("SELECT count(*)::int n FROM hon.saas_creative_reservations r JOIN hon.saas_creative_ledger e ON e.reservation_id=r.id WHERE e.organization_id<>r.organization_id"),0);
+ assert.equal(await n("SELECT count(*)::int n FROM hon.saas_creative_ledger e JOIN hon.saas_creative_lots l ON l.id=e.lot_id WHERE e.school_id<>l.school_id OR e.organization_id<>l.organization_id"),0);
+ assert.equal(await n("SELECT count(*)::int n FROM hon.saas_creative_reservations r JOIN hon.saas_creative_ledger e ON e.reservation_id=r.id WHERE e.school_id<>r.school_id OR e.organization_id<>r.organization_id"),0);
  const list=await wallet.readWallets(H('operator'));
- assert.deepEqual(new Set(list.wallets.map(x=>x.organizationId)),new Set([org('A'),org('B')]));
- const listA=list.wallets.find(x=>x.organizationId===org('A'));
+ assert.deepEqual(new Set(list.wallets.map(x=>x.schoolId)),new Set([school('A'),school('B')]));
+ const listA=list.wallets.find(x=>x.schoolId===school('A'));
  assert.deepEqual([listA.actualProviderCostMicrounits,listA.consumedCredits,listA.outcomeUnknown],[25_445_000,5500,0]);
  // Every balance equals its ledger: GRANT - FINALIZE - (held) - EXPIRE - DEBIT.
  for(const k of ['A','B']){
-  const t=await ledgerTotals(org(k)),bal=(await hqWallet(k)).balance;
+  const t=await ledgerTotals(school(k)),bal=(await hqWallet(k)).balance;
   assert.equal(bal.availableCredits+bal.heldCredits,(t.GRANT??0)-(t.FINALIZE??0)-(t.EXPIRE??0)-(t.DEBIT??0),`${k} balance = ledger`);
  }
  const audit=await creativeAudit();

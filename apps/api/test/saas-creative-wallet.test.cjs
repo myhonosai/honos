@@ -112,3 +112,87 @@ test('CW1 refusals map to stable 422 codes; runtime reserve/settle validate befo
   await assert.rejects(never.settleCredits('verified-human', randomUUID(), { outcome:'SUCCEEDED', expectedVersion:1, finalUnits:-1, providerCostMicrounits:0 }, randomUUID()), e => e.getStatus() === 400);
   await assert.rejects(never.grantCredits('verified-human', 'not-a-uuid', { kind:'PROMOTIONAL', credits:1, reasonCode:'PROMOTION', note:'x' }, randomUUID()), e => e.getStatus() === 400);
 });
+
+// ---------- CW1 independent-review corrections (school-owned wallets, unknown cost, CREATIVE_MEDIA) ----------
+const internalReservation = (schoolId, organizationId, patch = {}) => ({ ...reservation({ schoolId }), organizationId, providerId:'HIGGSFIELD', modelCode:'fixture-video-1',
+  costStatus:'PENDING', providerCostMicrounits:null, costReference:null, costRecordedAt:null, usageId:null, resolutionReference:null, ...patch });
+const expense = (patch = {}) => ({ actualProviderCostMicrounits:0, finalizedProviderCostMicrounits:0, failedOrNotChargedProviderCostMicrounits:0, consumedCredits:0,
+  unknownCostGenerations:0, pendingCostGenerations:1, spendClass:'CREATIVE_MEDIA', generations:{ finalized:0, released:0, reserved:1, outcomeUnknown:0 }, ...patch });
+const hqWallet = (patch = {}) => { const schoolId = patch.schoolId ?? U(), organizationId = patch.organizationId ?? U();
+  return { ...schoolWallet({ schoolId }), organizationId, reservations:[internalReservation(schoolId, organizationId)], purchases:[{ ...purchase({ schoolId }), paymentProvider:null,
+    providerPaymentRef:null, paidAmountMinor:null, paidCurrency:null }], providerExpense:expense(), ...patch }; };
+const released = (s, o, patch) => internalReservation(s, o, { status:'RELEASED', statusReason:'PROVIDER_FAILED', version:2, settledAt:T, ...patch });
+
+test('CW1 review: HQ wallets are one school; unknown provider cost is never a verified zero; creative expense is CREATIVE_MEDIA', () => {
+  const ok = hqWallet();
+  assert.doesNotThrow(() => contracts.validateSaasCreativeHqWallet(ok));
+  // P1-A/P1-B: a reservation or purchase of another school (even in the same organization) is drift, as is a missing school id.
+  for (const bad of [{ ...ok, reservations:[internalReservation(U(), ok.organizationId)] }, { ...ok, reservations:[internalReservation(ok.schoolId, U())] },
+    { ...ok, purchases:[{ ...ok.purchases[0], schoolId:U() }] }, (({ schoolId, ...rest }) => rest)(ok)])
+    assert.throws(() => contracts.validateSaasCreativeHqWallet(bad));
+  // P2-A: creative expense must say CREATIVE_MEDIA.
+  assert.throws(() => contracts.validateSaasCreativeHqWallet({ ...ok, providerExpense:expense({ spendClass:'AGENT_INFERENCE' }) }));
+  // P2-B: cost status is consistent with the cost; an UNKNOWN cost has no amount; an open generation is always PENDING.
+  const s = ok.schoolId, o = ok.organizationId;
+  assert.doesNotThrow(() => contracts.validateSaasCreativeHqWallet({ ...ok, reservations:[released(s, o, { costStatus:'UNKNOWN' })] }));
+  for (const r of [released(s, o, { costStatus:'UNKNOWN', providerCostMicrounits:0 }), released(s, o, { costStatus:'RECORDED', providerCostMicrounits:null, costRecordedAt:T }),
+    released(s, o, { costStatus:'PENDING' }), internalReservation(s, o, { costStatus:'UNKNOWN' }), released(s, o, { costStatus:'UNKNOWN', usageId:U() })])
+    assert.throws(() => contracts.validateSaasCreativeHqWallet({ ...ok, reservations:[r] }), JSON.stringify(r));
+  // Inputs: NOT_CHARGED may leave the cost unknown; SUCCEEDED may not; the HQ cost record is closed.
+  assert.doesNotThrow(() => contracts.validateSaasCreativeResolveInput({ resolution:'NOT_CHARGED', expectedVersion:1, finalUnits:null, providerCostMicrounits:null, evidenceReference:'case-1' }));
+  assert.throws(() => contracts.validateSaasCreativeResolveInput({ resolution:'SUCCEEDED', expectedVersion:1, finalUnits:1, providerCostMicrounits:null, evidenceReference:'case-1' }));
+  assert.doesNotThrow(() => contracts.validateSaasCreativeCostInput({ expectedVersion:2, providerCostMicrounits:42000, evidenceReference:'invoice line 7' }));
+  for (const bad of [{ expectedVersion:2, providerCostMicrounits:null, evidenceReference:'x' }, { expectedVersion:2, providerCostMicrounits:1, evidenceReference:'' },
+    { expectedVersion:2, providerCostMicrounits:1, evidenceReference:'x', schoolId:U() }, { expectedVersion:0, providerCostMicrounits:1, evidenceReference:'x' }])
+    assert.throws(() => contracts.validateSaasCreativeCostInput(bad));
+  const applied = released(s, o, { costStatus:'RECORDED', providerCostMicrounits:42000, costReference:'invoice line 7', costRecordedAt:T, usageId:U(), version:3 });
+  assert.doesNotThrow(() => contracts.validateSaasCreativeCostReceipt({ reservation:applied, outcome:'APPLIED', replayed:false }));
+  assert.throws(() => contracts.validateSaasCreativeCostReceipt({ reservation:released(s, o, { costStatus:'UNKNOWN' }), outcome:'APPLIED', replayed:false }));
+  // HQ list: one row per school, never a merged organization row.
+  const row = (schoolId, organizationId) => ({ schoolId, schoolName:'Dojo', organizationId, organizationName:'Org', availableCredits:1, heldCredits:0, consumedCredits:0,
+    actualProviderCostMicrounits:0, outcomeUnknown:0, unknownCostGenerations:0, updatedAt:T });
+  const list = wallets => ({ program:{ status:'ACTIVE', version:2, monthlyIncludedCredits:12000 }, rates:null, packages:packages(), wallets });
+  const org = U(), a = U();
+  assert.doesNotThrow(() => contracts.validateSaasCreativeHqWalletList(list([row(a, org), row(U(), org)])));
+  assert.throws(() => contracts.validateSaasCreativeHqWalletList(list([row(a, org), row(a, org)])));
+});
+
+test('CW1 review HTTP: HQ routes are per school; organization routes are gone; provider cost has its own owner command', async () => {
+  const calls = [], school = U(), org = U(), reservationId = U();
+  const module = await Test.createTestingModule({ controllers:[SaasCreativeWalletHqController],
+    providers:[SaasCreativeWalletService, SaasBillingService, SaasCommandGuard, SaasReadGuard,
+      { provide:RuntimeDatabaseService, useValue:{ callSaasBilling:async (operation, params) => { calls.push([operation, params]);
+        if (operation === 'readCreativeWalletFromHq') return hqWallet({ schoolId:school, organizationId:org });
+        if (operation === 'recordCreativeCost') return { reservation:released(school, org, { costStatus:'RECORDED', providerCostMicrounits:42000, costReference:'invoice line 7',
+          costRecordedAt:T, usageId:U(), version:3 }), outcome:'APPLIED', replayed:false };
+        return { adjustment:{ adjustmentId:U(), schoolId:school, lot:lot({ kind:'PROMOTIONAL', window:null, expiresAt:null, adjustmentId:U(), availableCredits:500, heldCredits:0,
+          consumedCredits:0, credits:500 }), reasonCode:'PROMOTION', note:'x' }, balance:balance(), replayed:false }; } } }] })
+    .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject:'verified-human' }; return true; } }).compile();
+  const previous = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
+  const app = module.createNestApplication(); app.setGlobalPrefix('v1'); await app.listen(0, '127.0.0.1');
+  const base = `http://127.0.0.1:${app.getHttpServer().address().port}/v1/hq/saas/creative-credits`;
+  try {
+    assert.equal((await send(`${base}/schools/${school}`)).status, 200);
+    assert.deepEqual(calls.at(-1), ['readCreativeWalletFromHq', ['verified-human', school]]);
+    const g = await send(`${base}/schools/${school}/grants`, { method:'POST', headers:human('saas-creative-grant'), body:JSON.stringify({ kind:'PROMOTIONAL', credits:500, reasonCode:'PROMOTION', note:'x' }) });
+    assert.equal(g.status, 200, g.body); assert.deepEqual(calls.at(-1)[1].slice(0, 2), ['verified-human', school]);
+    const c = await send(`${base}/reservations/${reservationId}/provider-cost`, { method:'POST', headers:human('saas-creative-cost-record'),
+      body:JSON.stringify({ expectedVersion:2, providerCostMicrounits:42000, evidenceReference:'invoice line 7' }) });
+    assert.equal(c.status, 200, c.body); assert.deepEqual(calls.at(-1)[0], 'recordCreativeCost');
+    const n = calls.length;
+    assert.equal((await send(`${base}/reservations/${reservationId}/provider-cost`, { method:'POST', headers:human('saas-creative-resolve'),
+      body:JSON.stringify({ expectedVersion:2, providerCostMicrounits:42000, evidenceReference:'invoice line 7' }) })).status, 403, 'the command header must match');
+    assert.equal((await send(`${base}/organizations/${org}`)).status, 404, 'no organization wallet');
+    assert.equal((await send(`${base}/organizations/${org}/grants`, { method:'POST', headers:human('saas-creative-grant'), body:'{}' })).status, 404);
+    assert.equal(calls.length, n);
+  } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
+});
+
+test('CW1 review refusals: S4 pause, access and school state refuse with stable codes; a cost for an open outcome is a retryable conflict', async () => {
+  for (const code of ['SAAS_CREATIVE_AI_PAUSED_BY_HQ','SAAS_CREATIVE_AI_EXCEPTION_NO_AI','SAAS_CREATIVE_AI_ACCESS_SUSPENDED','SAAS_CREATIVE_SCHOOL_NOT_ACTIVE']) {
+    const service = new SaasCreativeWalletService(new SaasBillingService({ callSaasBilling:async () => { throw Object.assign(new Error(code), { code:'23514' }); } }));
+    await assert.rejects(service.readWallets('verified-human'), e => e.getStatus() === 422 && e.getResponse().code === code);
+  }
+  const pending = new SaasCreativeWalletService(new SaasBillingService({ callSaasBilling:async () => { throw Object.assign(new Error('SAAS_CREATIVE_OUTCOME_PENDING'), { code:'40001' }); } }));
+  await assert.rejects(pending.readWallets('verified-human'), e => e.getStatus() === 409 && e.getResponse().code === 'SAAS_CREATIVE_OUTCOME_PENDING');
+});

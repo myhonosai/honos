@@ -2,7 +2,10 @@
 // video generation only; AI team conversations never deduct (agentConversationsDeductCredits is always
 // false) and the wallet is separate from the internal AI-agent budget. Top-up purchases are recorded intents:
 // no card is charged and payment collection is NOT_CONNECTED. School views never carry provider cost,
-// provider identity or HQ notes; only HQ views do.
+// provider identity or HQ notes; only HQ views do. Owner decision 2026-11-03: every wallet belongs to exactly one
+// eligible paying school (never an organization pool); schools of one organization never share or see each other's
+// credits, and HQ views and lists are per school. Creative provider expense is classified CREATIVE_MEDIA and an
+// unknown provider cost stays UNKNOWN (never a guessed zero) until recorded once.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { saasUuid } from './saas-billing.js';
@@ -12,16 +15,18 @@ export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO';
 export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
 export type SaasCreativeRateBasis = 'PROVISIONAL' | 'VERIFIED_COST';
 export type SaasCreativePackageCode = 'STARTER' | 'GROWTH' | 'CREATOR';
-export type SaasCreativeEligibilityReason = 'PROGRAM_INACTIVE' | 'PAID_ACCESS_REQUIRED' | 'ENTITLEMENT_NOT_IN_EFFECT'
+export type SaasCreativeEligibilityReason = 'PROGRAM_INACTIVE' | 'SCHOOL_NOT_ACTIVE' | 'PAID_ACCESS_REQUIRED' | 'ENTITLEMENT_NOT_IN_EFFECT'
   | 'HON_OS_SUBSCRIPTION_REQUIRED' | 'SUBSCRIPTION_NOT_IN_SERVICE' | 'VERIFIED_PAYMENT_REQUIRED' | 'WINDOW_UNAVAILABLE' | 'WINDOW_NOT_PAID';
 const LOT_KINDS: readonly SaasCreativeLotKind[] = ['INCLUDED_MONTHLY','PROMOTIONAL','ADJUSTMENT','PURCHASED_TOPUP'];
 const MEDIA: readonly SaasCreativeMediaKind[] = ['IMAGE','VIDEO'];
 const UNITS: readonly SaasCreativeBillingUnit[] = ['IMAGE','VIDEO_SECOND','REQUEST'];
 const BASES: readonly SaasCreativeRateBasis[] = ['PROVISIONAL','VERIFIED_COST'];
 const PACKAGES: readonly SaasCreativePackageCode[] = ['STARTER','GROWTH','CREATOR'];
-const REASONS: readonly SaasCreativeEligibilityReason[] = ['PROGRAM_INACTIVE','PAID_ACCESS_REQUIRED','ENTITLEMENT_NOT_IN_EFFECT',
+const REASONS: readonly SaasCreativeEligibilityReason[] = ['PROGRAM_INACTIVE','SCHOOL_NOT_ACTIVE','PAID_ACCESS_REQUIRED','ENTITLEMENT_NOT_IN_EFFECT',
   'HON_OS_SUBSCRIPTION_REQUIRED','SUBSCRIPTION_NOT_IN_SERVICE','VERIFIED_PAYMENT_REQUIRED','WINDOW_UNAVAILABLE','WINDOW_NOT_PAID'];
 const RES_STATES = ['RESERVED','FINALIZED','RELEASED','OUTCOME_UNKNOWN'] as const;
+const COST_STATES = ['PENDING','RECORDED','UNKNOWN'] as const;
+export type SaasCreativeCostStatus = typeof COST_STATES[number];
 const RES_REASONS = ['RESERVED','PROVIDER_SUCCEEDED','PROVIDER_FAILED','PROVIDER_OUTCOME_UNKNOWN','HQ_RESOLVED_SUCCEEDED','HQ_RESOLVED_NOT_CHARGED'] as const;
 const GRANT_REASONS = ['PROMOTION','GOODWILL','SERVICE_RECOVERY','BILLING_CORRECTION','OTHER'] as const;
 const DEBIT_REASONS = ['BILLING_CORRECTION','RECORDED_IN_ERROR','OTHER'] as const;
@@ -58,7 +63,10 @@ export interface SaasCreativeGrantInput { kind: 'PROMOTIONAL' | 'ADJUSTMENT'; cr
 export interface SaasCreativeDebitInput { credits: number; reasonCode: typeof DEBIT_REASONS[number]; note: string }
 export type SaasCreativeResolveInput =
   | { resolution: 'SUCCEEDED'; expectedVersion: number; finalUnits: number; providerCostMicrounits: number; evidenceReference: string }
-  | { resolution: 'NOT_CHARGED'; expectedVersion: number; finalUnits: null; providerCostMicrounits: number; evidenceReference: string };
+  /** providerCostMicrounits null keeps the cost UNKNOWN for later reconciliation; it is never recorded as zero. */
+  | { resolution: 'NOT_CHARGED'; expectedVersion: number; finalUnits: null; providerCostMicrounits: number | null; evidenceReference: string };
+/** HQ owner records, once, the provider cost of a released generation whose cost is UNKNOWN. */
+export interface SaasCreativeCostInput { expectedVersion: number; providerCostMicrounits: number; evidenceReference: string }
 export interface SaasCreativeReserveInput { operationCode: string; units: number; providerId: string; modelCode: string }
 export type SaasCreativeSettleInput =
   | { outcome: 'SUCCEEDED'; expectedVersion: number; finalUnits: number; providerCostMicrounits: number }
@@ -85,7 +93,8 @@ export interface SaasCreativeReservation {
   reservedAt: string; settledAt: string | null;
 }
 export interface SaasCreativeReservationInternal extends SaasCreativeReservation {
-  providerId: string; modelCode: string; providerCostMicrounits: number | null; usageId: string | null; resolutionReference: string | null;
+  organizationId: string; providerId: string; modelCode: string; costStatus: SaasCreativeCostStatus; providerCostMicrounits: number | null;
+  costReference: string | null; costRecordedAt: string | null; usageId: string | null; resolutionReference: string | null;
 }
 export interface SaasCreativeRate {
   operationCode: string; mediaKind: SaasCreativeMediaKind; displayName: string; billingUnit: SaasCreativeBillingUnit;
@@ -124,17 +133,18 @@ export interface SaasCreativeSchoolWallet extends WalletBase {
 }
 export interface SaasCreativeProviderExpense {
   actualProviderCostMicrounits: number; finalizedProviderCostMicrounits: number; failedOrNotChargedProviderCostMicrounits: number; consumedCredits: number;
+  unknownCostGenerations: number; pendingCostGenerations: number; spendClass: 'CREATIVE_MEDIA';
   generations: { finalized: number; released: number; reserved: number; outcomeUnknown: number };
 }
 export interface SaasCreativeHqWallet extends WalletBase {
-  organizationId: string; reservations: SaasCreativeReservationInternal[];
+  schoolId: string; organizationId: string; reservations: SaasCreativeReservationInternal[];
   adjustments: (SaasCreativeAdjustment & { note: string; actorPrincipalId: string })[];
   purchases: (SaasCreativePurchase & { paymentProvider: string | null; providerPaymentRef: string | null; paidAmountMinor: number | null; paidCurrency: string | null })[];
   rates: SaasCreativeRates<SaasCreativeRate & { costEvidenceId: string | null }> | null; providerExpense: SaasCreativeProviderExpense;
 }
 export interface SaasCreativeHqWalletRow {
-  organizationId: string; organizationName: string; availableCredits: number; heldCredits: number; consumedCredits: number;
-  actualProviderCostMicrounits: number; outcomeUnknown: number; updatedAt: string;
+  schoolId: string; schoolName: string; organizationId: string; organizationName: string; availableCredits: number; heldCredits: number; consumedCredits: number;
+  actualProviderCostMicrounits: number; outcomeUnknown: number; unknownCostGenerations: number; updatedAt: string;
 }
 export interface SaasCreativeHqWalletList {
   program: { status: 'INACTIVE' | 'ACTIVE'; version: number; monthlyIncludedCredits: 12000 };
@@ -147,9 +157,10 @@ export interface SaasCreativeRatesReceipt {
   rates: SaasCreativeRates<SaasCreativeRate & { costEvidenceId: string | null }>; retiredRateVersionId: string | null; replayed: boolean;
 }
 export interface SaasCreativeAdjustmentReceipt {
-  adjustment: { adjustmentId: string; lot: SaasCreativeLot; credits?: number; reasonCode: string; note: string }; balance: SaasCreativeBalance; replayed: boolean;
+  adjustment: { adjustmentId: string; schoolId: string; lot: SaasCreativeLot; credits?: number; reasonCode: string; note: string }; balance: SaasCreativeBalance; replayed: boolean;
 }
 export interface SaasCreativeResolveReceipt { reservation: SaasCreativeReservationInternal; replayed: boolean }
+export interface SaasCreativeCostReceipt { reservation: SaasCreativeReservationInternal; outcome: 'APPLIED'; replayed: boolean }
 export interface SaasCreativeWindowReceipt { lot: SaasCreativeLot; balance: SaasCreativeBalance; replayed: boolean }
 export interface SaasCreativeReservationReceipt { reservation: SaasCreativeReservation; balance: SaasCreativeBalance; replayed: boolean }
 export interface SaasCreativePurchaseReceipt { purchase: SaasCreativePurchase; replayed: boolean }
@@ -186,11 +197,17 @@ export function validateSaasCreativeDebitInput(value: unknown): SaasCreativeDebi
 }
 export function validateSaasCreativeResolveInput(value: unknown): SaasCreativeResolveInput {
   const input = record(value, invalid); exactKeys(input, ['resolution','expectedVersion','finalUnits','providerCostMicrounits','evidenceReference'], invalid);
-  if (!version(input.expectedVersion) || !text(input.evidenceReference, 200) || !isInt(input.providerCostMicrounits, 0, 999_999_999_999_999)) invalid();
-  if (input.resolution === 'SUCCEEDED') { if (!isInt(input.finalUnits, 0, 1000)) invalid(); }
-  else if (input.resolution === 'NOT_CHARGED') { if (input.finalUnits !== null) invalid(); }
+  const cost = (v: unknown) => isInt(v, 0, 999_999_999_999_999);
+  if (!version(input.expectedVersion) || !text(input.evidenceReference, 200)) invalid();
+  if (input.resolution === 'SUCCEEDED') { if (!isInt(input.finalUnits, 0, 1000) || !cost(input.providerCostMicrounits)) invalid(); }
+  else if (input.resolution === 'NOT_CHARGED') { if (input.finalUnits !== null || !(input.providerCostMicrounits === null || cost(input.providerCostMicrounits))) invalid(); }
   else invalid();
   return input as unknown as SaasCreativeResolveInput;
+}
+export function validateSaasCreativeCostInput(value: unknown): SaasCreativeCostInput {
+  const input = record(value, invalid); exactKeys(input, ['expectedVersion','providerCostMicrounits','evidenceReference'], invalid);
+  if (!version(input.expectedVersion) || !isInt(input.providerCostMicrounits, 0, 999_999_999_999_999) || !text(input.evidenceReference, 200)) invalid();
+  return input as unknown as SaasCreativeCostInput;
 }
 export function validateSaasCreativeReserveInput(value: unknown): SaasCreativeReserveInput {
   const input = record(value, invalid); exactKeys(input, ['operationCode','units','providerId','modelCode'], invalid);
@@ -250,7 +267,8 @@ function validateReservation(value: unknown, internal: boolean): void {
   const r = record(value, drift);
   const keys = ['reservationId','schoolId','operationCode','mediaKind','rateBasis','creditsPerUnit','units','reservedCredits','status','statusReason',
     'version','finalUnits','finalCredits','lots','reservedAt','settledAt'];
-  exactKeys(r, internal ? [...keys, 'providerId','modelCode','providerCostMicrounits','usageId','resolutionReference'] : keys, drift);
+  exactKeys(r, internal ? [...keys, 'organizationId','providerId','modelCode','costStatus','providerCostMicrounits','costReference','costRecordedAt','usageId',
+    'resolutionReference'] : keys, drift);
   if (!isUuid(r.reservationId) || !isUuid(r.schoolId) || typeof r.operationCode !== 'string' || !OPERATION.test(r.operationCode) || !has(MEDIA, r.mediaKind)
     || !has(BASES, r.rateBasis) || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.units, 1, 1000)
     || r.reservedCredits !== (r.creditsPerUnit as number) * (r.units as number) || !has(RES_STATES, r.status) || !has(RES_REASONS, r.statusReason)
@@ -266,8 +284,12 @@ function validateReservation(value: unknown, internal: boolean): void {
   if (finalized ? !count(r.finalUnits) || r.finalCredits !== (r.finalUnits as number) * (r.creditsPerUnit as number) || (r.finalCredits as number) > (r.reservedCredits as number)
     : r.finalCredits !== null || r.finalUnits !== null) drift();
   if ((r.status === 'RESERVED' || r.status === 'OUTCOME_UNKNOWN') !== (r.settledAt === null)) drift();
-  if (internal && (typeof r.providerId !== 'string' || typeof r.modelCode !== 'string' || !nullable(r.providerCostMicrounits, count) || !nullable(r.usageId, isUuid)
-    || (finalized && (r.usageId === null || r.providerCostMicrounits === null)) || !nullable(r.resolutionReference, (v): v is string => text(v, 200)))) drift();
+  if (internal && (!isUuid(r.organizationId) || typeof r.providerId !== 'string' || typeof r.modelCode !== 'string' || !has(COST_STATES, r.costStatus)
+    || !nullable(r.providerCostMicrounits, count) || !nullable(r.usageId, isUuid) || !nullable(r.costReference, (v): v is string => text(v, 200)) || !nts(r.costRecordedAt)
+    || (r.costStatus === 'RECORDED') !== (r.providerCostMicrounits !== null) || (r.costStatus === 'RECORDED') !== (r.costRecordedAt !== null)
+    || (r.usageId !== null && r.costStatus !== 'RECORDED')
+    || ((r.status === 'RESERVED' || r.status === 'OUTCOME_UNKNOWN') !== (r.costStatus === 'PENDING'))
+    || (finalized && (r.usageId === null || r.costStatus !== 'RECORDED')) || !nullable(r.resolutionReference, (v): v is string => text(v, 200)))) drift();
 }
 function validateRates(value: unknown, internal: boolean): void {
   if (value === null) return;
@@ -347,12 +369,16 @@ export function validateSaasCreativeSchoolWallet(value: unknown): SaasCreativeSc
   return w as unknown as SaasCreativeSchoolWallet;
 }
 export function validateSaasCreativeHqWallet(value: unknown): SaasCreativeHqWallet {
-  const w = record(value, drift); exactKeys(w, [...WALLET_KEYS, 'organizationId', 'providerExpense'], drift);
-  if (!isUuid(w.organizationId)) drift();
+  const w = record(value, drift); exactKeys(w, [...WALLET_KEYS, 'schoolId', 'organizationId', 'providerExpense'], drift);
+  if (!isUuid(w.schoolId) || !isUuid(w.organizationId)) drift();
   validateWalletBase(w, true);
+  if ((w.reservations as SaasCreativeReservationInternal[]).some(r => r.schoolId !== w.schoolId || r.organizationId !== w.organizationId)) drift();
+  if ((w.purchases as SaasCreativePurchase[]).some(p => p.schoolId !== w.schoolId)) drift();
   const e = record(w.providerExpense, drift);
-  exactKeys(e, ['actualProviderCostMicrounits','finalizedProviderCostMicrounits','failedOrNotChargedProviderCostMicrounits','consumedCredits','generations'], drift);
+  exactKeys(e, ['actualProviderCostMicrounits','finalizedProviderCostMicrounits','failedOrNotChargedProviderCostMicrounits','consumedCredits',
+    'unknownCostGenerations','pendingCostGenerations','spendClass','generations'], drift);
   if (!count(e.actualProviderCostMicrounits) || !count(e.finalizedProviderCostMicrounits) || !count(e.failedOrNotChargedProviderCostMicrounits) || !count(e.consumedCredits)
+    || !count(e.unknownCostGenerations) || !count(e.pendingCostGenerations) || e.spendClass !== 'CREATIVE_MEDIA'
     || (e.finalizedProviderCostMicrounits as number) + (e.failedOrNotChargedProviderCostMicrounits as number) !== e.actualProviderCostMicrounits) drift();
   const g = record(e.generations, drift); exactKeys(g, ['finalized','released','reserved','outcomeUnknown'], drift);
   if (!count(g.finalized) || !count(g.released) || !count(g.reserved) || !count(g.outcomeUnknown)) drift();
@@ -366,10 +392,13 @@ export function validateSaasCreativeHqWalletList(value: unknown): SaasCreativeHq
   if (!Array.isArray(r.wallets) || r.wallets.length > 200) drift();
   (r.wallets as unknown[]).forEach(value => {
     const w = record(value, drift);
-    exactKeys(w, ['organizationId','organizationName','availableCredits','heldCredits','consumedCredits','actualProviderCostMicrounits','outcomeUnknown','updatedAt'], drift);
-    if (!isUuid(w.organizationId) || typeof w.organizationName !== 'string' || !count(w.availableCredits) || !count(w.heldCredits) || !count(w.consumedCredits)
-      || !count(w.actualProviderCostMicrounits) || !count(w.outcomeUnknown) || !isTimestamp(w.updatedAt)) drift();
+    exactKeys(w, ['schoolId','schoolName','organizationId','organizationName','availableCredits','heldCredits','consumedCredits','actualProviderCostMicrounits',
+      'outcomeUnknown','unknownCostGenerations','updatedAt'], drift);
+    if (!isUuid(w.schoolId) || typeof w.schoolName !== 'string' || !isUuid(w.organizationId) || typeof w.organizationName !== 'string' || !count(w.availableCredits)
+      || !count(w.heldCredits) || !count(w.consumedCredits) || !count(w.actualProviderCostMicrounits) || !count(w.outcomeUnknown) || !count(w.unknownCostGenerations)
+      || !isTimestamp(w.updatedAt)) drift();
   });
+  if (new Set((r.wallets as SaasCreativeHqWalletRow[]).map(w => w.schoolId)).size !== (r.wallets as unknown[]).length) drift();
   return r as unknown as SaasCreativeHqWalletList;
 }
 const replayed = (r: Record<string, unknown>) => { if (typeof r.replayed !== 'boolean') drift(); };
@@ -390,14 +419,20 @@ export function validateSaasCreativeAdjustmentReceipt(value: unknown): SaasCreat
   const r = record(value, drift); exactKeys(r, ['adjustment','balance','replayed'], drift); replayed(r); validateBalance(r.balance);
   const a = record(r.adjustment, drift);
   const debit = Object.prototype.hasOwnProperty.call(a, 'credits');
-  exactKeys(a, debit ? ['adjustmentId','lot','credits','reasonCode','note'] : ['adjustmentId','lot','reasonCode','note'], drift);
-  if (!isUuid(a.adjustmentId) || !has(ADJ_REASONS, a.reasonCode) || !text(a.note, 500) || (debit && !isInt(a.credits, 1, 1_000_000_000))) drift();
+  exactKeys(a, debit ? ['adjustmentId','schoolId','lot','credits','reasonCode','note'] : ['adjustmentId','schoolId','lot','reasonCode','note'], drift);
+  if (!isUuid(a.adjustmentId) || !isUuid(a.schoolId) || !has(ADJ_REASONS, a.reasonCode) || !text(a.note, 500) || (debit && !isInt(a.credits, 1, 1_000_000_000))) drift();
   validateLot(a.lot);
   return r as unknown as SaasCreativeAdjustmentReceipt;
 }
 export function validateSaasCreativeResolveReceipt(value: unknown): SaasCreativeResolveReceipt {
   const r = record(value, drift); exactKeys(r, ['reservation','replayed'], drift); replayed(r); validateReservation(r.reservation, true);
   return r as unknown as SaasCreativeResolveReceipt;
+}
+export function validateSaasCreativeCostReceipt(value: unknown): SaasCreativeCostReceipt {
+  const r = record(value, drift); exactKeys(r, ['reservation','outcome','replayed'], drift); replayed(r); validateReservation(r.reservation, true);
+  const x = r.reservation as SaasCreativeReservationInternal;
+  if (r.outcome !== 'APPLIED' || x.status !== 'RELEASED' || x.costStatus !== 'RECORDED') drift();
+  return r as unknown as SaasCreativeCostReceipt;
 }
 export function validateSaasCreativeWindowReceipt(value: unknown): SaasCreativeWindowReceipt {
   const r = record(value, drift); exactKeys(r, ['lot','balance','replayed'], drift); replayed(r); validateLot(r.lot); validateBalance(r.balance);

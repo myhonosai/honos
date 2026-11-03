@@ -2100,8 +2100,9 @@ END $$;
 -- webhook). Earlier saas blocks revoke every saas function, so the runtime entry points are granted here.
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   IF to_regprocedure('hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply CW1 migration 0202 first'; END IF;
+  IF to_regclass('hon.saas_creative_cost_events') IS NULL THEN RAISE EXCEPTION 'Apply the corrected CW1 migration 0202 first'; END IF;
   FOREACH t IN ARRAY ARRAY['saas_creative_program','saas_creative_rate_versions','saas_creative_rates','saas_creative_topup_packages','saas_creative_wallets',
-    'saas_creative_topup_purchases','saas_creative_adjustments','saas_creative_lots','saas_creative_reservations','saas_creative_ledger'] LOOP
+    'saas_creative_topup_purchases','saas_creative_adjustments','saas_creative_lots','saas_creative_reservations','saas_creative_ledger','saas_creative_cost_events'] LOOP
     EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
     EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
@@ -2117,7 +2118,8 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.set_saas_creative_program(text,jsonb,uuid,uuid,uuid), hon.publish_saas_creative_rates(text,jsonb,uuid,uuid,uuid),
       hon.grant_saas_creative_credits_from_hq(text,uuid,jsonb,uuid,uuid,uuid), hon.debit_saas_creative_lot_from_hq(text,uuid,jsonb,uuid,uuid,uuid),
-      hon.resolve_saas_creative_reservation_from_hq(text,uuid,jsonb,uuid,uuid,uuid), hon.read_saas_creative_wallet_from_hq(text,uuid),
+      hon.resolve_saas_creative_reservation_from_hq(text,uuid,jsonb,uuid,uuid,uuid), hon.record_saas_creative_cost_from_hq(text,uuid,jsonb,uuid,uuid,uuid),
+      hon.read_saas_creative_wallet_from_hq(text,uuid),
       hon.read_saas_creative_wallets_from_hq(text), hon.read_saas_creative_wallet(text,uuid), hon.open_saas_creative_window(text,uuid,uuid,uuid,uuid),
       hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid), hon.settle_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid),
       hon.create_saas_creative_topup_purchase(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;

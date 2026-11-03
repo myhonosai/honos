@@ -14,12 +14,12 @@ export const saasBillingTables = ['saas_subscription_generations','saas_price_sc
  'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
  'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications',
  'saas_creative_program','saas_creative_rate_versions','saas_creative_rates','saas_creative_topup_packages','saas_creative_wallets',
- 'saas_creative_topup_purchases','saas_creative_adjustments','saas_creative_lots','saas_creative_reservations','saas_creative_ledger'];
+ 'saas_creative_topup_purchases','saas_creative_adjustments','saas_creative_lots','saas_creative_reservations','saas_creative_ledger','saas_creative_cost_events'];
 const evidenceTables = ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
  'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy',
- 'saas_creative_rates','saas_creative_topup_packages','saas_creative_adjustments','saas_creative_lots','saas_creative_ledger'];
+ 'saas_creative_rates','saas_creative_topup_packages','saas_creative_adjustments','saas_creative_lots','saas_creative_ledger','saas_creative_cost_events'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
@@ -280,6 +280,8 @@ export const saasBillingFunctions = [
  ['hon.saas_creative_program_active()',false,false],
  ['hon.saas_creative_lock_wallet(uuid,timestamp with time zone)',false,true],
  ['hon.saas_creative_touch_wallet(uuid,timestamp with time zone)',false,true],
+ ['hon.saas_creative_pause_gate(uuid)',false,false],
+ ['hon.saas_creative_evidence_actor(text,uuid)',false,true],
  ['hon.saas_creative_lot_totals(uuid)',false,false],
  ['hon.saas_creative_lot_remaining(uuid)',false,false],
  ['hon.saas_creative_lot_available(hon.saas_creative_lots,timestamp with time zone)',false,false],
@@ -295,12 +297,16 @@ export const saasBillingFunctions = [
  ['hon.saas_creative_purchase_json(hon.saas_creative_topup_purchases,boolean)',false,false],
  ['hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)',false,true],
  ['hon.saas_creative_settle_lots(hon.saas_creative_reservations,integer,uuid,timestamp with time zone)',false,true],
+ ['hon.saas_creative_apply_cost(hon.saas_creative_reservations,uuid,bigint,text,timestamp with time zone)',false,true],
+ ['hon.saas_creative_expense_json(uuid)',false,false],
  ['hon.saas_creative_wallet_json(uuid,boolean)',false,false],
  ['hon.set_saas_creative_program(text,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.publish_saas_creative_rates(text,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.grant_saas_creative_credits_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.debit_saas_creative_lot_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.resolve_saas_creative_reservation_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.record_saas_creative_cost_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.saas_record_creative_provider_cost(uuid,jsonb,timestamp with time zone)',false,true],
  ['hon.read_saas_creative_wallet_from_hq(text,uuid)',true,true],
  ['hon.read_saas_creative_wallets_from_hq(text)',true,true],
  ['hon.read_saas_creative_wallet(text,uuid)',true,true],

@@ -136,6 +136,7 @@ const SAAS_BILLING_CALLS = {
   grantCreativeCredits: { sql: 'SELECT hon.grant_saas_creative_credits_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   debitCreativeLot: { sql: 'SELECT hon.debit_saas_creative_lot_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   resolveCreativeReservation: { sql: 'SELECT hon.resolve_saas_creative_reservation_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  recordCreativeCost: { sql: 'SELECT hon.record_saas_creative_cost_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readCreativeWalletFromHq: { sql: 'SELECT hon.read_saas_creative_wallet_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readCreativeWalletsFromHq: { sql: 'SELECT hon.read_saas_creative_wallets_from_hq($1) AS data', arity: 1, readOnly: true },
   readSchoolCreativeWallet: { sql: 'SELECT hon.read_saas_creative_wallet($1,$2::uuid) AS data', arity: 2, readOnly: true },

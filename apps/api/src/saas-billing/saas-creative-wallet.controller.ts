@@ -28,9 +28,9 @@ export class SaasCreativeWalletHqController {
   async wallets(@Req() req: HonRequest) {
     return { data: await this.wallet.readWallets(subject(req)) };
   }
-  @Get('organizations/:organizationId') @UseGuards(SaasReadGuard)
-  async organization(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
-    return { data: await this.wallet.readOrganizationWallet(subject(req), organizationId) };
+  @Get('schools/:schoolId') @UseGuards(SaasReadGuard)
+  async school(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.wallet.readSchoolWalletFromHq(subject(req), schoolId) };
   }
   @Post('program') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.setCreativeProgram)
   async program(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
@@ -40,9 +40,9 @@ export class SaasCreativeWalletHqController {
   async rates(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.wallet.publishRates(subject(req), body, key) };
   }
-  @Post('organizations/:organizationId/grants') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.grantCreativeCredits)
-  async grant(@Req() req: HonRequest, @Param('organizationId') organizationId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
-    return { data: await this.wallet.grantCredits(subject(req), organizationId, body, key) };
+  @Post('schools/:schoolId/grants') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.grantCreativeCredits)
+  async grant(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.wallet.grantCredits(subject(req), schoolId, body, key) };
   }
   @Post('lots/:lotId/debits') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.debitCreativeLot)
   async debit(@Req() req: HonRequest, @Param('lotId') lotId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
@@ -51,6 +51,10 @@ export class SaasCreativeWalletHqController {
   @Post('reservations/:reservationId/resolve') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.resolveCreativeReservation)
   async resolve(@Req() req: HonRequest, @Param('reservationId') reservationId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.wallet.resolveReservation(subject(req), reservationId, body, key) };
+  }
+  @Post('reservations/:reservationId/provider-cost') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.recordCreativeCost)
+  async cost(@Req() req: HonRequest, @Param('reservationId') reservationId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.wallet.recordProviderCost(subject(req), reservationId, body, key) };
   }
 }
 

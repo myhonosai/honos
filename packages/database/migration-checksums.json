@@ -193,6 +193,6 @@
     "0198_ai_team_readiness.sql": "2bf9e1ce874190012ed63a13d4be5791fefe269a22ba3c2de4b9242b8bae3530",
     "0199_hon_conversation_delegation.sql": "6cb2e904236f0587bc913ee1562bf38e2d60e428798d4c153b8aa6ec9de0364b",
     "0200_crm_lead_membership_discovery.sql": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c",
-    "0202_hon_os_creative_credit_wallet.sql": "8aba320c5b2ca716073c458aeaa36ca66eba438df2f97c06945937b0922af3a2"
+    "0202_hon_os_creative_credit_wallet.sql": "6d70c1eb017d3ab297cae3f02f6a4b56408ccd26c74c531a21780b515d129f22"
   }
 }

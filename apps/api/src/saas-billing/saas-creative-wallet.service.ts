@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
-  saasUuid, validateSaasCreativeAdjustmentReceipt, validateSaasCreativeDebitInput, validateSaasCreativeGrantInput, validateSaasCreativeHqWallet,
+  saasUuid, validateSaasCreativeAdjustmentReceipt, validateSaasCreativeCostInput, validateSaasCreativeCostReceipt, validateSaasCreativeDebitInput, validateSaasCreativeGrantInput, validateSaasCreativeHqWallet,
   validateSaasCreativeHqWalletList, validateSaasCreativeProgramInput, validateSaasCreativeProgramReceipt, validateSaasCreativePurchaseInput,
   validateSaasCreativePurchaseReceipt, validateSaasCreativeRatesInput, validateSaasCreativeRatesReceipt, validateSaasCreativeReservationReceipt,
   validateSaasCreativeReserveInput, validateSaasCreativeResolveInput, validateSaasCreativeResolveReceipt, validateSaasCreativeSchoolWallet,
@@ -27,9 +27,10 @@ export class SaasCreativeWalletService {
   async readWallets(subject: string) {
     return this.billing.call('readCreativeWalletsFromHq', [subject], validateSaasCreativeHqWalletList);
   }
-  async readOrganizationWallet(subject: string, organizationId: unknown) {
-    const organization = parse(() => saasUuid(organizationId));
-    return this.billing.call('readCreativeWalletFromHq', [subject, organization], validateSaasCreativeHqWallet);
+  /** One school's wallet (wallets are school-owned; there is no organization pool to read). */
+  async readSchoolWalletFromHq(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.billing.call('readCreativeWalletFromHq', [subject, school], validateSaasCreativeHqWallet);
   }
   async setProgram(subject: string, body: unknown, key: unknown) {
     const [input, idempotencyKey] = parse(() => [validateSaasCreativeProgramInput(body), saasUuid(key)] as const);
@@ -39,9 +40,9 @@ export class SaasCreativeWalletService {
     const [input, idempotencyKey] = parse(() => [validateSaasCreativeRatesInput(body), saasUuid(key)] as const);
     return this.billing.call('publishCreativeRates', [subject, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreativeRatesReceipt);
   }
-  async grantCredits(subject: string, organizationId: unknown, body: unknown, key: unknown) {
-    const [organization, input, idempotencyKey] = parse(() => [saasUuid(organizationId), validateSaasCreativeGrantInput(body), saasUuid(key)] as const);
-    return this.billing.call('grantCreativeCredits', [subject, organization, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreativeAdjustmentReceipt);
+  async grantCredits(subject: string, schoolId: unknown, body: unknown, key: unknown) {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateSaasCreativeGrantInput(body), saasUuid(key)] as const);
+    return this.billing.call('grantCreativeCredits', [subject, school, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreativeAdjustmentReceipt);
   }
   async debitLot(subject: string, lotId: unknown, body: unknown, key: unknown) {
     const [lot, input, idempotencyKey] = parse(() => [saasUuid(lotId), validateSaasCreativeDebitInput(body), saasUuid(key)] as const);
@@ -50,6 +51,11 @@ export class SaasCreativeWalletService {
   async resolveReservation(subject: string, reservationId: unknown, body: unknown, key: unknown) {
     const [reservation, input, idempotencyKey] = parse(() => [saasUuid(reservationId), validateSaasCreativeResolveInput(body), saasUuid(key)] as const);
     return this.billing.call('resolveCreativeReservation', [subject, reservation, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreativeResolveReceipt);
+  }
+  /** Records, once, the evidenced provider cost of a released generation whose cost is UNKNOWN. */
+  async recordProviderCost(subject: string, reservationId: unknown, body: unknown, key: unknown) {
+    const [reservation, input, idempotencyKey] = parse(() => [saasUuid(reservationId), validateSaasCreativeCostInput(body), saasUuid(key)] as const);
+    return this.billing.call('recordCreativeCost', [subject, reservation, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()], validateSaasCreativeCostReceipt);
   }
 
   // ---------- school ----------

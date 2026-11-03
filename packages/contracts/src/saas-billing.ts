@@ -100,6 +100,7 @@ export const SAAS_COMMANDS = {
   grantCreativeCredits: 'saas-creative-grant',
   debitCreativeLot: 'saas-creative-debit',
   resolveCreativeReservation: 'saas-creative-resolve',
+  recordCreativeCost: 'saas-creative-cost-record',
   openCreativeWindow: 'saas-creative-window-open',
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
 } as const;
