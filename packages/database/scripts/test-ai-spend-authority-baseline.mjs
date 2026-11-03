@@ -1116,6 +1116,16 @@ try {
   // A non-agent (CREATIVE_MEDIA) provider expense row, as the creative wallet (CW1) records them: it has no agent, so
   // the per-agent breakdown must skip it rather than fail the whole HQ read (CW1 review P2-A regression).
   await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'OPENROUTER','ai0-creative','IMAGE',0,5000,$3,'CREATIVE_MEDIA')", [old.o.id, old.o.school, K()]);
+  // Manus delta review P2: a school whose only activity is unresolved calls (no ledger row at all) must still be listed;
+  // a school with no activity at all is not. One org with an UNKNOWN hold from each agent and nothing recorded, and one
+  // org with nothing.
+  const unresolvedOnly = await lostOutcome('inv-21-unresolved-only', 'marcus');
+  for (const name of ['claire', 'chad']) {
+    fakes[name].mode = 'UNKNOWN';
+    assert.equal((await agents[name].service.submit(context(unresolvedOnly.o), agents[name].input(unresolvedOnly.o))).status, 'UNKNOWN');
+    fakes[name].mode = 'RESULT';
+  }
+  const idle = await makeOrg('inv-21-zero-activity');
   const ledgerBefore = (await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n;
   const read = await usage(hq.subject, from, to);
   const report = read.value?.rows[0].r;
@@ -1127,9 +1137,33 @@ try {
       count(*)::int n, count(r.id)::int w
     FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF'
     WHERE u.occurred_at >= $1 AND u.occurred_at < $2 GROUP BY 1,2,3`, [from, to]);
-  const schoolsSeen = new Set(expected.map((e) => `${e.o}/${e.s}`));
-  assert.equal(report.schools.length, schoolsSeen.size, 'one entry per school with usage');
+  // Independent unresolved counts per school (the HQ queue predicate on the immutable origin).
+  const unresolvedExpected = await rows(`SELECT organization_id o, school_id s, count(*)::int n FROM (
+      SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.marketing_ai_invocations
+      UNION ALL SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.teaching_ai_invocations
+      UNION ALL SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.chad_follow_up_invocations) h
+    WHERE reserved_credits > 0 AND (status = 'UNKNOWN' OR (status = 'SENDING' AND held_at <= clock_timestamp() - interval '1 hour')) GROUP BY 1,2`);
+  const schoolsSeen = new Set([...expected, ...unresolvedExpected].map((e) => `${e.o}/${e.s}`));
+  assert.equal(report.truncated, false);
+  assert.equal(report.schools.length, schoolsSeen.size, 'one entry per school with usage in range or unresolved calls now');
   assert.equal(new Set(report.schools.map((x) => `${x.organizationId}/${x.schoolId}`)).size, report.schools.length, 'no school reported twice');
+  for (const e of unresolvedExpected)
+    assert.equal(report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s)?.unreconciledInvocations, e.n, `school ${e.s} unresolved count`);
+  for (const x of report.schools)
+    if (!unresolvedExpected.some((e) => e.o === x.organizationId && e.s === x.schoolId)) assert.equal(x.unreconciledInvocations, 0, `school ${x.schoolId} has no unresolved call`);
+  // The unresolved-only school is listed once, with its three unresolved calls and no amount at all (no ledger class,
+  // no invented cost); the zero-activity school is not listed; the totals reconcile with the ledger (no double count).
+  const uo = report.schools.filter((x) => x.schoolId === unresolvedOnly.o.school);
+  assert.equal(uo.length, 1, 'an unresolved-only school is listed exactly once');
+  assert.deepEqual([uo[0].unreconciledInvocations, uo[0].entries, uo[0].providerReportedCostMicrounits, uo[0].estimatedWriteOffCostMicrounits,
+    uo[0].lateProviderCostMicrounits, uo[0].writeOffEntries, uo[0].byClass], [3, 0, 0, 0, 0, 0, {}], JSON.stringify(uo[0]));
+  assert.equal(report.schools.some((x) => x.schoolId === idle.school || x.organizationId === idle.id), false, 'a zero-activity school is not listed');
+  assert.equal(report.organizations.find((x) => x.organizationId === unresolvedOnly.o.id)?.openUnknownHolds, 3, 'its organization is listed with its open holds');
+  const ledgerTotals = await row(`SELECT count(*)::int n, coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NULL),0)::bigint cost,
+      coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NOT NULL),0)::bigint estimate
+    FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF' WHERE u.occurred_at >= $1 AND u.occurred_at < $2`, [from, to]);
+  assert.deepEqual([report.schools.reduce((t, x) => t + x.entries, 0), report.schools.reduce((t, x) => t + x.providerReportedCostMicrounits, 0), report.schools.reduce((t, x) => t + x.estimatedWriteOffCostMicrounits, 0)],
+    [ledgerTotals.n, Number(ledgerTotals.cost), Number(ledgerTotals.estimate)], 'entries, provider cost and estimates reconcile with the ledger exactly once');
   for (const e of expected) {
     const sch = report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s);
     const cls = sch?.byClass?.[e.c];
@@ -1176,7 +1210,7 @@ try {
     assert.equal((await usage(hq.subject, a, b)).error?.code, '22023', label);
   assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n, ledgerBefore, 'the read writes nothing');
   assert.equal((await row("SELECT provolatile v, prosecdef d FROM pg_proc WHERE oid='hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)'::regprocedure")).v, 's');
-  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates, late actuals (with the estimate they supersede) and unreconciled calls kept separate (mixed agent + creative), org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
+  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates, late actuals (with the estimate they supersede) and unreconciled calls kept separate (mixed agent + creative), an unresolved-only school listed once with no amount, a zero-activity school not listed, totals reconcile with the ledger, org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
   }
 
   }
