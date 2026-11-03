@@ -1993,3 +1993,18 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.authorize_crm_owner_read_only(text,uuid,text,uuid,uuid), hon.read_saas_school_access_standing(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0147 current-school Class Sessions read: the blanket function revoke near the top of this script removes 0147's
+-- EXECUTE grant, so re-grant exactly that one named SECURITY DEFINER projection. Its private authority helper, PUBLIC
+-- and client roles stay revoked. No table, column, helper or grant-option privilege is added here.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['require_current_school_class_sessions_read_actor(text)','read_current_school_class_sessions(text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_current_school_class_sessions(text) TO hon_runtime;
+  END IF;
+END $$;
