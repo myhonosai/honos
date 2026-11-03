@@ -191,7 +191,7 @@
     "0196_ai_unknown_resolution.sql": "766a8d1c08c4ccc51c3f7d2d90546c7bc0d8ea860a68798265c220230ad8a1a3",
     "0197_ai_school_usage_hq_read.sql": "6fa30b7af0f1a9046dd1d1037a174e0d36780a46d1881bce7a9224a14a4da8ba",
     "0198_ai_team_readiness.sql": "71fd59380496ad85a25f1898daa9774095744426b5e432e4349aae4f51cb94fd",
-    "0199_hon_conversation_delegation.sql": "bb024e84796a7a7d27439f4e3777950e44cd48cd7de6d4413582a91a2892fa02",
+    "0199_hon_conversation_delegation.sql": "f47e07603647e0063b0af42de7cd0d7bcbad996c4bf06a7c5c76129cdc280be4",
     "0200_crm_lead_membership_discovery.sql": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c",
     "0201_saas_billing_utc_calendar_periods.sql": "ea21b3ea4b4096026da07cd4a547dc0c5c3863b1c7780dd449a375ac66fedd3b"
   }
