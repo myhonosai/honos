@@ -1,4 +1,5 @@
 import { currentSchoolClassSessionsUuid, verifyCurrentSchoolClassSessions, type CurrentSchoolClassSession } from '@hon/contracts';
+import { reportConfirmedSessionInvalidation } from './session-invalidation';
 
 const RESPONSE_MAX = 64_000;
 export class ClassSessionsReadAccessError extends Error {
@@ -20,15 +21,16 @@ export function parseClassSessionsRead(value: unknown): CurrentSchoolClassSessio
   return verifyCurrentSchoolClassSessions(value.data);
 }
 /** Explicit GET only; path selectors are untrusted and authorization is repeated server- and database-side. */
-export async function loadCurrentSchoolClassSessions(organizationId: string, schoolId: string): Promise<CurrentSchoolClassSession[]> {
+export async function loadCurrentSchoolClassSessions(organizationId: string, schoolId: string, signal?: AbortSignal): Promise<CurrentSchoolClassSession[]> {
   const path = classSessionsReadPath(organizationId, schoolId);
   let response: Response;
   try {
     response = await fetch(path, {
       method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
-      headers: { Accept: 'application/json', 'X-HON-Human-Read': 'class-sessions' },
+      headers: { Accept: 'application/json', 'X-HON-Human-Read': 'class-sessions' }, ...(signal ? { signal } : {}),
     });
   } catch { throw new Error('Class Sessions is unavailable. No session list was retained or retried automatically.'); }
+  if (response.status === 401) reportConfirmedSessionInvalidation();
   if (response.status === 401 || response.status === 403) throw new ClassSessionsReadAccessError(response.status);
   if ([400,404,405,413,415,422].includes(response.status)) throw new ClassSessionsReadRejectedError();
   try {

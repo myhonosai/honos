@@ -12,8 +12,11 @@ import { type KnownMembership } from './membership-activation-http';
 import { readLeadMemberships, leadWorkflowHref, LeadMembershipReadError, type LeadMembershipScope, type DiscoveryFailure } from './crm-lead-memberships-http';
 import { membershipRecoveryText, recoveryLifecycleText } from './crm-lead-memberships-copy';
 import styles from './crm-lead-memberships-workbench.module.css';
+import { ConnectedStudentOperations } from './connected-student-operations';
+import { operationsText } from './connected-student-operations-copy';
+import { StudentOperationsError } from './connected-student-operations-http';
 
-type Selection = Readonly<{ key: string; scope: KnownMembership; stage: 'activation' | 'dates' }>;
+type Selection = Readonly<{ key: string; scope: KnownMembership; studentProfileId: string; stage: 'activation' | 'dates' | 'operations' }>;
 /** The list is a fresh lead-bound observation, never a membership detail/activation capability. */
 export function CrmLeadMembershipsWorkbench({ scope, sessionSubject }: { scope: LeadMembershipScope | null; sessionSubject: string }): React.ReactElement {
   const { preferences, date, number } = useLocale(), language = preferences?.language ?? 'en';
@@ -63,9 +66,9 @@ export function CrmLeadMembershipsWorkbench({ scope, sessionSubject }: { scope: 
     } finally { if (mounted.current && run === epoch.current && currentKey.current === ownership) { active.current = false; setLoading(false); } }
   }
   const data = result?.key === key ? result.data : null, observation = result, observationEpoch = epoch.current;
-  function open(item: CrmLeadMembershipItem): void {
+  function open(item: CrmLeadMembershipItem, operations = false): void {
     if (!scope || !data || !mounted.current || selected.current || concealed.current || active.current || observationEpoch !== epoch.current || observed.current !== observation || currentKey.current !== key || !data.memberships.includes(item)) return;
-    const next: Selection = Object.freeze({ key, scope: Object.freeze({ organizationId: scope.organizationId, schoolId: scope.schoolId, membershipId: item.membershipId }), stage: item.state === 'DRAFT' ? 'activation' : 'dates' });
+    const next: Selection = Object.freeze({ key, scope: Object.freeze({ organizationId: scope.organizationId, schoolId: scope.schoolId, membershipId: item.membershipId }), studentProfileId: item.studentProfileId, stage: operations ? 'operations' : item.state === 'DRAFT' ? 'activation' : 'dates' });
     selected.current = next; epoch.current++; observed.current = null; setResult(null); setSelection(next);
   }
   function back(expected: Selection): void {
@@ -74,8 +77,16 @@ export function CrmLeadMembershipsWorkbench({ scope, sessionSubject }: { scope: 
   }
   function manageDates(expected: Selection, input: KnownMembership): void {
     if (!mounted.current || selected.current !== expected || currentKey.current !== key || Object.keys(input).length !== 3 || Object.keys(expected.scope).some(k => input[k as keyof KnownMembership] !== expected.scope[k as keyof KnownMembership])) return;
-    const next: Selection = Object.freeze({ key, scope: expected.scope, stage: 'dates' }); selected.current = next; setSelection(next);
+    const next: Selection = Object.freeze({ key, scope: expected.scope, studentProfileId: expected.studentProfileId, stage: 'dates' }); selected.current = next; setSelection(next);
   }
+  if (selection && selection.key === key && selection.stage === 'operations') return <ConnectedStudentOperations
+    selection={{ organizationId: selection.scope.organizationId, schoolId: selection.scope.schoolId, studentProfileId: selection.studentProfileId }}
+    sessionSubject={sessionSubject} initialPresentation={mode} onReturn={() => back(selection)} verifyStudent={async signal => {
+      if (!scope || !mounted.current || selected.current !== selection || currentKey.current !== key) throw new StudentOperationsError(403);
+      const current = await readLeadMemberships(scope, signal);
+      if (signal.aborted || !mounted.current || selected.current !== selection || currentKey.current !== key) throw new StudentOperationsError(403);
+      if (!current.memberships.some(item => item.membershipId === selection.scope.membershipId && item.studentProfileId === selection.studentProfileId)) throw new StudentOperationsError(404);
+    }} />;
   if (selection && selection.key === key) return selection.stage === 'dates'
     ? <MembershipDatesWorkbench key={`dates:${key}:${selection.scope.membershipId}`} sessionSubject={sessionSubject} initialMembership={selection.scope} initialPresentation={mode} onReturnLabel={t('back')} onReturn={() => back(selection)} onAbandon={() => back(selection)} />
     : <MembershipActivationWorkbench key={`activation:${key}:${selection.scope.membershipId}`} sessionSubject={sessionSubject} initialMembership={selection.scope} initialPresentation={mode} onReturnLabel={t('back')} onReturn={() => back(selection)} onManageDates={input => manageDates(selection, input)} />;
@@ -94,6 +105,7 @@ export function CrmLeadMembershipsWorkbench({ scope, sessionSubject }: { scope: 
           <h2>{t(item.origin === 'ADULT_REGISTRATION' ? 'adult' : 'child')} · {number(index + 1)}</h2>
           <dl><dt>{t('profile')}</dt><dd><code>{item.studentProfileId}</code></dd><dt>{t('membership')}</dt><dd><code>{item.membershipId}</code></dd><dt>{t('lifecycle')}</dt><dd>{recoveryLifecycleText(language, item.state)}</dd><dt>{t('version')}</dt><dd>{number(item.version)}</dd><dt>{t('created')}</dt><dd>{date(item.createdAt)}</dd></dl>
           <button type="button" onClick={() => open(item)}>{t(item.state === 'DRAFT' ? 'draft' : 'dates')} · {number(index + 1)}</button>
+          <button type="button" onClick={() => open(item, true)}>{operationsText(language, 'title')} · {number(index + 1)}</button>
         </li>)}</ol>
       </section>}
     </div>

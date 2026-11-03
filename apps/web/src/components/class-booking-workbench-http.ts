@@ -6,6 +6,7 @@ import {
   type CreateClassBookingInput,
   type GenericClassBookingKind,
 } from '@hon/contracts';
+import { reportConfirmedSessionInvalidation } from './session-invalidation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INTEGER_MAX = 2_147_483_647;
@@ -32,7 +33,9 @@ export type ClassBookingWorkbenchResult = {
   replayed: boolean;
 };
 export class ClassBookingUncertainError extends Error {}
-export class ClassBookingRejectedError extends Error {}
+export class ClassBookingRejectedError extends Error {
+  constructor(message: string, readonly status?: number) { super(message); }
+}
 export class ClassBookingAccessError extends ClassBookingRejectedError {
   constructor(readonly status: 401 | 403) {
     super('Current verified human session or exact school booking permission is unavailable. Inputs, receipt and retry were cleared.');
@@ -135,12 +138,13 @@ export async function submitClassBooking(command: PreparedClassBooking): Promise
   } catch {
     throw new ClassBookingUncertainError('Booking outcome is uncertain. No receipt is assumed; only the exact retained command may be retried.');
   }
+  if (response.status === 401) reportConfirmedSessionInvalidation();
   if (response.status === 401 || response.status === 403) throw new ClassBookingAccessError(response.status);
   if (response.status === 409 && await inProgress(response)) {
     throw new ClassBookingUncertainError('The exact command is still processing. No receipt is assumed; retry is a separate human action.');
   }
   if ([400, 404, 409, 413, 415, 422].includes(response.status)) {
-    throw new ClassBookingRejectedError('Class-booking command rejected. No verified receipt; review the exact IDs and kind before a new explicit submit.');
+    throw new ClassBookingRejectedError('Class-booking command rejected. No verified receipt; review the exact IDs and kind before a new explicit submit.', response.status);
   }
   try {
     if (!response.ok || ![200, 201].includes(response.status) || response.redirected

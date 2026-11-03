@@ -1,3 +1,11 @@
+## 2026-11-03 — Connected student booking and attendance (dependency draft)
+
+- PR #127 P2 correction: synchronously retire submit revisions before releasing the command lock, on read replacement/failure and on deliberate abandonment. Ten added component cases reproduce five failures before the fix (including SUCCESS/CONFLICT replacement POSTs) and pass afterward; all 70 focused component/transport/handoff tests pass. Mounted React regressions and fresh exact-head CI verify retained callbacks, fresh confirmed versions and exact UNKNOWN retry without backend, migration or grant changes; final run evidence belongs in the PR report.
+- Final CI repair: normalize only synthetic class-session fixture times to avoid microsecond SQL ordering collapsing into millisecond/UUID contract ties. Add a deterministic actual signed-API reproduction and retain the ACL-denial regression. The mounted CONFLICT test must await completed reread before confirming; no production validator, backend or grant is changed. PR #128 remains the separate canonical ACL dependency.
+- Connect the verified adult/child membership-discovery student reference to the existing bounded sessions, canonical booking, and exact attendance APIs. No new backend, roster, eligibility, financial or provider logic.
+- Keep selections and exact unknown requests in private mounted memory; shield/reauthorize, prevent mounted replacement bookings, require attendance reads and versions, and preserve EN/KO/ES and Modern/Classic/Big Button.
+- Reusable workbench first committed on accepted main; connected handoff depends on #126/#122, without changing those PRs. Signed-session/disposable-DB and mounted browser evidence run in the dedicated draft-safe workflow. See docs/architecture/CONNECTED_STUDENT_BOOKING_ATTENDANCE.md for actual boundaries and dependencies.
+
 ## 2026-11-03 — Lead-bound membership recovery frontend (dependency draft)
 
 - Implement actual CRM-list/journey navigation to an idle, signed-session-gated saved-memberships screen. Reuse PR #122's exact closed discovery validator; reopen each adult/child record through existing activation/date/history components, with original lead selectors retained for an authorized return. No school directory, matching, new backend or migration.
