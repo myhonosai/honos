@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, verifyChampionsProofConnection } from './champions-proof-target.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { verifySaasBillingSecurity } from './saas-billing-security.mjs';
@@ -9,8 +10,10 @@ import { verifySaasBillingSecurity } from './saas-billing-security.mjs';
 // here by the fixture HQ owner only. No generation provider is called: every provider outcome and cost is a
 // synthetic value written by this proof. No card is charged: top-up fulfillment runs the internal contract with
 // synthetic STRIPE_SIMULATED payment facts.
-const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
-if(owner.hostname!=='localhost'||owner.port!=='5432'||owner.pathname!=='/hon_champions_validation'||owner.username!=='hon_champions_owner'||runtime.hostname!==owner.hostname||runtime.port!==owner.port||runtime.pathname!==owner.pathname||runtime.username!=='hon_champions_runtime')throw new Error('Only exact disposable localhost validation URLs permitted; never remote DB.');
+// Fail-closed target guard (Manus review P2): exact disposable localhost fixture as node-postgres itself interprets
+// the URLs, no PG* overrides, explicit client configs, then a server-side database/role/loopback/marker check below.
+await import('./test-champions-proof-target.mjs');
+const targets=championsProofTargets(process.env),runtime={username:CHAMPIONS_RUNTIME_ROLE};
 if(Object.keys(process.env).some(key=>/^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HEYGEN|HIGGSFIELD|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(key)))throw new Error('Provider credentials/execution switches are forbidden.');
 process.env.HON_PUBLIC_ORIGIN='https://hon.example';
 process.env.HON_RUNTIME_DATABASE_POOL_MAX='10';
@@ -25,8 +28,8 @@ const SECRET='whsec_disposableFixtureSecret0123456789',KEY='sk_test_disposableFi
 const sim=new StripeSimulator(SECRET);
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),wallet=new SaasCreativeWalletService(billing);
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
-const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
-const ownerPool=new pg.Pool({connectionString:owner.toString(),ssl:false,max:5});
+const admin=new pg.Client(targets.owner),restricted=new pg.Client(targets.runtime);
+const ownerPool=new pg.Pool({...targets.owner,max:5});
 const creativeTables=['saas_creative_cost_events','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
 const offerTables=['saas_offer_sales_stops','saas_offer_set_offers','saas_offer_sets'];
@@ -105,6 +108,10 @@ const creativeAudit=async()=>(await admin.query("SELECT action_code,count(*)::in
 const creativeOutbox=async()=>(await admin.query("SELECT count(*)::int n FROM hon.saas_outbox WHERE event_type LIKE 'saas.creative.%'")).rows[0].n;
 
 await Promise.all([admin.connect(),restricted.connect()]);
+await verifyChampionsProofConnection(admin,CHAMPIONS_OWNER_ROLE);
+await verifyChampionsProofConnection(ownerPool,CHAMPIONS_OWNER_ROLE);
+await verifyChampionsProofConnection({query:(...a)=>database['getPool']().query(...a)},CHAMPIONS_RUNTIME_ROLE);
+await verifyChampionsProofConnection(restricted,CHAMPIONS_RUNTIME_ROLE);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  await cleanup();

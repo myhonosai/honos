@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, verifyChampionsProofConnection } from './champions-proof-target.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // CW1 independent-review regressions (Manus review of PR #124 at a07f637, 2026-11-03). One check per finding,
@@ -7,8 +8,10 @@ import { randomUUID } from 'node:crypto';
 //   P1-C the S4 emergency AI pause and access changes apply to new creative reservations, never to accounting;
 //   P2-A creative provider expense is classified CREATIVE_MEDIA; P2-B an unknown provider cost stays reconcilable.
 // DISPOSABLE DATABASE ONLY, TEST MODE, SIMULATED provider results and payments (same posture as the CW1 proof).
-const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
-if(owner.hostname!=='localhost'||owner.port!=='5432'||owner.pathname!=='/hon_champions_validation'||owner.username!=='hon_champions_owner'||runtime.hostname!==owner.hostname||runtime.port!==owner.port||runtime.pathname!==owner.pathname||runtime.username!=='hon_champions_runtime')throw new Error('Only exact disposable localhost validation URLs permitted; never remote DB.');
+// Fail-closed target guard (Manus review P2): exact disposable localhost fixture as node-postgres itself interprets
+// the URLs, no PG* overrides, explicit client configs, then a server-side database/role/loopback/marker check below.
+await import('./test-champions-proof-target.mjs');
+const targets=championsProofTargets(process.env),runtime={username:CHAMPIONS_RUNTIME_ROLE};
 if(Object.keys(process.env).some(key=>/^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HEYGEN|HIGGSFIELD|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(key)))throw new Error('Provider credentials/execution switches are forbidden.');
 process.env.HON_PUBLIC_ORIGIN='https://hon.example';
 process.env.HON_RUNTIME_DATABASE_POOL_MAX='12';
@@ -23,8 +26,8 @@ const SECRET='whsec_disposableFixtureSecret0123456789',KEY='sk_test_disposableFi
 const sim=new StripeSimulator(SECRET);
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),wallet=new SaasCreativeWalletService(billing);
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
-const admin=new pg.Client({connectionString:owner.toString(),ssl:false});
-const ownerPool=new pg.Pool({connectionString:owner.toString(),ssl:false,max:8});
+const admin=new pg.Client(targets.owner);
+const ownerPool=new pg.Pool({...targets.owner,max:8});
 const creativeTables=['saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
 const optionalCreativeTables=['saas_creative_cost_events'];
@@ -103,6 +106,9 @@ async function check(id,title,fn){
 }
 
 await admin.connect();
+await verifyChampionsProofConnection(admin,CHAMPIONS_OWNER_ROLE);
+await verifyChampionsProofConnection(ownerPool,CHAMPIONS_OWNER_ROLE);
+await verifyChampionsProofConnection({query:(...a)=>database['getPool']().query(...a)},CHAMPIONS_RUNTIME_ROLE);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  await cleanup();
