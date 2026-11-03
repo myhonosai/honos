@@ -1,6 +1,6 @@
 {
   "baseline": "be3a26e097a4ceb355d08d93d57dd73297b6048f",
-  "chainSha256": "4d133cb9cb5d924d6aede70fb897b519778836354182b4079e073fb0023d5192",
+  "chainSha256": "0568a3052d8aee7a3a686e2b7d16981a7b69d9dab4ddce3af2201b3b86c3111c",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -49,6 +49,10 @@
     {
       "file": "0192_crm_suspended_owner_read_only.sql",
       "sha256": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542"
+    },
+    {
+      "file": "0202_hon_os_creative_credit_wallet.sql",
+      "sha256": "8aba320c5b2ca716073c458aeaa36ca66eba438df2f97c06945937b0922af3a2"
     }
   ]
 }

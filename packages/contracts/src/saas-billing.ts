@@ -93,6 +93,13 @@ export const SAAS_COMMANDS = {
   revokeAccessException: 'saas-access-exception-revoke',
   closeExpiredAccessExceptions: 'saas-access-exception-close',
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
+  setCreativeProgram: 'saas-creative-program',
+  publishCreativeRates: 'saas-creative-rates-publish',
+  grantCreativeCredits: 'saas-creative-grant',
+  debitCreativeLot: 'saas-creative-debit',
+  resolveCreativeReservation: 'saas-creative-resolve',
+  openCreativeWindow: 'saas-creative-window-open',
+  createCreativeTopupPurchase: 'saas-creative-topup-purchase',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
