@@ -5,7 +5,7 @@ export const FOLLOW_UP_DRAFT_PURPOSES = ['INTRODUCTION', 'CHECK_IN', 'TRIAL_REMI
 export type FollowUpDraftPurpose = (typeof FOLLOW_UP_DRAFT_PURPOSES)[number];
 export interface ChadFollowUpAssistantRequest { leadId: string; expectedLeadVersion: number; purpose: FollowUpDraftPurpose }
 export interface FollowUpDraftContent { subject: string; content: string }
-export type ChadFollowUpInvocationStatus = 'PENDING' | 'CONFIGURATION_REQUIRED' | 'BLOCKED' | 'SENDING' | 'UNKNOWN' | 'FAILED' | 'AWAITING_APPROVAL' | 'APPROVED' | 'REJECTED';
+export type ChadFollowUpInvocationStatus = 'PENDING' | 'CONFIGURATION_REQUIRED' | 'BLOCKED' | 'SENDING' | 'UNKNOWN' | 'FAILED' | 'RESULT_RECORDED' | 'RESULT_HELD' | 'AWAITING_APPROVAL' | 'APPROVED' | 'REJECTED';
 export interface ChadFollowUpInvocationView {
   id: string; schoolId: string; leadId: string; leadVersion: number; purpose: FollowUpDraftPurpose; workItemId: string;
   status: ChadFollowUpInvocationStatus; reason: string | null; actionRequestId: string | null; draft: FollowUpDraftContent | null;

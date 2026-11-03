@@ -3,7 +3,7 @@ import type { CommandContext } from './index.js';
 export interface TeachingAssistantContext extends CommandContext { externalSubject: string }
 export interface TeachingAssistantRequest { curriculumId: string; brief?: string }
 export interface TeachingDraftContent { title: string; content: string }
-export type TeachingInvocationStatus = 'PENDING' | 'CONFIGURATION_REQUIRED' | 'BLOCKED' | 'SENDING' | 'UNKNOWN' | 'FAILED' | 'AWAITING_APPROVAL' | 'SAVED' | 'REJECTED';
+export type TeachingInvocationStatus = 'PENDING' | 'CONFIGURATION_REQUIRED' | 'BLOCKED' | 'SENDING' | 'UNKNOWN' | 'FAILED' | 'RESULT_RECORDED' | 'RESULT_HELD' | 'AWAITING_APPROVAL' | 'SAVED' | 'REJECTED';
 export interface TeachingInvocationView {
   id: string; schoolId: string; curriculumId: string; workItemId: string; status: TeachingInvocationStatus;
   reason: string | null; actionRequestId: string | null; draft: TeachingDraftContent | null;

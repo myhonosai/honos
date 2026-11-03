@@ -2,7 +2,7 @@ import type { CommandContext } from './index.js';
 export interface MarketingAssistantContext extends CommandContext { externalSubject: string }
 export interface MarketingAssistantRequest { campaignId: string; request: string }
 export interface MarketingDraftContent { title: string; content: string }
-export type MarketingInvocationStatus = 'PENDING' | 'CONFIGURATION_REQUIRED' | 'BLOCKED' | 'SENDING' | 'UNKNOWN' | 'FAILED' | 'AWAITING_APPROVAL' | 'SAVED' | 'REJECTED';
+export type MarketingInvocationStatus = 'PENDING' | 'CONFIGURATION_REQUIRED' | 'BLOCKED' | 'SENDING' | 'UNKNOWN' | 'FAILED' | 'RESULT_RECORDED' | 'RESULT_HELD' | 'AWAITING_APPROVAL' | 'SAVED' | 'REJECTED';
 export interface MarketingInvocationView {
   id: string; schoolId: string; campaignId: string; workItemId: string; status: MarketingInvocationStatus;
   reason: string | null; actionRequestId: string | null; draft: MarketingDraftContent | null;

@@ -66,6 +66,12 @@ proof() { # fixture, script, description
   summary+=("| $description | \`$script\` | pass |")
 }
 
+# AI-0 spend-authority regression baseline (test only, no fix). Single-use dedicated fixture with
+# fake providers only; known failures KF-AI2/AI9/AI14/AI8/AI3 pass only while they reproduce exactly as
+# pinned OPEN in ai-spend-entrypoints.json and must be replaced by S4 (or the approved AI-D3 slice).
+setup ai-spend-baseline HON_AI_SPEND_BASELINE_VALIDATION_TARGET hon_ai_spend_baseline_validation HON_AI_SPEND_BASELINE_ENV_FILE
+proof ai-spend-baseline test-ai-spend-authority-baseline.mjs "AI-0 spend-authority baseline: strict inventory of AI spend paths, grants and ceilings; closed credit/trial/access/payment programs; entitlement gates for all three agents; 5 known failures (open, replaced by S4 or a later approved slice)"
+
 # Public lead forms use the uniquely marked marketing fixture. Keep its descriptor
 # separate from every other proof and invoke the package's existing db:test-public-forms
 # command so it builds the current contracts/config/database/API before both proofs.
@@ -144,6 +150,7 @@ proof flexible-billing-accounts test-crm-lead-registration-recovery-integrity.mj
 proof flexible-billing-accounts test-school-membership-plan-catalog-integrity.mjs "School membership plan catalog (0175): per-school versioned plans, immutable terms, AVAILABLE-only staff options, plan-bound adult DRAFT with exact version binding, no schedule/invoice/payment effect"
 proof flexible-billing-accounts test-crm-guardian-child-enrollment-integrity.mjs "CRM guardian/child enrollment (0176): separate guardian/child identities, explicit payer designation through the canonical account, additional children with staff-review ambiguity, one plan-bound DRAFT per child, no schedule/invoice/payment effect"
 proof flexible-billing-accounts test-membership-activation-gate-integrity.mjs "Membership activation gate (0177): two-step human preview and confirmation, runtime UPDATE revoked and settings-free transition trigger, school-scoped activate/override/cancel authority with live re-checks, identity-review override, school-local inclusive dates across DST, exact idempotency and concurrency, no payment or entitlement effect"
+proof flexible-billing-accounts test-crm-lead-membership-discovery-integrity.mjs "CRM lead membership discovery (0200, D-M1): one lead -> the memberships its own adult or guardian/child workflow created, in any lifecycle state; activation + lead-read direct-human authority, school isolation, full-family ordering, zero effects"
 proof flexible-billing-accounts test-membership-date-revision-integrity.mjs "Membership date revisions (0178): two-step human date revisions bound to immutable history by the extended settings-free trigger, owner-only retroactive authority with live re-checks, school-local inclusive dates, legacy confirmation queue and exact status totals, no-deadlock races with invoices, cancellation, renewal and retention, no payment or financial effect"
 setup crm-lead-registration HON_CRM_LEAD_REGISTRATION_VALIDATION_TARGET hon_crm_registration_validation HON_CRM_LEAD_REGISTRATION_ENV_FILE
 proof crm-lead-registration test-crm-lead-registration-integrity.mjs "CRM lead registration: direct-human scope, adult/guardian-child identity separation, idempotency, rollback, no payment or membership effect"
@@ -180,7 +187,7 @@ summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-m
 /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
 rm -f "$adult_draft_dir/$adult_draft_fixture.env"
 
-echo "All $passed disposable-database proofs passed (8 fixtures, all migrations applied)."
+echo "All $passed disposable-database proofs passed (9 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

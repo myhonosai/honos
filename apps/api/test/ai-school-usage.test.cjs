@@ -1,0 +1,82 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { randomUUID } = require('node:crypto');
+const { request: httpRequest } = require('node:http');
+require('reflect-metadata');
+const { Test } = require('@nestjs/testing');
+const { json } = require('express');
+const { AiSchoolUsageHqController, AiSchoolUsageService } = require('../dist/ai-spend/ai-school-usage.controller.js');
+const { SaasBillingService } = require('../dist/saas-billing/saas-billing.service.js');
+const { SaasReadGuard } = require('../dist/saas-billing/saas-billing.guards.js');
+const { HonIdentityGuard } = require('../dist/foundation/hon-identity.guard.js');
+const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
+const contracts = require('@hon/contracts');
+
+const U = () => randomUUID(), T = '2026-11-01T00:00:00.000Z';
+const amt = (credits, cost, entries) => ({ credits, providerCostMicrounits: cost, entries });
+const school = (org, patch = {}) => ({ organizationId: org, schoolId: U(), providerCostMicrounits: 9000, entries: 4,
+  byClass: { AGENT_INFERENCE: { ...amt(7, 6000, 3), byAgent: { MARKETING: amt(4, 4000, 2), CHAD_FOLLOW_UP: amt(3, 2000, 1) } },
+    CREATIVE_MEDIA: { ...amt(50, 3000, 1), byAgent: null } }, ...patch });
+const org = (id, patch = {}) => ({ organizationId: id, agentWindowStart: T, agentWindowEnd: '2026-12-01T00:00:00.000Z', agentCommittedCredits: 7,
+  agentCeilingCredits: 12000, openUnknownHolds: 0, aiPaused: false, ...patch });
+const report = (patch = {}) => { const o = U(); return { from: T, to: '2026-11-02T00:00:00.000Z', asOf: T, truncated: false, schools: [school(o)], organizations: [org(o)],
+  providerCostUnit: 'MICROUNITS_USD', ...patch }; };
+
+test('S4-e contracts: per-school totals add up per class and per agent; credits never cross classes', () => {
+  assert.equal(contracts.validateAiSchoolUsageReport(report()).schools.length, 1);
+  assert.equal(contracts.validateAiSchoolUsageReport(report({ schools: [], organizations: [] })).schools.length, 0);
+  const o = U();
+  for (const bad of [
+    report({ schools: [school(o, { entries: 5 })], organizations: [org(o)] }),
+    report({ schools: [school(o, { providerCostMicrounits: 1 })], organizations: [org(o)] }),
+    report({ schools: [school(o, { credits: 57 })], organizations: [org(o)] }),
+    report({ schools: [school(o, { byClass: { IMAGES: { ...amt(1, 1, 1), byAgent: null } }, entries: 1, providerCostMicrounits: 1 })], organizations: [org(o)] }),
+    report({ schools: [school(o, { byClass: { AGENT_INFERENCE: { ...amt(1, 1, 1), byAgent: { KAI: amt(1, 1, 1) } } }, entries: 1, providerCostMicrounits: 1 })], organizations: [org(o)] }),
+    report({ schools: [school(o, { byClass: { AGENT_INFERENCE: { ...amt(1, 1, 2), byAgent: { MARKETING: amt(1, 1, 1) } } }, entries: 2, providerCostMicrounits: 1 })], organizations: [org(o)] }),
+    report({ schools: [school(o, { byClass: { CREATIVE_MEDIA: { ...amt(1, 1, 1), byAgent: {} } }, entries: 1, providerCostMicrounits: 1 })], organizations: [org(o)] }),
+    report({ schools: [school(U())] }),
+    report({ providerCostUnit: 'USD' }), { ...report(), extra: 1 },
+    report({ organizations: [org(o, { agentCommittedCredits: -1 })], schools: [] })])
+    assert.throws(() => contracts.validateAiSchoolUsageReport(bad), JSON.stringify(bad).slice(0, 120));
+  assert.deepEqual(contracts.validateAiSchoolUsageRange('2026-10-01T00:00:00Z', '2026-11-01T00:00:00Z'), { from: '2026-10-01T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' });
+  for (const [a, b] of [['2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z'], ['2026-11-02T00:00:00Z', '2026-11-01T00:00:00Z'], ['2026-01-01T00:00:00Z', '2026-11-01T00:00:00Z'],
+    ['yesterday', '2026-11-01T00:00:00Z'], [undefined, '2026-11-01T00:00:00Z'], [['2026-10-01T00:00:00Z'], '2026-11-01T00:00:00Z']])
+    assert.throws(() => contracts.validateAiSchoolUsageRange(a, b), `${a} ${b}`);
+});
+
+const send = (url, { method = 'GET', headers = {} } = {}) => new Promise((resolve, reject) => {
+  const req = httpRequest(url, { method, headers }, res => { const chunks = []; res.on('data', c => chunks.push(c)); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString() })); });
+  req.on('error', reject); req.end();
+});
+
+test('HTTP: HQ school usage is a bounded read bound to the verified subject; bad ranges never reach the database', async () => {
+  const calls = []; let next = null;
+  const module = await Test.createTestingModule({ controllers: [AiSchoolUsageHqController],
+    providers: [AiSchoolUsageService, SaasBillingService, SaasReadGuard, { provide: RuntimeDatabaseService, useValue: { async callSaasBilling(operation, params) {
+      calls.push([operation, params]);
+      if (next) { const e = new Error(next.message); e.code = next.code; next = null; throw e; }
+      return report();
+    } } }] })
+    .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-human' }; return true; } }).compile();
+  const app = module.createNestApplication({ bodyParser: false });
+  app.use(json({ strict: true })); app.setGlobalPrefix('v1'); await app.listen(0, '127.0.0.1');
+  const base = `http://127.0.0.1:${app.getHttpServer().address().port}/v1/hq/ai/school-usage`;
+  const h = { 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' };
+  try {
+    const ok = await send(`${base}?from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z`, { headers: h });
+    assert.equal(ok.status, 200, ok.body); assert.match(ok.headers['cache-control'], /no-store/);
+    assert.deepEqual(calls.at(-1), ['readAiSchoolUsage', ['verified-human', '2026-10-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z']]);
+    for (const [code, status, expected] of [['42501', 403, 'SAAS_FORBIDDEN'], ['22023', 400, 'INVALID_SAAS_INPUT'], ['XX000', 503, 'SAAS_UNAVAILABLE']]) {
+      next = { message: 'private detail', code };
+      const r = await send(`${base}?from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z`, { headers: h });
+      assert.deepEqual([r.status, JSON.parse(r.body).code], [status, expected], code);
+    }
+    const n = calls.length;
+    for (const [q, label] of [['', 'no range'], ['?from=2026-10-01T00:00:00Z', 'no end'], ['?from=2026-01-01T00:00:00Z&to=2026-11-01T00:00:00Z', 'over 92 days'],
+      ['?from=2026-11-01T00:00:00Z&to=2026-10-01T00:00:00Z', 'reversed'], ['?from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z&organizationId=x', 'extra query key'],
+      ['?from=2026-10-01T00:00:00Z&from=2026-10-02T00:00:00Z&to=2026-11-01T00:00:00Z', 'repeated key']])
+      assert.equal((await send(`${base}${q}`, { headers: h })).status, 400, label);
+    assert.equal((await send(`${base}?from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z`, { method: 'POST', headers: h })).status, 404, 'no write route');
+    assert.equal(calls.length, n, 'refused requests never reach the database');
+  } finally { await app.close(); }
+});

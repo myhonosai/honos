@@ -27,6 +27,50 @@
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
 
+## S4-d lost AI outcomes (UNKNOWN) and HQ owner resolution — Claude (2026-11-01, owner-authorized draft, stacked on S4-c)
+
+- Migration `0196_ai_unknown_resolution.sql` (number proposed; owner allocates). Owner decision AI-D3. Finding AI-8. Design: `docs/architecture/HON_AI_UNKNOWN_RESOLUTION_S4D.md`.
+- [x] Window-scoped counting: UNKNOWN and stale (1 hour) SENDING holds count only in the window in which they were held; in-flight calls always count.
+- [x] `resolve_ai_unknown_invocation` (human HQ owner only; RECORD_PROVIDER_COST / NO_PROVIDER_CHARGE / WRITE_OFF with closed evidence; one ledger row in the original window or none; immutable record, audit, inert outbox; idempotent; once per call) and the HQ queue read; `GET /v1/hq/ai/unknown-invocations`, `POST .../:agent/:invocationId/resolve`.
+- [x] AI-0: KF-AI8 flipped to `FIXED_BY_S4D`, replaced by INV-19 and INV-20; no open known failures remain. API test `ai-unknown-resolution.test.cjs`.
+- [ ] Codex: HQ queue and resolution screen.
+- [ ] Later slice: UNKNOWN escalation monitor (more than 5 in 24 hours pauses the organization; older than 72 hours alerts HQ).
+- [ ] Independent review; owner merge after #97, S4-a, S4-b and S4-c.
+
+## S4-c AI spend access decision and HQ pause — Claude (2026-11-01, owner-authorized draft, stacked on S4-b)
+
+- Migration `0195_ai_spend_access_decision.sql` (number proposed; owner allocates). Owner decision AI-D1 = A. Findings AI-9, AI-1. Design: `docs/architecture/HON_AI_ACCESS_DECISION_S4C.md`.
+- [x] One access decision `ai_spend_allowed(org, at, class)`: HQ pause, promotional hook (off), live exception refuses (`AI_EXCEPTION_NO_AI`), legacy unchanged, explicit mapping for every paid-access state (unknown refuses). Applied at begin, at every hold increase (before the budget check) and at B3 reservation insert. Evidence steps never gated.
+- [x] HQ emergency pause: append-only `ai_spend_pauses`, human HQ owner only, organization or platform, per class or ALL, idempotent per key; `GET/POST /v1/hq/ai/spend-pauses` with exact human-command guard.
+- [x] AI-0: KF-AI9 flipped to `FIXED_BY_S4C`, replaced by INV-16 (all three agents); INV-17 (state mapping) and INV-18 (pause) added. API test `ai-spend-pause.test.cjs`.
+- [ ] Codex: HQ pause screen and plain refusal copy on agent screens.
+- [ ] Owner decisions before the hooks do anything: promotional AI access, trial AI funding.
+- [ ] Independent review; owner merge after #97, S4-a and S4-b.
+
+## S4-b organization agent budget and lock — Claude (2026-11-01, owner-authorized draft, stacked on S4-a)
+
+- Migration `0194_ai_org_budget_lock.sql` (number proposed; owner allocates). Findings AI-2, AI-3, AI-17. Design: `docs/architecture/HON_AI_ORG_BUDGET_LOCK_S4B.md`.
+- [x] One organization agent budget: `ai_org_committed_credits` (agent-inference ledger credits in the `ai_spend_window` plus every open Marcus/Claire/Chad hold), `ai_org_ceiling` (12,000, the only literal left), `ai_budget_lock` (`ai.budget:<org>`, taken first in every prepare, before the gate row locks; see the design doc for the deadlock it avoids). The three prepares use them; refusal stays durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED`. Reserve guard trigger re-checks any hold increase (`AI_ORG_BUDGET_EXCEEDED`, 42501).
+- [x] `ai_usage_ledger.spend_class` (AGENT_INFERENCE / CREATIVE_MEDIA / HQ_INTERNAL); B3 rows backfilled and written CREATIVE_MEDIA; agent writers set AGENT_INFERENCE; planning eligibility counts agent rows only.
+- [x] AI-0: KF-AI2 and KF-AI3 flipped to `FIXED_BY_S4B`, replaced by INV-14 (all 6 arrival orders at used 11,990) and INV-15 (deterministic pg_locks serialization, 3 same-agent + 3 cross-agent pairs). KF-AI8 probe now shows the stale hold blocking both agents (still open for S4-d).
+- [ ] B3 creative reservations keep their own allowance check (closed program); the B3 budget guard is deferred to the creative-wallet slices (AI-17 keeps creative out of the agent budget).
+- [ ] Independent review; owner merge after #97 and S4-a.
+
+## S4-a durable AI usage evidence — Claude (2026-11-01, owner-authorized draft, stacked on AI-0)
+
+- Migration `0193_ai_spend_durable_evidence.sql` (number proposed; owner allocates). Owner decisions AI-D6, AI-D7. Design: `docs/architecture/HON_AI_SPEND_DURABLE_EVIDENCE_S4A.md`.
+- [x] Evidence-only actor `ai_evidence_actor`; the six `record_*`/`fail_*` functions check only tenant, requester and SENDING, so a charged result is recorded after a mid-flight lapse (AI-14). Recording ends `RESULT_RECORDED`; the approval proposal is a separate transaction under the full gate (AI-16); a lapse ends `RESULT_HELD` / `ACCESS_LAPSED` and retry binds it once after access returns (AI-D7). `ai_usage_ledger.source_invocation_id` unique per invocation (AI-5, agent rows).
+- [x] AI-0 KF-AI14 flipped to `FIXED_BY_S4A`, replaced by INV-13 (3 agents x 3 lapse kinds, failed-proposal survival, replay, duplicate ledger refusal).
+- [ ] Independent review (Manus or Codex); regular CI after mark-ready; owner merge after PR #97. Codex: web workbenches should label `RESULT_RECORDED`/`RESULT_HELD` (validators already accept them).
+
+## AI-0 spend-authority regression baseline — Claude (2026-10-31)
+
+- Test only; not the security fix. No migration, runtime, policy, provider or deployment change. Design: `docs/architecture/HON_AI_SPEND_AUTHORITY_BASELINE.md`.
+- [x] Dedicated single-use disposable fixture `hon_ai_spend_baseline_validation`; strict inventory `packages/database/scripts/ai-spend-entrypoints.json` (spend tables/functions, ledger/reservation/allowance/credit writers, 12000 ceilings, grants, programs, AI policy records); 12 invariants; fake providers only; wired into `run-db-proofs.sh` (AI-10 closed for the baseline) and `db:test-ai-spend-baseline`.
+- [x] Known failures pinned OPEN: KF-AI2 cross-agent over-commit (S4), KF-AI9 unpaid HQ COMPLETE exception reaches the provider (S4), KF-AI8 UNKNOWN hold never released and not month-scoped (AI-D3 slice), KF-AI3 same-agent race (S4; observed serialized, not reproduced), and new KF-AI14: an entitlement lapse while a call is in flight loses its usage record and leaves the hold SENDING for all three agents (S4).
+- [ ] Independent review of the draft PR, then owner merge decision. AI-D1 (S4 scope/order) stays open.
+- [ ] S4 must flip KF-AI2/AI9/AI3/AI14 to FIXED_BY_S4 and replace each probe with its invariant in the same reviewed PR; an explicit exception refusal (`AI_EXCEPTION_NO_AI`) and an organization-wide budget lock and unguarded evidence steps (record/fail after a lapse) are required.
+
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 
 - P1 correction: keep the minimized production HQ directory unchanged, submit school-only invitation input, and resolve the canonical organization inside the protected HQ-owner database transaction. Correct the enhanced browser fixture; fresh exact-head verification pending.
