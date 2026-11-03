@@ -101,6 +101,7 @@ const expectedRlsTables = [
   'ai_usage_ledger',
   'ai_spend_pauses',
   'ai_unknown_resolutions',
+  'ai_late_provider_expenses',
   'ai_spend_pause_commands',
   'ai_invocation_plans',
   'chad_follow_up_invocations',

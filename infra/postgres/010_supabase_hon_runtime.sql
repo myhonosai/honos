@@ -2039,13 +2039,17 @@ END $$;
 DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['ai_sending_stale_after()','ai_hold_counts(text,timestamptz,tstzrange,timestamptz)','ai_org_committed_credits(uuid,timestamptz)',
     'guard_ai_unknown_resolutions()','ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)','ai_unknown_validate(text,jsonb)',
-    'resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)','read_ai_unknown_invocations_from_hq(text)'] LOOP
+    'resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)','read_ai_unknown_invocations_from_hq(text)',
+    'ai_stamp_hold_origin()','ai_late_expense_receipt(hon.ai_late_provider_expenses,boolean)','record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
   END LOOP;
   REVOKE ALL ON TABLE hon.ai_unknown_resolutions FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_unknown_resolutions FROM '||quote_ident(r); END LOOP;
+  REVOKE ALL ON TABLE hon.ai_late_provider_expenses FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_late_provider_expenses FROM '||quote_ident(r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid), hon.read_ai_unknown_invocations_from_hq(text) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid), hon.read_ai_unknown_invocations_from_hq(text),
+      hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;

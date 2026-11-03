@@ -67,6 +67,7 @@
   "spendReferences": [
     "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
     "hon.ai_spend_reserve_guard()",
+    "hon.ai_stamp_hold_origin()",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
@@ -90,6 +91,7 @@
     "hon.read_saas_school_credits(text,uuid)",
     "hon.read_saas_trial_governance(text)",
     "hon.read_teaching_invocation(text,uuid)",
+    "hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
@@ -278,14 +280,16 @@
       "ai_spend_reserve_guard_insert",
       "ai_spend_start_guard",
       "chad_follow_up_invocations_immutable",
-      "chad_follow_up_invocations_no_truncate"
+      "chad_follow_up_invocations_no_truncate",
+      "zz_ai_hold_origin"
     ],
     "marketing_ai_invocations": [
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
       "ai_spend_start_guard",
       "marketing_invocation_guard",
-      "marketing_invocation_no_truncate"
+      "marketing_invocation_no_truncate",
+      "zz_ai_hold_origin"
     ],
     "saas_credit_reservations": [
       "ai_spend_b3_guard",
@@ -297,7 +301,8 @@
       "ai_spend_reserve_guard_insert",
       "ai_spend_start_guard",
       "teaching_ai_invocations_immutable",
-      "teaching_ai_invocations_no_truncate"
+      "teaching_ai_invocations_no_truncate",
+      "zz_ai_hold_origin"
     ]
   },
   "programs": {
