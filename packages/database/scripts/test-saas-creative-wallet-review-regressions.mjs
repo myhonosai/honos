@@ -40,7 +40,7 @@ const saasTables=['saas_access_transitions','saas_access_states','saas_provider_
 const http=(n,code)=>e=>{assert.equal(e?.getStatus?.(),n,e?.stack??String(e));if(code)assert.equal(e.getResponse().code,code,e.stack);return true;};
 const deny=(p,n,code)=>assert.rejects(p,http(n,code));
 const K=()=>randomUUID(),iso=d=>new Date(d).toISOString(),NOW=Date.now(),HOUR=3600_000,DAY=24*HOUR;
-const humans=Object.fromEntries(['owner','ownerA','ownerB','staffA2'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`cw1r-${k}-${randomUUID()}`}]));
+const humans=Object.fromEntries(['owner','ownerA','ownerB','staffA2','ownerC'].map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`cw1r-${k}-${randomUUID()}`}]));
 const H=k=>humans[k].subject;
 const S={},created=[];
 let createdProvider=false,programTouched=false;
@@ -92,7 +92,7 @@ const offer=(code,kind,priceMinor,displayName)=>{const interval=contracts.saasHo
  salesOpensAt:iso(NOW-HOUR),salesClosesAt:null,eligibility:'ANY_ACTIVE_ORGANIZATION',saleLimit:null,priceLock:'WHILE_CONTINUOUSLY_SUBSCRIBED',priceLockMonths:null,
  annualRenewal:interval==='ANNUAL'?'AUTO_RENEW_AT_LOCKED_PRICE':null,plannedMonthlyPremiumCredits:12000,aiFairUseReference:null,refundWindowDays:30,cancellationTiming:'END_OF_PAID_PERIOD'};};
 // Actors per school: ownerA at school A1 (the registered school), staffA2 at a second school A2 of the SAME organization, ownerB at B.
-const actor={A1:'ownerA',A2:'staffA2',B:'ownerB'};
+const actor={A1:'ownerA',A2:'staffA2',B:'ownerB',C:'ownerC'};
 const reserve=(at,op,units,key=K(),who=actor[at])=>wallet.reserveCredits(H(who),S[at],{operationCode:op,units,providerId:'HIGGSFIELD',modelCode:op==='video.generate'?'fixture-video-1':'fixture-image-1'},key);
 const settle=(r,body,key=K(),who)=>wallet.settleCredits(H(who),r.reservationId,{expectedVersion:r.version,...body},key);
 const fulfill=(purchaseId,payment,client=ownerPool)=>client.query('SELECT hon.saas_fulfill_creative_topup($1,$2::jsonb,$3) r',[purchaseId,JSON.stringify(payment),new Date()]).then(r=>r.rows[0].r);
@@ -287,6 +287,114 @@ try{
   assert.equal(hq.providerExpense.unknownCostGenerations,0);
  });
 
+
+ // ---------- P2-W (Manus round 2, Task 4): authority, eligibility and expiry are decided AFTER the wallet-lock wait ----------
+ // Deterministic two-connection proofs: a holder transaction keeps school C's wallet lock while the API request waits on
+ // it (confirmed with pg_blocking_pids, never a sleep), the condition changes by the server clock during the wait
+ // (confirmed with clock_timestamp()), then the holder releases. A decision taken before the wait must not survive it.
+ let lot,until,before,out;
+ await check('P2-W0','fixture: third paid school C',async()=>{
+  const r=await register('ownerC',details('C'));created.push(r.organizationId);S.orgC=r.organizationId;S.C=r.schoolId;
+  const co=await payments.startSchoolHonOsCheckout(H('ownerC'),r.schoolId,{offerId:pub.set.offers[0].offerId},K());
+  assert.deepEqual([(await deliver(sim.completeCheckout(co.checkout.providerSessionId).completed)).event.detail],['ACCESS_ACTIVATED'],'C paid');
+ });
+ const serverPassed=async t=>(await row('SELECT clock_timestamp() > $1::timestamptz p',[t])).p;
+ const untilPassed=async t=>{for(let i=0;i<200&&!(await serverPassed(t));i++)await new Promise(z=>setTimeout(z,25));assert.ok(await serverPassed(t),'server clock passed the expiry');};
+ // Runs `request` while a holder keeps C's wallet lock; `during` runs once the request is provably blocked on the holder.
+ async function duringWalletWait(request,during){
+  const holder=await ownerPool.connect();
+  try{
+   await holder.query('BEGIN');await holder.query('SELECT hon.saas_creative_lock_wallet($1,clock_timestamp())',[S.C]);
+   const hpid=(await holder.query('SELECT pg_backend_pid() p')).rows[0].p;
+   const pending=request().then(v=>({ok:true,v}),e=>({ok:false,e}));
+   let blocked=0;
+   for(let i=0;i<400&&!blocked;i++){blocked=(await row('SELECT count(*)::int n FROM pg_stat_activity a WHERE $1=ANY(pg_blocking_pids(a.pid))',[hpid])).n;if(!blocked)await new Promise(z=>setTimeout(z,10));}
+   assert.ok(blocked>0,'the request is blocked on the held wallet lock');
+   await during();
+   await holder.query('ROLLBACK');
+   return await pending;
+  }finally{await holder.query('ROLLBACK').catch(()=>{});holder.release();}
+ }
+ const counts=async()=>row("SELECT (SELECT count(*)::int FROM hon.saas_creative_lots WHERE school_id=$1) lots,(SELECT count(*)::int FROM hon.saas_creative_reservations WHERE school_id=$1) res,(SELECT count(*)::int FROM hon.saas_creative_ledger WHERE school_id=$1) ledger,(SELECT count(*)::int FROM hon.saas_audit WHERE organization_id=$2) audit",[S.C,S.orgC]);
+ const refusedWith=(out,codes)=>{assert.equal(out.ok,false,'the waiting request is refused, not completed with a pre-wait decision');assert.ok(codes.includes(out.e?.getResponse?.()?.code),String(out.e?.getResponse?.()?.code??out.e));};
+ const setEntitlementUntil=t=>admin.query('UPDATE hon.organization_entitlements SET effective_until=$2 WHERE organization_id=$1',[S.orgC,t]);
+ const setGrantsUntil=async t=>{await admin.query('BEGIN');try{await admin.query('ALTER TABLE hon.principal_role_grants DISABLE TRIGGER USER');
+  await admin.query('UPDATE hon.principal_role_grants SET effective_until=$3 WHERE principal_id=$1 AND organization_id=$2',[humans.ownerC.id,S.orgC,t]);
+  await admin.query('ALTER TABLE hon.principal_role_grants ENABLE TRIGGER USER');await admin.query('COMMIT');}catch(e){await admin.query('ROLLBACK');throw e;}};
+ const soon=async ms=>(await row(`SELECT clock_timestamp()+interval '${ms} milliseconds' t`)).t;
+
+ await check('P2-W1a','window opening re-checks requester authority after a wallet-lock wait (role grant expired during the wait: no window granted)',async()=>{
+  // W1a: the requester's grant expires while window opening waits: no included window may be granted afterwards.
+  until=await soon(1200);await setGrantsUntil(until);
+  try{
+  before=await counts();
+  out=await duringWalletWait(()=>wallet.openWindow(H('ownerC'),S.C,K()),async()=>{assert.equal(await serverPassed(until),false,'blocked before the expiry');await untilPassed(until);});
+  refusedWith(out,['SAAS_FORBIDDEN']);
+  assert.deepEqual(await counts(),before,'no lot, ledger entry, reservation or audit action');
+  }finally{await setGrantsUntil(null);}
+ });
+ await check('P2-W1b','window opening re-checks the entitlement after a wallet-lock wait (entitlement ended during the wait: no window granted)',async()=>{
+  // W1b: the entitlement ends while window opening waits: no included window may be granted afterwards.
+  until=await soon(1200);await setEntitlementUntil(until);
+  try{
+  before=await counts();
+  out=await duringWalletWait(()=>wallet.openWindow(H('ownerC'),S.C,K()),async()=>{assert.equal(await serverPassed(until),false,'blocked before the expiry');await untilPassed(until);});
+  refusedWith(out,['SAAS_FORBIDDEN','SAAS_CREATIVE_ENTITLEMENT_NOT_IN_EFFECT','SAAS_CREATIVE_AI_ACCESS_LAPSED']);
+  assert.deepEqual(await counts(),before,'no lot, ledger entry, reservation or audit action');
+  }finally{await setEntitlementUntil(null);lot=(await wallet.openWindow(H('ownerC'),S.C,K())).lot;}
+  assert.equal(lot.credits,12000);
+ });
+ await check('P2-W2','a reservation re-checks requester authority after a wallet-lock wait (role grant expired during the wait: refused, nothing written); an in-flight cost still records',async()=>{
+  // W2: the requester's role grant expires while a reservation waits: refused 403; a generation already in flight
+  //     (reserved before) still records its provider result and cost.
+  const inflight=(await reserve('C','image.generate',2)).reservation;
+  until=await soon(1200);await setGrantsUntil(until);
+  try{
+  before=await counts();
+  out=await duringWalletWait(()=>reserve('C','image.generate',1),async()=>{assert.equal(await serverPassed(until),false,'blocked before the expiry');await untilPassed(until);});
+  refusedWith(out,['SAAS_FORBIDDEN']);
+  assert.deepEqual(await counts(),before,'no reservation, ledger entry or audit action after the wait');
+  assert.equal((await settle(inflight,{outcome:'SUCCEEDED',finalUnits:2,providerCostMicrounits:21000},K(),'ownerC')).reservation.status,'FINALIZED','the in-flight result and its cost still record');
+  }finally{await setGrantsUntil(null);for(const x of (await admin.query("SELECT id,version FROM hon.saas_creative_reservations WHERE school_id=$1 AND status='RESERVED'",[S.C])).rows)await settle({reservationId:x.id,version:x.version},{outcome:'FAILED',finalUnits:null,providerCostMicrounits:0},K(),'ownerC');}
+ });
+ await check('P2-W3','concurrent retries with one key during a wallet-lock wait create exactly one reservation',async()=>{
+  // W3: concurrent retries with one key while waiting: exactly one reservation. The concurrent duplicate is told the
+  //     request may not be assumed applied (409, retry with the same key); the retry replays the same reservation.
+  const key=K();before=await counts();
+  out=await duringWalletWait(()=>Promise.allSettled([reserve('C','image.generate',1,key),reserve('C','image.generate',1,key)]),async()=>{});
+  const won=out.v.filter(x=>x.status==='fulfilled'),lost=out.v.filter(x=>x.status==='rejected');
+  assert.deepEqual([won.length,lost.length],[1,1],'one request applies, the concurrent duplicate does not');
+  http(409,'SAAS_OUTCOME_UNKNOWN')(lost[0].reason);// in progress: retry with the same key
+  const again=await reserve('C','image.generate',1,key);
+  assert.deepEqual([again.replayed,again.reservation.reservationId],[true,won[0].value.reservation.reservationId],'the retry replays the same reservation');
+  assert.equal((await counts()).res,before.res+1,'exactly one reservation for one key');
+  await settle(won[0].value.reservation,{outcome:'FAILED',finalUnits:null,providerCostMicrounits:0},K(),'ownerC');
+ });
+ await check('P2-W4','an HQ pause issued during a wallet-lock wait is serialized behind the waiting reservation; nothing is reserved after it',async()=>{
+  // W4: an HQ pause issued while a reservation waits is serialized behind it (the reservation was decided first);
+  //     nothing is reserved after the pause commits.
+  let pausing;
+  out=await duringWalletWait(()=>reserve('C','image.generate',1),async()=>{pausing=pause('PAUSE',S.orgC,'CREATIVE_MEDIA');await new Promise(z=>setTimeout(z,200));});
+  const pz=await pausing;
+  try{
+  assert.equal(out.ok,true,'decided before the pause committed');
+  assert.ok(new Date(out.v.reservation.reservedAt)<=(await row('SELECT paused_at FROM hon.ai_spend_pauses WHERE id=$1',[pz.pauseId])).paused_at);
+  await deny(reserve('C','image.generate',1),422,'SAAS_CREATIVE_AI_PAUSED_BY_HQ');
+  await settle(out.v.reservation,{outcome:'FAILED',finalUnits:null,providerCostMicrounits:0},K(),'ownerC');
+  }finally{await pause('RESUME',S.orgC,'CREATIVE_MEDIA');}
+ });
+ await check('P2-W5','an included window that ends during a wallet-lock wait cannot fund the waiting reservation',async()=>{
+  // W5: the funding window ends while a reservation waits: the expired lot cannot fund it.
+  until=await soon(1200);
+  await admin.query('BEGIN');try{await admin.query('ALTER TABLE hon.saas_creative_lots DISABLE TRIGGER USER');
+   await admin.query('UPDATE hon.saas_creative_lots SET window_end=$2,expires_at=$2 WHERE id=$1',[lot.lotId,until]);
+   await admin.query('ALTER TABLE hon.saas_creative_lots ENABLE TRIGGER USER');await admin.query('COMMIT');}catch(e){await admin.query('ROLLBACK');throw e;}
+  before=await counts();
+  out=await duringWalletWait(()=>reserve('C','image.generate',1),async()=>{assert.equal(await serverPassed(until),false,'blocked before the expiry');await untilPassed(until);});
+  refusedWith(out,['SAAS_CREDITS_EXHAUSTED','SAAS_CREATIVE_WINDOW_UNAVAILABLE','SAAS_CREATIVE_WINDOW_NOT_PAID']);
+  const after=await counts();
+  assert.deepEqual([after.res,after.audit],[before.res,before.audit],'no reservation or audit action funded by the expired window');
+ });
  await setAccessProgram(false);programTouched=false;
 }finally{
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));

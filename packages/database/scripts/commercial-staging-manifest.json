@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "802f7af1dec8041e84259c75f22c1fb19b8e36f768fc4306f8e9ef856eb92d5e",
+  "chainSha256": "ef430b2ff8d4bacfc7918092843af2bd1b8425aa5176b58b0659f278f3c20e1c",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -88,7 +88,7 @@
     },
     {
       "file": "0202_hon_os_creative_credit_wallet.sql",
-      "sha256": "6d70c1eb017d3ab297cae3f02f6a4b56408ccd26c74c531a21780b515d129f22"
+      "sha256": "20cf43f41bc5bcd1702e8fbedd38e38044ff400f5a8b661464a6878a3de7fa93"
     }
   ]
 }

@@ -1030,7 +1030,7 @@ END $$;
 -- Opens the school's current included window if the school is eligible (idempotent: one grant per window).
 CREATE FUNCTION hon.open_saas_creative_window(p_subject text, p_school uuid, p_key uuid, p_request uuid, p_correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
-DECLARE scope record; replay jsonb; v_lot uuid; e jsonb; at timestamptz; snapshot jsonb;
+DECLARE scope record; again record; replay jsonb; v_lot uuid; e jsonb; at timestamptz; snapshot jsonb;
 BEGIN
   SELECT * INTO scope FROM hon.require_saas_school_actor(p_subject, p_school) LIMIT 1;
   LOCK TABLE hon.users, hon.principals, hon.principal_role_grants, hon.roles, hon.role_permissions, hon.permissions,
@@ -1038,8 +1038,14 @@ BEGIN
   SELECT * INTO scope FROM hon.require_saas_school_actor(p_subject, p_school) LIMIT 1;
   replay := hon.saas_claim_request(scope.principal_id, p_key, 'saas.creative.window', hon.saas_fingerprint(ARRAY['saas.creative.window', p_school::text]), p_request, p_correlation);
   IF replay IS NOT NULL THEN RETURN replay; END IF;
+  PERFORM hon.saas_creative_lock_wallet(scope.school_id, clock_timestamp());
+  -- Execution point (after any wallet-lock wait): the time, the requester's authority and the school's eligibility
+  -- are all taken now, so an entitlement, grant or window that ended during the wait cannot open a window.
   at := clock_timestamp();
-  PERFORM hon.saas_creative_lock_wallet(scope.school_id, at);
+  SELECT * INTO again FROM hon.require_saas_school_actor(p_subject, p_school) LIMIT 1;
+  IF again.principal_id IS DISTINCT FROM scope.principal_id OR again.school_id IS DISTINCT FROM scope.school_id THEN
+    RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
   v_lot := hon.saas_creative_open_window(scope.school_id, scope.principal_id, at);
   IF v_lot IS NULL THEN
     e := hon.saas_creative_eligibility(scope.school_id, at);
@@ -1056,7 +1062,7 @@ END $$;
 -- and the reservation atomic. Only the school's own lots are ever consulted.
 CREATE FUNCTION hon.reserve_saas_creative_credits(p_subject text, p_school uuid, p jsonb, p_key uuid, p_request uuid, p_correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
-DECLARE scope record; replay jsonb; e jsonb; why text; rate hon.saas_creative_rates%ROWTYPE; units integer; credits integer; need integer; take integer;
+DECLARE scope record; again record; replay jsonb; e jsonb; why text; rate hon.saas_creative_rates%ROWTYPE; units integer; credits integer; need integer; take integer;
   created hon.saas_creative_reservations%ROWTYPE; l record; at timestamptz; snapshot jsonb;
 BEGIN
   IF p IS NULL OR jsonb_typeof(p) <> 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['modelCode','operationCode','providerId','units']
@@ -1078,10 +1084,18 @@ BEGIN
     RAISE EXCEPTION 'SAAS_PROVIDER_UNKNOWN' USING ERRCODE = '23514';
   END IF;
   PERFORM hon.saas_creative_pause_gate(scope.organization_id);
+  PERFORM hon.saas_creative_lock_wallet(scope.school_id, clock_timestamp());
+  -- Execution point (after any pause-gate or wallet-lock wait; lock order unchanged: pause gate, then wallet). The
+  -- time, the requester's authority, the S4 spend decision, eligibility and lot expiry are all decided now, so a
+  -- grant, entitlement, access state or window that ended during the wait cannot fund a new reservation. The
+  -- authority tables stay SHARE-locked until commit, and a pause cannot commit while the gate is held.
   at := clock_timestamp();
+  SELECT * INTO again FROM hon.require_saas_school_actor(p_subject, p_school) LIMIT 1;
+  IF again.principal_id IS DISTINCT FROM scope.principal_id OR again.school_id IS DISTINCT FROM scope.school_id THEN
+    RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
   why := hon.ai_spend_allowed(scope.organization_id, at, 'CREATIVE_MEDIA');
   IF why IS NOT NULL THEN RAISE EXCEPTION '%', 'SAAS_CREATIVE_' || why USING ERRCODE = '23514'; END IF;
-  PERFORM hon.saas_creative_lock_wallet(scope.school_id, at);
   PERFORM hon.saas_creative_open_window(scope.school_id, scope.principal_id, at);
   e := hon.saas_creative_eligibility(scope.school_id, at);
   IF NOT (e->>'eligible')::boolean THEN RAISE EXCEPTION '%', 'SAAS_CREATIVE_' || (e->>'reason') USING ERRCODE = '23514'; END IF;

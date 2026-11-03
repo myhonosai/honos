@@ -194,6 +194,6 @@
     "0199_hon_conversation_delegation.sql": "6cb2e904236f0587bc913ee1562bf38e2d60e428798d4c153b8aa6ec9de0364b",
     "0200_crm_lead_membership_discovery.sql": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c",
     "0201_saas_billing_utc_calendar_periods.sql": "ea21b3ea4b4096026da07cd4a547dc0c5c3863b1c7780dd449a375ac66fedd3b",
-    "0202_hon_os_creative_credit_wallet.sql": "6d70c1eb017d3ab297cae3f02f6a4b56408ccd26c74c531a21780b515d129f22"
+    "0202_hon_os_creative_credit_wallet.sql": "20cf43f41bc5bcd1702e8fbedd38e38044ff400f5a8b661464a6878a3de7fa93"
   }
 }

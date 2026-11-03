@@ -102,6 +102,12 @@ CW1 is stacked on the S4 chain (#97 → #106 → #108 → #109 → #110 → #118
 | P2-A spend class | `CREATIVE_MEDIA` on every creative usage row; HQ expense says so | Usage rows are CREATIVE_MEDIA with 0 customer credits; agent budget unchanged by creative spend; HQ per-school usage separates the classes across three schools |
 | P2-B unknown cost erased | `cost_status`, immutable cost events, one late transition | FAILED with unknown cost stays UNKNOWN (lost response replays safely); 5 concurrent duplicate provider deliveries apply once; a different later event is review-only; HQ NOT_CHARGED without a guessed zero, then one evidenced cost record (a second is refused, a school owner is refused) |
 
+## Review corrections (revision 3: decisions after lock waits)
+
+Manus round-2 finding (P2): reservations and window opening took the time, the S4 spend decision and part of the eligibility before waiting on the school's wallet lock. Now both `open_saas_creative_window` and `reserve_saas_creative_credits` take the wallet lock first (lock order unchanged: pause gate, then wallet), then decide everything at the execution point: `at := clock_timestamp()`, the requester is re-resolved (same principal and school, grants and entitlement at that instant), then `ai_spend_allowed`, eligibility, window opening and lot expiry use that `at`. The authority tables stay SHARE-locked to commit and a pause cannot commit while the gate is held. Settlement and cost recording are unchanged (evidence actor), so incurred costs still record.
+
+Deterministic two-connection regressions (`P2-W*`): a holder transaction keeps school C's wallet lock; the API request is confirmed blocked on it with `pg_blocking_pids`; the condition changes by the server clock (`clock_timestamp()`), then the holder releases. Before: 3 of 6 failed (a role grant that expired during the wait still opened a window and still funded a reservation; an included window that ended during the wait still funded one). After: all pass, plus the entitlement-expiry, same-key retry (one reservation, the retry replays it) and pause-during-wait (serialized behind the waiting reservation) cases.
+
 ## Not in CW1
 
 Generation runtime and provider adapters, checkout creation and webhook wiring for top-ups, refunds/chargebacks of top-ups, UI (Codex), an HQ monitor for long-held reservations.
