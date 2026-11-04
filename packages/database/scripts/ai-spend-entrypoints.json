@@ -1,0 +1,393 @@
+{
+  "description": "AI-0 strict inventory of every database path that can authorize, reserve, record or fund AI spend. Captured with `node scripts/test-ai-spend-authority-baseline.mjs --print-inventory` from the disposable AI-0 fixture and reviewed by hand.",
+  "updateRule": "Change this file only in a PR that explains the new, changed or removed AI spend path and is approved by the owner. A known failure may move from OPEN to FIXED_BY_<slice> only in the PR that fixes it, which must also add the replacing invariant.",
+  "baselineCommit": "b234be7f14c49d07349219dfb4ae3b9c2a05d3f9",
+  "migrationFiles": 183,
+  "spendTables": [
+    "ai_usage_ledger",
+    "chad_follow_up_invocations",
+    "marketing_ai_invocations",
+    "saas_credit_reservations",
+    "teaching_ai_invocations"
+  ],
+  "spendFunctions": [
+    "hon.begin_chad_follow_up_request(text,jsonb,uuid)",
+    "hon.begin_marketing_request(text,jsonb,uuid)",
+    "hon.begin_teaching_request(text,jsonb,uuid)",
+    "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
+    "hon.fail_marketing_invocation(text,uuid,text,text)",
+    "hon.fail_teaching_invocation(text,uuid,text,text)",
+    "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
+    "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_marketing_result(text,uuid,jsonb)",
+    "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.require_ai_invocation_plan_access()",
+    "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.saas_current_allowance(uuid,uuid,timestamp with time zone)",
+    "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)",
+    "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
+  ],
+  "ledgerWriters": [
+    "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_marketing_result(text,uuid,jsonb)",
+    "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)"
+  ],
+  "reservationWriters": [
+    "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
+    "hon.fail_marketing_invocation(text,uuid,text,text)",
+    "hon.fail_teaching_invocation(text,uuid,text,text)",
+    "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_marketing_result(text,uuid,jsonb)",
+    "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
+  ],
+  "allowanceWriters": [
+    "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
+    "hon.saas_current_allowance(uuid,uuid,timestamp with time zone)"
+  ],
+  "creditLedgerWriters": [
+    "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
+    "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.saas_current_allowance(uuid,uuid,timestamp with time zone)",
+    "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
+  ],
+  "budgetCeilingLiteral12000": [
+    "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
+    "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)"
+  ],
+  "spendReferences": [
+    "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
+    "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
+    "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
+    "hon.fail_marketing_invocation(text,uuid,text,text)",
+    "hon.fail_teaching_invocation(text,uuid,text,text)",
+    "hon.guard_chad_follow_up()",
+    "hon.guard_marketing_invocation()",
+    "hon.guard_saas_credits()",
+    "hon.guard_teaching_assistant()",
+    "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
+    "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.read_chad_follow_up_invocation(text,uuid)",
+    "hon.read_marketing_invocation(text,uuid)",
+    "hon.read_saas_exception_policy(text)",
+    "hon.read_saas_organization_credits_from_hq(text,uuid)",
+    "hon.read_saas_school_billing_account(text,uuid)",
+    "hon.read_saas_school_credits(text,uuid)",
+    "hon.read_saas_trial_governance(text)",
+    "hon.read_teaching_invocation(text,uuid)",
+    "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_marketing_result(text,uuid,jsonb)",
+    "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.saas_allowance_balance(uuid)",
+    "hon.saas_allowance_json(uuid)",
+    "hon.saas_credit_program_active()",
+    "hon.saas_credit_program_json()",
+    "hon.saas_credit_reservation_json(hon.saas_credit_reservations,boolean)",
+    "hon.saas_current_allowance(uuid,uuid,timestamp with time zone)",
+    "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)",
+    "hon.saas_record_thresholds(uuid,timestamp with time zone)",
+    "hon.set_saas_credit_program(text,jsonb,uuid,uuid,uuid)",
+    "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
+  ],
+  "trialTableReaders": [
+    "hon.decide_saas_trial_policy(text,jsonb,uuid,uuid,uuid)",
+    "hon.draft_saas_trial_campaign(text,jsonb,uuid,uuid,uuid)",
+    "hon.guard_saas_trial_insert()",
+    "hon.propose_saas_trial_policy(text,jsonb,uuid,uuid,uuid)",
+    "hon.publish_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.read_saas_trial_campaign(text,uuid)",
+    "hon.read_saas_trial_governance(text)",
+    "hon.saas_trial_preview(uuid)",
+    "hon.verify_saas_trial_evidence()",
+    "hon.withdraw_saas_trial_campaign(text,uuid,jsonb,uuid,uuid,uuid)"
+  ],
+  "accessStateReadersInSpendFunctions": [],
+  "b3ReservationsInAgentFunctions": [],
+  "agentTablesInB3Functions": [],
+  "grants": {
+    "hon.begin_chad_follow_up_request(text,jsonb,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.begin_marketing_request(text,jsonb,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.begin_teaching_request(text,jsonb,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.fail_chad_follow_up_invocation(text,uuid,text,text)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.fail_marketing_invocation(text,uuid,text,text)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.fail_teaching_invocation(text,uuid,text,text)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.record_chad_follow_up_result(text,uuid,jsonb)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.record_marketing_result(text,uuid,jsonb)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.record_teaching_result(text,uuid,jsonb)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.require_ai_invocation_plan_access()": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.saas_current_allowance(uuid,uuid,timestamp with time zone)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    }
+  },
+  "runtimeSpendTablePrivileges": {
+    "ai_usage_ledger": {
+      "select": true,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
+    "chad_follow_up_invocations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
+    "marketing_ai_invocations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
+    "saas_credit_reservations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
+    "teaching_ai_invocations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    }
+  },
+  "spendTableTriggers": {
+    "ai_usage_ledger": [],
+    "chad_follow_up_invocations": [
+      "chad_follow_up_invocations_immutable",
+      "chad_follow_up_invocations_no_truncate"
+    ],
+    "marketing_ai_invocations": [
+      "marketing_invocation_guard",
+      "marketing_invocation_no_truncate"
+    ],
+    "saas_credit_reservations": [
+      "saas_guarded",
+      "saas_no_truncate"
+    ],
+    "teaching_ai_invocations": [
+      "teaching_ai_invocations_immutable",
+      "teaching_ai_invocations_no_truncate"
+    ]
+  },
+  "programs": {
+    "credit": {
+      "status": "INACTIVE",
+      "top_ups_enabled": false,
+      "overage_enabled": false
+    },
+    "trial": {
+      "status": "INACTIVE",
+      "signup_enabled": false,
+      "enrollment_enabled": false,
+      "promotional_issuance_enabled": false
+    },
+    "access": {
+      "status": "INACTIVE",
+      "mutations_enabled": false
+    },
+    "payment": {
+      "status": "DISABLED",
+      "live_mode": false
+    }
+  },
+  "aiPolicyRecords": [
+    {
+      "policy_code": "CREDIT_ROLLOVER",
+      "version": 2,
+      "status": "DECIDED",
+      "decision_code": "NO_ROLLOVER",
+      "actions_enabled": false
+    },
+    {
+      "policy_code": "FOUNDER_ALLOWANCE",
+      "version": 2,
+      "status": "DECIDED",
+      "decision_code": "FULL_MONTHLY_PLAN_ALLOWANCE",
+      "actions_enabled": false
+    },
+    {
+      "policy_code": "PLAN_ALLOWANCES",
+      "version": 2,
+      "status": "DECIDED",
+      "decision_code": "CORE_5000_COMPLETE_12000_FULL_FOR_FOUNDER_LIFETIME_CHAMPIONS",
+      "actions_enabled": false
+    },
+    {
+      "policy_code": "PREMIUM_OPERATIONS",
+      "version": 2,
+      "status": "DECIDED",
+      "decision_code": "HQ_PUBLISHED_PRICING_LINKED_TO_VERIFIED_COST",
+      "actions_enabled": false
+    },
+    {
+      "policy_code": "SUSPENDED_ALLOWANCE",
+      "version": 2,
+      "status": "DECIDED",
+      "decision_code": "NO_NEW_GRANTS_OR_JOBS_SETTLE_IN_FLIGHT",
+      "actions_enabled": false
+    },
+    {
+      "policy_code": "TOP_UP_PRICING",
+      "version": 2,
+      "status": "DECIDED",
+      "decision_code": "TWICE_VERIFIED_PROVIDER_COST",
+      "actions_enabled": false
+    },
+    {
+      "policy_code": "TOP_UP_PRICING",
+      "version": 3,
+      "status": "DECIDED",
+      "decision_code": "TWICE_VERIFIED_PROVIDER_COST",
+      "actions_enabled": false
+    }
+  ],
+  "knownFailures": [
+    {
+      "id": "KF-AI2-CROSS-AGENT-OVERCOMMIT",
+      "finding": "AI-2",
+      "status": "OPEN",
+      "replacedBy": "S4",
+      "currentOutcome": "Marcus, Claire and Chad all reach SENDING at used 11990; 12005 committed against the 12000 ceiling because each prepare sums only its own table.",
+      "replacementOutcome": "The third prepare is refused AI_ORG_BUDGET_EXCEEDED under one organization budget lock; committed never exceeds the ceiling."
+    },
+    {
+      "id": "KF-AI9-EXCEPTION-SPEND",
+      "finding": "AI-9",
+      "status": "OPEN",
+      "replacedBy": "S4",
+      "currentOutcome": "An unpaid school with a COMPLETE HQ access exception (receipt aiCredits NONE) reaches the provider and records usage.",
+      "replacementOutcome": "Refused before the provider (AI_EXCEPTION_NO_AI) unless owner decision AI-D1 approves a capped exception AI allowance."
+    },
+    {
+      "id": "KF-AI8-UNKNOWN-HOLD",
+      "finding": "AI-8",
+      "status": "OPEN",
+      "replacedBy": "AI-D3 slice",
+      "currentOutcome": "A last-month UNKNOWN Marcus hold still blocks this month's Marcus request; no agent release path exists; the UNKNOWN call has no ledger row.",
+      "replacementOutcome": "Owner-approved UNKNOWN resolution (AI-D3): provider lookup records the real cost and releases or expires the hold. S4 keeps counting UNKNOWN holds."
+    },
+    {
+      "id": "KF-AI3-SAME-AGENT-RACE",
+      "finding": "AI-3",
+      "status": "OPEN",
+      "replacedBy": "S4",
+      "currentOutcome": "Observed on b234be7: the second concurrent Marcus prepare at used 11994 waits on a transactionid ShareLock held by the first and is refused by the per-agent ceiling after the first commits (12000 committed). Reported as not reproduced (mayNotReproduce); an over-commit above 12000 would be reported as reproduced. Either way it never fails CI while OPEN.",
+      "replacementOutcome": "Serialized by the S4 organization budget lock; exactly one reserves."
+    },
+    {
+      "id": "KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE",
+      "finding": "AI-14",
+      "status": "OPEN",
+      "replacedBy": "S4",
+      "currentOutcome": "Found while building AI-0 on b234be7. For Marcus, Claire and Chad, a call already SENDING when the entitlement is suspended gets its provider answer, but record_* and fail_* both re-run the entitlement gate through the agent owner check (marketing_owner calls require_ai_invocation_plan_access). The service reports PERSISTENCE_UNKNOWN, no ai_usage_ledger row is written, and the invocation stays SENDING with its hold reserved.",
+      "replacementOutcome": "Evidence steps are never guarded (S4 rule): the result records exactly one ledger row (or UNKNOWN/FAILED is recorded) after a mid-flight lapse; start and reserve stay gated."
+    }
+  ]
+}
