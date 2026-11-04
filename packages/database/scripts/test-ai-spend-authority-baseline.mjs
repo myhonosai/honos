@@ -1253,6 +1253,214 @@ try {
   pass('INV-22', `a request begun with valid authority is refused at prepare once the permission is removed, the role grant expires or is revoked (${Object.keys(lostOutcomes).length} agent/case refusals, no provider call, hold or ledger row); restored authority proceeds`);
   }
 
+  // ---- INV-23 (AI-R1): team readiness agrees with what a real request would do, and writes nothing ----
+  {
+  const ready = async (o, patch = {}) => (await tenant(context(o, patch), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [o.subject]))).rows[0].r;
+  const byKey = (r) => Object.fromEntries(r.agents.map((a) => [a.agentKey, a]));
+  const counts = async () => (await row(`SELECT (SELECT count(*) FROM hon.ai_invocation_plans)::int p, (SELECT count(*) FROM hon.ai_usage_ledger)::int l,
+    (SELECT count(*) FROM hon.audit_events)::int a, (SELECT count(*) FROM hon.marketing_ai_invocations)+(SELECT count(*) FROM hon.teaching_ai_invocations)+(SELECT count(*) FROM hon.chad_follow_up_invocations) i`));
+  const r0 = await makeOrg('inv-23');
+  const before = await counts(), calls0 = Object.values(fakes).reduce((n, f) => n + f.calls, 0);
+  const base = await ready(r0);
+  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['claire', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
+  assert.deepEqual([base.organizationId, base.schoolId, base.completeEntitlement, base.agentBudget.ceilingCredits], [r0.id, r0.school, true, 12000]);
+  assert.deepEqual(await counts(), before, 'readiness writes nothing');
+  assert.equal(Object.values(fakes).reduce((n, f) => n + f.calls, 0), calls0, 'readiness never reaches a provider');
+  // Equivalence with real requests across the INV-8 gate changes: every refused request is reported unavailable.
+  const ALL = Object.keys(agents);
+  const cases = [
+    ['COMPLETE SUSPENDED', ALL, () => admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [r0.id]), () => restoreEntitlement(r0)],
+    ['CORE ACTIVE', ALL, () => admin.query("UPDATE hon.organization_entitlements SET tier='CORE' WHERE organization_id=$1", [r0.id]), () => restoreEntitlement(r0)],
+    ['teaching.assistant.use removed', ['claire'], () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='teaching.assistant.use'", [r0.role]),
+      () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'teaching.assistant.use')", [r0.role, r0.id])],
+    ['owner grant expired', ALL, () => admin.query("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval '1 minute' WHERE principal_id=$1", [r0.principal]),
+      () => admin.query('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1', [r0.principal])],
+    ['no route', ALL, () => admin.query('UPDATE hon.hq_ai_routing_policies SET active=false WHERE policy_id=$1', [r0.policy]), () => admin.query('UPDATE hon.hq_ai_routing_policies SET active=true WHERE policy_id=$1', [r0.policy])],
+  ];
+  const seen = {};
+  for (const [label, affected, apply, restore] of cases) {
+    await apply();
+    try {
+      let readiness = null;
+      const refused = await settle(ready(r0));
+      if (refused.value) readiness = byKey(refused.value);
+      for (const name of Object.keys(agents)) {
+        if (!affected.includes(name)) { assert.equal(readiness?.[name].available, true, `${name} ${label}: unaffected agent stays available`); continue; }
+        const outcome = await expectRefused(name, r0, {}, `INV-23 ${label}`);
+        // A whole-school refusal (no ai.invocation.plan scope) refuses the readiness read itself, which is also unavailable.
+        assert(readiness === null || readiness[name].available === false, `${name} ${label}: readiness must report unavailable (${outcome}): ${JSON.stringify(readiness?.[name])}`);
+        seen[`${name}: ${label}`] = readiness ? readiness[name].blockedBy : 'READ_REFUSED';
+      }
+    } finally { await restore(); }
+  }
+  assert.deepEqual(byKey(await ready(r0)).claire.available, true, 'restored');
+  // Specific blockers: HQ pause (S4-c), organization budget (S4-b), and a request that still fits the smaller Chad estimate.
+  await setUsed(r0, 11996);
+  const near = byKey(await ready(r0));
+  assert.deepEqual([near.marcus.blockedBy, near.claire.blockedBy, near.chad.available], ['ORGANIZATION_AI_BUDGET_REACHED', 'ORGANIZATION_AI_BUDGET_REACHED', true], JSON.stringify(near));
+  // The real request is refused too (the planner's budget denial surfaces as a BLOCKED request with no provider call).
+  assert.match(await expectRefused('marcus', r0, {}, 'INV-23 budget'), /^BLOCKED_/, 'the real request agrees');
+  const pauseIn = { action: 'PAUSE', organizationId: r0.id, spendClass: 'AGENT_INFERENCE', reason: 'Disposable synthetic AI-0 readiness pause' };
+  const pause = await settle(admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [hq.subject, JSON.stringify(pauseIn), K()]));
+  assert.equal(pause.value?.rows[0].r.status, 'ACTIVE', JSON.stringify(pause.error?.message));
+  assert.deepEqual(Object.values(byKey(await ready(r0))).map((a) => a.blockedBy), ['AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ', 'AI_PAUSED_BY_HQ']);
+  seen.pause = 'AI_PAUSED_BY_HQ';
+  // Only the direct human of this transaction, in the human UI, may read readiness.
+  for (const [patch, label] of [[{ source: 'AI' }, 'AI source'], [{ delegatedByPrincipalId: r0.principal }, 'delegated']]) {
+    const r = await settle(tenant(context(r0, patch), async (client) => {
+      await client.query("SELECT set_config('app.hon_source',$1,true),set_config('app.hon_delegated_by_principal_id',$2,true)", [patch.source ?? 'HUMAN_UI', patch.delegatedByPrincipalId ?? '']);
+      return client.query('SELECT hon.read_ai_team_readiness($1) r', [r0.subject]);
+    }));
+    assert.equal(r.error?.code, '42501', label);
+  }
+  const other = await makeOrg('inv-23-other');
+  assert.equal((await settle(tenant(context(r0), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [other.subject])))).error?.code, '42501', 'another school’s owner');
+  pass('INV-23', `AI-R1: team readiness reports all three agents available on a ready school, agrees with real requests across ${cases.length} gate changes (${Object.keys(seen).length} checks), names the budget and HQ pause blockers, refuses non-direct or foreign humans, and writes nothing or calls no provider`);
+  }
+
+  // ---- INV-23V (AI-R1, Manus final review P2): organization budget totals need independent organization-wide authority ----
+  // Two schools in one organization; usage at school B. Readiness is read at school A. Only an HQ reader, or a human with
+  // ai.usage.read at every school of the organization, sees committed/ceiling credits; everyone else gets null.
+  {
+  const v = await makeOrg('inv-23v'), schoolB = K(), staffRole = K();
+  await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1::uuid,$2,'AI-0 synthetic school B',$1::uuid::text,'UTC')", [schoolB, v.id]);
+  await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,correlation_id) VALUES($1,$2,'OPENROUTER','ai0-used-fixture','TEXT',500,$3)", [v.id, schoolB, K()]);
+  // School-only staff: every school permission except the AI usage economics permission, at school A only.
+  await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'AI0_STAFF','AI-0 synthetic staff',false)", [staffRole, v.id]);
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) SELECT $1,$2,code FROM hon.permissions WHERE code <> 'ai.usage.read'", [staffRole, v.id]);
+  const human = async (label, hqGrant = null) => {
+    const h = { user: K(), principal: K(), subject: `ai0-23v-${label}-${K()}` };
+    await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','AI-0 synthetic staff')", [h.user, h.subject]);
+    await admin.query("INSERT INTO hon.principals(id,principal_type,user_id,display_name) VALUES($1,'HUMAN_USER',$2,'AI-0 synthetic staff')", [h.principal, h.user]);
+    await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 day')", [v.id, v.school, h.principal, staffRole, v.principal]);
+    if (hqGrant) await admin.query(`INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,$2,$3,clock_timestamp()-interval '2 days',${hqGrant.until ?? 'NULL'})`, [h.principal, hqGrant.role, hqGrant.perms ?? []]);
+    return h;
+  };
+  const budgetOf = async (h) => (await tenant(context(v, { principalId: h.principal, externalSubject: h.subject }), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [h.subject]))).rows[0].r.agentBudget;
+  const committedNow = async () => Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [v.id])).n);
+  const owner = { principal: v.principal, subject: v.subject };
+  const outcomes = [];
+  const expectHidden = async (h, label) => { assert.equal(await budgetOf(h), null, `${label}: organization totals must be hidden`); outcomes.push(`${label}: hidden`); };
+  const expectShown = async (h, label) => {
+    assert.deepEqual(await budgetOf(h), { committedCredits: await committedNow(), ceilingCredits: 12000 }, `${label}: organization totals shown`);
+    outcomes.push(`${label}: shown`);
+  };
+  await expectHidden(await human('staff'), 'school-only staff');
+  await expectHidden(owner, 'owner of school A only');
+  await expectHidden(await human('hq-operator-no-billing', { role: 'HON_HQ_OPERATOR', perms: ['hq.dashboard.view'] }), 'HQ operator without billing authority');
+  await expectHidden(await human('hq-expired', { role: 'HON_HQ_OWNER', until: "clock_timestamp()-interval '1 minute'" }), 'expired HQ owner');
+  await expectShown(await human('hq-owner', { role: 'HON_HQ_OWNER' }), 'HQ owner');
+  await expectShown(await human('hq-billing', { role: 'HON_HQ_OPERATOR', perms: ['hq.billing.manage'] }), 'HQ billing operator');
+  assert.ok((await committedNow()) >= 500, 'the totals include school B usage');
+  // Owner at both schools: organization-wide authority from existing grants.
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 day')", [v.id, schoolB, v.principal, v.role]);
+  await expectShown(owner, 'owner of both schools');
+  // A school that is not ACTIVE fails closed for school-derived authority; HQ still sees the totals.
+  await admin.query("UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1", [schoolB]);
+  await expectHidden(owner, 'owner of both schools, school B suspended');
+  await admin.query("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [schoolB]);
+  await expectShown(owner, 'owner of both schools, school B active again');
+  // (Manus delta review P2) Live entitlement: suspended, expired or missing entitlement and an access state without
+  // access hide the totals from school-derived authority (owner of both schools, and staff granted ai.usage.read at
+  // both schools); HQ billing readers are unchanged; restoring the entitlement shows them again.
+  const hqOwner = await human('hq-owner-ent', { role: 'HON_HQ_OWNER' }), hqBilling = await human('hq-billing-ent', { role: 'HON_HQ_OPERATOR', perms: ['hq.billing.manage'] });
+  const usageStaff = await human('usage-staff');
+  const usageRole = K();
+  await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'AI0_USAGE','AI-0 synthetic usage reader',false)", [usageRole, v.id]);
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.usage.read')", [usageRole, v.id]);
+  for (const sch of [v.school, schoolB])
+    await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 day')", [v.id, sch, usageStaff.principal, usageRole, v.principal]);
+  await expectShown(usageStaff, 'staff with ai.usage.read at every school');
+  const schoolDerived = [[owner, 'owner of both schools'], [usageStaff, 'staff with ai.usage.read at every school']];
+  const lapses = [
+    ['entitlement SUSPENDED', "UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1"],
+    ['entitlement expired', "UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '1 minute' WHERE organization_id=$1"],
+    ['entitlement not yet effective', "UPDATE hon.organization_entitlements SET effective_from=clock_timestamp()+interval '1 day' WHERE organization_id=$1"],
+    ['access state awaiting first payment', "INSERT INTO hon.saas_access_states(organization_id,state,reason,version,changed_by_principal_id,created_at,updated_at) VALUES($1,'AWAITING_FIRST_PAYMENT','AWAITING_INITIAL_PAYMENT',1,$2,clock_timestamp(),clock_timestamp())"]];
+  for (const [label, sql] of lapses) {
+    await admin.query(sql, sql.includes('$2') ? [v.id, v.principal] : [v.id]);
+    for (const [h, who] of schoolDerived) await expectHidden(h, `${who}, ${label}`);
+    await expectShown(hqOwner, `HQ owner, ${label}`);
+    await expectShown(hqBilling, `HQ billing operator, ${label}`);
+    // Fixture cleanup only (the access-state table refuses deletes by design): the end-of-proof check expects it empty.
+    if (sql.includes('saas_access_states')) {
+      await admin.query('BEGIN'); await admin.query('ALTER TABLE hon.saas_access_states DISABLE TRIGGER USER');
+      await admin.query('DELETE FROM hon.saas_access_states WHERE organization_id=$1', [v.id]);
+      await admin.query('ALTER TABLE hon.saas_access_states ENABLE TRIGGER USER'); await admin.query('COMMIT');
+    }
+    await restoreEntitlement(v);
+    for (const [h, who] of schoolDerived) await expectShown(h, `${who}, restored after ${label}`);
+  }
+  // Revalidation during authorization (two connections, pg_locks-observed): an uncommitted suspension, role-grant
+  // revocation, permission removal or HQ grant expiry makes the read wait, and it then fails closed once committed.
+  const waitsOn = async (blocker) => {
+    const xid = (await blocker.query('SELECT txid_current()::text x')).rows[0].x;
+    for (const end = Date.now() + 5000; Date.now() < end; await sleep(20))
+      if ((await rows("SELECT 1 FROM pg_locks WHERE locktype='transactionid' AND NOT granted AND transactionid::text=$1", [xid])).length) return true;
+    return false;
+  };
+  const races = [
+    ['entitlement suspended', owner, "UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [v.id], () => restoreEntitlement(v)],
+    ['school B role grant revoked', usageStaff, "UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE principal_id=$1 AND school_id=$3",
+      [usageStaff.principal, v.principal, schoolB], () => admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')", [v.id, schoolB, usageStaff.principal, usageRole, v.principal])],
+    ['ai.usage.read removed from the role', usageStaff, "DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='ai.usage.read'", [usageRole],
+      () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.usage.read')", [usageRole, v.id])],
+    ['HQ owner grant expired', hqOwner, "UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1", [hqOwner.principal],
+      () => admin.query('UPDATE hon.hq_operator_grants SET effective_until=NULL WHERE principal_id=$1', [hqOwner.principal])]];
+  for (const [label, h, sql, args, restore] of races) {
+    await expectShown(h, `${label}: before`);
+    const blocker = await openTx();
+    try {
+      await blocker.query(sql, args);
+      const read = settle(budgetOf(h));
+      assert.equal(await waitsOn(blocker), true, `${label}: the read must wait for the uncommitted change`);
+      await blocker.query('COMMIT');
+      const r = await read;
+      assert.equal(r.value, null, `${label}: after the change commits the totals are hidden: ${JSON.stringify(r.value ?? r.error?.message)}`);
+      outcomes.push(`${label} during the read: waits, then hidden`);
+    } finally { await blocker.end().catch(() => {}); }
+    await restore();
+    await expectShown(h, `${label}: restored`);
+  }
+  // (Manus delta review P2, entitlement time) Activation is judged at transaction start, exactly as the central rule
+  // (0130); expiry on the fresh clock. Deterministic: a blocker row-locks (FOR UPDATE) the entitlement row, the read
+  // begins its transaction and is seen WAITING on it (pg_locks), the activation or expiry instant passes, then the lock
+  // is released. Owner of both schools (school-derived authority) throughout.
+  const timeRace = async (label, setSql, waitMs, expectBudget) => {
+    await admin.query(setSql, [v.id]);
+    const blocker = await openTx();
+    try {
+      await blocker.query('SELECT 1 FROM hon.organization_entitlements WHERE organization_id=$1 FOR UPDATE', [v.id]);
+      const read = settle(budgetOf(owner));
+      assert.equal(await waitsOn(blocker), true, `${label}: the read must wait on the entitlement row`);
+      await sleep(waitMs);
+      await blocker.query('COMMIT');
+      const r = await read;
+      if (expectBudget) assert.deepEqual(r.value, { committedCredits: await committedNow(), ceilingCredits: 12000 }, `${label}: ${JSON.stringify(r.value ?? r.error?.message)}`);
+      else assert.equal(r.value, null, `${label}: ${JSON.stringify(r.value ?? r.error?.message)}`);
+      outcomes.push(`${label}: ${expectBudget ? 'shown' : 'hidden'}`);
+    } finally { await blocker.end().catch(() => {}); }
+  };
+  // Case A: the transaction began before activation; activation passes during the wait: still denied.
+  await timeRace('activation during the wait (transaction began before effective_from)',
+    "UPDATE hon.organization_entitlements SET status='ACTIVE',effective_from=clock_timestamp()+interval '1500 milliseconds',effective_until=NULL WHERE organization_id=$1", 2500, false);
+  // Case B: a read that starts after activation, with every other requirement met: shown.
+  await expectShown(owner, 'read started after activation');
+  // Case C: active at transaction start, expires during the wait: denied on the fresh clock.
+  await timeRace('expiry during the wait (active when the transaction began)',
+    "UPDATE hon.organization_entitlements SET status='ACTIVE',effective_from=clock_timestamp()-interval '1 day',effective_until=clock_timestamp()+interval '1500 milliseconds' WHERE organization_id=$1", 2500, false);
+  await restoreEntitlement(v);
+  // Control: no time boundary crossed during the same wait: shown (the wait itself never hides valid access).
+  await timeRace('no boundary crossed during the wait', "UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1", 300, true);
+  // Case E reconfirmed after the time races: one-school owner and staff stay hidden, full authority still shown.
+  await expectHidden(await human('staff-after-time'), 'school-only staff after the time races');
+  await expectShown(usageStaff, 'staff with ai.usage.read at every school after the time races');
+  // Cross-organization isolation: authority over another organization's schools gives nothing here.
+  const foreign = await makeOrg('inv-23v-foreign');
+  assert.equal((await settle(tenant(context(v, { principalId: foreign.principal, externalSubject: foreign.subject }), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [foreign.subject])))).error?.code, '42501', 'another organization’s owner is refused');
+  pass('INV-23V', `AI-R1: school-scoped readiness discloses organization budget totals only with independent organization-wide authority (${outcomes.join('; ')})`);
+  }
+
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
   // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter
