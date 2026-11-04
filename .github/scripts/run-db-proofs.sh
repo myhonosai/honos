@@ -95,6 +95,7 @@ setup class-sessions-read HON_CLASS_SESSIONS_READ_VALIDATION_TARGET hon_class_se
 proof class-sessions-read test-security-boundaries.mjs "Tenant isolation, restricted runtime role, parent-family boundaries"
 proof class-sessions-read test-outbox-leases.mjs "Outbox leases never treat UNKNOWN as published"
 proof class-sessions-read test-class-sessions-read-integrity.mjs "Class Sessions current-school read boundary"
+proof class-sessions-read test-class-sessions-read-microsecond-order.mjs "Class Sessions read: signed-session HTTP 200 and one (published millisecond, UUID) order across SQL, 50-row boundary and contract"
 
 setup crm-lead-close HON_CRM_LEAD_CLOSE_VALIDATION_TARGET hon_crm_close_validation HON_CRM_LEAD_CLOSE_ENV_FILE
 proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational table"

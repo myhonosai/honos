@@ -185,6 +185,7 @@
     "0190_a2p_registration_preparation.sql": "266d6a2f25a8051bce80cf625a0ae333bd8032fb3a1ae0b437bb4a03d36f5638",
     "0191_school_owner_invitations.sql": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f",
     "0192_crm_suspended_owner_read_only.sql": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542",
-    "0193_ai_spend_durable_evidence.sql": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5"
+    "0193_ai_spend_durable_evidence.sql": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5",
+    "0203_class_sessions_read_millisecond_order.sql": "9bfb14c3b22af6d3a0d7e3a06ce7ee1e47a7a9a1286cb7d079423a2f2f5b5429"
   }
 }
