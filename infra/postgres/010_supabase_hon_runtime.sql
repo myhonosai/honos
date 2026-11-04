@@ -2068,3 +2068,14 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- S4-e 0197 HQ per-school AI usage: the HQ read is the only runtime boundary (it reads the ledger as definer).
+DO $$ DECLARE r text; BEGIN
+  REVOKE ALL ON FUNCTION hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz) FROM '||quote_ident(r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz) TO hon_runtime;
+  END IF;
+END $$;

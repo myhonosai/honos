@@ -82,6 +82,7 @@
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.read_ai_school_usage_from_hq(text,timestamp with time zone,timestamp with time zone)",
     "hon.read_ai_unknown_invocations_from_hq(text)",
     "hon.read_chad_follow_up_invocation(text,uuid)",
     "hon.read_marketing_invocation(text,uuid)",

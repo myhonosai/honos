@@ -1109,6 +1109,148 @@ try {
   pass('INV-20L', 'S4-d: a verified provider charge after a WRITE_OFF is recorded once as separate immutable evidence (no second ledger row; original hold window), the WRITE_OFF decision, estimate and ledger row stay, no credit is deducted again; replay, key reuse, a second actual and a duplicate provider generation are refused (also for a zero estimate); HQ-owner only; audited');
   }
 
+  // ---- INV-21 (S4-e): HQ per-school AI usage and actual provider cost, read only ----
+  {
+  const usage = (subject, from, to) => settle(admin.query('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r', [subject, from, to]));
+  const from = new Date(Date.now() - 90 * 86_400_000).toISOString(), to = new Date(Date.now() + 3_600_000).toISOString();
+  // A non-agent (CREATIVE_MEDIA) provider expense row, as the creative wallet (CW1) records them: it has no agent, so
+  // the per-agent breakdown must skip it rather than fail the whole HQ read (CW1 review P2-A regression).
+  await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,provider_cost_microunits,correlation_id,spend_class) VALUES($1,$2,'OPENROUTER','ai0-creative','IMAGE',0,5000,$3,'CREATIVE_MEDIA')", [old.o.id, old.o.school, K()]);
+  // Manus delta review P2: a school whose only activity is unresolved calls (no ledger row at all) must still be listed;
+  // a school with no activity at all is not. One org with an UNKNOWN hold from each agent and nothing recorded, and one
+  // org with nothing.
+  const unresolvedOnly = await lostOutcome('inv-21-unresolved-only', 'marcus');
+  for (const name of ['claire', 'chad']) {
+    fakes[name].mode = 'UNKNOWN';
+    assert.equal((await agents[name].service.submit(context(unresolvedOnly.o), agents[name].input(unresolvedOnly.o))).status, 'UNKNOWN');
+    fakes[name].mode = 'RESULT';
+  }
+  const idle = await makeOrg('inv-21-zero-activity');
+  const ledgerBefore = (await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n;
+  const read = await usage(hq.subject, from, to);
+  const report = read.value?.rows[0].r;
+  assert(report, JSON.stringify(read.error?.message));
+  // Independent per-school totals straight from the ledger: each school is reported exactly once and only with its own rows.
+  // Cost basis comes from the resolution records: a WRITE_OFF row's cost is an estimate, never a provider charge.
+  const expected = await rows(`SELECT u.organization_id o, u.school_id s, u.spend_class c, sum(u.customer_credits)::bigint credits,
+      coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NULL),0)::bigint cost, coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NOT NULL),0)::bigint estimate,
+      count(*)::int n, count(r.id)::int w
+    FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF'
+    WHERE u.occurred_at >= $1 AND u.occurred_at < $2 GROUP BY 1,2,3`, [from, to]);
+  // Independent unresolved counts per school (the HQ queue predicate on the immutable origin).
+  const unresolvedExpected = await rows(`SELECT organization_id o, school_id s, count(*)::int n FROM (
+      SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.marketing_ai_invocations
+      UNION ALL SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.teaching_ai_invocations
+      UNION ALL SELECT organization_id, school_id, status, held_at, reserved_credits FROM hon.chad_follow_up_invocations) h
+    WHERE reserved_credits > 0 AND (status = 'UNKNOWN' OR (status = 'SENDING' AND held_at <= clock_timestamp() - interval '1 hour')) GROUP BY 1,2`);
+  const schoolsSeen = new Set([...expected, ...unresolvedExpected].map((e) => `${e.o}/${e.s}`));
+  assert.equal(report.truncated, false);
+  assert.equal(report.schools.length, schoolsSeen.size, 'one entry per school with usage in range or unresolved calls now');
+  assert.equal(new Set(report.schools.map((x) => `${x.organizationId}/${x.schoolId}`)).size, report.schools.length, 'no school reported twice');
+  for (const e of unresolvedExpected)
+    assert.equal(report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s)?.unreconciledInvocations, e.n, `school ${e.s} unresolved count`);
+  for (const x of report.schools)
+    if (!unresolvedExpected.some((e) => e.o === x.organizationId && e.s === x.schoolId)) assert.equal(x.unreconciledInvocations, 0, `school ${x.schoolId} has no unresolved call`);
+  // The unresolved-only school is listed once, with its three unresolved calls and no amount at all (no ledger class,
+  // no invented cost); the zero-activity school is not listed; the totals reconcile with the ledger (no double count).
+  const uo = report.schools.filter((x) => x.schoolId === unresolvedOnly.o.school);
+  assert.equal(uo.length, 1, 'an unresolved-only school is listed exactly once');
+  assert.deepEqual([uo[0].unreconciledInvocations, uo[0].entries, uo[0].providerReportedCostMicrounits, uo[0].estimatedWriteOffCostMicrounits,
+    uo[0].lateProviderCostMicrounits, uo[0].writeOffEntries, uo[0].byClass], [3, 0, 0, 0, 0, 0, {}], JSON.stringify(uo[0]));
+  assert.equal(report.schools.some((x) => x.schoolId === idle.school || x.organizationId === idle.id), false, 'a zero-activity school is not listed');
+  assert.equal(report.organizations.find((x) => x.organizationId === unresolvedOnly.o.id)?.openUnknownHolds, 3, 'its organization is listed with its open holds');
+  const ledgerTotals = await row(`SELECT count(*)::int n, coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NULL),0)::bigint cost,
+      coalesce(sum(u.provider_cost_microunits) FILTER (WHERE r.id IS NOT NULL),0)::bigint estimate
+    FROM hon.ai_usage_ledger u LEFT JOIN hon.ai_unknown_resolutions r ON r.ledger_entry_id=u.id AND r.decision='WRITE_OFF' WHERE u.occurred_at >= $1 AND u.occurred_at < $2`, [from, to]);
+  assert.deepEqual([report.schools.reduce((t, x) => t + x.entries, 0), report.schools.reduce((t, x) => t + x.providerReportedCostMicrounits, 0), report.schools.reduce((t, x) => t + x.estimatedWriteOffCostMicrounits, 0)],
+    [ledgerTotals.n, Number(ledgerTotals.cost), Number(ledgerTotals.estimate)], 'entries, provider cost and estimates reconcile with the ledger exactly once');
+  for (const e of expected) {
+    const sch = report.schools.find((x) => x.organizationId === e.o && x.schoolId === e.s);
+    const cls = sch?.byClass?.[e.c];
+    assert.deepEqual([cls?.credits, cls?.providerReportedCostMicrounits, cls?.estimatedWriteOffCostMicrounits, cls?.entries, cls?.writeOffEntries],
+      [Number(e.credits), Number(e.cost), Number(e.estimate), e.n, e.w], `school ${e.s} class ${e.c}`);
+  }
+  // Agent attribution comes from the S4-a source invocation; pre-S4-a style rows are UNATTRIBUTED, never guessed.
+  const oldSchool = report.schools.find((x) => x.schoolId === old.o.school);
+  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.providerReportedCostMicrounits >= 2400, true, JSON.stringify(oldSchool));
+  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.MARKETING?.estimatedWriteOffCostMicrounits, 0, 'RECORD_PROVIDER_COST is provider evidence, not an estimate');
+  assert.equal(oldSchool.byClass.AGENT_INFERENCE.byAgent.UNATTRIBUTED?.credits, 11990, 'the synthetic used-credit fixture row has no source invocation');
+  const offSchool = report.schools.find((x) => x.schoolId === staleOld.o.school);
+  // Manus review P2: the WRITE_OFF estimate (900) is reported as an estimate and is NOT in the provider-reported total.
+  const offTeaching = offSchool.byClass.AGENT_INFERENCE.byAgent.TEACHING;
+  assert.deepEqual([offTeaching?.providerReportedCostMicrounits, offTeaching?.estimatedWriteOffCostMicrounits, offTeaching?.writeOffEntries], [0, 900, 1], JSON.stringify(offSchool));
+  assert.equal(offSchool.estimatedWriteOffCostMicrounits, 900);
+  // Manus final review P2: the late verified actual (1100, INV-20L) is reported beside the estimate, never inside the
+  // provider-reported total or the estimate; the estimate it supersedes is shown, and no credits or entries are added.
+  assert.deepEqual([offTeaching?.lateProviderCostMicrounits, offTeaching?.lateProviderExpenseEntries, offTeaching?.supersededWriteOffEstimateMicrounits, offTeaching?.entries, offTeaching?.credits],
+    [1100, 1, 900, 1, 0], JSON.stringify(offTeaching));
+  assert.deepEqual([offSchool.lateProviderCostMicrounits, offSchool.supersededWriteOffEstimateMicrounits], [1100, 900]);
+  const lateTotals = await row(`SELECT coalesce(sum(provider_cost_microunits),0)::bigint c, count(*)::int n FROM hon.ai_late_provider_expenses WHERE occurred_at >= $1 AND occurred_at < $2`, [from, to]);
+  assert.deepEqual([report.schools.reduce((t, x) => t + x.lateProviderCostMicrounits, 0), report.schools.reduce((t, x) => t + x.lateProviderExpenseEntries, 0)],
+    [Number(lateTotals.c), lateTotals.n], 'every late actual in range is reported once (incl. the zero-estimate Chad call)');
+  assert.equal(offSchool.providerReportedCostMicrounits, Object.values(offSchool.byClass).reduce((a, c) => a + c.providerReportedCostMicrounits, 0));
+  // Unknown outcomes carry no amount: they are counted per school, separately from both cost totals.
+  const staleSchool = report.schools.find((x) => x.schoolId === staleCur.o.school);
+  assert.equal(staleSchool?.unreconciledInvocations, 1, 'an open stale SENDING hold is reported as unreconciled');
+  assert.equal(oldSchool.unreconciledInvocations, 0, 'a resolved outcome is not unreconciled');
+  for (const sch of report.schools) assert.equal(sch.byClass.CREATIVE_MEDIA?.byAgent ?? null, null, 'creative rows are never attributed to an agent budget');
+  assert.deepEqual([oldSchool.byClass.CREATIVE_MEDIA?.credits, oldSchool.byClass.CREATIVE_MEDIA?.providerReportedCostMicrounits >= 5000, oldSchool.byClass.CREATIVE_MEDIA?.estimatedWriteOffCostMicrounits], [0, true, 0], 'creative expense is reported in its own class');
+  // Organization budget picture equals the S4-b/S4-d functions; open lost outcomes are counted.
+  const orgOf = (o) => report.organizations.find((x) => x.organizationId === o.id);
+  const committedNow = Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleCur.o.id])).n);
+  assert.deepEqual([orgOf(staleCur.o)?.agentCeilingCredits, orgOf(staleCur.o)?.agentCommittedCredits, orgOf(staleCur.o)?.openUnknownHolds, orgOf(staleCur.o)?.aiPaused],
+    [12000, committedNow, 1, false], JSON.stringify(orgOf(staleCur.o)));
+  assert.equal(orgOf(old.o)?.openUnknownHolds, 0, 'resolved outcomes are not open');
+  assert.equal(report.providerCostUnit, 'MICROUNITS_USD');
+  // Authority and range: HQ readers only; bad ranges refused; nothing written; a STABLE definer read with one runtime grant.
+  assert.equal((await usage(old.o.subject, from, to)).error?.code, '42501', 'a school owner cannot read HQ school usage');
+  assert.equal((await usage(`ai0-unknown-${K()}`, from, to)).error?.code, '42501', 'an unknown subject cannot read');
+  for (const [a, b, label] of [[to, from, 'reversed'], [new Date(Date.now() - 100 * 86_400_000).toISOString(), to, 'over 92 days'], [null, to, 'no start'],
+    [from, new Date(Date.now() + 3 * 86_400_000).toISOString(), 'future end']])
+    assert.equal((await usage(hq.subject, a, b)).error?.code, '22023', label);
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger')).n, ledgerBefore, 'the read writes nothing');
+  assert.equal((await row("SELECT provolatile v, prosecdef d FROM pg_proc WHERE oid='hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)'::regprocedure")).v, 's');
+  pass('INV-21', `S4-e: HQ per-school AI usage: ${report.schools.length} schools each reported once with only their own ledger rows, per class (credits never cross classes) and per agent (UNATTRIBUTED when no source), provider-reported cost, WRITE_OFF estimates, late actuals (with the estimate they supersede) and unreconciled calls kept separate (mixed agent + creative), an unresolved-only school listed once with no amount, a zero-activity school not listed, totals reconcile with the ledger, org budget equal to the S4-b/S4-d functions, open lost outcomes counted; HQ readers only, bounded range, read only`);
+  }
+
+  }
+
+  // ---- INV-22: a permission or role grant lost after a request begins stops it at prepare, before any provider call ----
+  {
+  const lose = {
+    'ai.invocation.plan permission removed': [async (o) => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='ai.invocation.plan'", [o.role]),
+      async (o) => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.invocation.plan')", [o.role, o.id])],
+    'owner role grant expired': [async (o) => admin.query('UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval \'1 minute\' WHERE principal_id=$1', [o.principal]),
+      async (o) => admin.query('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1', [o.principal])],
+    'owner role grant revoked': [async (o) => admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1', [o.principal]), null],
+  };
+  const lostOutcomes = {};
+  for (const [label, [apply, restore]] of Object.entries(lose)) {
+    const o = await makeOrg(`inv-22-${Object.keys(lostOutcomes).length}`);
+    const begun = {};
+    for (const name of Object.keys(agents)) {
+      fakes[name].readiness = () => 'NOT_CONFIGURED';
+      begun[name] = (await agents[name].service.submit(context(o), agents[name].input(o))).id;
+      fakes[name].readiness = () => 'READY';
+    }
+    await apply(o);
+    for (const name of Object.keys(agents)) {
+      const calls = fakes[name].calls, ledger = await ledgerRows(o);
+      fakes[name].mode = 'RESULT';
+      const refused = await settle(agents[name].service.generate(context(o), begun[name]));
+      assert.equal(refused.error?.getStatus?.(), 403, `${name} ${label}: prepare must be refused: ${JSON.stringify(refused.value ?? refused.error?.getResponse?.())}`);
+      assert.equal(fakes[name].calls, calls, `${name} ${label}: refused prepare reached the provider`);
+      assert.equal(await ledgerRows(o), ledger);
+      assert.equal((await reservedByAgent(o))[name], 0, `${name} ${label}: no hold`);
+      lostOutcomes[`${name}: ${label}`] = 'HTTP_403';
+    }
+    if (restore) {
+      await restore(o);
+      const ok = await agents.marcus.service.generate(context(o), begun.marcus);
+      assert.equal(ok.status, 'AWAITING_APPROVAL', `${label}: restoring the authority lets the same request proceed: ${JSON.stringify(ok)}`);
+    }
+  }
+  pass('INV-22', `a request begun with valid authority is refused at prepare once the permission is removed, the role grant expires or is revoked (${Object.keys(lostOutcomes).length} agent/case refusals, no provider call, hold or ledger row); restored authority proceeds`);
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
