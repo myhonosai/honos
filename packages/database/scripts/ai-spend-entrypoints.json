@@ -7,6 +7,7 @@
     "ai_usage_ledger",
     "chad_follow_up_invocations",
     "marketing_ai_invocations",
+    "saas_creative_reservations",
     "saas_credit_reservations",
     "teaching_ai_invocations"
   ],
@@ -35,6 +36,7 @@
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
     "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)",
     "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)"
   ],
   "reservationWriters": [
@@ -96,11 +98,14 @@
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.saas_allowance_balance(uuid)",
     "hon.saas_allowance_json(uuid)",
+    "hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)",
+    "hon.saas_creative_reservation_json(hon.saas_creative_reservations,boolean)",
     "hon.saas_credit_program_active()",
     "hon.saas_credit_program_json()",
     "hon.saas_credit_reservation_json(hon.saas_credit_reservations,boolean)",
@@ -221,6 +226,11 @@
       "public": false,
       "security_definer": true
     },
+    "hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": true
+    },
     "hon.saas_current_allowance(uuid,uuid,timestamp with time zone)": {
       "runtime": false,
       "public": false,
@@ -253,6 +263,13 @@
       "truncate": false
     },
     "marketing_ai_invocations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
+    "saas_creative_reservations": {
       "select": false,
       "insert": false,
       "update": false,
@@ -293,6 +310,10 @@
       "marketing_invocation_guard",
       "marketing_invocation_no_truncate",
       "zz_ai_hold_origin"
+    ],
+    "saas_creative_reservations": [
+      "saas_guarded",
+      "saas_no_truncate"
     ],
     "saas_credit_reservations": [
       "ai_spend_b3_guard",

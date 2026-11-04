@@ -47,6 +47,8 @@
     "db:test-saas-billing-utc-webhook-periods": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-billing-utc-webhook-periods.mjs",
     "db:test-champions-proof-target": "node scripts/test-champions-proof-target.mjs",
     "db:test-saas-invoicing": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-invoicing-integrity.mjs",
+    "db:test-saas-creative-wallet": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-creative-wallet-integrity.mjs",
+    "db:test-saas-creative-wallet-review-regressions": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-creative-wallet-review-regressions.mjs",
     "db:test-saas-credits": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-credits-integrity.mjs",
     "db:test-saas-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-payments-integrity.mjs",
     "db:test-saas-school-billing": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-saas-school-billing-integrity.mjs",
