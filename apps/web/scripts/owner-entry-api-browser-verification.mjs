@@ -221,7 +221,12 @@ try {
     await context.clearCookies(); await page.getByTestId('verify-entry').click();
     await page.getByTestId('entry-status').filter({ hasText: entryText('en', 'SESSION') }).waitFor();
     assert.equal(await page.evaluate(() => window.__entrySessionSignals), 1); assert(await page.getByTestId('entry-private').isHidden());
-    assert(await page.getByTestId('verify-entry').isDisabled()); securityChecks.push('actual authenticated transport 401 invalidates the mounted entry and requires a new signed-in document');
+    assert(await page.getByTestId('verify-entry').isDisabled());
+    // Real 401 must remain terminal even after later browser privacy events.
+    await page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); });
+    await page.getByTestId('entry-status').filter({ hasText: entryText('en', 'SESSION') }).waitFor();
+    assert(await page.getByTestId('verify-entry').isDisabled()); assert(await page.getByTestId('entry-private').isHidden());
+    securityChecks.push('actual authenticated transport 401 stays terminal through blur/pagehide and requires a new signed-in document');
     await context.close();
   }
   pass('mounted real 403 revocation and real 401 loss have distinct local/global privacy outcomes');

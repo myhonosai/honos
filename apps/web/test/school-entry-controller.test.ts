@@ -47,6 +47,14 @@ it('clears loaded facts and retires links synchronously on session loss; no in-p
   c.conceal('SESSION'); expect(c.canNavigate(version, a)).toBe(false); expect(c.snapshot().selection).toBeNull();
   await c.load(); expect(api.current).toHaveBeenCalledTimes(1); expect(c.snapshot().phase).toBe('SESSION');
 });
+it.each(['SESSION', 'IDENTITY'] as const)('keeps %s terminal through later privacy events and effect cleanup', async phase => {
+  vi.mocked(api.identity).mockRejectedValueOnce(new SchoolEntryError(phase));
+  await c.load(); const reads = vi.mocked(api.identity).mock.calls.length;
+  c.conceal(); c.conceal(); c.dispose(); c.activate();
+  await c.load();
+  expect(c.snapshot()).toMatchObject({ phase, selection: null, choices: [] });
+  expect(api.identity).toHaveBeenCalledTimes(reads);
+});
 it('does not confuse unavailable/suspended school resolution with a verified empty list or grant an exception', async () => {
   vi.mocked(api.current).mockResolvedValue({ state: 'MANUAL_ENTRY_REQUIRED' }); vi.mocked(api.choices).mockResolvedValue({ state: 'MANUAL_ENTRY_REQUIRED' });
   await c.load(); expect(c.snapshot().phase).toBe('UNAVAILABLE'); expect(api.verifySchool).not.toHaveBeenCalled();

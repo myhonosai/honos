@@ -19,7 +19,10 @@ export class SchoolEntryController {
   }
   conceal(phase: 'CONCEALED' | 'SESSION' = 'CONCEALED'): void {
     this.abort?.abort(); this.abort = null;
-    this.replace(phase);
+    // Privacy events and effect cleanup must never downgrade a terminal identity
+    // or session failure into a restorable state in this mounted controller.
+    const terminal = this.state.phase === 'SESSION' || this.state.phase === 'IDENTITY';
+    this.replace(phase === 'SESSION' ? phase : terminal ? this.state.phase : phase);
   }
   dispose(): void { this.mounted = false; this.conceal(); this.listeners.clear(); }
   canNavigate(revision: number, scope: SchoolScope): boolean {
