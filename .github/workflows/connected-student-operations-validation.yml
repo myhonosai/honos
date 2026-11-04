@@ -1,7 +1,7 @@
 name: Connected student booking and attendance
 on:
   pull_request:
-    branches: [main, codex/active-membership-recovery]
+    branches: [main, codex/active-membership-recovery, codex/connected-booking-attendance]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'apps/web/**'

@@ -56,16 +56,22 @@ try{
  const protectedTables=(await q("SELECT relname FROM pg_class WHERE relnamespace='hon'::regnamespace AND relkind='r' AND relname ~ '^(saas_|payment|invoice|refund|membership|organization_entitlement|document_ack|agreement|consent|communication_|action_|ai_|school_payment|stripe|provider)' ORDER BY relname")).rows.map(r=>r.relname);
  const snapshot=async tables=>{const s={};for(const table of tables){assert.match(table,/^[a-z_]+$/);s[table]=(await q(`SELECT md5(coalesce(string_agg(t::text,'|' ORDER BY t::text),'')) h FROM hon.${table} t`)).rows[0].h;}return s;};
  const protectedBefore=await snapshot(protectedTables);
- // Existing 0147 fixture boundary: canonical 010 reconciliation removes this named function grant.
- // Prove the inherited denial first; do not claim the unmodified production reconciliation works.
+ // Accepted #128 canonical reconciliation must supply the grant; a fixture repair would mask a regression.
  const sessionReadGranted=(await q("SELECT has_function_privilege($1,'hon.read_current_school_class_sessions(text)','EXECUTE') allowed",[flexibleBillingAccountsFixture.runtime])).rows[0].allowed;
- if(!sessionReadGranted){
-  await assert.rejects(sessions.loadCurrentSchoolClassSessions(a.org,a.school),denied(403));
-  assert.match(flexibleBillingAccountsFixture.runtime,/^hon_[a-z_]+_runtime$/);
-  await q(`GRANT EXECUTE ON FUNCTION hon.read_current_school_class_sessions(text) TO "${flexibleBillingAccountsFixture.runtime}"`);
-  groups.push('inherited canonical ACL gap proved; disposable-only 0147 named-function fixture grant restored, no table access');
- }
+ assert.equal(sessionReadGranted,true,'Canonical Class Sessions grant missing; fixture ACL repairs are forbidden.');
+ assert.match(flexibleBillingAccountsFixture.runtime,/^hon_[a-z_]+_runtime$/);
+ const verifier=(await readFile(resolve(repo,'infra/postgres/011_verify_supabase_hon_runtime.sql'),'utf8')).split('-- Class Sessions current-school read exact verification:')[1]?.split('-- End Class Sessions current-school read exact verification.')[0];
+ assert(verifier,'Accepted canonical Class Sessions verifier is missing.');
+ const verifyAcl=verifier.replaceAll('hon_runtime',flexibleBillingAccountsFixture.runtime);
+ await q(verifyAcl);
  const list=await sessions.loadCurrentSchoolClassSessions(a.org,a.school);assert.equal(list.length,2);assert(list.every(s=>a.sessions.includes(s.sessionId)));groups.push('signed-session bounded session read with real school resolver');
+ // A rollback-only ablation proves loss of the canonical grant is detected, never silently repaired.
+ await q('BEGIN');try{
+  await q(`REVOKE EXECUTE ON FUNCTION hon.read_current_school_class_sessions(text) FROM "${flexibleBillingAccountsFixture.runtime}"`);
+  await assert.rejects(q(verifyAcl),/Class Sessions read grant drift/);
+ }finally{await q('ROLLBACK');}
+ await q(verifyAcl);assert.equal((await sessions.loadCurrentSchoolClassSessions(a.org,a.school)).length,2);
+ groups.push('accepted canonical ACL grants and verifier used without fixture repair; revoked grant detected and rollback restores the original posture');
  // Deterministically reproduce the former clock_timestamp/random-UUID fixture failure through the real signed API.
  // SQL orders microseconds, but its JSON timestamps/closed contract expose milliseconds and use UUID for ties.
  const descending=[...b.sessions].sort().reverse();
