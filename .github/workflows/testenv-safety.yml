@@ -1,0 +1,27 @@
+name: Private test environment safety
+on:
+  pull_request:
+    paths:
+      - scripts/testenv/**
+      - .github/workflows/testenv-safety.yml
+      - package.json
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safety:
+    name: Private-state and injected-cleanup guards (no app or DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - run: node --test scripts/testenv/state-safety.test.mjs
+      - run: |
+          node --check scripts/testenv/testenv.mjs
+          node --check scripts/testenv/verify-testenv-browser.mjs
+          git diff --check

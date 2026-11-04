@@ -35,7 +35,15 @@ certificate once; either accept it for `localhost` or trust the printed `ca.pem`
 
 To test a different branch, check it out and run `pnpm testenv:up --build`. New migrations are
 applied on start. If you switch to a branch that does **not** have migrations your database already
-applied, start fresh with `pnpm testenv:reset --confirm-delete-test-data`.
+applied, use a new explicitly approved state path; do not reset retained data to bypass migration-ledger safety.
+
+For fresh-only isolated QA, use an approved absolute `HON_TESTENV_HOME` with an existing real parent
+and `pnpm testenv:up --fresh`. This refuses existing directories, symlink aliases and in-repository
+state. Existing environments require the exact private marker, owner and private permissions.
+Startup failures await reverse-order resource cleanup, including PostgreSQL launch/readiness,
+migration/ACL/bootstrap and gateway failures; shutdown failures are reported, not claimed successful.
+Startup still applies migrations/ACLs and bootstraps HQ. This safety correction does not authorize
+retained-state writes, new test-access exceptions, exposing localhost or deployment.
 
 ## Test people
 
@@ -76,9 +84,15 @@ and should go to `/staff/...` instead.
 
 ```bash
 pnpm testenv:test                                   # test identity provider and launcher guards
-HON_TESTENV_PLAYWRIGHT=<path to playwright> pnpm testenv:verify-browser   # while running: full real-browser journey
+pnpm testenv:test-safety                            # dependency-free filesystem/injected-cleanup tests; no app/DB
+HON_TESTENV_PLAYWRIGHT=<path to playwright> pnpm testenv:verify-browser   # login/provisioning/invitation smoke only
 HON_TESTENV_VERIFY_PERSISTENCE=1 HON_TESTENV_PLAYWRIGHT=<...> pnpm testenv:verify-browser   # after a restart
 ```
+
+The browser verifier is not seven-journey acceptance: a staff dashboard screenshot may still show
+suspended access, its cross-school probe is HQ-plane denial, and server provider egress is not
+measured. `realProviderCalls: null` means unknown, not zero. Actual mounted operational journeys
+require separately verified staff/parent provisioning, operating entitlement and persistence evidence.
 
 ## Safety design
 

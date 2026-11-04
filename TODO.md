@@ -16,6 +16,11 @@
 
 # HON Delivery Backlog
 
+## Sprint 1 private-environment safety continuation — Manus
+
+- [x] Continue #102's existing launcher only: exact private marker/path validation, refusal of symlink or retained-state aliases for fresh QA, and awaited startup-failure cleanup registered before PostgreSQL launch. Twelve isolated filesystem/injected-resource/source-wiring regressions, syntax/JSON checks and diff hygiene pass; focused independent review found no reproducible delta defect. No apps/databases started, no API/UI/migrations/ACLs/access policy changed, and no seven-journey/owner-preview readiness claimed.
+- [ ] Verify the new exact-head hosted safety workflow; reconcile #102 with approved combined main before actual mounted acceptance. Keep separate operator approval for retained-state writes, hosting, and test-access exceptions; resolve staff/parent provisioning and the authoritative seven-journey acceptance list.
+
 ## PR #89 canonical-main reconciliation — Codex
 
 - [x] Normally merge canonical main `92bba0359c5e0dceeb0565b0b1e892828b1481c1` into the existing draft security branch. Preserve merged A2P/invitation scopes, private runtime/RLS boundaries and verified-email protections alongside TLS and corrected bounded/redacted telemetry.
