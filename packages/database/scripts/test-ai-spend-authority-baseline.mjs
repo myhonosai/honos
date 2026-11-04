@@ -121,6 +121,8 @@ const { ActionEngineService } = await import('../../../apps/api/dist/action/acti
 const { MarketingAssistantService } = await import('../../../apps/api/dist/marketing/marketing-assistant.service.js');
 const { TeachingAssistantService } = await import('../../../apps/api/dist/teaching-assistant/teaching-assistant.service.js');
 const { ChadFollowUpAssistantService } = await import('../../../apps/api/dist/chad-follow-up-assistant/chad-follow-up-assistant.service.js');
+const { HonConversationService } = await import('../../../apps/api/dist/hon-conversation/hon-conversation.controller.js');
+const { AiTeamReadinessService } = await import('../../../apps/api/dist/ai-team/ai-team-readiness.controller.js');
 const { ProviderRuntimeError } = await import('../../../apps/api/dist/ai/provider-runtime.js');
 const { ClaireProviderRuntimeError } = await import('../../../apps/api/dist/ai/claire-provider-runtime.js');
 const { ChadProviderRuntimeError } = await import('../../../apps/api/dist/ai/chad-provider-runtime.js');
@@ -1459,6 +1461,293 @@ try {
   const foreign = await makeOrg('inv-23v-foreign');
   assert.equal((await settle(tenant(context(v, { principalId: foreign.principal, externalSubject: foreign.subject }), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [foreign.subject])))).error?.code, '42501', 'another organization’s owner is refused');
   pass('INV-23V', `AI-R1: school-scoped readiness discloses organization budget totals only with independent organization-wide authority (${outcomes.join('; ')})`);
+  }
+
+  // ---- INV-24 (C1): HON conversation hands each turn to the named specialist once, approvals stay in Action Center ----
+  {
+  const c0 = await makeOrg('inv-24');
+  const scope = { organizationId: c0.id, schoolId: c0.school, principalId: c0.principal, externalSubject: c0.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad));
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? 'OK'; };
+  const calls = () => fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls;
+  const readiness = (await hon.readiness(scope)).data;
+  assert.deepEqual([readiness.contract, readiness.authorization, readiness.entitlement, readiness.providerRoute, readiness.availableAgentKeys], [true, true, true, true, ['marcus', 'claire', 'chad']]);
+  const k1 = K();
+  const conv = await hon.create(scope, { title: 'Spring enrollment push' }, k1);
+  assert.deepEqual([conv.status, conv.turnCount], ['READY', 0]);
+  assert.equal((await hon.create(scope, { title: 'Spring enrollment push' }, k1)).id, conv.id, 'conversation create is idempotent');
+  assert.equal(await code(hon.create(scope, { title: 'Other' }, k1)), 'HON_IDEMPOTENCY_CONFLICT');
+  const before = { calls: calls(), ledger: await ledgerRows(c0) };
+  const t1 = K();
+  const marcusTurn = { text: 'Draft a friendly spring beginner class post. Use placeholders for unprovided facts.', delegation: { agentKey: 'marcus', campaignId: c0.campaign } };
+  const r1 = await hon.sendTurn(scope, conv.id, marcusTurn, t1);
+  assert.equal(r1.status, 'AWAITING_APPROVAL'); assert.equal(r1.actionRequestIds.length, 1); assert.deepEqual(r1.delegatedAgentKeys, ['marcus']);
+  const inv = await row('SELECT * FROM hon.marketing_ai_invocations WHERE id=$1', [r1.invocationId]);
+  assert.deepEqual([inv.idempotency_key, inv.requested_by, inv.action_request_id, inv.work_item_id], [r1.turnId, c0.principal, r1.actionRequestIds[0], r1.workItemIds[0]], 'specialist record is found by turn id and requester only');
+  assert.equal((await row('SELECT status FROM hon.action_requests WHERE id=$1', [r1.actionRequestIds[0]])).status, 'AWAITING_APPROVAL', 'consequential step is an Action Center CONFIRM proposal');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.marketing_campaign_content WHERE organization_id=$1', [c0.id])).n, 0, 'nothing saved before human approval');
+  assert.deepEqual(await hon.sendTurn(scope, conv.id, marcusTurn, t1), r1, 'resend returns the same receipt');
+  assert.deepEqual([calls() - before.calls, (await ledgerRows(c0)) - before.ledger], [1, 1], 'one provider call and one ledger row despite the resend');
+  assert.equal(await code(hon.sendTurn(scope, conv.id, { ...marcusTurn, text: 'Something else' }, t1)), 'HON_IDEMPOTENCY_CONFLICT');
+  const r2 = await hon.sendTurn(scope, conv.id, { text: 'Outline a white belt practice.', delegation: { agentKey: 'claire', curriculumId: c0.curriculum } }, K());
+  const r3 = await hon.sendTurn(scope, conv.id, { text: 'Check in kindly about a trial class.', delegation: { agentKey: 'chad', leadId: c0.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' } }, K());
+  assert.deepEqual([r2.status, r3.status], ['AWAITING_APPROVAL', 'AWAITING_APPROVAL']);
+  assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Just chat with me' }, K())), 'INVALID_HON_TURN');
+  assert.equal((await settle(tenant(context(c0), (client) => client.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [c0.subject, conv.id, JSON.stringify({ text: 'hi', delegation: { agentKey: 'hon' } }), K()])))).error?.message, 'HON_DELEGATION_REQUIRED', 'no HON-authored answer path');
+  // A specialist refusal (entitlement suspended) is recorded before any provider call; the conversation itself stays readable.
+  await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [c0.id]);
+  const n = calls();
+  const refused = await hon.sendTurn(scope, conv.id, marcusTurn, K());
+  await restoreEntitlement(c0);
+  assert.deepEqual([refused.status, refused.reason, refused.invocationId, calls() - n], ['FAILED', 'AGENT_NOT_AUTHORIZED', null, 0]);
+  // An unknown provider outcome is reported as UNKNOWN, never success or failure.
+  fakes.marcus.mode = 'UNKNOWN';
+  const unknown = await hon.sendTurn(scope, conv.id, { ...marcusTurn, text: 'A second spring post.' }, K());
+  fakes.marcus.mode = 'RESULT';
+  assert.equal(unknown.status, 'UNKNOWN');
+  const thread = await hon.read(scope, conv.id);
+  assert.deepEqual(thread.turns.map((t) => t.role), ['HUMAN', 'marcus', 'HUMAN', 'claire', 'HUMAN', 'chad', 'HUMAN', 'marcus', 'HUMAN', 'marcus']);
+  assert.deepEqual(thread.turns.filter((t) => t.role !== 'HUMAN').map((t) => t.status), ['AWAITING_APPROVAL', 'AWAITING_APPROVAL', 'AWAITING_APPROVAL', 'FAILED', 'UNKNOWN']);
+  assert.ok(thread.turns.filter((t) => t.role !== 'HUMAN').every((t) => t.text === null), 'specialist drafts stay behind their own reads');
+  assert.equal(thread.status, 'UNKNOWN');
+  // Pagination: newest first, keyset cursor.
+  const c2 = await hon.create(scope, { title: 'Second' }, K()), c3 = await hon.create(scope, { title: 'Third' }, K());
+  const p1 = await hon.list(scope, { limit: '2' });
+  assert.deepEqual(p1.items.map((x) => x.id), [c3.id, c2.id]); assert.ok(p1.nextCursor);
+  const p2 = await hon.list(scope, { limit: '2', cursor: p1.nextCursor });
+  assert.deepEqual([p2.items.map((x) => x.id), p2.nextCursor], [[conv.id], null]);
+  // Isolation: another school's owner cannot see or extend it; a foreign subject in this tenant is refused.
+  const other = await makeOrg('inv-24-other');
+  const otherScope = { organizationId: other.id, schoolId: other.school, principalId: other.principal, externalSubject: other.subject };
+  assert.equal(await code(hon.read(otherScope, conv.id)), 'HON_CONVERSATION_NOT_FOUND');
+  assert.equal(await code(hon.sendTurn(otherScope, conv.id, marcusTurn, K())), 'HON_CONVERSATION_NOT_FOUND');
+  assert.deepEqual((await hon.list(otherScope, {})).items, []);
+  assert.equal(await code(hon.read({ ...scope, externalSubject: other.subject }, conv.id)), 'HON_CONVERSATION_FORBIDDEN');
+  assert.equal((await settle(tenant(context(c0), async (client) => { await client.query("SELECT set_config('app.hon_source','AI_AGENT',true)"); return client.query('SELECT hon.read_hon_conversation($1,$2)', [c0.subject, conv.id]); }))).error?.code, '42501', 'not the direct human source');
+  for (const t of ['hon_conversations', 'hon_conversation_turns']) {
+    assert.equal((await row(`SELECT has_table_privilege($1,'hon.${t}','SELECT') s`, [runtimeRole])).s, false, `${t}: functions only`);
+  }
+  for (const f of ['hon_conversation_actor(text)', 'hon_conversation_hold_actor(text,uuid)', 'hon_turn_view(hon.hon_conversation_turns)', 'hon_conversation_summary(hon.hon_conversations)']) {
+    assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
+  }
+  pass('INV-24', 'C1: HON conversation turns hand off once to the named specialist (turn id = specialist idempotency key, one provider call and one ledger row per turn despite resends), every draft lands as an Action Center CONFIRM proposal, refusals and unknown outcomes are reported honestly, no HON-authored answer path, requester- and school-scoped, functions-only tables');
+
+  // ---- INV-24R (C1, Manus review P2): requester authority holds through turn creation (two connections) ----
+  // Another transaction holds the conversation row (as a concurrent turn would). The turn command, started with valid
+  // authority, is seen WAITING in pg_locks; authority changes and commits; on release the command must refuse with no
+  // turn row, no specialist record and no provider call. A revocation issued after the command took its hold waits.
+  {
+  const others = new Set();
+  const turnSql = 'SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)';
+  const turnInput = (o) => JSON.stringify({ text: 'Draft a friendly spring beginner class post.', delegation: { agentKey: 'marcus', campaignId: o.campaign } });
+  const turnRows = async (conversationId) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [conversationId])).n;
+  /** Starts begin_hon_turn in the real tenant transaction and resolves once a non-excluded backend waits on `locktypes`. */
+  const startTurn = async (o, conversationId) => {
+    const exclude = [...others];
+    let done = null;
+    const result = settle(tenant(context(o), (client) => client.query(turnSql, [o.subject, conversationId, turnInput(o), K()]))).then((r) => { done = r; return r; });
+    for (const end = Date.now() + 5000; ; await sleep(20)) {
+      const waits = await rows("SELECT pid FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid','tuple') AND NOT (pid = ANY($1::int[]))", [exclude]);
+      if (waits.length) return { pid: waits[0].pid, result };
+      if (done || Date.now() > end) throw new Error(`expected the turn to wait on the conversation row first; it ${done ? `settled (${done.error ? done.error.code + ' ' + done.error.message : 'succeeded'})` : 'never waited'}`);
+    }
+  };
+  const holdConversation = async (conversationId) => {
+    const c = await openTx();
+    others.add((await c.query('SELECT pg_backend_pid() p')).rows[0].p);
+    await c.query('SELECT 1 FROM hon.hon_conversations WHERE id=$1 FOR UPDATE', [conversationId]);
+    return c;
+  };
+  others.add((await row('SELECT pg_backend_pid() p')).p);
+  const outcomes = [];
+  const cases = [
+    ['role grant revoked', (o) => admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1 AND school_id=$2', [o.principal, o.school])],
+    ['ai.invocation.plan removed from the role', (o) => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='ai.invocation.plan'", [o.role])],
+    ['principal deactivated', (o) => admin.query('UPDATE hon.principals SET is_active=false WHERE id=$1', [o.principal])],
+  ];
+  for (const [label, change] of cases) {
+    const o = await makeOrg(`inv-24r-${outcomes.length}`);
+    const sc = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+    const conv = await hon.create(sc, { title: 'Race proof' }, K());
+    const callsBefore = calls();
+    const holder = await holdConversation(conv.id);
+    const cmd = await startTurn(o, conv.id);
+    await change(o);
+    await holder.query('COMMIT'); await holder.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the turn: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.deepEqual([await turnRows(conv.id), calls() - callsBefore, (await row('SELECT count(*)::int n FROM hon.marketing_ai_invocations WHERE organization_id=$1', [o.id])).n], [0, 0, 0], `${label}: no turn, provider call or specialist record`);
+    outcomes.push(`${label}: refused`);
+  }
+  // Role grant expired by the clock while waiting.
+  {
+    const o = await makeOrg('inv-24r-expiry');
+    const sc = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+    const conv = await hon.create(sc, { title: 'Race proof' }, K());
+    await admin.query("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()+interval '4 seconds' WHERE principal_id=$1 AND school_id=$2", [o.principal, o.school]);
+    const until = (await row('SELECT max(effective_until) u FROM hon.principal_role_grants WHERE principal_id=$1', [o.principal])).u;
+    const holder = await holdConversation(conv.id);
+    const cmd = await startTurn(o, conv.id);
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await holder.query('COMMIT'); await holder.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the turn: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await turnRows(conv.id), 0);
+    outcomes.push('role grant expired while waiting: refused');
+  }
+  // After the hold: the turn's transaction is kept open once begin_hon_turn has returned. A revocation then waits for
+  // that transaction (pg_locks), the turn commits once, and only then does the revocation apply.
+  {
+    const o = await makeOrg('inv-24r-ordered');
+    const sc = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+    const conv = await hon.create(sc, { title: 'Race proof' }, K());
+    let release, turned = null;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const result = settle(tenant(context(o), async (client) => { const r = await client.query(turnSql, [o.subject, conv.id, turnInput(o), K()]); turned = r; await gate; return r; }));
+    let revoke;
+    try {
+      for (const end = Date.now() + 5000; !turned; await sleep(20)) if (Date.now() > end) throw new Error('the turn did not complete inside its transaction');
+      revoke = await startBlocked('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE principal_id=$1 AND school_id=$2', [o.principal, o.school], 'transactionid', { tx: true });
+    } finally { release(); }
+    const r = await result;
+    assert.equal(r.value?.rows[0]?.begin_hon_turn?.handOff, true, `the turn decided before the revocation: ${JSON.stringify(r.error?.message ?? r.value?.rows[0])}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    assert.equal(await turnRows(conv.id), 1, 'recorded once');
+    assert.equal((await settle(tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, turnInput(o), K()])))).error?.code, '42501', 'refused after the revocation');
+    outcomes.push('revocation after the hold: waits, applies after');
+  }
+  pass('INV-24R', `C1: requester authority holds through turn creation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; refusals leave no turn, specialist record or provider call`);
+  }
+
+  // ---- INV-24S (C1, Manus final review P2): a turn's specialist record must be the target the turn asked for ----
+  // For each specialist: a turn is recorded (not yet handed over); a request sent straight to that specialist with the
+  // turn id as its Idempotency-Key and a different target is refused and never shows on the turn; the normal hand-over
+  // then completes, a resend replays it, and a concurrent substitution racing two concurrent hand-overs leaves exactly
+  // one specialist record (the turn's target), one provider call and one Action Center proposal: the turn's hand-over
+  // claim lets only one of the concurrent resends hand over (the other reads the live state).
+  {
+  const turnSql = 'SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) r';
+  const receiptOf = async (o, turnId) => (await tenant(context(o), (client) => client.query('SELECT hon.read_hon_turn_receipt($1,$2) r', [o.subject, turnId]))).rows[0].r;
+  const byKey = async (name, o, key) => rows(`SELECT id, request_hash, action_request_id FROM hon.${agents[name].table} WHERE organization_id=$1 AND requested_by=$2 AND idempotency_key=$3`, [o.id, o.principal, key]);
+  const cases = {
+    marcus: (o) => [{ text: 'Draft a friendly spring beginner class post.', delegation: { agentKey: 'marcus', campaignId: o.campaign } },
+      { campaignId: o.campaign, request: 'Draft a friendly spring beginner class post.' },
+      { campaignId: o.campaign, request: 'Write something completely different for another purpose.' }],
+    claire: (o) => [{ text: 'Outline a white belt practice.', delegation: { agentKey: 'claire', curriculumId: o.curriculum } },
+      { curriculumId: o.curriculum, brief: 'Outline a white belt practice.' },
+      { curriculumId: o.curriculum, brief: 'A different brief that the turn never asked for' }],
+    chad: (o) => [{ text: 'Check in kindly about a trial class.', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' } },
+      { leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' },
+      { leadId: o.lead, expectedLeadVersion: 1, purpose: 'REENGAGEMENT' }],
+  };
+  const outcomes = [];
+  for (const name of ['marcus', 'claire', 'chad']) {
+    const o = await makeOrg(`inv-24s-${name}`);
+    const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+    const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad));
+    const conv = await hon.create(scope, { title: `Binding ${name}` }, K());
+    const [turnInput, exact, substitute] = cases[name](o);
+    const calls0 = fakes[name].calls;
+    // The turn exists (as after a hand-over that never started); its id is now a specialist idempotency key.
+    const key = K();
+    const begun = (await tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turnInput), key]))).rows[0].r;
+    assert.equal(begun.handOff, true);
+    const turnId = begun.turnId;
+    // That caller holds the hand-over claim: a resend now does not start a second, competing hand-over.
+    assert.equal((await tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turnInput), key]))).rows[0].r.handOff, false, `${name}: one hand-over at a time`);
+    // The claimed hand-over never ran (simulated crash): after five minutes a resend may claim it again.
+    const abandon = (id) => admin.query("UPDATE hon.hon_conversation_turns SET handoff_claimed_at=clock_timestamp()-interval '6 minutes' WHERE id=$1", [id]);
+    await abandon(turnId);
+    // Direct-key substitution: the specialist's own endpoint, the turn id as Idempotency-Key, another target.
+    const direct = await settle(agents[name].service.submit(context(o, { idempotencyKey: turnId }), substitute));
+    assert.ok(direct.error, `${name}: a substituted target under a turn id must be refused: ${JSON.stringify(direct.value)}`);
+    assert.deepEqual([(await byKey(name, o, turnId)).length, fakes[name].calls - calls0], [0, 0], `${name}: no substituted record, no provider call`);
+    assert.equal((await receiptOf(o, turnId)).invocationId, null, `${name}: the turn shows no substituted work`);
+    // Normal hand-over completes and binds the turn's own target; a resend replays it.
+    const r1 = await hon.sendTurn(scope, conv.id, turnInput, key);
+    const linked = await byKey(name, o, turnId);
+    assert.deepEqual([r1.turnId, r1.status, linked.length, linked[0]?.id, r1.invocationId], [turnId, 'AWAITING_APPROVAL', 1, r1.invocationId, linked[0]?.id], `${name}: ${JSON.stringify(r1)}`);
+    assert.equal(linked[0].request_hash, (await row('SELECT delegation_fingerprint f FROM hon.hon_conversation_turns WHERE id=$1', [turnId])).f, `${name}: specialist fingerprint is the turn's`);
+    assert.deepEqual(await hon.sendTurn(scope, conv.id, turnInput, key), r1, `${name}: resend replays`);
+    // The same target straight to the specialist under the turn id is the same request: it replays, never a second record.
+    assert.equal((await agents[name].service.submit(context(o, { idempotencyKey: turnId }), exact)).id, r1.invocationId, `${name}: exact target replays`);
+    assert.equal((await settle(agents[name].service.submit(context(o, { idempotencyKey: turnId }), substitute))).error != null, true, `${name}: substitution after the hand-over is still refused`);
+    assert.equal(fakes[name].calls - calls0, 1, `${name}: one provider call`);
+    // Concurrent: two hand-overs of a new turn and a substitution under its id, all at once.
+    const key2 = K();
+    const begun2 = (await tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turnInput), key2]))).rows[0].r;
+    await abandon(begun2.turnId);
+    const calls1 = fakes[name].calls;
+    const [a, b, sub] = await Promise.all([settle(hon.sendTurn(scope, conv.id, turnInput, key2)), settle(hon.sendTurn(scope, conv.id, turnInput, key2)),
+      settle(agents[name].service.submit(context(o, { idempotencyKey: begun2.turnId }), substitute))]);
+    const rec2 = await byKey(name, o, begun2.turnId);
+    assert.ok(sub.error, `${name}: concurrent substitution refused`);
+    assert.equal(rec2.length, 1, `${name}: exactly one specialist record for the turn`);
+    assert.equal(fakes[name].calls - calls1, 1, `${name}: one provider call under concurrency`);
+    const final = await receiptOf(o, begun2.turnId);
+    assert.deepEqual([final.invocationId, final.status, final.actionRequestIds.length], [rec2[0].id, 'AWAITING_APPROVAL', 1], `${name}: ${JSON.stringify(final)}`);
+    for (const r of [a, b]) if (r.value) assert.equal(r.value.turnId, begun2.turnId);
+    outcomes.push(`${name}: substitution refused before and after the hand-over and under concurrency (${[a, b].filter((r) => r.value).length}/2 concurrent hand-overs returned the receipt)`);
+  }
+  pass('INV-24S', `C1: each turn is bound to its specialist target and fingerprint: ${outcomes.join('; ')}; normal hand-over, resend and exact-target replay keep one record, one provider call and one Action Center proposal`);
+  }
+
+  // ---- INV-24W (C1, Manus delta review P2): Marcus hand-overs use one canonical request text and fingerprint ----
+  // Whitespace that Marcus's own request contract trims (JavaScript trim) must not refuse a valid hand-over: the turn's
+  // target and fingerprint are computed from the same canonical text Marcus records. Equivalent texts share one
+  // fingerprint, different texts stay distinct, direct-key substitution stays refused, concurrent resends make one call.
+  {
+  const turnSql = 'SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) r';
+  const o = await makeOrg('inv-24w');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad));
+  const conv = await hon.create(scope, { title: 'Whitespace' }, K());
+  const plain = 'Draft a friendly spring beginner class post.';
+  const turn = (text) => ({ text, delegation: { agentKey: 'marcus', campaignId: o.campaign } });
+  const fingerprintOf = async (turnId) => (await row('SELECT delegation_fingerprint f, delegation d FROM hon.hon_conversation_turns WHERE id=$1', [turnId]));
+  const recordOf = async (turnId) => rows('SELECT id, request_hash, request_text FROM hon.marketing_ai_invocations WHERE organization_id=$1 AND idempotency_key=$2', [o.id, turnId]);
+  fakes.marcus.mode = 'RESULT';
+  const variants = [plain, `  ${plain}  `, `\n\t${plain}\r\n`, `\u00a0\u3000${plain}\u2028`, `\ufeff\u2003${plain}\u205f\u202f`, `\u2029\u1680${plain}\u2009 `];
+  const fps = new Set(), seenV = [];
+  for (const text of variants) {
+    assert.equal(text.trim(), plain, 'the variant is equivalent under Marcus\'s own trim');
+    const calls = fakes.marcus.calls;
+    const r = await settle(hon.sendTurn(scope, conv.id, turn(text), K()));
+    assert.equal(r.value?.status, 'AWAITING_APPROVAL', `variant ${JSON.stringify(text)}: valid hand-over must complete: ${JSON.stringify(r.value ?? r.error?.message)}`);
+    const t = await fingerprintOf(r.value.turnId), rec = await recordOf(r.value.turnId);
+    assert.deepEqual([rec.length, rec[0]?.request_hash, rec[0]?.request_text, t.d.request], [1, t.f, plain, plain], `variant ${JSON.stringify(text)}: one Marcus record bound to the turn's canonical target`);
+    assert.equal(fakes.marcus.calls - calls, 1);
+    // Direct-key substitution under this turn id stays refused; the same canonical request replays.
+    assert.ok((await settle(agents.marcus.service.submit(context(o, { idempotencyKey: r.value.turnId }), { campaignId: o.campaign, request: 'Write something completely different.' }))).error, 'substitution refused');
+    assert.equal((await agents.marcus.service.submit(context(o, { idempotencyKey: r.value.turnId }), { campaignId: o.campaign, request: text })).id, rec[0].id, 'the equivalent request replays');
+    assert.equal(fakes.marcus.calls - calls, 1, 'no second provider call');
+    fps.add(t.f); seenV.push(JSON.stringify(text));
+  }
+  assert.equal(fps.size, 1, 'canonically equivalent requests produce one fingerprint');
+  // Different semantic targets stay distinct (inner whitespace is content; another campaign is another target).
+  const inner = await hon.sendTurn(scope, conv.id, turn(plain.replace('spring ', 'spring  ')), K());
+  assert.notEqual((await fingerprintOf(inner.turnId)).f, [...fps][0], 'inner whitespace is not normalized away');
+  const start = new Date(Date.now() + 3_600_000).toISOString(), end = new Date(Date.now() + 30 * 86_400_000).toISOString();
+  const c2 = (await campaigns.save(context(o), null, { expectedVersion: 0, code: 'AI0B', name: 'AI-0 synthetic campaign B', goal: 'Introduce beginner classes', offerLabel: '', channel: 'REFERRAL', startsAt: start, endsAt: end, plannedBudgetMinor: 0, currency: 'USD' })).campaign.id;
+  const t2 = await hon.sendTurn(scope, conv.id, { text: plain, delegation: { agentKey: 'marcus', campaignId: c2 } }, K());
+  assert.notEqual((await fingerprintOf(t2.turnId)).f, [...fps][0], 'another campaign is another fingerprint');
+  // Concurrent resends of one whitespace-variant turn: one Marcus record, one provider call.
+  const key = K(), calls = fakes.marcus.calls;
+  const [a, b] = await Promise.all([settle(hon.sendTurn(scope, conv.id, turn(`  ${plain}\n`), key)), settle(hon.sendTurn(scope, conv.id, turn(`  ${plain}\n`), key))]);
+  const turnId = (a.value ?? b.value).turnId;
+  assert.deepEqual([(await recordOf(turnId)).length, fakes.marcus.calls - calls], [1, 1], `concurrent resends: ${JSON.stringify([a.value ?? a.error?.message, b.value ?? b.error?.message])}`);
+  // The canonical function equals JavaScript trim for every whitespace-like code point, including ones trim keeps.
+  const points = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0, 0x1680, 0x180e, ...Array.from({ length: 11 }, (_, k) => 0x2000 + k), 0x200b, 0x200c, 0x200d,
+    0x2028, 0x2029, 0x202f, 0x205f, 0x2060, 0x3000, 0xfeff, 0x41];
+  for (const cp of points) {
+    const ch = String.fromCodePoint(cp), sample = `${ch}${ch}a${ch}b${ch}`;
+    assert.equal((await row('SELECT hon.hon_canonical_request_text($1) t', [sample])).t, sample.trim(), `U+${cp.toString(16).padStart(4, '0')}: same as JavaScript trim`);
+  }
+  // A text that is only whitespace under trim is refused before any turn is recorded.
+  assert.equal((await settle(tenant(context(o), (client) => client.query(turnSql, [o.subject, conv.id, JSON.stringify(turn('\u00a0\u3000\u2028')), K()])))).error?.code, '22023');
+  pass('INV-24W', `C1: Marcus hand-overs use one canonical request (JavaScript trim, ${points.length} code points checked): ${variants.length} whitespace variants hand over to one Marcus record each with the turn's fingerprint (one fingerprint for all), substitution refused and the equivalent request replays, inner whitespace and another campaign stay distinct, concurrent resends make one call, whitespace-only text refused`);
+  }
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----

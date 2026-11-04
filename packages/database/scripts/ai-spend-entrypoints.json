@@ -282,12 +282,14 @@
       "ai_spend_start_guard",
       "chad_follow_up_invocations_immutable",
       "chad_follow_up_invocations_no_truncate",
+      "hon_turn_binding",
       "zz_ai_hold_origin"
     ],
     "marketing_ai_invocations": [
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
       "ai_spend_start_guard",
+      "hon_turn_binding",
       "marketing_invocation_guard",
       "marketing_invocation_no_truncate",
       "zz_ai_hold_origin"
@@ -301,6 +303,7 @@
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
       "ai_spend_start_guard",
+      "hon_turn_binding",
       "teaching_ai_invocations_immutable",
       "teaching_ai_invocations_no_truncate",
       "zz_ai_hold_origin"
