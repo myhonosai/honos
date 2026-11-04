@@ -17,7 +17,7 @@
 //   - reset deletes only a directory carrying this tool's marker file, after explicit confirmation.
 import { spawn, spawnSync } from 'node:child_process';
 import { createPrivateKey, generateKeyPairSync, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { createConnection } from 'node:net';
@@ -27,9 +27,10 @@ import { fileURLToPath } from 'node:url';
 import { TEST_IDENTITIES, honExternalSubject } from './identities.mjs';
 import { createTestIdentityProvider } from './test-identity-provider.mjs';
 import { signIn } from './session-client.mjs';
+import { createCleanupStack, STATE_MARKER, validateStateDirectory } from './state-safety.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const MARKER = 'HON OS private owner test environment state. Safe to delete only with testenv reset.';
+const MARKER = STATE_MARKER;
 const PORTS = Object.freeze({ gateway: 3443, web: 3100, api: 3001, postgres: 55440 });
 const ORIGIN = `https://localhost:${PORTS.gateway}`;
 const ISSUER = `${ORIGIN}/__test-idp`;
@@ -42,10 +43,10 @@ const FORBIDDEN_INHERITED = [
   'HON_OIDC_CLIENT_SECRET', 'MANUS_JWT_SECRET', 'SUPABASE_SERVICE_ROLE_KEY',
 ];
 
-export function stateDirectory(env = process.env) {
+export function stateDirectory(env = process.env, { requireFresh = false } = {}) {
+  if (requireFresh && !env.HON_TESTENV_HOME?.startsWith('/')) throw new Error('Fresh QA requires an explicit absolute HON_TESTENV_HOME.');
   const dir = env.HON_TESTENV_HOME ? resolve(env.HON_TESTENV_HOME) : join(homedir(), '.hon-testenv');
-  if (dir === repoRoot || dir.startsWith(`${repoRoot}/`)) throw new Error('Test environment state must live outside the repository so it can never be committed.');
-  return dir;
+  return validateStateDirectory(dir, { root: repoRoot, requireFresh });
 }
 
 export function refuseUnsafeInvocation(env = process.env, root = repoRoot) {
@@ -61,7 +62,7 @@ export function refuseUnsafeInvocation(env = process.env, root = repoRoot) {
 }
 
 function log(message) { process.stdout.write(`[testenv] ${message}\n`); }
-function fail(message) { process.stderr.write(`[testenv] ${message}\n`); process.exit(1); }
+function fail(message) { throw new Error(message); }
 
 function postgresBinaries(env = process.env) {
   const candidates = [env.HON_TESTENV_PG_BIN];
@@ -92,16 +93,16 @@ function run(binary, args, { env = minimalEnv({}), input, cwd = repoRoot, quiet 
 
 function writePrivate(path, content) { writeFileSync(path, content, { mode: 0o600 }); chmodSync(path, 0o600); }
 
-function ensureState(dir) {
-  if (existsSync(dir)) {
-    if (!existsSync(join(dir, 'MARKER'))) fail(`${dir} exists but is not a HON test environment directory. Choose another HON_TESTENV_HOME.`);
-    const stat = statSync(dir);
-    if ((stat.mode & 0o077) !== 0 || (typeof process.getuid === 'function' && stat.uid !== process.getuid())) fail(`${dir} must be private (mode 0700) and owned by you.`);
+function ensureState(dir, { requireFresh = false } = {}) {
+  validateStateDirectory(dir, { root: repoRoot, requireFresh });
+  if (!requireFresh && existsSync(dir)) {
+    // The exact marker, ownership, private permissions and non-linked paths were checked above.
   } else {
-    mkdirSync(dir, { mode: 0o700, recursive: true });
-    chmodSync(dir, 0o700);
+    // Require an existing parent; never silently adopt a directory created by a racing caller.
+    mkdirSync(dir, { mode: 0o700 });
     writePrivate(join(dir, 'MARKER'), `${MARKER}\n`);
   }
+  validateStateDirectory(dir, { root: repoRoot });
   const secretsPath = join(dir, 'secrets.json');
   if (!existsSync(secretsPath)) {
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -171,6 +172,12 @@ async function startDatabase(dir, secrets, pg) {
     log('Initialised a private PostgreSQL cluster.');
   }
   if (await portOpen(PORTS.postgres)) fail(`Port ${PORTS.postgres} is already in use. Stop the other process (or a previous test environment) first.`);
+  const stopDatabase = () => {
+    const result = spawnSync(pg.pgctl, ['-D', data, '-m', 'fast', '-w', 'stop'], { env: minimalEnv({}), stdio: 'ignore' });
+    if (result.status !== 0) throw new Error('Private PostgreSQL shutdown failed; operator inspection is required.');
+  };
+  // pg_ctl can report a readiness failure after launching the server; register first.
+  cleanup.add(stopDatabase);
   run(pg.pgctl, ['-D', data, '-l', join(data, 'postgres.log'), '-o', `-p ${PORTS.postgres} -h 127.0.0.1 -k ${join(data, 'socket')}`, '-w', 'start'], { quiet: true });
   const urls = databaseUrls(secrets);
   const psqlEnv = minimalEnv({ PGPASSWORD: secrets.postgresPassword });
@@ -188,7 +195,7 @@ REVOKE ALL ON DATABASE ${DATABASE} FROM PUBLIC;`, 'postgres');
   psql(runtimeAcl);
   const count = run(pg.psql, ['-X', '-tA', '-h', '127.0.0.1', '-p', String(PORTS.postgres), '-U', 'postgres', '-d', DATABASE, '-c', "SELECT count(*) FROM hon.schema_migrations"], { env: psqlEnv, quiet: true }).trim();
   log(`Database ready: ${count} migrations applied; API connects as restricted hon_runtime.`);
-  return { data, urls, stop: () => spawnSync(pg.pgctl, ['-D', data, '-m', 'fast', '-w', 'stop'], { env: minimalEnv({}), stdio: 'ignore' }) };
+  return { data, urls };
 }
 
 function bootstrapHqOwner(urls) {
@@ -222,47 +229,56 @@ function startChild(label, args, env, logDir, cwd = repoRoot) {
   const child = spawn(process.execPath, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
   const append = (chunk) => { try { writeFileSync(out, chunk, { flag: 'a' }); } catch { /* best effort */ } };
   child.stdout.on('data', append); child.stderr.on('data', append);
-  child.on('exit', (code, signal) => { if (!shuttingDown) { process.stderr.write(`[testenv] ${label} stopped unexpectedly (${code ?? signal}). See ${out}\n`); shutdown(1); } });
+  child.on('error', () => { if (!shuttingDown) { process.stderr.write(`[testenv] ${label} could not start.\n`); void shutdown(1); } });
+  child.on('exit', (code, signal) => { if (!shuttingDown) { process.stderr.write(`[testenv] ${label} stopped unexpectedly (${code ?? signal}). See ${out}\n`); void shutdown(1); } });
   return child;
 }
 
 let shuttingDown = false;
-const stops = [];
-function shutdown(code = 0) {
+const cleanup = createCleanupStack();
+function stopChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null || !child.pid) return;
+  return new Promise((done) => {
+    const timeout = setTimeout(() => child.kill('SIGKILL'), 3000);
+    child.once('exit', () => { clearTimeout(timeout); done(); });
+    child.kill('SIGTERM');
+  });
+}
+async function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
   log('Stopping...');
-  for (const stop of stops.reverse()) { try { stop(); } catch { /* continue */ } }
-  setTimeout(() => process.exit(code), 500);
+  const errors = await cleanup.close();
+  if (errors.length) process.stderr.write(`[testenv] ${errors.length} resource shutdown failure(s); inspect this private environment before restarting or deleting it.\n`);
+  process.exit(errors.length ? 1 : code);
 }
 
 async function up(args) {
   if (typeof process.getuid === 'function' && process.getuid() === 0) fail('Run the test environment as your normal user, not as root (PostgreSQL refuses to run as root).');
   const problems = refuseUnsafeInvocation();
   if (problems.length) fail(problems.join('\n'));
+  const dir = stateDirectory(process.env, { requireFresh: args.includes('--fresh') });
   if (!['apps/api/dist/main.js', 'apps/web/.next/BUILD_ID', 'packages/database/dist/index.js'].every((file) => existsSync(join(repoRoot, file))) || args.includes('--build')) {
     log('Building the application from this checkout (pnpm build)...');
     const build = spawnSync('pnpm', ['build'], { cwd: repoRoot, env: minimalEnv({ NEXT_TELEMETRY_DISABLED: '1' }), stdio: 'inherit' });
     if (build.status !== 0) fail('pnpm build failed.');
   }
   for (const port of [PORTS.gateway, PORTS.web, PORTS.api]) if (await portOpen(port)) fail(`Port ${port} is already in use. Stop the other process first.`);
-  const dir = stateDirectory();
-  const secrets = ensureState(dir);
+  const secrets = ensureState(dir, { requireFresh: args.includes('--fresh') });
   const tls = ensureTls(dir);
   const logDir = join(dir, 'logs');
   mkdirSync(logDir, { mode: 0o700, recursive: true });
   const pg = postgresBinaries();
   process.on('SIGINT', () => shutdown(0)); process.on('SIGTERM', () => shutdown(0));
   const database = await startDatabase(dir, secrets, pg);
-  stops.push(database.stop);
   bootstrapHqOwner(database.urls);
 
   const env = applicationEnvironment(secrets, database.urls, tls);
   const api = startChild('api', [join(repoRoot, 'apps/api/dist/main.js')], env.api, logDir);
-  stops.push(() => api.kill('SIGTERM'));
+  cleanup.add(() => stopChild(api));
   const nextBin = join(repoRoot, 'apps/web/node_modules/next/dist/bin/next');
   const web = startChild('web', [nextBin, 'start', '--hostname', '127.0.0.1', '--port', String(PORTS.web)], env.web, logDir, join(repoRoot, 'apps/web'));
-  stops.push(() => web.kill('SIGTERM'));
+  cleanup.add(() => stopChild(web));
 
   const idp = await createTestIdentityProvider({ issuer: ISSUER, clientId: CLIENT_ID, redirectUri: `${ORIGIN}/auth/callback`, accessCode: secrets.accessCode, privateKeyPem: secrets.idpPrivateKeyPem, keyId: secrets.idpKeyId });
   const gateway = createHttpsServer({ cert: readFileSync(tls.cert), key: readFileSync(tls.key) }, (req, res) => {
@@ -275,8 +291,8 @@ async function up(args) {
     upstream.on('error', () => { if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain' }); res.end('HON OS web app is starting or unavailable. Retry in a few seconds.'); });
     req.pipe(upstream);
   });
-  await new Promise((done) => gateway.listen(PORTS.gateway, '127.0.0.1', done));
-  stops.push(() => gateway.close());
+  cleanup.add(() => new Promise((done) => { gateway.close(() => done()); gateway.closeAllConnections(); }));
+  await new Promise((done, reject) => { gateway.once('error', reject); gateway.listen(PORTS.gateway, '127.0.0.1', done); });
 
   await waitFor(() => portOpen(PORTS.api), 'API');
   await waitFor(() => portOpen(PORTS.web), 'Web app');
@@ -342,11 +358,16 @@ function status() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [command = 'help', ...args] = process.argv.slice(2);
-  if (command === 'up') await up(args);
-  else if (command === 'reset') reset(args);
-  else if (command === 'status') status();
-  else if (command === 'create-school') await createSchool(args);
-  else log('Usage: node scripts/testenv/testenv.mjs up [--build] | status | create-school [--name "Test Dojo A"] [--tier CORE] | reset --confirm-delete-test-data');
+  try {
+    if (command === 'up') await up(args);
+    else if (command === 'reset') reset(args);
+    else if (command === 'status') status();
+    else if (command === 'create-school') await createSchool(args);
+    else log('Usage: node scripts/testenv/testenv.mjs up [--build] [--fresh] | status | create-school [--name "Test Dojo A"] [--tier CORE] | reset --confirm-delete-test-data');
+  } catch (error) {
+    process.stderr.write(`[testenv] ${error.message}\n`);
+    await shutdown(1);
+  }
 }
 
 export const TESTENV = Object.freeze({ PORTS, ORIGIN, ISSUER, CLIENT_ID, DATABASE });

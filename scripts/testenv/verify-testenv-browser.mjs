@@ -23,7 +23,13 @@ mkdirSync(results, { recursive: true });
 const dir = stateDirectory();
 const secrets = JSON.parse(readFileSync(join(dir, 'secrets.json'), 'utf8'));
 const caFile = join(dir, 'tls', 'ca.pem');
-const report = { origin: ORIGIN, startedAt: new Date().toISOString(), checks: [], screenshots: [], realProviderCalls: 0 };
+const report = {
+  origin: ORIGIN, startedAt: new Date().toISOString(), checks: [], screenshots: [],
+  evidenceScope: 'Real login/provisioning/invitation smoke only; not all seven operating journeys.',
+  realProviderCalls: null,
+  providerEvidence: 'Browser foreign-origin traffic blocked; server provider egress is not measured by this verifier.',
+  staffPlaneIsolationVerified: false,
+};
 const check = (name, detail = '') => { report.checks.push({ name, detail }); console.log(`PASS ${name}${detail ? ` — ${detail}` : ''}`); };
 
 const browser = await chromium.launch({ headless: true });
