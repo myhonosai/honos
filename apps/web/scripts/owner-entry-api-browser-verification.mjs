@@ -6,9 +6,10 @@ import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { issueSession, HON_SESSION_COOKIE } from '@hon/auth';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from '../../../packages/database/scripts/flexible-billing-accounts-local-guard.mjs';
+import { requireCanonicalEntryFixture, canonicalEntrySetup } from './owner-entry-canonical-fixture.mjs';
 
 assert.equal(process.env.HON_OWNER_ENTRY_API_TEST, '1');
 const urls = await requireFlexibleBillingAccountsLocalUrls();
@@ -25,16 +26,29 @@ const { HqController } = await load('hq/hq.controller.js'), { HqOverviewService 
 const { CurrentStaffReportingSchoolController, CurrentStaffReportingSchoolNoStoreGuard } = await load('reports/current-staff-reporting-school.controller.js');
 const { StaffReportingSchoolsController } = await load('reports/staff-reporting-schools.controller.js');
 const { OperationsReportController } = await load('reports/operations-report.controller.js'), { OperationsReportService } = await load('reports/operations-report.service.js');
-const database = new RuntimeDatabaseService(), fixture = new Client({ connectionString: urls.DATABASE_URL, ssl: false });
+let database, canonicalAttempted = false;
+const fixture = new Client({ connectionString: urls.DATABASE_URL, ssl: false });
 const q = (text, values = []) => fixture.query(text, values);
 const auth = { mode: 'OIDC', audience: 'hon-owner-entry-disposable', secret: randomBytes(32).toString('hex') };
 Object.assign(process.env, { HON_AUTH_MODE: auth.mode, HON_SESSION_AUDIENCE: auth.audience, HON_SESSION_JWT_SECRET: auth.secret });
 const origin = 'http://127.0.0.1:3000', apiOrigin = 'http://127.0.0.1:3001';
 const originalFetch = globalThis.fetch, groups = [], browserChecks = [], identityChecks = [], securityChecks = [];
+const canonicalRoleMarker = `HON disposable owner-entry runtime ${randomUUID()}`;
 let app, next, browser, actor, nextLog = '', frontendReads = 0;
 const pass = name => { groups.push(name); console.log('PASS ' + name); };
 const cookie = (who, expired = false) => `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: who.subject, displayName: 'Synthetic test identity' }, auth, expired ? Math.floor(Date.now() / 1000) - 50000 : undefined)}`;
 const headers = who => ({ Cookie: cookie(who), 'Sec-Fetch-Site': 'same-origin' });
+function canonicalAdmin(sql, stage, requireOwnedRole = false) {
+  const guard = `DO $$ BEGIN
+    IF NOT EXISTS(SELECT 1 FROM pg_database WHERE datname=current_database() AND datname='${flexibleBillingAccountsFixture.database}'
+      AND pg_get_userbyid(datdba)='${flexibleBillingAccountsFixture.owner}' AND shobj_description(oid,'pg_database')='HON disposable flexible billing accounts validation')
+    THEN RAISE EXCEPTION 'Unrecognized disposable database'; END IF;
+    ${requireOwnedRole ? `IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime' AND shobj_description(oid,'pg_authid')='${canonicalRoleMarker}') THEN RAISE EXCEPTION 'Unrecognized runtime role'; END IF;` : ''}
+  END $$;`;
+  const result = spawnSync('sudo', ['-u', 'postgres', 'psql', '-X', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1', '-p', '5432', '-d', flexibleBillingAccountsFixture.database], {
+    input: guard + '\n' + sql, encoding: 'utf8', env: { PATH: process.env.PATH, LANG: 'C.UTF-8' }, maxBuffer: 8 * 1024 * 1024 });
+  if (result.status !== 0) throw new Error(`Canonical disposable runtime ${stage} failed (credentials redacted).`);
+}
 async function compile(path, imports = {}) {
   let code = ts.transpileModule(await readFile(join(root, path), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
   for (const [from, to] of Object.entries(imports)) for (const quote of ["'", '"']) code = code.replaceAll('from ' + quote + from + quote, 'from ' + JSON.stringify(to));
@@ -57,7 +71,32 @@ async function setup(who, hq = false) {
 }
 try {
   await fixture.connect();
-  assert.deepEqual((await q("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0], { owner: flexibleBillingAccountsFixture.owner, marker: 'HON disposable flexible billing accounts validation' });
+  const observed = (await q("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker,EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') AS \"canonicalRoleExists\" FROM pg_database WHERE datname=current_database()")).rows[0];
+  requireCanonicalEntryFixture(process.env, urls, observed);
+  // Preserve the production guard's alias denial rather than overriding its SQL.
+  const alias = new RuntimeDatabaseService();
+  try { await assert.rejects(alias.readStaffReportingSchools('synthetic-posture-probe'), error => error.getStatus?.() === 503); }
+  finally { await alias.onModuleDestroy(); }
+  // Retire the general fixture's alias ACLs, rather than tolerating an extra
+  // grantee in the strict canonical verifier. It may own no schema objects;
+  // DROP OWNED therefore revokes only this marked test role's privileges here.
+  canonicalAdmin(`DO $$ DECLARE role_id oid; BEGIN
+    SELECT oid INTO role_id FROM pg_roles WHERE rolname='${flexibleBillingAccountsFixture.runtime}'
+      AND shobj_description(oid,'pg_authid')='HON disposable flexible billing accounts validation';
+    IF role_id IS NULL OR EXISTS(SELECT 1 FROM pg_class WHERE relowner=role_id)
+      OR EXISTS(SELECT 1 FROM pg_proc WHERE proowner=role_id) OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspowner=role_id)
+      OR EXISTS(SELECT 1 FROM pg_type WHERE typowner=role_id) THEN RAISE EXCEPTION 'Unexpected fixture alias ownership'; END IF;
+  END $$; DROP OWNED BY ${flexibleBillingAccountsFixture.runtime};`, 'marked alias retirement');
+  const password = randomBytes(36).toString('base64url');
+  canonicalAttempted = true;
+  // Unconditional CREATE refuses a competing/pre-existing role, never adopts it.
+  canonicalAdmin(`BEGIN; CREATE ROLE hon_runtime LOGIN PASSWORD '${password}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION CONNECTION LIMIT 20;
+    COMMENT ON ROLE hon_runtime IS '${canonicalRoleMarker}'; COMMIT;`, 'fresh role creation');
+  canonicalAdmin(canonicalEntrySetup(await readFile(join(root, 'infra/postgres/010_supabase_hon_runtime.sql'), 'utf8'), password), 'full ACL setup', true);
+  canonicalAdmin(await readFile(join(root, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8'), 'full verifier', true);
+  const runtimeUrl = new URL(urls.HON_RUNTIME_DATABASE_URL); runtimeUrl.username = 'hon_runtime'; runtimeUrl.password = password;
+  process.env.HON_RUNTIME_DATABASE_URL = runtimeUrl.href; database = new RuntimeDatabaseService();
+  pass('fixture alias remains refused; exact hon_runtime uses full canonical setup/verifier without named-function repair');
   const hq = await setup('HQ', true), a = await setup('A'), b = await setup('B'); actor = a;
   const module = await Test.createTestingModule({ controllers: [HqController, CurrentStaffReportingSchoolController, StaffReportingSchoolsController, OperationsReportController],
     providers: [HonIdentityGuard, HonIdentityService, CurrentStaffReportingSchoolNoStoreGuard, HqOverviewService, HqSchoolDirectoryService, OperationsReportService, { provide: RuntimeDatabaseService, useValue: database }] }).compile();
@@ -238,6 +277,9 @@ try {
   await browser?.close();
   if (next && next.exitCode === null) { const stopped = new Promise(resolve => next.once('exit', resolve)); next.kill('SIGTERM'); await stopped; }
   // Nest owns the provided RuntimeDatabaseService once compiled; never double-end its pool.
-  if (app) await app.close(); else await database.onModuleDestroy();
+  if (app) await app.close(); else await database?.onModuleDestroy();
+  if (canonicalAttempted && (await q("SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime' AND shobj_description(oid,'pg_authid')=$1) present", [canonicalRoleMarker])).rows[0].present) {
+    canonicalAdmin('DROP OWNED BY hon_runtime; DROP ROLE hon_runtime;', 'fresh-role cleanup', true);
+  }
   await fixture.end();
 }
