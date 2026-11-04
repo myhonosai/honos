@@ -51,7 +51,7 @@ async function setup(who, hq = false) {
     await q("INSERT INTO hon.organization_entitlements(organization_id,tier,status,effective_from) VALUES($1,'COMPLETE','ACTIVE',clock_timestamp()-interval '1 day')", [a.org]);
     await q("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'OWNER','School Owner',true)", [a.role, a.org]);
     await q("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [a.role, a.org]);
-    await q('INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$3)', [a.org, a.school, a.principal, a.role]);
+    await q("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 day')", [a.org, a.school, a.principal, a.role]);
   }
   return a;
 }
@@ -111,19 +111,19 @@ try {
   }
   pass('actual frontend transport verifies exact current-school reports through Next and restricted PostgreSQL');
   actor = a;
-  await q("UPDATE hon.principal_role_grants SET expires_at=clock_timestamp()-interval '1 second' WHERE principal_id=$1", [a.principal]);
+  await q("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval '1 second' WHERE principal_id=$1", [a.principal]);
   let denied = new SchoolEntryController(a.subject); await denied.load(); assert.equal(denied.snapshot().phase, 'UNAVAILABLE'); assert.equal(denied.snapshot().selection, null); denied.dispose();
-  await q('UPDATE hon.principal_role_grants SET expires_at=NULL WHERE principal_id=$1', [a.principal]);
+  await q('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1', [a.principal]);
   await q("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [a.org]);
   denied = new SchoolEntryController(a.subject); await denied.load(); assert.equal(denied.snapshot().phase, 'UNAVAILABLE'); denied.dispose();
   await q("UPDATE hon.organization_entitlements SET status='ACTIVE' WHERE organization_id=$1", [a.org]);
   pass('revoked and suspended fixture authority stays unavailable; no access exception or policy approval is recorded');
   const extra = randomUUID();
   await q("INSERT INTO hon.schools(id,organization_id,name,slug) VALUES($1,$2,'Synthetic A second school',$3)", [extra, a.org, `entry-${extra}`]);
-  await q('INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id) VALUES($1,$2,$3,$4,$3)', [a.org, extra, a.principal, a.role]);
+  await q("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$3,clock_timestamp()-interval '1 day')", [a.org, extra, a.principal, a.role]);
   const multi = new SchoolEntryController(a.subject); await multi.load(); assert.equal(multi.snapshot().phase, 'CHOICE');
   assert.deepEqual(new Set(multi.snapshot().choices.map(c => c.schoolId)), new Set([a.school, extra])); assert.equal(multi.snapshot().selection, null);
-  await q("UPDATE hon.principal_role_grants SET expires_at=clock_timestamp()-interval '1 second' WHERE principal_id=$1 AND school_id=$2", [a.principal, extra]);
+  await q("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval '1 second' WHERE principal_id=$1 AND school_id=$2", [a.principal, extra]);
   await multi.choose(extra, multi.snapshot().revision); assert.equal(multi.snapshot().phase, 'DENIED'); assert.equal(multi.snapshot().selection, null); multi.dispose();
   pass('bounded authorized multi-school selection excludes B and denies authority revoked after the choice read');
   for (const token of ['FORGED', cookie(a, true).split('=')[1]]) {
@@ -160,10 +160,10 @@ try {
     await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(a).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }]);
     await context.route('**/*', route => { assert.equal(new URL(route.request().url()).origin, origin); return route.continue(); });
     const page = await context.newPage();
-    await q('UPDATE hon.principal_role_grants SET expires_at=NULL WHERE principal_id=$1 AND school_id=$2', [a.principal, extra]);
+    await q('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1 AND school_id=$2', [a.principal, extra]);
     await page.goto(`${origin}/auth/continue`); await page.getByTestId(`school-choice-${extra}`).waitFor();
     await page.evaluate(() => { window.__entrySessionSignals = 0; window.addEventListener('hon:session-invalidated', () => { window.__entrySessionSignals++; }); });
-    await q("UPDATE hon.principal_role_grants SET expires_at=clock_timestamp()-interval '1 second' WHERE principal_id=$1 AND school_id=$2", [a.principal, extra]);
+    await q("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval '1 second' WHERE principal_id=$1 AND school_id=$2", [a.principal, extra]);
     await page.getByTestId(`school-choice-${extra}`).click();
     await page.getByTestId('entry-status').filter({ hasText: entryText('en', 'DENIED') }).waitFor();
     assert.equal(await page.evaluate(() => window.__entrySessionSignals), 0); assert(await page.getByTestId('entry-private').isHidden());
@@ -193,7 +193,7 @@ try {
     assert.equal(await page.getByTestId('school-entry').getAttribute('data-interface-theme'), mode);
     assert.equal(await page.getByRole('heading', { level: 1 }).innerText(), entryText(language, 'title'));
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-    const crm = page.getByTestId('entry-crm'); await crm.focus(); assert(await crm.evaluate(el => el === document.activeElement && el.matches(':focus-visible')));
+    const crm = page.getByTestId('entry-crm'); await crm.focus(); await page.keyboard.press('Shift'); assert(await crm.evaluate(el => el === document.activeElement && el.matches(':focus-visible')));
     const u = new URL(await crm.getAttribute('href'), origin); assert.equal(u.searchParams.get('schoolId'), a.school); assert.equal(u.searchParams.get('organizationId'), a.org);
     const beforeModeReads = calls.filter(r => /current-reporting-school|reporting-schools|reports\/operations/.test(r.path)).length;
     const otherMode = mode === 'modern' ? 'classic' : 'modern';

@@ -65,3 +65,13 @@ it('cancels a stalled response body on read invalidation', async () => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new ReadableStream({ cancel }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }));
   const task = schoolEntryApi.current(abort.signal); await Promise.resolve(); abort.abort(); await expect(task).rejects.toThrow(); expect(cancel).toHaveBeenCalledOnce();
 });
+it('a late 401 from a retired read cannot invalidate a newer session', async () => {
+  const abort = new AbortController(); let finish!: (response: Response) => void;
+  vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const task = schoolEntryApi.current(abort.signal); abort.abort(); finish(response({}, 401));
+  await expect(task).rejects.toThrow(); expect(invalidated).not.toHaveBeenCalled();
+});
+it('an already-retired request cannot dispatch another protected read', async () => {
+  const abort = new AbortController(); abort.abort(); const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response({ state: 'RESOLVED', ...a }));
+  await expect(schoolEntryApi.current(abort.signal)).rejects.toThrow(); expect(f).not.toHaveBeenCalled();
+});

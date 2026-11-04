@@ -14,8 +14,11 @@ function closed(value: unknown, keys: readonly string[]): Record<string, unknown
 }
 /** Read-only fixed paths; no browser role, actor, delegation or authority headers. */
 async function read(path: string, signal: AbortSignal, requireNoStoreEcho = true): Promise<unknown> {
+  signal.throwIfAborted();
   const response = await fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin',
     cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal });
+  // A retired read's late 401 must not invalidate a newer mounted session.
+  signal.throwIfAborted();
   if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new SchoolEntryError('SESSION'); }
   if (response.status === 403) throw new SchoolEntryError('DENIED');
   if (response.status !== 200 || response.redirected || response.url && (typeof location === 'undefined' || response.url !== new URL(path, location.origin).href)
