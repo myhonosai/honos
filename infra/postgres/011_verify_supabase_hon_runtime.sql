@@ -2692,3 +2692,46 @@ DO $$ DECLARE safe boolean; BEGIN
  INTO safe FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_a2p_preparation_scope(text)'::regprocedure;
  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'A2P-1 preparation scope drift'; END IF;
 END $$;
+
+-- Class Sessions current-school read exact verification:
+-- 0147's named SECURITY DEFINER projection is the runtime's only Class Sessions
+-- read entry point. Runtime holds exactly one non-grantable EXECUTE on it; the
+-- private authority helper, PUBLIC and client roles hold none. Forced RLS stays.
+DO $$
+DECLARE read_safe boolean; helper_safe boolean;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime'
+    AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolinherit OR rolreplication))
+    OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime')) THEN
+    RAISE EXCEPTION 'Class Sessions read requires a restricted runtime role';
+  END IF;
+  SELECT p.prosecdef AND p.provolatile = 'v' AND p.prokind = 'f'
+    AND p.prorettype = 'jsonb'::regtype
+    AND (o.rolsuper OR o.rolbypassrls)
+    AND o.rolname NOT IN ('hon_runtime', 'anon', 'authenticated', 'service_role')
+    AND has_function_privilege('hon_runtime', p.oid, 'EXECUTE')
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace = p.pronamespace AND x.proname = p.proname) = 1
+    AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+      WHERE a.grantee <> p.proowner AND (a.grantee <> (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime')
+        OR a.is_grantable OR a.privilege_type <> 'EXECUTE' OR a.grantor <> p.proowner))
+    AND (SELECT count(*) FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+      WHERE a.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'hon_runtime')) = 1
+  INTO read_safe FROM pg_proc p JOIN pg_roles o ON o.oid = p.proowner
+  WHERE p.oid = 'hon.read_current_school_class_sessions(text)'::regprocedure;
+  IF read_safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Class Sessions read grant drift'; END IF;
+  SELECT p.prosecdef
+    AND NOT has_function_privilege('hon_runtime', p.oid, 'EXECUTE')
+    AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee <> p.proowner)
+  INTO helper_safe FROM pg_proc p
+  WHERE p.oid = 'hon.require_current_school_class_sessions_read_actor(text)'::regprocedure;
+  IF helper_safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Class Sessions private helper exposed'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolname IN ('anon', 'authenticated', 'service_role')
+    AND (has_function_privilege(r.oid, 'hon.read_current_school_class_sessions(text)', 'EXECUTE')
+      OR has_function_privilege(r.oid, 'hon.require_current_school_class_sessions_read_actor(text)', 'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Class Sessions read exposed to a client role';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid = 'hon.class_sessions'::regclass AND relrowsecurity AND relforcerowsecurity) THEN
+    RAISE EXCEPTION 'class_sessions must retain forced RLS';
+  END IF;
+END $$;
+-- End Class Sessions current-school read exact verification.
