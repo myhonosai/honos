@@ -6,6 +6,7 @@
  * - Known failures (KNOWN_FAILURE_*) intentionally reproduce open vulnerabilities and pass only while they
  *   reproduce exactly as recorded in ai-spend-entrypoints.json. A fix must flip the entry to FIXED_BY_<slice>
  *   and add the matching invariant in the same reviewed PR (S4 for KF-AI2/AI3/AI9/AI14; the AI-D3 slice for KF-AI8).
+ *   Fixed so far: KF-AI14 by S4-a (INV-13); KF-AI2 and KF-AI3 by S4-b (INV-14, INV-15).
  *
  * Disposable single-use fixture only (setup-ai-spend-baseline-validation.mjs recreates it every run).
  * Fake providers only; every network call is counted and refused. Synthetic approvals live only here.
@@ -413,20 +414,41 @@ try {
   }
   pass('INV-13', `S4-a: a charged result records exactly one ledger row after a mid-flight lapse (${Object.keys(lapseOutcomes).length} agent/lapse cases), is held without a proposal, and binds once after access returns; usage survives a failed proposal; replay and duplicate ledger rows refused`);
 
-  // ---- KNOWN FAILURE KF-AI2: cross-agent over-commit ----
-  const k1 = await makeOrg('kf-ai2');
-  await setUsed(k1, 11990);
-  const held = [];
-  for (const name of ['marcus', 'claire', 'chad']) held.push([name, await startHeld(name, k1)]);
-  const k1Committed = await committed(k1), k1Reserved = await reservedByAgent(k1);
-  const allSending = held.every(([, h]) => h.sending);
-  for (const name of Object.keys(fakes)) fakes[name].release();
-  await Promise.all(held.map(([, h]) => h.submitted));
-  assert.deepEqual(await reservedByAgent(k1), { marcus: 0, claire: 0, chad: 0 });
-  // Causal split: each agent reserved exactly its own estimate against its own table, so no single agent saw the others.
-  const k1Split = k1Reserved.marcus === 6 && k1Reserved.claire === 6 && k1Reserved.chad === 3 && k1Committed.used === 11990;
-  reportKnownFailure('KF-AI2-CROSS-AGENT-OVERCOMMIT', allSending && k1Split && k1Committed.total === 12005,
-    `used ${k1Committed.used} + reserved ${JSON.stringify(k1Reserved)} = ${k1Committed.total} committed against a 12000 ceiling`);
+  // ---- INV-14 (S4-b, replaces KF-AI2): one organization budget across all three agents ----
+  // At used 11,990 the organization has room for 10 credits. In every arrival order the agents are admitted
+  // greedily against ONE organization total (Marcus 6, Claire 6, Chad 3); a refused agent is BLOCKED with
+  // CUSTOMER_BUDGET_EXCEEDED before any provider call, and committed never exceeds the 12,000 ceiling.
+  const orders = [['marcus', 'claire', 'chad'], ['marcus', 'chad', 'claire'], ['claire', 'marcus', 'chad'], ['claire', 'chad', 'marcus'], ['chad', 'marcus', 'claire'], ['chad', 'claire', 'marcus']];
+  const orderOutcomes = [];
+  for (const order of orders) {
+    const o = await makeOrg(`inv-14-${order.join('-')}`);
+    await setUsed(o, 11990);
+    const callsBefore = Object.fromEntries(Object.keys(fakes).map((n) => [n, fakes[n].calls]));
+    const held = [], admitted = [], refused = [];
+    let room = 10;
+    for (const name of order) {
+      const h = await startHeld(name, o);
+      held.push(h);
+      const expectAdmit = agents[name].estimate <= room;
+      if (expectAdmit) room -= agents[name].estimate;
+      if (h.sending) admitted.push(name);
+      else {
+        assert.equal(h.settled.value?.status, 'BLOCKED', `${order}: ${name} refusal must be durable BLOCKED: ${JSON.stringify(h.settled)}`);
+        const reason = (await row(`SELECT reason FROM hon.${agents[name].table} WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1`, [o.id])).reason;
+        assert.equal(reason, 'CUSTOMER_BUDGET_EXCEEDED');
+        refused.push(name);
+      }
+      assert.equal(h.sending, expectAdmit, `${order.join('>')}: ${name} expected ${expectAdmit ? 'admitted' : 'refused'} against the organization total`);
+      const c = await committed(o);
+      assert(c.total <= 12000, `${order.join('>')}: committed ${c.total} exceeds the 12,000 ceiling`);
+    }
+    for (const name of refused) assert.equal(fakes[name].calls, callsBefore[name], `${name} refused but reached the provider`);
+    for (const name of Object.keys(fakes)) fakes[name].release();
+    await Promise.all(held.map((h) => h.submitted));
+    assert.deepEqual(await reservedByAgent(o), { marcus: 0, claire: 0, chad: 0 });
+    orderOutcomes.push(`${order.join('>')}: admitted ${admitted.join('+')}, refused ${refused.join('+') || 'none'}`);
+  }
+  pass('INV-14', `S4-b: one organization agent budget at used 11990 in all 6 arrival orders, committed <= 12000, refusals BLOCKED before any provider call (${orderOutcomes.join('; ')})`);
 
   // ---- KNOWN FAILURE KF-AI9: unpaid HQ COMPLETE exception reaches the provider ----
   const x = await makeOrg('kf-ai9');
@@ -478,8 +500,8 @@ try {
   await admin.query('COMMIT');
   await setUsed(k3, 11990);
   const staleBlocked = await expectRefused('marcus', k3, {}, 'stale UNKNOWN hold');
-  fakes.claire.mode = 'FAILED';
-  const control = await agents.claire.service.submit(context(k3), agents.claire.input(k3));
+  // Since S4-b the stale hold counts against the ONE organization budget, so Claire is refused too.
+  const control = await expectRefused('claire', k3, {}, 'stale UNKNOWN hold (organization budget)');
   // The only reservation writers are pinned by INV-1; none of them can settle an UNKNOWN call later.
   const lateFail = await settle(tenant(context(k3), (client) => client.query("SELECT hon.fail_marketing_invocation($1,$2::uuid,'FAILED','PROVIDER_REJECTED')", [k3.subject, unknown.id])));
   const lateRecord = await settle(tenant(context(k3), (client) => client.query('SELECT hon.record_marketing_result($1,$2::uuid,$3::jsonb)', [k3.subject, unknown.id,
@@ -487,45 +509,75 @@ try {
   const stillHeld = (await reservedByAgent(k3)).marcus;
   const unknownLedger = (await row("SELECT count(*)::int n FROM hon.marketing_ai_invocations WHERE organization_id=$1 AND usage_id IS NOT NULL AND status='UNKNOWN'", [k3.id])).n;
   const lateOutcome = (r) => r.error ? `refused ${r.error.message}` : `returned ${JSON.stringify(r.value.rows[0])}`;
-  reportKnownFailure('KF-AI8-UNKNOWN-HOLD', staleBlocked === 'BLOCKED_CUSTOMER_BUDGET_EXCEEDED' && control.status === 'FAILED' && stillHeld === 6 && unknownLedger === 0,
-    `last-month UNKNOWN hold still counted: Marcus ${staleBlocked} at used 11990 while Claire (own table) reached the provider; late fail ${lateOutcome(lateFail)}; late record ${lateOutcome(lateRecord)}; hold still ${stillHeld}; UNKNOWN ledger rows ${unknownLedger}`);
+  reportKnownFailure('KF-AI8-UNKNOWN-HOLD', staleBlocked === 'BLOCKED_CUSTOMER_BUDGET_EXCEEDED' && control === 'BLOCKED_CUSTOMER_BUDGET_EXCEEDED' && stillHeld === 6 && unknownLedger === 0,
+    `last-month UNKNOWN hold still counted against the organization budget: Marcus ${staleBlocked} and Claire ${control} at used 11990; late fail ${lateOutcome(lateFail)}; late record ${lateOutcome(lateRecord)}; hold still ${stillHeld}; UNKNOWN ledger rows ${unknownLedger}`);
 
-  // ---- KNOWN FAILURE KF-AI3: same-agent race (two open transactions) ----
-  const k4 = await makeOrg('kf-ai3');
-  await setUsed(k4, 11994);
-  const beginAndPlan = async () => {
-    const c = context(k4);
-    const begun = await tenant(c, async (client) => (await client.query('SELECT hon.begin_marketing_request($1,$2::jsonb,$3::uuid) data', [k4.subject, JSON.stringify(agents.marcus.input(k4)), c.idempotencyKey])).rows[0].data);
-    const ref = await tenant(c, async (client) => (await client.query('SELECT hon.marketing_planning_reference($1,$2::uuid) data', [k4.subject, begun.id])).rows[0].data);
-    const planned = await plans.plan({ ...c, idempotencyKey: begun.id }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'marcus', modality: 'TEXT', taskClass: 'DRAFT_MARKETING', inputBudget: 4096, outputBudget: 1024, maxProviderCostMicrounits: 100000 });
-    assert.equal(planned.status, 'PLANNED', JSON.stringify(planned));
-    return { c, id: begun.id, planId: planned.plan.id };
-  };
-  const [first, second] = [await beginAndPlan(), await beginAndPlan()];
-  let releaseFirst; const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
-  let firstPrepared; const firstReady = new Promise((resolve) => { firstPrepared = resolve; });
-  const firstTx = settle(tenant(first.c, async (client) => {
-    const payload = (await client.query('SELECT hon.prepare_marketing_invocation($1,$2::uuid,$3::uuid,true) data', [k4.subject, first.id, first.planId])).rows[0].data;
-    firstPrepared(); await firstGate; return payload;
-  }));
-  await firstReady;
-  const secondRun = settle(tenant(second.c, async (client) => (await client.query('SELECT hon.prepare_marketing_invocation($1,$2::uuid,$3::uuid,true) data', [k4.subject, second.id, second.planId])).rows[0].data));
-  const secondTx = await settle(Promise.race([secondRun.then((r) => { if (r.error) throw r.error; return r.value; }), sleep(3000).then(() => { throw new Error('SECOND_PREPARE_WAITED'); })]));
-  // Record what the second prepare waits on, so the evidence names the serializing lock.
-  const waits = secondTx.error?.message === 'SECOND_PREPARE_WAITED'
-    ? (await rows("SELECT DISTINCT l.locktype,coalesce(l.relation::regclass::text,'') relation,l.mode FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE NOT l.granted AND a.datname=current_database()")).map((w) => `${w.locktype}:${w.relation}:${w.mode}`)
-    : [];
-  releaseFirst();
-  const firstResult = await firstTx;
-  const secondAfterWait = await secondRun;
-  const bothPassed = !!firstResult.value && !!secondTx.value;
-  const k4Committed = await committed(k4);
-  // Release the synthetic holds the ordinary way (provider rejection); a refused prepare has nothing to release.
-  for (const [id, prepared] of [[first.id, firstResult.value], [second.id, secondAfterWait.value]]) if (prepared) await tenant(context(k4), (client) => client.query("SELECT hon.fail_marketing_invocation($1,$2::uuid,'FAILED','PROVIDER_REJECTED')", [k4.subject, id]));
-  assert.equal((await reservedByAgent(k4)).marcus, 0);
-  reportKnownFailure('KF-AI3-SAME-AGENT-RACE', bothPassed,
-    bothPassed ? `two concurrent Marcus prepares at used 11994 both reserved 6 (${k4Committed.total} committed)` : `second prepare waited on [${waits.join(', ')}] until the first committed, then returned ${secondAfterWait.value ? 'a payload' : 'no payload (refused by the per-agent ceiling)'}; ${k4Committed.total} committed`, { mayNotReproduce: true });
-  if (secondAfterWait.error) throw secondAfterWait.error;
+  // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
+  // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
+  // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter
+  // recomputes the organization total after the lock, so exactly one reaches the provider and the other is
+  // BLOCKED / CUSTOMER_BUDGET_EXCEEDED. No deadlock, no timing dependence.
+  const pairs = [['marcus', 'marcus'], ['claire', 'claire'], ['chad', 'chad'], ['marcus', 'claire'], ['marcus', 'chad'], ['claire', 'chad']];
+  const pairOutcomes = [], waitEvidence = [];
+  for (const [x, y] of pairs) {
+    const o = await makeOrg(`inv-15-${x}-${y}`);
+    const room = Math.max(agents[x].estimate, agents[y].estimate);
+    await setUsed(o, 12000 - room);
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    // Begin both requests first (provider not ready: durable CONFIGURATION_REQUIRED, nothing reserved), so the race
+    // below is between two prepares only, exactly as two open tabs retrying would be.
+    const pending = [];
+    for (const name of [x, y]) {
+      fakes[name].readiness = () => 'NOT_CONFIGURED';
+      const view = await agents[name].service.submit(context(o), agents[name].input(o));
+      fakes[name].readiness = () => 'READY';
+      assert.equal(view.status, 'CONFIGURATION_REQUIRED', `${name}: setup request must wait for configuration: ${JSON.stringify(view)}`);
+      pending.push([name, view.id]);
+    }
+    const callsBefore = fakes[x].calls + (x === y ? 0 : fakes[y].calls);
+    let racing; const done = [];
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT hon.ai_budget_lock($1)', [o.id]);
+      // HOLD: the admitted call keeps its hold until checked, so the loser's decision cannot depend on how fast the
+      // winner's (smaller) actual usage is recorded.
+      fakes[x].mode = 'HOLD'; fakes[y].mode = 'HOLD';
+      racing = pending.map(([name, id], i) => settle(agents[name].service.generate(context(o), id)).then((r) => { done[i] = r; return r; }));
+      // Both prepares must be blocked at the same time: at least one on the ai.budget advisory lock, and the other
+      // either on that lock too or queued behind the first prepare's organization row lock (taken earlier by the
+      // shared access gate). Either way neither can compute its total until the budget lock is free.
+      let waits = [];
+      for (const end = Date.now() + 4000; ; await sleep(20)) {
+        waits = await rows("SELECT DISTINCT l.pid,l.locktype FROM pg_locks l WHERE NOT l.granted AND l.database=(SELECT oid FROM pg_database WHERE datname=current_database()) UNION SELECT DISTINCT l.pid,l.locktype FROM pg_locks l WHERE NOT l.granted AND l.locktype='transactionid'");
+        const pids = new Set(waits.map((w) => w.pid));
+        if (pids.size >= 2 && waits.some((w) => w.locktype === 'advisory')) break;
+        if (Date.now() > end || done.filter(Boolean).length) throw new Error(`${x}/${y}: prepares were not both blocked behind the ai.budget lock (waits ${JSON.stringify(waits)}; settled early: ${JSON.stringify(done.map((r) => r && (r.error ? (r.error.getResponse?.() ?? String(r.error)) : r.value?.status)))})`);
+      }
+      waitEvidence.push(`${x}/${y}: ${[...new Set(waits.map((w) => w.locktype))].sort().join('+')}`);
+      await blocker.query('COMMIT');
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await blocker.end();
+    }
+    for (const end = Date.now() + 15000; ; await sleep(20)) {
+      if (done.filter(Boolean).length === 1 && (await sendingCount(o)) === 1) break;
+      if (Date.now() > end || done.filter(Boolean).length === 2) throw new Error(`${x}/${y}: expected one SENDING and one settled refusal: ${JSON.stringify(done.map((r) => r && (r.error ? (r.error.getResponse?.() ?? String(r.error)) : r.value?.status)))}`);
+    }
+    const loserCommitted = await committed(o);
+    assert(loserCommitted.total <= 12000, `${x}/${y}: committed ${loserCommitted.total} exceeds the ceiling while the winner is in flight`);
+    for (const name of new Set([x, y])) fakes[name].complete();
+    const settled = await Promise.all(racing);
+    for (const r of settled) if (r.error) throw r.error;
+    const statuses = settled.map((r) => r.value.status).sort();
+    const callsAfter = fakes[x].calls + (x === y ? 0 : fakes[y].calls);
+    assert.deepEqual(statuses, ['AWAITING_APPROVAL', 'BLOCKED'].sort(), `${x}/${y}: exactly one admitted: ${JSON.stringify(statuses)}`);
+    assert.equal(callsAfter - callsBefore, 1, `${x}/${y}: exactly one provider call`);
+    const c = await committed(o);
+    assert(c.total <= 12000, `${x}/${y}: committed ${c.total} exceeds the ceiling`);
+    pairOutcomes.push(`${x}/${y}`);
+  }
+  pass('INV-15', `S4-b: prepares serialize on ai.budget:<org> (both blocked, lock evidence ${waitEvidence.join('; ')}); exactly one admitted, the other BLOCKED, one provider call, committed <= 12000`);
 
   // ---- INV-12: zero external effects ----
   assert.equal(networkCalls, 0);

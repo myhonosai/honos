@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0e6de462e66fb188e49bf443781ebb07ea74e9cfdd94f01c94d9e9281b48219a",
+  "chainSha256": "7396a73e40d36bb551f94873eff68c894dbc699a64a1a93947ec7a624a6e6226",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -53,6 +53,10 @@
     {
       "file": "0193_ai_spend_durable_evidence.sql",
       "sha256": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5"
+    },
+    {
+      "file": "0194_ai_org_budget_lock.sql",
+      "sha256": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b"
     }
   ]
 }

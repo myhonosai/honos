@@ -42,6 +42,15 @@
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
 
+## S4-b organization agent budget and lock — Claude (2026-11-01, owner-authorized draft, stacked on S4-a)
+
+- Migration `0194_ai_org_budget_lock.sql` (number proposed; owner allocates). Findings AI-2, AI-3, AI-17. Design: `docs/architecture/HON_AI_ORG_BUDGET_LOCK_S4B.md`.
+- [x] One organization agent budget: `ai_org_committed_credits` (agent-inference ledger credits in the `ai_spend_window` plus every open Marcus/Claire/Chad hold), `ai_org_ceiling` (12,000, the only literal left), `ai_budget_lock` (`ai.budget:<org>`, taken first in every prepare, before the gate row locks; see the design doc for the deadlock it avoids). The three prepares use them; refusal stays durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED`. Reserve guard trigger re-checks any hold increase (`AI_ORG_BUDGET_EXCEEDED`, 42501).
+- [x] `ai_usage_ledger.spend_class` (AGENT_INFERENCE / CREATIVE_MEDIA / HQ_INTERNAL); B3 rows backfilled and written CREATIVE_MEDIA; agent writers set AGENT_INFERENCE; planning eligibility counts agent rows only.
+- [x] AI-0: KF-AI2 and KF-AI3 flipped to `FIXED_BY_S4B`, replaced by INV-14 (all 6 arrival orders at used 11,990) and INV-15 (deterministic pg_locks serialization, 3 same-agent + 3 cross-agent pairs). KF-AI8 probe now shows the stale hold blocking both agents (still open for S4-d).
+- [ ] B3 creative reservations keep their own allowance check (closed program); the B3 budget guard is deferred to the creative-wallet slices (AI-17 keeps creative out of the agent budget).
+- [ ] Independent review; owner merge after #97 and S4-a.
+
 ## S4-a durable AI usage evidence — Claude (2026-11-01, owner-authorized draft, stacked on AI-0)
 
 - Migration `0193_ai_spend_durable_evidence.sql` (number proposed; owner allocates). Owner decisions AI-D6, AI-D7. Design: `docs/architecture/HON_AI_SPEND_DURABLE_EVIDENCE_S4A.md`.

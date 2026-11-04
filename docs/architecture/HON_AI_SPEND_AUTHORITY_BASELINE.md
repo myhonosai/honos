@@ -57,6 +57,8 @@ AI-0 pins only what it actually collects and asserts. It does **not** claim comp
 | INV-10 | B3 premium reservations are refused with `SAAS_CREDITS_NOT_ACTIVE`. |
 | INV-11 | An allowed call records exactly one ledger row with provider cost; a replay records none; a provider rejection releases the hold. |
 | INV-13 | (S4-a) A charged result records exactly one ledger row after a mid-flight lapse, ends `RESULT_HELD` with no proposal, and binds once after access returns; usage survives a failed proposal; duplicate ledger rows per invocation are refused. |
+| INV-14 | (S4-b) One organization agent budget: at used 11,990 every arrival order of Marcus 6, Claire 6, Chad 3 is admitted greedily against 12,000; refusals are durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED` with no provider call; committed never exceeds the ceiling. |
+| INV-15 | (S4-b) Deterministic serialization: with `ai.budget:<org>` held by a blocker, both prepares of each same-agent and cross-agent pair are blocked (pg_locks); after release exactly one reaches the provider and the other is `BLOCKED`. |
 | INV-12 | Zero network calls, programs unchanged, AI rows confined to synthetic organizations, no allowance, trial or access-state writes. |
 
 ## Known failures (intentionally vulnerable probes)
@@ -65,11 +67,11 @@ Each probe prints `KNOWN-FAILURE (open, replaced by <slice>) <id>: reproduced | 
 
 | Probe | Plain-language problem | Today (reproduced) | Replaced by |
 |---|---|---|---|
-| **KF-AI2-CROSS-AGENT-OVERCOMMIT** | Each agent checks the monthly ceiling against the shared ledger but only its own open holds, so three agents together can exceed the ceiling. | Used 11,990, then Marcus 6 + Claire 6 + Chad 3 all reach the provider: 12,005 committed against 12,000. | S4 org-wide committed credits and budget lock |
+| **KF-AI2-CROSS-AGENT-OVERCOMMIT** (FIXED_BY_S4B, INV-14) | Each agent checks the monthly ceiling against the shared ledger but only its own open holds, so three agents together can exceed the ceiling. | Used 11,990, then Marcus 6 + Claire 6 + Chad 3 all reach the provider: 12,005 committed against 12,000. | S4 org-wide committed credits and budget lock |
 | **KF-AI9-EXCEPTION-SPEND** | A D9/D10 HQ access exception with COMPLETE scope sets the entitlement to COMPLETE ACTIVE. The exception receipt says `aiCredits: NONE`, but the agent gate only reads the entitlement. | Unpaid school, COMPLETE exception: Marcus reaches the provider once and writes a ledger row. | S4 explicit exception refusal |
 | **KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE** | Found while building AI-0. `record_*` and `fail_*` re-run the entitlement gate through the agent owner check. If the entitlement lapses while a call is in flight, the provider has already answered but nothing can be written. | For all three agents: provider called once, service returns `*_PERSISTENCE_UNKNOWN`, no ledger row, invocation stuck `SENDING` with its hold still reserved (6, 6, 3). Provider cost goes unrecorded and the stuck hold keeps counting against the agent's budget. | S4 (evidence steps never guarded). **FIXED_BY_S4A**: replaced by INV-13. |
 | **KF-AI8-UNKNOWN-HOLD** | An UNKNOWN provider outcome keeps its hold forever, across months, and no function can resolve it. | A last-month UNKNOWN Marcus hold still blocks Marcus at used 11,990 while Claire passes; late fail and late record are both refused `MARKETING_OUTCOME_REPLAY`; no ledger row. | Separate slice after owner decision AI-D3 |
-| **KF-AI3-SAME-AGENT-RACE** | Two concurrent prepares of the same agent could both pass the ceiling check. | **Not reproduced** on `b234be7`: the second Marcus prepare waits on a `transactionid` ShareLock held by the first and is refused by the per-agent ceiling after the first commits (12,000 committed). Recorded each run; "not reproduced" never fails CI. | S4 budget lock (makes serialization explicit for every agent and B3) |
+| **KF-AI3-SAME-AGENT-RACE** (FIXED_BY_S4B, INV-15) | Two concurrent prepares of the same agent could both pass the ceiling check. | **Not reproduced** on `b234be7`: the second Marcus prepare waits on a `transactionid` ShareLock held by the first and is refused by the per-agent ceiling after the first commits (12,000 committed). Recorded each run; "not reproduced" never fails CI. | S4 budget lock (makes serialization explicit for every agent and B3) |
 
 ## How S4 replaces the known failures
 
@@ -84,6 +86,8 @@ Exception schools have **no** paid-access state row, so an S4 decision that only
 - In the S4 PR: KF-AI9 becomes `FIXED_BY_S4`, its probe is replaced by an invariant (prepare refused, provider calls 0), and INV-9 stays.
 
 ### Shared cross-agent budget (KF-AI2, KF-AI3)
+
+- **Done in S4-b (migration 0194):** KF-AI2 and KF-AI3 are `FIXED_BY_S4B`, replaced by INV-14 and INV-15. See `HON_AI_ORG_BUDGET_LOCK_S4B.md`.
 
 - One function computes organization committed credits: current-month ledger credits plus reserved credits across all three agent tables plus open B3 reservations.
 - A reserve guard (`BEFORE UPDATE` when `reserved_credits` increases) takes an advisory lock `ai.budget:<org>` last, then refuses with `AI_ORG_BUDGET_EXCEEDED` (SQLSTATE 42501, already mapped to 403 by the three services) if the new total would exceed the ceiling.

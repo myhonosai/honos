@@ -2023,3 +2023,12 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.read_chad_follow_up_result_payload(text,uuid),hon.hold_chad_follow_up_result(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- S4-b 0194 organization agent budget: window, ceiling, committed sum, lock and reserve guard stay internal (no runtime grant).
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['ai_spend_window(uuid,timestamptz)','ai_org_ceiling(uuid,timestamptz)','ai_org_committed_credits(uuid,timestamptz)',
+    'ai_budget_lock(uuid)','ai_spend_reserve_guard()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+END $$;
