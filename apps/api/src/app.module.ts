@@ -90,6 +90,8 @@ import { InterfaceThemeController } from './preferences/interface-theme.controll
 import { InterfaceThemeService } from './preferences/interface-theme.service.js';
 import { MembershipController } from './billing/membership.controller.js';
 import { MembershipService } from './billing/membership.service.js';
+import { CrmLeadMembershipsController } from './billing/crm-lead-memberships.controller.js';
+import { CrmLeadMembershipsService } from './billing/crm-lead-memberships.service.js';
 import { MembershipDateRevisionController } from './billing/membership-date-revision.controller.js';
 import { MembershipDateRevisionService } from './billing/membership-date-revision.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
@@ -348,6 +350,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
+    CrmLeadMembershipsController,
     MembershipDateRevisionController,
     MembershipStatusReportController,
     CrmAdultMembershipDraftController,
@@ -471,6 +474,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    CrmLeadMembershipsService,
     MembershipDateRevisionService,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
