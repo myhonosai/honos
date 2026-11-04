@@ -44,12 +44,13 @@ const migrate = spawnSync(process.execPath, [new URL('./migrate.mjs', import.met
 if (migrate.status !== 0) throw new Error(`Disposable migration failed: ${migrate.stderr.replaceAll(ownerPassword, '[REDACTED]').replaceAll(runtimePassword, '[REDACTED]')}`);
 console.log(migrate.stdout.trim());
 const canonical = (await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8')).replaceAll('hon_runtime', runtime).replaceAll('FOR ROLE postgres', `FOR ROLE ${owner}`).replaceAll('DATABASE postgres', `DATABASE ${database}`);
+// Apply the canonical reconciliation twice: the second run proves it is
+// idempotent and that a rerun preserves 0147's named-function EXECUTE grant.
 psql(canonical, database); psql(canonical, database);
-// The generic canonical reconciliation intentionally knows no future narrow
-// projection functions. Reassert only 0147's exact function-only boundary.
+// The function grant must come from the canonical reconciliation itself; this
+// fixture deliberately does NOT re-grant it (an earlier fixture-only re-grant
+// masked the production ACL gap). Only the 0147 table posture is narrowed here,
+// so the proof can also show the runtime has no direct session-table read.
 psql(`ALTER TABLE hon.class_sessions ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.class_sessions FORCE ROW LEVEL SECURITY;
-REVOKE SELECT ON hon.class_sessions FROM PUBLIC,${runtime};
-REVOKE ALL ON FUNCTION hon.require_current_school_class_sessions_read_actor(text) FROM PUBLIC,${runtime};
-REVOKE ALL ON FUNCTION hon.read_current_school_class_sessions(text) FROM PUBLIC,${runtime};
-GRANT EXECUTE ON FUNCTION hon.read_current_school_class_sessions(text) TO ${runtime};`, database);
+REVOKE SELECT ON hon.class_sessions FROM PUBLIC,${runtime};`, database);
 console.log('Disposable localhost Class Sessions read database created; migrations and canonical least-privilege grants applied. Credentials remain only in the fresh private mode-0600 job env file.');
