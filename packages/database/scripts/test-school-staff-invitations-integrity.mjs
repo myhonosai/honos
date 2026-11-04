@@ -194,6 +194,61 @@ try{
  assert.equal(receipt(await send('account/staff-invitations/accept',{identity:staffS,body:accept(invS,inputS.token)})).accountStatus,'STAFF_ROLE_BOUND');
  pass('paid access fails closed: a suspended or lapsed organization cannot invite, list or complete an outstanding invitation; restored access completes it');
 
+ // 9c. Authority that expires between verification and the evidence write fails closed (deterministic clock barrier).
+ // Fixture-only: the evidence INSERT waits until a pinned instant T has passed. Authority is set to expire exactly at T,
+ // so every pre-write check sees it live and only a check made after the evidence write can see it expired.
+ await q('CREATE TABLE public.s2_clock_barrier_at(until timestamptz)');await q('INSERT INTO public.s2_clock_barrier_at VALUES(NULL)');
+ await q(`CREATE FUNCTION public.s2_clock_barrier() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+  DECLARE u timestamptz; BEGIN SELECT until INTO u FROM public.s2_clock_barrier_at;
+  IF u IS NOT NULL THEN PERFORM pg_sleep(greatest(0,extract(epoch FROM u-clock_timestamp()))+0.02); END IF; RETURN NEW; END $$`);
+ await q('CREATE TRIGGER s2_clock_barrier BEFORE INSERT ON hon.school_staff_account_events FOR EACH ROW EXECUTE FUNCTION public.s2_clock_barrier()');
+ const boundary=person('boundary'),boundaryPrincipal=await human(boundary,'S2 boundary manager');const boundaryGrant=await grant(A,boundaryPrincipal,managerRole);
+ const pin=async()=>{const t=(await q("SELECT clock_timestamp()+interval '1500 milliseconds' t"))[0].t;await q('UPDATE public.s2_clock_barrier_at SET until=$1',[t]);return t;};
+ const unpin=()=>q('UPDATE public.s2_clock_barrier_at SET until=NULL');
+ // The call must reach the barrier (evidence write) before failing: it returns only after T.
+ const atBoundary=async(t,work)=>{const r=await denied(work,403);assert(Date.now()>=t.getTime(),'refused before the evidence write');return r;};
+ try{
+  let t=await pin();
+  const ctl=receipt(await send('school/staff-invitations',{identity:boundary,body:invite(A.schoolId,frontDesk,'ctl-'+K()+'@example.invalid')}));
+  assert(Date.now()>=t.getTime());assert.equal(ctl.status,'PENDING');await unpin();
+  // INVITE: the manager grant expires at T.
+  t=await pin();await q('UPDATE hon.principal_role_grants SET effective_until=$2 WHERE id=$1',[boundaryGrant,t]);
+  const lateKey=K(),lateInput=invite(A.schoolId,frontDesk,'late-'+K()+'@example.invalid');
+  await atBoundary(t,()=>send('school/staff-invitations',{identity:boundary,body:lateInput,key:lateKey}));
+  await unpin();await q('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE id=$1',[boundaryGrant]);
+  // REVOKE: the manager grant expires at T; the invitation stays PENDING.
+  const staffV=person('staff-v'),inputV=invite(A.schoolId,frontDesk,staffV.email);const invV=receipt(await send('school/staff-invitations',{identity:boundary,body:inputV}));
+  t=await pin();await q('UPDATE hon.principal_role_grants SET effective_until=$2 WHERE id=$1',[boundaryGrant,t]);
+  await atBoundary(t,()=>send('school/staff-invitations/revoke',{identity:boundary,body:{schoolId:A.schoolId,invitationId:invV.invitationId}}));
+  assert.equal((await q('SELECT status FROM hon.school_staff_invitations WHERE id=$1',[invV.invitationId]))[0].status,'PENDING');
+  // ACCEPT: the issuer's grant expires at T; no identity, role grant or evidence survives.
+  await atBoundary(t=await pin().then(async t=>{await q('UPDATE hon.principal_role_grants SET effective_until=$2 WHERE id=$1',[boundaryGrant,t]);return t;}),()=>send('account/staff-invitations/accept',{identity:staffV,body:accept(invV,inputV.token)}));
+  await unpin();await q('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE id=$1',[boundaryGrant]);
+  assert.equal((await q('SELECT count(*) n FROM hon.users WHERE external_subject=$1',[staffV.externalSubject]))[0].n,'0');
+  // ACCEPT: the organization's paid access ends at T.
+  const ent=(await q('SELECT effective_until FROM hon.organization_entitlements WHERE organization_id=$1',[A.organizationId]))[0].effective_until;
+  t=await pin();await q('UPDATE hon.organization_entitlements SET effective_until=$2 WHERE organization_id=$1',[A.organizationId,t]);
+  await atBoundary(t,()=>send('account/staff-invitations/accept',{identity:staffV,body:accept(invV,inputV.token)}));
+  await unpin();await q('UPDATE hon.organization_entitlements SET effective_until=$2 WHERE organization_id=$1',[A.organizationId,ent]);
+  // ACCEPT: the invitation itself expires at T.
+  const staffW=person('staff-w'),inputW=invite(A.schoolId,frontDesk,staffW.email);const invW=receipt(await send('school/staff-invitations',{identity:boundary,body:inputW}));
+  t=await pin();
+  await admin.query('BEGIN');await admin.query('ALTER TABLE hon.school_staff_invitations DISABLE TRIGGER immutable');
+  await admin.query('UPDATE hon.school_staff_invitations SET expires_at=$2 WHERE id=$1',[invW.invitationId,t]);
+  await admin.query('ALTER TABLE hon.school_staff_invitations ENABLE TRIGGER immutable');await admin.query('COMMIT');
+  await atBoundary(t,()=>send('account/staff-invitations/accept',{identity:staffW,body:accept(invW,inputW.token)}));
+  await unpin();
+  // Control: with authority intact the same barrier completes.
+  t=await pin();assert.equal(receipt(await send('account/staff-invitations/accept',{identity:staffV,body:accept(invV,inputV.token)})).accountStatus,'STAFF_ROLE_BOUND');assert(Date.now()>=t.getTime());await unpin();
+  // Replay after expiry: a stored INVITE response is not returned to a manager whose authority has ended.
+  const replayKey=K(),replayInput=invite(A.schoolId,frontDesk,'replay-'+K()+'@example.invalid');receipt(await send('school/staff-invitations',{identity:boundary,body:replayInput,key:replayKey}));
+  await q('UPDATE hon.principal_role_grants SET effective_until=clock_timestamp() WHERE id=$1',[boundaryGrant]);
+  await denied(()=>send('school/staff-invitations',{identity:boundary,body:replayInput,key:replayKey}),403);
+ }finally{
+  await q('DROP TRIGGER s2_clock_barrier ON hon.school_staff_account_events');await q('DROP FUNCTION public.s2_clock_barrier()');await q('DROP TABLE public.s2_clock_barrier_at');
+ }
+ pass('authority (issuer grant, paid access, invitation expiry) that ends between verification and the evidence write fails closed with no identity, grant, invitation change or evidence; replay after expiry is refused');
+
  // 10. List and immutable evidence.
  const list=receipt(await send('school/schools/'+A.schoolId+'/staff-invitations',{identity:manager,method:'GET'}));
  assert(list.length>=6&&list.length<=50);assert(list.every(i=>i.schoolId===A.schoolId));assert(list.some(i=>i.status==='EXPIRED'));assert(list.some(i=>i.status==='REVOKED'));
