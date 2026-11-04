@@ -33,11 +33,21 @@ const auth = { mode: 'OIDC', audience: 'hon-owner-entry-disposable', secret: ran
 Object.assign(process.env, { HON_AUTH_MODE: auth.mode, HON_SESSION_AUDIENCE: auth.audience, HON_SESSION_JWT_SECRET: auth.secret });
 const origin = 'http://127.0.0.1:3000', apiOrigin = 'http://127.0.0.1:3001';
 const originalFetch = globalThis.fetch, groups = [], browserChecks = [], identityChecks = [], securityChecks = [];
+const blockedStaticFontRequests = [];
 const canonicalRoleMarker = `HON disposable owner-entry runtime ${randomUUID()}`;
 let app, next, browser, actor, nextLog = '', frontendReads = 0;
 const pass = name => { groups.push(name); console.log('PASS ' + name); };
 const cookie = (who, expired = false) => `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: who.subject, displayName: 'Synthetic test identity' }, auth, expired ? Math.floor(Date.now() / 1000) - 50000 : undefined)}`;
 const headers = who => ({ Cookie: cookie(who), 'Sec-Fetch-Site': 'same-origin' });
+async function blockExternal(route) {
+  const url = new URL(route.request().url());
+  if (url.origin === origin) return false;
+  // Existing shared CSS requests Google Fonts. Abort before any contact and
+  // exercise the installed local fallbacks; no provider request is allowed.
+  await route.abort();
+  assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(url.origin), 'Unexpected external operation was blocked.');
+  blockedStaticFontRequests.push(url.origin); return true;
+}
 function canonicalAdmin(sql, stage, requireOwnedRole = false) {
   const guard = `DO $$ BEGIN
     IF NOT EXISTS(SELECT 1 FROM pg_database WHERE datname=current_database() AND datname='${flexibleBillingAccountsFixture.database}'
@@ -180,7 +190,7 @@ try {
   for (const [label, who] of [['HQ', hq], ['School A', a], ['School B', b]]) {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(who).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }]);
-    await context.route('**/*', route => { assert.equal(new URL(route.request().url()).origin, origin); return route.continue(); });
+    await context.route('**/*', async route => { if (!await blockExternal(route)) return route.continue(); });
     const page = await context.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(`${origin}/auth/continue`);
     assert.equal(new URL(page.url()).pathname, who === hq ? '/hq' : '/staff/entry');
@@ -197,7 +207,7 @@ try {
   {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(a).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }]);
-    await context.route('**/*', route => { assert.equal(new URL(route.request().url()).origin, origin); return route.continue(); });
+    await context.route('**/*', async route => { if (!await blockExternal(route)) return route.continue(); });
     const page = await context.newPage();
     await q('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE principal_id=$1 AND school_id=$2', [a.principal, extra]);
     await page.goto(`${origin}/auth/continue`); await page.getByTestId(`school-choice-${extra}`).waitFor();
@@ -222,8 +232,9 @@ try {
     const { localeCookieName, DEFAULT_LOCALE } = await import(pathToFileURL(webRequire.resolve('@hon/design-system')).href);
     await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(a).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' },
       { name: localeCookieName(presentationScope), value: encodeURIComponent(JSON.stringify({ ...DEFAULT_LOCALE, language })), url: origin, sameSite: 'Lax' }]);
-    const calls = [], errors = []; await context.route('**/*', route => {
-      const url = new URL(route.request().url()); assert.equal(url.origin, origin, 'External provider/browser traffic forbidden.');
+    const calls = [], errors = []; await context.route('**/*', async route => {
+      if (await blockExternal(route)) return;
+      const url = new URL(route.request().url());
       calls.push({ path: url.pathname, method: route.request().method() }); return route.continue();
     });
     const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
@@ -270,7 +281,8 @@ try {
   pass(`read-only invariants: ${protectedTables.length} protected tables unchanged; zero business commands/provider calls`);
   await writeFile(join(results, 'owner-entry-report.json'), JSON.stringify({ sourceSha: process.env.HON_OWNER_ENTRY_SHA ?? null, groups, frontendReads, browserChecks, identityChecks, securityChecks,
     signedSyntheticIdentities: true, markedDisposableDatabase: true, actualNextAndNest: true, actualProviderOrOidcLogin: false, protectedTables: protectedTables.length,
-    externalProviderCalls: 0, businessCommands: 0, paidAiCalls: 0, screenshots: browserChecks.length, knownTimestampOrderingDefect: 'UNRESOLVED; existing real API reproduction retained unchanged' }, null, 2) + '\n');
+    externalProviderCalls: 0, externalPageRequestsAllowed: 0, blockedStaticFontRequests, screenshotFonts: 'installed local fallbacks; external fonts blocked',
+    businessCommands: 0, paidAiCalls: 0, screenshots: browserChecks.length, knownTimestampOrderingDefect: 'UNRESOLVED; existing real API reproduction retained unchanged' }, null, 2) + '\n');
   console.log(JSON.stringify({ passed: true, groups: groups.length, browserChecks: browserChecks.length, protectedTables: protectedTables.length, providerCalls: 0 }));
 } finally {
   globalThis.fetch = originalFetch;
