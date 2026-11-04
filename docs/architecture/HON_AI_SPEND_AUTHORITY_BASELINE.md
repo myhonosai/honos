@@ -39,7 +39,7 @@ AI-0 pins only what it actually collects and asserts. It does **not** claim comp
 
 - **Covered:** the three agent runtimes (Marcus, Claire, Chad) end to end through their real services with fake providers; their spend tables, record/fail/prepare functions and runtime grants; `ai_usage_ledger` writers; `saas_credit_reservations` writers; literal `12000` ceilings; spend-table triggers; the B3 premium reservation refusal while the credit program is inactive; credit, trial, paid-access and payment program posture; the exception end-of-access path (INV-9).
 - **Not covered (review separately; candidates to extend INV-1/INV-2):** B3 allowance and credit-ledger internals beyond the writer list, pricing and provider-cost evidence helpers, generic helper functions that spend paths call, and restricted Supabase-shaped roles other than the disposable runtime role (anon/authenticated/service_role are checked only for grants, not exercised).
-- **Exception and post-lapse probes:** KF-AI14 asserts per agent the exact `*_PERSISTENCE_UNKNOWN` code, one provider call, no ledger row and the agent's estimate still held; KF-AI2 asserts the per-agent split (6 + 6 + 3 at used 11,990). KF-AI9 exercises Marcus only; S4-c must prove all three agents.
+- **Exception and post-lapse probes:** the former KF-AI14 probe asserted per agent the exact `*_PERSISTENCE_UNKNOWN` code, one provider call, no ledger row and the agent's estimate still held (now replaced by INV-13 in S4-a, which covers all three agents and three lapse kinds); KF-AI2 asserts the per-agent split (6 + 6 + 3 at used 11,990). KF-AI9 exercises Marcus only; S4-c must prove all three agents.
 
 ## Invariants (must pass; any failure blocks CI)
 
@@ -56,6 +56,7 @@ AI-0 pins only what it actually collects and asserts. It does **not** claim comp
 | INV-9 | After an exception is revoked, expires, or is CORE scope, agents are refused. |
 | INV-10 | B3 premium reservations are refused with `SAAS_CREDITS_NOT_ACTIVE`. |
 | INV-11 | An allowed call records exactly one ledger row with provider cost; a replay records none; a provider rejection releases the hold. |
+| INV-13 | (S4-a) A charged result records exactly one ledger row after a mid-flight lapse, ends `RESULT_HELD` with no proposal, and binds once after access returns; usage survives a failed proposal; duplicate ledger rows per invocation are refused. |
 | INV-12 | Zero network calls, programs unchanged, AI rows confined to synthetic organizations, no allowance, trial or access-state writes. |
 
 ## Known failures (intentionally vulnerable probes)
@@ -66,7 +67,7 @@ Each probe prints `KNOWN-FAILURE (open, replaced by <slice>) <id>: reproduced | 
 |---|---|---|---|
 | **KF-AI2-CROSS-AGENT-OVERCOMMIT** | Each agent checks the monthly ceiling against the shared ledger but only its own open holds, so three agents together can exceed the ceiling. | Used 11,990, then Marcus 6 + Claire 6 + Chad 3 all reach the provider: 12,005 committed against 12,000. | S4 org-wide committed credits and budget lock |
 | **KF-AI9-EXCEPTION-SPEND** | A D9/D10 HQ access exception with COMPLETE scope sets the entitlement to COMPLETE ACTIVE. The exception receipt says `aiCredits: NONE`, but the agent gate only reads the entitlement. | Unpaid school, COMPLETE exception: Marcus reaches the provider once and writes a ledger row. | S4 explicit exception refusal |
-| **KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE** | Found while building AI-0. `record_*` and `fail_*` re-run the entitlement gate through the agent owner check. If the entitlement lapses while a call is in flight, the provider has already answered but nothing can be written. | For all three agents: provider called once, service returns `*_PERSISTENCE_UNKNOWN`, no ledger row, invocation stuck `SENDING` with its hold still reserved (6, 6, 3). Provider cost goes unrecorded and the stuck hold keeps counting against the agent's budget. | S4 (evidence steps never guarded) |
+| **KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE** | Found while building AI-0. `record_*` and `fail_*` re-run the entitlement gate through the agent owner check. If the entitlement lapses while a call is in flight, the provider has already answered but nothing can be written. | For all three agents: provider called once, service returns `*_PERSISTENCE_UNKNOWN`, no ledger row, invocation stuck `SENDING` with its hold still reserved (6, 6, 3). Provider cost goes unrecorded and the stuck hold keeps counting against the agent's budget. | S4 (evidence steps never guarded). **FIXED_BY_S4A**: replaced by INV-13. |
 | **KF-AI8-UNKNOWN-HOLD** | An UNKNOWN provider outcome keeps its hold forever, across months, and no function can resolve it. | A last-month UNKNOWN Marcus hold still blocks Marcus at used 11,990 while Claire passes; late fail and late record are both refused `MARKETING_OUTCOME_REPLAY`; no ledger row. | Separate slice after owner decision AI-D3 |
 | **KF-AI3-SAME-AGENT-RACE** | Two concurrent prepares of the same agent could both pass the ceiling check. | **Not reproduced** on `b234be7`: the second Marcus prepare waits on a `transactionid` ShareLock held by the first and is refused by the per-agent ceiling after the first commits (12,000 committed). Recorded each run; "not reproduced" never fails CI. | S4 budget lock (makes serialization explicit for every agent and B3) |
 
@@ -92,7 +93,7 @@ Exception schools have **no** paid-access state row, so an S4 decision that only
 ### Evidence after a mid-flight lapse (KF-AI14)
 
 - `record_*` and `fail_*` must not depend on the start gate. They should check only that the invocation is the caller's own `SENDING` row in the current tenant, so a result or UNKNOWN/FAILED outcome is always recorded once the provider has been called. Start and reserve stay gated.
-- In the S4 PR: KF-AI14 becomes `FIXED_BY_S4` and its probe becomes an invariant (exactly one ledger row after a lapse, hold released).
+- **Done in S4-a (migration 0193):** KF-AI14 is `FIXED_BY_S4A` and its probe is replaced by INV-13 (exactly one ledger row after a lapse, hold released, result held until access returns). See `HON_AI_SPEND_DURABLE_EVIDENCE_S4A.md`.
 
 ### What stays open after S4
 

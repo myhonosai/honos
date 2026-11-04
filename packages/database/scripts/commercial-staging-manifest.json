@@ -1,6 +1,6 @@
 {
-  "baseline": "be3a26e097a4ceb355d08d93d57dd73297b6048f",
-  "chainSha256": "4d133cb9cb5d924d6aede70fb897b519778836354182b4079e073fb0023d5192",
+  "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
+  "chainSha256": "0e6de462e66fb188e49bf443781ebb07ea74e9cfdd94f01c94d9e9281b48219a",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -49,6 +49,10 @@
     {
       "file": "0192_crm_suspended_owner_read_only.sql",
       "sha256": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542"
+    },
+    {
+      "file": "0193_ai_spend_durable_evidence.sql",
+      "sha256": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5"
     }
   ]
 }

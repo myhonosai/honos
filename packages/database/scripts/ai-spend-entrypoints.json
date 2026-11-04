@@ -384,10 +384,11 @@
     {
       "id": "KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE",
       "finding": "AI-14",
-      "status": "OPEN",
-      "replacedBy": "S4",
+      "status": "FIXED_BY_S4A",
+      "replacedBy": "S4-a (migration 0193, invariant INV-13)",
       "currentOutcome": "Found while building AI-0 on b234be7. For Marcus, Claire and Chad, a call already SENDING when the entitlement is suspended gets its provider answer, but record_* and fail_* both re-run the entitlement gate through the agent owner check (marketing_owner calls require_ai_invocation_plan_access). The service reports PERSISTENCE_UNKNOWN, no ai_usage_ledger row is written, and the invocation stays SENDING with its hold reserved.",
-      "replacementOutcome": "Evidence steps are never guarded (S4 rule): the result records exactly one ledger row (or UNKNOWN/FAILED is recorded) after a mid-flight lapse; start and reserve stay gated."
+      "replacementOutcome": "Evidence steps are never guarded (S4 rule): the result records exactly one ledger row (or UNKNOWN/FAILED is recorded) after a mid-flight lapse; start and reserve stay gated.",
+      "fixedOutcome": "record_* and fail_* use the evidence-only actor (tenant, requester, SENDING). A result whose access lapsed mid-flight records exactly one ledger row with provider cost (source_invocation_id unique), releases the hold and ends RESULT_HELD / ACCESS_LAPSED with no proposal; after access returns, retry binds it once with no provider call. Begin, prepare, payload read and bind keep the full gate."
     }
   ]
 }
