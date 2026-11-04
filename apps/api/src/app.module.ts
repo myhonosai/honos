@@ -2,6 +2,8 @@ import { SchoolOwnerInvitationController, SchoolAccountHumanGuard } from './acco
 import { SchoolOwnerInvitationService } from './accounts/school-owner-invitation.service.js';
 import { SchoolStaffInvitationController, SchoolStaffAccountHumanGuard } from './accounts/school-staff-invitation.controller.js';
 import { SchoolStaffInvitationService } from './accounts/school-staff-invitation.service.js';
+import { SchoolFamilyAccessInvitationController, SchoolFamilyAccountHumanGuard } from './accounts/school-family-access-invitation.controller.js';
+import { SchoolFamilyAccessInvitationService } from './accounts/school-family-access-invitation.service.js';
 import { SaasSubscriptionGenerationService } from './saas-pricing/saas-subscription-generation.service.js';
 import { SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController } from './saas-pricing/saas-subscription-generation.controller.js';
 import { SaasPriceAcceptanceService } from './saas-pricing/saas-price-acceptance.service.js';
@@ -262,7 +264,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
 
 @Module({
   imports: [ClassPassModule, KioskModule],
-  controllers: [SchoolOwnerInvitationController,SchoolStaffInvitationController,OwnerLaunchController,
+  controllers: [SchoolOwnerInvitationController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
     StaffCurriculumLibraryController, ParentCurriculumLibraryController,
     AchievementsController, ParentAchievementsController,
@@ -364,7 +366,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [SchoolOwnerInvitationService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard,
+  providers: [SchoolOwnerInvitationService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard,
     SaasSubscriptionGenerationService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
