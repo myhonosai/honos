@@ -210,6 +210,46 @@ const humanSource = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_con
 const tenant = (c, work) => db.withTenantTransaction(c, async (client) => { await client.query(humanSource); return work(client); });
 const settle = (promise) => promise.then((value) => ({ value }), (error) => ({ error }));
 
+/** A further disposable human HQ owner whose authority the race proofs change (the shared `hq` is never touched). */
+async function makeHqOwner(label, untilSql = 'NULL') {
+  const h = { id: K(), user: K(), subject: `ai0-hq-${label}-${K()}` };
+  await admin.query('BEGIN');
+  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','AI-0 synthetic HQ owner')", [h.user, h.subject]);
+  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','AI-0 synthetic HQ owner',true)", [h.id, h.user]);
+  await admin.query(`INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,'HON_HQ_OWNER','{}',clock_timestamp()-interval '2 days',${untilSql})`, [h.id]);
+  await admin.query('COMMIT');
+  h.until = (await row('SELECT effective_until FROM hon.hq_operator_grants WHERE principal_id=$1', [h.id])).effective_until;
+  return h;
+}
+/** A second connection with an open transaction (the "other" transaction of a two-connection proof). */
+async function openTx() {
+  const c = new pg.Client({ connectionString: ownerUrl, ssl: false });
+  await c.connect();
+  await c.query('BEGIN');
+  return c;
+}
+/**
+ * Runs `sql` on its own connection and resolves once pg_locks shows that backend WAITING on a lock of `locktype`
+ * (deterministic: the proof never relies on timing for the interleaving). Throws if it settles without waiting.
+ */
+async function startBlocked(sql, args, locktype, { tx = false } = {}) {
+  const c = new pg.Client({ connectionString: ownerUrl, ssl: false });
+  await c.connect();
+  const pid = (await c.query('SELECT pg_backend_pid() p')).rows[0].p;
+  if (tx) await c.query('BEGIN');
+  let done = null;
+  const result = settle(c.query(sql, args)).then((r) => { done = r; return r; });
+  for (const end = Date.now() + 5000; ; await sleep(20)) {
+    const waits = await rows('SELECT locktype FROM pg_locks WHERE pid=$1 AND NOT granted', [pid]);
+    if (waits.some((w) => w.locktype === locktype)) break;
+    if (done || Date.now() > end) {
+      await c.end().catch(() => {});
+      throw new Error(`expected the command to wait on a ${locktype} lock first; it ${done ? `settled (${done.error ? done.error.code + ' ' + done.error.message : 'succeeded'})` : 'never waited'}`);
+    }
+  }
+  return { client: c, pid, result: tx ? result : result.finally(() => c.end()) };
+}
+
 /** Starts a submit and resolves when its invocation is SENDING (held) or when the submit settles without sending. */
 async function startHeld(name, o, patch = {}) {
   const a = agents[name], before = (await row(`SELECT count(*)::int n FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id])).n;
@@ -450,8 +490,8 @@ try {
   }
   pass('INV-14', `S4-b: one organization agent budget at used 11990 in all 6 arrival orders, committed <= 12000, refusals BLOCKED before any provider call (${orderOutcomes.join('; ')})`);
 
-  // ---- KNOWN FAILURE KF-AI9: unpaid HQ COMPLETE exception reaches the provider ----
-  const x = await makeOrg('kf-ai9');
+  // ---- INV-16 (S4-c, replaces KF-AI9): an HQ access exception grants product access, never AI spend (AI-D1 = A) ----
+  const x = await makeOrg('inv-16');
   await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [x.id]);
   assert.equal(await expectRefused('marcus', x, {}, 'suspended before exception'), 'HTTP_403');
   const view = await schoolBilling.readExceptionPolicy(hq.subject);
@@ -461,18 +501,45 @@ try {
   await schoolBilling.decideExceptionPolicy(hq.subject, { expectedRevision: view.current?.revision ?? 0, decision: 'APPROVED', termsVersion, maxDays: 90,
     validFrom: new Date(Date.now() - 60_000).toISOString(), validUntil: new Date(Date.now() + 86_400_000).toISOString(),
     reason: 'DISPOSABLE SYNTHETIC AI-0 TEST ONLY; no operational policy approval', confirmation: 'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY' }, K());
-  const version = async () => (await row('SELECT version FROM hon.organization_entitlements WHERE organization_id=$1', [x.id])).version;
-  const grant = async (scopeTier, ms) => schoolBilling.grantAccessException(hq.subject, x.id, { schoolId: x.school, purpose: 'INTERNAL_TESTING', reason: 'Disposable synthetic AI-0 exception only', scopeTier,
-    startsAt: new Date().toISOString(), expiresAt: new Date(Date.now() + ms).toISOString(), expectedEntitlementVersion: await version() }, K());
+  const versionOf = async (o) => (await row('SELECT version FROM hon.organization_entitlements WHERE organization_id=$1', [o.id])).version;
+  const grantFor = async (o, scopeTier, ms) => schoolBilling.grantAccessException(hq.subject, o.id, { schoolId: o.school, purpose: 'INTERNAL_TESTING', reason: 'Disposable synthetic AI-0 exception only', scopeTier,
+    startsAt: new Date().toISOString(), expiresAt: new Date(Date.now() + ms).toISOString(), expectedEntitlementVersion: await versionOf(o) }, K());
+  const grant = (scopeTier, ms) => grantFor(x, scopeTier, ms);
+  const decision = async (o, cls = 'AGENT_INFERENCE') => (await row("SELECT hon.ai_spend_allowed($1,clock_timestamp(),$2) d", [o.id, cls])).d;
   const granted = await grant('COMPLETE', 86_400_000);
   const aiCredits = JSON.stringify(granted).match(/"aiCredits":"([A-Z_]+)"/)?.[1];
   assert.equal(aiCredits, 'NONE', `exception receipt must state aiCredits NONE: ${JSON.stringify(granted)}`);
-  const callsBefore = fakes.marcus.calls, ledgerBefore = await ledgerRows(x);
-  fakes.marcus.mode = 'RESULT';
-  const exceptionSpend = await settle(agents.marcus.service.submit(context(x), agents.marcus.input(x)));
-  const reachedProvider = !exceptionSpend.error && exceptionSpend.value.status === 'AWAITING_APPROVAL' && fakes.marcus.calls === callsBefore + 1 && await ledgerRows(x) === ledgerBefore + 1;
-  reportKnownFailure('KF-AI9-EXCEPTION-SPEND', reachedProvider,
-    `COMPLETE HQ exception (receipt aiCredits ${aiCredits}) on an unpaid school: provider calls ${fakes.marcus.calls - callsBefore}, ledger rows +${await ledgerRows(x) - ledgerBefore}`);
+  assert.equal(await decision(x), 'AI_EXCEPTION_NO_AI');
+  assert.equal(await decision(x, 'CREATIVE_MEDIA'), 'AI_EXCEPTION_NO_AI');
+  const beginRefusals = {};
+  for (const name of Object.keys(agents)) beginRefusals[name] = await expectRefused(name, x, {}, 'COMPLETE exception on an unpaid school');
+  assert.deepEqual(Object.values(beginRefusals), ['HTTP_403', 'HTTP_403', 'HTTP_403']);
+  // Prepare and in-flight edges on a legacy school that receives an exception: a request begun before the grant is
+  // refused at prepare (reserve guard) with no provider call; a call already SENDING at grant time still records.
+  const y = await makeOrg('inv-16-inflight');
+  const begunBefore = {}, inflight = {};
+  for (const name of Object.keys(agents)) {
+    fakes[name].readiness = () => 'NOT_CONFIGURED';
+    begunBefore[name] = (await agents[name].service.submit(context(y), agents[name].input(y))).id;
+    fakes[name].readiness = () => 'READY';
+    inflight[name] = await startHeld(name, y);
+    assert(inflight[name].sending, `${name} must be SENDING before the grant`);
+  }
+  // Exceptions are granted only where no entitlement is in effect (D9): the school lapses, then HQ grants one.
+  await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [y.id]);
+  await grantFor(y, 'COMPLETE', 86_400_000);
+  assert.equal(await decision(y), 'AI_EXCEPTION_NO_AI');
+  const yCalls = Object.fromEntries(Object.keys(fakes).map((n) => [n, fakes[n].calls])), yLedger = await ledgerRows(y);
+  for (const name of Object.keys(agents)) {
+    const refused = await settle(agents[name].service.generate(context(y), begunBefore[name]));
+    assert.equal(refused.error?.getStatus?.(), 403, `${name}: prepare after the grant must be refused: ${JSON.stringify(refused.value ?? refused.error?.getResponse?.())}`);
+    assert.equal(fakes[name].calls, yCalls[name], `${name}: refused prepare reached the provider`);
+  }
+  for (const name of Object.keys(fakes)) fakes[name].complete();
+  await Promise.all(Object.values(inflight).map((h) => h.submitted));
+  assert.equal(await ledgerRows(y) - yLedger, 3, 'calls in flight at grant time still record exactly one ledger row each');
+  assert.equal(await sendingCount(y), 0);
+  pass('INV-16', `S4-c: a live COMPLETE HQ exception (receipt aiCredits ${aiCredits}) refuses begin for all three agents and prepare for requests begun earlier (AI_EXCEPTION_NO_AI, no provider call); calls already in flight at grant time still record`);
 
   // ---- INV-9: exception lifecycle edges stop spend ----
   const exceptionId = JSON.stringify(granted).match(/"exceptionId":"([0-9a-f-]{36})"/)?.[1];
@@ -486,6 +553,192 @@ try {
   await sleep(4_000);
   const afterExpiry = await expectRefused('marcus', x, {}, 'after exception expiry');
   pass('INV-9', `exception end stops spend without any job: revoked ${afterRevoke}, CORE scope ${coreScope}, expired ${afterExpiry}`);
+
+  // ---- INV-17 (S4-c): every paid-access state maps to its documented decision; legacy is unchanged ----
+  const mapping = { PAYMENT_ACTIVE: [null, 'AI_ACCESS_LAPSED'], CANCELLATION_SCHEDULED: [null, 'AI_ACCESS_LAPSED'], AWAITING_FIRST_PAYMENT: ['AI_ACCESS_NOT_PAID', 'AI_ACCESS_NOT_PAID'],
+    REGISTERED: ['AI_ACCESS_NOT_PAID', 'AI_ACCESS_NOT_PAID'], TRIAL_ENDED: ['AI_ACCESS_NOT_PAID', 'AI_ACCESS_NOT_PAID'], TRIAL_ACTIVE: ['AI_TRIAL_FUNDING_NOT_APPROVED', 'AI_TRIAL_FUNDING_NOT_APPROVED'],
+    PAST_DUE_GRACE: ['AI_ACCESS_PAST_DUE', 'AI_ACCESS_PAST_DUE'], SUSPENDED_NONPAYMENT: ['AI_ACCESS_SUSPENDED', 'AI_ACCESS_SUSPENDED'], REVIEW_HOLD: ['AI_ACCESS_REVIEW_HOLD', 'AI_ACCESS_REVIEW_HOLD'],
+    ENDED: ['AI_ACCESS_ENDED', 'AI_ACCESS_ENDED'], SOMETHING_NEW: ['AI_ACCESS_UNKNOWN_STATE', 'AI_ACCESS_UNKNOWN_STATE'] };
+  for (const [state, [inEffect, lapsed]] of Object.entries(mapping)) {
+    assert.equal((await row('SELECT hon.ai_access_state_decision($1,true,false) d', [state])).d, inEffect, `${state} with entitlement in effect`);
+    assert.equal((await row('SELECT hon.ai_access_state_decision($1,false,false) d', [state])).d, lapsed, `${state} with entitlement lapsed`);
+  }
+  assert.equal((await row("SELECT hon.ai_access_state_decision('TRIAL_ACTIVE',true,true) d")).d, null, 'trial funding hook, once approved, is the only trial path');
+  const legacy = await makeOrg('inv-17-legacy');
+  assert.equal(await decision(legacy), null, 'legacy organization (no access-state row, no exception) is unchanged');
+  // Real rows inside a rolled-back transaction (the proof leaves no access-state rows behind, INV-12).
+  await admin.query('BEGIN');
+  try {
+    await admin.query("INSERT INTO hon.saas_access_states(organization_id,state,reason,version,changed_by_principal_id,created_at,updated_at) VALUES($1,'AWAITING_FIRST_PAYMENT','AWAITING_INITIAL_PAYMENT',1,$2,clock_timestamp(),clock_timestamp())", [legacy.id, legacy.principal]);
+    assert.equal(await decision(legacy), 'AI_ACCESS_NOT_PAID');
+    await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [legacy.id]);
+    assert.equal(await decision(legacy), 'AI_ACCESS_NOT_PAID');
+  } finally { await admin.query('ROLLBACK'); }
+  assert.equal(await decision(legacy), null);
+  pass('INV-17', `S4-c: ${Object.keys(mapping).length} access states map to documented decisions in both entitlement conditions (unknown -> AI_ACCESS_UNKNOWN_STATE, trial only via the unapproved funding hook); a real AWAITING_FIRST_PAYMENT row refuses; legacy unchanged`);
+
+  // ---- INV-18 (S4-c): HQ emergency AI pause, human HQ owner only ----
+  const paused = await makeOrg('inv-18');
+  const pauseCmd = (subject, input, key) => settle(admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r', [subject, JSON.stringify(input), key]));
+  const pIn = (action, organizationId, spendClass = 'AGENT_INFERENCE') => ({ action, organizationId, spendClass, reason: 'Disposable synthetic AI-0 pause test' });
+  assert.equal((await pauseCmd(paused.subject, pIn('PAUSE', paused.id), K())).error?.code, '42501', 'a school owner cannot pause');
+  for (const bad of [{}, { action: 'PAUSE' }, { ...pIn('PAUSE', paused.id), extra: 1 }, { ...pIn('PAUSE', paused.id), spendClass: 'HQ_INTERNAL' }, { ...pIn('PAUSE', paused.id), reason: 'short' }])
+    assert.equal((await pauseCmd(hq.subject, bad, K())).error?.code, '22023', `invalid pause input ${JSON.stringify(bad)}`);
+  const pk = K();
+  const pauseA = await pauseCmd(hq.subject, pIn('PAUSE', paused.id), pk);
+  assert.equal(pauseA.value?.rows[0].r.status, 'ACTIVE', JSON.stringify(pauseA.error?.message));
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', paused.id), pk)).value?.rows[0].r.replayed, true, 'pause replay');
+  assert.equal((await pauseCmd(hq.subject, { ...pIn('PAUSE', paused.id), reason: 'A different synthetic pause reason' }, pk)).error?.code, '23505', 'pause key reuse');
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', paused.id), K())).error?.message, 'AI_SPEND_PAUSE_ALREADY_ACTIVE', 'second active pause for the same scope');
+  assert.equal(await decision(paused), 'AI_PAUSED_BY_HQ');
+  assert.equal(await decision(paused, 'CREATIVE_MEDIA'), null, 'an agent pause does not pause creative');
+  assert.equal(await decision(legacy), null, 'an organization pause does not affect another organization');
+  for (const name of Object.keys(agents)) assert.equal(await expectRefused(name, paused, {}, 'HQ pause'), 'HTTP_403');
+  const rk = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', paused.id), rk)).value?.rows[0].r.status, 'ENDED');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', paused.id), rk)).value?.rows[0].r.replayed, true, 'resume replay');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', paused.id), K())).error?.message, 'AI_SPEND_PAUSE_NOT_ACTIVE', 'nothing left to resume');
+  assert.equal(await decision(paused), null);
+  fakes.claire.mode = 'RESULT';
+  assert.equal((await agents.claire.service.submit(context(paused), agents.claire.input(paused))).status, 'AWAITING_APPROVAL', 'spend resumes after the pause ends');
+  // Platform-wide pause for all classes, then resume.
+  const platformKey = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', null, 'ALL'), platformKey)).value?.rows[0].r.status, 'ACTIVE');
+  assert.equal(await decision(legacy), 'AI_PAUSED_BY_HQ');
+  assert.equal(await decision(legacy, 'CREATIVE_MEDIA'), 'AI_PAUSED_BY_HQ');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', null, 'ALL'), K())).value?.rows[0].r.status, 'ENDED');
+  assert.equal(await decision(legacy), null);
+  assert.equal((await settle(admin.query('UPDATE hon.ai_spend_pauses SET reason=$1', ['Tampered synthetic pause reason']))).error?.code, '55000', 'pause records are append-only');
+  assert.equal((await settle(admin.query('DELETE FROM hon.ai_spend_pauses'))).error?.code, '55000');
+  const listed = (await row('SELECT hon.read_ai_spend_pauses_from_hq($1) r', [hq.subject])).r.pauses;
+  assert.equal(listed.filter((p) => p.status === 'ENDED').length >= 2, true);
+  assert.equal((await settle(admin.query('SELECT hon.read_ai_spend_pauses_from_hq($1)', [paused.subject]))).error?.code, '42501', 'a school owner cannot read HQ pauses');
+  pass('INV-18', 'S4-c: HQ-owner-only organization and platform AI pause/resume, idempotent per key, one active pause per scope, class-scoped, append-only; agents refused while paused and resume afterwards');
+
+  // ---- INV-18R (S4-c, Manus review P1): HQ authority holds through the pause command (two connections) ----
+  // The command checks authority, then takes a shared lock on users/principals/HQ grants/family grants and checks
+  // again, and checks once more after the per-scope advisory lock. Each case below makes the command WAIT (seen in
+  // pg_locks) while authority changes, then shows the outcome. A refusal leaves no pause row.
+  {
+  const raceOrg = await makeOrg('inv-18r');
+  const pauseSql = 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r';
+  const activePauses = async () => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1 AND ended_at IS NULL', [raceOrg.id])).n;
+  const allPauses = async () => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1', [raceOrg.id])).n;
+  const scopeLock = "SELECT pg_advisory_xact_lock(hashtextextended('ai.pause:' || $1::text || ':AGENT_INFERENCE', 0))";
+  const outcomes = [];
+  // (a) Revoked while waiting: the revocation is uncommitted when the command starts (its first check passes), the
+  // command waits for the shared lock, the revocation commits, and the recheck refuses.
+  // (b) Permission change while waiting: the grant becomes an operator grant (owner-only command): refused.
+  for (const [label, change] of [['revoked', "effective_until=clock_timestamp()"], ['downgraded to operator', "hq_role='HON_HQ_OPERATOR',permission_codes='{hq.billing.manage}'"]]) {
+    const h = await makeHqOwner(`inv-18r-${label.split(' ')[0]}`);
+    const before = await allPauses();
+    const revoker = await openTx();
+    await revoker.query(`UPDATE hon.hq_operator_grants SET ${change} WHERE principal_id=$1`, [h.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'relation');
+    await revoker.query('COMMIT'); await revoker.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the pause: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await allPauses(), before, `${label}: no pause row`);
+    outcomes.push(`${label}: refused`);
+  }
+  // (c) Expired by the clock while waiting on the per-scope lock held by another pause command.
+  {
+    const h = await makeHqOwner('inv-18r-expiry', "clock_timestamp()+interval '4 seconds'");
+    const before = await allPauses();
+    const other = await openTx();
+    await other.query(scopeLock, [raceOrg.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'advisory');
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [h.until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the pause: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    assert.equal(await allPauses(), before, 'expired: no pause row');
+    outcomes.push('expired while waiting: refused');
+  }
+  // (d) A revocation cannot race past the final decision: while the command waits, a revocation of that owner waits
+  // behind the command's shared lock; the command completes with the authority it held, then the revocation applies
+  // and the same owner is refused afterwards.
+  {
+    const h = await makeHqOwner('inv-18r-ordered');
+    const other = await openTx();
+    await other.query(scopeLock, [raceOrg.id]);
+    const cmd = await startBlocked(pauseSql, [h.subject, JSON.stringify(pIn('PAUSE', raceOrg.id)), K()], 'advisory');
+    const revoke = await startBlocked('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h.id], 'relation', { tx: true });
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(r.value?.rows[0].r.status, 'ACTIVE', `the command decided before the revocation: ${JSON.stringify(r.error?.message)}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    assert.equal((await pauseCmd(h.subject, pIn('RESUME', raceOrg.id), K())).error?.code, '42501', 'the revoked owner is refused afterwards');
+    assert.equal(await activePauses(), 1);
+    assert.equal((await pauseCmd(hq.subject, pIn('RESUME', raceOrg.id), K())).value?.rows[0].r.status, 'ENDED');
+    outcomes.push('revocation during the command: waits, applies after');
+  }
+  assert.equal(await activePauses(), 0);
+  pass('INV-18R', `S4-c: HQ pause authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; no refused pause row`);
+  }
+
+  // ---- INV-18K (S4-c, Manus final review P2): one immutable identity per pause/resume command key ----
+  // PAUSE and RESUME share one key space bound to action, scope, spend class, reason and actor. Any other command
+  // presented with a claimed key is refused (sequentially and concurrently); an exact replay returns the receipt.
+  {
+  const pauseSql = 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) r';
+  const [ka, kb, kc] = [await makeOrg('inv-18k-a'), await makeOrg('inv-18k-b'), await makeOrg('inv-18k-c')];
+  const active = async (o) => (await row('SELECT count(*)::int n FROM hon.ai_spend_pauses WHERE organization_id=$1 AND ended_at IS NULL', [o.id])).n;
+  const reused = (r, label) => assert.equal(r.error?.message, 'AI_SPEND_PAUSE_KEY_REUSED', `${label}: ${JSON.stringify(r.value?.rows[0]?.r ?? r.error?.message)}`);
+  const checks = [];
+  // Sequential: a PAUSE key presented as a RESUME (same scope) is refused and the pause stays active.
+  const k1 = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k1)).value?.rows[0].r.status, 'ACTIVE');
+  reused(await pauseCmd(hq.subject, pIn('RESUME', ka.id), k1), 'PAUSE key reused for RESUME');
+  assert.equal(await active(ka), 1, 'the pause is still active');
+  // Same key, other scope or other class: refused, nothing written.
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', kb.id), k1), 'PAUSE key reused for another organization');
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', ka.id, 'CREATIVE_MEDIA'), k1), 'PAUSE key reused for another class');
+  assert.equal(await active(kb), 0);
+  // A RESUME key presented as a PAUSE is refused (no new pause is created).
+  const k2 = K();
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', ka.id), k2)).value?.rows[0].r.status, 'ENDED');
+  reused(await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k2), 'RESUME key reused for PAUSE');
+  assert.equal(await active(ka), 0, 'no pause was created from a RESUME key');
+  checks.push('PAUSE<->RESUME, other scope and other class reuse refused');
+  // Exact replays return the original receipt, even after the state moved on.
+  const r1 = (await pauseCmd(hq.subject, pIn('PAUSE', ka.id), k1)).value?.rows[0].r;
+  assert.deepEqual([r1?.replayed, r1?.status], [true, 'ENDED'], 'PAUSE replay after the resume');
+  const r2 = (await pauseCmd(hq.subject, pIn('RESUME', ka.id), k2)).value?.rows[0].r;
+  assert.deepEqual([r2?.replayed, r2?.status], [true, 'ENDED'], 'RESUME replay');
+  checks.push('exact replays return the original receipt');
+  // Another HQ owner replaying the same input with the key is a different command; a revoked owner cannot replay.
+  const h2 = await makeHqOwner('inv-18k-other');
+  reused(await pauseCmd(h2.subject, pIn('PAUSE', ka.id), k1), 'another actor replaying the key');
+  const h3 = await makeHqOwner('inv-18k-revoked');
+  const k3 = K();
+  assert.equal((await pauseCmd(h3.subject, pIn('PAUSE', kb.id), k3)).value?.rows[0].r.status, 'ACTIVE');
+  await admin.query('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h3.id]);
+  assert.equal((await pauseCmd(h3.subject, pIn('PAUSE', kb.id), k3)).error?.code, '42501', 'a revoked owner cannot replay');
+  assert.equal((await pauseCmd(hq.subject, pIn('RESUME', kb.id), K())).value?.rows[0].r.status, 'ENDED');
+  checks.push('other actor refused, revoked owner cannot replay');
+  // Concurrent: two incompatible commands with one key (a PAUSE for one organization and a RESUME for another) both
+  // wait on the key lock (pg_locks); on release exactly one is applied and the other is refused.
+  assert.equal((await pauseCmd(hq.subject, pIn('PAUSE', kc.id), K())).value?.rows[0].r.status, 'ACTIVE');
+  const k4 = K();
+  const holder = await openTx();
+  await holder.query("SELECT pg_advisory_xact_lock(hashtextextended('ai.pause.key:' || $1::text, 0))", [k4]);
+  const c1 = await startBlocked(pauseSql, [hq.subject, JSON.stringify(pIn('PAUSE', kb.id)), k4], 'advisory');
+  const c2 = await startBlocked(pauseSql, [hq.subject, JSON.stringify(pIn('RESUME', kc.id)), k4], 'advisory');
+  await holder.query('COMMIT'); await holder.end();
+  const both = [await c1.result, await c2.result];
+  assert.equal(both.filter((r) => r.value).length, 1, `exactly one applied: ${JSON.stringify(both.map((r) => r.value?.rows[0].r ?? r.error?.message))}`);
+  reused(both.find((r) => r.error), 'the concurrent loser');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_spend_pause_commands WHERE command_key=$1', [k4])).n, 1);
+  // PAUSE won: kb paused, kc still paused. RESUME won: kb not paused, kc resumed.
+  const pauseWon = both[0].value !== undefined;
+  assert.deepEqual([await active(kb), await active(kc)], pauseWon ? [1, 1] : [0, 0], 'only the winning command changed state');
+  for (const o of [kb, kc]) if (await active(o)) await pauseCmd(hq.subject, pIn('RESUME', o.id), K());
+  checks.push('concurrent incompatible reuse: one applied, one refused');
+  assert.equal((await settle(admin.query('UPDATE hon.ai_spend_pause_commands SET reason=$1', ['Tampered synthetic command reason']))).error?.code, '55000', 'command identities are immutable');
+  pass('INV-18K', `S4-c: one immutable command-key identity for pause/resume (action, scope, class, reason, actor): ${checks.join('; ')}`);
+  }
 
   // ---- KNOWN FAILURE KF-AI8: UNKNOWN holds never release and are not month-scoped ----
   const k3 = await makeOrg('kf-ai8');
