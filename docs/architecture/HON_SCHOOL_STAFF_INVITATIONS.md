@@ -35,6 +35,7 @@ So nobody could add a front-desk person or an instructor without a database fixt
 - **Inputs from the session only.** The subject and verified email come only from the signed HON session. The request body can't name an organization, principal, permission list or activation, and the closed validators reject those fields.
 - **Exact school.** Revoke and list work only at the manager's exact school. An invitation id from another school returns not-found.
 - **Final once accepted.** An accepted invitation can't be revoked. Ending the access goes through the existing `iam.staff_role.revoke` command, which keeps its final-owner-coverage and self-mutation protections.
+- **Authority is decided after the last write.** Every time window (grants, paid access, invitation expiry) is judged on `clock_timestamp()`. The final authority check runs after the invitation, role grant and evidence writes, so authority that ends at any instant up to the evidence row aborts the whole statement and nothing durable survives. This holds for invite, revoke, accept and replay. Proof group 11 pins the expiry exactly at that boundary.
 - **Concurrency.** It uses the 0191 authority envelope: one advisory lock plus NOWAIT `SHARE ROW EXCLUSIVE` on the IAM tables. Unauthorized callers are refused before they touch those locks. Authorized callers that hit contention get `503 ACCOUNT_BUSY`, which is safe to retry.
 - **Storage and evidence**
   - The custody tables use forced RLS with no policies, and the runtime role can't read them.
