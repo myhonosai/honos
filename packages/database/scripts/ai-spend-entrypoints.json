@@ -7,6 +7,7 @@
     "ai_usage_ledger",
     "chad_follow_up_invocations",
     "marketing_ai_invocations",
+    "saas_creative_reservations",
     "saas_credit_reservations",
     "teaching_ai_invocations"
   ],
@@ -34,6 +35,8 @@
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)",
     "hon.saas_record_provider_usage(hon.saas_credit_reservations,uuid,bigint,bigint,bigint)"
   ],
   "reservationWriters": [
@@ -46,7 +49,8 @@
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
-    "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
+    "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)"
   ],
   "allowanceWriters": [
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
@@ -60,12 +64,13 @@
     "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
   ],
   "budgetCeilingLiteral12000": [
-    "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
-    "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
-    "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
-    "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)"
+    "hon.ai_org_ceiling(uuid,timestamp with time zone)"
   ],
   "spendReferences": [
+    "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
+    "hon.ai_spend_reserve_guard()",
+    "hon.ai_stamp_hold_origin()",
+    "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
@@ -79,6 +84,8 @@
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.read_ai_school_usage_from_hq(text,timestamp with time zone,timestamp with time zone)",
+    "hon.read_ai_unknown_invocations_from_hq(text)",
     "hon.read_chad_follow_up_invocation(text,uuid)",
     "hon.read_marketing_invocation(text,uuid)",
     "hon.read_saas_exception_policy(text)",
@@ -87,13 +94,18 @@
     "hon.read_saas_school_credits(text,uuid)",
     "hon.read_saas_trial_governance(text)",
     "hon.read_teaching_invocation(text,uuid)",
+    "hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
+    "hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
+    "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.saas_allowance_balance(uuid)",
     "hon.saas_allowance_json(uuid)",
+    "hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)",
+    "hon.saas_creative_reservation_json(hon.saas_creative_reservations,boolean)",
     "hon.saas_credit_program_active()",
     "hon.saas_credit_program_json()",
     "hon.saas_credit_reservation_json(hon.saas_credit_reservations,boolean)",
@@ -119,6 +131,11 @@
   "b3ReservationsInAgentFunctions": [],
   "agentTablesInB3Functions": [],
   "grants": {
+    "hon.ai_org_ceiling(uuid,timestamp with time zone)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": false
+    },
     "hon.begin_chad_follow_up_request(text,jsonb,uuid)": {
       "runtime": true,
       "public": false,
@@ -199,8 +216,18 @@
       "public": false,
       "security_definer": true
     },
+    "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
     "hon.resolve_saas_credit_reservation(text,uuid,jsonb,uuid,uuid,uuid)": {
       "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)": {
+      "runtime": false,
       "public": false,
       "security_definer": true
     },
@@ -242,6 +269,13 @@
       "delete": false,
       "truncate": false
     },
+    "saas_creative_reservations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
     "saas_credit_reservations": {
       "select": false,
       "insert": false,
@@ -260,20 +294,40 @@
   "spendTableTriggers": {
     "ai_usage_ledger": [],
     "chad_follow_up_invocations": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
       "chad_follow_up_invocations_immutable",
-      "chad_follow_up_invocations_no_truncate"
+      "chad_follow_up_invocations_no_truncate",
+      "hon_turn_binding",
+      "zz_ai_hold_origin"
     ],
     "marketing_ai_invocations": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
+      "hon_turn_binding",
       "marketing_invocation_guard",
-      "marketing_invocation_no_truncate"
+      "marketing_invocation_no_truncate",
+      "zz_ai_hold_origin"
+    ],
+    "saas_creative_reservations": [
+      "saas_guarded",
+      "saas_no_truncate"
     ],
     "saas_credit_reservations": [
+      "ai_spend_b3_guard",
       "saas_guarded",
       "saas_no_truncate"
     ],
     "teaching_ai_invocations": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
+      "hon_turn_binding",
       "teaching_ai_invocations_immutable",
-      "teaching_ai_invocations_no_truncate"
+      "teaching_ai_invocations_no_truncate",
+      "zz_ai_hold_origin"
     ]
   },
   "programs": {
@@ -352,34 +406,38 @@
     {
       "id": "KF-AI2-CROSS-AGENT-OVERCOMMIT",
       "finding": "AI-2",
-      "status": "OPEN",
-      "replacedBy": "S4",
+      "status": "FIXED_BY_S4B",
+      "replacedBy": "S4-b (migration 0194, invariant INV-14)",
       "currentOutcome": "Marcus, Claire and Chad all reach SENDING at used 11990; 12005 committed against the 12000 ceiling because each prepare sums only its own table.",
-      "replacementOutcome": "The third prepare is refused AI_ORG_BUDGET_EXCEEDED under one organization budget lock; committed never exceeds the ceiling."
+      "replacementOutcome": "The third prepare is refused AI_ORG_BUDGET_EXCEEDED under one organization budget lock; committed never exceeds the ceiling.",
+      "fixedOutcome": "All three prepares compute one organization total (hon.ai_org_committed_credits: agent-inference ledger credits in the UTC-month window plus every open agent hold) under ai.budget:<org>. At used 11990 every arrival order admits greedily against the 12000 ceiling; a refused agent is BLOCKED / CUSTOMER_BUDGET_EXCEEDED before any provider call. A reserve guard trigger re-checks any hold increase."
     },
     {
       "id": "KF-AI9-EXCEPTION-SPEND",
       "finding": "AI-9",
-      "status": "OPEN",
-      "replacedBy": "S4",
+      "status": "FIXED_BY_S4C",
+      "replacedBy": "S4-c (migration 0195, invariant INV-16)",
       "currentOutcome": "An unpaid school with a COMPLETE HQ access exception (receipt aiCredits NONE) reaches the provider and records usage.",
-      "replacementOutcome": "Refused before the provider (AI_EXCEPTION_NO_AI) unless owner decision AI-D1 approves a capped exception AI allowance."
+      "replacementOutcome": "Refused before the provider (AI_EXCEPTION_NO_AI) unless owner decision AI-D1 approves a capped exception AI allowance.",
+      "fixedOutcome": "hon.ai_spend_allowed denies AI_EXCEPTION_NO_AI while a live HQ access exception owns the entitlement (before the legacy rule). Begin (start guard) and prepare (reserve guard) are refused for all three agents with no provider call; B3 reservations get the same decision; calls already in flight at grant time still record."
     },
     {
       "id": "KF-AI8-UNKNOWN-HOLD",
       "finding": "AI-8",
-      "status": "OPEN",
-      "replacedBy": "AI-D3 slice",
+      "status": "FIXED_BY_S4D",
+      "replacedBy": "S4-d (migration 0196, invariants INV-19 and INV-20)",
       "currentOutcome": "A last-month UNKNOWN Marcus hold still blocks this month's Marcus request; no agent release path exists; the UNKNOWN call has no ledger row.",
-      "replacementOutcome": "Owner-approved UNKNOWN resolution (AI-D3): provider lookup records the real cost and releases or expires the hold. S4 keeps counting UNKNOWN holds."
+      "replacementOutcome": "Owner-approved UNKNOWN resolution (AI-D3): provider lookup records the real cost and releases or expires the hold. S4 keeps counting UNKNOWN holds.",
+      "fixedOutcome": "UNKNOWN and stale SENDING holds count only in the budget window in which they were held (hon.ai_hold_counts); in-flight SENDING always counts. A human HQ owner resolves each lost outcome once with closed provider evidence (hon.resolve_ai_unknown_invocation): RECORD_PROVIDER_COST writes one ledger row in the original window, NO_PROVIDER_CHARGE none, WRITE_OFF a zero-credit row; immutable resolution, audit and inert outbox. The agent path still refuses late evidence."
     },
     {
       "id": "KF-AI3-SAME-AGENT-RACE",
       "finding": "AI-3",
-      "status": "OPEN",
-      "replacedBy": "S4",
+      "status": "FIXED_BY_S4B",
+      "replacedBy": "S4-b (migration 0194, invariant INV-15)",
       "currentOutcome": "Observed on b234be7: the second concurrent Marcus prepare at used 11994 waits on a transactionid ShareLock held by the first and is refused by the per-agent ceiling after the first commits (12000 committed). Reported as not reproduced (mayNotReproduce); an over-commit above 12000 would be reported as reproduced. Either way it never fails CI while OPEN.",
-      "replacementOutcome": "Serialized by the S4 organization budget lock; exactly one reserves."
+      "replacementOutcome": "Serialized by the S4 organization budget lock; exactly one reserves.",
+      "fixedOutcome": "Every prepare takes ai.budget:<org> last and recomputes after it. With the lock held by a blocker, both prepares of each same-agent and cross-agent pair are observed waiting on the advisory lock in pg_locks; after release exactly one reaches the provider and the other is BLOCKED."
     },
     {
       "id": "KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE",
