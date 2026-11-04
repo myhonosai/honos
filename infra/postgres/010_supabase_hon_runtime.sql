@@ -2067,7 +2067,7 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
       FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
     END LOOP;
   END LOOP;
-  FOREACH f IN ARRAY ARRAY['guard_school_family_access_invitation()','school_family_access_manager(text,uuid)',
+  FOREACH f IN ARRAY ARRAY['guard_school_family_access_invitation()','school_family_access_manager(text,uuid)','school_family_access_revoker(text,uuid)','school_family_access_actor(text,uuid,text)',
     'school_family_access_invitation_json(hon.school_family_access_invitations)','school_family_account_result(hon.school_family_access_invitations)',
     'school_family_account_record(text,uuid,text,uuid,text,jsonb)','school_family_acceptor_conflict(text,text,hon.school_family_access_invitations)',
     'manage_school_family_access_invitation(text,text,jsonb,uuid)','accept_school_family_access_invitation(text,text,jsonb,uuid)','read_school_family_access_invitations(text,uuid)'] LOOP

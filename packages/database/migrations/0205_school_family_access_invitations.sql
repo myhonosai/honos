@@ -72,7 +72,7 @@ CREATE TRIGGER no_truncate BEFORE TRUNCATE ON hon.school_family_access_invitatio
 
 -- The live family-manager principal for this exact school, or NULL: family.member.manage and family.read
 -- at the exact school (0024), active human, single principal. Fail closed for paid access (B6A 0172
--- predicate): a suspended, lapsed or not-yet-started organization cannot invite, revoke, end, list,
+-- predicate): a suspended, lapsed or not-yet-started organization cannot invite, list,
 -- or have an outstanding invitation accepted.
 CREATE FUNCTION hon.school_family_access_manager(p_subject text,p_school uuid) RETURNS uuid
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
@@ -82,6 +82,22 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
     AND EXISTS(SELECT 1 FROM hon.principals p WHERE p.id=s.principal_id AND p.is_active AND p.principal_type='HUMAN_USER')
     AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=s.organization_id AND e.status='ACTIVE'
       AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
+$$;
+
+-- Owner decision 2026-11-04 (security/custody): the same family manager may still REVOKE a pending invitation
+-- or END existing guardian access while the organization's paid access is suspended, lapsed or not yet
+-- started. This narrow exception never covers invite, list or accept.
+CREATE FUNCTION hon.school_family_access_revoker(p_subject text,p_school uuid) RETURNS uuid
+LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
+  SELECT s.principal_id FROM hon.resolve_authorized_scope(p_subject,p_school,'family.member.manage') s
+  WHERE hon.principal_has_school_permission(s.principal_id,s.organization_id,p_school,'family.member.manage')
+    AND hon.principal_has_school_permission(s.principal_id,s.organization_id,p_school,'family.read')
+    AND EXISTS(SELECT 1 FROM hon.principals p WHERE p.id=s.principal_id AND p.is_active AND p.principal_type='HUMAN_USER')
+$$;
+CREATE FUNCTION hon.school_family_access_actor(p_subject text,p_school uuid,p_operation text) RETURNS uuid
+LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
+  SELECT CASE WHEN p_operation IN ('REVOKE','END') THEN hon.school_family_access_revoker(p_subject,p_school)
+    ELSE hon.school_family_access_manager(p_subject,p_school) END
 $$;
 
 CREATE FUNCTION hon.school_family_access_invitation_json(i hon.school_family_access_invitations) RETURNS jsonb LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
@@ -129,6 +145,7 @@ END $$;
 -- Low-volume IAM onboarding reuses the 0191 authority envelope: one advisory lock plus NOWAIT
 -- SHARE ROW EXCLUSIVE on every IAM table (family_access_grants included), so authority read after
 -- the lock cannot change before commit. Operations: INVITE, REVOKE (pending only), END (accepted only).
+-- INVITE needs live paid access; REVOKE and END stay available during a suspension (owner decision).
 CREATE FUNCTION hon.manage_school_family_access_invitation(p_subject text,p_operation text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; i hon.school_family_access_invitations%ROWTYPE; prior hon.school_account_requests%ROWTYPE;
@@ -138,9 +155,9 @@ BEGIN
     OR jsonb_typeof(p_input->'schoolId') IS DISTINCT FROM 'string' OR p_input->>'schoolId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
     RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
   v_school:=(p_input->>'schoolId')::uuid;
-  IF hon.school_family_access_manager(p_subject,v_school) IS NULL THEN RAISE EXCEPTION 'ACCOUNT_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  IF hon.school_family_access_actor(p_subject,v_school,p_operation) IS NULL THEN RAISE EXCEPTION 'ACCOUNT_FORBIDDEN' USING ERRCODE='42501'; END IF;
   PERFORM hon.lock_school_account_authority();
-  actor:=hon.school_family_access_manager(p_subject,v_school);
+  actor:=hon.school_family_access_actor(p_subject,v_school,p_operation);
   IF actor IS NULL THEN RAISE EXCEPTION 'ACCOUNT_FORBIDDEN' USING ERRCODE='42501'; END IF;
   SELECT organization_id INTO v_org FROM hon.schools WHERE id=v_school;
   fp:=encode(sha256(convert_to('FAMILY:'||p_operation||':'||p_input::text,'UTF8')),'hex');
@@ -193,7 +210,7 @@ BEGIN
       END IF;
     END IF;
   END IF;
-  IF hon.school_family_access_manager(p_subject,v_school) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'ACCOUNT_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  IF hon.school_family_access_actor(p_subject,v_school,p_operation) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'ACCOUNT_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN hon.school_family_account_record(p_subject,p_key,fp,i.id,p_operation,hon.school_family_access_invitation_json(i));
 END $$;
 
@@ -278,7 +295,7 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
       FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
     END LOOP;
   END LOOP;
-  FOREACH f IN ARRAY ARRAY['guard_school_family_access_invitation()','school_family_access_manager(text,uuid)',
+  FOREACH f IN ARRAY ARRAY['guard_school_family_access_invitation()','school_family_access_manager(text,uuid)','school_family_access_revoker(text,uuid)','school_family_access_actor(text,uuid,text)',
     'school_family_access_invitation_json(hon.school_family_access_invitations)','school_family_account_result(hon.school_family_access_invitations)',
     'school_family_account_record(text,uuid,text,uuid,text,jsonb)','school_family_acceptor_conflict(text,text,hon.school_family_access_invitations)',
     'manage_school_family_access_invitation(text,text,jsonb,uuid)','accept_school_family_access_invitation(text,text,jsonb,uuid)','read_school_family_access_invitations(text,uuid)'] LOOP

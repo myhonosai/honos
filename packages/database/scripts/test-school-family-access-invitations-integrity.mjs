@@ -62,7 +62,7 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const fns=await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%school_family%')");
- assert.equal(fns.length,9);
+ assert.equal(fns.length,11);
  for(const f of fns){const entry=['manage_school_family_access_invitation','accept_school_family_access_invitation','read_school_family_access_invitations'].includes(f.proname);
   assert.equal(f.prosecdef,entry,f.proname);assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry,f.proname);}
  pass('forced deny-all RLS on new custody tables; runtime executes exactly the three fixed entry points');
@@ -76,6 +76,8 @@ try{
  const manager=person('manager'),managerPrincipal=await human(manager,'S2F manager');
  const managerRole=await customRole(A,'CUSTOM_FAMILY_MANAGER',['school.view','family.read','family.member.manage']);
  const managerGrant=await grant(A,managerPrincipal,managerRole);
+ // A second family manager at A keeps later groups under the process-local per-subject rate limit (30/min).
+ const manager2=person('manager-2');await grant(A,await human(manager2,'S2F manager 2'),managerRole);
  const desk=person('desk'),deskPrincipal=await human(desk,'S2F desk');
  const deskRole=await customRole(A,'CUSTOM_FRONT_DESK',['school.view','family.read']);await grant(A,deskPrincipal,deskRole);
  const managerB=person('manager-b'),managerBPrincipal=await human(managerB,'S2F manager B');
@@ -191,35 +193,46 @@ try{
 
  // 9b. Paid access fails closed.
  const parentS=person('parent-s'),inputS=invite(A.schoolId,famA2,parentS.email);const invS=receipt(await send('school/family-access-invitations',{identity:manager,body:inputS}));
+ const parentP1=person('parent-p1'),inputP1=invite(A.schoolId,famA2,parentP1.email);const invP1=receipt(await send('school/family-access-invitations',{identity:manager,body:inputP1}));
+ const parentP2=person('parent-p2'),inputP2=invite(A.schoolId,famA2,parentP2.email);const invP2=receipt(await send('school/family-access-invitations',{identity:manager,body:inputP2}));
  const entitlement=(await q('SELECT status,effective_from,effective_until FROM hon.organization_entitlements WHERE organization_id=$1',[A.organizationId]))[0];
  await q("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1",[A.organizationId]);
+ // Owner decision (security/custody): the narrow revocation exception survives a suspension; nothing else does.
+ await denied(()=>send('school/family-access-invitations/end',{identity:desk,body:end(A.schoolId,invE)}),403);
+ await denied(()=>send('school/family-access-invitations/revoke',{identity:outsider,body:{schoolId:A.schoolId,invitationId:invP1.invitationId}}),403);
+ assert.deepEqual(await scope(collide,A),[{f:famA2,a:'VIEWER'}]);
+ assert.equal(receipt(await send('school/family-access-invitations/end',{identity:manager,body:end(A.schoolId,invE)})).status,'ENDED');
+ assert.deepEqual(await scope(collide,A),[]);
+ assert.equal(receipt(await send('school/family-access-invitations/revoke',{identity:manager,body:{schoolId:A.schoolId,invitationId:invP1.invitationId}})).status,'REVOKED');
  await denied(()=>send('school/family-access-invitations',{identity:manager,body:invite(A.schoolId,famA2,'susp-'+K()+'@example.invalid')}),403);
  await denied(()=>send('school/schools/'+A.schoolId+'/family-access-invitations',{identity:manager,method:'GET'}),403);
  await denied(()=>send('account/family-access-invitations/accept',{identity:parentS,body:accept(invS,inputS.token)}),403);
  await q("UPDATE hon.organization_entitlements SET status='ACTIVE',effective_until=clock_timestamp()-interval '1 minute' WHERE organization_id=$1",[A.organizationId]);
  await denied(()=>send('account/family-access-invitations/accept',{identity:parentS,body:accept(invS,inputS.token)}),403);
+ await denied(()=>send('school/family-access-invitations',{identity:manager,body:invite(A.schoolId,famA2,'lapsed-'+K()+'@example.invalid')}),403);
+ assert.equal(receipt(await send('school/family-access-invitations/revoke',{identity:manager,body:{schoolId:A.schoolId,invitationId:invP2.invitationId}})).status,'REVOKED');
  await q('UPDATE hon.organization_entitlements SET status=$2,effective_from=$3,effective_until=$4 WHERE organization_id=$1',[A.organizationId,entitlement.status,entitlement.effective_from,entitlement.effective_until]);
  assert.equal(receipt(await send('account/family-access-invitations/accept',{identity:parentS,body:accept(invS,inputS.token)})).accountStatus,'FAMILY_ACCESS_BOUND');
- pass('paid access fails closed: a suspended or lapsed organization cannot invite, list or complete an outstanding invitation; restored access completes it');
+ pass('paid access fails closed for invite, list and accept; the family manager alone may still end guardian access and revoke pending invitations while suspended or lapsed; restored access completes the outstanding invitation');
 
  // 10. Ending accepted access.
  await denied(()=>send('school/family-access-invitations/end',{identity:managerB,body:end(B.schoolId,invC)}),404);
  await denied(()=>send('school/family-access-invitations/end',{identity:desk,body:end(A.schoolId,invC)}),403);
- await denied(()=>send('school/family-access-invitations/end',{identity:manager,body:{schoolId:A.schoolId,invitationId:invC.invitationId}}),400);
+ await denied(()=>send('school/family-access-invitations/end',{identity:manager2,body:{schoolId:A.schoolId,invitationId:invC.invitationId}}),400);
  assert.deepEqual(await scope(parentC,A),[{f:famA2,a:'SECONDARY_GUARDIAN'}]);
- const endKey=K(),ended=receipt(await send('school/family-access-invitations/end',{identity:manager,body:end(A.schoolId,invC),key:endKey}));
+ const endKey=K(),ended=receipt(await send('school/family-access-invitations/end',{identity:manager2,body:end(A.schoolId,invC),key:endKey}));
  assert.equal(ended.status,'ENDED');assert.deepEqual(await scope(parentC,A),[]);
- assert.deepEqual(receipt(await send('school/family-access-invitations/end',{identity:manager,body:end(A.schoolId,invC),key:endKey})),ended);
- assert.equal(receipt(await send('school/family-access-invitations/end',{identity:manager,body:end(A.schoolId,invC)})).status,'ENDED');
+ assert.deepEqual(receipt(await send('school/family-access-invitations/end',{identity:manager2,body:end(A.schoolId,invC),key:endKey})),ended);
+ assert.equal(receipt(await send('school/family-access-invitations/end',{identity:manager2,body:end(A.schoolId,invC)})).status,'ENDED');
  assert.equal((await q("SELECT count(*) n FROM hon.family_access_grants g JOIN hon.school_family_access_invitations i ON i.access_grant_id=g.id WHERE i.id=$1 AND g.effective_until=i.ended_at",[invC.invitationId]))[0].n,'1');
  await denied(()=>send('account/family-access-invitations/accept',{identity:parentC,body:accept(invC,inputC.token)}),403);
- const inputC2=invite(A.schoolId,famA2,parentC.email,{accessLevel:'VIEWER'});const invC2=receipt(await send('school/family-access-invitations',{identity:manager,body:inputC2}));
+ const inputC2=invite(A.schoolId,famA2,parentC.email,{accessLevel:'VIEWER'});const invC2=receipt(await send('school/family-access-invitations',{identity:manager2,body:inputC2}));
  receipt(await send('account/family-access-invitations/accept',{identity:parentC,body:accept(invC2,inputC2.token)}));
  assert.deepEqual(await scope(parentC,A),[{f:famA2,a:'VIEWER'}]);
  pass('a manager ends exactly the grant an invitation created (exact school, explicit confirmation, idempotent); ended access is never revived by replay; a fresh invitation can relink');
 
  // 11. List and immutable evidence.
- const list=receipt(await send('school/schools/'+A.schoolId+'/family-access-invitations',{identity:manager,method:'GET'}));
+ const list=receipt(await send('school/schools/'+A.schoolId+'/family-access-invitations',{identity:manager2,method:'GET'}));
  assert(list.length>=8&&list.length<=50);assert(list.every(i=>i.schoolId===A.schoolId));
  for(const s of ['EXPIRED','REVOKED','ENDED','ACCEPTED','PENDING'])assert(list.some(i=>i.status===s),s);
  await denied(()=>send('school/schools/'+A.schoolId+'/family-access-invitations',{identity:outsider,method:'GET'}),403);

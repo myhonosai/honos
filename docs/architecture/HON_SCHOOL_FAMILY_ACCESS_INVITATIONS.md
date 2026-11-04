@@ -40,7 +40,7 @@ So no parent could use the parent screens without a database fixture.
   - Runtime executes only `manage_school_family_access_invitation`, `accept_school_family_access_invitation` and `read_school_family_access_invitations`.
   - Each (subject, idempotency key) pair is single-use across every account flow, because requests share `hon.school_account_requests`.
   - Audit events are immutable, and `execution_allowed` is always false. Invitations allow only PENDING→ACCEPTED, PENDING→REVOKED and ACCEPTED→ENDED.
-- **Paid access fails closed.** The family-manager check uses the B6A (0172) live-entitlement predicate. A suspended or lapsed organization cannot invite, revoke, end, list, or have an outstanding invitation accepted. Already-linked parents keep their existing scope; what they can read during a suspension is decided by each parent read, not by this slice.
+- **Paid access fails closed, except for the narrow revocation exception.** The family-manager check uses the B6A (0172) live-entitlement predicate. A suspended or lapsed organization, or one whose access hasn't started, cannot invite, list, or have an outstanding invitation accepted. Owner decision (2026-11-04, security and custody): the same family manager can still **end** existing guardian access and **revoke** a pending invitation during a suspension. The exception covers nothing else. Already-linked parents keep their existing scope; what they can read during a suspension is decided by each parent read, not by this slice.
 - **No commercial effect.** No entitlement, billing, credit, AI, CRM, student or outbox table changes. The receipt says so: `accessGranted`, `billingActivated` and `aiCreditsGranted` are all false (they refer to paid access, not to the family link).
 
 ## API (same-origin human browser only, header `x-hon-human-command: school-family-account`)
@@ -62,7 +62,7 @@ POST commands need an `Idempotency-Key` UUID. The contracts and validators are i
 | Status | Code | When |
 |---|---|---|
 | 400 | `ACCOUNT_INPUT_INVALID` | Request fails validation, or a missing end confirmation |
-| 403 | `ACCOUNT_FORBIDDEN` | Caller lacks authority, or the invitation is unavailable |
+| 403 | `ACCOUNT_FORBIDDEN` | Caller lacks authority (invite and list also need live paid access), or the invitation is unavailable |
 | 403 | `VERIFIED_EMAIL_REQUIRED` | Session has no verified email |
 | 404 | `ACCOUNT_UNAVAILABLE` | Family or invitation not found at this school |
 | 409 | `ACCOUNT_REVIEW_REQUIRED` | Identity conflict, revoking an accepted invitation, or ending one that was never accepted |
@@ -76,15 +76,16 @@ POST commands need an `Idempotency-Key` UUID. The contracts and validators are i
 
 `apps/api/test/school-family-access-invitations.test.cjs` covers the contracts, the guard, the session-only email and the error mapping.
 
-## Owner decisions
+## Owner decisions (David, 2026-11-04)
 
-1. **Who can link parents.** Proposed: `family.member.manage` plus `family.read` (OWNER by default; custom staff roles can be given it). Alternative: OWNER only.
-2. **Mixed staff/parent identities.** An instructor who is also a parent at the school is refused today (fail closed). Allowing it needs a deliberate rule for how one identity sees both scopes.
-3. **Suspension.** Linking, ending and listing are blocked while paid access is suspended or lapsed, same as staff invitations. Ending a parent's access during a suspension (for example a custody issue) may need to stay available.
-4. **Delivery.** Sending the link by email or SMS needs owner approval of a provider.
+1. **Who can link parents.** Approved: owners and authorized school staff who hold both `family.member.manage` and `family.read`, with confirmation, verified identity and audit evidence. Implemented as described above.
+2. **Mixed staff/parent identities.** Approved as the intended final behavior: one person may be both staff and a parent, with independently authorized role contexts and strict privacy separation. **The current fail-closed refusal stays** until secure dual-role support is built and passes independent review. That is a separate future slice, and it also needs the matching change in the staff flow (0204), which refuses identities with family grants.
+3. **Suspension.** Approved: authorized personnel can end or revoke guardian access during a suspension. Only that narrow exception is implemented; invite, list and accept stay blocked.
+4. **Delivery.** Resend is the proposed default transactional email provider, subject to integration and security review. Until it is configured and explicitly approved, links are delivered manually. No provider is activated, and this slice has no email code.
 
 ## Not included / follow-ups
 
+- A suspension-time read of existing invitations (list stays blocked under decision 3), if staff need it to find what to end.
 - Ending a family grant that was not created by an invitation (fixture or legacy grants).
 - Parent self-service (a parent inviting a second guardian).
 - Codex owns the family-access screen: an "Invite parent" action on the family record, the invitations list, and the accept page.
