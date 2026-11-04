@@ -149,7 +149,7 @@ END $$;
 CREATE FUNCTION hon.manage_school_family_access_invitation(p_subject text,p_operation text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; i hon.school_family_access_invitations%ROWTYPE; prior hon.school_account_requests%ROWTYPE;
-  fp text; at timestamptz; v_org uuid; v_school uuid; v_family uuid; v_ttl integer;
+  fp text; at timestamptz; v_org uuid; v_school uuid; v_family uuid; v_ttl integer; result jsonb;
 BEGIN
   IF p_key IS NULL OR p_subject IS NULL OR p_input IS NULL OR jsonb_typeof(p_input)<>'object' OR p_operation IS NULL OR p_operation NOT IN ('INVITE','REVOKE','END')
     OR jsonb_typeof(p_input->'schoolId') IS DISTINCT FROM 'string' OR p_input->>'schoolId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
@@ -210,15 +210,20 @@ BEGIN
       END IF;
     END IF;
   END IF;
+  result:=hon.school_family_account_record(p_subject,p_key,fp,i.id,p_operation,hon.school_family_access_invitation_json(i));
+  -- Decision point AFTER every durable write, including the evidence row: authority that expired at any
+  -- instant up to here (grant window, and paid access for INVITE, all judged on clock_timestamp()) aborts
+  -- the statement, so no invitation, grant end, request or evidence row survives. REVOKE/END keep the
+  -- owner-approved suspension exception: the revoker check needs no paid access, before or after.
   IF hon.school_family_access_actor(p_subject,v_school,p_operation) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'ACCOUNT_FORBIDDEN' USING ERRCODE='42501'; END IF;
-  RETURN hon.school_family_account_record(p_subject,p_key,fp,i.id,p_operation,hon.school_family_access_invitation_json(i));
+  RETURN result;
 END $$;
 
 -- Email and subject originate ONLY in the HON-signed OIDC session, never in the request body.
 CREATE FUNCTION hon.accept_school_family_access_invitation(p_subject text,p_verified_email text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE i hon.school_family_access_invitations%ROWTYPE; prior hon.school_account_requests%ROWTYPE; fp text; at timestamptz;
-  v_user uuid; actor uuid; v_grant uuid; issuer_subject text;
+  v_user uuid; actor uuid; v_grant uuid; issuer_subject text; result jsonb;
 BEGIN
   IF p_key IS NULL OR p_subject IS NULL OR length(p_subject)>2048 OR p_subject NOT LIKE 'oidc:%'
     OR p_verified_email IS NULL OR p_verified_email<>lower(btrim(p_verified_email))
@@ -270,7 +275,12 @@ BEGIN
   INSERT INTO hon.family_access_grants(organization_id,school_id,family_id,principal_id,access_level,effective_from,granted_by_principal_id,created_at)
     VALUES(i.organization_id,i.school_id,i.family_id,actor,i.access_level,at,i.created_by,at) RETURNING id INTO v_grant;
   UPDATE hon.school_family_access_invitations SET status='ACCEPTED',accepted_subject=p_subject,access_grant_id=v_grant,accepted_at=at WHERE id=i.id RETURNING * INTO i;
-  RETURN hon.school_family_account_record(p_subject,p_key,fp,i.id,'ACCEPT',hon.school_family_account_result(i));
+  result:=hon.school_family_account_record(p_subject,p_key,fp,i.id,'ACCEPT',hon.school_family_account_result(i));
+  -- Decision point AFTER the identity, family grant and evidence writes: the invitation window and the
+  -- issuer's authority (grant window, paid access) must still hold now, or nothing survives.
+  IF i.expires_at<=clock_timestamp() OR hon.school_family_access_manager(issuer_subject,i.school_id) IS DISTINCT FROM i.created_by THEN
+    RAISE EXCEPTION 'ACCOUNT_INVITATION_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+  RETURN result;
 END $$;
 
 CREATE FUNCTION hon.read_school_family_access_invitations(p_subject text,p_school uuid) RETURNS jsonb

@@ -231,6 +231,75 @@ try{
  assert.deepEqual(await scope(parentC,A),[{f:famA2,a:'VIEWER'}]);
  pass('a manager ends exactly the grant an invitation created (exact school, explicit confirmation, idempotent); ended access is never revived by replay; a fresh invitation can relink');
 
+ // 10b. Authority that expires between verification and the evidence write fails closed (deterministic clock barrier).
+ // Fixture-only: the evidence INSERT waits until a pinned instant T has passed. Authority is set to expire exactly at T,
+ // so every pre-write check sees it live and only a check made after the evidence write can see it expired.
+ await q('CREATE TABLE public.s2f_clock_barrier_at(until timestamptz)');await q('INSERT INTO public.s2f_clock_barrier_at VALUES(NULL)');
+ await q(`CREATE FUNCTION public.s2f_clock_barrier() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+  DECLARE u timestamptz; BEGIN SELECT until INTO u FROM public.s2f_clock_barrier_at;
+  IF u IS NOT NULL THEN PERFORM pg_sleep(greatest(0,extract(epoch FROM u-clock_timestamp()))+0.02); END IF; RETURN NEW; END $$`);
+ await q('CREATE TRIGGER s2f_clock_barrier BEFORE INSERT ON hon.school_family_account_events FOR EACH ROW EXECUTE FUNCTION public.s2f_clock_barrier()');
+ const boundary=person('boundary'),boundaryPrincipal=await human(boundary,'S2F boundary manager');const boundaryGrant=await grant(A,boundaryPrincipal,managerRole);
+ const pin=async()=>{const t=(await q("SELECT clock_timestamp()+interval '1500 milliseconds' t"))[0].t;await q('UPDATE public.s2f_clock_barrier_at SET until=$1',[t]);return t;};
+ const unpin=()=>q('UPDATE public.s2f_clock_barrier_at SET until=NULL');
+ const expireGrantAt=t=>q('UPDATE hon.principal_role_grants SET effective_until=$2 WHERE id=$1',[boundaryGrant,t]);
+ const restoreGrant=()=>q('UPDATE hon.principal_role_grants SET effective_until=NULL WHERE id=$1',[boundaryGrant]);
+ // The call must reach the barrier (evidence write) before failing: it returns only after T.
+ const atBoundary=async(t,work)=>{const r=await denied(work,403);assert(Date.now()>=t.getTime(),'refused before the evidence write');return r;};
+ const ent=(await q('SELECT status,effective_until FROM hon.organization_entitlements WHERE organization_id=$1',[A.organizationId]))[0];
+ const restoreEntitlement=()=>q('UPDATE hon.organization_entitlements SET status=$2,effective_until=$3 WHERE organization_id=$1',[A.organizationId,ent.status,ent.effective_until]);
+ try{
+  // Control: intact authority completes through the same barrier.
+  let t=await pin();
+  assert.equal(receipt(await send('school/family-access-invitations',{identity:boundary,body:invite(A.schoolId,famA,'ctl-'+K()+'@example.invalid')})).status,'PENDING');
+  assert(Date.now()>=t.getTime());await unpin();
+  // INVITE: the manager grant expires at T.
+  t=await pin();await expireGrantAt(t);
+  await atBoundary(t,()=>send('school/family-access-invitations',{identity:boundary,body:invite(A.schoolId,famA,'late-'+K()+'@example.invalid')}));
+  await unpin();await restoreGrant();
+  // ACCEPT: the issuer's grant, then the organization's paid access, then the invitation itself expire at T.
+  const parentV=person('parent-v'),inputV=invite(A.schoolId,famA,parentV.email);const invV=receipt(await send('school/family-access-invitations',{identity:boundary,body:inputV}));
+  t=await pin();await expireGrantAt(t);
+  await atBoundary(t,()=>send('account/family-access-invitations/accept',{identity:parentV,body:accept(invV,inputV.token)}));
+  await unpin();await restoreGrant();
+  assert.equal((await q('SELECT count(*) n FROM hon.users WHERE external_subject=$1',[parentV.externalSubject]))[0].n,'0');assert.deepEqual(await scope(parentV,A),[]);
+  t=await pin();await q('UPDATE hon.organization_entitlements SET effective_until=$2 WHERE organization_id=$1',[A.organizationId,t]);
+  await atBoundary(t,()=>send('account/family-access-invitations/accept',{identity:parentV,body:accept(invV,inputV.token)}));
+  await unpin();await restoreEntitlement();
+  const parentW=person('parent-w'),inputW=invite(A.schoolId,famA,parentW.email);const invW=receipt(await send('school/family-access-invitations',{identity:boundary,body:inputW}));
+  t=await pin();
+  await admin.query('BEGIN');await admin.query('ALTER TABLE hon.school_family_access_invitations DISABLE TRIGGER immutable');
+  await admin.query('UPDATE hon.school_family_access_invitations SET expires_at=$2 WHERE id=$1',[invW.invitationId,t]);
+  await admin.query('ALTER TABLE hon.school_family_access_invitations ENABLE TRIGGER immutable');await admin.query('COMMIT');
+  await atBoundary(t,()=>send('account/family-access-invitations/accept',{identity:parentW,body:accept(invW,inputW.token)}));
+  await unpin();assert.deepEqual(await scope(parentW,A),[]);
+  // Control acceptance, then the suspension exception at the boundary: a revoker whose grant ends at T cannot END or REVOKE.
+  t=await pin();assert.equal(receipt(await send('account/family-access-invitations/accept',{identity:parentV,body:accept(invV,inputV.token)})).accountStatus,'FAMILY_ACCESS_BOUND');assert(Date.now()>=t.getTime());await unpin();
+  assert.deepEqual(await scope(parentV,A),[{f:famA,a:'SECONDARY_GUARDIAN'}]);
+  const parentY=person('parent-y'),inputY=invite(A.schoolId,famA,parentY.email);const invY=receipt(await send('school/family-access-invitations',{identity:boundary,body:inputY}));
+  await q("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1",[A.organizationId]);
+  t=await pin();await expireGrantAt(t);
+  await atBoundary(t,()=>send('school/family-access-invitations/end',{identity:boundary,body:end(A.schoolId,invV)}));
+  assert.deepEqual(await scope(parentV,A),[{f:famA,a:'SECONDARY_GUARDIAN'}]);
+  t=await pin();await expireGrantAt(t);
+  await atBoundary(t,()=>send('school/family-access-invitations/revoke',{identity:boundary,body:{schoolId:A.schoolId,invitationId:invY.invitationId}}));
+  assert.equal((await q('SELECT status FROM hon.school_family_access_invitations WHERE id=$1',[invY.invitationId]))[0].status,'PENDING');
+  await unpin();await restoreGrant();
+  // The owner-approved exception itself is unchanged: with intact authority, END and REVOKE complete through the barrier while suspended.
+  t=await pin();
+  assert.equal(receipt(await send('school/family-access-invitations/end',{identity:boundary,body:end(A.schoolId,invV)})).status,'ENDED');assert.deepEqual(await scope(parentV,A),[]);
+  assert.equal(receipt(await send('school/family-access-invitations/revoke',{identity:boundary,body:{schoolId:A.schoolId,invitationId:invY.invitationId}})).status,'REVOKED');
+  assert(Date.now()>=t.getTime());await unpin();await restoreEntitlement();
+  // Replay after expiry: a stored INVITE response is not returned to a manager whose authority has ended.
+  const replayKey=K(),replayInput=invite(A.schoolId,famA,'replay-'+K()+'@example.invalid');receipt(await send('school/family-access-invitations',{identity:boundary,body:replayInput,key:replayKey}));
+  await q('UPDATE hon.principal_role_grants SET effective_until=clock_timestamp() WHERE id=$1',[boundaryGrant]);
+  await denied(()=>send('school/family-access-invitations',{identity:boundary,body:replayInput,key:replayKey}),403);
+ }finally{
+  await unpin().catch(()=>{});await restoreEntitlement();
+  await q('DROP TRIGGER s2f_clock_barrier ON hon.school_family_account_events');await q('DROP FUNCTION public.s2f_clock_barrier()');await q('DROP TABLE public.s2f_clock_barrier_at');
+ }
+ pass('authority (issuer or revoker grant, paid access, invitation expiry) that ends between verification and the evidence write fails closed with no identity, family grant, end, revocation or evidence; the suspension revocation exception is unchanged; replay after expiry is refused');
+
  // 11. List and immutable evidence.
  const list=receipt(await send('school/schools/'+A.schoolId+'/family-access-invitations',{identity:manager2,method:'GET'}));
  assert(list.length>=8&&list.length<=50);assert(list.every(i=>i.schoolId===A.schoolId));
