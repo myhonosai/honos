@@ -1,3 +1,16 @@
+## Owner entry integration — implemented; exact-head hosted verification follows publication
+
+- Reuse PR #111 on reviewed #129 plus accepted main `8257ad2`; preserve backend, migrations and reviewed CRM/booking/attendance bytes. Route verified school owners to a localized school-entry screen and HQ principals to HQ.
+- Reuse selector-free current-school and bounded authorized school-choice readers, then independently verify the exact selected school before exposing navigation. Conceal on blur/hidden/pagehide/session/school changes; no storage, automatic retry, test-access exception or business mutation.
+- Local prepublication evidence: 113 focused tests, full web suite 1,503, auth 101/domain 421, TypeScript/production web build and 192 migration checksums pass. The final full workspace/API/PostgreSQL/browser result must come from the exact-head hosted workflow. Local pnpm store setup failed and API HTTP listeners return EPERM (single-file reproduction: 22 pass, 3 listener failures); neither is a passing full local repository run. Draft only; no deployment or activation. Shared sprint dependencies: Issue #132.
+
+## C-AUTH-1 — original PR #111 checkpoint (historical)
+
+- Replace the callback's unconditional HQ landing with a fixed session-verified continuation route. Reuse only current HQ-session and exact-one staff reporting-school APIs; strict closed results select fixed local destinations, while ambiguous/missing/error classifications remain **Access not verified**. No role claims, parent-content probe, backend, migration, provider or provisioning changes.
+- Document the precise missing minimal guardian/current-access reader for Claude; preserve parent/staff/HQ independent API authorization, all callback PKCE/nonce/verified-email behavior, manual workspace choices and no automatic retries. Scope and evidence limits: [verified post-login routing](docs/architecture/VERIFIED_POST_LOGIN_ROUTING.md).
+- Local verification on the isolated current-main branch: 73 focused auth/routing/page tests and all 1,106 web tests pass; web TypeScript and production build pass. Response streaming is bounded to 16 KB and cancels on deadline. Script syntax, workflow YAML, documentation links, manifest uniqueness and whitespace checks pass. Local mounted HTTP/browser execution is blocked by `listen EPERM`; the dedicated synthetic production-Next/browser proof awaits hosted CI, while the existing account workflow retains full repository/disposable PostgreSQL checks. Web classification responses are mocked; no fresh API/database/IAM proof is claimed. No commit, publication, merge, deployment, Codespaces or changes to PRs #94/#95/#104 are authorized by this checkpoint.
+
+
 ## Membership operations — isolated canonical-ACL integration candidate (DRAFT)
 
 - Combine exact reviewed frontend sources #126 `67e01f2a346dbdb0390824b2ebaf856f248750a1` / #127 `6241e34d9632be1cfc430fa6a6e96e26b996fab1`, current reconciled backend #122 `952f20118a867295d67a80049f9807e98541f112`, and accepted main/#128 `7096f916f5aa350876aff19e7eba5f9da6f1406b` in an isolated candidate. Original frontend and Claude branches remain unchanged; this is not backend merge approval.

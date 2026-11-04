@@ -60,8 +60,8 @@ describe('Next generic OIDC integration', () => {
       expect(form.get('redirect_uri')).toBe(testEnv.HON_OIDC_REDIRECT_URI);
       return Response.json({ id_token: token, access_token: 'RAW_ACCESS_TOKEN', refresh_token: 'RAW_REFRESH_TOKEN' });
     });
-    const response = await callback(req(`/auth/callback?code=AUTH_CODE&state=${authorization.searchParams.get('state')}`, `${AUTH_TRANSACTION_COOKIE}=${txCookie}`));
-    expect(response.status).toBe(307); expect(response.headers.get('location')).toBe('https://hon.example/hq');
+    const response = await callback(req(`/auth/callback?code=AUTH_CODE&state=${authorization.searchParams.get('state')}&returnTo=https://evil.example&role=HQ&schoolId=untrusted`, `${AUTH_TRANSACTION_COOKIE}=${txCookie}`));
+    expect(response.status).toBe(307); expect(response.headers.get('location')).toBe('https://hon.example/auth/continue');
     const honToken = response.cookies.get(HON_SESSION_COOKIE)!.value;
     const profile = verifySession(honToken, sessionConfig());
     expect(profile.externalSubject).toBe(`oidc:${encodeURIComponent(testEnv.HON_OIDC_ISSUER)}:oidc-account`);
@@ -133,6 +133,7 @@ describe('explicit Manus development adapter compatibility', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => String(url).endsWith('/ExchangeToken') ? Response.json({ accessToken: 'RAW_MANUS_TOKEN' }) : Response.json({ openId: identity.externalSubject, name: identity.displayName, email: identity.email }));
     const response = await callback(req(`/auth/callback?code=DEV_CODE&state=${encodeURIComponent(state)}`, `${AUTH_TRANSACTION_COOKIE}=${txCookie}`));
     expect(response.status).toBe(307); expect(verifySession(response.cookies.get(HON_SESSION_COOKIE)!.value, sessionConfig())).toEqual(identity);
+    expect(response.headers.get('location')).toBe('https://hon.example/auth/continue');
     expect(response.cookies.get(MANUS_SESSION_COOKIE)?.value).toBeTruthy();
     expect(fetcher).toHaveBeenCalledTimes(2); expect(fetcher.mock.calls.every(([url]) => String(url).startsWith('https://manus-dev-api.example'))).toBe(true);
   });
