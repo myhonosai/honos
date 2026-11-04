@@ -1181,6 +1181,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
   }
 
+  async callSchoolStaffAccount(operation: 'invite'|'revoke'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      invite: {sql: "SELECT hon.manage_school_staff_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},
+      revoke: {sql: "SELECT hon.manage_school_staff_invitation($1,'REVOKE',$2::jsonb,$3::uuid) data",arity:3},
+      accept: {sql: 'SELECT hon.accept_school_staff_invitation($1,$2,$3::jsonb,$4::uuid) data',arity:4},
+      list: {sql: 'SELECT hon.read_school_staff_invitations($1,$2::uuid) data',arity:2},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
