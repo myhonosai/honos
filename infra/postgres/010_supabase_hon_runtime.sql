@@ -2020,7 +2020,7 @@ END $$;
 
 -- S4-c 0195 AI access decision: decision, hooks and guards stay internal; only the HQ pause command and read are runtime boundaries.
 DO $$ DECLARE r text; f text; BEGIN
-  FOREACH f IN ARRAY ARRAY['guard_ai_spend_pauses()','ai_promotional_access(uuid,timestamptz,text)','ai_trial_funding_available(uuid,timestamptz,text)',
+  FOREACH f IN ARRAY ARRAY['guard_ai_spend_pauses()','guard_ai_spend_pause_commands()','ai_promotional_access(uuid,timestamptz,text)','ai_trial_funding_available(uuid,timestamptz,text)',
     'ai_access_state_decision(text,boolean,boolean)','ai_spend_allowed(uuid,timestamptz,text)','ai_spend_start_guard()','ai_spend_b3_guard()',
     'command_ai_spend_pause(text,jsonb,uuid)','read_ai_spend_pauses_from_hq(text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
@@ -2028,6 +2028,8 @@ DO $$ DECLARE r text; f text; BEGIN
   END LOOP;
   REVOKE ALL ON TABLE hon.ai_spend_pauses FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_spend_pauses FROM '||quote_ident(r); END LOOP;
+  REVOKE ALL ON TABLE hon.ai_spend_pause_commands FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_spend_pause_commands FROM '||quote_ident(r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.command_ai_spend_pause(text,jsonb,uuid), hon.read_ai_spend_pauses_from_hq(text) TO hon_runtime;
   END IF;
@@ -2037,14 +2039,18 @@ END $$;
 DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['ai_sending_stale_after()','ai_hold_counts(text,timestamptz,tstzrange,timestamptz)','ai_org_committed_credits(uuid,timestamptz)',
     'guard_ai_unknown_resolutions()','ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)','ai_unknown_validate(text,jsonb)',
-    'resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)','read_ai_unknown_invocations_from_hq(text)'] LOOP
+    'resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)','read_ai_unknown_invocations_from_hq(text)',
+    'ai_stamp_hold_origin()','ai_late_expense_receipt(hon.ai_late_provider_expenses,boolean)','record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
   END LOOP;
   REVOKE ALL ON TABLE hon.ai_unknown_resolutions FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_unknown_resolutions FROM '||quote_ident(r); END LOOP;
+  REVOKE ALL ON TABLE hon.ai_late_provider_expenses FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.ai_late_provider_expenses FROM '||quote_ident(r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid), hon.read_ai_unknown_invocations_from_hq(text) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid), hon.read_ai_unknown_invocations_from_hq(text),
+      hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
 
@@ -2061,7 +2067,7 @@ END $$;
 
 -- AI-R1 0198 AI team readiness: the route helper stays internal; only the tenant readiness read is a runtime boundary.
 DO $$ DECLARE r text; f text; BEGIN
-  FOREACH f IN ARRAY ARRAY['ai_team_route(uuid,uuid,bigint,bigint)','read_ai_team_readiness(text)'] LOOP
+  FOREACH f IN ARRAY ARRAY['ai_team_route(uuid,uuid,bigint,bigint)','ai_team_org_budget_authority(uuid,uuid)','read_ai_team_readiness(text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
   END LOOP;
@@ -2076,7 +2082,8 @@ DO $$ DECLARE r text; f text; BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.hon_conversations, hon.hon_conversation_turns FROM '||quote_ident(r); END LOOP;
   FOREACH f IN ARRAY ARRAY['hon_conversation_actor(text)','hon_turn_view(hon.hon_conversation_turns)','hon_conversation_summary(hon.hon_conversations)',
       'begin_hon_conversation(text,jsonb,uuid)','list_my_hon_conversations(text,timestamptz,uuid,integer)','read_hon_conversation(text,uuid)',
-      'begin_hon_turn(text,uuid,jsonb,uuid)','fail_hon_turn(text,uuid,text)','read_hon_turn_receipt(text,uuid)'] LOOP
+      'begin_hon_turn(text,uuid,jsonb,uuid)','fail_hon_turn(text,uuid,text)','read_hon_turn_receipt(text,uuid)',
+      'hon_conversation_hold_actor(text,uuid)','hon_turn_bind_specialist()','hon_canonical_request_text(text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
   END LOOP;

@@ -17,7 +17,11 @@ export interface AiTeamAgentReadiness {
 }
 export interface AiTeamReadiness {
   organizationId: string; schoolId: string; completeEntitlement: boolean;
-  agentBudget: { committedCredits: number; ceilingCredits: number }; agents: AiTeamAgentReadiness[]; asOf: string;
+  /**
+   * Organization-wide agent budget (all schools of the organization). Null unless the requester independently holds
+   * organization-wide authority (HON HQ reader, or ai.usage.read at every school of the organization).
+   */
+  agentBudget: { committedCredits: number; ceilingCredits: number } | null; agents: AiTeamAgentReadiness[]; asOf: string;
   /** The C1 HON conversation contract exists; GET /hon/readiness gives the composer prerequisites. */
   honConversation: { contract: true };
 }
@@ -30,8 +34,11 @@ const BLOCK = new Set<unknown>([...AI_TEAM_SPEND_DECISIONS.slice(1), ...AI_TEAM_
 export function validateAiTeamReadinessRow(value: unknown): Omit<AiTeamReadiness, 'honConversation' | 'agents'> & { agents: Omit<AiTeamAgentReadiness, 'providerRuntime'>[] } {
   const r = record(value, drift);
   exactKeys(r, ['organizationId', 'schoolId', 'completeEntitlement', 'agentBudget', 'agents', 'asOf'], drift);
-  const b = record(r.agentBudget, drift); exactKeys(b, ['committedCredits', 'ceilingCredits'], drift);
-  if (!isUuid(r.organizationId) || !isUuid(r.schoolId) || typeof r.completeEntitlement !== 'boolean' || !isCount(b.committedCredits) || !isCount(b.ceilingCredits)
+  if (r.agentBudget !== null) {
+    const b = record(r.agentBudget, drift); exactKeys(b, ['committedCredits', 'ceilingCredits'], drift);
+    if (!isCount(b.committedCredits) || !isCount(b.ceilingCredits)) drift();
+  }
+  if (!isUuid(r.organizationId) || !isUuid(r.schoolId) || typeof r.completeEntitlement !== 'boolean'
     || !isTimestamp(r.asOf) || !Array.isArray(r.agents) || r.agents.length !== AI_TEAM_READY_AGENTS.length) drift();
   (r.agents as unknown[]).forEach((x, i) => {
     const a = record(x, drift);

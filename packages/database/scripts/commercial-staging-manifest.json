@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "7a60bd67a08c0d4c5ecf5dfcc4cb30edb3d2eaf1dfa4ae8a8a5cd291cd9aa5ad",
+  "chainSha256": "642a2e5bfb44bba45599b602c76bfcf6af399689edbe674f844649eba8303dfe",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -60,23 +60,23 @@
     },
     {
       "file": "0195_ai_spend_access_decision.sql",
-      "sha256": "0d4d1e8ec8e5f9d1b9a3d684471af8f3b7d1fc3bd2a558c75e932ddce467e484"
+      "sha256": "08cb95ab587101cd031a003c19f3631d865676815413fb62bafc90f625adb858"
     },
     {
       "file": "0196_ai_unknown_resolution.sql",
-      "sha256": "d44dd87c39d2e21e8a3c1093edb1dbfe7c8c9e5a4a690c70de9542191a56ece9"
+      "sha256": "bcdfc97fc19cda882717b24d7c23add4e53cc64372bfe6f1a765403e2cacba40"
     },
     {
       "file": "0197_ai_school_usage_hq_read.sql",
-      "sha256": "64fcd3e4d382d1963e3936aa32a263e9675623fcf297263b17bd74b5b94c1126"
+      "sha256": "6676e39bf0c523d4bb88c7fd82daf8f107196c005cc29741e415e951658743f6"
     },
     {
       "file": "0198_ai_team_readiness.sql",
-      "sha256": "2bf9e1ce874190012ed63a13d4be5791fefe269a22ba3c2de4b9242b8bae3530"
+      "sha256": "7eb7cb3b0e64560136a783a97752772e6c67bc7695a57c89e90d6cc172e8d552"
     },
     {
       "file": "0199_hon_conversation_delegation.sql",
-      "sha256": "6cb2e904236f0587bc913ee1562bf38e2d60e428798d4c153b8aa6ec9de0364b"
+      "sha256": "3e7ff3b67c55bcdec206993f7610c3a1b8a4ece0645c68d9d757461d4eb5ff9b"
     },
     {
       "file": "0200_crm_lead_membership_discovery.sql",

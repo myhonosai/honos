@@ -15,6 +15,22 @@ BEGIN;
 -- specialist is refused rather than answered with a made-up reply. Nothing is executed without human approval.
 --
 -- Tables are forced-RLS with no policies and no grants: the runtime reaches them only through these functions.
+--
+-- Turn binding (Manus final review P2, 2026-11-03): the specialist record a turn reports must be the one the turn asked
+-- for. Each turn stores its typed specialist target (delegation) and that target's request fingerprint
+-- (delegation_fingerprint = sha256 of the canonical target, which is exactly the specialist's own request_hash for
+-- the same input). A trigger on the three specialist tables refuses any specialist request whose idempotency key is a
+-- turn id of the same requester at the same school unless it is that turn's specialist with that exact target and
+-- fingerprint (HON_TURN_DELEGATION_MISMATCH, 42501): a request sent straight to Marcus, Claire or Chad with a turn's
+-- id as its Idempotency-Key cannot substitute another target. hon_turn_view also links only a matching fingerprint.
+-- One hand-over at a time: begin_hon_turn (serialized by the conversation row lock) claims the hand-over in
+-- handoff_claimed_at and returns handOff true to exactly one caller. A concurrent resend gets handOff false and reads
+-- the turn's live state instead of starting a second, competing hand-over of the same specialist request. A claim
+-- that has not produced a specialist record within five minutes (the turn then reads UNKNOWN) may be claimed again
+-- by a resend with the same Idempotency-Key, which resumes it.
+-- Canonical Marcus request (Manus delta review P2): the Marcus target's request is hon.hon_canonical_request_text of the
+-- turn text, the same trim Marcus's request contract applies, so a turn whose text has leading or trailing whitespace
+-- hands over instead of being refused; equivalent texts produce one fingerprint, different texts stay distinct.
 
 CREATE TABLE hon.hon_conversations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL, school_id uuid NOT NULL,
@@ -32,6 +48,8 @@ CREATE TABLE hon.hon_conversation_turns (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organization_id uuid NOT NULL, school_id uuid NOT NULL,
   conversation_id uuid NOT NULL, requested_by uuid NOT NULL REFERENCES hon.principals(id), seq integer NOT NULL CHECK (seq BETWEEN 1 AND 200),
   text text NOT NULL, agent_key text NOT NULL CHECK (agent_key IN ('marcus', 'claire', 'chad')), delegation jsonb NOT NULL,
+  delegation_fingerprint text NOT NULL CHECK (delegation_fingerprint ~ '^[a-f0-9]{64}$'),
+  handoff_claimed_at timestamptz,
   idempotency_key uuid NOT NULL, request_hash text NOT NULL CHECK (request_hash ~ '^[a-f0-9]{64}$'),
   failure_reason text CHECK (failure_reason IN ('AGENT_NOT_AUTHORIZED', 'AGENT_REQUEST_INVALID', 'AGENT_TARGET_NOT_FOUND', 'AGENT_REQUEST_CONFLICT')),
   failed_at timestamptz, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -63,6 +81,30 @@ BEGIN
   RETURN actor;
 END $$;
 
+-- Manus review P2 (2026-11-03): authority must hold through a mutation that waited. Called after the conversation row
+-- lock: it share-locks the rows that decide hon_conversation_actor (organization, school, user, principal, the
+-- principal's role grants at this school, those roles and their ai.invocation.plan permission rows), in the same
+-- organization -> school -> user -> principal -> grants order the attendance and owner-launch actor locks use, then
+-- checks authority again. A revocation, expiry, deactivation or permission removal that committed while this
+-- transaction waited is refused here; one issued after this point waits until this transaction ends.
+CREATE FUNCTION hon.hon_conversation_hold_actor(p_subject text, p_actor uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE org uuid := hon.current_organization_id(); school uuid := hon.current_school_id();
+BEGIN
+  PERFORM 1 FROM hon.organizations WHERE id = org FOR SHARE;
+  PERFORM 1 FROM hon.schools WHERE id = school AND organization_id = org FOR SHARE;
+  PERFORM 1 FROM hon.users WHERE external_subject = p_subject FOR SHARE;
+  PERFORM 1 FROM hon.principals WHERE id = p_actor FOR SHARE;
+  PERFORM 1 FROM hon.principal_role_grants WHERE principal_id = p_actor AND organization_id = org AND school_id = school ORDER BY id FOR SHARE;
+  PERFORM 1 FROM hon.roles WHERE id IN (SELECT role_id FROM hon.principal_role_grants WHERE principal_id = p_actor AND organization_id = org AND school_id = school) ORDER BY id FOR SHARE;
+  PERFORM 1 FROM hon.role_permissions WHERE permission_code = 'ai.invocation.plan'
+    AND role_id IN (SELECT role_id FROM hon.principal_role_grants WHERE principal_id = p_actor AND organization_id = org AND school_id = school)
+    ORDER BY role_id FOR SHARE;
+  IF hon.hon_conversation_actor(p_subject) IS DISTINCT FROM p_actor THEN
+    RAISE EXCEPTION 'HON_CONVERSATION_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
+END $$;
+
 -- Live specialist state for one turn, found only by (school, requester, idempotency key = turn id).
 CREATE FUNCTION hon.hon_turn_view(t hon.hon_conversation_turns) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -70,18 +112,21 @@ DECLARE inv_id uuid; inv_status text; inv_reason text; work uuid; action uuid; u
 BEGIN
   IF t.agent_key = 'marcus' THEN
     SELECT id, i.status, i.reason, work_item_id, action_request_id, updated_at INTO inv_id, inv_status, inv_reason, work, action, updated
-    FROM hon.marketing_ai_invocations i WHERE organization_id = t.organization_id AND school_id = t.school_id AND requested_by = t.requested_by AND idempotency_key = t.id;
+    FROM hon.marketing_ai_invocations i WHERE organization_id = t.organization_id AND school_id = t.school_id AND requested_by = t.requested_by AND idempotency_key = t.id
+      AND i.request_hash = t.delegation_fingerprint;
   ELSIF t.agent_key = 'claire' THEN
     SELECT id, i.status, i.reason, work_item_id, action_request_id, updated_at INTO inv_id, inv_status, inv_reason, work, action, updated
-    FROM hon.teaching_ai_invocations i WHERE organization_id = t.organization_id AND school_id = t.school_id AND requested_by = t.requested_by AND idempotency_key = t.id;
+    FROM hon.teaching_ai_invocations i WHERE organization_id = t.organization_id AND school_id = t.school_id AND requested_by = t.requested_by AND idempotency_key = t.id
+      AND i.request_hash = t.delegation_fingerprint;
   ELSE
     SELECT id, i.status, i.reason, work_item_id, action_request_id, updated_at INTO inv_id, inv_status, inv_reason, work, action, updated
-    FROM hon.chad_follow_up_invocations i WHERE organization_id = t.organization_id AND school_id = t.school_id AND requested_by = t.requested_by AND idempotency_key = t.id;
+    FROM hon.chad_follow_up_invocations i WHERE organization_id = t.organization_id AND school_id = t.school_id AND requested_by = t.requested_by AND idempotency_key = t.id
+      AND i.request_hash = t.delegation_fingerprint;
   END IF;
   IF inv_id IS NULL THEN
     -- Not yet handed over (or the hand-over never started): a recorded refusal is FAILED; a hand-over that did not
     -- finish within five minutes is UNKNOWN (resending with the same Idempotency-Key resumes it); otherwise PROCESSING.
-    status := CASE WHEN t.failure_reason IS NOT NULL THEN 'FAILED' WHEN t.created_at <= clock_timestamp() - interval '5 minutes' THEN 'UNKNOWN' ELSE 'PROCESSING' END;
+    status := CASE WHEN t.failure_reason IS NOT NULL THEN 'FAILED' WHEN coalesce(t.handoff_claimed_at, t.created_at) <= clock_timestamp() - interval '5 minutes' THEN 'UNKNOWN' ELSE 'PROCESSING' END;
     reason := coalesce(t.failure_reason, CASE WHEN status = 'UNKNOWN' THEN 'HANDOFF_NOT_CONFIRMED' END);
   ELSE
     -- Specialist state is authoritative. Anything not listed is UNKNOWN, never success.
@@ -119,9 +164,12 @@ BEGIN
   fingerprint := encode(sha256(convert_to(p_input::text, 'UTF8')), 'hex');
   SELECT * INTO c FROM hon.hon_conversations WHERE organization_id = org AND school_id = school AND owner_principal_id = actor AND idempotency_key = p_key FOR UPDATE;
   IF FOUND THEN
+    -- A replay can wait behind the first request's row lock: authority is held and checked again first.
+    PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
     IF c.request_hash <> fingerprint THEN RAISE EXCEPTION 'HON_CONVERSATION_REPLAY_SWAP' USING ERRCODE = '23505'; END IF;
     RETURN hon.hon_conversation_summary(c);
   END IF;
+  PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
   INSERT INTO hon.hon_conversations (organization_id, school_id, owner_principal_id, title, idempotency_key, request_hash)
   VALUES (org, school, actor, btrim(p_input->>'title'), p_key, fingerprint) RETURNING * INTO c;
   RETURN hon.hon_conversation_summary(c);
@@ -167,11 +215,24 @@ BEGIN
   RETURN hon.hon_conversation_summary(c) || jsonb_build_object('turns', turns);
 END $$;
 
+-- (Manus delta review P2) One canonical request text for a Marcus hand-over: exactly what Marcus's own request contract
+-- (validateMarketingRequest, JavaScript String.prototype.trim) makes of the same text, so the turn's target and
+-- fingerprint equal the request_hash and request_text Marcus records. JavaScript trim removes, at both ends only,
+-- WhiteSpace (tab, vertical tab, form feed, space, no-break space, zero width no-break space and every Unicode Zs space)
+-- and LineTerminators (line feed, carriage return, line and paragraph separators). Nothing else (not U+0085, U+180E or
+-- zero width space) and nothing inside the text is changed. Listed explicitly, never via a locale-dependent class.
+CREATE FUNCTION hon.hon_canonical_request_text(p text) RETURNS text
+LANGUAGE sql IMMUTABLE STRICT SET search_path=pg_catalog AS $$
+  SELECT regexp_replace(p,
+    '^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$',
+    '', 'g')
+$$;
+
 -- Records the human turn (idempotent per conversation + key) and returns what the API must hand to the specialist.
 CREATE FUNCTION hon.begin_hon_turn(p_subject text, p_conversation uuid, p_input jsonb, p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.hon_conversation_actor(p_subject); c hon.hon_conversations%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
-  fingerprint text; d jsonb; agent text; target jsonb; v jsonb;
+  fingerprint text; d jsonb; agent text; target jsonb; v jsonb; handoff boolean;
 BEGIN
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object' OR NOT p_input ?& ARRAY['text', 'delegation']
      OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_input) k WHERE k NOT IN ('text', 'delegation'))
@@ -183,7 +244,8 @@ BEGIN
   -- Each specialist's own typed target only; the specialist re-validates and re-authorizes it.
   IF agent = 'marcus' AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(d) k WHERE k NOT IN ('agentKey', 'campaignId')) AND jsonb_typeof(d->'campaignId') = 'string'
      AND (d->>'campaignId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
-    target := jsonb_build_object('campaignId', lower(d->>'campaignId'), 'request', p_input->>'text');
+    target := jsonb_build_object('campaignId', lower(d->>'campaignId'), 'request', hon.hon_canonical_request_text(p_input->>'text'));
+    IF NOT hon.marketing_safe_text(target->>'request', 2000) OR length(target->>'request') = 0 THEN RAISE EXCEPTION 'INVALID_HON_TURN' USING ERRCODE = '22023'; END IF;
   ELSIF agent = 'claire' AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(d) k WHERE k NOT IN ('agentKey', 'curriculumId')) AND jsonb_typeof(d->'curriculumId') = 'string'
      AND (d->>'curriculumId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' AND length(btrim(p_input->>'text')) <= 1200 THEN
     target := jsonb_build_object('curriculumId', lower(d->>'curriculumId'), 'brief', p_input->>'text');
@@ -199,19 +261,51 @@ BEGIN
   fingerprint := encode(sha256(convert_to(p_input::text, 'UTF8')), 'hex');
   SELECT * INTO c FROM hon.hon_conversations WHERE id = p_conversation AND organization_id = hon.current_organization_id() AND school_id = hon.current_school_id() AND owner_principal_id = actor FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_CONVERSATION_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
+  -- The conversation row lock can wait behind another turn: authority is held and checked again before any turn row.
+  PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
   SELECT * INTO t FROM hon.hon_conversation_turns WHERE conversation_id = c.id AND idempotency_key = p_key;
   IF FOUND THEN
     IF t.request_hash <> fingerprint THEN RAISE EXCEPTION 'HON_TURN_REPLAY_SWAP' USING ERRCODE = '23505'; END IF;
   ELSE
     IF c.turn_count >= 200 THEN RAISE EXCEPTION 'HON_CONVERSATION_FULL' USING ERRCODE = '23514'; END IF;
-    INSERT INTO hon.hon_conversation_turns (organization_id, school_id, conversation_id, requested_by, seq, text, agent_key, delegation, idempotency_key, request_hash)
-    VALUES (c.organization_id, c.school_id, c.id, actor, c.turn_count + 1, btrim(p_input->>'text'), agent, target, p_key, fingerprint) RETURNING * INTO t;
+    INSERT INTO hon.hon_conversation_turns (organization_id, school_id, conversation_id, requested_by, seq, text, agent_key, delegation, delegation_fingerprint,
+        idempotency_key, request_hash)
+    VALUES (c.organization_id, c.school_id, c.id, actor, c.turn_count + 1, btrim(p_input->>'text'), agent, target,
+        encode(sha256(convert_to(target::text, 'UTF8')), 'hex'), p_key, fingerprint) RETURNING * INTO t;
+    handoff := true;
     UPDATE hon.hon_conversations SET turn_count = turn_count + 1, updated_at = clock_timestamp() WHERE id = c.id;
   END IF;
   v := hon.hon_turn_view(t);
-  RETURN jsonb_build_object('turnId', t.id, 'agentKey', t.agent_key, 'delegation', t.delegation,
-    'handOff', t.failure_reason IS NULL AND v->>'invocationId' IS NULL);
+  IF handoff IS NULL THEN
+    handoff := t.failure_reason IS NULL AND v->>'invocationId' IS NULL
+      AND (t.handoff_claimed_at IS NULL OR t.handoff_claimed_at <= clock_timestamp() - interval '5 minutes');
+  END IF;
+  IF handoff THEN UPDATE hon.hon_conversation_turns SET handoff_claimed_at = clock_timestamp() WHERE id = t.id; END IF;
+  RETURN jsonb_build_object('turnId', t.id, 'agentKey', t.agent_key, 'delegation', t.delegation, 'handOff', handoff);
 END $$;
+
+-- Binds a specialist request to the turn whose id it uses as its idempotency key (see header). Requests with any other
+-- key are untouched; the specialist's own gates, replay checks and Action Center binding are unchanged.
+CREATE FUNCTION hon.hon_turn_bind_specialist() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE t hon.hon_conversation_turns%ROWTYPE; n jsonb := to_jsonb(NEW); d jsonb; ok boolean;
+BEGIN
+  SELECT * INTO t FROM hon.hon_conversation_turns
+   WHERE id = NEW.idempotency_key AND organization_id = NEW.organization_id AND school_id = NEW.school_id AND requested_by = NEW.requested_by;
+  IF NOT FOUND THEN RETURN NEW; END IF;
+  d := t.delegation;
+  ok := NEW.request_hash = t.delegation_fingerprint AND CASE TG_TABLE_NAME
+    WHEN 'marketing_ai_invocations' THEN t.agent_key = 'marcus' AND n->>'campaign_id' = d->>'campaignId' AND n->>'request_text' = d->>'request'
+    WHEN 'teaching_ai_invocations' THEN t.agent_key = 'claire' AND n->>'curriculum_id' = d->>'curriculumId' AND n->>'brief_text' IS NOT DISTINCT FROM d->>'brief'
+    WHEN 'chad_follow_up_invocations' THEN t.agent_key = 'chad' AND n->>'lead_id' = d->>'leadId'
+      AND (n->>'lead_version')::integer = (d->>'expectedLeadVersion')::integer AND n->>'purpose' = d->>'purpose'
+    ELSE false END;
+  IF ok IS NOT TRUE THEN RAISE EXCEPTION 'HON_TURN_DELEGATION_MISMATCH' USING ERRCODE = '42501'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER hon_turn_binding BEFORE INSERT ON hon.marketing_ai_invocations FOR EACH ROW EXECUTE FUNCTION hon.hon_turn_bind_specialist();
+CREATE TRIGGER hon_turn_binding BEFORE INSERT ON hon.teaching_ai_invocations FOR EACH ROW EXECUTE FUNCTION hon.hon_turn_bind_specialist();
+CREATE TRIGGER hon_turn_binding BEFORE INSERT ON hon.chad_follow_up_invocations FOR EACH ROW EXECUTE FUNCTION hon.hon_turn_bind_specialist();
 
 -- A refusal before the specialist recorded anything. Ignored once the specialist has its own record (its state wins).
 CREATE FUNCTION hon.fail_hon_turn(p_subject text, p_turn uuid, p_reason text) RETURNS void
@@ -251,7 +345,8 @@ DO $$ DECLARE f regprocedure; r text; BEGIN
       'hon.hon_conversation_summary(hon.hon_conversations)'::regprocedure, 'hon.begin_hon_conversation(text,jsonb,uuid)'::regprocedure,
       'hon.list_my_hon_conversations(text,timestamptz,uuid,integer)'::regprocedure, 'hon.read_hon_conversation(text,uuid)'::regprocedure,
       'hon.begin_hon_turn(text,uuid,jsonb,uuid)'::regprocedure, 'hon.fail_hon_turn(text,uuid,text)'::regprocedure,
-      'hon.read_hon_turn_receipt(text,uuid)'::regprocedure] LOOP
+      'hon.read_hon_turn_receipt(text,uuid)'::regprocedure, 'hon.hon_conversation_hold_actor(text,uuid)'::regprocedure,
+      'hon.hon_turn_bind_specialist()'::regprocedure, 'hon.hon_canonical_request_text(text)'::regprocedure] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);

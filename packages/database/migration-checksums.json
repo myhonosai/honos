@@ -187,11 +187,11 @@
     "0192_crm_suspended_owner_read_only.sql": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542",
     "0193_ai_spend_durable_evidence.sql": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5",
     "0194_ai_org_budget_lock.sql": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b",
-    "0195_ai_spend_access_decision.sql": "0d4d1e8ec8e5f9d1b9a3d684471af8f3b7d1fc3bd2a558c75e932ddce467e484",
-    "0196_ai_unknown_resolution.sql": "d44dd87c39d2e21e8a3c1093edb1dbfe7c8c9e5a4a690c70de9542191a56ece9",
-    "0197_ai_school_usage_hq_read.sql": "64fcd3e4d382d1963e3936aa32a263e9675623fcf297263b17bd74b5b94c1126",
-    "0198_ai_team_readiness.sql": "2bf9e1ce874190012ed63a13d4be5791fefe269a22ba3c2de4b9242b8bae3530",
-    "0199_hon_conversation_delegation.sql": "6cb2e904236f0587bc913ee1562bf38e2d60e428798d4c153b8aa6ec9de0364b",
+    "0195_ai_spend_access_decision.sql": "08cb95ab587101cd031a003c19f3631d865676815413fb62bafc90f625adb858",
+    "0196_ai_unknown_resolution.sql": "bcdfc97fc19cda882717b24d7c23add4e53cc64372bfe6f1a765403e2cacba40",
+    "0197_ai_school_usage_hq_read.sql": "6676e39bf0c523d4bb88c7fd82daf8f107196c005cc29741e415e951658743f6",
+    "0198_ai_team_readiness.sql": "7eb7cb3b0e64560136a783a97752772e6c67bc7695a57c89e90d6cc172e8d552",
+    "0199_hon_conversation_delegation.sql": "3e7ff3b67c55bcdec206993f7610c3a1b8a4ece0645c68d9d757461d4eb5ff9b",
     "0200_crm_lead_membership_discovery.sql": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c"
   }
 }
