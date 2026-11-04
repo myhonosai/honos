@@ -42,6 +42,16 @@
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
 
+## S4-d lost AI outcomes (UNKNOWN) and HQ owner resolution — Claude (2026-11-01, owner-authorized draft, stacked on S4-c)
+
+- Migration `0196_ai_unknown_resolution.sql` (number proposed; owner allocates). Owner decision AI-D3. Finding AI-8. Design: `docs/architecture/HON_AI_UNKNOWN_RESOLUTION_S4D.md`.
+- [x] Window-scoped counting: UNKNOWN and stale (1 hour) SENDING holds count only in the window in which they were held; in-flight calls always count.
+- [x] `resolve_ai_unknown_invocation` (human HQ owner only; RECORD_PROVIDER_COST / NO_PROVIDER_CHARGE / WRITE_OFF with closed evidence; one ledger row in the original window or none; immutable record, audit, inert outbox; idempotent; once per call) and the HQ queue read; `GET /v1/hq/ai/unknown-invocations`, `POST .../:agent/:invocationId/resolve`.
+- [x] AI-0: KF-AI8 flipped to `FIXED_BY_S4D`, replaced by INV-19 and INV-20; no open known failures remain. API test `ai-unknown-resolution.test.cjs`.
+- [ ] Codex: HQ queue and resolution screen.
+- [ ] Later slice: UNKNOWN escalation monitor (more than 5 in 24 hours pauses the organization; older than 72 hours alerts HQ).
+- [ ] Independent review; owner merge after #97, S4-a, S4-b and S4-c.
+
 ## S4-c AI spend access decision and HQ pause — Claude (2026-11-01, owner-authorized draft, stacked on S4-b)
 
 - Migration `0195_ai_spend_access_decision.sql` (number proposed; owner allocates). Owner decision AI-D1 = A. Findings AI-9, AI-1. Design: `docs/architecture/HON_AI_ACCESS_DECISION_S4C.md`.

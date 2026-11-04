@@ -740,30 +740,376 @@ try {
   pass('INV-18K', `S4-c: one immutable command-key identity for pause/resume (action, scope, class, reason, actor): ${checks.join('; ')}`);
   }
 
-  // ---- KNOWN FAILURE KF-AI8: UNKNOWN holds never release and are not month-scoped ----
-  const k3 = await makeOrg('kf-ai8');
-  fakes.marcus.mode = 'UNKNOWN';
-  const unknown = await agents.marcus.service.submit(context(k3), agents.marcus.input(k3));
-  assert.equal(unknown.status, 'UNKNOWN', JSON.stringify(unknown));
-  assert.equal((await reservedByAgent(k3)).marcus, 6);
+  // ---- INV-19 (S4-d, replaces KF-AI8): lost outcomes count only in the window in which they were held ----
+  {
+  const backdate = async (table, id, interval, status = null) => {
+    await admin.query('BEGIN');
+    await admin.query(`ALTER TABLE hon.${table} DISABLE TRIGGER USER`);
+    await admin.query(`UPDATE hon.${table} SET status=coalesce($3,status),created_at=created_at-$2::interval,updated_at=clock_timestamp()-$2::interval,held_at=held_at-$2::interval WHERE id=$1`, [id, interval, status]);
+    await admin.query(`ALTER TABLE hon.${table} ENABLE TRIGGER USER`);
+    await admin.query('COMMIT');
+  };
+  const lostOutcome = async (label, name = 'marcus') => {
+    const o = await makeOrg(label);
+    fakes[name].mode = 'UNKNOWN';
+    const view = await agents[name].service.submit(context(o), agents[name].input(o));
+    fakes[name].mode = 'RESULT';
+    assert.equal(view.status, 'UNKNOWN', JSON.stringify(view));
+    assert.equal((await reservedByAgent(o))[name], agents[name].estimate);
+    return { o, id: view.id };
+  };
+  const admitted = async (name, o, label) => {
+    fakes[name].mode = 'RESULT';
+    const view = await agents[name].service.submit(context(o), agents[name].input(o));
+    assert.equal(view.status, 'AWAITING_APPROVAL', `${label}: ${JSON.stringify(view)}`);
+  };
+  // Pure rule: fresh SENDING always counts (even across a window boundary); lost outcomes only in their window.
+  const holdCounts = async (status, ago, windowOffset) => (await row(`SELECT hon.ai_hold_counts($1, clock_timestamp()-$2::interval,
+    hon.ai_spend_window(NULL, clock_timestamp()-$3::interval), clock_timestamp()) r`, [status, ago, windowOffset])).r;
+  assert.equal(await holdCounts('SENDING', '5 minutes', '40 days'), true, 'an in-flight call always counts');
+  assert.equal(await holdCounts('SENDING', '2 hours', '0 days'), true, 'a stale SENDING hold counts in its own window');
+  assert.equal(await holdCounts('SENDING', '40 days', '0 days'), false, 'a stale SENDING hold from an earlier window does not');
+  assert.equal(await holdCounts('UNKNOWN', '1 minute', '0 days'), true);
+  assert.equal(await holdCounts('UNKNOWN', '40 days', '0 days'), false);
+  // Last window's UNKNOWN Marcus hold no longer blocks Marcus or Claire this window.
+  const old = await lostOutcome('inv-19-old');
+  await backdate(agents.marcus.table, old.id, '40 days');
+  await setUsed(old.o, 11990);
+  await admitted('claire', old.o, 'a last-window UNKNOWN hold must not block another agent');
+  await admitted('marcus', old.o, 'a last-window UNKNOWN hold must not block its own agent');
+  // This window's UNKNOWN hold still counts.
+  const cur = await lostOutcome('inv-19-current');
+  await setUsed(cur.o, 11990);
+  assert.equal(await expectRefused('claire', cur.o, {}, 'current-window UNKNOWN hold'), 'BLOCKED_CUSTOMER_BUDGET_EXCEEDED');
+  // A stale SENDING hold (provider answered, nothing recorded) from last window: same rule; from this window: counts.
+  const staleOld = await lostOutcome('inv-19-stale-old', 'claire');
+  await backdate(agents.claire.table, staleOld.id, '40 days', 'SENDING');
+  await setUsed(staleOld.o, 11990);
+  await admitted('marcus', staleOld.o, 'a last-window stale SENDING hold must not block');
+  const staleCur = await lostOutcome('inv-19-stale-current', 'chad');
+  await backdate(agents.chad.table, staleCur.id, '2 hours', 'SENDING');
+  await setUsed(staleCur.o, 11994);
+  assert.equal(await expectRefused('claire', staleCur.o, {}, 'current-window stale SENDING hold'), 'BLOCKED_CUSTOMER_BUDGET_EXCEEDED');
+  // Late provider evidence through the agent path stays refused; only the HQ resolution below can settle it.
+  const lateFail = await settle(tenant(context(old.o), (client) => client.query("SELECT hon.fail_marketing_invocation($1,$2::uuid,'FAILED','PROVIDER_REJECTED')", [old.o.subject, old.id])));
+  assert.equal(lateFail.error?.message, 'MARKETING_OUTCOME_REPLAY');
+  // The HQ queue lists every open lost outcome, with whether it still limits its school.
+  const queue = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r;
+  const item = (id) => queue.open.find((q) => q.invocationId === id);
+  assert.deepEqual([item(old.id)?.agent, item(old.id)?.countsAgainstCurrentWindow, item(old.id)?.reservedCredits], ['MARKETING', false, 6]);
+  assert.deepEqual([item(cur.id)?.countsAgainstCurrentWindow, item(staleOld.id)?.status, item(staleOld.id)?.countsAgainstCurrentWindow, item(staleCur.id)?.agent],
+    [true, 'SENDING', false, 'CHAD_FOLLOW_UP']);
+  assert.equal(queue.staleAfterSeconds, 3600);
+  assert.equal((await settle(admin.query('SELECT hon.read_ai_unknown_invocations_from_hq($1)', [old.o.subject]))).error?.code, '42501', 'a school owner cannot read the HQ queue');
+  pass('INV-19', 'S4-d: UNKNOWN and stale SENDING holds count only in the window in which they were held (last-window holds no longer block any agent; current-window holds do; in-flight calls always count); late agent evidence stays refused; HQ queue lists all four with window status');
+
+  // ---- INV-20 (S4-d): human HQ owner resolution with provider evidence (AI-D3) ----
+  const resolve = (subject, agent, id, input, key = K()) => settle(admin.query('SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r',
+    [subject, agent, id, JSON.stringify(input), key, K(), K()]));
+  const REASON = 'Synthetic AI-0 resolution from provider evidence';
+  const recordInput = { decision: 'RECORD_PROVIDER_COST', reason: REASON, evidence: { providerGenerationId: 'gen-ai0-synthetic-1', inputTokens: 1200, outputTokens: 600, providerCostMicrounits: 2400 } };
+  const ledgerFor = async (id) => rows('SELECT id,customer_credits::int c,provider_cost_microunits::bigint cost,input_units::int i,occurred_at FROM hon.ai_usage_ledger WHERE source_invocation_id=$1', [id]);
+  assert.equal((await resolve(old.o.subject, 'MARKETING', old.id, recordInput)).error?.code, '42501', 'a school owner cannot resolve');
+  for (const bad of [{ ...recordInput, extra: 1 }, { ...recordInput, decision: 'REFUND' }, { ...recordInput, reason: 'short' },
+    { ...recordInput, evidence: { ...recordInput.evidence, inputTokens: -1 } }, { ...recordInput, evidence: { ...recordInput.evidence, inputTokens: '1200' } },
+    { ...recordInput, evidence: { providerLookupReference: 'x' } }, { decision: 'WRITE_OFF', reason: REASON, evidence: {} }])
+    assert.equal((await resolve(hq.subject, 'MARKETING', old.id, bad)).error?.code, '22023', JSON.stringify(bad));
+  assert.equal((await resolve(hq.subject, 'IMAGES', old.id, recordInput)).error?.code, '22023', 'unknown agent');
+  assert.equal((await resolve(hq.subject, 'MARKETING', K(), recordInput)).error?.code, 'P0002', 'unknown invocation');
+  assert.equal((await resolve(hq.subject, 'TEACHING', old.id, recordInput)).error?.code, 'P0002', 'agent and invocation must match');
+  // RECORD_PROVIDER_COST: one ledger row in the ORIGINAL window, hold released, replay-safe, then not resolvable again.
+  const audits0 = (await row("SELECT count(*)::int n FROM hon.audit_events WHERE action_code='hq.ai.unknown_invocation.resolve'")).n;
+  const key = K();
+  const rec = await resolve(hq.subject, 'MARKETING', old.id, recordInput, key);
+  const receipt = rec.value?.rows[0].r;
+  assert.deepEqual([receipt?.decision, receipt?.releasedCredits, receipt?.customerCredits, receipt?.replayed], ['RECORD_PROVIDER_COST', 6, 2, false], JSON.stringify(rec.error?.message ?? receipt));
+  const recLedger = await ledgerFor(old.id);
+  assert.equal(recLedger.length, 1); assert.equal(recLedger[0].c, 2); assert.equal(Number(recLedger[0].cost), 2400);
+  assert.equal((await row('SELECT $1::timestamptz <@ hon.ai_spend_window(NULL, clock_timestamp()) r', [recLedger[0].occurred_at])).r, false, 'recorded in the original window, not this one');
+  assert.equal((await reservedByAgent(old.o)).marcus, 0);
+  assert.equal((await resolve(hq.subject, 'MARKETING', old.id, recordInput, key)).value?.rows[0].r.replayed, true, 'replay');
+  assert.equal((await ledgerFor(old.id)).length, 1, 'a replay writes nothing');
+  assert.equal((await resolve(hq.subject, 'MARKETING', old.id, { ...recordInput, reason: 'A different synthetic resolution reason' }, key)).error?.code, '23505', 'key reuse');
+  assert.equal((await resolve(hq.subject, 'MARKETING', old.id, recordInput)).error?.message, 'AI_UNKNOWN_NOT_RESOLVABLE', 'resolved once');
+  const lateRecord = await settle(tenant(context(old.o), (client) => client.query('SELECT hon.record_marketing_result($1,$2::uuid,$3::jsonb)', [old.o.subject, old.id,
+    JSON.stringify({ draft: { title: 'Late result', content: 'A late provider result.' }, inputTokens: 200, outputTokens: 100, providerCostMicrounits: 600 })])));
+  assert.equal(lateRecord.error?.message, 'MARKETING_OUTCOME_REPLAY', 'the agent path cannot record a resolved call');
+  // NO_PROVIDER_CHARGE: no ledger row; the current-window hold is released and the school can spend again.
+  const none = await resolve(hq.subject, 'MARKETING', cur.id, { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-none-1' } });
+  assert.deepEqual([none.value?.rows[0].r.ledgerEntryId, none.value?.rows[0].r.customerCredits], [null, null], JSON.stringify(none.error?.message));
+  assert.equal((await ledgerFor(cur.id)).length, 0);
+  await admitted('claire', cur.o, 'released hold');
+  // WRITE_OFF of a stale SENDING (TEACHING): zero-credit row with the best-known cost; ends UNKNOWN.
+  const off = await resolve(hq.subject, 'TEACHING', staleOld.id, { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 900 } });
+  assert.equal(off.value?.rows[0].r.customerCredits, 0, JSON.stringify(off.error?.message));
+  const offLedger = await ledgerFor(staleOld.id);
+  assert.deepEqual([offLedger.length, offLedger[0]?.c, Number(offLedger[0]?.cost)], [1, 0, 900]);
+  assert.equal((await row(`SELECT status FROM hon.${agents.claire.table} WHERE id=$1`, [staleOld.id])).status, 'UNKNOWN');
+  // A fresh SENDING call and a recorded call are not resolvable.
+  const fresh = await lostOutcome('inv-20-fresh', 'chad');
+  await backdate(agents.chad.table, fresh.id, '1 minute', 'SENDING');
+  assert.equal((await resolve(hq.subject, 'CHAD_FOLLOW_UP', fresh.id, recordInput)).error?.message, 'AI_UNKNOWN_NOT_RESOLVABLE', 'an in-flight call is not resolvable');
+  const recordedCall = (await row(`SELECT id FROM hon.${agents.claire.table} WHERE organization_id=$1 AND status='AWAITING_APPROVAL' LIMIT 1`, [cur.o.id])).id;
+  assert.equal((await resolve(hq.subject, 'TEACHING', recordedCall, recordInput)).error?.message, 'AI_UNKNOWN_NOT_RESOLVABLE');
+  // Evidence: immutable resolutions, audit rows and inert outbox events for the three resolutions.
+  assert.equal((await row("SELECT count(*)::int n FROM hon.audit_events WHERE action_code='hq.ai.unknown_invocation.resolve'")).n - audits0, 3);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.outbox_events WHERE event_type='ai.unknown_invocation.resolved' AND aggregate_id = ANY($1::uuid[])", [[old.id, cur.id, staleOld.id]])).n, 3);
+  assert.equal((await settle(admin.query('UPDATE hon.ai_unknown_resolutions SET reason=$1', ['Tampered synthetic resolution reason']))).error?.code, '55000');
+  assert.equal((await settle(admin.query('DELETE FROM hon.ai_unknown_resolutions'))).error?.code, '55000');
+  const after = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r;
+  assert.equal(after.open.some((q) => [old.id, cur.id, staleOld.id].includes(q.invocationId)), false, 'resolved items leave the open queue');
+  assert.equal(after.open.some((q) => q.invocationId === staleCur.id), true, 'unresolved items stay');
+  assert.equal(after.resolved.filter((x) => [old.id, cur.id, staleOld.id].includes(x.invocationId)).length, 3);
+  pass('INV-20', 'S4-d: HQ-owner-only resolution: RECORD_PROVIDER_COST writes one ledger row in the original window, NO_PROVIDER_CHARGE writes none and frees the school, WRITE_OFF writes a zero-credit row; closed evidence, idempotent per key, once per call, in-flight and recorded calls refused, agent path still refused; immutable record, audit and inert outbox');
+
+  // ---- INV-20R (S4-d, Manus review P1): HQ authority holds through UNKNOWN resolution (two connections) ----
+  // Same pattern as INV-18R: authority is checked, then held by the shared lock on users/principals/HQ grants/family
+  // grants, and checked again after the key lock and after the invocation row lock. A refusal writes nothing: no
+  // resolution, ledger, audit or outbox row, and the hold stays as it was. No provider is involved (none is called).
+  {
+  const resolveSql = 'SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r';
+  const noCharge = { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-race-1' } };
+  const args = (h, id) => [h.subject, 'MARKETING', id, JSON.stringify(noCharge), K(), K(), K()];
+  const evidence = async (id) => row(`SELECT i.status, i.reserved_credits::int reserved, i.usage_id,
+      (SELECT count(*)::int FROM hon.ai_unknown_resolutions r WHERE r.invocation_id=i.id) resolutions,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger l WHERE l.source_invocation_id=i.id) ledger,
+      (SELECT count(*)::int FROM hon.audit_events a WHERE a.entity_id=i.id AND a.action_code='hq.ai.unknown_invocation.resolve') audits,
+      (SELECT count(*)::int FROM hon.outbox_events o WHERE o.aggregate_id=i.id AND o.event_type='ai.unknown_invocation.resolved') outbox
+    FROM hon.marketing_ai_invocations i WHERE i.id=$1`, [id]);
+  const untouched = (e) => e.status === 'UNKNOWN' && e.reserved === agents.marcus.estimate && e.usage_id === null && e.resolutions + e.ledger + e.audits + e.outbox === 0;
+  const outcomes = [];
+  for (const [label, change] of [['revoked', "effective_until=clock_timestamp()"], ['downgraded to operator', "hq_role='HON_HQ_OPERATOR',permission_codes='{hq.billing.manage}'"]]) {
+    const lost = await lostOutcome(`inv-20r-${label.split(' ')[0]}`);
+    const h = await makeHqOwner(`inv-20r-${label.split(' ')[0]}`);
+    const revoker = await openTx();
+    await revoker.query(`UPDATE hon.hq_operator_grants SET ${change} WHERE principal_id=$1`, [h.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'relation');
+    await revoker.query('COMMIT'); await revoker.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.error?.code, '42501', `${label} while waiting must refuse the resolution: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    const e = await evidence(lost.id);
+    assert(untouched(e), `${label}: nothing written: ${JSON.stringify(e)}`);
+    outcomes.push(`${label}: refused`);
+  }
+  // Expired by the clock while waiting on the invocation row lock (held by another transaction, e.g. a recording).
+  {
+    const lost = await lostOutcome('inv-20r-expiry');
+    const h = await makeHqOwner('inv-20r-expiry', "clock_timestamp()+interval '4 seconds'");
+    const other = await openTx();
+    await other.query('SELECT 1 FROM hon.marketing_ai_invocations WHERE id=$1 FOR UPDATE', [lost.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'transactionid');
+    for (const end = Date.now() + 10000; !(await row('SELECT clock_timestamp() > $1::timestamptz r', [h.until])).r; await sleep(50)) if (Date.now() > end) throw new Error('grant did not expire');
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.error?.code, '42501', `expired while waiting must refuse the resolution: ${JSON.stringify(r.value?.rows[0] ?? r.error?.message)}`);
+    const e = await evidence(lost.id);
+    assert(untouched(e), `expired: nothing written: ${JSON.stringify(e)}`);
+    outcomes.push('expired while waiting on the invocation row: refused');
+  }
+  // A revocation issued while the resolution waits queues behind it; the resolution completes, then the revocation applies.
+  {
+    const lost = await lostOutcome('inv-20r-ordered');
+    const h = await makeHqOwner('inv-20r-ordered');
+    const other = await openTx();
+    await other.query('SELECT 1 FROM hon.marketing_ai_invocations WHERE id=$1 FOR UPDATE', [lost.id]);
+    const c0 = providerCalls;
+    const cmd = await startBlocked(resolveSql, args(h, lost.id), 'transactionid');
+    const revoke = await startBlocked('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1', [h.id], 'relation', { tx: true });
+    await other.query('COMMIT'); await other.end();
+    const r = await cmd.result;
+    assert.equal(providerCalls, c0, 'a resolution never calls a provider');
+    assert.equal(r.value?.rows[0].r.decision, 'NO_PROVIDER_CHARGE', `the resolution decided before the revocation: ${JSON.stringify(r.error?.message)}`);
+    assert.equal((await revoke.result).error, undefined);
+    await revoke.client.query('COMMIT'); await revoke.client.end();
+    const again = await lostOutcome('inv-20r-after');
+    assert.equal((await settle(admin.query(resolveSql, args(h, again.id)))).error?.code, '42501', 'the revoked owner is refused afterwards');
+    assert(untouched(await evidence(again.id)));
+    outcomes.push('revocation during the resolution: waits, applies after');
+  }
+  pass('INV-20R', `S4-d: HQ UNKNOWN-resolution authority holds through the mutation (two-connection, pg_locks-observed waits): ${outcomes.join('; ')}; refusals write no resolution, ledger, audit or outbox row and keep the hold`);
+  }
+
+  // ---- INV-19W (S4-d, Manus final review P2): a hold's window is its immutable held_at, never updated_at ----
+  // Natural cross-window progression in real transactions, for each agent: the hold is taken (SENDING, provider call
+  // pending), its origin is moved to the previous window (simulated clock), then the real service records the provider
+  // outcome as UNKNOWN now, which rewrites updated_at in the current window. The hold must stay in its original window:
+  // it no longer limits the school, the HQ queue shows the original time, and a late resolution books the cost there.
+  {
+  const errors = { marcus: ProviderRuntimeError, claire: ClaireProviderRuntimeError, chad: ChadProviderRuntimeError };
+  const agentCode = { marcus: 'MARKETING', claire: 'TEACHING', chad: 'CHAD_FOLLOW_UP' };
+  const inWindow = async (o, t) => (await row('SELECT $2::timestamptz <@ hon.ai_spend_window($1, clock_timestamp()) r', [o.id, t])).r;
+  const seen = [];
+  for (const name of ['marcus', 'claire', 'chad']) {
+    const a = agents[name], o = await makeOrg(`inv-19w-${name}`);
+    const held = await startHeld(name, o);
+    assert.equal(held.sending, true, `${name}: the hold is taken`);
+    const inv = await row(`SELECT id, held_at FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id]);
+    assert.ok(inv.held_at, `${name}: held_at is stamped when the hold is taken`);
+    // Tampering with the origin is refused, even by the table owner.
+    // The table's column guard refuses it first (42501); the stamping trigger would refuse it too (55000).
+    assert.ok(['42501', '55000'].includes((await settle(admin.query(`UPDATE hon.${a.table} SET held_at=clock_timestamp() WHERE id=$1`, [inv.id]))).error?.code), `${name}: held_at is immutable`);
+    await admin.query('BEGIN');
+    await admin.query(`ALTER TABLE hon.${a.table} DISABLE TRIGGER USER`);
+    await admin.query(`UPDATE hon.${a.table} SET held_at=held_at-interval '40 days', created_at=created_at-interval '40 days' WHERE id=$1`, [inv.id]);
+    await admin.query(`ALTER TABLE hon.${a.table} ENABLE TRIGGER USER`);
+    await admin.query('COMMIT');
+    // The provider outcome arrives now, as UNKNOWN, through the real service and its own fail_* transaction.
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    const settled = await held.submitted;
+    assert.equal(settled.value?.status ?? settled.error?.getResponse?.()?.code, 'UNKNOWN', `${name}: outcome recorded as UNKNOWN`);
+    const after = await row(`SELECT status, held_at, updated_at, reserved_credits FROM hon.${a.table} WHERE id=$1`, [inv.id]);
+    assert.deepEqual([after.status, after.reserved_credits > 0, await inWindow(o, after.updated_at), await inWindow(o, after.held_at)], ['UNKNOWN', true, true, false],
+      `${name}: updated_at moved to the current window, held_at stayed in the original one`);
+    assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [o.id])).n), 0, `${name}: the old-window hold no longer limits the school`);
+    const q = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.open.find((x) => x.invocationId === inv.id);
+    assert.deepEqual([q?.countsAgainstCurrentWindow, q?.heldAt === new Date(after.held_at).toISOString()], [false, true], `${name}: HQ queue shows the original time`);
+    const rec = await resolve(hq.subject, agentCode[name], inv.id, { ...recordInput, evidence: { ...recordInput.evidence, providerGenerationId: `gen-ai0-19w-${name}` } });
+    assert.ok(rec.value, `${name}: ${rec.error?.message}`);
+    const led = await ledgerFor(inv.id);
+    assert.deepEqual([led.length, new Date(led[0].occurred_at).toISOString()], [1, new Date(after.held_at).toISOString()], `${name}: the late cost is booked in the original window`);
+    seen.push(name);
+  }
+  // No trustworthy origin (a hold from before held_at existed): fail closed. It always counts, shows no time, and is
+  // never resolvable (Manus delta review P2): any decision would release capacity on an unproven origin.
+  const legacy = await lostOutcome('inv-19w-legacy');
   await admin.query('BEGIN');
-  await admin.query('ALTER TABLE hon.marketing_ai_invocations DISABLE TRIGGER USER');
-  await admin.query("UPDATE hon.marketing_ai_invocations SET created_at=created_at-interval '40 days',updated_at=updated_at-interval '40 days' WHERE organization_id=$1", [k3.id]);
-  await admin.query('ALTER TABLE hon.marketing_ai_invocations ENABLE TRIGGER USER');
+  await admin.query(`ALTER TABLE hon.${agents.marcus.table} DISABLE TRIGGER USER`);
+  await admin.query(`UPDATE hon.${agents.marcus.table} SET held_at=NULL, updated_at=updated_at-interval '40 days' WHERE id=$1`, [legacy.id]);
+  await admin.query(`ALTER TABLE hon.${agents.marcus.table} ENABLE TRIGGER USER`);
   await admin.query('COMMIT');
-  await setUsed(k3, 11990);
-  const staleBlocked = await expectRefused('marcus', k3, {}, 'stale UNKNOWN hold');
-  // Since S4-b the stale hold counts against the ONE organization budget, so Claire is refused too.
-  const control = await expectRefused('claire', k3, {}, 'stale UNKNOWN hold (organization budget)');
-  // The only reservation writers are pinned by INV-1; none of them can settle an UNKNOWN call later.
-  const lateFail = await settle(tenant(context(k3), (client) => client.query("SELECT hon.fail_marketing_invocation($1,$2::uuid,'FAILED','PROVIDER_REJECTED')", [k3.subject, unknown.id])));
-  const lateRecord = await settle(tenant(context(k3), (client) => client.query('SELECT hon.record_marketing_result($1,$2::uuid,$3::jsonb)', [k3.subject, unknown.id,
-    JSON.stringify({ draft: { title: 'Late result', content: 'A late provider result for an UNKNOWN call.' }, inputTokens: 200, outputTokens: 100, providerCostMicrounits: 600 })])));
-  const stillHeld = (await reservedByAgent(k3)).marcus;
-  const unknownLedger = (await row("SELECT count(*)::int n FROM hon.marketing_ai_invocations WHERE organization_id=$1 AND usage_id IS NOT NULL AND status='UNKNOWN'", [k3.id])).n;
-  const lateOutcome = (r) => r.error ? `refused ${r.error.message}` : `returned ${JSON.stringify(r.value.rows[0])}`;
-  reportKnownFailure('KF-AI8-UNKNOWN-HOLD', staleBlocked === 'BLOCKED_CUSTOMER_BUDGET_EXCEEDED' && control === 'BLOCKED_CUSTOMER_BUDGET_EXCEEDED' && stillHeld === 6 && unknownLedger === 0,
-    `last-month UNKNOWN hold still counted against the organization budget: Marcus ${staleBlocked} and Claire ${control} at used 11990; late fail ${lateOutcome(lateFail)}; late record ${lateOutcome(lateRecord)}; hold still ${stillHeld}; UNKNOWN ledger rows ${unknownLedger}`);
+  assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [legacy.o.id])).n), agents.marcus.estimate, 'a NULL-origin hold always counts');
+  const lq = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.open.find((x) => x.invocationId === legacy.id);
+  assert.deepEqual([lq?.heldAt, lq?.countsAgainstCurrentWindow], [null, true]);
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, recordInput)).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 1 } })).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
+  assert.equal((await resolve(hq.subject, 'MARKETING', legacy.id, { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: 'lookup-ai0-legacy' } })).error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE');
+  assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [legacy.o.id])).n), agents.marcus.estimate, 'a refused NULL-origin hold keeps counting');
+  pass('INV-19W', `S4-d: immutable hold origin: for ${seen.join(', ')} a hold taken last window and recorded UNKNOWN now (updated_at current) stays in its original window (not counted now, HQ shows the original time, late cost booked there); held_at cannot be set; a NULL-origin hold counts always and refuses every decision`);
+  }
+
+  // ---- INV-19N (S4-d, Manus delta review P2): a hold without a trustworthy origin is never released ----
+  // For each agent, a real SENDING hold whose held_at is missing (as for a hold taken before held_at existed): before
+  // and after the stale limit measured on the mutable updated_at/created_at, under concurrent resolution attempts, and
+  // after the provider outcome turns it UNKNOWN, no decision releases it: it keeps counting, nothing is written. A hold
+  // with a trustworthy origin is still resolved exactly once under concurrent attempts (one ledger row, one release).
+  {
+  const errors = { marcus: ProviderRuntimeError, claire: ClaireProviderRuntimeError, chad: ChadProviderRuntimeError };
+  const agentCode = { marcus: 'MARKETING', claire: 'TEACHING', chad: 'CHAD_FOLLOW_UP' };
+  const committed = async (o) => Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [o.id])).n);
+  const written = async (id) => row(`SELECT (SELECT count(*)::int FROM hon.ai_unknown_resolutions WHERE invocation_id=$1) res,
+      (SELECT count(*)::int FROM hon.ai_usage_ledger WHERE source_invocation_id=$1) led,
+      (SELECT count(*)::int FROM hon.audit_events WHERE entity_id=$1 AND action_code='hq.ai.unknown_invocation.resolve') aud,
+      (SELECT count(*)::int FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='ai.unknown_invocation.resolved') obx`, [id]);
+  const adminPatch = async (table, id, set) => {
+    await admin.query('BEGIN');
+    await admin.query(`ALTER TABLE hon.${table} DISABLE TRIGGER USER`);
+    await admin.query(`UPDATE hon.${table} SET ${set} WHERE id=$1`, [id]);
+    await admin.query(`ALTER TABLE hon.${table} ENABLE TRIGGER USER`);
+    await admin.query('COMMIT');
+  };
+  const decisions = (name, tag) => [
+    { ...recordInput, evidence: { ...recordInput.evidence, providerGenerationId: `gen-ai0-19n-${name}-${tag}` } },
+    { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 900 } },
+    { decision: 'NO_PROVIDER_CHARGE', reason: REASON, evidence: { providerLookupReference: `lookup-ai0-19n-${name}-${tag}` } }];
+  const allRefused = async (name, id, tag, label) => {
+    const key = K();
+    const attempts = await Promise.all([...decisions(name, tag), ...decisions(name, `${tag}-b`)].map((input, i) => resolve(hq.subject, agentCode[name], id, input, i === 5 ? key : K()))
+      .concat([resolve(hq.subject, agentCode[name], id, decisions(name, tag)[2], key)]));
+    for (const r of attempts) assert.equal(r.error?.message, 'AI_UNKNOWN_ORIGIN_UNAVAILABLE', `${name} ${label}: ${r.error?.message ?? 'released'}`);
+  };
+  const seen = [];
+  for (const name of ['marcus', 'claire', 'chad']) {
+    const a = agents[name], o = await makeOrg(`inv-19n-${name}`);
+    const held = await startHeld(name, o);
+    assert.equal(held.sending, true, `${name}: the hold is taken`);
+    const inv = await row(`SELECT id FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o.id]);
+    await adminPatch(a.table, inv.id, 'held_at=NULL');
+    // Before the stale limit (updated_at fresh): every decision is refused, concurrently, with no write.
+    await allRefused(name, inv.id, 'fresh', 'NULL-origin SENDING before the stale limit');
+    assert.equal(await committed(o), a.estimate, `${name}: still counts`);
+    // After the stale limit measured only on the mutable timestamps: still refused; staleness is never inferred.
+    await adminPatch(a.table, inv.id, "updated_at=clock_timestamp()-interval '2 hours', created_at=created_at-interval '2 hours'");
+    await allRefused(name, inv.id, 'stale', 'NULL-origin SENDING past the stale limit by updated_at');
+    assert.deepEqual([await committed(o), (await reservedByAgent(o))[name], await sendingCount(o)], [a.estimate, a.estimate, 1], `${name}: the hold is untouched`);
+    // The provider outcome arrives as UNKNOWN: the NULL-origin UNKNOWN hold is refused too.
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    await held.submitted;
+    assert.equal((await row(`SELECT status FROM hon.${a.table} WHERE id=$1`, [inv.id])).status, 'UNKNOWN');
+    await allRefused(name, inv.id, 'unknown', 'NULL-origin UNKNOWN');
+    assert.deepEqual([await committed(o), (await reservedByAgent(o))[name]], [a.estimate, a.estimate], `${name}: no release`);
+    assert.deepEqual(await written(inv.id), { res: 0, led: 0, aud: 0, obx: 0 }, `${name}: nothing written`);
+    const q = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.open.find((x) => x.invocationId === inv.id);
+    assert.deepEqual([q?.heldAt, q?.countsAgainstCurrentWindow], [null, true], `${name}: HQ sees an open hold with no time that still counts`);
+    // With a trustworthy origin: a fresh SENDING hold is not resolvable; an UNKNOWN one resolves exactly once under
+    // concurrent attempts (one ledger row and one provider cost, one release).
+    const o2 = await makeOrg(`inv-19n-${name}-valid`);
+    const held2 = await startHeld(name, o2);
+    const inv2 = await row(`SELECT id, held_at FROM hon.${a.table} WHERE organization_id=$1 AND status='SENDING'`, [o2.id]);
+    assert.ok(inv2.held_at);
+    await adminPatch(a.table, inv2.id, "updated_at=clock_timestamp()-interval '2 hours', created_at=created_at-interval '2 hours'");
+    assert.equal((await resolve(hq.subject, agentCode[name], inv2.id, decisions(name, 'v0')[2])).error?.message, 'AI_UNKNOWN_NOT_RESOLVABLE', `${name}: a SENDING hold with a fresh origin is in flight`);
+    for (const h of fakes[name].held.splice(0)) h.reject(new errors[name]('UNKNOWN', 'PROVIDER_UNKNOWN'));
+    await held2.submitted;
+    const race = await Promise.all([decisions(name, 'v1')[0], decisions(name, 'v2')[0], decisions(name, 'v3')[2]].map((input) => resolve(hq.subject, agentCode[name], inv2.id, input)));
+    assert.equal(race.filter((r) => r.value).length, 1, `${name}: exactly one concurrent resolution wins`);
+    for (const r of race.filter((x) => x.error)) assert.equal(r.error.message, 'AI_UNKNOWN_NOT_RESOLVABLE');
+    const w = await written(inv2.id);
+    assert.deepEqual([w.res, w.aud, w.obx, w.led <= 1, (await reservedByAgent(o2))[name]], [1, 1, 1, true, 0], `${name}: one release, no duplicate cost`);
+    seen.push(name);
+  }
+  pass('INV-19N', `S4-d: for ${seen.join(', ')} a SENDING hold without a trustworthy origin is never released (before and after the stale limit by updated_at, under 7 concurrent attempts incl. a key replay, and after it turns UNKNOWN): it keeps counting, the HQ queue shows it, no resolution/ledger/audit/outbox row; a hold with an origin: fresh SENDING refused, UNKNOWN resolved exactly once under 3 concurrent attempts (no duplicate provider cost)`);
+  }
+
+  // ---- INV-20L (S4-d, Manus final review P2): a verified provider charge after a WRITE_OFF is recorded once ----
+  {
+  const lateSql = 'SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r';
+  const late = (subject, agent, id, input, key = K()) => settle(admin.query(lateSql, [subject, agent, id, JSON.stringify(input), key, K(), K()]));
+  const lateIn = (gen, cost) => ({ reason: 'Provider usage export showed the actual charge', evidence: { providerGenerationId: gen, inputTokens: 1000, outputTokens: 500, providerCostMicrounits: cost } });
+  const res = await row("SELECT * FROM hon.ai_unknown_resolutions WHERE invocation_id=$1", [staleOld.id]);
+  assert.equal(res.decision, 'WRITE_OFF');
+  const committedBefore = Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleOld.o.id])).n);
+  const audits0 = (await row("SELECT count(*)::int n FROM hon.audit_events WHERE action_code='hq.ai.late_provider_expense.record'")).n;
+  assert.equal((await late(staleOld.o.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1100))).error?.code, '42501', 'a school owner cannot record it');
+  for (const bad of [{ ...lateIn('gen-ai0-late-1', 1100), extra: 1 }, { reason: 'short', evidence: lateIn('x', 1).evidence }, { ...lateIn('gen ai0', 1), evidence: { ...lateIn('g', 1).evidence, providerGenerationId: 'bad id' } }])
+    assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, bad)).error?.code, '22023', JSON.stringify(bad));
+  const key = K();
+  const first = await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1100), key);
+  const receipt = first.value?.rows[0].r;
+  assert.deepEqual([receipt?.customerCredits, receipt?.providerCostMicrounits, receipt?.estimatedProviderCostMicrounits, receipt?.replayed], [0, 1100, 900, false], JSON.stringify(first.error?.message ?? receipt));
+  const led = await rows('SELECT id, customer_credits::int c, provider_cost_microunits::bigint cost FROM hon.ai_usage_ledger WHERE source_invocation_id=$1', [staleOld.id]);
+  assert.deepEqual(led.map((l) => [l.id, l.c, Number(l.cost)]), [[res.ledger_entry_id, 0, 900]], 'the WRITE_OFF ledger row is the only ledger row for the call, unchanged; the actual is separate evidence');
+  const exp = await row('SELECT occurred_at, provider_cost_microunits::bigint cost, estimated_provider_cost_microunits::bigint est FROM hon.ai_late_provider_expenses WHERE invocation_id=$1', [staleOld.id]);
+  assert.deepEqual([new Date(exp.occurred_at).toISOString(), Number(exp.cost), Number(exp.est)], [new Date(res.held_at).toISOString(), 1100, 900], 'attributed to the original hold window');
+  const resAfter = await row("SELECT decision, evidence, ledger_entry_id FROM hon.ai_unknown_resolutions WHERE id=$1", [res.id]);
+  assert.deepEqual([resAfter.decision, resAfter.evidence, resAfter.ledger_entry_id], [res.decision, res.evidence, res.ledger_entry_id], 'the WRITE_OFF decision and estimate are unchanged');
+  assert.equal(Number((await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp()) n', [staleOld.o.id])).n), committedBefore, 'no customer credit is deducted again');
+  // Replay, key reuse, a second actual for the same call, and a duplicate provider generation are all refused.
+  assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1100), key)).value?.rows[0].r.replayed, true, 'exact replay');
+  assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-1', 1200), key)).error?.message, 'AI_LATE_EXPENSE_KEY_REUSED');
+  assert.equal((await late(hq.subject, 'TEACHING', staleOld.id, lateIn('gen-ai0-late-2', 1200))).error?.message, 'AI_LATE_EXPENSE_ALREADY_RECORDED');
+  // Zero estimate: a WRITE_OFF of 0, then the actual charge; a reused generation id on it is refused first.
+  const zero = await lostOutcome('inv-20l-zero', 'chad');
+  assert.ok((await resolve(hq.subject, 'CHAD_FOLLOW_UP', zero.id, { decision: 'WRITE_OFF', reason: REASON, evidence: { estimatedProviderCostMicrounits: 0 } })).value);
+  assert.equal((await late(hq.subject, 'CHAD_FOLLOW_UP', zero.id, lateIn('gen-ai0-late-1', 700))).error?.message, 'AI_LATE_EXPENSE_DUPLICATE_GENERATION');
+  assert.equal((await late(hq.subject, 'CHAD_FOLLOW_UP', zero.id, lateIn('gen-ai0-late-zero', 700))).value?.rows[0].r.providerCostMicrounits, 700);
+  assert.deepEqual((await rows('SELECT customer_credits::int c, provider_cost_microunits::bigint cost FROM hon.ai_usage_ledger WHERE source_invocation_id=$1', [zero.id])).map((l) => [l.c, Number(l.cost)]), [[0, 0]], 'zero estimate: one zero-credit ledger row');
+  assert.equal(Number((await row('SELECT count(*) n FROM hon.ai_late_provider_expenses WHERE invocation_id=$1', [zero.id])).n), 1);
+  // Only after a WRITE_OFF: a recorded cost or a no-charge resolution cannot take a late actual.
+  assert.equal((await late(hq.subject, 'MARKETING', old.id, lateIn('gen-ai0-late-3', 1))).error?.message, 'AI_LATE_EXPENSE_NOT_WRITTEN_OFF');
+  assert.equal((await late(hq.subject, 'MARKETING', cur.id, lateIn('gen-ai0-late-4', 1))).error?.message, 'AI_LATE_EXPENSE_NOT_WRITTEN_OFF');
+  assert.equal((await late(hq.subject, 'MARKETING', K(), lateIn('gen-ai0-late-5', 1))).error?.code, 'P0002');
+  assert.equal((await row("SELECT count(*)::int n FROM hon.audit_events WHERE action_code='hq.ai.late_provider_expense.record'")).n - audits0, 2, 'one audit row per recorded expense');
+  assert.equal((await settle(admin.query('UPDATE hon.ai_late_provider_expenses SET reason=$1', ['Tampered synthetic late expense']))).error?.code, '55000');
+  const item = (await row('SELECT hon.read_ai_unknown_invocations_from_hq($1) r', [hq.subject])).r.resolved.find((x) => x.invocationId === staleOld.id);
+  assert.equal(item?.lateProviderExpense?.providerCostMicrounits, 1100, 'the HQ queue shows the late actual next to the write-off');
+  pass('INV-20L', 'S4-d: a verified provider charge after a WRITE_OFF is recorded once as separate immutable evidence (no second ledger row; original hold window), the WRITE_OFF decision, estimate and ledger row stay, no credit is deducted again; replay, key reuse, a second actual and a duplicate provider generation are refused (also for a zero estimate); HQ-owner only; audited');
+  }
+
+  }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
