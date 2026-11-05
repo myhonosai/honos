@@ -1,3 +1,8 @@
+## Current HQ integration composition — accepted main 0204
+
+- Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after #135. All196 migration/checksum and backend bytes match accepted main; HQ production frontend and corrected proof loader are unchanged.
+- The complete three-job green run at `b3f0185…` is historical evidence for the195-migration checkpoint. Fresh196-migration combined-head verification follows publication. Separate #141 expected-principal authority remains a review/acceptance dependency.
+
 ## C-HQ-2 — existing HQ school management, Sprint 2 reconciliation
 
 - [x] Preserve #112 checkpoint `2fdca2b` and normally merge accepted main `029de0cadbeb047ef8e38767de4e60e460325821` through local merge `217938b`. API/packages/infra bytes remain those of accepted main, including migration `0203`.
