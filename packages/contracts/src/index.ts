@@ -1032,3 +1032,4 @@ export * from './ai-school-usage.js';
 export * from './ai-team-readiness.js';
 export * from './hon-conversation.js';
 export * from './school-staff-invitations.js';
+export * from './school-family-access-invitations.js';
