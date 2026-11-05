@@ -119,6 +119,7 @@ jobs:
       - name: Require a patched Node.js runtime (October 2026 security release)
         run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
       - name: Install unchanged lockfile and build application
+        id: app_build
         run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/web build
       - name: Focused frontend integration tests
         # New date-management tests use the exact shared 0178 contracts; existing regressions remain below.
@@ -134,6 +135,7 @@ jobs:
       - name: HQ frontend module loader and shared invalidation regression
         run: node --test apps/web/scripts/hq-school-create-frontend-loader-check.mjs
       - name: Frontend transport against the real API and guarded disposable PostgreSQL
+        id: api_transport
         run: |
           set -euo pipefail
           pnpm --filter @hon/api build
@@ -153,6 +155,7 @@ jobs:
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_TRIAL_RECOVERY_API_TEST=1 HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA="$HON_CRM_SOURCE_SHA" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-trial-recovery-api-verification.mjs' _ "$fixture_dir/recovery.env"
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_JOURNEY_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-journey-api-verification.mjs' _ "$fixture_dir/recovery.env"
       - name: Prepare pinned browser tools outside the repository
+        id: browser_tools
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -173,6 +176,7 @@ jobs:
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET=postgresql://localhost:5432/hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE="$fixture_dir/recovery.env" node packages/database/scripts/setup-flexible-billing-accounts-validation.mjs
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted HON_OWNER_ENTRY_API_TEST=1 HON_OWNER_ENTRY_SHA="$HON_CRM_SOURCE_SHA" HON_OWNER_ENTRY_TOOLS="$HON_CRM_TOOLS" HON_OWNER_ENTRY_CHROME="$HON_CRM_CHROME" HON_OWNER_ENTRY_RESULTS="$HON_CRM_RESULTS/owner-entry" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/owner-entry-api-browser-verification.mjs' _ "$fixture_dir/recovery.env"
       - name: HQ provisioning through the actual bound service and signed session
+        if: ${{ !cancelled() && steps.app_build.outcome == 'success' && steps.api_transport.outcome == 'success' && steps.browser_tools.outcome == 'success' }}
         run: |
           set -euo pipefail
           fixture_dir=/home/ubuntu/jobs/crm_resume_verification
@@ -180,6 +184,7 @@ jobs:
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET=postgresql://localhost:5432/hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE="$fixture_dir/hq.env" node packages/database/scripts/setup-flexible-billing-accounts-validation.mjs
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_HQ_CREATE_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/hq-school-create-api-verification.mjs' _ "$fixture_dir/hq.env"
       - name: HQ mounted privacy and accessibility (synthetic API fixture, separately labelled)
+        if: ${{ !cancelled() && steps.app_build.outcome == 'success' && steps.api_transport.outcome == 'success' && steps.browser_tools.outcome == 'success' }}
         env:
           HON_HQ_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
           HON_HQ_CHROME_BIN: ${{ env.HON_CRM_CHROME }}
@@ -187,6 +192,7 @@ jobs:
           HON_HQ_BROWSER_RESULTS: ${{ env.HON_CRM_RESULTS }}/hq
         run: pnpm --filter @hon/web exec node scripts/hq-school-create-browser.mjs
       - name: Staff invitations through actual Next, signed API and PostgreSQL
+        if: ${{ !cancelled() && steps.app_build.outcome == 'success' && steps.api_transport.outcome == 'success' && steps.browser_tools.outcome == 'success' }}
         run: |
           set -euo pipefail
           fixture_dir=/home/ubuntu/jobs/owner_experience_accounts
@@ -196,6 +202,7 @@ jobs:
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CHAMPIONS_VALIDATION_TARGET=postgresql://localhost:5432/hon_champions_validation HON_CHAMPIONS_ENV_FILE="$fixture_dir/staff.env" node packages/database/scripts/setup-champions-club-validation.mjs
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted HON_STAFF_INVITATIONS_TEST=1 HON_STAFF_INVITATIONS_SHA="$HON_CRM_SOURCE_SHA" HON_STAFF_INVITATIONS_RESULTS="$HON_CRM_RESULTS/staff" HON_STAFF_INVITATIONS_TOOLS="$HON_CRM_TOOLS" HON_STAFF_INVITATIONS_CHROME="$HON_CRM_CHROME" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/staff-invitations-verification.mjs' _ "$fixture_dir/staff.env"
       - name: Family access through actual Next, signed API and PostgreSQL
+        if: ${{ !cancelled() && steps.app_build.outcome == 'success' && steps.api_transport.outcome == 'success' && steps.browser_tools.outcome == 'success' }}
         run: |
           set -euo pipefail
           fixture_dir=/home/ubuntu/jobs/owner_experience_accounts
@@ -203,9 +210,11 @@ jobs:
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CHAMPIONS_VALIDATION_TARGET=postgresql://localhost:5432/hon_champions_validation HON_CHAMPIONS_ENV_FILE="$fixture_dir/family.env" node packages/database/scripts/setup-champions-club-validation.mjs
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted HON_FAMILY_ACCESS_TEST=1 HON_FAMILY_ACCESS_SHA="$HON_CRM_SOURCE_SHA" HON_FAMILY_ACCESS_RESULTS="$HON_CRM_RESULTS/family" HON_FAMILY_ACCESS_TOOLS="$HON_CRM_TOOLS" HON_FAMILY_ACCESS_CHROME="$HON_CRM_CHROME" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/family-access-integration.mjs' _ "$fixture_dir/family.env"
       - name: Actual application browser verification
+        if: ${{ !cancelled() && steps.app_build.outcome == 'success' && steps.api_transport.outcome == 'success' && steps.browser_tools.outcome == 'success' }}
         id: browser
         run: pnpm --filter @hon/web exec node scripts/crm-adult-flow-browser.mjs
       - name: Connected CRM journey browser verification retained from the consolidated workflow
+        if: ${{ !cancelled() && steps.app_build.outcome == 'success' && steps.api_transport.outcome == 'success' && steps.browser_tools.outcome == 'success' }}
         env:
           HON_CRM_JOURNEY_SHA: ${{ github.event.pull_request.head.sha }}
           HON_CRM_JOURNEY_CHROME: ${{ env.HON_CRM_CHROME }}
@@ -213,6 +222,7 @@ jobs:
           HON_CRM_JOURNEY_RESULTS: ${{ env.HON_CRM_RESULTS }}/connected-journey
         run: pnpm --filter @hon/web exec node scripts/crm-journey-browser.mjs
       - name: Native CRM membership booking attendance journey (actual API/database)
+        if: ${{ !cancelled() && steps.app_build.outcome == 'success' && steps.api_transport.outcome == 'success' && steps.browser_tools.outcome == 'success' }}
         run: |
           set -euo pipefail
           fixture_dir=/home/ubuntu/jobs/crm_resume_verification

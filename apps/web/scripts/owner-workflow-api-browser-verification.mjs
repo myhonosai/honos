@@ -33,7 +33,7 @@ const q = (sql, values = []) => owner.query(sql, values);
 const report = { sourceSha, evidence: 'NATIVE_BROWSER_NEXT_NEST_IAM_RESTRICTED_DISPOSABLE_POSTGRES', passed: false,
   signedSyntheticHonSession: true, externalOidcLogin: false, ownerDeviceAcceptance: false, apiResponsesMocked: false,
   browserHeadersModified: false, authorizationOrScopeOverridden: false, fullAppModule: false, workersStarted: false,
-  externalProviderCalls: 0, blockedExternalOrigins: [], nativeBrowserRequests: [], nestIngress: [], cases: [], screenshots: [] };
+  providerExecutionConfigured: false, externalProviderCalls: null, blockedExternalOrigins: [], nativeBrowserRequests: [], nestIngress: [], cases: [], screenshots: [] };
 let stage = 'load-canonical-components', app, database, next, browser, ownerConnected = false;
 async function loadClasses() {
   const files = ['foundation/runtime-database.service', 'foundation/hon-identity.guard', 'foundation/hon-identity.service',

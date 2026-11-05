@@ -8,7 +8,7 @@ on:
       - apps/web/src/app/staff/family-access/**
       - apps/web/src/app/account/family-invitation/**
       - apps/web/test/family-access-*.test.*
-      - apps/web/scripts/family-access-integration.mjs
+      - apps/web/scripts/family-access*.mjs
       - apps/web/public/manus-routes.json
       - .github/workflows/family-access-ui-validation.yml
 permissions:
