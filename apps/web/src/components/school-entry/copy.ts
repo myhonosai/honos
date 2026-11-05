@@ -16,6 +16,7 @@ const en = {
   dashboard: 'School operations dashboard', dashboardHelp: 'View authorized reports. Multiple-school users must choose the school again there.',
   team: 'Staff team and invitations', teamHelp: 'Review staff invitations and roles through the existing staff-management workflow. Each operation checks its own authority.',
   family: 'Family account access', familyHelp: 'Manage account access for an already-known family. The destination requires an explicit family selector and fresh authorization.',
+  account: 'School account & usage', accountHelp: 'Read HON OS billing standing and the separate school creative wallet. Each read checks its own permission, including billing recovery during suspension.',
   backToEntry: 'Choose or recheck school', navigationPaused: 'Finish or resolve the current work before leaving this page.', navigationHelp: 'Each destination verifies access again. Opening a link does not run an action.',
   unavailable: 'Not enabled by this workspace', unavailableHelp: 'Payments, outbound messages, trial access activation and paid AI calls remain unavailable here. A saved record is not evidence of payment or signed agreements.',
   mode: 'Presentation', modern: 'Modern', classic: 'Classic', big: 'Big Button', modeHelp: 'Presentation only. Changing layout or language does not read school data or change permissions.', nav: 'Workspace navigation',
@@ -30,6 +31,7 @@ const ko: Record<Key, string> = {
   booking: '확인된 학생 수업 예약', bookingHelp: '문의 선택 → 회원권 조회 → 학생 선택 → 수업 조회 및 예약. 학생 ID를 URL에 복사하지 않습니다.', attendance: '출석 기록', attendanceHelp: '확인된 학생의 회원권에서 수업 업무를 열고 수업을 선택한 후 출석을 직접 조회하거나 수정하세요.', dashboard: '도장 운영 대시보드', dashboardHelp: '권한이 확인된 보고서를 봅니다. 여러 도장에 접근할 수 있다면 이 화면에서도 도장을 다시 선택해야 합니다.',
   unavailable: '이 업무 공간에서 활성화하지 않는 기능', unavailableHelp: '결제, 외부 메시지, 체험 접근 활성화 및 유료 AI 호출은 여기서 사용할 수 없습니다. 저장된 기록은 결제나 계약 서명의 증거가 아닙니다.', mode: '화면 모드', modern: '모던', classic: '클래식', big: '큰 버튼', modeHelp: '표시 방식만 바뀝니다. 화면 모드나 언어를 변경해도 도장 데이터를 조회하거나 권한을 변경하지 않습니다.', nav: '업무 공간 탐색',
   team: '직원 팀 및 초대', teamHelp: '기존 직원 관리 업무에서 초대와 역할을 확인하세요. 각 작업에서 권한을 다시 확인합니다.', family: '가족 계정 접근 관리', familyHelp: '이미 알고 있는 가족의 계정 접근을 관리합니다. 대상 화면에서 가족을 직접 지정하고 권한을 새로 확인해야 합니다.',
+  account: '도장 계정 및 사용 현황', accountHelp: 'HON OS 청구 상태와 별도 도장 크리에이티브 지갑을 조회합니다. 정지 중 청구 복구를 포함해 각 조회에서 권한을 확인합니다.',
   backToEntry: '도장 선택 또는 다시 확인', navigationPaused: '이 페이지를 나가기 전에 진행 중인 업무를 완료하거나 해결하세요.', navigationHelp: '각 대상 화면에서 접근 권한을 다시 확인합니다. 링크를 열어도 작업이 실행되지 않습니다.',
 };
 const es: Record<Key, string> = {
@@ -40,6 +42,7 @@ const es: Record<Key, string> = {
   booking: 'Reservar para un estudiante verificado', bookingHelp: 'Lead → recuperar membresías → elegir estudiante → clases y reserva. No se copia el ID del estudiante en la URL.', attendance: 'Registrar asistencia', attendanceHelp: 'Desde la membresía verificada, abre operaciones de clase, elige una sesión y consulta o actualiza la asistencia explícitamente.', dashboard: 'Panel de operaciones escolares', dashboardHelp: 'Consulta informes autorizados. Los usuarios de varias escuelas deben elegir de nuevo la escuela allí.',
   unavailable: 'No habilitado por este espacio', unavailableHelp: 'Los pagos, mensajes externos, activación de acceso de prueba e invocaciones de IA de pago no están disponibles aquí. Un registro guardado no acredita pago ni acuerdos firmados.', mode: 'Presentación', modern: 'Moderna', classic: 'Clásica', big: 'Botones grandes', modeHelp: 'Solo presentación. Cambiar el diseño o el idioma no consulta datos escolares ni cambia permisos.', nav: 'Navegación del espacio',
   team: 'Equipo e invitaciones del personal', teamHelp: 'Revisa invitaciones y roles en el flujo existente de gestión del personal. Cada operación verifica su propia autorización.', family: 'Acceso a cuentas familiares', familyHelp: 'Gestiona el acceso de una familia ya conocida. El destino exige indicar la familia y verificar nuevamente la autorización.',
+  account: 'Cuenta y uso de la escuela', accountHelp: 'Consulta el estado de facturación HON OS y la cartera creativa escolar independiente. Cada consulta verifica su permiso, incluida la recuperación durante suspensión.',
   backToEntry: 'Elegir o volver a verificar escuela', navigationPaused: 'Termina o resuelve el trabajo actual antes de salir de esta página.', navigationHelp: 'Cada destino vuelve a verificar el acceso. Abrir un enlace no ejecuta una acción.',
 };
 export function entryText(language: string, key: Key): string { return (language === 'ko' ? ko : language === 'es' ? es : en)[key]; }

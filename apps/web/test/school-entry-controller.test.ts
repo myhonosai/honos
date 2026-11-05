@@ -74,10 +74,10 @@ it('repeated concealment invalidates an in-flight access restoration', async () 
   expect(c.snapshot()).toMatchObject({ phase: 'CONCEALED', selection: null });
 });
 it('links only established workflows with inert school selectors; no student, membership, role or command is carried', () => {
-  const links = schoolWorkflowLinks(a); expect(links.map(x => x.key)).toEqual(['crm', 'registration', 'membership', 'booking', 'attendance', 'dashboard', 'team', 'family']);
+  const links = schoolWorkflowLinks(a); expect(links.map(x => x.key)).toEqual(['crm', 'registration', 'membership', 'booking', 'attendance', 'dashboard', 'team', 'family', 'account']);
   for (const link of links) {
     const u = new URL(link.href, 'https://hon.example'); expect(u.origin).toBe('https://hon.example');
     expect([...u.searchParams.keys()]).toEqual(['organizationId', 'schoolId']); expect(u.searchParams.get('schoolId')).toBe(a.schoolId);
-    expect(['/staff/crm/journey', '/staff/dashboard', '/staff/team/invitations', '/staff/family-access']).toContain(u.pathname);
+    expect(['/staff/crm/journey', '/staff/dashboard', '/staff/team/invitations', '/staff/family-access', '/staff/account-status']).toContain(u.pathname);
   }
 });

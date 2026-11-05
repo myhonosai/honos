@@ -15,7 +15,7 @@ it('requires a verified session and offers ordinary independently authorized wor
   const guarded = await AccessPage(); expect(guarded.type).toBe(AccessNotice);
   const page = AccessNotice(); expect(session.require).toHaveBeenCalledTimes(1);
   expect(text(page)).toContain('Access not verified'); expect(text(page)).toContain('This does not establish that your account has no access.');
-  expect(nodes(page).filter(e => e.type === 'a').map(e => e.props.href)).toEqual(['/hq','/staff/entry','/parent','/auth/continue','/auth/login']);
+  expect(nodes(page).filter(e => e.type === 'a').map(e => e.props.href)).toEqual(['/hq','/staff/entry','/parent','/staff/account-status','/auth/continue','/auth/login']);
   expect(fetcher).not.toHaveBeenCalled(); fetcher.mockRestore();
 });
 it('does not render a neutral workspace page when the session guard redirects', async () => {

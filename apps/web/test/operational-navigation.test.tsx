@@ -20,12 +20,12 @@ it('normalizes only a complete inert pair and performs no reads or commands', ()
 });
 it.each([a, b])('preserves both selectors for school $schoolId through a closed route set', scope => {
   const links = schoolWorkflowLinks({ ...scope, extraReportFact: 'not serialized' } as typeof scope);
-  expect(links.map(link => link.key)).toEqual(['crm', 'registration', 'membership', 'booking', 'attendance', 'dashboard', 'team', 'family']);
+  expect(links.map(link => link.key)).toEqual(['crm', 'registration', 'membership', 'booking', 'attendance', 'dashboard', 'team', 'family', 'account']);
   for (const link of links) {
     const url = new URL(link.href, 'https://hon.invalid');
     expect(url.origin).toBe('https://hon.invalid');
     expect([...url.searchParams.entries()]).toEqual(Object.entries(scope));
-    expect(['/staff/crm/journey', '/staff/dashboard', '/staff/team/invitations', '/staff/family-access']).toContain(url.pathname);
+    expect(['/staff/crm/journey', '/staff/dashboard', '/staff/team/invitations', '/staff/family-access', '/staff/account-status']).toContain(url.pathname);
   }
   expect(schoolWorkflowLinks({ ...scope, schoolId: 'invalid' })).toEqual([]);
 });
