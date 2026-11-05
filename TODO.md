@@ -1,3 +1,8 @@
+## Sprint 2 — owner entry on accepted main 0204
+
+- Prepare the current196-migration composition with accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` and final CRM frontend. All production frontend bytes remain those of reviewed #134; all backend/API/packages/infra bytes equal accepted main.
+- Preserve the four-job green195-migration checkpoint at `3c86b66…` as historical source evidence. A fresh exact-head196-migration run follows this batched reconciliation. No new broad audit or runtime behavior change is introduced.
+
 ## Sprint 2 — owner entry reconciliation on accepted backend 0203
 
 - Preserve the reviewed #134 production frontend byte-for-byte while normally incorporating the final #129 integration and accepted main `029de0cadbeb047ef8e38767de4e60e460325821`. All 195 migration/checksum and canonical ACL bytes come from accepted main; no backend source is authored here.
@@ -16,6 +21,12 @@
 - Document the precise missing minimal guardian/current-access reader for Claude; preserve parent/staff/HQ independent API authorization, all callback PKCE/nonce/verified-email behavior, manual workspace choices and no automatic retries. Scope and evidence limits: [verified post-login routing](docs/architecture/VERIFIED_POST_LOGIN_ROUTING.md).
 - Local verification on the isolated current-main branch: 73 focused auth/routing/page tests and all 1,106 web tests pass; web TypeScript and production build pass. Response streaming is bounded to 16 KB and cancels on deadline. Script syntax, workflow YAML, documentation links, manifest uniqueness and whitespace checks pass. Local mounted HTTP/browser execution is blocked by `listen EPERM`; the dedicated synthetic production-Next/browser proof awaits hosted CI, while the existing account workflow retains full repository/disposable PostgreSQL checks. Web classification responses are mocked; no fresh API/database/IAM proof is claimed. No commit, publication, merge, deployment, Codespaces or changes to PRs #94/#95/#104 are authorized by this checkpoint.
 
+
+## Sprint 2 — accepted main 0204 reconciliation
+
+- Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after the owner-authorized #135 squash; its backend tree is identical to reviewed #135 `7d1134a`. All196 migration checksums and canonical API/package/infra bytes are preserved. No backend logic is authored here.
+- Reviewed #129 production frontend remains unchanged. The prior four-job green run at `41e06bc…` is evidence for the195-migration checkpoint, not fresh verification of this196-migration composition. Publish one batch and obtain fresh final-head verification; do not repeat unchanged-head runs.
+- Existing exact retries, privacy, callback retirement and original-microsecond HTTP200 proof remain unchanged. Tracking#131; no merge/deployment/provider activation.
 
 ## Sprint 2 — final accepted backend / reviewed CRM frontend integration
 
