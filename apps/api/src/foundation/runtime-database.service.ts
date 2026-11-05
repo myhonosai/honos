@@ -41,6 +41,8 @@ export interface ResolvedParentFamilyScope extends ResolvedPrincipalScope {
 
 export interface HqSchoolProvisioningCommand {
   externalSubject: string;
+  /** The HQ principal the human screen verified; the database refuses before any write unless it is the actor. */
+  expectedPrincipalId: string;
   legalName: string;
   displayName: string;
   schoolName: string;
@@ -58,6 +60,8 @@ export interface HqSchoolProvisioningResult {
   schoolId: string;
   ownerRoleId: string;
   replayed: boolean;
+  actorPrincipalId: string;
+  entitlementStatus: string;
 }
 
 const CHAMPIONS_CLUB_CALLS = {
@@ -1045,11 +1049,11 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   async provisionSchoolFromHq(command: HqSchoolProvisioningCommand): Promise<HqSchoolProvisioningResult> {
     await this.assertRuntimePosture();
-    const result = await this.getPool().query<HqSchoolProvisioningResult>(
-      `SELECT organization_id AS "organizationId", school_id AS "schoolId", owner_role_id AS "ownerRoleId", replayed
-       FROM hon.provision_school_from_hq($1, $2, $3, $4, $5, $6, $7::hon.plan_tier, $8, $9, $10::uuid, $11::uuid)`,
+    const result = await this.getPool().query<{ data: HqSchoolProvisioningResult }>(
+      `SELECT hon.provision_school_from_hq_human($1, $2::uuid, $3, $4, $5, $6, $7, $8::hon.plan_tier, $9, $10, $11::uuid, $12::uuid) AS data`,
       [
         command.externalSubject,
+        command.expectedPrincipalId,
         command.legalName,
         command.displayName,
         command.schoolName,
@@ -1062,7 +1066,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
         command.correlationId,
       ],
     );
-    const provisioned = result.rows[0];
+    const provisioned = result.rows[0]?.data;
     if (!provisioned) throw new Error('HON HQ tenant provisioning did not return a result.');
     return provisioned;
   }
