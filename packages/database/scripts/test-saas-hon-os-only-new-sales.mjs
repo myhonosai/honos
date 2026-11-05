@@ -208,7 +208,7 @@ try{
  // ---------- 3. new customers cannot buy a legacy plan through any path ----------
  // N is a brand-new school registered through HQ provisioning (Core): a new customer, with no legacy subscription.
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'D8 Provisioned Dojo LLC',
-  displayName:'D8 Provisioned Dojo',schoolName:'D8 Provisioned Dojo Main',schoolSlug:`d8-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
+  displayName:'D8 Provisioned Dojo',schoolName:'D8 Provisioned Dojo Main',schoolSlug:`d8-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K(),expectedPrincipalId:humans.owner.id});
  Object.assign(N,{id:provisioned.organizationId,school:provisioned.schoolId});
  // N stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED; the D9 proof covers that case).
  await activatePreD9ProvisionedSchool(admin,N.id);

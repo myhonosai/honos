@@ -60,7 +60,7 @@ try {
   await owner.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','Local fixture human')",[p,u]);
  }
  await owner.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role) VALUES($1,'HON_HQ_OWNER')",[ids.hqPrincipal]);
- const provision=async(name,tier)=>hq.provisionInitialSchool({externalSubject:hqSubject},{legalName:'Local '+name,displayName:'Local '+name,schoolName:'Local '+name,schoolSlug:'local-'+randomUUID(),timezone:'UTC',initialTier:tier,idempotencyKey:randomUUID()});
+ const provision=async(name,tier)=>hq.provisionInitialSchool({externalSubject:hqSubject},{legalName:'Local '+name,displayName:'Local '+name,schoolName:'Local '+name,schoolSlug:'local-'+randomUUID(),timezone:'UTC',initialTier:tier,idempotencyKey:randomUUID(),expectedPrincipalId:ids.hqPrincipal});
  const a=await provision('launch','ESSENTIAL'),b=await provision('other','CORE');
  // Both stand in for schools provisioned before D9 (0185 holds new provisioning SUSPENDED).
  for(const school of [a,b])await activatePreD9ProvisionedSchool(owner,school.organizationId);
