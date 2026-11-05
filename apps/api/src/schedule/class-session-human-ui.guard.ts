@@ -1,9 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, ServiceUnavailableException, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
+import { forwardedHostMatchesPublicOrigin } from './same-origin-proxy.js';
 
 const AUTHORITY_HEADERS = new Set([
-  'authorization', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-proto',
+  'authorization', 'forwarded', 'x-forwarded-for', 'x-forwarded-port', 'x-forwarded-proto',
   'x-real-ip', 'x-original-url', 'x-rewrite-url', 'x-subject', 'x-user-id', 'x-principal-id',
   'x-organization-id', 'x-school-id', 'x-role', 'x-tier', 'x-source',
   'x-delegated-by-principal-id', 'x-action-request-id',
@@ -36,6 +37,7 @@ export class ClassSessionHumanUiGuard implements CanActivate {
     if (hasSelector) throw new BadRequestException({ code: 'CLASS_SESSION_SELECTORS_NOT_ACCEPTED' });
     if (request.method !== 'POST'
       || headers.origin !== origin
+      || !forwardedHostMatchesPublicOrigin(headers['x-forwarded-host'], origin)
       || headers['x-hon-human-command'] !== 'class-session'
       || headers['sec-fetch-site'] !== 'same-origin'
       || headers['sec-fetch-mode'] !== 'same-origin'
