@@ -55,3 +55,28 @@ test('Class Sessions read source carries no mutation, generic search, roster, bo
   const migration = readFileSync('../../packages/database/migrations/0147_current_school_class_sessions_read.sql', 'utf8');
   assert.match(migration, /LIMIT 50/); assert.match(migration, /schedule\.session\.read/); assert.match(migration, /FORCE ROW LEVEL SECURITY/); assert.match(migration, /REVOKE SELECT ON TABLE hon\.class_sessions/); assert.doesNotMatch(migration, /INSERT INTO hon\.(?:audit_events|outbox_events|class_bookings|attendance_records)/i);
 });
+
+test('Class Sessions contract orders by published millisecond then sessionId (the single rule SQL must follow)', () => {
+  const { verifyCurrentSchoolClassSessions } = require('@hon/contracts');
+  const row = (sessionId, startsAt) => ({ ...item, sessionId, startsAt, endsAt: '2026-10-16T13:00:00.000Z' });
+  const low = '0aaaaaaa-0000-4000-8000-000000000000', high = 'faaaaaaa-0000-4000-8000-000000000000';
+  // Same published millisecond: UUID ascending is valid, the reverse is a contract violation.
+  assert.equal(verifyCurrentSchoolClassSessions([row(low, '2026-10-16T12:00:00.123Z'), row(high, '2026-10-16T12:00:00.123Z')]).length, 2);
+  assert.throws(() => verifyCurrentSchoolClassSessions([row(high, '2026-10-16T12:00:00.123Z'), row(low, '2026-10-16T12:00:00.123Z')]));
+  // Distinct milliseconds: time first, a reversed UUID never overrides it.
+  assert.equal(verifyCurrentSchoolClassSessions([row(high, '2026-10-16T12:00:00.122Z'), row(low, '2026-10-16T12:00:00.123Z')]).length, 2);
+});
+
+test('Latest Class Sessions projection orders and bounds by the published UTC millisecond, never raw microseconds', () => {
+  const { readdirSync } = require('node:fs');
+  const directory = '../../packages/database/migrations/';
+  const defining = readdirSync(directory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort()
+    .filter((file) => /FUNCTION hon\.read_current_school_class_sessions\(p_subject text\)/.test(readFileSync(directory + file, 'utf8')));
+  assert.deepEqual(defining, ['0147_current_school_class_sessions_read.sql', '0203_class_sessions_read_millisecond_order.sql']);
+  const body = readFileSync(directory + defining.at(-1), 'utf8').replace(/--[^\n]*/g, '');
+  assert.match(body, /date_trunc\('milliseconds', session\.starts_at AT TIME ZONE 'UTC'\) AS starts_at/);
+  assert.match(body, /jsonb_agg\(item\.item ORDER BY item\.published_starts_at, item\.id\)/);
+  assert.match(body, /ORDER BY published\.starts_at, session\.id\s+LIMIT 50/);
+  assert.match(body, /'startsAt', to_char\(published\.starts_at, /);
+  assert.doesNotMatch(body, /ORDER BY (?:item|session)\.starts_at/);
+});

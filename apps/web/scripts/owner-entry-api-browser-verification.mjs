@@ -287,7 +287,7 @@ try {
   await writeFile(join(results, 'owner-entry-report.json'), JSON.stringify({ sourceSha: process.env.HON_OWNER_ENTRY_SHA ?? null, groups, frontendReads, browserChecks, identityChecks, securityChecks,
     signedSyntheticIdentities: true, markedDisposableDatabase: true, actualNextAndNest: true, actualProviderOrOidcLogin: false, protectedTables: protectedTables.length,
     externalProviderCalls: 0, externalPageRequestsAllowed: 0, blockedStaticFontRequests, screenshotFonts: 'installed local fallbacks; external fonts blocked',
-    businessCommands: 0, paidAiCalls: 0, screenshots: browserChecks.length, knownTimestampOrderingDefect: 'UNRESOLVED; existing real API reproduction retained unchanged' }, null, 2) + '\n');
+    businessCommands: 0, paidAiCalls: 0, screenshots: browserChecks.length, timestampOrderingEvidence: 'Accepted migration 0203; original microsecond HTTP 200 proof runs separately in the same exact-head workflow' }, null, 2) + '\n');
   console.log(JSON.stringify({ passed: true, groups: groups.length, browserChecks: browserChecks.length, protectedTables: protectedTables.length, providerCalls: 0 }));
 } finally {
   globalThis.fetch = originalFetch;

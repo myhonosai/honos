@@ -146,6 +146,9 @@ jobs:
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-recovery-api-verification.mjs && node apps/web/scripts/crm-family-api-verification.mjs && node apps/web/scripts/membership-activation-api-verification.mjs && node apps/web/scripts/membership-dates-api-verification.mjs' _ "$fixture_dir/recovery.env"
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_SCHOOL_MEMBERSHIP_API_TEST=1 HON_SCHOOL_MEMBERSHIP_SHA="$HON_SCHOOL_MEMBERSHIP_SHA" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/school-membership-integration-api-verification.mjs' _ "$fixture_dir/recovery.env"
           env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CONNECTED_OPERATIONS_API_TEST=1 HON_CONNECTED_OPERATIONS_SHA="$HON_CRM_SOURCE_SHA" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/connected-student-operations-api-verification.mjs' _ "$fixture_dir/recovery.env"
+          # PR #129 supersedes the standalone trial-recovery workflow; keep its real API proof here.
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_TRIAL_RECOVERY_API_TEST=1 HON_CRM_TRIAL_RECOVERY_FRONTEND_SHA="$HON_CRM_SOURCE_SHA" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-trial-recovery-api-verification.mjs' _ "$fixture_dir/recovery.env"
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_CRM_JOURNEY_API_TEST=1 bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/crm-journey-api-verification.mjs' _ "$fixture_dir/recovery.env"
       - name: Prepare pinned browser tools outside the repository
         run: |
           set -euo pipefail
@@ -157,7 +160,7 @@ jobs:
           echo "HON_CRM_CHROME=$chrome_bin" >> "$GITHUB_ENV"
           echo "HON_CRM_TOOLS=$RUNNER_TEMP/hon-crm-tools" >> "$GITHUB_ENV"
           echo "HON_CRM_RESULTS=$RUNNER_TEMP/hon-crm-results" >> "$GITHUB_ENV"
-          npm install --prefix "$RUNNER_TEMP/hon-crm-tools" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1 axe-core@4.10.3
+          npm install --prefix "$RUNNER_TEMP/hon-crm-tools" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1 axe-core@4.10.3 esbuild@0.25.12
       - name: Owner entry against actual Next, signed sessions, canonical API and disposable PostgreSQL
         id: owner_entry
         run: |
@@ -169,6 +172,13 @@ jobs:
       - name: Actual application browser verification
         id: browser
         run: pnpm --filter @hon/web exec node scripts/crm-adult-flow-browser.mjs
+      - name: Connected CRM journey browser verification retained from the consolidated workflow
+        env:
+          HON_CRM_JOURNEY_SHA: ${{ github.event.pull_request.head.sha }}
+          HON_CRM_JOURNEY_CHROME: ${{ env.HON_CRM_CHROME }}
+          HON_CRM_JOURNEY_TOOLS: ${{ env.HON_CRM_TOOLS }}
+          HON_CRM_JOURNEY_RESULTS: ${{ env.HON_CRM_RESULTS }}/connected-journey
+        run: pnpm --filter @hon/web exec node scripts/crm-journey-browser.mjs
       - name: Retain private review artifacts
         if: always() && (steps.browser.outcome != 'skipped' || steps.owner_entry.outcome != 'skipped')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -1,6 +1,6 @@
 # Verified owner entry integration
 
-This continues PR #111 on reviewed integration #129 `c14a2b110bce4e04b63cd3fe218a560fdcf246e9` and accepted main `8257ad26afde65896d3aa1adcb0aabed08d75051`. The normal main-ancestry merge preserves #129’s exact reviewed source tree. No backend, shared contract, migration, canonical ACL or existing CRM/membership/booking/attendance component is changed.
+This continues PR #111 and reviewed #134 `1285328bbb24b9fa659eaed7cd323d8d163f96a2` on the final #129 integration, using accepted main `029de0cadbeb047ef8e38767de4e60e460325821`. The normal merge preserves reviewed production frontend bytes. All backend, shared contract, 195 migrations and canonical ACL source are copied unchanged from accepted main; only integration proof, workflow and evidence wording are reconciled.
 
 ## Working path
 
@@ -27,7 +27,7 @@ New controller/HTTP/session/presentation regressions cover both organizations, s
 
 Local Node uses the installed cached dependencies; full pnpm and PostgreSQL evidence must come from the supported hosted workflow. Record actual final results in the PR, never infer them from source or a skipped job.
 
-Accepted backend sequence remains #108 → #109 → #110 → #118 → #119 → #120 → #122; #129/#126/#127 are unmerged dependencies, not merge authorization. Claude owns #130 (`50ed01f…`) and its timestamp-order correction. This candidate preserves the existing HTTP 500 reproduction on the unchanged backend; once the approved correction is accepted, flip that harness assertion to a positive exact-source read in a separately reviewed delta. Do not weaken response validation or normalize production precision.
+The backend sequence through #122, #123, #124 and #130 is accepted on main `029de0c…` (195 migrations through 0203). #129/#126/#127 remain frontend source dependencies, not merge authorization. The connected-operations real API proof now requires HTTP 200 on the original microsecond collision and verifies unchanged raw timestamps. Migration 0203 supplies the production ordering correction; neither the validator nor the fixture timestamps are relaxed. Fresh combined-head CI and focused proof/workflow delta review are still required.
 
 New schools remain suspended. This screen neither grants an exception nor approves D10 policies, trial enrollment, paid access, subscriptions, providers or AI spending. Private environment hosting, normal identity-provider setup, legitimate test-school access and owner merge authorization remain separate gates.
 

@@ -1,3 +1,9 @@
+## Sprint 2 — owner entry reconciliation on accepted backend 0203
+
+- Preserve the reviewed #134 production frontend byte-for-byte while normally incorporating the final #129 integration and accepted main `029de0cadbeb047ef8e38767de4e60e460325821`. All 195 migration/checksum and canonical ACL bytes come from accepted main; no backend source is authored here.
+- Retain the owner-entry canonical-role fixture and actual Next/signed-session/resolver/browser proof. Incorporate #129's positive original-microsecond regression and unique trial/journey proof consolidation. No fixture timestamp normalization, access exception or provider activation.
+- The historical #134 four-job run at `1285328…` remains historical; fresh exact-head combined verification and focused independent reconciliation review follow publication. Shared sprint tracking: GitHub #131.
+
 ## Owner entry integration — implemented; exact-head hosted verification follows publication
 
 - Reuse PR #111 on reviewed #129 plus accepted main `8257ad2`; preserve backend, migrations and reviewed CRM/booking/attendance bytes. Route verified school owners to a localized school-entry screen and HQ principals to HQ.
@@ -10,6 +16,14 @@
 - Document the precise missing minimal guardian/current-access reader for Claude; preserve parent/staff/HQ independent API authorization, all callback PKCE/nonce/verified-email behavior, manual workspace choices and no automatic retries. Scope and evidence limits: [verified post-login routing](docs/architecture/VERIFIED_POST_LOGIN_ROUTING.md).
 - Local verification on the isolated current-main branch: 73 focused auth/routing/page tests and all 1,106 web tests pass; web TypeScript and production build pass. Response streaming is bounded to 16 KB and cancels on deadline. Script syntax, workflow YAML, documentation links, manifest uniqueness and whitespace checks pass. Local mounted HTTP/browser execution is blocked by `listen EPERM`; the dedicated synthetic production-Next/browser proof awaits hosted CI, while the existing account workflow retains full repository/disposable PostgreSQL checks. Web classification responses are mocked; no fresh API/database/IAM proof is claimed. No commit, publication, merge, deployment, Codespaces or changes to PRs #94/#95/#104 are authorized by this checkpoint.
 
+
+## Sprint 2 — final accepted backend / reviewed CRM frontend integration
+
+- [x] Normally incorporate accepted main `029de0cadbeb047ef8e38767de4e60e460325821`; preserve all 195 migrations/checksums and all canonical backend/ACL source. Reviewed #126/#127/#129 production UI files remain byte-identical and are included once.
+- [x] Replace the obsolete HTTP 500 expectation with HTTP 200 on the original microsecond collision; assert published-ms/UUID order and unchanged raw timestamps, without fixture normalization or parser/grant workaround.
+- [x] Consolidate #129's overlapping CI: keep the complete four jobs and port the unique trial/journey API/browser scripts into it. Other PRs' workflows are unaffected. Local YAML, syntax, retained-proof mapping and checksum checks pass.
+- [ ] Hosted exact-head full repository, canonical PostgreSQL, commercial and API/browser/axe evidence; focused delta review and explicit owner merge approval remain required. No production/browser launch or activation is claimed.
+- Shared tracking is GitHub #131. Older checkpoints below retain historical evidence only.
 
 ## Membership operations — isolated canonical-ACL integration candidate (DRAFT)
 

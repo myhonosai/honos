@@ -95,6 +95,7 @@ setup class-sessions-read HON_CLASS_SESSIONS_READ_VALIDATION_TARGET hon_class_se
 proof class-sessions-read test-security-boundaries.mjs "Tenant isolation, restricted runtime role, parent-family boundaries"
 proof class-sessions-read test-outbox-leases.mjs "Outbox leases never treat UNKNOWN as published"
 proof class-sessions-read test-class-sessions-read-integrity.mjs "Class Sessions current-school read boundary"
+proof class-sessions-read test-class-sessions-read-microsecond-order.mjs "Class Sessions read: signed-session HTTP 200 and one (published millisecond, UUID) order across SQL, 50-row boundary and contract"
 
 setup crm-lead-close HON_CRM_LEAD_CLOSE_VALIDATION_TARGET hon_crm_close_validation HON_CRM_LEAD_CLOSE_ENV_FILE
 proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational table"
@@ -119,8 +120,12 @@ proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Cl
 proof champions-club test-champions-club-contests-integrity.mjs "Champions Club contests: HQ lifecycle, frozen standings, winner review, liabilities"
 proof champions-club test-champions-club-journey-integrity.mjs "Champions Club end-to-end journey: code to winner, automatic reward reconciliation, audit"
 proof champions-club test-saas-subscription-integrity.mjs "HON subscription catalog (B1): owner-only offers, atomic founder inventory, entitlement-linked records, no billing effect"
+proof champions-club test-saas-billing-utc-periods-integrity.mjs "Issue #100 (0201): SaaS billing periods are UTC calendar months from the original anchor (month-end clamping, leap years, DST, time of day) whatever the session, database default or reused pooled connection TimeZone; pre-0201 drift reproduced only with the pin removed"
+proof champions-club test-saas-billing-utc-webhook-periods.mjs "0201 on the production webhook path: monthly and annual HON OS activation and renewals at month ends, a leap day and DST days on one reused pooled session across zones and a non-UTC database default; pre-0201 drift reproduced only with pins removed; read-only operator checks find exactly the drifted rows"
 proof champions-club test-saas-invoicing-integrity.mjs "HON invoices and payment evidence (B2): gapless numbering, verified tax before issue, HQ attestation only, no collection or reward effect"
 proof champions-club test-saas-credits-integrity.mjs "HON premium credits (B3): owner-gated program, verified-cost pricing, reserve/finalize/release/expire ledger, concurrency-safe balance"
+proof champions-club test-saas-creative-wallet-integrity.mjs "HON OS creative credit wallet (CW1, 0202): school-owned wallets: 12,000 monthly window per eligible paid HON OS school, separate from the agent budget; HQ-owner rates/grants/corrections; concurrency-safe reserve/settle; actual provider cost recorded separately; top-up intents and TEST MODE exactly-once fulfillment; no provider call, no card charge"
+proof champions-club test-saas-creative-wallet-review-regressions.mjs "CW1 review regressions: exact-school isolation for two schools in one organization; school-owned allowances, purchases and locks; S4 HQ pause/access refuse new reservations but never accounting; CREATIVE_MEDIA expense separate in HQ usage; unknown provider cost stays UNKNOWN and is recorded exactly once"
 proof champions-club test-saas-refunds-rewards-integrity.mjs "HON refunds and Champions rewards (B4): 30-day first-purchase guarantee records, owner-gated reward application, alerts block fulfillment, no execution or payout"
 proof champions-club test-saas-payments-integrity.mjs "HON payments (B5, test mode, simulated Stripe): hosted checkout, signature-verified idempotent webhooks, provider-verified accounting, renewals, refunds, recovery"
 proof champions-club test-saas-school-billing-integrity.mjs "HON school billing reads (B5.1) and inactive paid-access foundation: exact-school billing.hon.view, organization billing, stable pagination, verified vs recorded, dry run with enforcement NONE"
