@@ -197,6 +197,7 @@
     "0202_hon_os_creative_credit_wallet.sql": "20cf43f41bc5bcd1702e8fbedd38e38044ff400f5a8b661464a6878a3de7fa93",
     "0203_class_sessions_read_millisecond_order.sql": "9bfb14c3b22af6d3a0d7e3a06ce7ee1e47a7a9a1286cb7d079423a2f2f5b5429",
     "0204_school_staff_invitations.sql": "49ad0ada64996fe468efa255f89db452ffdef4b640cbb0f998315bfe125c3b43",
-    "0205_school_family_access_invitations.sql": "c2c34b607e97be4da8b236aefcd630b1fd5282fe5fdedbe84003382b0c1bc449"
+    "0205_school_family_access_invitations.sql": "c2c34b607e97be4da8b236aefcd630b1fd5282fe5fdedbe84003382b0c1bc449",
+    "0206_school_owner_invitation_authority_order.sql": "f72f61c5ee635c8a230abe3d7ba2eafd2622a50c2c92724ca49ddd9c3dcf448c"
   }
 }

@@ -177,6 +177,58 @@ try{
  await waitBehindInvitationRow(pid,blockerPid);await q('SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM(expires_at-clock_timestamp())))+0.02) FROM hon.school_owner_invitations WHERE id=$1',[waitId]);
  await blocker.query('COMMIT');assert.equal((await pendingAccept).error?.code,'42501');assert.deepEqual(await counts(),beforeExpiry);
  pass('HQ authority and invitation expiry during actual row waits fail closed; no partial identity, role, invitation, claim or evidence effects');
+ // Authority that expires between verification and the evidence write fails closed (deterministic clock barrier).
+ // Fixture-only: the evidence INSERT waits until a pinned instant T has passed. HQ authority or the invitation is set to
+ // expire exactly at T, so every pre-write check sees it live and only a check made after the evidence write sees it expired.
+ await q('CREATE TABLE public.p0_clock_barrier_at(until timestamptz)');await q('INSERT INTO public.p0_clock_barrier_at VALUES(NULL)');
+ await q(`CREATE FUNCTION public.p0_clock_barrier() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+  DECLARE u timestamptz; BEGIN SELECT until INTO u FROM public.p0_clock_barrier_at;
+  IF u IS NOT NULL THEN PERFORM pg_sleep(greatest(0,extract(epoch FROM u-clock_timestamp()))+0.02); END IF; RETURN NEW; END $$`);
+ await q('CREATE TRIGGER p0_clock_barrier BEFORE INSERT ON hon.school_account_events FOR EACH ROW EXECUTE FUNCTION public.p0_clock_barrier()');
+ const pin=async()=>{const t=(await q("SELECT clock_timestamp()+interval '1500 milliseconds' t"))[0].t;await q('UPDATE public.p0_clock_barrier_at SET until=$1',[t]);return t;};
+ const unpin=()=>q('UPDATE public.p0_clock_barrier_at SET until=NULL');
+ const expireWaiterAt=t=>q('UPDATE hon.hq_operator_grants SET effective_until=$2 WHERE principal_id=$1',[actor.waiter.principal,t]);
+ const restoreWaiter=()=>q('UPDATE hon.hq_operator_grants SET effective_until=NULL WHERE principal_id=$1',[actor.waiter.principal]);
+ // The call must reach the barrier (evidence write) before failing: it returns only after T.
+ const atBoundary=async(t,work)=>{const r=await denied(work,403);assert(Date.now()>=t.getTime(),'refused before the evidence write');return r;};
+ try{
+  // Control: intact HQ authority completes through the same barrier.
+  let t=await pin();
+  const ctlIdentity={externalSubject:'oidc:p0:'+K(),email:'ctl-'+K()+'@example.invalid',emailVerified:true},ctlInput=invite(orgA,ctlIdentity.email);
+  const ctlInv=receipt(await send('hq/school-owner-invitations',{who:'waiter',body:ctlInput}));assert.equal(ctlInv.status,'PENDING');assert(Date.now()>=t.getTime());await unpin();
+  // INVITE and REVOKE: the HQ owner grant expires at T.
+  t=await pin();await expireWaiterAt(t);
+  await atBoundary(t,()=>send('hq/school-owner-invitations',{who:'waiter',body:invite(orgA,'late-'+K()+'@example.invalid')}));
+  await unpin();await restoreWaiter();
+  t=await pin();await expireWaiterAt(t);
+  await atBoundary(t,()=>send('hq/school-owner-invitations/revoke',{who:'waiter',body:{invitationId:ctlInv.invitationId}}));
+  assert.equal((await q('SELECT status FROM hon.school_owner_invitations WHERE id=$1',[ctlInv.invitationId]))[0].status,'PENDING');
+  await unpin();await restoreWaiter();
+  // ACCEPT: the issuing HQ owner's grant expires at T; no identity or OWNER grant survives.
+  t=await pin();await expireWaiterAt(t);
+  await atBoundary(t,()=>send('account/school-owner-invitations/accept',{identity:ctlIdentity,body:accept(ctlInv,ctlInput.token)}));
+  await unpin();await restoreWaiter();
+  assert.equal((await q('SELECT count(*) n FROM hon.users WHERE external_subject=$1',[ctlIdentity.externalSubject]))[0].n,'0');
+  assert.equal((await q('SELECT status FROM hon.school_owner_invitations WHERE id=$1',[ctlInv.invitationId]))[0].status,'PENDING');
+  // ACCEPT: the invitation itself expires at T.
+  const lateIdentity={externalSubject:'oidc:p0:'+K(),email:'late-accept-'+K()+'@example.invalid',emailVerified:true},lateToken=randomBytes(32).toString('base64url'),lateId=K();
+  t=await pin();
+  await q("INSERT INTO hon.school_owner_invitations(id,organization_id,school_id,email,token_hash,created_by,created_at,expires_at,status) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp(),$7,'PENDING')",[lateId,orgA.organizationId,orgA.schoolId,lateIdentity.email,hash(lateToken),actor.waiter.principal,t]);
+  await atBoundary(t,()=>send('account/school-owner-invitations/accept',{identity:lateIdentity,body:accept({invitationId:lateId},lateToken)}));
+  await unpin();
+  assert.equal((await q('SELECT count(*) n FROM hon.users WHERE external_subject=$1',[lateIdentity.externalSubject]))[0].n,'0');
+  // Control acceptance through the barrier, then revoke it so the owner grant does not outlive the group.
+  t=await pin();assert.equal(receipt(await send('account/school-owner-invitations/accept',{identity:ctlIdentity,body:accept(ctlInv,ctlInput.token)})).accountStatus,'OWNER_BOUND');assert(Date.now()>=t.getTime());await unpin();
+  receipt(await send('hq/school-owner-invitations/revoke',{who:'waiter',body:{invitationId:ctlInv.invitationId}}));
+  // Replay after expiry: a stored INVITE response is not returned to an HQ owner whose authority has ended.
+  const replayKey=K(),replayInput=invite(orgA,'replay-'+K()+'@example.invalid');receipt(await send('hq/school-owner-invitations',{who:'waiter',body:replayInput,key:replayKey}));
+  await q('UPDATE hon.hq_operator_grants SET effective_until=clock_timestamp() WHERE principal_id=$1',[actor.waiter.principal]);
+  await denied(()=>send('hq/school-owner-invitations',{who:'waiter',body:replayInput,key:replayKey}),403);
+ }finally{
+  await unpin().catch(()=>{});await restoreWaiter();
+  await q('DROP TRIGGER p0_clock_barrier ON hon.school_account_events');await q('DROP FUNCTION public.p0_clock_barrier()');await q('DROP TABLE public.p0_clock_barrier_at');
+ }
+ pass('HQ authority or invitation expiry between verification and the evidence write fails closed: no invitation, revocation, identity, OWNER grant or evidence; replay after expiry refused');
  const rollbackIdentity={externalSubject:'oidc:p0:'+K(),email:'rollback-'+K()+'@example.invalid',emailVerified:true},rollbackInput=invite(orgA,rollbackIdentity.email);
  const rollbackInvitation=receipt(await send('hq/school-owner-invitations',{body:rollbackInput}));
  await q('ALTER TABLE hon.school_account_events ADD CONSTRAINT p0_synthetic_failure CHECK(false) NOT VALID');
