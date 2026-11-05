@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "5705aec0ef05b0fbf0b78062be45c8678a20af9d7b031f823741fd0f310efad4",
+  "chainSha256": "4619d3930a8d1a2a5e844a69658f6a7ae017d17c94f3a5da2b9d56e451ad2192",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -57,6 +57,42 @@
     {
       "file": "0194_ai_org_budget_lock.sql",
       "sha256": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b"
+    },
+    {
+      "file": "0195_ai_spend_access_decision.sql",
+      "sha256": "08cb95ab587101cd031a003c19f3631d865676815413fb62bafc90f625adb858"
+    },
+    {
+      "file": "0196_ai_unknown_resolution.sql",
+      "sha256": "bcdfc97fc19cda882717b24d7c23add4e53cc64372bfe6f1a765403e2cacba40"
+    },
+    {
+      "file": "0197_ai_school_usage_hq_read.sql",
+      "sha256": "6676e39bf0c523d4bb88c7fd82daf8f107196c005cc29741e415e951658743f6"
+    },
+    {
+      "file": "0198_ai_team_readiness.sql",
+      "sha256": "7eb7cb3b0e64560136a783a97752772e6c67bc7695a57c89e90d6cc172e8d552"
+    },
+    {
+      "file": "0199_hon_conversation_delegation.sql",
+      "sha256": "3e7ff3b67c55bcdec206993f7610c3a1b8a4ece0645c68d9d757461d4eb5ff9b"
+    },
+    {
+      "file": "0200_crm_lead_membership_discovery.sql",
+      "sha256": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c"
+    },
+    {
+      "file": "0201_saas_billing_utc_calendar_periods.sql",
+      "sha256": "ea21b3ea4b4096026da07cd4a547dc0c5c3863b1c7780dd449a375ac66fedd3b"
+    },
+    {
+      "file": "0202_hon_os_creative_credit_wallet.sql",
+      "sha256": "20cf43f41bc5bcd1702e8fbedd38e38044ff400f5a8b661464a6878a3de7fa93"
+    },
+    {
+      "file": "0203_class_sessions_read_millisecond_order.sql",
+      "sha256": "9bfb14c3b22af6d3a0d7e3a06ce7ee1e47a7a9a1286cb7d079423a2f2f5b5429"
     },
     {
       "file": "0204_school_staff_invitations.sql",

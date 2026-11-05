@@ -1,3 +1,16 @@
+## Sprint 2 — family invitation frontend on reconciled backend
+
+- Normally incorporate Claude's reviewed/reconciled #136 `558bd339a026aba5a51f8e8ceee8f2b358994f9e` on accepted main through0203;197 checksums pass and API/packages/infra exactly match that dependency. No backend source or migration is authored here.
+- Preserve exact localized accessible-name assertions with explicit select labels; fix POST origin-only referrers while keeping GET no-referrer, closed commands, current identity checks and exact UNKNOWN recovery.77focused frontend regressions/typecheck pass; fresh mounted signed-API/browser evidence remains pending on the final published tree.
+- The earlier OIDC namespace repair passed all8 actual API groups; its browser label failure remains recorded as a failure, not a successful owner test. Backend acceptance, independent frontend review and owner approval remain gates in#131.
+
+## PR #139 — mounted browser labels and command origin
+
+- [x] Preserve exact localized selectors with explicit family/access-level select labels. Hosted run `41994633747`, job `127134741405`, passed all eight API groups, then timed out on the exact family label; Playwright reads the wrapping label's descendant option text. Add bounded entry diagnostics and preserve privacy/authorization checks.
+- [x] Use origin-only referrers for same-origin POSTs so browsers retain the configured Origin header; keep reads at `no-referrer`. Add unchanged-guard mounted empty-body probes (`no-referrer` refused before submission; `strict-origin` reaches closed input validation) with zero-write assertions. No backend, contract or migration changes.
+- Local evidence: 77 focused family frontend tests, web TypeScript, API build/family test file, harness syntax and whitespace checks pass. Real Playwright label functions reproduce before/after exact matching for both selects in EN/KO/ES; native Fetch Origin serialization through the actual unchanged guard reproduces opaque-Origin refusal versus expected-Origin acceptance. These are not a local mounted-browser run.
+- Fresh exact-head hosted browser/API/PostgreSQL evidence remains pending; local Chromium/socket execution is unavailable.
+
 ## PR #139 — family frontend hosted acceptance fixture repair
 
 - [x] Correct only the synthetic signed-session identity namespace in the frontend verification harness to match the existing OIDC acceptance boundary. Preserve all acceptance, mixed-role refusal, privacy, exact-retry and database assertions; no UI, backend, contract or migration changes.
@@ -48,6 +61,26 @@
 
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
+
+## S4-d lost AI outcomes (UNKNOWN) and HQ owner resolution — Claude (2026-11-01, owner-authorized draft, stacked on S4-c)
+
+- Migration `0196_ai_unknown_resolution.sql` (number proposed; owner allocates). Owner decision AI-D3. Finding AI-8. Design: `docs/architecture/HON_AI_UNKNOWN_RESOLUTION_S4D.md`.
+- [x] Window-scoped counting: UNKNOWN and stale (1 hour) SENDING holds count only in the window in which they were held; in-flight calls always count.
+- [x] `resolve_ai_unknown_invocation` (human HQ owner only; RECORD_PROVIDER_COST / NO_PROVIDER_CHARGE / WRITE_OFF with closed evidence; one ledger row in the original window or none; immutable record, audit, inert outbox; idempotent; once per call) and the HQ queue read; `GET /v1/hq/ai/unknown-invocations`, `POST .../:agent/:invocationId/resolve`.
+- [x] AI-0: KF-AI8 flipped to `FIXED_BY_S4D`, replaced by INV-19 and INV-20; no open known failures remain. API test `ai-unknown-resolution.test.cjs`.
+- [ ] Codex: HQ queue and resolution screen.
+- [ ] Later slice: UNKNOWN escalation monitor (more than 5 in 24 hours pauses the organization; older than 72 hours alerts HQ).
+- [ ] Independent review; owner merge after #97, S4-a, S4-b and S4-c.
+
+## S4-c AI spend access decision and HQ pause — Claude (2026-11-01, owner-authorized draft, stacked on S4-b)
+
+- Migration `0195_ai_spend_access_decision.sql` (number proposed; owner allocates). Owner decision AI-D1 = A. Findings AI-9, AI-1. Design: `docs/architecture/HON_AI_ACCESS_DECISION_S4C.md`.
+- [x] One access decision `ai_spend_allowed(org, at, class)`: HQ pause, promotional hook (off), live exception refuses (`AI_EXCEPTION_NO_AI`), legacy unchanged, explicit mapping for every paid-access state (unknown refuses). Applied at begin, at every hold increase (before the budget check) and at B3 reservation insert. Evidence steps never gated.
+- [x] HQ emergency pause: append-only `ai_spend_pauses`, human HQ owner only, organization or platform, per class or ALL, idempotent per key; `GET/POST /v1/hq/ai/spend-pauses` with exact human-command guard.
+- [x] AI-0: KF-AI9 flipped to `FIXED_BY_S4C`, replaced by INV-16 (all three agents); INV-17 (state mapping) and INV-18 (pause) added. API test `ai-spend-pause.test.cjs`.
+- [ ] Codex: HQ pause screen and plain refusal copy on agent screens.
+- [ ] Owner decisions before the hooks do anything: promotional AI access, trial AI funding.
+- [ ] Independent review; owner merge after #97, S4-a and S4-b.
 
 ## S4-b organization agent budget and lock — Claude (2026-11-01, owner-authorized draft, stacked on S4-a)
 

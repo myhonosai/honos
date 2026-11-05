@@ -24,7 +24,7 @@ const owner=new Client({connectionString:urls.DATABASE_URL,ssl:false}),runtime=n
 const auth={mode:'OIDC',audience:'family-access-disposable',secret:randomBytes(32).toString('hex'),emitVerifiedEmail:true};
 Object.assign(process.env,{HON_AUTH_MODE:auth.mode,HON_SESSION_AUDIENCE:auth.audience,HON_SESSION_JWT_SECRET:auth.secret});
 const origin='http://127.0.0.1:3000',apiOrigin='http://127.0.0.1:3001';process.env.HON_PUBLIC_ORIGIN=origin;
-const originalFetch=globalThis.fetch,groups=[],browserCases=[],externalDenied=[],attempts=[];let app,next,browser,actor,lose=false,revokeAfterRead=null,appOwnsDatabase=false;
+const originalFetch=globalThis.fetch,groups=[],browserCases=[],browserOriginProbe=[],guardDiagnostics=new Map(),externalDenied=[],attempts=[];let app,next,browser,actor,lose=false,revokeAfterRead=null,appOwnsDatabase=false;
 const results=process.env.HON_FAMILY_ACCESS_RESULTS;assert(results&&resolve(results)===results&&results.startsWith('/home/runner/work/_temp/'));
 const fingerprint=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const q=(sql,args=[])=>owner.query(sql,args),pass=name=>{groups.push(name);console.log('PASS family frontend: '+name);};
@@ -41,7 +41,19 @@ try{
  await Promise.all([owner.connect(),runtime.connect()]);assert.deepEqual((await q("SELECT pg_get_userbyid(datdba) owner,shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()")).rows[0],{owner:'hon_champions_owner',marker:'HON disposable Champions Club validation'});
  const A=await school('A'),B=await school('B'),M=await manager(A,'api-manager'),N=await manager(B,'other-manager'),limited=await manager(A,'limited',['school.view','family.read']);actor=M;
  const browserManagers=await Promise.all(['en','ko','es'].map(language=>manager(A,'browser-'+language)));
- const module=await Test.createTestingModule({controllers:[SchoolFamilyAccessInvitationController,FamilyController],providers:[SchoolFamilyAccessInvitationService,SchoolFamilyAccountHumanGuard,HonIdentityGuard,HonIdentityService,FamilyService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();app=module.createNestApplication({logger:false});appOwnsDatabase=true;app.setGlobalPrefix('v1');await app.listen(3001,'127.0.0.1');
+ const module=await Test.createTestingModule({controllers:[SchoolFamilyAccessInvitationController,FamilyController],providers:[SchoolFamilyAccessInvitationService,SchoolFamilyAccountHumanGuard,HonIdentityGuard,HonIdentityService,FamilyService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();app=module.createNestApplication({logger:false});appOwnsDatabase=true;app.setGlobalPrefix('v1');
+ // Observe only bounded guard facts. Never retain/log a cookie, request body,
+ // identity, invitation code, raw header value or idempotency key in evidence.
+ app.use((request,response,next)=>{
+  const key=request.headers['idempotency-key'];
+  if(request.method==='POST'&&request.path==='/v1/school/family-access-invitations'&&typeof key==='string'&&/^[a-f0-9-]{36}$/.test(key)&&guardDiagnostics.size<100){
+   const h=request.headers,enumHeader=(name,allowed)=>allowed.includes(h[name])?h[name]:h[name]===undefined?'MISSING':'OTHER';
+   const facts={originKind:h.origin===undefined?'MISSING':h.origin==='null'?'OPAQUE':h.origin===origin?'EXPECTED':'OTHER',referrerKind:h.referer===undefined?'MISSING':h.referer===origin+'/'?'ORIGIN_ONLY':'OTHER',fetchMode:enumHeader('sec-fetch-mode',['same-origin','cors','no-cors','navigate']),fetchSite:enumHeader('sec-fetch-site',['same-origin','same-site','cross-site','none']),fetchDest:enumHeader('sec-fetch-dest',['empty']),expectedMarker:h['x-hon-human-command']==='school-family-account',sessionCookiePresent:typeof h.cookie==='string'&&h.cookie.split(';').some(value=>value.trim().startsWith(HON_SESSION_COOKIE+'=')),authorizationPresent:h.authorization!==undefined,unexpectedHonHeaders:Object.keys(h).some(name=>name.startsWith('x-hon-')&&name!=='x-hon-human-command'),expectedApiHost:h.host==='127.0.0.1:3001',status:null};
+   guardDiagnostics.set(key,facts);response.once('finish',()=>{facts.status=response.statusCode;});
+  }
+  next();
+ });
+ await app.listen(3001,'127.0.0.1');
  next=spawn(process.execPath,[webRequire.resolve('next/dist/bin/next'),'start','--hostname','127.0.0.1','--port','3000'],{cwd:join(root,'apps/web'),env:{PATH:process.env.PATH,HOME:process.env.HOME,LANG:'C.UTF-8',NODE_ENV:'production',HON_DEPLOYMENT_ENVIRONMENT:'preview',NEXT_TELEMETRY_DISABLED:'1',HON_AUTH_MODE:auth.mode,HON_SESSION_AUDIENCE:auth.audience,HON_SESSION_JWT_SECRET:auth.secret,HON_API_BASE_URL:apiOrigin},stdio:['ignore','pipe','pipe']});next.stdout.on('data',()=>{});next.stderr.on('data',()=>{});
  let ready=false;for(let i=0;i<120;i++){try{await originalFetch(origin+'/api/identity/me',{redirect:'manual'});ready=true;break;}catch{await new Promise(r=>setTimeout(r,100));}}assert(ready,'Production Next did not start.');
  const invalidation=await compile('apps/web/src/components/session-invalidation.ts'),httpUrl=await compile('apps/web/src/components/family-access/http.ts',{'@hon/contracts':pathToFileURL(webRequire.resolve('@hon/contracts')).href,'../session-invalidation':invalidation});
@@ -78,10 +90,36 @@ try{
   await ctx.addCookies([{name:HON_SESSION_COOKIE,value:signed(who).split('=')[1],url:origin,httpOnly:true,sameSite:'Lax'},{name:localeCookieName(key),value:encodeURIComponent(JSON.stringify({...DEFAULT_LOCALE,language})),url:origin,sameSite:'Lax'}]);
   await ctx.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===origin)return route.continue();await route.abort();assert(['https://fonts.googleapis.com','https://fonts.gstatic.com'].includes(url.origin),'Unexpected external browser destination');externalDenied.push(url.origin);});return ctx;
  }
- async function enter(page,language,school){await page.goto(origin+'/staff/family-access');await page.getByLabel(t(language,'org'),{exact:true}).fill(school.organizationId);await page.getByLabel(t(language,'school'),{exact:true}).fill(school.schoolId);await page.getByRole('button',{name:t(language,'read'),exact:true}).first().click();await page.getByLabel(t(language,'family'),{exact:true}).selectOption(school.familyId);await page.getByRole('heading',{name:'Synthetic A Family',exact:true}).waitFor();}
+ async function enter(page,language,school){
+  const reads=[],observe=response=>{const path=new URL(response.url()).pathname;const route=path==='/api/identity/me'?'identity':path.endsWith('/families')?'families':path.endsWith('/family-access-invitations')?'invitations':null;if(route&&reads.length<12)reads.push({route,status:response.status()});};page.on('response',observe);
+  try{await page.goto(origin+'/staff/family-access');await page.getByLabel(t(language,'org'),{exact:true}).fill(school.organizationId);await page.getByLabel(t(language,'school'),{exact:true}).fill(school.schoolId);await page.getByRole('button',{name:t(language,'read'),exact:true}).first().click();await page.getByLabel(t(language,'family'),{exact:true}).selectOption(school.familyId);await page.getByRole('heading',{name:'Synthetic A Family',exact:true}).waitFor();}
+  catch(error){
+   const state=await page.evaluate(()=>({language:document.documentElement.lang,visibility:document.visibilityState,focused:document.hasFocus(),status:document.querySelector('[data-testid="family-access-status"]')?.textContent??null,privateHidden:document.querySelector('[data-testid="family-access-private"]')?.hidden??null,selects:Array.from(document.querySelectorAll('[data-testid="family-access-private"] select')).map(el=>({labels:Array.from(el.labels??[]).map(label=>label.textContent),options:el.options.length,disabled:el.disabled}))}));
+   const evidence={language,reads,state,exactFamilyMatches:await page.getByLabel(t(language,'family'),{exact:true}).count()};
+   await Promise.allSettled([writeFile(join(results,'family-access-entry-failure.json'),JSON.stringify(evidence,null,2)+'\n'),page.screenshot({path:join(results,'family-access-entry-failure.png'),fullPage:true})]);console.error('Family browser entry failed: '+JSON.stringify(evidence));throw error;
+  }finally{page.off('response',observe);}
+ }
+ {
+  const ctx=await context(browserManagers[0]),page=await ctx.newPage();await enter(page,'en',A);const before=await rowCounts();
+  // These invalid closed bodies cannot reach a database command. The live
+  // mounted browser demonstrates the original guard refusal and repaired path.
+  const probes=await page.evaluate(async()=>{
+   const rows=[];for(const policy of ['no-referrer','strict-origin']){
+    const key=crypto.randomUUID(),response=await fetch('/api/v1/school/family-access-invitations',{method:'POST',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',referrerPolicy:policy,headers:{Accept:'application/json','Content-Type':'application/json','X-HON-Human-Command':'school-family-account','Idempotency-Key':key},body:'{}'});
+    const body=await response.json().catch(()=>null);rows.push({policy,key,status:response.status,code:['HUMAN_UI_REQUIRED','ACCOUNT_INPUT_INVALID'].includes(body?.code)?body.code:'UNRECOGNIZED'});
+   }return rows;
+  });
+  for(const {key,...probe}of probes){const facts=guardDiagnostics.get(key);const result={...probe,guard:facts};browserOriginProbe.push(result);console.log('PROBE family browser origin: '+JSON.stringify(result));}
+  await writeFile(join(results,'family-access-origin-probe.json'),JSON.stringify(browserOriginProbe,null,2)+'\n');
+  assert.equal(browserOriginProbe[0].status,403);assert.equal(browserOriginProbe[0].code,'HUMAN_UI_REQUIRED');assert.equal(browserOriginProbe[0].guard?.originKind,'OPAQUE');
+  assert.equal(browserOriginProbe[1].status,400);assert.equal(browserOriginProbe[1].code,'ACCOUNT_INPUT_INVALID');assert.equal(browserOriginProbe[1].guard?.originKind,'EXPECTED');
+  assert.equal(browserOriginProbe[0].guard?.referrerKind,'MISSING');assert.equal(browserOriginProbe[1].guard?.referrerKind,'ORIGIN_ONLY');
+  for(const {guard}of browserOriginProbe){assert.equal(guard.fetchMode,'same-origin');assert.equal(guard.fetchSite,'same-origin');assert.equal(guard.fetchDest,'empty');assert.equal(guard.expectedMarker,true);assert.equal(guard.sessionCookiePresent,true);assert.equal(guard.authorizationPresent,false);assert.equal(guard.unexpectedHonHeaders,false);}
+  assert.deepEqual(await rowCounts(),before);await ctx.close();pass('actual mounted browser: original no-referrer POST has opaque Origin and is refused; strict-origin reaches closed validation with zero database effects');
+ }
  for(const language of ['en','ko','es'])for(const mode of ['modern','classic','big'])for(const width of [390,834,1440]){
   const who=browserManagers[['en','ko','es'].indexOf(language)],ctx=await context(who,language,width),page=await ctx.newPage(),errors=[],domain=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(/\/api\/v1\/(?:school|organizations)/.test(r.url()))domain.push({url:r.url(),method:r.method()});});
-  await enter(page,language,A);await page.getByRole('button',{name:t(language,mode),exact:true}).click();assert.equal(await page.getByTestId('family-access').getAttribute('data-interface-theme'),mode);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await enter(page,language,A);assert.equal(await page.getByLabel(t(language,'level'),{exact:true}).inputValue(),'PRIMARY_GUARDIAN');await page.getByRole('button',{name:t(language,mode),exact:true}).click();assert.equal(await page.getByTestId('family-access').getAttribute('data-interface-theme'),mode);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   const initial=domain.length;const other=mode==='modern'?'classic':'modern';await page.getByRole('button',{name:t(language,other),exact:true}).click();await page.getByRole('button',{name:t(language,mode),exact:true}).click();assert.equal(domain.length,initial,'Presentation must not read family data.');const languageSelector=page.locator('[data-locale-utility] select');await languageSelector.selectOption(language==='en'?'es':'en');await languageSelector.selectOption(language);assert.equal(domain.length,initial,'Locale fallback must not read family data.');
   const email=page.getByLabel(t(language,'email'),{exact:true});await email.focus();await page.keyboard.type('test@example.invalid');assert(await email.evaluate(el=>el===document.activeElement),'Typing must preserve keyboard focus.');await email.fill('');
   await page.addScriptTag({content:axe});const scan=await page.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(scan.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
@@ -115,7 +153,7 @@ try{
  pass('actual mounted stale-scope callbacks denied; UNKNOWN survives school edit and exact-key retry; invitation acceptance persists across reload and explicit access end');
  assert.deepEqual(await snapshot(),protectedBefore,'Family-account UI changed unrelated business, commercial, audit/outbox, entitlement, AI or provider tables.');
  pass('unrelated business/financial/AI records unchanged; no delivery or real-provider execution');
- await writeFile(join(results,'family-access-report.json'),JSON.stringify({sourceSha:sha,groups,browserCases,syntheticIdentities:true,actualNextNestPostgres:true,apiAuthorizationMocked:false,externalOidcLogin:false,externalProviderCalls:0,deliveryCalls:0,suspensionExceptionReviewGate:'UNAPPROVED_DEPENDENT_DRAFT',suspensionReadBehavior:'403 conceals actions; atomic suspension-time authorization remains backend-owned',protectedTables:protectedTables.length,blockedStaticFonts:externalDenied,screenshots:browserCases.length+2,unknownOutcome:'actual commit then injected response loss; original URL/body/key only',fullDocumentRecovery:'unavailable; private memory is lost'},null,2)+'\n');
+ await writeFile(join(results,'family-access-report.json'),JSON.stringify({sourceSha:sha,groups,browserCases,browserOriginProbe,syntheticIdentities:true,actualNextNestPostgres:true,apiAuthorizationMocked:false,externalOidcLogin:false,externalProviderCalls:0,deliveryCalls:0,suspensionExceptionReviewGate:'UNAPPROVED_DEPENDENT_DRAFT',suspensionReadBehavior:'403 conceals actions; atomic suspension-time authorization remains backend-owned',protectedTables:protectedTables.length,blockedStaticFonts:externalDenied,screenshots:browserCases.length+2,unknownOutcome:'actual commit then injected response loss; original URL/body/key only',fullDocumentRecovery:'unavailable; private memory is lost'},null,2)+'\n');
  console.log(JSON.stringify({passed:true,groups:groups.length,browserCases:browserCases.length,sourceSha:sha}));
 }catch(error){primaryError=error;throw error;}finally{
  globalThis.fetch=originalFetch;delete globalThis.window;delete globalThis.location;const cleanup=[];

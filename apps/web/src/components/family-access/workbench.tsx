@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { FAMILY_ACCESS_LEVELS, type FamilyAccessLevel } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from '../session-invalidation';
@@ -49,6 +49,7 @@ export function FamilyAccessWorkspace({ sessionSubject, acceptance = false }: { 
 
 function BoundFamilyAccess({ sessionSubject, scope, autoLoad, onLock, binding }: { sessionSubject: string; scope: FamilyScope | null; autoLoad: boolean; onLock: (value: boolean, terminal: boolean) => void; binding: React.MutableRefObject<Binding | null> }): React.ReactElement {
   const locale = useLocale(), t = (key: Parameters<typeof familyText>[1]) => familyText(locale.preferences.language, key);
+  const familySelectId = useId(), levelSelectId = useId();
   const holder = useRef<FamilyAccessController | null>(null); if (!holder.current) holder.current = new FamilyAccessController(sessionSubject, scope);
   const controller = holder.current;
   useLayoutEffect(() => { binding.current = { controller, scope }; return () => { if (binding.current?.controller === controller) binding.current = null; }; }, [binding, controller, scope]);
@@ -87,11 +88,11 @@ function BoundFamilyAccess({ sessionSubject, scope, autoLoad, onLock, binding }:
     <div key={privateDomEpoch.current} ref={area} hidden={!visible} inert={!visible} data-testid="family-access-private">
       {scope ? <>
         <section aria-label={t('verifiedScope')}><h2>{t('verifiedScope')}</h2><p>{t('org')}: <code>{scope.organizationId}</code><br/>{t('school')}: <code>{scope.schoolId}</code></p></section>
-        <label>{t('family')}<select value={snapshot.selected} disabled={busy} onChange={e => { controller.choose(e.target.value, snapshot.revision); setAction(null); }}><option value="">{t('choose')}</option>{snapshot.families.filter(f => f.status === 'ACTIVE').map(f => <option key={f.id} value={f.id}>{f.displayName}</option>)}</select></label>
+        <label htmlFor={familySelectId}>{t('family')}</label><select id={familySelectId} value={snapshot.selected} disabled={busy} onChange={e => { controller.choose(e.target.value, snapshot.revision); setAction(null); }}><option value="">{t('choose')}</option>{snapshot.families.filter(f => f.status === 'ACTIVE').map(f => <option key={f.id} value={f.id}>{f.displayName}</option>)}</select>
         {snapshot.families.filter(f => f.status === 'ACTIVE').length === 0 && <p>{t('empty')}</p>}<p>{t('limit')}</p>
         {selected && <><h2>{selected.displayName}</h2><form autoComplete="off" onSubmit={e => { e.preventDefault(); execute(() => controller.invite(email, level, Number(hours), confirmed, snapshot.revision)); }}>
           <fieldset disabled={busy}><legend>{t('invite')}</legend><label>{t('email')}<input type="email" required maxLength={254} value={email} onChange={e => edit(() => setEmail(e.target.value))} autoComplete="off" /></label>
-            <label>{t('level')}<select value={level} onChange={e => edit(() => setLevel(e.target.value as FamilyAccessLevel))}>{FAMILY_ACCESS_LEVELS.map(v => <option key={v} value={v}>{t(v)}</option>)}</select></label>
+            <label htmlFor={levelSelectId}>{t('level')}</label><select id={levelSelectId} value={level} onChange={e => edit(() => setLevel(e.target.value as FamilyAccessLevel))}>{FAMILY_ACCESS_LEVELS.map(v => <option key={v} value={v}>{t(v)}</option>)}</select>
             <label>{t('hours')}<input type="number" min={1} max={168} required value={hours} onChange={e => edit(() => setHours(e.target.value))} /></label>
             <label><input type="checkbox" checked={confirmed && !action} onChange={e => edit(() => setConfirmed(e.target.checked))} />{t('confirmInvite')}</label><button disabled={!confirmed || Boolean(action)}>{t('invite')}</button>
           </fieldset></form>
