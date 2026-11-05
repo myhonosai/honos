@@ -1,6 +1,14 @@
 {
   "routes": [
     {
+      "path": "/staff/entry",
+      "title": "HON | School Workspace"
+    },
+    {
+      "path": "/auth/access",
+      "title": "HON | Access not verified"
+    },
+    {
       "path": "/",
       "title": "HON Complete | AI Command Center"
     },
@@ -381,12 +389,32 @@
       "title": "HON OS | Owner invitation"
     },
     {
+      "path": "/account/staff-invitation",
+      "title": "HON OS | Accept staff invitation"
+    },
+    {
+      "path": "/staff/team/invitations",
+      "title": "HON OS | Staff invitations"
+    },
+    {
       "path": "/hq/school-owner-invitations",
       "title": "HON HQ | Owner invitations"
     },
     {
       "path": "/staff/crm/journey",
       "title": "Human CRM leads"
+    },
+    {
+      "path": "/staff/crm/lead-memberships",
+      "title": "HON | CRM Membership Recovery"
+    },
+    {
+      "path": "/staff/family-access",
+      "title": "HON OS | Family access"
+    },
+    {
+      "path": "/account/family-invitation",
+      "title": "HON OS | Family invitation"
     }
   ]
 }

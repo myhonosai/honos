@@ -10,6 +10,10 @@ import { loadOwnerLaunch, loadOwnerLaunchFirstClassBookingContext, loadOwnerLaun
 import { InterfaceThemePicker } from './interface-theme-picker';
 import { HonTeamBand } from './hon-command/hon-command';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './interface-theme-preference';
+import { SchoolOperationsNavigation } from './school-operations-navigation';
+import { useLocale } from './localization/provider';
+import { entryText } from './school-entry/copy';
+import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from './session-invalidation';
 import styles from './staff-dashboard.module.css';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
@@ -189,6 +193,7 @@ function PlatformViewSelector({
 }
 
 export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDashboardInitialScope } = {}): React.ReactElement {
+  const { preferences } = useLocale();
   const [organizationId, setOrganizationId] = useState(initialScope.organizationId ?? '');
   const [schoolId, setSchoolId] = useState(initialScope.schoolId ?? '');
   const [selection, setSelection] = useState<VerifiedSelection | null>(null);
@@ -207,8 +212,24 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   const [schoolChoiceId, setSchoolChoiceId] = useState('');
   const [manualEntry, setManualEntry] = useState(true);
   const [scopeMessage, setScopeMessage] = useState('No verified school is selected. No operational data is shown.');
+  const privateArea = useRef<HTMLDivElement | null>(null);
+  const privateNavigation = useRef<HTMLDivElement | null>(null), privateTeam = useRef<HTMLDivElement | null>(null);
+  const privateScope = useRef<HTMLElement | null>(null), scopeDomEpoch = useRef(0);
+  const privacyShield = useRef(true), sessionEnded = useRef(false), preferenceBusy = useRef(false);
+
+  function hideImmediately() {
+    privacyShield.current = true;
+    for (const area of [privateNavigation.current, privateTeam.current, privateArea.current]) if (area) {
+      area.hidden = true; area.inert = true;
+      for (const link of area.querySelectorAll('a')) link.removeAttribute('href');
+    }
+  }
+  function hideScopeImmediately() {
+    if (privateScope.current) { privateScope.current.hidden = true; privateScope.current.inert = true; }
+  }
 
   function clear() {
+    hideImmediately();
     generation.current += 1;
     interfaceThemeGeneration.current += 1;
     setSchoolChoiceId('');
@@ -217,6 +238,23 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
     setInterfaceTheme(DEFAULT_HON_INTERFACE_THEME); setInterfaceThemeState('UNAVAILABLE');
     setInterfaceThemeMessage('Load a verified school dashboard to view or change your personal Platform View preference.');
   }
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const conceal = (event: Event) => {
+      if (event.type === HON_SESSION_INVALIDATED_EVENT) sessionEnded.current = true;
+      hideScopeImmediately(); scopeDomEpoch.current++;
+      clear(); setSchoolChoices([]); setOrganizationId(''); setSchoolId(''); setManualEntry(true);
+      setScopeMessage(entryText(preferences.language, sessionEnded.current ? 'SESSION' : 'CONCEALED'));
+    };
+    const hidden = () => { if (document.visibilityState !== 'visible') conceal(new Event('visibilitychange')); };
+    for (const event of ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]) window.addEventListener(event, conceal);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      hideImmediately();
+      for (const event of ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]) window.removeEventListener(event, conceal);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+  }, []);
   useEffect(() => () => { generation.current += 1; interfaceThemeGeneration.current += 1; }, []);
   useEffect(() => {
     clear(); setLoading(true);
@@ -278,7 +316,8 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
     return () => { if (current === interfaceThemeGeneration.current) interfaceThemeGeneration.current += 1; };
   }, [selection?.organizationId, selection?.schoolId]);
   async function chooseInterfaceTheme(next: HonInterfaceTheme) {
-    if (!selection || interfaceThemeState !== 'READY') return;
+    if (!selection || interfaceThemeState !== 'READY' || privacyShield.current || sessionEnded.current || preferenceBusy.current) return;
+    preferenceBusy.current = true;
     const current = ++interfaceThemeGeneration.current;
     const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
     setInterfaceThemeState('SAVING'); setInterfaceThemeMessage('Saving your personal Platform View preference for this verified current school…');
@@ -291,17 +330,17 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
       if (current !== interfaceThemeGeneration.current) return;
       setInterfaceThemeState('ERROR');
       setInterfaceThemeMessage(`${reason instanceof Error ? reason.message : 'The personal Platform View preference is unavailable.'} No presentation preference was saved.`);
-    }
+    } finally { preferenceBusy.current = false; }
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (loading || (schoolChoices.length > 0 && !manualEntry)) return;
+    if (loading || sessionEnded.current || (schoolChoices.length > 0 && !manualEntry)) return;
     clear(); const requestGeneration = generation.current; setLoading(true);
     await readDashboard(organizationId, schoolId, requestGeneration);
   }
   async function submitSchoolChoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (loading || manualEntry) return;
+    if (loading || sessionEnded.current || manualEntry) return;
     // A DOM value is never authority and cannot invent an option or override its
     // organization. Bind both selectors to the verified closed choice response.
     const choice = schoolChoices.find((school) => school.schoolId === schoolChoiceId);
@@ -312,7 +351,8 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
     await readDashboard(choice.organizationId, choice.schoolId, requestGeneration);
   }
   async function readDashboard(requestedOrganizationId: string, requestedSchoolId: string, requestGeneration: number) {
-    const current = () => generation.current === requestGeneration;
+    const current = () => generation.current === requestGeneration && !sessionEnded.current
+      && (typeof document === 'undefined' || document.visibilityState !== 'hidden');
     try {
       const next = await loadStaffDashboard(requestedOrganizationId, requestedSchoolId);
       if (!current()) return;
@@ -320,6 +360,7 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
         throw new Error('The operations report did not verify the exact current school. Dashboard content was cleared.');
       }
       setOrganizationId(next.organizationId); setSchoolId(next.schoolId);
+      privacyShield.current = false;
       setSnapshot(next);
       setSelection({ organizationId: next.organizationId, schoolId: next.schoolId, generatedAt: next.generatedAt, from: next.from, to: next.to });
 
@@ -382,12 +423,23 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   const classPassHref = selection ? classPassScopeHref(selection.organizationId, selection.schoolId) : '/staff/classpass';
   const attendanceHref = selection ? attendanceScopeHref(selection.organizationId, selection.schoolId) : '/staff/attendance';
   const verifiedSchoolName = selection ? schoolChoices.find((school) => school.organizationId === selection.organizationId && school.schoolId === selection.schoolId) : undefined;
+  const navigationRevision = generation.current;
+  const canNavigate = () => !privacyShield.current && !sessionEnded.current && !preferenceBusy.current && generation.current === navigationRevision;
+  const privateVisible = Boolean(snapshot && selection && !privacyShield.current);
   return <main className={`${styles.page} ${themeClass}`} data-interface-theme={interfaceTheme}>
-    <nav aria-label="Staff navigation"><a href="/staff/hon?return=%2Fstaff%2Fdashboard">HON AI team</a><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href={classPassHref}>ClassPass &amp; Walk-In</a><a href={attendanceHref}>Attendance workbench</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label={entryText(preferences.language, 'nav')}><a href="/staff/entry">{entryText(preferences.language, 'backToEntry')}</a><a href="/auth/login">{entryText(preferences.language, 'signIn')}</a></nav>
+    <div key={`navigation-${navigationRevision}`} ref={privateNavigation} hidden={!privateVisible} inert={!privateVisible}>
+      {privateVisible && selection && <>
+        <SchoolOperationsNavigation scope={selection} current="dashboard" blocked={loading || interfaceThemeState === 'SAVING'} canNavigate={canNavigate} />
+        <nav aria-label="Staff navigation" onClick={event => { if (!canNavigate()) event.preventDefault(); }}><a href="/staff/hon?return=%2Fstaff%2Fdashboard">HON AI team</a><a href="/core">HON Core</a><a href="/staff/command-center">School Command Center</a><a href="/staff/search">Staff search</a><a href={crmLeadsHref}>CRM leads</a><a href={trialAppointmentsHref}>Trial appointments</a><a href={classPassHref}>ClassPass &amp; Walk-In</a><a href={attendanceHref}>Attendance workbench</a><a href="/staff/crm/follow-ups">Follow-ups</a><a href="/staff/billing/renewals">Renewal reviews</a><a href="/staff/work">Human work</a></nav>
+      </>}
+    </div>
     <header className={styles.header}><p className={styles.eyebrow}>STAFF / CONVENTIONAL OPERATIONS</p><h1>School operations dashboard</h1><p>One verified school at a time. Read-only operational counts, with no contact data, notes, payment methods, private evidence, automated execution, or external activity.</p></header>
-    {snapshot && selection && <HonTeamBand scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} variant={interfaceTheme} />}
+    <div key={`team-${navigationRevision}`} ref={privateTeam} hidden={!privateVisible} inert={!privateVisible}>
+      {privateVisible && selection && <HonTeamBand scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} variant={interfaceTheme} />}
+    </div>
     <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
-    <section className={styles.scopeSection} aria-labelledby="scope-heading">
+    <section key={scopeDomEpoch.current} ref={privateScope} className={styles.scopeSection} aria-labelledby="scope-heading" data-testid="dashboard-scope">
       <div><h2 id="scope-heading">Current verified school</h2><p>A single eligible current school loads automatically without entering IDs. For multiple eligible schools, choose one explicitly. Manual fallback: enter already-known staff-context IDs. Loading validates the exact organization, school, active human session, and <code>reporting.view</code> authority through the existing school operations report.</p></div>
       {schoolChoices.length > 0 && <>
         {!manualEntry && <form onSubmit={submitSchoolChoice} aria-busy={loading}>
@@ -403,15 +455,19 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
         <button type="button" onClick={() => { clear(); setManualEntry(!manualEntry); }}>{manualEntry ? 'Choose from authorized schools' : 'Use manual known-ID entry'}</button>
       </>}
       {(manualEntry || schoolChoices.length === 0) && <form onSubmit={submit} aria-busy={loading}>
-        <fieldset disabled={loading}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label><button type="submit">{loading ? 'Verifying school…' : 'Load verified dashboard'}</button></fieldset>
+        <fieldset disabled={loading || sessionEnded.current}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label><button type="submit">{loading ? 'Verifying school…' : 'Load verified dashboard'}</button></fieldset>
       </form>}
       {!selection && !loading && !error && <p className={styles.scopeState} role="status">{scopeMessage}</p>}
       {loading && <p className={styles.scopeState} role="status">Checking current school access and loading the aggregate-only operations report…</p>}
       {error && <p className={styles.error} role="alert">{error}</p>}
       {selection && <div className={styles.verified} role="status"><strong>Verified current school</strong>{verifiedSchoolName ? <span>{verifiedSchoolName.schoolName} — {verifiedSchoolName.organizationName}</span> : <><span>Organization <code>{selection.organizationId}</code></span><span>School <code>{selection.schoolId}</code></span></>}<span>Window: {utc(selection.from)} – {utc(selection.to)} UTC</span><span>Generated: {utc(selection.generatedAt)} UTC</span></div>}
     </section>
-    {snapshot && selection && <PlatformViewSelector interfaceTheme={interfaceTheme} interfaceThemeState={interfaceThemeState} interfaceThemeMessage={interfaceThemeMessage} onChange={(theme) => void chooseInterfaceTheme(theme)} />}
-    {snapshot && <OperationsCards snapshot={snapshot} />}
-    {snapshot && ownerWorkflowProgress && <OwnerWorkflowProgressCard progress={ownerWorkflowProgress} />}
+    <div key={navigationRevision} ref={privateArea} hidden={!privateVisible} inert={!privateVisible} data-testid="dashboard-private">
+      {privateVisible && snapshot && selection && <>
+        <PlatformViewSelector interfaceTheme={interfaceTheme} interfaceThemeState={interfaceThemeState} interfaceThemeMessage={interfaceThemeMessage} onChange={(theme) => void chooseInterfaceTheme(theme)} />
+        <OperationsCards snapshot={snapshot} />
+        {ownerWorkflowProgress && <OwnerWorkflowProgressCard progress={ownerWorkflowProgress} />}
+      </>}
+    </div>
   </main>;
 }

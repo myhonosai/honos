@@ -3,6 +3,7 @@ import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {CrmJourney} from '../src/components/crm-journey/workbench';
 import {journeyCatalog,journeyText} from '../src/components/crm-journey/catalog';
 import {CrmJourneyLink} from '../src/components/crm-journey/entry';
+import {SchoolOperationsNavigation} from '../src/components/school-operations-navigation';
 import {scope,row,identity,envelope,closeReceipt,appointment,queue,id} from './crm-journey-fixtures';
 const h=vi.hoisted(()=>({values:[] as any[],cursor:0,effects:[] as (()=>void)[],language:'en'}));
 vi.mock('react',async()=>{const r=await vi.importActual<typeof import('react')>('react');return {...r,
@@ -26,6 +27,50 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 async function loaded(){const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row])).mockResolvedValueOnce(identity());click('load');await settle();expect(text(render())).toContain('Private');return f;}
 function prepareClose(){click('step-close');el('confirm').props.onChange({target:{checked:true}});return nodes(render()).find(e=>e.type==='form')!.props.onSubmit;}
 function authorize(f:Awaited<ReturnType<typeof loaded>>,status='OPEN'){f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([{...row,status,version:status==='OPEN'?1:2}])).mockResolvedValueOnce(identity());}
+function operationalLink(key: string): El | undefined {
+ const navigation = nodes(render()).find(node => node.type === SchoolOperationsNavigation);
+ return navigation ? nodes(SchoolOperationsNavigation(navigation.props as any)).find(node => node.props['data-testid'] === `operations-${key}`) : undefined;
+}
+it('offers account navigation only after a verified school read and preserves exact cross-organization selectors', async () => {
+ expect(operationalLink('team')).toBeUndefined(); expect(el('journey-entry-back').props.href).toBe('/staff/entry'); const f = await loaded();
+ expect(el('journey-entry-back')).toBeUndefined();
+ const old = operationalLink('team')!;
+ expect(new URL(old.props.href, 'https://hon.invalid').searchParams.get('organizationId')).toBe(scope.organizationId);
+ change('organization', id(40));
+ const stale = { preventDefault: vi.fn() }; old.props.onClick(stale); expect(stale.preventDefault).toHaveBeenCalledOnce();
+ expect(operationalLink('team')).toBeUndefined(); change('school', id(41)); authorize(f); click('load'); await settle();
+ const url = new URL(operationalLink('family')!.props.href, 'https://hon.invalid');
+ expect(url.pathname).toBe('/staff/family-access'); expect([...url.searchParams.entries()]).toEqual([['organizationId', id(40)], ['schoolId', id(41)]]);
+});
+it('presentation/language changes keep the same verified navigation without school reads', async () => {
+ const f = await loaded(), count = f.mock.calls.length, href = operationalLink('team')!.props.href;
+ for (const language of ['en','ko','es']) for (const mode of ['modern','classic','big']) {
+  h.language = language; change('mode', mode); expect(operationalLink('team')!.props.href).toBe(href);
+ }
+ expect(f.mock.calls).toHaveLength(count);
+});
+it('retires native and retained account links on concealment, denies restoration after revocation, and never auto-restores', async () => {
+ const f = await loaded(), old = operationalLink('family')!, native = { removeAttribute: vi.fn() };
+ const area = nodes(render()).find(node => node.type === 'div' && node.props.ref && 'inert' in node.props)!;
+ area.props.ref.current = { hidden: false, inert: false, querySelectorAll: () => [native] };
+ window.dispatchEvent(new Event('blur'));
+ expect(area.props.ref.current.hidden).toBe(true); expect(native.removeAttribute).toHaveBeenCalledWith('href');
+ const event = { preventDefault: vi.fn() }; old.props.onClick(event); expect(event.preventDefault).toHaveBeenCalledOnce();
+ expect(operationalLink('family')).toBeUndefined(); const count = f.mock.calls.length;
+ window.dispatchEvent(new Event('focus')); expect(f.mock.calls).toHaveLength(count);
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},403)); click('restore'); await settle(); expect(operationalLink('team')).toBeUndefined();
+});
+it('keeps new navigation unavailable through dirty, in-flight and unknown command state until the existing deliberate abandonment', async () => {
+ const f = await loaded(), old = operationalLink('team')!; click('step-close'); change('note','Draft to preserve');
+ expect(operationalLink('team')!.props.href).toBeUndefined(); const stale = { preventDefault: vi.fn() }; old.props.onClick(stale); expect(stale.preventDefault).toHaveBeenCalledOnce();
+ el('confirm').props.onChange({target:{checked:true}}); let finish!:(r:Response)=>void;
+ f.mockResolvedValueOnce(identity()).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+ nodes(render()).find(node=>node.type==='form')!.props.onSubmit({preventDefault(){}}); await settle(); expect(operationalLink('team')!.props.href).toBeUndefined();
+ finish(envelope({},503)); await settle(); expect(operationalLink('team')!.props.href).toBeUndefined();
+ expect(nodes(render()).filter(node => node.type === 'a').every(node => !node.props.href)).toBe(true);
+ click('discard'); expect(el('abandon')).toBeDefined(); click('abandon'); expect(operationalLink('team')).toBeUndefined();
+ authorize(f); click('load'); await settle(); expect(operationalLink('team')!.props.href).toBeDefined();
+});
 it('starts idle; modes, language, tabs and empty focus loss do not fetch',()=>{const f=vi.spyOn(globalThis,'fetch');render();change('mode','classic');change('mode','big');click('step-history');h.language='ko';render();window.dispatchEvent(new Event('blur'));window.dispatchEvent(new Event('focus'));expect(f).not.toHaveBeenCalled();expect(hidden()).toBe(false);});
 it.each(['WON','LOST'])('%s settles behind the shield without a reload or duplicate command',async decision=>{
  const f=await loaded();prepareClose();change('decision',decision);el('confirm').props.onChange({target:{checked:true}});const submit=nodes(render()).find(e=>e.type==='form')!.props.onSubmit;
@@ -126,6 +171,8 @@ it('F1: an abandoned unknown schedule stays held after reload and reselect with 
  const f=await loadedPair(),keys=vi.spyOn(globalThis.crypto,'randomUUID'),submit=prepareTrial();
  f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));submit({preventDefault(){}});await settle();expect(el('retry')).toBeDefined();
  click('discard');click('abandon');pairRead(f);click('load');await settle();change('lead-select',secondLead.id);change('lead-select',row.id);
+ expect(operationalLink('team')!.props.href).toBeUndefined();expect(operationalLink('family')!.props.href).toBeUndefined();
+ expect(el('journey-entry-back')).toBeUndefined();expect(el('membership-recovery').props.href).toBeUndefined();
  expect(el('save-trial')).toBeUndefined();const count=f.mock.calls.length;submit({preventDefault(){}});await settle();
  expect(f.mock.calls).toHaveLength(count);expect(keys).toHaveBeenCalledTimes(1);expect(postCount(f)).toBe(1);
 });

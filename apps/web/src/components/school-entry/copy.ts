@@ -1,0 +1,45 @@
+const en = {
+  title: 'Your school workspace', intro: 'Open the existing HON OS workflows for one authorized school at a time.',
+  verify: 'Verify school access', restore: 'Verify access and restore', choose: 'Choose and verify school', school: 'Authorized schools',
+  IDLE: 'No school information has been loaded.', LOADING: 'Verifying your session and current school access…', CHOICE: 'Choose one authorized school. No school is selected automatically.',
+  READY: 'Current school access verified. Each destination checks its own permissions again.', CONCEALED: 'School information is hidden. Verify access to restore it.',
+  SESSION: 'Your session ended. Sign in again, then explicitly open your school workspace.', DENIED: 'This read is not authorized. No school information is shown.',
+  UNAVAILABLE: 'School access could not be verified. Access may be suspended, ambiguous or temporarily unavailable. This screen does not grant access.',
+  IDENTITY: 'The signed-in identity changed. Sign in and reopen this workspace.',
+  selected: 'Current authorized school', change: 'Change or recheck school', signIn: 'Sign in again', hq: 'HQ workspace',
+  scope: 'School scope details', operations: 'School workflows', boundary: 'Opening a link does not register, activate, book, mark attendance, collect payment or send a message.',
+  crm: 'CRM leads and follow-up', crmHelp: 'Select a lead, record internal follow-up, schedule a trial and review its outcome.',
+  registration: 'Adult or family registration', registrationHelp: 'Open CRM, verify the lead and use its existing registration step. Registration is not paid enrollment.',
+  membership: 'Membership activation and history', membershipHelp: 'Select a CRM lead, then recover its memberships. Review each student separately; activation requires two-step confirmation.',
+  booking: 'Book a verified student', bookingHelp: 'Select a lead → recover memberships → choose a student → class sessions and booking. No student ID is copied into a URL.',
+  attendance: 'Record attendance', attendanceHelp: 'From the verified student’s membership, open class operations, choose a session and explicitly read or update attendance.',
+  dashboard: 'School operations dashboard', dashboardHelp: 'View authorized reports. Multiple-school users must choose the school again there.',
+  team: 'Staff team and invitations', teamHelp: 'Review staff invitations and roles through the existing staff-management workflow. Each operation checks its own authority.',
+  family: 'Family account access', familyHelp: 'Manage account access for an already-known family. The destination requires an explicit family selector and fresh authorization.',
+  backToEntry: 'Choose or recheck school', navigationPaused: 'Finish or resolve the current work before leaving this page.', navigationHelp: 'Each destination verifies access again. Opening a link does not run an action.',
+  unavailable: 'Not enabled by this workspace', unavailableHelp: 'Payments, outbound messages, trial access activation and paid AI calls remain unavailable here. A saved record is not evidence of payment or signed agreements.',
+  mode: 'Presentation', modern: 'Modern', classic: 'Classic', big: 'Big Button', modeHelp: 'Presentation only. Changing layout or language does not read school data or change permissions.', nav: 'Workspace navigation',
+} as const;
+type Key = keyof typeof en;
+const ko: Record<Key, string> = {
+  title: '내 도장 업무 공간', intro: '권한이 확인된 도장 한 곳의 HON OS 업무를 엽니다.', verify: '도장 접근 권한 확인', restore: '접근 권한 확인 후 다시 표시', choose: '도장 선택 및 권한 확인', school: '접근 가능한 도장',
+  IDLE: '도장 정보를 아직 불러오지 않았습니다.', LOADING: '로그인 세션과 현재 도장 접근 권한을 확인하는 중입니다…', CHOICE: '접근 가능한 도장 한 곳을 선택하세요. 자동으로 선택하지 않습니다.', READY: '현재 도장 접근 권한을 확인했습니다. 각 업무 화면에서 권한을 다시 확인합니다.',
+  CONCEALED: '도장 정보를 숨겼습니다. 접근 권한을 확인하면 다시 표시됩니다.', SESSION: '세션이 만료되었습니다. 다시 로그인한 후 도장 업무 공간을 직접 여세요.', DENIED: '이 조회 권한이 없습니다. 도장 정보를 표시하지 않습니다.', UNAVAILABLE: '도장 접근 권한을 확인할 수 없습니다. 접근이 정지되었거나 도장을 특정할 수 없거나 일시적인 오류일 수 있습니다. 이 화면은 접근 권한을 부여하지 않습니다.', IDENTITY: '로그인 사용자가 변경되었습니다. 다시 로그인한 후 업무 공간을 여세요.',
+  selected: '현재 권한이 확인된 도장', change: '도장 변경 또는 다시 확인', signIn: '다시 로그인', hq: 'HQ 업무 공간', scope: '도장 범위 상세 정보', operations: '도장 업무', boundary: '링크를 열어도 등록, 활성화, 예약, 출석 처리, 결제 또는 메시지 발송은 실행되지 않습니다.',
+  crm: 'CRM 문의 및 후속 업무', crmHelp: '문의를 선택하고 내부 후속 기록, 체험 예약 및 결과를 관리합니다.', registration: '성인 또는 가족 등록', registrationHelp: 'CRM에서 문의를 확인한 후 기존 등록 단계를 이용하세요. 등록은 결제된 입학을 뜻하지 않습니다.', membership: '회원권 활성화 및 이력', membershipHelp: 'CRM 문의를 선택한 후 연결된 회원권을 조회하세요. 학생별로 확인하며 활성화는 2단계 확인이 필요합니다.',
+  booking: '확인된 학생 수업 예약', bookingHelp: '문의 선택 → 회원권 조회 → 학생 선택 → 수업 조회 및 예약. 학생 ID를 URL에 복사하지 않습니다.', attendance: '출석 기록', attendanceHelp: '확인된 학생의 회원권에서 수업 업무를 열고 수업을 선택한 후 출석을 직접 조회하거나 수정하세요.', dashboard: '도장 운영 대시보드', dashboardHelp: '권한이 확인된 보고서를 봅니다. 여러 도장에 접근할 수 있다면 이 화면에서도 도장을 다시 선택해야 합니다.',
+  unavailable: '이 업무 공간에서 활성화하지 않는 기능', unavailableHelp: '결제, 외부 메시지, 체험 접근 활성화 및 유료 AI 호출은 여기서 사용할 수 없습니다. 저장된 기록은 결제나 계약 서명의 증거가 아닙니다.', mode: '화면 모드', modern: '모던', classic: '클래식', big: '큰 버튼', modeHelp: '표시 방식만 바뀝니다. 화면 모드나 언어를 변경해도 도장 데이터를 조회하거나 권한을 변경하지 않습니다.', nav: '업무 공간 탐색',
+  team: '직원 팀 및 초대', teamHelp: '기존 직원 관리 업무에서 초대와 역할을 확인하세요. 각 작업에서 권한을 다시 확인합니다.', family: '가족 계정 접근 관리', familyHelp: '이미 알고 있는 가족의 계정 접근을 관리합니다. 대상 화면에서 가족을 직접 지정하고 권한을 새로 확인해야 합니다.',
+  backToEntry: '도장 선택 또는 다시 확인', navigationPaused: '이 페이지를 나가기 전에 진행 중인 업무를 완료하거나 해결하세요.', navigationHelp: '각 대상 화면에서 접근 권한을 다시 확인합니다. 링크를 열어도 작업이 실행되지 않습니다.',
+};
+const es: Record<Key, string> = {
+  title: 'Espacio de tu escuela', intro: 'Abre los flujos existentes de HON OS para una escuela autorizada a la vez.', verify: 'Verificar acceso a la escuela', restore: 'Verificar acceso y mostrar', choose: 'Elegir y verificar escuela', school: 'Escuelas autorizadas',
+  IDLE: 'No se ha cargado información de la escuela.', LOADING: 'Verificando tu sesión y el acceso actual a la escuela…', CHOICE: 'Elige una escuela autorizada. No se selecciona automáticamente.', READY: 'Acceso actual verificado. Cada destino vuelve a comprobar sus permisos.', CONCEALED: 'La información está oculta. Verifica el acceso para mostrarla.', SESSION: 'Tu sesión terminó. Inicia sesión y abre explícitamente el espacio de tu escuela.', DENIED: 'Esta consulta no está autorizada. No se muestra información de la escuela.', UNAVAILABLE: 'No se pudo verificar el acceso. Puede estar suspendido, ser ambiguo o no estar disponible temporalmente. Esta pantalla no concede acceso.', IDENTITY: 'Cambió la identidad de la sesión. Inicia sesión y vuelve a abrir este espacio.',
+  selected: 'Escuela autorizada actual', change: 'Cambiar o volver a verificar escuela', signIn: 'Volver a iniciar sesión', hq: 'Espacio de HQ', scope: 'Detalles del ámbito escolar', operations: 'Flujos de la escuela', boundary: 'Abrir un enlace no registra, activa, reserva, marca asistencia, cobra ni envía mensajes.',
+  crm: 'Leads y seguimiento CRM', crmHelp: 'Elige un lead, registra seguimiento interno, programa una clase de prueba y revisa su resultado.', registration: 'Registro de adultos o familias', registrationHelp: 'Abre CRM, verifica el lead y utiliza su paso de registro existente. El registro no es una inscripción pagada.', membership: 'Activación e historial de membresías', membershipHelp: 'Elige un lead CRM y recupera sus membresías. Revisa cada estudiante; la activación requiere dos confirmaciones.',
+  booking: 'Reservar para un estudiante verificado', bookingHelp: 'Lead → recuperar membresías → elegir estudiante → clases y reserva. No se copia el ID del estudiante en la URL.', attendance: 'Registrar asistencia', attendanceHelp: 'Desde la membresía verificada, abre operaciones de clase, elige una sesión y consulta o actualiza la asistencia explícitamente.', dashboard: 'Panel de operaciones escolares', dashboardHelp: 'Consulta informes autorizados. Los usuarios de varias escuelas deben elegir de nuevo la escuela allí.',
+  unavailable: 'No habilitado por este espacio', unavailableHelp: 'Los pagos, mensajes externos, activación de acceso de prueba e invocaciones de IA de pago no están disponibles aquí. Un registro guardado no acredita pago ni acuerdos firmados.', mode: 'Presentación', modern: 'Moderna', classic: 'Clásica', big: 'Botones grandes', modeHelp: 'Solo presentación. Cambiar el diseño o el idioma no consulta datos escolares ni cambia permisos.', nav: 'Navegación del espacio',
+  team: 'Equipo e invitaciones del personal', teamHelp: 'Revisa invitaciones y roles en el flujo existente de gestión del personal. Cada operación verifica su propia autorización.', family: 'Acceso a cuentas familiares', familyHelp: 'Gestiona el acceso de una familia ya conocida. El destino exige indicar la familia y verificar nuevamente la autorización.',
+  backToEntry: 'Elegir o volver a verificar escuela', navigationPaused: 'Termina o resuelve el trabajo actual antes de salir de esta página.', navigationHelp: 'Cada destino vuelve a verificar el acceso. Abrir un enlace no ejecuta una acción.',
+};
+export function entryText(language: string, key: Key): string { return (language === 'ko' ? ko : language === 'es' ? es : en)[key]; }

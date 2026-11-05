@@ -8,7 +8,7 @@ export async function loadMembershipBrowserCopy(name) {
   const ts = requireWeb('typescript');
   const source = await readFile(new URL(`../src/components/${name}.ts`, import.meta.url), 'utf8');
   let compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
-  if (name === 'membership-dates-copy') {
+  if (name === 'membership-dates-copy' || name === 'crm-lead-memberships-copy') {
     const dependency = ts.transpileModule(await readFile(new URL('../src/components/membership-activation-catalog.ts', import.meta.url), 'utf8'), {compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
     compiled = compiled.replace(/from\s+['"]\.\/membership-activation-catalog['"]/g, 'from '+JSON.stringify('data:text/javascript;base64,'+Buffer.from(dependency).toString('base64')));
   }

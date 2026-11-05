@@ -1,0 +1,8 @@
+.navigation { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: 1rem; }
+.navigation a { display: inline-flex; box-sizing: border-box; align-items: center; min-width: 0; min-height: 44px; max-width: 100%; padding: .65rem .9rem; border: 1px solid currentColor; border-radius: .5rem; color: inherit; overflow-wrap: anywhere; }
+.navigation a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+.navigation a[aria-disabled="true"] { opacity: .65; }
+.navigation p { flex-basis: 100%; margin: .25rem 0; font-size: .9rem; }
+:global([data-interface-theme="big-button"]) .navigation a, :global([data-mode="big"]) .navigation a { min-height: 56px; padding: 1rem; }
+:global([data-interface-theme="classic"]) .navigation a, :global([data-mode="classic"]) .navigation a { border-radius: .2rem; padding-inline: .65rem; }
+@media (max-width: 480px) { .navigation a { width: 100%; } }

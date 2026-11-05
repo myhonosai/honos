@@ -18,9 +18,11 @@ permissions:
 concurrency:
   group: connected-crm-${{ github.event.pull_request.number }}
   cancel-in-progress: true
+# PR #129 runs the complete superseding connected-student-operations workflow,
+# including these API/browser proofs. Avoid duplicate repository/database/commercial jobs.
 jobs:
   checks:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.number != 129
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -44,7 +46,7 @@ jobs:
       - run: pnpm db:check
       - run: git diff --exit-code
   database:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.number != 129
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
@@ -84,7 +86,7 @@ jobs:
       - if: always()
         run: git diff --exit-code
   browser:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.number != 129
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
