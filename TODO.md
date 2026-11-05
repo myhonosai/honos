@@ -1,3 +1,9 @@
+## Sprint 2 — accepted main 0204 reconciliation
+
+- Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after the owner-authorized #135 squash; its backend tree is identical to reviewed #135 `7d1134a`. All196 migration checksums and canonical API/package/infra bytes are preserved. No backend logic is authored here.
+- Reviewed #129 production frontend remains unchanged. The prior four-job green run at `41e06bc…` is evidence for the195-migration checkpoint, not fresh verification of this196-migration composition. Publish one batch and obtain fresh final-head verification; do not repeat unchanged-head runs.
+- Existing exact retries, privacy, callback retirement and original-microsecond HTTP200 proof remain unchanged. Tracking#131; no merge/deployment/provider activation.
+
 ## Sprint 2 — final accepted backend / reviewed CRM frontend integration
 
 - [x] Normally incorporate accepted main `029de0cadbeb047ef8e38767de4e60e460325821`; preserve all 195 migrations/checksums and all canonical backend/ACL source. Reviewed #126/#127/#129 production UI files remain byte-identical and are included once.
