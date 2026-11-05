@@ -1,3 +1,18 @@
+## Current HQ integration composition — accepted main 0204
+
+- Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after #135. All196 migration/checksum and backend bytes match accepted main; HQ production frontend and corrected proof loader are unchanged.
+- The complete three-job green run at `b3f0185…` is historical evidence for the195-migration checkpoint. Fresh196-migration combined-head verification follows publication. Separate #141 expected-principal authority remains a review/acceptance dependency.
+
+## C-HQ-2 — existing HQ school management, Sprint 2 reconciliation
+
+- [x] Preserve #112 checkpoint `2fdca2b` and normally merge accepted main `029de0cadbeb047ef8e38767de4e60e460325821` through local merge `217938b`. API/packages/infra bytes remain those of accepted main, including migration `0203`.
+- [x] Localize creation/directory EN/KO/ES; retain the shared Modern/Classic/Big Button controls and existing visual sources. Add persistent directory status and immediate DOM concealment for form/receipts, read retirement, same-owner exact UNKNOWN recovery and late retired-401 rejection.
+- [x] Re-run 55 focused frontend regressions, web typecheck, both harness syntax checks and 195 migration checksum validations locally on merged main `029de0c`. Earlier all 1,351 web tests and the production web build remain evidence for unchanged frontend source; those broader runs were not repeated for this backend-only merge. Hosted harness prepares 27 language/view/width browser/axe captures; local socket restrictions are not passing browser evidence.
+- [ ] Complete final-head hosted workspace/build/migration and signed-session API/database/browser verification, then focused independent review and owner approval. Do not infer full success from a source check.
+- [x] Correct the harness-only frontend dependency mapping after connected job `127137588905` in run `41995513902` failed to resolve `./session-invalidation` from a transpiled controller. The socket-free native-ESM regression reproduces the missing mapping and passes with the fix; 55 focused tests, web typecheck and harness syntax checks pass. Hosted API/browser verification still requires a new run; the failed run established no API proof-group or browser result.
+- [ ] Claude backend gate: canonical human-Origin enforcement and immutable expected-principal binding for legacy HQ provisioning are tracked in separate [draft #141](https://github.com/myhonosai/honos/pull/141) at `bac9cb55138733ea036be7a181e8c1f98d221f75`, pending independent review and merge. That draft is not integrated here; the accepted-main gaps remain. Creation remains suspended/no operating access, payment or AI. Frontend pre/post identity checks are not atomic command binding, and no frontend marker supplies backend authority.
+- Shared sprint tracking and dependencies: GitHub Issue #131; original #111/#129/#134 and Claude branches are preserved. No merge, deployment or provider activation.
+
 ## 2026-11-02 — PR #104 dates/history integration after merged #117
 
 - Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
