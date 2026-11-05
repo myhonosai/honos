@@ -151,7 +151,7 @@ try{
 
  // ---------- 1. school registration through HQ provisioning ----------
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Journey Martial Arts LLC',
-  displayName:'Journey Martial Arts',schoolName:'Journey Martial Arts Main',schoolSlug:`journey-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
+  displayName:'Journey Martial Arts',schoolName:'Journey Martial Arts Main',schoolSlug:`journey-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K(),expectedPrincipalId:humans.owner.id});
  const A={id:provisioned.organizationId,school:provisioned.schoolId};
  // This fixture stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED).
  await activatePreD9ProvisionedSchool(admin,provisioned.organizationId);

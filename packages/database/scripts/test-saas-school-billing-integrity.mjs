@@ -142,7 +142,7 @@ try{
 
  // A: registered through HQ provisioning, a second school A2 in the same organization, and a front-desk clerk without billing.hon.view.
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Billing Reads Martial Arts LLC',
-  displayName:'Billing Reads Martial Arts',schoolName:'Billing Reads Main',schoolSlug:`b51-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
+  displayName:'Billing Reads Martial Arts',schoolName:'Billing Reads Main',schoolSlug:`b51-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K(),expectedPrincipalId:humans.owner.id});
  A={id:provisioned.organizationId,school:provisioned.schoolId,school2:randomUUID(),clerkRole:randomUUID()};
  // This fixture stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED).
  await activatePreD9ProvisionedSchool(admin,provisioned.organizationId);

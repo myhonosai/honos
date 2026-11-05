@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "3913b7e3c6feb7a0c0ab2e031c74c8181b4205292d704d9904d6bf5880d7f2a7",
+  "chainSha256": "f65a556b0541054626e1ad26199cca7a603d8217b15dc2787c581bbeaa0d9365",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -109,6 +109,10 @@
     {
       "file": "0207_school_staff_invitation_roles.sql",
       "sha256": "6aac8ca234e4c85dd54c3c1239906b2bbc4935f21fcf03bd2253fbea28dd09cf"
+    },
+    {
+      "file": "0208_hq_school_provisioning_human_binding.sql",
+      "sha256": "e00d379296721782d2eafcbb245dbb03500a327e799a12c15b022e1c6611ad7f"
     }
   ]
 }

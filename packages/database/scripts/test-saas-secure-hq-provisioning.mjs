@@ -104,7 +104,7 @@ const subs=async o=>(await row('SELECT count(*)::int n FROM hon.saas_subscriptio
 // A school-staff operating path: the human-work scope resolver (STATUS_GATED, window-aware) for the school's own owner.
 const staffScope=async k=>(await restricted.query('SELECT organization_id FROM hon.resolve_human_work_scope($1)',[H(`owner${k}`)])).rows.map(r=>r.organization_id);
 const provision=(who,slug,tier='COMPLETE',key=K(),extra={})=>onboarding.provisionInitialSchool({externalSubject:H(who)},{legalName:`D9 ${slug} LLC`,
- displayName:`D9 ${slug}`,schoolName:`D9 ${slug} Main`,schoolSlug:slug,timezone:'America/Chicago',initialTier:tier,idempotencyKey:key,...extra});
+ displayName:`D9 ${slug}`,schoolName:`D9 ${slug} Main`,schoolSlug:slug,timezone:'America/Chicago',initialTier:tier,idempotencyKey:key,expectedPrincipalId:humans[who].id,...extra});
 const exceptionInput=(k,patch={})=>({schoolId:P[k].schoolId,purpose:'PRODUCT_DEMONSTRATION',reason:'Fixture demonstration for an approved prospect',
  scopeTier:'COMPLETE',startsAt:iso(Date.now()),expiresAt:iso(Date.now()+30*DAY),expectedEntitlementVersion:1,...patch});
 const grant=(who,org,input,key=K())=>access.grantAccessException(H(who),org,input,key);
@@ -191,20 +191,94 @@ try{
  // Idempotent replay and key reuse.
  const replay=await provision('owner',slugP1,'COMPLETE',kP1);
  assert.deepEqual([replay.replayed,replay.organizationId,replay.schoolId],[true,P.P1.organizationId,P.P1.schoolId]);
- await sqlDeny(provision('owner',slugP1,'CORE',kP1),'23505');
+ await deny(provision('owner',slugP1,'CORE',kP1),409,'HQ_PROVISIONING_CONFLICT');
  // Unauthorized provisioners: billing support, a billing operator without onboarding, a school owner, a stranger, an expired HQ owner.
- for(const who of ['support','ownerLG','stranger','exowner'])await sqlDeny(provision(who,slug('X')),'42501');
+ for(const who of ['support','ownerLG','stranger','exowner'])await deny(provision(who,slug('X')),403,'HQ_PROVISIONING_FORBIDDEN');
  // Concurrency: five identical requests under one key create one school.
  const kC=K(),slugC=slug('P3');
  const race=await Promise.allSettled(Array.from({length:5},()=>provision('owner',slugC,'COMPLETE',kC)));
  const won=race.filter(r=>r.status==='fulfilled').map(r=>r.value);
- assert.ok(won.length>=1&&race.every(r=>r.status==='fulfilled'||['55P03','23505'].includes(r.reason?.code)),JSON.stringify(race.map(r=>r.reason?.code)));
+ assert.ok(won.length>=1&&race.every(r=>r.status==='fulfilled'||['HQ_PROVISIONING_IN_PROGRESS','HQ_PROVISIONING_CONFLICT'].includes(r.reason?.getResponse?.().code)),JSON.stringify(race.map(r=>r.reason?.getResponse?.()??r.reason?.code)));
  assert.equal(new Set(won.map(r=>r.organizationId)).size,1);
  assert.equal((await row('SELECT count(*)::int n FROM hon.schools WHERE slug=$1',[slugC])).n,1,'exactly one school');
  P.P3={...won[0]};await addSchoolOwner('P3');
  P.P4=await provision('owner',slug('P4'));await addSchoolOwner('P4');
  P.P5=await provision('owner',slug('P5'));await addSchoolOwner('P5');
  P.P6=await provision('owner',slug('P6'));await addSchoolOwner('P6');
+
+ // ---------- 1b. expected-principal binding and authority order (0208) ----------
+ // The receipt echoes the database actor and the current entitlement status.
+ assert.deepEqual([P.P1.actorPrincipalId,P.P1.entitlementStatus,P.P2.actorPrincipalId,replay.actorPrincipalId],[humans.owner.id,'SUSPENDED',humans.onboarder.id,humans.owner.id]);
+ // Runtime can execute only the bound entry point.
+ for(const[sig,allowed]of [['provision_school_from_hq(text,text,text,text,text,text,hon.plan_tier,text,text,uuid,uuid)',false],['hq_provisioning_actor(text)',false],
+  ['provision_school_from_hq_human(text,uuid,text,text,text,text,text,hon.plan_tier,text,text,uuid,uuid)',true]])
+  assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,allowed,sig);
+ await sqlDeny(restricted.query("SELECT * FROM hon.provision_school_from_hq($1,'X','X','X',$2,'UTC','COMPLETE',$3,'f',$4,$4)",[H('owner'),slug('direct'),K(),K()]),'42501');
+ const provisioningRows=async(who,key,slugValue)=>({schools:(await row('SELECT count(*)::int n FROM hon.schools WHERE slug=$1',[slugValue])).n,
+  requests:(await row('SELECT count(*)::int n FROM hon.hq_onboarding_requests WHERE actor_principal_id=$1 AND idempotency_key=$2',[humans[who].id,key])).n});
+ // A session that changed after the screen verified its principal is refused before any write.
+ {
+  const kM=K(),slugM=slug('mismatch');
+  for(const expectedPrincipalId of [humans.onboarder.id,randomUUID(),humans.ownerP1.id])
+   await deny(provision('owner',slugM,'COMPLETE',kM,{expectedPrincipalId}),409,'HQ_EXPECTED_PRINCIPAL_MISMATCH');
+  assert.deepEqual(await provisioningRows('owner',kM,slugM),{schools:0,requests:0},'mismatch writes nothing');
+  await deny(provision('stranger',slugM,'COMPLETE',kM,{expectedPrincipalId:humans.owner.id}),403,'HQ_PROVISIONING_FORBIDDEN');
+  await deny(provision('owner',slugM,'COMPLETE',kM,{expectedPrincipalId:'not-a-uuid'}),400,'HQ_EXPECTED_PRINCIPAL_REQUIRED');
+  const ok=await provision('owner',slugM,'COMPLETE',kM);P.PM=ok;
+  assert.deepEqual([ok.replayed,ok.actorPrincipalId],[false,humans.owner.id]);
+  // A replay under a different expected principal discloses nothing.
+  await deny(provision('owner',slugM,'COMPLETE',kM,{expectedPrincipalId:humans.onboarder.id}),409,'HQ_EXPECTED_PRINCIPAL_MISMATCH');
+  assert.deepEqual(await provisioningRows('owner',kM,slugM),{schools:1,requests:1});
+ }
+ // Authority that ends while the rows are being written rolls everything back; a replay after it ended is refused.
+ {
+  const late={id:randomUUID(),user:randomUUID(),subject:`d9-late-${randomUUID()}`};humans.late=late;
+  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[late.user,late.subject,`${late.user}@example.test`]);
+  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[late.id,late.user]);
+  await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_OWNER','{}',clock_timestamp()-interval '1 hour')",[late.id]);
+  // Sequences are not transactional: a trigger entry stays counted even when the command rolls back.
+  await admin.query('CREATE SEQUENCE public.d9_clock_barrier_entries');
+  await admin.query('CREATE TABLE public.d9_clock_barrier_at(until timestamptz)');await admin.query('INSERT INTO public.d9_clock_barrier_at VALUES(NULL)');
+  await admin.query(`CREATE FUNCTION public.d9_clock_barrier() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+   DECLARE u timestamptz; BEGIN SELECT until INTO u FROM public.d9_clock_barrier_at;
+   IF u IS NOT NULL AND NEW.event_type='organization.provisioned' THEN PERFORM nextval('public.d9_clock_barrier_entries'); PERFORM pg_sleep(greatest(0,extract(epoch FROM u-clock_timestamp()))+0.02); END IF; RETURN NEW; END $$`);
+  // The outbox row is the last insert; only the request-completion update follows it.
+  await admin.query('CREATE TRIGGER d9_clock_barrier BEFORE INSERT ON hon.outbox_events FOR EACH ROW EXECUTE FUNCTION public.d9_clock_barrier()');
+  const entries=async()=>Number((await row('SELECT CASE WHEN is_called THEN last_value ELSE 0 END n FROM public.d9_clock_barrier_entries')).n);
+  const durable=['organizations','organization_entitlements','schools','roles','role_permissions','principal_role_grants','audit_events','outbox_events','hq_onboarding_requests'];
+  const durableCounts=async()=>Object.fromEntries(await Promise.all(durable.map(async t=>[t,(await row(`SELECT count(*)::int n FROM hon.${t}`)).n])));
+  const pin=async()=>{const t=(await row("SELECT clock_timestamp()+interval '1500 milliseconds' t")).t;await admin.query('UPDATE public.d9_clock_barrier_at SET until=$1',[t]);return t;};
+  try{
+   // Control: intact authority completes through the same barrier.
+   let t=await pin();const kCtl=K(),slugCtl=slug('late-ctl');let e0=await entries();
+   const ctl=await provision('late',slugCtl,'COMPLETE',kCtl);P.PL=ctl;
+   assert.equal(await entries(),e0+1,'control entered the barrier');assert.ok(Date.now()>=t.getTime(),'control passed the barrier');assert.equal(ctl.actorPrincipalId,late.id);
+   // The grant ends at the barrier: nothing is committed.
+   t=await pin();await admin.query('UPDATE hon.hq_operator_grants SET effective_until=$2 WHERE principal_id=$1',[late.id,t]);
+   const kL=K(),slugL=slug('late');const beforeLate=await durableCounts();e0=await entries();
+   await deny(provision('late',slugL,'COMPLETE',kL),403,'HQ_PROVISIONING_FORBIDDEN');
+   assert.equal(await entries(),e0+1,'refused only after entering the last insert');assert.ok(Date.now()>=t.getTime(),'refused only after the expiry instant');
+   assert.deepEqual(await durableCounts(),beforeLate,'every durable provisioning table rolled back');
+   assert.deepEqual(await provisioningRows('late',kL,slugL),{schools:0,requests:0},'late expiry rolls back the school and the request claim');
+   // The control request cannot be replayed once authority ended.
+   await admin.query('UPDATE public.d9_clock_barrier_at SET until=NULL');
+   await deny(provision('late',slugCtl,'COMPLETE',kCtl),403,'HQ_PROVISIONING_FORBIDDEN');
+   // Restored authority replays; a removed grant is equally final.
+   await admin.query('UPDATE hon.hq_operator_grants SET effective_until=NULL WHERE principal_id=$1',[late.id]);
+   assert.equal((await provision('late',slugCtl,'COMPLETE',kCtl)).replayed,true,'restored authority replays');
+   await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id=$1',[late.id]);
+   await deny(provision('late',slugCtl,'COMPLETE',kCtl),403,'HQ_PROVISIONING_FORBIDDEN');
+  }finally{
+   await admin.query('DROP TRIGGER IF EXISTS d9_clock_barrier ON hon.outbox_events');await admin.query('DROP FUNCTION IF EXISTS public.d9_clock_barrier()');await admin.query('DROP TABLE IF EXISTS public.d9_clock_barrier_at');await admin.query('DROP SEQUENCE IF EXISTS public.d9_clock_barrier_entries');
+  }
+ }
+ // A second active principal on the same user is ambiguous and refused.
+ {
+  const twin=randomUUID();
+  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[twin,humans.onboarder.user]);
+  try{await deny(provision('onboarder',slug('twin')),403,'HQ_PROVISIONING_FORBIDDEN');}
+  finally{await admin.query('DELETE FROM hon.principals WHERE id=$1',[twin]);}
+ }
 
  // ---------- 2. D8 and D7 for a provisioned school ----------
  const opts=await payments.readPlanOptions(H('ownerP1'),P.P1.schoolId);
