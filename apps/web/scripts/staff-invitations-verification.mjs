@@ -133,7 +133,8 @@ try {
       await context.route('**/api/v1/school/staff-invitations', async route => {
         const request = route.request(); assert.equal(new URL(request.url()).origin, origin);
         if (request.method() !== 'POST') return route.continue(); exactPosts.push({ body: request.postData(), key: request.headers()['idempotency-key'] });
-        if (drop) { drop = false; const r = await route.fetch(); assert.equal(r.status(), 200); await route.abort('failed'); } else await route.continue();
+        // route.fetch() defaults to provisional headers, which omit browser security metadata.
+        if (drop) { drop = false; const r = await route.fetch({ headers: await request.allHeaders() }); assert.equal(r.status(), 200); await route.abort('failed'); } else await route.continue();
       });
       await page.getByRole('button', { name: t(language, 'invite'), exact: true }).click();
       if (language === 'en') { await page.getByText(t(language, 'unknown'), { exact: true }).waitFor(); await page.getByRole('button', { name: t(language, 'retry'), exact: true }).click(); }
@@ -175,7 +176,7 @@ try {
       if (route.request().method() !== 'POST') return route.continue();
       exact.push({ body: route.request().postData(), key: route.request().headers()['idempotency-key'] });
       if (!switchSession) return route.continue(); switchSession = false;
-      const response = await route.fetch(); assert.equal(response.status(), 200); await setActor(B.who); await route.fulfill({ response });
+      const response = await route.fetch({ headers: await route.request().allHeaders() }); assert.equal(response.status(), 200); await setActor(B.who); await route.fulfill({ response });
     });
     await page.getByTestId('staff-email').fill(recipient.email); await page.getByRole('button', { name: t('en', 'newToken'), exact: true }).click(); await page.getByTestId('staff-confirm').check();
     await page.getByRole('button', { name: t('en', 'invite'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t('en', 'IDENTITY') }).waitFor();
