@@ -1,3 +1,10 @@
+## PR #139 — family frontend hosted acceptance fixture repair
+
+- [x] Correct only the synthetic signed-session identity namespace in the frontend verification harness to match the existing OIDC acceptance boundary. Preserve all acceptance, mixed-role refusal, privacy, exact-retry and database assertions; no UI, backend, contract or migration changes.
+- Hosted run `41971811688`, job `127061574513`, passed the first five frontend groups, then acceptance at `apps/web/scripts/family-access-integration.mjs:66` returned `ACCOUNT_INPUT_INVALID`. The fixture generated `family-ui:…`; migration 0205 correctly requires `oidc:…`, matching the real OIDC normalizer and canonical backend proof.
+- Local evidence: the original signed verified-email fixture reproduced the namespace mismatch; six corrected recipient/staff/browser identities passed real session signing/verification with distinct OIDC subjects. All 74 focused family frontend tests, 101 authentication tests, web TypeScript, harness syntax and whitespace checks passed. Existing assertions are unchanged.
+- Fresh exact-head hosted API/PostgreSQL/browser verification remains required. Local sockets are unavailable; no local database/browser pass or operational approval is claimed.
+
 ## 2026-11-02 — PR #104 dates/history integration after merged #117
 
 - Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
