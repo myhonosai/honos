@@ -1,9 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, ServiceUnavailableException, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
+import { forwardedHostMatchesPublicOrigin } from './same-origin-proxy.js';
 
 const AUTHORITY_HEADERS = new Set([
-  'authorization', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-proto',
+  'authorization', 'forwarded', 'x-forwarded-for', 'x-forwarded-port', 'x-forwarded-proto',
   'x-real-ip', 'x-original-url', 'x-rewrite-url', 'x-subject', 'x-user-id', 'x-principal-id',
   'x-organization-id', 'x-school-id', 'x-role', 'x-tier', 'x-source',
   'x-delegated-by-principal-id', 'x-action-request-id', 'idempotency-key',
@@ -35,7 +36,12 @@ export class ClassSessionsReadHumanUiGuard implements CanActivate {
       || (headers['content-length'] !== undefined && headers['content-length'] !== '0')) {
       throw new BadRequestException({ code: 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED' });
     }
-    if (request.method !== 'GET' || headers.origin !== origin || headers['x-hon-human-read'] !== 'class-sessions'
+    // Browsers omit Origin on same-origin GET (Fetch standard), so it is optional here but must match when
+    // present; the forbidden Sec-Fetch-* metadata plus the custom read header (which forces a CORS preflight
+    // Nest never grants) carry the same-origin proof. POST commands still require Origin.
+    if (request.method !== 'GET' || (headers.origin !== undefined && headers.origin !== origin)
+      || !forwardedHostMatchesPublicOrigin(headers['x-forwarded-host'], origin)
+      || headers['x-hon-human-read'] !== 'class-sessions'
       || headers['sec-fetch-site'] !== 'same-origin' || headers['sec-fetch-mode'] !== 'same-origin'
       || headers['sec-fetch-dest'] !== 'empty' || headers['sec-fetch-user'] !== undefined
       || unexpectedHonHeader || authorityHeader) {
