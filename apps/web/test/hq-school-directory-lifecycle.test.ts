@@ -3,7 +3,7 @@ import type { HqSchoolDirectory } from '@hon/contracts';
 import { HqSchoolDirectoryController, bindHqSchoolDirectoryPrivacy } from '../src/components/hq-school-directory-controller';
 import { HqSchoolDirectoryAccessError, loadHqSchoolDirectory, readHqSchoolDirectoryPrincipal } from '../src/components/hq-school-directory-http';
 import { SchoolCreationController } from '../src/components/hq-onboarding-controller';
-import { createSchoolRequest, schoolCreationApi } from '../src/components/hq-onboarding-http';
+import { schoolCreationApi, type SchoolCreationReceipt } from '../src/components/hq-onboarding-http';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from '../src/components/session-invalidation';
 import { readFileSync } from 'node:fs';
 
@@ -69,20 +69,21 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
       expect(denied.api.load).not.toHaveBeenCalled(); expect(denied.controller.snapshot()).toMatchObject({ kind: status === 401 ? 'unauthorized' : 'forbidden', directory: null });
     }
   });
-  it('keeps the creation request mounted and exact while a creation-transport 401 conceals loaded directory facts synchronously', async () => {
+  it('keeps the creation request mounted and exact while its current command401 conceals loaded directory facts synchronously', async () => {
     const s = setup(); await s.controller.start(); const p = privacy(s.controller); vi.stubGlobal('window', p.browser);
-    const receipt = { organizationId: '20000000-0000-4000-8000-000000000001', schoolId: '30000000-0000-4000-8000-000000000001', ownerRoleId: '40000000-0000-4000-8000-000000000001', replayed: true, actorPrincipalId: principal, entitlementStatus: 'SUSPENDED' as const };
+    const receipt: SchoolCreationReceipt = { organizationId: '20000000-0000-4000-8000-000000000001', schoolId: '30000000-0000-4000-8000-000000000001', ownerRoleId: '40000000-0000-4000-8000-000000000001', replayed: true, actorPrincipalId: principal, entitlementStatus: 'SUSPENDED' };
     const api = { authorize: vi.fn(async () => principal), send: vi.fn(async (_request: unknown) => receipt) };
     const creation = new SchoolCreationController(api); creation.start(); await creation.authorize();
     for (const key of Object.keys(form) as (keyof typeof form)[]) creation.edit(key, form[key]);
     api.send.mockRejectedValueOnce(new Error('unknown')); creation.confirm(true); await creation.submit(); const original = api.send.mock.calls[0]![0];
     p.browser.addEventListener(HON_SESSION_INVALIDATED_EVENT, () => creation.conceal(true));
     const json = vi.fn(); vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 401, json } as unknown as Response);
-    await expect(schoolCreationApi.send(createSchoolRequest(form, principal))).rejects.toMatchObject({ status: 401 });
+    api.send.mockImplementationOnce(request => schoolCreationApi.send(request as Parameters<typeof schoolCreationApi.send>[0]));
+    creation.confirm(true); await creation.submit();
     expect(json).not.toHaveBeenCalled(); expect(p.facts).toEqual({ hidden: true, inert: true });
     expect(s.controller.snapshot()).toMatchObject({ kind: 'unauthorized', directory: null }); expect(creation.snapshot().concealed).toBe(true);
     await creation.authorize(); expect(creation.snapshot().uncertain).toBe(true); creation.confirm(true); await creation.submit();
-    expect(api.send.mock.calls[1]![0]).toBe(original); p.unbind(); creation.stop();
+    expect(api.send.mock.calls[1]![0]).toBe(original); expect(api.send.mock.calls[2]![0]).toBe(original); p.unbind(); creation.stop();
   });
   it('unmount hides facts and detaches listeners without a focus-triggered refresh or presentation dependency', async () => {
     const s = setup(); await s.controller.start(); const p = privacy(s.controller); p.unbind(); s.controller.stop();

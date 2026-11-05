@@ -1,5 +1,5 @@
 import { createSchoolRequest, schoolCreationApi, SchoolCreationError, type SchoolCreationApi, type SchoolCreationForm, type SchoolCreationReceipt, type SchoolCreationRequest } from './hq-onboarding-http';
-import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from './session-invalidation';
+import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT, reportConfirmedSessionInvalidation } from './session-invalidation';
 
 export const emptySchoolForm = (): SchoolCreationForm => ({ legalName: '', displayName: '', schoolName: '', schoolSlug: '', timezone: 'America/Los_Angeles' });
 export type SchoolCreationView = Readonly<{
@@ -13,6 +13,7 @@ export class SchoolCreationController {
   private view: SchoolCreationView = { access: 'idle', busy: false, concealed: true, form: emptySchoolForm(), confirmed: false, uncertain: false, receipt: null, message: '' };
   private listeners = new Set<() => void>();
   private mounted = false;
+  private lifetime = 0;
   private epoch = 0;
   private lease: object | null = null;
   private principalId: string | null = null;
@@ -24,7 +25,7 @@ export class SchoolCreationController {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private update(patch: Partial<SchoolCreationView>) { this.view = { ...this.view, ...patch }; for (const listener of this.listeners) listener(); }
   start() { this.mounted = true; }
-  stop() { this.mounted = false; this.epoch++; this.read?.abort(); this.pending = null; this.principalId = null; }
+  stop() { this.mounted = false; this.lifetime++; this.epoch++; this.read?.abort(); this.pending = null; this.principalId = null; }
   conceal = (sessionEnded = false) => {
     this.epoch++; this.read?.abort(); this.principalId = null;
     this.update({ concealed: true, access: sessionEnded || this.view.access === 'signed-out' ? 'signed-out' : 'idle', form: emptySchoolForm(), confirmed: false, receipt: null, uncertain: false, message: '' });
@@ -68,7 +69,7 @@ export class SchoolCreationController {
     try { request = this.pending ?? createSchoolRequest(this.view.form, this.principalId); }
     catch { this.update({ confirmed: false, message: 'errorInvalid' }); return; }
     const lease = {}; this.lease = lease;
-    const epoch = this.epoch; this.read = new AbortController();
+    const epoch = this.epoch, lifetime = this.lifetime; this.read = new AbortController();
     this.update({ busy: true, confirmed: false, message: '' });
     let dispatched = false;
     try {
@@ -85,7 +86,15 @@ export class SchoolCreationController {
       this.pending = null;
       this.update({ receipt, uncertain: false, form: emptySchoolForm(), message: '' });
     } catch (error) {
-      if (!this.current(epoch)) { this.fail(error, epoch); return; }
+      // A retired POST must not broadcast or mutate a replacement mount. Keep
+      // the original pending request for explicit, authorized exact recovery.
+      if (!this.current(epoch)) return;
+      if (error instanceof SchoolCreationError && error.status === 401) {
+        reportConfirmedSessionInvalidation();
+        // The synchronous shared event may itself unmount/replace this owner.
+        if (this.mounted && this.lifetime === lifetime && this.lease === lease && (!dispatched || this.pending === request)) this.deny(error);
+        return;
+      }
       if (!dispatched || (error instanceof SchoolCreationError && ([401, 403].includes(error.status) || error.code === 'HQ_EXPECTED_PRINCIPAL_MISMATCH'))) this.deny(error);
       else this.update({ uncertain: true, message: 'unknownOutcome' });
     } finally { this.release(lease); }

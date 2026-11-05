@@ -224,7 +224,7 @@ describe('existing HQ transport and verified receipt', () => {
     expect(fetchSpy.mock.calls[1]).toEqual(['/api/v1/hq/organizations', expect.objectContaining({ method: 'POST', cache: 'no-store', body: request.body, headers: expect.objectContaining({ 'X-HON-Human-Command': 'hq-school-provisioning', 'X-HON-Expected-Principal': principalId, 'Idempotency-Key': request.key }) })]);
     expect(JSON.parse(request.body)).not.toHaveProperty('principalId');
   });
-  it('fails closed for operator/support or malformed session and broadcasts only authenticated 401', async () => {
+  it('fails closed for operator/support or malformed session and leaves command401 reporting to its owner', async () => {
     for (const role of ['HON_HQ_OPERATOR', 'HON_HQ_SUPPORT']) {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: { principalId, hqRole: role } })));
       await expect(schoolCreationApi.authorize(new AbortController().signal)).rejects.toMatchObject({ status: 403 }); vi.restoreAllMocks();
@@ -235,7 +235,7 @@ describe('existing HQ transport and verified receipt', () => {
       fetchSpy.mockResolvedValue(new Response('{}', { status }));
       await expect(schoolCreationApi.send(createSchoolRequest(form, principalId))).rejects.toMatchObject({ status });
     }
-    expect(dispatchEvent).toHaveBeenCalledTimes(1); expect(dispatchEvent.mock.calls[0]![0].type).toBe('hon:session-invalidated');
+    expect(dispatchEvent).not.toHaveBeenCalled();
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: { principalId, hqRole: 'HON_HQ_OWNER', permission: '*' } })));
     await expect(schoolCreationApi.authorize(new AbortController().signal)).rejects.toThrow();
   });

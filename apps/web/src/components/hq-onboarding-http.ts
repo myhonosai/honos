@@ -57,8 +57,8 @@ export function verifySchoolCreationReceipt(value: unknown, status: number, expe
 }
 
 const options = { credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer' } as const;
-function requireSuccess(response: Response) {
-  if (response.status === 401) reportConfirmedSessionInvalidation();
+function requireSuccess(response: Response, reportSession = true) {
+  if (response.status === 401 && reportSession) reportConfirmedSessionInvalidation();
   if (!response.ok) throw new SchoolCreationError(response.status);
 }
 export const schoolCreationApi: SchoolCreationApi = {
@@ -86,7 +86,9 @@ export const schoolCreationApi: SchoolCreationApi = {
       try { mismatch = closed(await response.json(), ['code']).code === 'HQ_EXPECTED_PRINCIPAL_MISMATCH'; } catch { /* Unverified conflicts retain the unknown outcome. */ }
       throw new SchoolCreationError(409, mismatch ? 'HQ_EXPECTED_PRINCIPAL_MISMATCH' : null);
     }
-    requireSuccess(response);
+    // Consequential requests outlive concealment/unmount. Only the controller
+    // owning the current command may invalidate a session after settlement.
+    requireSuccess(response, false);
     return verifySchoolCreationReceipt(await response.json(), response.status, expectedPrincipalId);
   },
 };
