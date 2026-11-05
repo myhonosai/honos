@@ -1,12 +1,12 @@
 import { BadRequestException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import { accountUuid, validateStaffAccountReceipt, validateStaffInvitation, validateStaffInvitationAcceptance, validateStaffInvitationInput, validateStaffInvitationRevoke } from '@hon/contracts';
+import { accountUuid, validateStaffAccountReceipt, validateStaffInvitation, validateStaffInvitationAcceptance, validateStaffInvitationInput, validateStaffInvitationRevoke, validateStaffInvitationRoles } from '@hon/contracts';
 import { cookieValue, HON_SESSION_COOKIE, sessionConfig, verifySession } from '@hon/auth';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { SchoolAccountRateLimit } from './school-account-rate-limit.js';
 
-type Operation = 'invite'|'revoke'|'accept'|'list';
+type Operation = 'invite'|'revoke'|'accept'|'list'|'roles';
 const sha = (token: string) => createHash('sha256').update(token).digest('hex');
 
 @Injectable()
@@ -14,7 +14,8 @@ export class SchoolStaffInvitationService {
   private readonly rateLimit = new SchoolAccountRateLimit();
   constructor(private readonly database: RuntimeDatabaseService) {}
   private admit(req: HonRequest, operation: Operation) {
-    const wait = this.rateLimit.admit(req.honIdentity!.externalSubject, operation);
+    // Role discovery shares the list budget: both are manager-only reads.
+    const wait = this.rateLimit.admit(req.honIdentity!.externalSubject, operation==='roles'?'list':operation);
     if (wait) {
       req.res?.setHeader('Retry-After', String(wait));
       throw new HttpException({code:'ACCOUNT_RATE_LIMITED',outcome:'NOT_SUBMITTED',retryAfterSeconds:wait},429);
@@ -58,5 +59,11 @@ export class SchoolStaffInvitationService {
     const data=await this.run('list',[req.honIdentity!.externalSubject,school]);
     if(!Array.isArray(data)||data.length>50) throw new ServiceUnavailableException({code:'ACCOUNT_UNAVAILABLE'});
     return data.map(validateStaffInvitation);
+  }
+  async roles(req: HonRequest, school: string) {
+    try { accountUuid(school); } catch { throw new BadRequestException({code:'ACCOUNT_INPUT_INVALID'}); }
+    this.admit(req,'roles');
+    const data=await this.run('roles',[req.honIdentity!.externalSubject,school]);
+    try { return validateStaffInvitationRoles(data); } catch { throw new ServiceUnavailableException({code:'ACCOUNT_UNAVAILABLE'}); }
   }
 }

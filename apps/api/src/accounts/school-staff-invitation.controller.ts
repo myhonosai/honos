@@ -37,4 +37,6 @@ export class SchoolStaffInvitationController {
   accept(@Req() r: HonRequest,@Body() b: unknown,@Headers('idempotency-key') k: string) { return this.invitations.command(r,'accept',b,k).then(data=>({data})); }
   @Get('school/schools/:schoolId/staff-invitations')
   list(@Req() r: HonRequest,@Param('schoolId') s: string) { return this.invitations.list(r,s).then(data=>({data})); }
+  @Get('school/schools/:schoolId/staff-invitation-roles')
+  roles(@Req() r: HonRequest,@Param('schoolId') s: string) { return this.invitations.roles(r,s).then(data=>({data})); }
 }
