@@ -38,11 +38,42 @@ const commandEvidence = new Map();
 const commandPaths = new Set(['/v1/school/staff-invitations', '/v1/school/staff-invitations/revoke', '/v1/account/staff-invitations/accept']);
 const diagnosticCode = value => ['HUMAN_UI_REQUIRED', 'HUMAN_UI_ORIGIN_NOT_CONFIGURED', 'ACCOUNT_INPUT_INVALID', 'ACCOUNT_FORBIDDEN', 'ACCOUNT_UNAVAILABLE',
   'VERIFIED_EMAIL_REQUIRED', 'ACCOUNT_REVIEW_REQUIRED', 'ACCOUNT_CONFLICT', 'ACCOUNT_RATE_LIMITED', 'ACCOUNT_BUSY'].includes(value) ? value : 'UNRECOGNIZED';
-const commandFailure = async (response, key) => {
-  if (response.status() === 200) return undefined;
-  const body = await response.json().catch(() => null);
-  return JSON.stringify({ status: response.status(), code: diagnosticCode(body?.code), request: commandEvidence.get(key) ?? 'UNOBSERVED' });
-};
+async function observeNativeCommands(page, afterSuccess = async () => 'DELIVER') {
+  const posts = [];
+  await page.exposeBinding('__honStaffNativeCommand', async (_source, post) => {
+    posts.push(post);
+    // A real denial is returned to the app unchanged and independently fails waitFor().
+    if (post.status !== 200) return 'DELIVER';
+    return afterSuccess(post, posts.length);
+  });
+  await page.evaluate(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (input, options) => {
+      const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
+      const method = options?.method ?? (input instanceof Request ? input.method : 'GET');
+      if (url.origin !== location.origin || url.pathname !== '/api/v1/school/staff-invitations' || method !== 'POST') return nativeFetch(input, options);
+      // Forward the actual app input/options unchanged. APIRequestContext is never the command transport.
+      const response = await nativeFetch(input, options), headers = new Headers(options?.headers);
+      let code = null;
+      if (response.status === 200) await response.clone().arrayBuffer();
+      else { const body = await response.clone().json().catch(() => null); code = ['HUMAN_UI_REQUIRED', 'ACCOUNT_FORBIDDEN', 'ACCOUNT_INPUT_INVALID', 'ACCOUNT_BUSY', 'ACCOUNT_RATE_LIMITED'].includes(body?.code) ? body.code : 'UNRECOGNIZED'; }
+      const action = await window.__honStaffNativeCommand({ url: url.href, method, body: typeof options?.body === 'string' ? options.body : null,
+        key: headers.get('Idempotency-Key'), status: response.status, code });
+      if (response.status === 200 && action === 'DROP') throw new DOMException('Synthetic post-commit response loss', 'TimeoutError');
+      return response;
+    };
+  });
+  return { posts, async waitFor(count) {
+    const deadline = Date.now() + 15000;
+    while (posts.length < count && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+    assert(posts.length >= count, 'Native browser command did not settle.');
+    for (const post of posts.slice(0, count)) {
+      assert.equal(post.status, 200, JSON.stringify({ status: post.status, code: diagnosticCode(post.code), request: commandEvidence.get(post.key) ?? 'UNOBSERVED' }));
+      assert(post.url === origin + '/api/v1/school/staff-invitations' && post.method === 'POST', 'Native command URL or method changed.');
+      assert(typeof post.body === 'string' && typeof post.key === 'string' && /^[a-f0-9-]{36}$/.test(post.key), 'Native command body/key capture unavailable.');
+    }
+  } };
+}
 const person = label => ({ externalSubject: `oidc:staff-ui:${label}:${K()}`, email: `${label}-${K()}@example.invalid`, emailVerified: true });
 const cookie = (who, expired = false) => `${HON_SESSION_COOKIE}=${issueSession(who, session, expired ? Math.floor(Date.now() / 1000) - 50000 : undefined)}`;
 const q = async (sql, values = []) => (await admin.query(sql, values)).rows;
@@ -151,10 +182,10 @@ try {
     await page.getByTestId('staff-role-id').fill(school.targetRole); await page.getByRole('button', { name: t(language, 'loadRole'), exact: true }).click(); await page.getByText('Front desk', { exact: true }).waitFor();
     if (language === 'en' && mode === 'modern' && width === 390) {
       // Exercise real browser Origin serialization and the unchanged guard with invalid closed input: no domain write can occur.
-      const keys = [K(), K()];
+      const keys = [K()];
       const probe = await page.evaluate(async ({ keys, marker }) => {
         const out = [];
-        for (const [i, policy] of ['no-referrer', 'strict-origin'].entries()) {
+        for (const [i, policy] of ['no-referrer'].entries()) {
           const response = await fetch('/api/v1/school/staff-invitations', { method: 'POST', credentials: 'same-origin', mode: 'same-origin',
             cache: 'no-store', redirect: 'error', referrerPolicy: policy, headers: { 'Content-Type': 'application/json', 'X-HON-Human-Command': marker, 'Idempotency-Key': keys[i] }, body: '{}' });
           const body = await response.json().catch(() => null);
@@ -164,10 +195,9 @@ try {
       }, { keys, marker: contracts.STAFF_ACCOUNT_HUMAN_COMMAND });
       const evidence = probe.map((item, i) => ({ ...item, request: commandEvidence.get(keys[i]) ?? 'UNOBSERVED' }));
       console.log('STAFF FRONTEND ORIGIN PROBE ' + JSON.stringify(evidence));
-      assert.deepEqual(probe, [{ policy: 'no-referrer', status: 403, code: 'HUMAN_UI_REQUIRED' }, { policy: 'strict-origin', status: 400, code: 'ACCOUNT_INPUT_INVALID' }]);
-      assert.equal(commandEvidence.get(keys[0])?.originKind, 'OPAQUE'); assert.equal(commandEvidence.get(keys[1])?.originKind, 'EXPECTED');
-      assert.equal(commandEvidence.get(keys[0])?.referrerKind, 'MISSING'); assert.equal(commandEvidence.get(keys[1])?.referrerKind, 'ORIGIN_ONLY');
-      pass('mounted browser no-referrer POST has opaque Origin; strict-origin passes the unchanged human guard without exposing a page path');
+      assert.deepEqual(probe, [{ policy: 'no-referrer', status: 400, code: 'ACCOUNT_INPUT_INVALID' }]);
+      assert.equal(commandEvidence.get(keys[0])?.originKind, 'EXPECTED'); assert.equal(commandEvidence.get(keys[0])?.referrerKind, 'MISSING');
+      pass('mounted native browser POST preserves expected Origin and no Referer; unchanged guard rejects invalid closed input');
     }
     const beforeModes = requests.filter(r => r.path.includes('staff-invitations') && r.method === 'GET').length;
     await page.getByRole('button', { name: t(language, mode), exact: true }).click(); assert.equal(await page.getByTestId('staff-invitations').getAttribute('data-interface-theme'), mode);
@@ -176,18 +206,16 @@ try {
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     if (width === 390 && mode === 'modern') {
       const recipient = person(`browser-${language}`); await email.fill(recipient.email); await page.getByRole('button', { name: t(language, 'newToken'), exact: true }).click(); await page.getByTestId('staff-confirm').check();
-      const exactPosts = []; let drop = language === 'en';
-      await context.route('**/api/v1/school/staff-invitations', async route => {
-        const request = route.request(); assert.equal(new URL(request.url()).origin, origin);
-        if (request.method() !== 'POST') return route.continue(); exactPosts.push({ body: request.postData(), key: request.headers()['idempotency-key'] });
-        // Preserve the captured browser headers during fault injection; never synthesize an authorized origin.
-        if (drop) { drop = false; const r = await route.fetch({ headers: await request.allHeaders() }); assert.equal(r.status(), 200, await commandFailure(r, request.headers()['idempotency-key'])); await route.abort('failed'); } else await route.continue();
-      });
+      const observed = await observeNativeCommands(page, async (_post, count) => language === 'en' && count === 1 ? 'DROP' : 'DELIVER');
       await page.getByRole('button', { name: t(language, 'invite'), exact: true }).click();
-      if (language === 'en') { await page.getByText(t(language, 'unknown'), { exact: true }).waitFor(); await page.getByRole('button', { name: t(language, 'retry'), exact: true }).click(); }
-      await page.getByRole('heading', { name: t(language, 'success'), exact: true }).waitFor();
-      if (language === 'en') { assert.equal(exactPosts.length, 2); assert(exactPosts[1].body === exactPosts[0].body && exactPosts[1].key === exactPosts[0].key, 'Browser exact request was replaced'); }
+      await observed.waitFor(1);
       assert.equal((await q('SELECT count(*) n FROM hon.school_staff_invitations WHERE school_id=$1 AND email=$2', [school.schoolId, recipient.email]))[0].n, '1');
+      if (language === 'en') { await page.getByText(t(language, 'unknown'), { exact: true }).waitFor(); await page.getByRole('button', { name: t(language, 'retry'), exact: true }).click(); await observed.waitFor(2); }
+      await page.getByRole('heading', { name: t(language, 'success'), exact: true }).waitFor();
+      const exactPosts = observed.posts;
+      if (language === 'en') { assert.equal(exactPosts.length, 2); assert(exactPosts[1].url === exactPosts[0].url && exactPosts[1].body === exactPosts[0].body && exactPosts[1].key === exactPosts[0].key, 'Browser exact request was replaced'); }
+      assert.equal((await q('SELECT count(*) n FROM hon.school_staff_invitations WHERE school_id=$1 AND email=$2', [school.schoolId, recipient.email]))[0].n, '1');
+      if (language === 'en') pass('mounted native browser POST 200 commits once; post-commit response loss produces UNKNOWN and exact native retry 200 preserves one invitation');
       assert(await page.evaluate(() => { const area = document.querySelector('[data-testid="staff-account-private"]'); window.dispatchEvent(new Event('blur')); return area.hidden && area.inert; }));
       await page.getByRole('button', { name: t(language, 'restore'), exact: true }).click(); await page.getByRole('heading', { name: t(language, 'success'), exact: true }).waitFor();
       await page.getByRole('button', { name: t(language, 'show'), exact: true }).click(); const handoff = page.locator('input[readonly]'); assert(await handoff.count() >= 2);
@@ -218,20 +246,16 @@ try {
     const page = await context.newPage(); await page.goto(origin + '/staff/team/invitations');
     await page.getByTestId('staff-org').fill(A.organizationId); await page.getByTestId('staff-school').fill(A.schoolId); await page.getByRole('button', { name: t('en', 'verify'), exact: true }).click();
     await page.getByTestId('staff-role-id').fill(A.targetRole); await page.getByRole('button', { name: t('en', 'loadRole'), exact: true }).click(); await page.getByText('Front desk', { exact: true }).waitFor();
-    const recipient = person('silent-session-switch'), exact = []; let switchSession = true;
-    await context.route('**/api/v1/school/staff-invitations', async route => {
-      if (route.request().method() !== 'POST') return route.continue();
-      exact.push({ body: route.request().postData(), key: route.request().headers()['idempotency-key'] });
-      if (!switchSession) return route.continue(); switchSession = false;
-      const response = await route.fetch({ headers: await route.request().allHeaders() }); assert.equal(response.status(), 200, await commandFailure(response, route.request().headers()['idempotency-key'])); await setActor(B.who); await route.fulfill({ response });
-    });
+    const recipient = person('silent-session-switch');
+    const observed = await observeNativeCommands(page, async (_post, count) => { if (count === 1) await setActor(B.who); return 'DELIVER'; });
+    const exact = observed.posts;
     await page.getByTestId('staff-email').fill(recipient.email); await page.getByRole('button', { name: t('en', 'newToken'), exact: true }).click(); await page.getByTestId('staff-confirm').check();
-    await page.getByRole('button', { name: t('en', 'invite'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t('en', 'IDENTITY') }).waitFor();
+    await page.getByRole('button', { name: t('en', 'invite'), exact: true }).click(); await observed.waitFor(1); await page.getByTestId('staff-account-status').filter({ hasText: t('en', 'IDENTITY') }).waitFor();
     assert(await page.getByTestId('staff-account-private').isHidden()); assert.equal(await page.getByRole('heading', { name: t('en', 'success'), exact: true }).count(), 0);
     assert.equal((await q('SELECT count(*) n FROM hon.school_staff_invitations WHERE school_id=$1 AND email=$2', [A.schoolId, recipient.email]))[0].n, '1');
     await setActor(A.who); await page.getByRole('button', { name: t('en', 'restore'), exact: true }).click(); await page.getByText(t('en', 'unknown'), { exact: true }).waitFor();
-    assert.equal(exact.length, 1); await page.getByRole('button', { name: t('en', 'retry'), exact: true }).click(); await page.getByRole('heading', { name: t('en', 'success'), exact: true }).waitFor();
-    assert.equal(exact.length, 2); assert(exact[1].body === exact[0].body && exact[1].key === exact[0].key, 'Silent-switch recovery replaced the original request');
+    assert.equal(exact.length, 1); await page.getByRole('button', { name: t('en', 'retry'), exact: true }).click(); await observed.waitFor(2); await page.getByRole('heading', { name: t('en', 'success'), exact: true }).waitFor();
+    assert.equal(exact.length, 2); assert(exact[1].url === exact[0].url && exact[1].body === exact[0].body && exact[1].key === exact[0].key, 'Silent-switch recovery replaced the original request');
     await page.evaluate(() => { window.__staffSessionSignals = 0; window.addEventListener('hon:session-invalidated', () => { window.__staffSessionSignals++; }); });
     await context.clearCookies(); await page.getByRole('button', { name: t('en', 'verify'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t('en', 'SESSION') }).waitFor();
     assert(await page.getByTestId('staff-account-private').isHidden()); assert.equal(await page.evaluate(() => window.__staffSessionSignals), 1);
@@ -244,7 +268,7 @@ try {
   pass('mounted silent cookie identity switch, original-actor exact recovery, real 401 session expiry and real 403 revocation keep private receipts concealed');
   assert.deepEqual(await snapshot(), before); pass('every unrelated business table unchanged; no payment, entitlement, messaging, provider or AI effects');
   await writeFile(join(results, 'staff-invitations-report.json'), JSON.stringify({ sourceSha, groups, browserCases, protectedTables: protectedTables.length, actualNextNestSignedSessionsAndPostgres: true, externalOidcLoginVerified: false, syntheticFixtureDataOnly: true,
-    screenshots: browserCases.length + 3, acceptanceBrowserFlows: 3, localePreferenceSource: 'Scoped synthetic locale cookie and actual unavailable-remote fallback; server language persistence not exercised', blockedStaticFonts: [...blockedFonts], externalPageRequestsAllowed: 0, providerCalls: 0, deliveryPerformed: false }, null, 2) + '\n');
+    screenshots: browserCases.length + 3, acceptanceBrowserFlows: 3, commandFaultInjection: 'Native browser fetch after verified 200; no APIRequestContext command proxy', localePreferenceSource: 'Scoped synthetic locale cookie and actual unavailable-remote fallback; server language persistence not exercised', blockedStaticFonts: [...blockedFonts], externalPageRequestsAllowed: 0, providerCalls: 0, deliveryPerformed: false }, null, 2) + '\n');
   console.log(JSON.stringify({ passed: true, groups: groups.length, browserCases: browserCases.length, protectedTables: protectedTables.length }));
 } finally {
   globalThis.fetch = actualFetch;

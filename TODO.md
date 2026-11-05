@@ -1,8 +1,8 @@
-## Sprint 2 — staff invitation real-browser transport correction
+## Sprint 2 — staff invitation native-browser fault verification
 
 - Preserve the existing frontend draft and normally incorporate Claude's reconciled #135 `7d1134ac2ea98f791b5a30291c3ebe0b1e1c9ef0`, including accepted main through0203. API/packages/infra match that backend source exactly;196 historical checksum-locked migrations are unchanged.
-- Correct invitation POST referrer policy to strict-origin so real Fetch preserves Origin without disclosing private page paths; GET remains no-referrer. Keep all server human-command guards, exact body/key recovery and captured browser headers intact. The earlier allHeaders-only repair did not resolve mounted403 and is not counted as success.
-- Add a mounted original-policy403/corrected-policy400 invalid-body probe against the real guard, plus bounded enum/boolean-only denial diagnostics. Local64frontend regressions and typecheck pass; actual hosted browser proof remains required on the published combined head.
+- Preserve the original no-referrer transport byte-for-byte. Real Chromium disproved the Node-only Origin hypothesis: the original policy sends the expected Origin and no Referer. The temporary policy change is reverted; no production transport defect is claimed from that inference.
+- Replace Playwright HTTP-client fault injection with the browser native fetch, forwarding original arguments unchanged. Assert actual200 before synthetic post-commit loss or cookie switching; preserve original URL/body/key and denial behavior. Pin the observed original-policy400 invalid-input/zero-write result and safe diagnostics. Local64frontend regressions/typecheck pass; fresh exact-head hosted browser evidence remains required.
 - No provider, delivery, paid access, AI, deployment or persistent database changes. Independent frontend review and owner merge approval remain gates in#131.
 
 ## 2026-11-02 — PR #104 dates/history integration after merged #117

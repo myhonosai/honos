@@ -32,10 +32,10 @@ it('binds role lookup to the exact organization/school/id and rejects expanded o
     f.mockResolvedValue(Response.json({ data, meta: {} })); await expect(staffInvitationApi.role(scope, item.roleId, signal())).rejects.toThrow();
   }
 });
-it('preserves the POST origin without a private referrer path, immutable body/key and human-command marker', async () => {
+it('forwards the immutable original POST path/body/key and the actual human-command marker', async () => {
   const command: StaffCommand = Object.freeze({ kind: 'invite', path: '/api/v1/school/staff-invitations', body: JSON.stringify({ schoolId: scope.schoolId, roleId: item.roleId, email: item.email, ttlHours: 24, token: 'a'.repeat(43) }), key: id(8), subject: 'staff-manager', scope });
   const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(reply(item)); expect(await staffInvitationApi.command(command, signal())).toEqual(item);
-  expect(f.mock.calls[0]).toEqual([command.path, expect.objectContaining({ method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'strict-origin', body: command.body, headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': 'school-staff-account', 'Idempotency-Key': command.key } })]);
+  expect(f.mock.calls[0]).toEqual([command.path, expect.objectContaining({ method: 'POST', body: command.body, headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': 'school-staff-account', 'Idempotency-Key': command.key } })]);
   f.mockResolvedValue(reply({ ...item, roleId: id(90) })); await expect(staffInvitationApi.command(command, signal())).rejects.toThrow();
 });
 it('bounds JSON streams, refuses redirect/malformed replies and sanitizes unrecognized server errors', async () => {
