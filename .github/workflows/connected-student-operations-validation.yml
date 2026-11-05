@@ -1,7 +1,7 @@
 name: Connected student booking and attendance
 on:
   pull_request:
-    branches: [main, codex/active-membership-recovery, codex/connected-booking-attendance]
+    branches: [main, codex/active-membership-recovery, codex/connected-booking-attendance, codex/membership-operations-integrated]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'apps/web/**'
@@ -122,6 +122,10 @@ jobs:
       - name: Focused frontend integration tests
         # New date-management tests use the exact shared 0178 contracts; existing regressions remain below.
         run: pnpm --filter @hon/web exec vitest run test/crm-lead-memberships-http.test.ts test/crm-lead-memberships-interaction.test.tsx test/crm-lead-memberships-page-session.test.tsx test/membership-dates-copy.test.tsx test/membership-dates-http.test.ts test/membership-dates-interaction.test.tsx test/membership-dates-page-session.test.tsx
+      - name: Owner entry, canonical school selection, session concealment and post-login regressions
+        run: pnpm --filter @hon/web exec vitest run test/auth-routes.test.ts test/post-login-routing.test.ts test/post-login-access-page.test.tsx test/school-entry-controller.test.ts test/school-entry-http.test.ts test/school-entry-presentation.test.tsx
+      - name: Socket-free canonical-runtime fixture safety
+        run: node --test apps/web/scripts/test-owner-entry-canonical-fixture.mjs
       - name: Connected booking, attendance and handoff regressions
         run: pnpm --filter @hon/web exec vitest run test/connected-student-operations.test.tsx test/connected-student-operations-http.test.ts test/crm-lead-memberships-interaction.test.tsx
       - name: Existing CRM and E1a frontend regressions
@@ -157,6 +161,14 @@ jobs:
           echo "HON_CRM_TOOLS=$RUNNER_TEMP/hon-crm-tools" >> "$GITHUB_ENV"
           echo "HON_CRM_RESULTS=$RUNNER_TEMP/hon-crm-results" >> "$GITHUB_ENV"
           npm install --prefix "$RUNNER_TEMP/hon-crm-tools" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1 axe-core@4.10.3 esbuild@0.25.12
+      - name: Owner entry against actual Next, signed sessions, canonical API and disposable PostgreSQL
+        id: owner_entry
+        run: |
+          set -euo pipefail
+          fixture_dir=/home/ubuntu/jobs/crm_resume_verification
+          trap 'rm -f "$fixture_dir/recovery.env"' EXIT
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 HON_FLEXIBLE_BILLING_ACCOUNTS_VALIDATION_TARGET=postgresql://localhost:5432/hon_flexible_billing_accounts_validation HON_FLEXIBLE_BILLING_ACCOUNTS_ENV_FILE="$fixture_dir/recovery.env" node packages/database/scripts/setup-flexible-billing-accounts-validation.mjs
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted HON_OWNER_ENTRY_API_TEST=1 HON_OWNER_ENTRY_SHA="$HON_CRM_SOURCE_SHA" HON_OWNER_ENTRY_TOOLS="$HON_CRM_TOOLS" HON_OWNER_ENTRY_CHROME="$HON_CRM_CHROME" HON_OWNER_ENTRY_RESULTS="$HON_CRM_RESULTS/owner-entry" bash -c 'set -a; . "$1"; set +a; node apps/web/scripts/owner-entry-api-browser-verification.mjs' _ "$fixture_dir/recovery.env"
       - name: Actual application browser verification
         id: browser
         run: pnpm --filter @hon/web exec node scripts/crm-adult-flow-browser.mjs
@@ -168,7 +180,7 @@ jobs:
           HON_CRM_JOURNEY_RESULTS: ${{ env.HON_CRM_RESULTS }}/connected-journey
         run: pnpm --filter @hon/web exec node scripts/crm-journey-browser.mjs
       - name: Retain private review artifacts
-        if: always() && steps.browser.outcome != 'skipped'
+        if: always() && (steps.browser.outcome != 'skipped' || steps.owner_entry.outcome != 'skipped')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hon-connected-student-${{ github.run_id }}-${{ github.run_attempt }}

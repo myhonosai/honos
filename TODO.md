@@ -1,3 +1,27 @@
+## Sprint 2 — owner entry on accepted main 0204
+
+- Prepare the current196-migration composition with accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` and final CRM frontend. All production frontend bytes remain those of reviewed #134; all backend/API/packages/infra bytes equal accepted main.
+- Preserve the four-job green195-migration checkpoint at `3c86b66…` as historical source evidence. A fresh exact-head196-migration run follows this batched reconciliation. No new broad audit or runtime behavior change is introduced.
+
+## Sprint 2 — owner entry reconciliation on accepted backend 0203
+
+- Preserve the reviewed #134 production frontend byte-for-byte while normally incorporating the final #129 integration and accepted main `029de0cadbeb047ef8e38767de4e60e460325821`. All 195 migration/checksum and canonical ACL bytes come from accepted main; no backend source is authored here.
+- Retain the owner-entry canonical-role fixture and actual Next/signed-session/resolver/browser proof. Incorporate #129's positive original-microsecond regression and unique trial/journey proof consolidation. No fixture timestamp normalization, access exception or provider activation.
+- The historical #134 four-job run at `1285328…` remains historical; fresh exact-head combined verification and focused independent reconciliation review follow publication. Shared sprint tracking: GitHub #131.
+
+## Owner entry integration — implemented; exact-head hosted verification follows publication
+
+- Reuse PR #111 on reviewed #129 plus accepted main `8257ad2`; preserve backend, migrations and reviewed CRM/booking/attendance bytes. Route verified school owners to a localized school-entry screen and HQ principals to HQ.
+- Reuse selector-free current-school and bounded authorized school-choice readers, then independently verify the exact selected school before exposing navigation. Conceal on blur/hidden/pagehide/session/school changes; no storage, automatic retry, test-access exception or business mutation.
+- Local prepublication evidence: 113 focused tests, full web suite 1,503, auth 101/domain 421, TypeScript/production web build and 192 migration checksums pass. The final full workspace/API/PostgreSQL/browser result must come from the exact-head hosted workflow. Local pnpm store setup failed and API HTTP listeners return EPERM (single-file reproduction: 22 pass, 3 listener failures); neither is a passing full local repository run. Draft only; no deployment or activation. Shared sprint dependencies: Issue #132.
+
+## C-AUTH-1 — original PR #111 checkpoint (historical)
+
+- Replace the callback's unconditional HQ landing with a fixed session-verified continuation route. Reuse only current HQ-session and exact-one staff reporting-school APIs; strict closed results select fixed local destinations, while ambiguous/missing/error classifications remain **Access not verified**. No role claims, parent-content probe, backend, migration, provider or provisioning changes.
+- Document the precise missing minimal guardian/current-access reader for Claude; preserve parent/staff/HQ independent API authorization, all callback PKCE/nonce/verified-email behavior, manual workspace choices and no automatic retries. Scope and evidence limits: [verified post-login routing](docs/architecture/VERIFIED_POST_LOGIN_ROUTING.md).
+- Local verification on the isolated current-main branch: 73 focused auth/routing/page tests and all 1,106 web tests pass; web TypeScript and production build pass. Response streaming is bounded to 16 KB and cancels on deadline. Script syntax, workflow YAML, documentation links, manifest uniqueness and whitespace checks pass. Local mounted HTTP/browser execution is blocked by `listen EPERM`; the dedicated synthetic production-Next/browser proof awaits hosted CI, while the existing account workflow retains full repository/disposable PostgreSQL checks. Web classification responses are mocked; no fresh API/database/IAM proof is claimed. No commit, publication, merge, deployment, Codespaces or changes to PRs #94/#95/#104 are authorized by this checkpoint.
+
+
 ## Sprint 2 — accepted main 0204 reconciliation
 
 - Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after the owner-authorized #135 squash; its backend tree is identical to reviewed #135 `7d1134a`. All196 migration checksums and canonical API/package/infra bytes are preserved. No backend logic is authored here.

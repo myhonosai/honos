@@ -32,7 +32,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // This discriminated branch prevents any Manus environment lookup or network dependency in OIDC mode.
     const identity = config.mode === 'OIDC' ? await exchangeOidcCode(code, transaction, config) : await exchangeManusCode(code, transaction, config);
-    const response = NextResponse.redirect(new URL('/hq', callback), { headers: NO_STORE });
+    const response = NextResponse.redirect(new URL('/auth/continue', callback), { headers: NO_STORE });
     response.cookies.set(HON_SESSION_COOKIE, issueSession(identity, config), { ...cookieOptions(callback), maxAge: SESSION_SECONDS });
     if (config.mode === 'MANUS_DEVELOPMENT') {
       response.cookies.set(MANUS_SESSION_COOKIE, issueManusSession(identity, config), { ...cookieOptions(callback), maxAge: SESSION_SECONDS });
