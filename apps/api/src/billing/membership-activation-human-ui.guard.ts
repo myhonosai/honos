@@ -47,3 +47,8 @@ export class MembershipDateQueueHumanUiGuard extends MembershipActivationHumanUi
 export class MembershipStatusSummaryHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'reporting.membership-status';
 }
+/** D-M1 (0200): the lead membership discovery read is a GET; source/delegation headers and cross-site fetches stay refused. */
+@Injectable()
+export class CrmLeadMembershipsHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'crm.lead.memberships';
+}

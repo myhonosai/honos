@@ -33,6 +33,16 @@ const actualFetch = globalThis.fetch, groups = [], browserCases = []; let app, n
 const results = process.env.HON_STAFF_INVITATIONS_RESULTS; assert(results && resolve(results) === results && !results.startsWith(repo + '/'));
 await mkdir(results, { recursive: true });
 const pass = name => { groups.push(name); console.log('PASS STAFF FRONTEND ' + name); };
+// Bounded fixture-only diagnostics. Never emit cookies, keys, bodies, subjects or identifiers.
+const commandEvidence = new Map();
+const commandPaths = new Set(['/v1/school/staff-invitations', '/v1/school/staff-invitations/revoke', '/v1/account/staff-invitations/accept']);
+const diagnosticCode = value => ['HUMAN_UI_REQUIRED', 'HUMAN_UI_ORIGIN_NOT_CONFIGURED', 'ACCOUNT_INPUT_INVALID', 'ACCOUNT_FORBIDDEN', 'ACCOUNT_UNAVAILABLE',
+  'VERIFIED_EMAIL_REQUIRED', 'ACCOUNT_REVIEW_REQUIRED', 'ACCOUNT_CONFLICT', 'ACCOUNT_RATE_LIMITED', 'ACCOUNT_BUSY'].includes(value) ? value : 'UNRECOGNIZED';
+const commandFailure = async (response, key) => {
+  if (response.status() === 200) return undefined;
+  const body = await response.json().catch(() => null);
+  return JSON.stringify({ status: response.status(), code: diagnosticCode(body?.code), request: commandEvidence.get(key) ?? 'UNOBSERVED' });
+};
 const person = label => ({ externalSubject: `oidc:staff-ui:${label}:${K()}`, email: `${label}-${K()}@example.invalid`, emailVerified: true });
 const cookie = (who, expired = false) => `${HON_SESSION_COOKIE}=${issueSession(who, session, expired ? Math.floor(Date.now() / 1000) - 50000 : undefined)}`;
 const q = async (sql, values = []) => (await admin.query(sql, values)).rows;
@@ -61,7 +71,24 @@ try {
   const A = await setup('a'), B = await setup('b'), matrices = {};
   for (const language of ['en', 'ko', 'es']) matrices[language] = await setup(`matrix-${language}`);
   const module = await Test.createTestingModule({ controllers: [SchoolStaffInvitationController, StaffRoleController], providers: [SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, HonIdentityGuard, HonIdentityService, StaffRoleService, StaffRoleHumanUiGuard, { provide: RuntimeDatabaseService, useValue: database }] }).compile();
-  app = module.createNestApplication({ logger: false }); app.setGlobalPrefix('v1'); await app.listen(3001, '127.0.0.1');
+  app = module.createNestApplication({ logger: false }); app.setGlobalPrefix('v1');
+  app.use((request, response, proceed) => {
+    const key = request.headers['idempotency-key'];
+    if (request.method === 'POST' && commandPaths.has(request.originalUrl?.split('?')[0]) && typeof key === 'string' && /^[a-f0-9-]{36}$/.test(key) && commandEvidence.size < 64) {
+      const h = request.headers, known = (value, allowed) => allowed.includes(value) ? value : value === undefined ? 'MISSING' : 'OTHER';
+      const facts = { originKind: h.origin === origin ? 'EXPECTED' : h.origin === 'null' ? 'OPAQUE' : h.origin === undefined ? 'MISSING' : 'OTHER',
+        referrerKind: h.referer === origin + '/' ? 'ORIGIN_ONLY' : h.referer === undefined ? 'MISSING' : 'OTHER',
+        fetchSite: known(h['sec-fetch-site'], ['same-origin', 'same-site', 'cross-site', 'none']),
+        fetchMode: known(h['sec-fetch-mode'], ['same-origin', 'cors', 'no-cors', 'navigate']), fetchDest: known(h['sec-fetch-dest'], ['empty']),
+        expectedMarker: h['x-hon-human-command'] === contracts.STAFF_ACCOUNT_HUMAN_COMMAND,
+        sessionCookiePresent: Boolean(auth.cookieValue(h.cookie, HON_SESSION_COOKIE)), authorizationPresent: Boolean(h.authorization),
+        unexpectedHonHeaders: Object.keys(h).some(k => k.startsWith('x-hon-') && k !== 'x-hon-human-command'),
+        expectedApiHost: h.host === '127.0.0.1:3001', queryPresent: request.originalUrl.includes('?'), configuredOriginMatches: process.env.HON_PUBLIC_ORIGIN === origin };
+      response.once('finish', () => { commandEvidence.set(key, { ...facts, status: response.statusCode }); });
+    }
+    proceed();
+  });
+  await app.listen(3001, '127.0.0.1');
   next = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '--port', '3000'], { cwd: join(repo, 'apps/web'), env: { PATH: process.env.PATH, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', HON_DEPLOYMENT_ENVIRONMENT: 'preview', HON_AUTH_MODE: session.mode,
     HON_SESSION_AUDIENCE: session.audience, HON_SESSION_JWT_SECRET: session.secret, HON_PUBLIC_ORIGIN: origin, HON_API_BASE_URL: 'http://127.0.0.1:3001' }, stdio: ['ignore', 'pipe', 'pipe'] });
   next.stdout.on('data', b => { nextLog = (nextLog + b).slice(-2000); }); next.stderr.on('data', b => { nextLog = (nextLog + b).slice(-2000); });
@@ -122,6 +149,26 @@ try {
     await page.getByTestId('staff-org').fill(school.organizationId); await page.getByTestId('staff-school').fill(school.schoolId);
     await page.getByRole('button', { name: t(language, 'verify'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t(language, 'READY') }).waitFor();
     await page.getByTestId('staff-role-id').fill(school.targetRole); await page.getByRole('button', { name: t(language, 'loadRole'), exact: true }).click(); await page.getByText('Front desk', { exact: true }).waitFor();
+    if (language === 'en' && mode === 'modern' && width === 390) {
+      // Exercise real browser Origin serialization and the unchanged guard with invalid closed input: no domain write can occur.
+      const keys = [K(), K()];
+      const probe = await page.evaluate(async ({ keys, marker }) => {
+        const out = [];
+        for (const [i, policy] of ['no-referrer', 'strict-origin'].entries()) {
+          const response = await fetch('/api/v1/school/staff-invitations', { method: 'POST', credentials: 'same-origin', mode: 'same-origin',
+            cache: 'no-store', redirect: 'error', referrerPolicy: policy, headers: { 'Content-Type': 'application/json', 'X-HON-Human-Command': marker, 'Idempotency-Key': keys[i] }, body: '{}' });
+          const body = await response.json().catch(() => null);
+          out.push({ policy, status: response.status, code: ['HUMAN_UI_REQUIRED', 'ACCOUNT_INPUT_INVALID'].includes(body?.code) ? body.code : 'UNRECOGNIZED' });
+        }
+        return out;
+      }, { keys, marker: contracts.STAFF_ACCOUNT_HUMAN_COMMAND });
+      const evidence = probe.map((item, i) => ({ ...item, request: commandEvidence.get(keys[i]) ?? 'UNOBSERVED' }));
+      console.log('STAFF FRONTEND ORIGIN PROBE ' + JSON.stringify(evidence));
+      assert.deepEqual(probe, [{ policy: 'no-referrer', status: 403, code: 'HUMAN_UI_REQUIRED' }, { policy: 'strict-origin', status: 400, code: 'ACCOUNT_INPUT_INVALID' }]);
+      assert.equal(commandEvidence.get(keys[0])?.originKind, 'OPAQUE'); assert.equal(commandEvidence.get(keys[1])?.originKind, 'EXPECTED');
+      assert.equal(commandEvidence.get(keys[0])?.referrerKind, 'MISSING'); assert.equal(commandEvidence.get(keys[1])?.referrerKind, 'ORIGIN_ONLY');
+      pass('mounted browser no-referrer POST has opaque Origin; strict-origin passes the unchanged human guard without exposing a page path');
+    }
     const beforeModes = requests.filter(r => r.path.includes('staff-invitations') && r.method === 'GET').length;
     await page.getByRole('button', { name: t(language, mode), exact: true }).click(); assert.equal(await page.getByTestId('staff-invitations').getAttribute('data-interface-theme'), mode);
     assert.equal(requests.filter(r => r.path.includes('staff-invitations') && r.method === 'GET').length, beforeModes);
@@ -133,8 +180,8 @@ try {
       await context.route('**/api/v1/school/staff-invitations', async route => {
         const request = route.request(); assert.equal(new URL(request.url()).origin, origin);
         if (request.method() !== 'POST') return route.continue(); exactPosts.push({ body: request.postData(), key: request.headers()['idempotency-key'] });
-        // route.fetch() defaults to provisional headers, which omit browser security metadata.
-        if (drop) { drop = false; const r = await route.fetch({ headers: await request.allHeaders() }); assert.equal(r.status(), 200); await route.abort('failed'); } else await route.continue();
+        // Preserve the captured browser headers during fault injection; never synthesize an authorized origin.
+        if (drop) { drop = false; const r = await route.fetch({ headers: await request.allHeaders() }); assert.equal(r.status(), 200, await commandFailure(r, request.headers()['idempotency-key'])); await route.abort('failed'); } else await route.continue();
       });
       await page.getByRole('button', { name: t(language, 'invite'), exact: true }).click();
       if (language === 'en') { await page.getByText(t(language, 'unknown'), { exact: true }).waitFor(); await page.getByRole('button', { name: t(language, 'retry'), exact: true }).click(); }
@@ -176,7 +223,7 @@ try {
       if (route.request().method() !== 'POST') return route.continue();
       exact.push({ body: route.request().postData(), key: route.request().headers()['idempotency-key'] });
       if (!switchSession) return route.continue(); switchSession = false;
-      const response = await route.fetch({ headers: await route.request().allHeaders() }); assert.equal(response.status(), 200); await setActor(B.who); await route.fulfill({ response });
+      const response = await route.fetch({ headers: await route.request().allHeaders() }); assert.equal(response.status(), 200, await commandFailure(response, route.request().headers()['idempotency-key'])); await setActor(B.who); await route.fulfill({ response });
     });
     await page.getByTestId('staff-email').fill(recipient.email); await page.getByRole('button', { name: t('en', 'newToken'), exact: true }).click(); await page.getByTestId('staff-confirm').check();
     await page.getByRole('button', { name: t('en', 'invite'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t('en', 'IDENTITY') }).waitFor();

@@ -1,3 +1,10 @@
+## Sprint 2 — staff invitation real-browser transport correction
+
+- Preserve the existing frontend draft and normally incorporate Claude's reconciled #135 `7d1134ac2ea98f791b5a30291c3ebe0b1e1c9ef0`, including accepted main through0203. API/packages/infra match that backend source exactly;196 historical checksum-locked migrations are unchanged.
+- Correct invitation POST referrer policy to strict-origin so real Fetch preserves Origin without disclosing private page paths; GET remains no-referrer. Keep all server human-command guards, exact body/key recovery and captured browser headers intact. The earlier allHeaders-only repair did not resolve mounted403 and is not counted as success.
+- Add a mounted original-policy403/corrected-policy400 invalid-body probe against the real guard, plus bounded enum/boolean-only denial diagnostics. Local64frontend regressions and typecheck pass; actual hosted browser proof remains required on the published combined head.
+- No provider, delivery, paid access, AI, deployment or persistent database changes. Independent frontend review and owner merge approval remain gates in#131.
+
 ## 2026-11-02 — PR #104 dates/history integration after merged #117
 
 - Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
@@ -41,6 +48,26 @@
 
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
+
+## S4-d lost AI outcomes (UNKNOWN) and HQ owner resolution — Claude (2026-11-01, owner-authorized draft, stacked on S4-c)
+
+- Migration `0196_ai_unknown_resolution.sql` (number proposed; owner allocates). Owner decision AI-D3. Finding AI-8. Design: `docs/architecture/HON_AI_UNKNOWN_RESOLUTION_S4D.md`.
+- [x] Window-scoped counting: UNKNOWN and stale (1 hour) SENDING holds count only in the window in which they were held; in-flight calls always count.
+- [x] `resolve_ai_unknown_invocation` (human HQ owner only; RECORD_PROVIDER_COST / NO_PROVIDER_CHARGE / WRITE_OFF with closed evidence; one ledger row in the original window or none; immutable record, audit, inert outbox; idempotent; once per call) and the HQ queue read; `GET /v1/hq/ai/unknown-invocations`, `POST .../:agent/:invocationId/resolve`.
+- [x] AI-0: KF-AI8 flipped to `FIXED_BY_S4D`, replaced by INV-19 and INV-20; no open known failures remain. API test `ai-unknown-resolution.test.cjs`.
+- [ ] Codex: HQ queue and resolution screen.
+- [ ] Later slice: UNKNOWN escalation monitor (more than 5 in 24 hours pauses the organization; older than 72 hours alerts HQ).
+- [ ] Independent review; owner merge after #97, S4-a, S4-b and S4-c.
+
+## S4-c AI spend access decision and HQ pause — Claude (2026-11-01, owner-authorized draft, stacked on S4-b)
+
+- Migration `0195_ai_spend_access_decision.sql` (number proposed; owner allocates). Owner decision AI-D1 = A. Findings AI-9, AI-1. Design: `docs/architecture/HON_AI_ACCESS_DECISION_S4C.md`.
+- [x] One access decision `ai_spend_allowed(org, at, class)`: HQ pause, promotional hook (off), live exception refuses (`AI_EXCEPTION_NO_AI`), legacy unchanged, explicit mapping for every paid-access state (unknown refuses). Applied at begin, at every hold increase (before the budget check) and at B3 reservation insert. Evidence steps never gated.
+- [x] HQ emergency pause: append-only `ai_spend_pauses`, human HQ owner only, organization or platform, per class or ALL, idempotent per key; `GET/POST /v1/hq/ai/spend-pauses` with exact human-command guard.
+- [x] AI-0: KF-AI9 flipped to `FIXED_BY_S4C`, replaced by INV-16 (all three agents); INV-17 (state mapping) and INV-18 (pause) added. API test `ai-spend-pause.test.cjs`.
+- [ ] Codex: HQ pause screen and plain refusal copy on agent screens.
+- [ ] Owner decisions before the hooks do anything: promotional AI access, trial AI funding.
+- [ ] Independent review; owner merge after #97, S4-a and S4-b.
 
 ## S4-b organization agent budget and lock — Claude (2026-11-01, owner-authorized draft, stacked on S4-a)
 

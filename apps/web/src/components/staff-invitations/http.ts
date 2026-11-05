@@ -12,7 +12,8 @@ const codes = new Set(['ACCOUNT_INPUT_INVALID', 'ACCOUNT_FORBIDDEN', 'VERIFIED_E
 async function json(path: string, signal: AbortSignal, command?: StaffCommand): Promise<unknown> {
   signal.throwIfAborted();
   const r = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin',
-    cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+    // Non-CORS POSTs with no-referrer serialize Origin as null. Send only the origin, never a private page path.
+    cache: 'no-store', redirect: 'error', referrerPolicy: command ? 'strict-origin' : 'no-referrer', signal,
     headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': STAFF_ACCOUNT_HUMAN_COMMAND, 'Idempotency-Key': command.key } : {}) },
     ...(command ? { body: command.body } : {}) });
   // A retired read must not invalidate the newer session that replaced it.

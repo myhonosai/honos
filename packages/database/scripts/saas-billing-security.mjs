@@ -12,16 +12,20 @@ export const saasBillingTables = ['saas_subscription_generations','saas_price_sc
  'saas_free_periods','saas_referral_payment_alerts',
  'saas_payment_program','saas_checkout_sessions','saas_provider_events','saas_provider_payment_refs',
  'saas_access_program','saas_access_policy_terms','saas_access_states','saas_access_transitions',
- 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications'];
+ 'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications',
+ 'saas_creative_program','saas_creative_rate_versions','saas_creative_rates','saas_creative_topup_packages','saas_creative_wallets',
+ 'saas_creative_topup_purchases','saas_creative_adjustments','saas_creative_lots','saas_creative_reservations','saas_creative_ledger','saas_creative_cost_events'];
 const evidenceTables = ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
- 'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy'];
+ 'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy',
+ 'saas_creative_rates','saas_creative_topup_packages','saas_creative_adjustments','saas_creative_lots','saas_creative_ledger','saas_creative_cost_events'];
 const paymentTables = ['saas_payment_program','saas_checkout_sessions'];
 const refundRewardTables = ['saas_refund_requests','saas_reward_fulfillment','saas_referral_payment_alerts'];
 const creditTables = ['saas_credit_program','saas_pricing_versions','saas_credit_allowances','saas_credit_reservations'];
 const catalogRowTables = ['saas_catalog_plans','saas_catalog_offers'];
 const invoicingTables = ['saas_invoice_sequences','saas_invoices'];
+const creativeTables = ['saas_creative_program','saas_creative_rate_versions','saas_creative_wallets','saas_creative_reservations','saas_creative_topup_purchases'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const saasBillingFunctions = [
  ['hon.saas_generation_lock_authority()',false,false],
@@ -271,8 +275,64 @@ export const saasBillingFunctions = [
  ['hon.read_saas_trial_governance(text)',true,true],
  ['hon.read_saas_trial_campaign(text,uuid)',true,true],
  ['hon.preview_saas_trial_publication(text,uuid)',true,true],
+ // CW1 (0202) HON OS creative credit wallet.
+ ['hon.guard_saas_creative()',false,false],
+ ['hon.saas_creative_program_active()',false,false],
+ ['hon.saas_creative_lock_wallet(uuid,timestamp with time zone)',false,true],
+ ['hon.saas_creative_touch_wallet(uuid,timestamp with time zone)',false,true],
+ ['hon.saas_creative_pause_gate(uuid)',false,false],
+ ['hon.saas_creative_evidence_actor(text,uuid)',false,true],
+ ['hon.saas_creative_lot_totals(uuid)',false,false],
+ ['hon.saas_creative_lot_remaining(uuid)',false,false],
+ ['hon.saas_creative_lot_available(hon.saas_creative_lots,timestamp with time zone)',false,false],
+ ['hon.saas_creative_lot_rank(text)',false,false],
+ ['hon.saas_creative_expire_lots(uuid,uuid,timestamp with time zone)',false,true],
+ ['hon.saas_creative_eligibility(uuid,timestamp with time zone)',false,false],
+ ['hon.saas_creative_open_window(uuid,uuid,timestamp with time zone)',false,true],
+ ['hon.saas_creative_lot_json(hon.saas_creative_lots,timestamp with time zone)',false,false],
+ ['hon.saas_creative_balance_json(uuid,timestamp with time zone)',false,false],
+ ['hon.saas_creative_reservation_json(hon.saas_creative_reservations,boolean)',false,false],
+ ['hon.saas_creative_rates_json(boolean)',false,false],
+ ['hon.saas_creative_packages_json()',false,false],
+ ['hon.saas_creative_purchase_json(hon.saas_creative_topup_purchases,boolean)',false,false],
+ ['hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)',false,true],
+ ['hon.saas_creative_settle_lots(hon.saas_creative_reservations,integer,uuid,timestamp with time zone)',false,true],
+ ['hon.saas_creative_apply_cost(hon.saas_creative_reservations,uuid,bigint,text,timestamp with time zone)',false,true],
+ ['hon.saas_creative_expense_json(uuid)',false,false],
+ ['hon.saas_creative_wallet_json(uuid,boolean)',false,false],
+ ['hon.set_saas_creative_program(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.publish_saas_creative_rates(text,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.grant_saas_creative_credits_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.debit_saas_creative_lot_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.resolve_saas_creative_reservation_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.record_saas_creative_cost_from_hq(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.saas_record_creative_provider_cost(uuid,jsonb,timestamp with time zone)',false,true],
+ ['hon.read_saas_creative_wallet_from_hq(text,uuid)',true,true],
+ ['hon.read_saas_creative_wallets_from_hq(text)',true,true],
+ ['hon.read_saas_creative_wallet(text,uuid)',true,true],
+ ['hon.open_saas_creative_window(text,uuid,uuid,uuid,uuid)',true,true],
+ ['hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.settle_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.create_saas_creative_topup_purchase(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.saas_fulfill_creative_topup(uuid,jsonb,timestamp with time zone)',false,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
+// Issue #100 (0201): functions that add calendar months to timestamptz run with TimeZone=UTC so billing
+// periods never depend on the caller's session, role, database or pooler TimeZone.
+export const saasUtcCalendarFunctions = Object.freeze([
+  'command_saas_subscription(text,uuid,jsonb,uuid,uuid,uuid)',
+  'create_saas_invoice_draft(text,jsonb,uuid,uuid,uuid)',
+  'saas_provider_invoice(hon.saas_subscriptions,integer,integer,timestamp with time zone,text,jsonb,timestamp with time zone)',
+  'saas_apply_renewal(jsonb,timestamp with time zone)',
+  'saas_activate_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',
+  'saas_activate_hon_os_checkout_core(uuid,jsonb,timestamp with time zone,boolean)',
+]);
+// Reviewed: these add months only to UTC wall-clock `timestamp` values (explicit AT TIME ZONE 'UTC'),
+// which is already independent of the session TimeZone.
+export const saasUtcExplicitCalendarFunctions = Object.freeze([
+  'saas_allowance_period(hon.saas_subscriptions,timestamp with time zone)',
+  'read_saas_organization_credits_from_hq(text,uuid)',
+]);
 const crossTriggers = [
  ['saas_subscription_generations','saas_generation_authority',7,'guard_saas_generation_insert'],
  ['saas_subscription_generations','saas_generation_evidence',5,'verify_saas_generation_evidence'],
@@ -325,6 +385,7 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : table === 'saas_offer_set_offers' ? ['guard_saas_offer_set_offers','saas_offer_rows',31]
    : refundRewardTables.includes(table) ? ['guard_saas_refunds_rewards','saas_guarded',27]
    : creditTables.includes(table) ? ['guard_saas_credits','saas_guarded',27]
+   : creativeTables.includes(table) ? ['guard_saas_creative','saas_guarded',27]
    : invoicingTables.includes(table) ? ['guard_saas_invoicing','saas_guarded',27] : ['guard_saas_records','saas_guarded',27];
   for (const [name,type] of [[rowTrigger,rowType],['saas_no_truncate',34]]) {
    const t=(await client.query(`SELECT count(*)=1 safe FROM pg_trigger WHERE tgrelid=$1::regclass AND tgname=$2 AND tgtype=$3
@@ -340,13 +401,21 @@ export async function verifySaasBillingSecurity(client, runtime) {
  const total=(await client.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname ~ 'saas'")).rows[0].n;
  if (total!==saasBillingFunctions.length) throw new Error(`Untracked HON subscription functions: ${total}`);
  for (const [signature,execute,definer] of saasBillingFunctions) {
-  const r=(await client.query(`SELECT p.prosecdef=$3 AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>$2
+  const r=(await client.query(`SELECT p.prosecdef=$3 AND p.proconfig=CASE WHEN p.oid=ANY(SELECT ('hon.'||f)::regprocedure FROM unnest($5::text[]) f)
+     THEN ARRAY['search_path=pg_catalog, hon','TimeZone=UTC'] ELSE ARRAY['search_path=pg_catalog, hon'] END::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>$2
    AND has_function_privilege($2,p.oid,'EXECUTE')=$4
    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname=$2) OR NOT $4 OR a.is_grantable OR a.privilege_type<>'EXECUTE')) safe
-   FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=$1::regprocedure`,[signature,runtime,definer,execute])).rows[0];
+   FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=$1::regprocedure`,[signature,runtime,definer,execute,saasUtcCalendarFunctions])).rows[0];
   if (r?.safe!==true) throw new Error(`Unsafe HON subscription function ${signature}`);
   for (const role of (await client.query("SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role')")).rows) {
    if ((await client.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role.rolname,signature])).rows[0].allowed) throw new Error(`Forbidden client HON subscription function ${role.rolname}`);
   }
  }
+ // Any SaaS function that adds calendar months to a timestamptz must be pinned to UTC (or reviewed as
+ // UTC-explicit). A CREATE OR REPLACE that drops the 0201 setting, or a new unpinned function, fails here.
+ const unpinned=(await client.query(`SELECT p.oid::regprocedure::text f FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname ~ 'saas'
+   AND p.prosrc ~* '(make_interval\\s*\\(\\s*months|interval\\s*''[0-9 ]*(month|year)s?'')'
+   AND NOT coalesce('TimeZone=UTC'=ANY(p.proconfig),false)
+   AND p.oid<>ALL(SELECT ('hon.'||f)::regprocedure FROM unnest($1::text[]) f) ORDER BY 1`,[saasUtcExplicitCalendarFunctions])).rows.map(r=>r.f);
+ if (unpinned.length) throw new Error(`SaaS calendar arithmetic not pinned to UTC: ${unpinned.join(', ')}`);
 }

@@ -59,6 +59,11 @@ AI-0 pins only what it actually collects and asserts. It does **not** claim comp
 | INV-13 | (S4-a) A charged result records exactly one ledger row after a mid-flight lapse, ends `RESULT_HELD` with no proposal, and binds once after access returns; usage survives a failed proposal; duplicate ledger rows per invocation are refused. |
 | INV-14 | (S4-b) One organization agent budget: at used 11,990 every arrival order of Marcus 6, Claire 6, Chad 3 is admitted greedily against 12,000; refusals are durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED` with no provider call; committed never exceeds the ceiling. |
 | INV-15 | (S4-b) Deterministic serialization: with `ai.budget:<org>` held by a blocker, both prepares of each same-agent and cross-agent pair are blocked (pg_locks); after release exactly one reaches the provider and the other is `BLOCKED`. |
+| INV-16 | (S4-c) A live COMPLETE HQ exception refuses begin for all three agents and prepare for requests begun before the grant (`AI_EXCEPTION_NO_AI`, no provider call); calls already in flight at grant time still record. |
+| INV-17 | (S4-c) Every paid-access state maps to a documented decision for both entitlement conditions; unknown states refuse; trial spend only through the unapproved funding hook; a real `AWAITING_FIRST_PAYMENT` row refuses; legacy organizations are unchanged. |
+| INV-18 | (S4-c) HQ emergency pause: human HQ owner only, organization or platform scope, per spend class or ALL, idempotent per key, one active pause per scope, append-only; agents refused while paused and resume afterwards. |
+| INV-19 | (S4-d) UNKNOWN and stale SENDING holds count only in the window in which they were held; in-flight calls always count; late agent evidence stays refused; the HQ queue lists open lost outcomes. |
+| INV-20 | (S4-d) Human HQ owner resolution with closed provider evidence: one ledger row in the original window, none, or a zero-credit write-off; idempotent, once per call; immutable record, audit and inert outbox. |
 | INV-12 | Zero network calls, programs unchanged, AI rows confined to synthetic organizations, no allowance, trial or access-state writes. |
 
 ## Known failures (intentionally vulnerable probes)
@@ -68,9 +73,9 @@ Each probe prints `KNOWN-FAILURE (open, replaced by <slice>) <id>: reproduced | 
 | Probe | Plain-language problem | Today (reproduced) | Replaced by |
 |---|---|---|---|
 | **KF-AI2-CROSS-AGENT-OVERCOMMIT** (FIXED_BY_S4B, INV-14) | Each agent checks the monthly ceiling against the shared ledger but only its own open holds, so three agents together can exceed the ceiling. | Used 11,990, then Marcus 6 + Claire 6 + Chad 3 all reach the provider: 12,005 committed against 12,000. | S4 org-wide committed credits and budget lock |
-| **KF-AI9-EXCEPTION-SPEND** | A D9/D10 HQ access exception with COMPLETE scope sets the entitlement to COMPLETE ACTIVE. The exception receipt says `aiCredits: NONE`, but the agent gate only reads the entitlement. | Unpaid school, COMPLETE exception: Marcus reaches the provider once and writes a ledger row. | S4 explicit exception refusal |
+| **KF-AI9-EXCEPTION-SPEND** (FIXED_BY_S4C, INV-16) | A D9/D10 HQ access exception with COMPLETE scope sets the entitlement to COMPLETE ACTIVE. The exception receipt says `aiCredits: NONE`, but the agent gate only reads the entitlement. | Unpaid school, COMPLETE exception: Marcus reaches the provider once and writes a ledger row. | S4 explicit exception refusal |
 | **KF-AI14-MIDFLIGHT-LAPSE-EVIDENCE** | Found while building AI-0. `record_*` and `fail_*` re-run the entitlement gate through the agent owner check. If the entitlement lapses while a call is in flight, the provider has already answered but nothing can be written. | For all three agents: provider called once, service returns `*_PERSISTENCE_UNKNOWN`, no ledger row, invocation stuck `SENDING` with its hold still reserved (6, 6, 3). Provider cost goes unrecorded and the stuck hold keeps counting against the agent's budget. | S4 (evidence steps never guarded). **FIXED_BY_S4A**: replaced by INV-13. |
-| **KF-AI8-UNKNOWN-HOLD** | An UNKNOWN provider outcome keeps its hold forever, across months, and no function can resolve it. | A last-month UNKNOWN Marcus hold still blocks Marcus at used 11,990 while Claire passes; late fail and late record are both refused `MARKETING_OUTCOME_REPLAY`; no ledger row. | Separate slice after owner decision AI-D3 |
+| **KF-AI8-UNKNOWN-HOLD** (FIXED_BY_S4D, INV-19/INV-20) | An UNKNOWN provider outcome keeps its hold forever, across months, and no function can resolve it. | A last-month UNKNOWN Marcus hold still blocks Marcus at used 11,990 while Claire passes; late fail and late record are both refused `MARKETING_OUTCOME_REPLAY`; no ledger row. | Separate slice after owner decision AI-D3 |
 | **KF-AI3-SAME-AGENT-RACE** (FIXED_BY_S4B, INV-15) | Two concurrent prepares of the same agent could both pass the ceiling check. | **Not reproduced** on `b234be7`: the second Marcus prepare waits on a `transactionid` ShareLock held by the first and is refused by the per-agent ceiling after the first commits (12,000 committed). Recorded each run; "not reproduced" never fails CI. | S4 budget lock (makes serialization explicit for every agent and B3) |
 
 ## How S4 replaces the known failures
@@ -84,6 +89,7 @@ Exception schools have **no** paid-access state row, so an S4 decision that only
 - In the S4 spend decision (`hon.ai_spend_allowed(org, at)` in the S4 design): if a `saas_access_exceptions` row for the organization is `GRANTED`, `starts_at <= at < expires_at`, and the entitlement version equals `granted_entitlement_version` (the exception currently owns the entitlement), refuse with `AI_EXCEPTION_NO_AI`, unless a future owner-approved per-exception AI cap exists (not built).
 - The check runs before the legacy branch, in the start and reserve guards, and in the B3 guard.
 - In the S4 PR: KF-AI9 becomes `FIXED_BY_S4`, its probe is replaced by an invariant (prepare refused, provider calls 0), and INV-9 stays.
+- **Done in S4-c (migration 0195):** KF-AI9 is `FIXED_BY_S4C`, replaced by INV-16 for all three agents. See `HON_AI_ACCESS_DECISION_S4C.md`.
 
 ### Shared cross-agent budget (KF-AI2, KF-AI3)
 
