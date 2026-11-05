@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f65a556b0541054626e1ad26199cca7a603d8217b15dc2787c581bbeaa0d9365",
+  "chainSha256": "d6c49d68f060812f8a7d7664bcb2065edc9bee6407b8fc3d6b6faea5e9cd4175",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -113,6 +113,10 @@
     {
       "file": "0208_hq_school_provisioning_human_binding.sql",
       "sha256": "e00d379296721782d2eafcbb245dbb03500a327e799a12c15b022e1c6611ad7f"
+    },
+    {
+      "file": "0209_creative_wallet_no_subscription_eligibility.sql",
+      "sha256": "da14eaa9d96b8fe0185dfd14510de357a6ced6416bbc6066af15d3812ad7009f"
     }
   ]
 }
