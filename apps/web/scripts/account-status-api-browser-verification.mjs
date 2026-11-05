@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile, lstat, realpath } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { requireAccountStatusRun } from './account-status-verification-support.mjs';
+import { requireAccountStatusRun, accountFailureDiagnostic } from './account-status-verification-support.mjs';
 import { nativeTransportObservation } from './owner-workflow-support.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -55,7 +55,7 @@ const report = { sourceSha, evidence: 'NATIVE_BROWSER_NEXT_NEST_IAM_RESTRICTED_D
   signedSyntheticHonSession: true, externalOidcLogin: false, ownerDeviceAcceptance: false, apiResponsesMocked: false,
   browserHeadersModified: false, authorizationOrScopeOverridden: false, fullAppModule: false, workersStarted: false,
   providerExecutionConfigured: false, externalProviderCalls: null, localePreferenceSource: 'Actual MyLanguagePreferenceController and canonical synthetic EN/KO/ES preferences configured before read-only baseline',
-  blockedExternalOrigins: [], nativeBrowserRequests: [], nativeBrowserResponses: [], localeReads: [], nestIngress: [], groups: [], cases: [], screenshots: [] };
+  blockedExternalOrigins: [], signedReads: [], nativeBrowserRequests: [], nativeBrowserResponses: [], localeReads: [], nestIngress: [], groups: [], cases: [], failures: [], screenshots: [] };
 let app, database, next, browser, ownerConnected = false, stage = 'verify-disposable-database', currentPage;
 const pass = name => { report.groups.push(name); console.log('PASS ACCOUNT STATUS ' + name); };
 const token = (who, expired = false) => issueSession({ externalSubject: who.subject, displayName: 'Synthetic account identity' }, auth, expired ? Math.floor(Date.now() / 1000) - 50000 : undefined);
@@ -83,6 +83,19 @@ async function snapshot(tables) {
 }
 async function signedRead(who, path, status, validator) {
   const response = await actualFetch(origin + path, { method: 'GET', headers: { Cookie: cookie(who), Accept: 'application/json' }, redirect: 'error' });
+  const body = response.status === 200 ? undefined : await response.clone().json().catch(() => null);
+  report.signedReads.push({ method: 'GET', path, status: response.status, ...accountFailureDiagnostic(body) });
+  if (response.status !== status && response.status === 503 && path === walletPath(who.school)) {
+    // Repeat the original fixed read-only call through the same restricted runtime
+    // to distinguish SQL failure from canonical response-validation drift. No owner
+    // SQL, grant, fixture write, replacement response or authorization override.
+    let data, databaseError;
+    try { data = await database.callSaasBilling('readSchoolCreativeWallet', [who.subject, who.school]); } catch (error) { databaseError = error; }
+    let canonicalValidation = 'NOT_REACHED';
+    if (databaseError === undefined) { try { contracts.validateSaasCreativeSchoolWallet(data); canonicalValidation = 'ACCEPTED'; } catch { canonicalValidation = 'REJECTED'; } }
+    const diagnostic = { operation: 'readSchoolCreativeWallet', ...accountFailureDiagnostic(body, databaseError), canonicalValidation };
+    report.walletFailureDiagnostic = diagnostic; console.log('DIAGNOSTIC ACCOUNT STATUS ' + JSON.stringify(diagnostic));
+  }
   assert.equal(response.status, status, `Actual signed read ${path} must return ${status}.`);
   if (status === 200) { assert.match(response.headers.get('cache-control') ?? '', /no-store/); const json = await response.json(); assert.deepEqual(Object.keys(json), ['data']); return validator(json.data); }
   if (status === 403) assert.equal((await response.json()).code, 'SAAS_FORBIDDEN'); else await response.arrayBuffer();
@@ -207,15 +220,23 @@ try {
     if (who === suspended) { assert.equal(account.entitlement.status, 'SUSPENDED'); assert.equal(account.entitlement.inEffect, false); assert.equal(standing.state, 'NO_ACCESS'); }
   }
   await signedRead(a, walletPath(a.school), 403); await signedRead(suspended, walletPath(suspended.school), 403);
-  const wallet = await signedRead(creative, walletPath(creative.school), 200, contracts.validateSaasCreativeSchoolWallet);
-  assert.equal(wallet.walletVersion, null); assert.equal(wallet.balance.availableCredits, 0); assert.equal(wallet.balance.heldCredits, 0); assert.equal(wallet.eligibility.reason, 'PROGRAM_INACTIVE');
-  assert.equal(wallet.agentConversationsDeductCredits, false); assert.equal(wallet.paymentsActive, false); assert.deepEqual(wallet.lots, []); assert.deepEqual(wallet.history, []);
+  try {
+    const wallet = await signedRead(creative, walletPath(creative.school), 200, contracts.validateSaasCreativeSchoolWallet);
+    assert.equal(wallet.walletVersion, null); assert.equal(wallet.balance.availableCredits, 0); assert.equal(wallet.balance.heldCredits, 0); assert.equal(wallet.eligibility.reason, 'PROGRAM_INACTIVE');
+    assert.equal(wallet.agentConversationsDeductCredits, false); assert.equal(wallet.paymentsActive, false); assert.deepEqual(wallet.lots, []); assert.deepEqual(wallet.history, []);
+    pass('required authorized empty-wallet signed GET200 validates the unchanged canonical projection');
+  } catch (error) {
+    const observed = report.signedReads.findLast(read => read.path === walletPath(creative.school));
+    const failure = { case: 'required-authorized-empty-wallet-api', expectedStatus: 200, actualStatus: observed?.status ?? null, type: error.name };
+    report.failures.push(failure); console.log('FAIL REQUIRED ACCOUNT STATUS ' + JSON.stringify(failure));
+    // Keep the overall proof failed, then measure independent billing behavior.
+  }
   for (const who of [a, parent, hq]) for (const path of [accountPath(b.school), accountPath(b.school) + '/access-standing', walletPath(b.school)]) await signedRead(who, path, 403);
   for (const school of [a.school, siblingSchool]) for (const path of [accountPath(school), accountPath(school) + '/access-standing', walletPath(school)]) await signedRead(school === a.school ? b : a, path, 403);
   for (const path of [accountPath(a.school), accountPath(a.school) + '/access-standing', walletPath(a.school)]) {
     const response = await actualFetch(origin + path, { headers: { Cookie: `${HON_SESSION_COOKIE}=FORGED` } }); assert.equal(response.status, 401); await response.arrayBuffer();
   }
-  pass('real billing/standing200, independent permission and suspended-entitlement wallet403, empty-wallet200, foreign-school/parent/HQ403 and forged-session401');
+  pass('real billing/standing200, independent permission and suspended-entitlement wallet403, foreign-school/parent/HQ403 and forged-session401');
   stage = 'mounted-native-matrix'; browser = await chromium.launch({ executablePath: config.chrome, headless: true, args: ['--no-sandbox'] });
   for (const language of ['en', 'ko', 'es']) for (const mode of ['modern', 'classic', 'big']) for (const width of [390, 834, 1440]) {
     const who = matrices[language], ui = await open(who, { language, width }); const { page } = ui; stage = `mounted-${language}-${mode}-${width}`;
@@ -247,14 +268,44 @@ try {
     assert.equal(await ui.page.getByTestId('account-card').locator('dl').count(), 0); await ui.context.close();
   }
   pass('known-school-only suspended billing recovery is explicit; a mismatching optional organization cannot expose actual returned facts');
-  stage = 'mounted-native-denials-and-empty-wallet';
+  stage = 'mounted-required-empty-wallet-and-denials';
   {
-    const ui = await open(creative); await billing(ui); await ui.page.getByTestId('account-read-wallet').click(); await card(ui, 'wallet', 'readyCard'); assert(await ui.page.getByTestId('wallet-card').getByText(value('en', 'PROGRAM_INACTIVE'), { exact: true }).count());
+    const ui = await open(creative); await billing(ui); let walletStatus = null;
+    const walletResponse = ui.page.waitForResponse(response => new URL(response.url()).pathname === walletPath(creative.school) && response.request().method() === 'GET');
+    await ui.page.getByTestId('account-read-wallet').click();
+    try {
+      walletStatus = (await walletResponse).status(); assert.equal(walletStatus, 200, 'Required mounted authorized wallet GET must return 200.');
+      await card(ui, 'wallet', 'readyCard'); assert(await ui.page.getByTestId('wallet-card').getByText(value('en', 'PROGRAM_INACTIVE'), { exact: true }).count());
+      pass('required mounted authorized empty-wallet GET200 produces the verified wallet card');
+    } catch (error) {
+      const failure = { case: 'required-authorized-empty-wallet-browser', expectedStatus: 200, actualStatus: walletStatus, type: error.name };
+      report.failures.push(failure); console.log('FAIL REQUIRED ACCOUNT STATUS ' + JSON.stringify(failure));
+      if (walletStatus === 503) {
+        await card(ui, 'wallet', 'unavailableCard');
+        assert.equal(await ui.page.getByTestId('wallet-card').locator('dl, table').count(), 0);
+        assert.equal(await ui.page.getByTestId('wallet-card').getByText(/^0$/).count(), 0);
+        await card(ui, 'account', 'readyCard'); await card(ui, 'standing', 'readyCard');
+        report.walletFailureHandling = { actualStatus: 503, unavailable: true, balanceValuesShown: false, independentBillingRetained: true };
+        pass('actual wallet503 shows unavailable with no balance values and retains independent billing; required wallet200 remains failed');
+      }
+    }
     for (const who of [parent, hq]) { await setActor(ui.context, who); const result = await nativeRead(ui.page, accountPath(creative.school)); assert.equal(result.status, 403); }
     await setActor(ui.context, a); assert.equal((await nativeRead(ui.page, accountPath(b.school))).status, 403);
     await setActor(ui.context, a, true); assert.equal((await nativeRead(ui.page, accountPath(a.school))).status, 401); await ui.context.close();
   }
-  pass('original native Chromium GET metadata reaches actual guards for empty-wallet200, foreign/parent/HQ403 and expired-session401');
+  pass('original native Chromium GET metadata reaches actual guards for foreign/parent/HQ403 and expired-session401');
+  stage = 'reload-retires-account-observations';
+  {
+    const ui = await open(a); await billing(ui); const reads = ui.reads();
+    const localeResponse = ui.page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/me/language-preference' && response.request().method() === 'GET');
+    await ui.page.reload(); await ui.page.bringToFront(); assert.equal((await localeResponse).status(), 200);
+    await ui.page.getByRole('heading', { name: t('en', 'title'), exact: true }).waitFor();
+    if (await ui.page.getByTestId('account-restore').count()) { await ui.page.getByTestId('account-restore').click(); await ui.page.getByTestId('account-school').waitFor(); }
+    assert.equal(ui.reads(), reads, 'Reload must not initiate domain reads.');
+    assert.equal(await ui.page.getByTestId('account-card').locator('dl').count(), 0); assert.equal(await ui.page.getByTestId('standing-card').locator('dl').count(), 0);
+    await refill(ui, a); await billing(ui); report.reloadVerified = true; await ui.context.close();
+  }
+  pass('full reload discards prior account facts and performs no domain read until a new explicit request');
   stage = 'late-success-after-concealment';
   {
     const ui = await open(a); const gate = await responseGate(ui.page, accountPath(a.school), 200);
@@ -298,16 +349,23 @@ try {
   stage = 'verify-zero-writes'; report.after = await snapshot(tables); assert.deepEqual(report.after, before, 'All HON table row counts and complete-row hashes must remain unchanged after fixture setup.');
   assert(report.nativeBrowserRequests.some(request => domainPath(request.path))); assert(report.nestIngress.length > 0);
   assert(report.nativeBrowserRequests.every(request => request.method === 'GET'));
-  report.zeroWritesVerified = true; report.passed = true;
+  report.zeroWritesVerified = true;
   pass('all HON tables unchanged: zero business, billing, policy, access, wallet, AI-credit or audit/outbox writes; no provider or worker configured');
+  stage = 'verify-required-cases'; assert.deepEqual(report.failures, [], 'Every required account and wallet case must pass; independent billing evidence cannot replace wallet200.');
+  report.passed = true;
 } catch (error) {
+  if (stage !== 'verify-required-cases') report.failures.push({ case: stage, type: error.name });
   report.failure = { stage, type: error.name, message: 'Guarded account verification failed; no header, response or authority repair.' };
   if (currentPage && !currentPage.isClosed()) await currentPage.screenshot({ path: join(config.results, 'account-status-failure.png'), fullPage: true }).catch(() => {});
   throw error;
 } finally {
-  if (ownerConnected && report.before && !report.after) report.after = await snapshot(Object.keys(report.before)).catch(() => null);
+  if (ownerConnected && report.before && !report.after) {
+    report.after = await snapshot(Object.keys(report.before)).catch(() => null);
+    try { assert.deepEqual(report.after, report.before); report.zeroWritesVerified = true; }
+    catch { report.zeroWritesVerified = false; report.failures.push({ case: 'all-hon-tables-unchanged', type: 'AssertionError' }); }
+  }
   report.blockedExternalOrigins = [...new Set(report.blockedExternalOrigins)];
   await writeFile(join(config.results, 'account-status-report.json'), JSON.stringify(report, null, 2) + '\n');
   await browser?.close().catch(() => {}); await stopNext(); await app?.close().catch(() => {}); await database?.onModuleDestroy().catch(() => {}); if (ownerConnected) await owner.end();
-  console.log(JSON.stringify({ sourceSha, passed: report.passed, groups: report.groups.length, mountedCases: report.cases.length, nativeHeadersUnchanged: true, apiMocked: false, externalOidcOrOwnerDeviceAcceptance: false }));
+  console.log(JSON.stringify({ sourceSha, passed: report.passed, groups: report.groups.length, mountedCases: report.cases.length, failures: report.failures.length, zeroWritesVerified: report.zeroWritesVerified ?? false, nativeHeadersUnchanged: true, apiMocked: false, externalOidcOrOwnerDeviceAcceptance: false }));
 }

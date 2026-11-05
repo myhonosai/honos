@@ -24,3 +24,19 @@ export function requireAccountStatusRun(env, sourceSha, repository) {
   assert(!paths.results.startsWith(repository + '/') && paths.results !== repository, 'Artifacts must be outside source.');
   return Object.freeze({ ...paths, sourceSha });
 }
+
+/** Fixture diagnostics retain known symbolic codes and canonical locations only.
+ * Never include arbitrary exception messages, SQL, parameters, bodies or stacks. */
+export function accountFailureDiagnostic(body, error) {
+  const apiCodes = new Set(['SAAS_UNAVAILABLE', 'SAAS_FORBIDDEN', 'INVALID_SAAS_INPUT', 'PERSISTENCE_NOT_CONFIGURED', 'HUMAN_UI_REQUIRED', 'UNAUTHENTICATED']);
+  const pgCodes = new Set(['42501', '55000', '42703', '42883', '42P01', '42804', 'XX000', '0A000', '25006', '57014', '55P03', '22P02', '23514']);
+  const functions = new Set(['read_saas_creative_wallet', 'saas_creative_wallet_json', 'saas_creative_eligibility', 'saas_organization_access',
+    'saas_creative_balance_json', 'saas_creative_rates_json', 'saas_creative_packages_json', 'require_saas_school_actor']);
+  const locations = [];
+  if (typeof error?.where === 'string') for (const match of error.where.slice(0, 8192).matchAll(/(?:PL\/pgSQL|SQL) function (?:hon\.)?([a-z_]+)\([^\n]*?\) line (\d+)/g)) {
+    const line = Number(match[2]); if (functions.has(match[1]) && line > 0 && line <= 10000) locations.push({ function: match[1], line });
+  }
+  return { apiCode: apiCodes.has(body?.code) ? body.code : 'UNRECOGNIZED',
+    pgCode: pgCodes.has(error?.code) ? error.code : error === undefined ? null : 'UNRECOGNIZED',
+    databaseErrorClass: error === undefined ? null : error?.message === 'record "per" is not assigned yet' ? 'UNASSIGNED_PERIOD_RECORD' : 'UNCLASSIFIED', locations };
+}
