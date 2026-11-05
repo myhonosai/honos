@@ -1,4 +1,17 @@
 import assert from 'node:assert/strict';
+// hon.lock_school_account_authority() (0191) takes these nine tables NOWAIT in SHARE ROW EXCLUSIVE mode.
+// Autovacuum/autoanalyze hold SHARE UPDATE EXCLUSIVE, so a background worker that happens to start on one
+// of them turns an expected 200/409 into the recoverable 503 ACCOUNT_BUSY (NOT_SUBMITTED). Disposable proofs
+// pause background maintenance on exactly these tables and restore the defaults afterwards; recoverable busy
+// itself stays covered deterministically by the explicit blocker-connection groups.
+export const schoolAccountAuthorityTables=['organizations','schools','users','principals','principal_role_grants','hq_operator_grants','family_access_grants','roles','role_permissions'];
+export async function pauseSchoolAccountAuthorityAutovacuum(client){
+  const definition=(await client.query("SELECT pg_get_functiondef('hon.lock_school_account_authority()'::regprocedure) d")).rows[0].d;
+  const locked=definition.match(/LOCK TABLE([^;]+)IN SHARE ROW EXCLUSIVE MODE NOWAIT/)?.[1].split(',').map(t=>t.trim().replace(/^hon\./,'')).sort();
+  assert.deepEqual(locked,[...schoolAccountAuthorityTables].sort(),'Account authority lock set changed; update the paused tables.');
+  for(const table of schoolAccountAuthorityTables)await client.query('ALTER TABLE hon.'+table+' SET (autovacuum_enabled=false)');
+  return async()=>{for(const table of schoolAccountAuthorityTables)await client.query('ALTER TABLE hon.'+table+' RESET (autovacuum_enabled)');};
+}
 export const schoolAccountTables=['school_owner_invitations','school_account_requests','school_account_events','school_staff_invitations','school_staff_account_events','school_family_access_invitations','school_family_account_events'];
 export async function verifySchoolAccountSecurity(client,runtime) {
   for(const table of schoolAccountTables){
