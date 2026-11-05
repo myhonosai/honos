@@ -38,3 +38,22 @@ export function validateStaffAccountReceipt(v: unknown): StaffAccountReceipt {
   if (o.accountStatus !== 'STAFF_ROLE_BOUND' || o.accessGranted !== false || o.billingActivated !== false || o.aiCreditsGranted !== false) throw new Error('ACCOUNT_RESPONSE_INVALID');
   return { invitationId: accountUuid(o.invitationId), schoolId: accountUuid(o.schoolId), roleId: accountUuid(o.roleId), accountStatus: 'STAFF_ROLE_BOUND', accessGranted: false, billingActivated: false, aiCreditsGranted: false };
 }
+/** Roles the signed-in staff manager may invite someone into at one exact school (read-only, at most 100). */
+export interface StaffInvitationRole { roleId: string; roleName: string; permissionCodes: string[] }
+export interface StaffInvitationRoles { roles: StaffInvitationRole[]; truncated: boolean }
+export function validateStaffInvitationRoles(v: unknown): StaffInvitationRoles {
+  const o = accountClosed(v, ['roles', 'truncated']);
+  if (!Array.isArray(o.roles) || o.roles.length > 100 || typeof o.truncated !== 'boolean') throw new Error('ACCOUNT_RESPONSE_INVALID');
+  const seen = new Set<string>();
+  const roles = o.roles.map((raw) => {
+    const r = accountClosed(raw, ['roleId', 'roleName', 'permissionCodes']);
+    const roleId = accountUuid(r.roleId);
+    if (seen.has(roleId) || typeof r.roleName !== 'string' || r.roleName.length < 1 || r.roleName.length > 100
+      || !Array.isArray(r.permissionCodes) || r.permissionCodes.length < 1 || r.permissionCodes.length > 200
+      || r.permissionCodes.some((p) => typeof p !== 'string' || !/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(p))
+      || new Set(r.permissionCodes).size !== r.permissionCodes.length) throw new Error('ACCOUNT_RESPONSE_INVALID');
+    seen.add(roleId);
+    return Object.freeze({ roleId, roleName: r.roleName, permissionCodes: Object.freeze([...(r.permissionCodes as string[])]) as string[] });
+  });
+  return Object.freeze({ roles: Object.freeze(roles) as StaffInvitationRole[], truncated: o.truncated });
+}

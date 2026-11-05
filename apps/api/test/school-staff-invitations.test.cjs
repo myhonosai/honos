@@ -44,3 +44,19 @@ test('database denials map to closed codes and redact SQL; busy is recoverable',
  const service=new SchoolStaffInvitationService({callSchoolStaffAccount:async()=>Array.from({length:51},()=>invitation)});
  await assert.rejects(()=>service.list({honIdentity:{externalSubject:'manager'}},ids.schoolId),e=>e.status===503);
 });
+test('staff invitation role discovery: closed response, bounded, malformed or oversized database output is refused',async()=>{
+ const role={roleId:ids.roleId,roleName:'Front desk',permissionCodes:['family.read','school.view']},ok={roles:[role],truncated:false};
+ assert.deepEqual(c.validateStaffInvitationRoles(ok),ok);
+ for(const bad of [{roles:[role]},{...ok,extra:1},{roles:[{...role,permissionCodes:[]}],truncated:false},{roles:[{...role,permissionCodes:['School View']}],truncated:false},
+   {roles:[{...role,permissionCodes:['school.view','school.view']}],truncated:false},{roles:[role,role],truncated:false},{roles:[{...role,roleName:''}],truncated:false},
+   {roles:[{...role,organizationId:randomUUID()}],truncated:false},{roles:Array.from({length:101},()=>({...role,roleId:randomUUID()})),truncated:true},{roles:[role],truncated:'no'}])
+  assert.throws(()=>c.validateStaffInvitationRoles(bad));
+ const calls=[],service=new SchoolStaffInvitationService({callSchoolStaffAccount:async(...args)=>{calls.push(args);return ok;}});
+ assert.deepEqual(await service.roles({honIdentity:{externalSubject:'manager'}},ids.schoolId),ok);
+ assert.deepEqual(calls,[['roles',['manager',ids.schoolId]]]);
+ await assert.rejects(()=>service.roles({honIdentity:{externalSubject:'manager'}},'not-a-uuid'),e=>e.status===400);assert.equal(calls.length,1);
+ const malformed=new SchoolStaffInvitationService({callSchoolStaffAccount:async()=>({roles:[{...role,permissionCodes:[]}],truncated:false})});
+ await assert.rejects(()=>malformed.roles({honIdentity:{externalSubject:'manager'}},ids.schoolId),e=>e.status===503);
+ const denied=new SchoolStaffInvitationService({callSchoolStaffAccount:async()=>{throw Object.assign(new Error('SECRET SQL'),{code:'42501'});}});
+ await assert.rejects(()=>denied.roles({honIdentity:{externalSubject:'manager'}},ids.schoolId),e=>e.status===403&&!JSON.stringify(e).includes('SECRET'));
+});

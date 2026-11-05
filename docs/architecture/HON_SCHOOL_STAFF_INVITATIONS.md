@@ -39,7 +39,7 @@ So nobody could add a front-desk person or an instructor without a database fixt
 - **Concurrency.** It uses the 0191 authority envelope: one advisory lock plus NOWAIT `SHARE ROW EXCLUSIVE` on the IAM tables. Unauthorized callers are refused before they touch those locks. Authorized callers that hit contention get `503 ACCOUNT_BUSY`, which is safe to retry.
 - **Storage and evidence**
   - The custody tables use forced RLS with no policies, and the runtime role can't read them.
-  - Runtime executes only `manage_school_staff_invitation`, `accept_school_staff_invitation` and `read_school_staff_invitations`.
+  - Runtime executes only `manage_school_staff_invitation`, `accept_school_staff_invitation`, `read_school_staff_invitations` and (0207) `read_school_staff_invitation_roles`.
   - Each (subject, idempotency key) pair is single-use across every account flow, because requests share `hon.school_account_requests`.
   - Audit events are immutable, and `execution_allowed` is always false.
 - **Paid access fails closed.** The staff-manager check uses the B6A (0172) live-entitlement predicate. A suspended or lapsed organization, or one whose access hasn't started, cannot invite, revoke or list, and cannot have an outstanding invitation accepted. The entitlement-coverage proof classifies all three entry points as ENFORCED. Owner decision: should this be relaxed, for example to allow read-only listing during the owner CRM read-only window?
@@ -53,6 +53,9 @@ So nobody could add a front-desk person or an instructor without a database fixt
 | POST | `/v1/school/staff-invitations/revoke` | `{schoolId, invitationId}` | `StaffInvitation` (REVOKED) |
 | POST | `/v1/account/staff-invitations/accept` | `{invitationId, token, confirmation: 'ACCEPT_SCHOOL_STAFF_INVITATION'}` | `StaffAccountReceipt` |
 | GET | `/v1/school/schools/:schoolId/staff-invitations` | — | `StaffInvitation[]` (≤ 50, newest first; `EXPIRED` derived) |
+| GET | `/v1/school/schools/:schoolId/staff-invitation-roles` | — | `StaffInvitationRoles` `{roles: [{roleId, roleName, permissionCodes}], truncated}` (0207, provisional) |
+
+**Role discovery (0207, provisional).** The staff screen should offer only roles the signed-in manager can actually invite into. `read_school_staff_invitation_roles` returns exactly the roles `school_staff_role_grantable` accepts for that manager at that exact school (organization roles usable there, never system/OWNER/HQ/platform, every permission staff-assignable and held by the manager), ordered by name then id, at most 100, with `truncated: true` when more exist. Same manager predicate as the list (checked before and after the read), same paid-access gate, same list rate budget. It is read-only and discloses nothing the manager could not already grant. The invite command still re-checks the role, so a stale list cannot widen authority.
 
 POST commands need an `Idempotency-Key` UUID. The contracts and validators are in `packages/contracts/src/school-staff-invitations.ts`.
 
@@ -71,7 +74,7 @@ POST commands need an `Idempotency-Key` UUID. The contracts and validators are i
 
 ## Evidence
 
-`packages/database/scripts/test-school-staff-invitations-integrity.mjs` runs as part of `run-db-proofs.sh`, on the disposable Champions fixture. It runs 12 groups through real signed sessions, Nest, the restricted runtime role and PostgreSQL, with no provider.
+`packages/database/scripts/test-school-staff-invitations-integrity.mjs` runs as part of `run-db-proofs.sh`, on the disposable Champions fixture. It runs 14 groups through real signed sessions, Nest, the restricted runtime role and PostgreSQL, with no provider.
 
 `apps/api/test/school-staff-invitations.test.cjs` covers the contracts, the guard, the session-only email and the error mapping.
 
@@ -79,4 +82,4 @@ POST commands need an `Idempotency-Key` UUID. The contracts and validators are i
 
 - Parent and guardian account linking to an existing family: a separate slice.
 - Delivering the invitation link by email or SMS. That needs owner approval of a provider.
-- Codex owns the staff screen. It uses the existing custom-role list, and this API.
+- Codex owns the staff screen. It uses this API, including the 0207 role discovery read.

@@ -2193,3 +2193,14 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.manage_school_family_access_invitation(text,text,jsonb,uuid),hon.accept_school_family_access_invitation(text,text,jsonb,uuid),hon.read_school_family_access_invitations(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0207 (provisional) staff invitation role discovery: one exact-school read is the only runtime entry point.
+DO $$ DECLARE r text; BEGIN
+  REVOKE ALL ON FUNCTION hon.read_school_staff_invitation_roles(text,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.read_school_staff_invitation_roles(text,uuid) FROM '||quote_ident(r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_staff_invitation_roles(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
