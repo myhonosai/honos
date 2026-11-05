@@ -667,7 +667,7 @@ try {
     'crm_guardian_child_membership_draft_current', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan', 'draft_crm_guardian_child_membership_from_plan',
     'draft_owner_launch_membership', 'evaluate_membership_activation', 'evaluate_membership_date_revision', 'guard_membership_date_revision_insert',
     'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
-    'read_crm_guardian_child_enrollment', 'read_crm_lead_registration_recovery', 'read_membership_date_confirmation_queue', 'read_membership_date_history',
+    'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_membership_date_confirmation_queue', 'read_membership_date_history',
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
     'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_status_summary', 'record_retention_attention_alert',
     'renewal_membership_facts', 'resolve_retention_attention_alert', 'revenue_plan_snapshot', 'revise_membership_dates']);
