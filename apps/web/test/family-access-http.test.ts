@@ -37,17 +37,7 @@ it('does not accept another signed identity or browser authority fields as conti
 });
 it('uses an immutable closed command and preserves exact URL, serialized body, key and human marker',async()=>{
  const command=familyCommand('invite',input,id(9));expect(Object.isFrozen(command)).toBe(true);const f=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>reply({data:invitation}));await familyAccessApi.send(command);await familyAccessApi.send(command);
- for(const [path,options] of f.mock.calls){expect(path).toBe('/api/v1/school/family-access-invitations');expect(options).toMatchObject({method:'POST',mode:'same-origin',credentials:'same-origin',cache:'no-store',redirect:'error',referrerPolicy:'strict-origin',body:command.body,headers:{'Content-Type':'application/json','X-HON-Human-Command':'school-family-account','Idempotency-Key':id(9)}});}
-});
-it.each([
- ['revoke',{schoolId:scope.schoolId,invitationId:id(4)},{...invitation,status:'REVOKED'}],
- ['end',{schoolId:scope.schoolId,invitationId:id(4),confirmation:'END_FAMILY_ACCESS'},{...invitation,status:'ENDED'}],
- ['accept',{invitationId:id(4),token,confirmation:'ACCEPT_FAMILY_ACCESS_INVITATION'},{invitationId:id(4),schoolId:scope.schoolId,familyId:family.id,accessLevel:'VIEWER',accountStatus:'FAMILY_ACCESS_BOUND',accessGranted:false,billingActivated:false,aiCreditsGranted:false}],
-] as const)('%s preserves the browser origin with an origin-only referrer and no manual Origin header',async(kind,body,result)=>{
- const command=familyCommand(kind,body,id(9)),f=vi.spyOn(globalThis,'fetch').mockResolvedValue(reply({data:result}));
- await expect(familyAccessApi.send(command)).resolves.toEqual(result);
- expect(f.mock.calls[0]).toEqual([command.path,expect.objectContaining({method:'POST',mode:'same-origin',credentials:'same-origin',cache:'no-store',redirect:'error',referrerPolicy:'strict-origin',body:command.body})]);
- expect(new Headers(f.mock.calls[0]?.[1]?.headers).has('Origin')).toBe(false);
+ for(const [path,options] of f.mock.calls){expect(path).toBe('/api/v1/school/family-access-invitations');expect(options).toMatchObject({method:'POST',mode:'same-origin',credentials:'same-origin',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',body:command.body,headers:{'Content-Type':'application/json','X-HON-Human-Command':'school-family-account','Idempotency-Key':id(9)}});}
 });
 it.each(['amount','organizationId','principalId','role','activation'])('rejects extra %s authority/business field before dispatch',field=>{
  expect(()=>familyCommand('invite',{...input,[field]:field==='amount'?1:id(99)},id(9))).toThrow();

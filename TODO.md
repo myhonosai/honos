@@ -1,14 +1,15 @@
 ## Sprint 2 — family invitation frontend on reconciled backend
 
 - Normally incorporate Claude's reviewed/reconciled #136 `558bd339a026aba5a51f8e8ceee8f2b358994f9e` on accepted main through0203;197 checksums pass and API/packages/infra exactly match that dependency. No backend source or migration is authored here.
-- Preserve exact localized accessible-name assertions with explicit select labels; fix POST origin-only referrers while keeping GET no-referrer, closed commands, current identity checks and exact UNKNOWN recovery.77focused frontend regressions/typecheck pass; fresh mounted signed-API/browser evidence remains pending on the final published tree.
+- Preserve exact localized accessible-name assertions with explicit select labels, the original no-referrer policy for every request, closed commands, current identity checks and exact UNKNOWN recovery. Fresh mounted signed-API/browser evidence remains pending on the final published tree.
 - The earlier OIDC namespace repair passed all8 actual API groups; its browser label failure remains recorded as a failure, not a successful owner test. Backend acceptance, independent frontend review and owner approval remain gates in#131.
 
-## PR #139 — mounted browser labels and command origin
+## PR #139 — mounted browser labels and original privacy policy
 
 - [x] Preserve exact localized selectors with explicit family/access-level select labels. Hosted run `41994633747`, job `127134741405`, passed all eight API groups, then timed out on the exact family label; Playwright reads the wrapping label's descendant option text. Add bounded entry diagnostics and preserve privacy/authorization checks.
-- [x] Use origin-only referrers for same-origin POSTs so browsers retain the configured Origin header; keep reads at `no-referrer`. Add unchanged-guard mounted empty-body probes (`no-referrer` refused before submission; `strict-origin` reaches closed input validation) with zero-write assertions. No backend, contract or migration changes.
-- Local evidence: 77 focused family frontend tests, web TypeScript, API build/family test file, harness syntax and whitespace checks pass. Real Playwright label functions reproduce before/after exact matching for both selects in EN/KO/ES; native Fetch Origin serialization through the actual unchanged guard reproduces opaque-Origin refusal versus expected-Origin acceptance. These are not a local mounted-browser run.
+- [x] Retain the original `no-referrer` policy for reads and commands. Real Chromium run `41997261365`, job `127143380860`, entered the corrected family selector and demonstrated `no-referrer` POST with expected Origin, no Referer and `400 ACCOUNT_INPUT_INVALID` for an empty closed body. The earlier Node-only Origin inference did not describe Chromium and is withdrawn; the erroneous probe expectation caused that run's failure. No guard, backend, contract or migration change.
+- [x] Replace Playwright API-client response-loss injection with a one-shot native browser fetch wrapper: send the original request unchanged, await the real 200/body, then throw a synthetic timeout. Require one persisted invitation/event/request and zero duplicate records after exact retry. No manually authored browser headers.
+- Local evidence: 74 focused frontend tests, web TypeScript, harness syntax and whitespace checks pass. Isolated execution of the actual injected wrapper preserves original arguments, loses only the first 200 response, propagates 403 unchanged and permits the exact next request. This does not establish a mounted-browser/database pass.
 - Fresh exact-head hosted browser/API/PostgreSQL evidence remains pending; local Chromium/socket execution is unavailable.
 
 ## PR #139 — family frontend hosted acceptance fixture repair

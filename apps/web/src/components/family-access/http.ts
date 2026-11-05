@@ -28,9 +28,7 @@ export function familyCommand(kind: FamilyCommandKind, input: unknown, key: stri
 const codes = new Set(['ACCOUNT_INPUT_INVALID', 'ACCOUNT_FORBIDDEN', 'VERIFIED_EMAIL_REQUIRED', 'ACCOUNT_UNAVAILABLE', 'ACCOUNT_REVIEW_REQUIRED', 'ACCOUNT_CONFLICT', 'ACCOUNT_RATE_LIMITED', 'ACCOUNT_BUSY', 'HUMAN_UI_REQUIRED', 'HUMAN_UI_ORIGIN_NOT_CONFIGURED']);
 async function json(path: string, signal: AbortSignal, command?: FamilyCommand, echo = true, reportCurrent = () => true): Promise<unknown> {
   signal.throwIfAborted();
-  // An origin-only POST referrer preserves Origin for the strict human-command
-  // guard. Browser same-origin POSTs with no-referrer instead send Origin: null.
-  const response = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: command ? 'strict-origin' : 'no-referrer', signal,
+  const response = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', signal,
     headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': FAMILY_ACCOUNT_HUMAN_COMMAND, 'Idempotency-Key': command.key } : {}) }, ...(command ? { body: command.body } : {}) });
   // Retired reads cannot invalidate a replacement session. Commands are never
   // aborted by privacy concealment: their original request must settle safely.

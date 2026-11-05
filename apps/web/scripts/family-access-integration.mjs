@@ -101,21 +101,19 @@ try{
  }
  {
   const ctx=await context(browserManagers[0]),page=await ctx.newPage();await enter(page,'en',A);const before=await rowCounts();
-  // These invalid closed bodies cannot reach a database command. The live
-  // mounted browser demonstrates the original guard refusal and repaired path.
+  // Invalid closed input cannot reach a database command. Observe the actual
+  // browser's original no-referrer request through the unchanged human guard.
   const probes=await page.evaluate(async()=>{
-   const rows=[];for(const policy of ['no-referrer','strict-origin']){
+   const rows=[];for(const policy of ['no-referrer']){
     const key=crypto.randomUUID(),response=await fetch('/api/v1/school/family-access-invitations',{method:'POST',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',referrerPolicy:policy,headers:{Accept:'application/json','Content-Type':'application/json','X-HON-Human-Command':'school-family-account','Idempotency-Key':key},body:'{}'});
     const body=await response.json().catch(()=>null);rows.push({policy,key,status:response.status,code:['HUMAN_UI_REQUIRED','ACCOUNT_INPUT_INVALID'].includes(body?.code)?body.code:'UNRECOGNIZED'});
    }return rows;
   });
   for(const {key,...probe}of probes){const facts=guardDiagnostics.get(key);const result={...probe,guard:facts};browserOriginProbe.push(result);console.log('PROBE family browser origin: '+JSON.stringify(result));}
   await writeFile(join(results,'family-access-origin-probe.json'),JSON.stringify(browserOriginProbe,null,2)+'\n');
-  assert.equal(browserOriginProbe[0].status,403);assert.equal(browserOriginProbe[0].code,'HUMAN_UI_REQUIRED');assert.equal(browserOriginProbe[0].guard?.originKind,'OPAQUE');
-  assert.equal(browserOriginProbe[1].status,400);assert.equal(browserOriginProbe[1].code,'ACCOUNT_INPUT_INVALID');assert.equal(browserOriginProbe[1].guard?.originKind,'EXPECTED');
-  assert.equal(browserOriginProbe[0].guard?.referrerKind,'MISSING');assert.equal(browserOriginProbe[1].guard?.referrerKind,'ORIGIN_ONLY');
+  assert.equal(browserOriginProbe[0].status,400);assert.equal(browserOriginProbe[0].code,'ACCOUNT_INPUT_INVALID');assert.equal(browserOriginProbe[0].guard?.originKind,'EXPECTED');assert.equal(browserOriginProbe[0].guard?.referrerKind,'MISSING');
   for(const {guard}of browserOriginProbe){assert.equal(guard.fetchMode,'same-origin');assert.equal(guard.fetchSite,'same-origin');assert.equal(guard.fetchDest,'empty');assert.equal(guard.expectedMarker,true);assert.equal(guard.sessionCookiePresent,true);assert.equal(guard.authorizationPresent,false);assert.equal(guard.unexpectedHonHeaders,false);}
-  assert.deepEqual(await rowCounts(),before);await ctx.close();pass('actual mounted browser: original no-referrer POST has opaque Origin and is refused; strict-origin reaches closed validation with zero database effects');
+  assert.deepEqual(await rowCounts(),before);await ctx.close();pass('actual mounted browser: original no-referrer POST preserves expected Origin, sends no Referer and reaches closed validation with zero database effects');
  }
  for(const language of ['en','ko','es'])for(const mode of ['modern','classic','big'])for(const width of [390,834,1440]){
   const who=browserManagers[['en','ko','es'].indexOf(language)],ctx=await context(who,language,width),page=await ctx.newPage(),errors=[],domain=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(/\/api\/v1\/(?:school|organizations)/.test(r.url()))domain.push({url:r.url(),method:r.method()});});
@@ -136,11 +134,25 @@ try{
   await page.evaluate(()=>window.dispatchEvent(new Event('hon:school-context-changed')));await page.evaluate(()=>window.oldFamilySubmit({preventDefault(){}}));assert.equal(posts.length,0);assert(await page.getByTestId('family-access-private').isHidden());
   // Bind A explicitly again; the ordinary old Restore button cannot silently choose A.
   await page.getByLabel(t('en','org'),{exact:true}).fill(A.organizationId);await page.getByLabel(t('en','school'),{exact:true}).fill(A.schoolId);await page.getByRole('button',{name:t('en','read'),exact:true}).first().click();await page.getByLabel(t('en','family'),{exact:true}).selectOption(A.familyId);
-  const recipient=identity('mounted-parent');await page.getByLabel(t('en','email'),{exact:true}).fill(recipient.email);await page.getByLabel(t('en','confirmInvite'),{exact:true}).check();let lost=true;
-  await ctx.route('**/api/v1/school/family-access-invitations',async route=>{if(route.request().method()==='POST'&&lost){lost=false;const response=await route.fetch();assert.equal(response.status(),200);await route.abort('failed');}else await route.continue();});
-  await page.getByRole('button',{name:t('en','invite'),exact:true}).click();await page.getByText(t('en','unknown'),{exact:true}).waitFor();assert.equal(posts.length,1);const original=posts[0];
+  const recipient=identity('mounted-parent');await page.getByLabel(t('en','email'),{exact:true}).fill(recipient.email);await page.getByLabel(t('en','confirmInvite'),{exact:true}).check();const mountedBefore=await rowCounts();
+  // Keep the native browser request, cookies and headers unchanged. Lose only
+  // the response after the real server has returned 200 and its body is read.
+  await page.evaluate(()=>{
+   const nativeFetch=window.fetch.bind(window);let armed=true;window.familyPostCommitLoss={finished:false,status:null,lost:false};
+   window.fetch=async(input,init)=>{
+    const url=new URL(typeof input==='string'||input instanceof URL?input:input.url,location.href),method=init?.method??(input instanceof Request?input.method:'GET');
+    const target=armed&&method==='POST'&&url.origin===location.origin&&url.pathname==='/api/v1/school/family-access-invitations';
+    if(target){armed=false;window.fetch=nativeFetch;}
+    const response=await nativeFetch(input,init);if(!target)return response;
+    window.familyPostCommitLoss.status=response.status;
+    if(response.status===200){await response.arrayBuffer();window.familyPostCommitLoss.lost=true;window.familyPostCommitLoss.finished=true;throw new DOMException('Synthetic response loss after real commit','TimeoutError');}
+    window.familyPostCommitLoss.finished=true;return response;
+   };
+  });
+  await page.getByRole('button',{name:t('en','invite'),exact:true}).click();await page.waitForFunction(()=>window.familyPostCommitLoss?.finished);assert.deepEqual(await page.evaluate(()=>window.familyPostCommitLoss),{finished:true,status:200,lost:true});await page.getByText(t('en','unknown'),{exact:true}).waitFor();assert.equal(posts.length,1);const original=posts[0],mountedCounts=await rowCounts();
+  for(const table of ['school_family_access_invitations','school_family_account_events','school_account_requests'])assert.equal(mountedCounts[table],mountedBefore[table]+1);
   await page.getByLabel(t('en','school'),{exact:true}).fill(B.schoolId);await page.getByRole('button',{name:t('en','read'),exact:true}).first().click();assert.equal(posts.length,1);assert(await page.getByTestId('family-access-private').isHidden());
-  await page.getByLabel(t('en','org'),{exact:true}).fill(A.organizationId);await page.getByLabel(t('en','school'),{exact:true}).fill(A.schoolId);await page.getByRole('button',{name:t('en','read'),exact:true}).first().click();await page.getByRole('button',{name:t('en','retry'),exact:true}).click();await page.getByText(t('en','recorded'),{exact:true}).waitFor();assert.equal(posts.length,2);assert.equal(fingerprint(posts[1]),fingerprint(original));
+  await page.getByLabel(t('en','org'),{exact:true}).fill(A.organizationId);await page.getByLabel(t('en','school'),{exact:true}).fill(A.schoolId);await page.getByRole('button',{name:t('en','read'),exact:true}).first().click();await page.getByRole('button',{name:t('en','retry'),exact:true}).click();await page.getByText(t('en','recorded'),{exact:true}).waitFor();assert.equal(posts.length,2);assert.equal(fingerprint(posts[1]),fingerprint(original));assert.deepEqual(await rowCounts(),mountedCounts);
   const invitationId=await page.getByLabel(t('en','id'),{exact:true}).inputValue(),privateCode=await page.getByLabel(t('en','token'),{exact:true}).inputValue();assert.match(privateCode,/^[A-Za-z0-9_-]{43}$/);assert(!page.url().includes(privateCode));
   await page.screenshot({path:join(results,'family-access-invitation-receipt-mobile.png'),fullPage:true});
   const parentCtx=await context(recipient),parentPage=await parentCtx.newPage();parentPage.on('pageerror',e=>errors.push(e.message));await parentPage.goto(origin+'/account/family-invitation');await parentPage.getByRole('button',{name:t('en','identity'),exact:true}).click();await parentPage.getByLabel(t('en','id'),{exact:true}).fill(invitationId);await parentPage.getByLabel(t('en','token'),{exact:true}).fill(privateCode);await parentPage.getByLabel(t('en','recipientConfirm'),{exact:true}).check();await parentPage.getByRole('button',{name:t('en','accept'),exact:true}).click();await parentPage.getByText(t('en','accepted'),{exact:true}).waitFor();
