@@ -1,3 +1,11 @@
+## Sprint 2 — final accepted backend / reviewed CRM frontend integration
+
+- [x] Normally incorporate accepted main `029de0cadbeb047ef8e38767de4e60e460325821`; preserve all 195 migrations/checksums and all canonical backend/ACL source. Reviewed #126/#127/#129 production UI files remain byte-identical and are included once.
+- [x] Replace the obsolete HTTP 500 expectation with HTTP 200 on the original microsecond collision; assert published-ms/UUID order and unchanged raw timestamps, without fixture normalization or parser/grant workaround.
+- [x] Consolidate #129's overlapping CI: keep the complete four jobs and port the unique trial/journey API/browser scripts into it. Other PRs' workflows are unaffected. Local YAML, syntax, retained-proof mapping and checksum checks pass.
+- [ ] Hosted exact-head full repository, canonical PostgreSQL, commercial and API/browser/axe evidence; focused delta review and explicit owner merge approval remain required. No production/browser launch or activation is claimed.
+- Shared tracking is GitHub #131. Older checkpoints below retain historical evidence only.
+
 ## Membership operations — isolated canonical-ACL integration candidate (DRAFT)
 
 - Combine exact reviewed frontend sources #126 `67e01f2a346dbdb0390824b2ebaf856f248750a1` / #127 `6241e34d9632be1cfc430fa6a6e96e26b996fab1`, current reconciled backend #122 `952f20118a867295d67a80049f9807e98541f112`, and accepted main/#128 `7096f916f5aa350876aff19e7eba5f9da6f1406b` in an isolated candidate. Original frontend and Claude branches remain unchanged; this is not backend merge approval.

@@ -72,17 +72,17 @@ try{
  }finally{await q('ROLLBACK');}
  await q(verifyAcl);assert.equal((await sessions.loadCurrentSchoolClassSessions(a.org,a.school)).length,2);
  groups.push('accepted canonical ACL grants and verifier used without fixture repair; revoked grant detected and rollback restores the original posture');
- // Deterministically reproduce the former clock_timestamp/random-UUID fixture failure through the real signed API.
- // SQL orders microseconds, but its JSON timestamps/closed contract expose milliseconds and use UUID for ties.
+ // Retain the original microsecond collision that failed before accepted migration 0203.
+ // Published millisecond ties must now use the same ascending UUID order in SQL and the closed contract.
  const descending=[...b.sessions].sort().reverse();
  await q("UPDATE hon.class_sessions SET starts_at=date_trunc('second',statement_timestamp())-interval '1 hour'+CASE WHEN id=$1 THEN interval '100 microseconds' ELSE interval '200 microseconds' END,ends_at=date_trunc('second',statement_timestamp())+interval '1 hour' WHERE id=ANY($2::uuid[])",[descending[0],descending]);
  const precisionRows=(await q("SELECT id,starts_at::text raw,to_char(starts_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') published FROM hon.class_sessions WHERE id=ANY($1::uuid[]) ORDER BY starts_at,id",[descending])).rows;
  assert.deepEqual(precisionRows.map(r=>r.id),descending);assert.notEqual(precisionRows[0].raw,precisionRows[1].raw);assert.equal(precisionRows[0].published,precisionRows[1].published);
- actor=b;observeProjection=true;await assert.rejects(sessions.loadCurrentSchoolClassSessions(b.org,b.school),/Class Sessions returned no verified bounded result/);observeProjection=false;assert.equal(projectionStatus,500);
- // Repair only the synthetic fixture; do not relax the production response validator or rewrite migration 0147.
- for(const [index,id]of b.sessions.entries())await q("UPDATE hon.class_sessions SET starts_at=date_trunc('second',clock_timestamp())-interval '1 hour'+$2::integer*interval '10 minutes',ends_at=date_trunc('second',clock_timestamp())+interval '1 hour'+$2::integer*interval '10 minutes' WHERE id=$1",[id,index]);
- assert.equal((await sessions.loadCurrentSchoolClassSessions(b.org,b.school)).length,2);actor=a;
- groups.push('deterministic microsecond-to-millisecond fixture ordering failure is HTTP 500; distinct published times restore the exact signed API read without weakening validation');
+ actor=b;observeProjection=true;const collision=await sessions.loadCurrentSchoolClassSessions(b.org,b.school);observeProjection=false;assert.equal(projectionStatus,200);
+ assert.deepEqual(collision.map(s=>s.sessionId),[...b.sessions].sort());assert.equal(collision[0].startsAt,collision[1].startsAt);
+ const unchanged=(await q("SELECT id,starts_at::text raw FROM hon.class_sessions WHERE id=ANY($1::uuid[]) ORDER BY starts_at,id",[descending])).rows;
+ assert.deepEqual(unchanged,precisionRows.map(({id,raw})=>({id,raw})),'The successful read must not normalize away original database precision.');actor=a;
+ groups.push('accepted 0203 returns HTTP 200 and published-millisecond/UUID ordering on original colliding microsecond rows without fixture normalization or relaxed validation');
  const exact=booking.prepareClassBooking({...scope(a.students[0]),sessionId:a.sessions[0]},'REGULAR',randomUUID());lose=true;await assert.rejects(booking.submitClassBooking(exact),e=>e instanceof booking.ClassBookingUncertainError);const recovered=await booking.submitClassBooking(exact);assert.equal(recovered.replayed,true);assert.equal((await q('SELECT count(*)::int n FROM hon.class_bookings WHERE class_session_id=$1 AND student_profile_id=$2',[a.sessions[0],a.students[0]])).rows[0].n,1);groups.push('actual commit + lost response + exact-key replay without duplicate booking');
  const duplicate=await booking.submitClassBooking(booking.prepareClassBooking({...scope(a.students[0]),sessionId:a.sessions[0]},'REGULAR',randomUUID()));assert.equal(duplicate.booking.id,recovered.booking.id);groups.push('canonical semantic duplicate prevention');
  await assert.rejects(booking.submitClassBooking(booking.prepareClassBooking({...scope(a.students[0]),sessionId:a.sessions[0]},'TRIAL',randomUUID())),denied(409));await assert.rejects(booking.submitClassBooking(booking.prepareClassBooking({...scope(a.students[1]),sessionId:a.sessions[1]},'REGULAR',randomUUID())),denied(409));groups.push('conflicting kind and cancelled session refused');
