@@ -43,6 +43,32 @@ it.each(['blur', 'pagehide', 'hon:session-invalidated', 'hon:school-context-chan
   await ready(); const area = dom(); expect(text(render())).toContain(item.email); window.dispatchEvent(new Event(event));
   expect(area.hidden).toBe(true); expect(area.inert).toBe(true); expect(text(render())).not.toContain(item.email); expect(posts).toHaveLength(0);
 });
+it.each(['blur', 'pagehide', 'hidden'])('%s before selectors are complete requires explicit same-identity restoration to selector entry', async event => {
+  render(); change('staff-org', id(1)); const area = dom(); vi.mocked(fetch).mockClear();
+  if (event === 'hidden') { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }
+  else window.dispatchEvent(new Event(event));
+  expect(area.hidden).toBe(true); expect(area.inert).toBe(true); expect(byId('staff-school')).toBeUndefined(); expect(fetch).not.toHaveBeenCalled();
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); render(); expect(area.hidden).toBe(true); expect(fetch).not.toHaveBeenCalled();
+  click('restore'); await settle(); expect(text(render())).toContain(t('en', 'IDLE')); expect(area.hidden).toBe(false); expect(area.inert).toBe(false);
+  expect(byId('staff-org').props.value).toBe(id(1)); expect(byId('staff-school').props.value).toBe(''); expect(byId('staff-role-id')).toBeUndefined(); expect(text(render())).not.toContain(item.email);
+  expect(vi.mocked(fetch).mock.calls.map(call => call[0])).toEqual(['/api/identity/me']); expect(posts).toHaveLength(0);
+  change('staff-school', id(2)); click('verify'); await settle(); expect(text(render())).toContain(t('en', 'READY')); expect(text(render())).toContain(item.email); expect(posts).toHaveLength(0);
+});
+it('privacy before any selector input restores only blank selectors after an explicit identity check', async () => {
+  render(); const area = dom(); window.dispatchEvent(new Event('blur')); expect(byId('staff-org')).toBeUndefined(); click('restore'); await settle();
+  expect(area.hidden).toBe(false); expect(byId('staff-org').props.value).toBe(''); expect(byId('staff-school').props.value).toBe(''); expect(byId('staff-role-id')).toBeUndefined();
+  expect(vi.mocked(fetch).mock.calls.map(call => call[0])).toEqual(['/api/identity/me']); expect(posts).toHaveLength(0);
+});
+it.each([401, 403])('identity %s during incomplete-selector recovery keeps selectors concealed', async status => {
+  render(); change('staff-org', id(1)); const area = dom(), event = vi.fn(); window.addEventListener('hon:session-invalidated', event); window.dispatchEvent(new Event('blur')); identityStatus = status;
+  click('restore'); await settle(); expect(area.hidden).toBe(true); expect(area.inert).toBe(true); expect(byId('staff-school')).toBeUndefined(); expect(posts).toHaveLength(0);
+  expect(text(render())).toContain(t('en', status === 401 ? 'SESSION' : 'DENIED')); expect(event).toHaveBeenCalledTimes(status === 401 ? 1 : 0);
+});
+it('a changed subject cannot restore incomplete selectors; only a later explicit matching identity can', async () => {
+  render(); change('staff-org', id(1)); const area = dom(); window.dispatchEvent(new Event('pagehide')); subject = 'manager-b'; click('restore'); await settle();
+  expect(area.hidden).toBe(true); expect(text(render())).toContain(t('en', 'IDENTITY')); expect(byId('staff-org')).toBeUndefined();
+  subject = 'manager-a'; expect(area.hidden).toBe(true); click('restore'); await settle(); expect(area.hidden).toBe(false); expect(text(render())).toContain(t('en', 'IDLE')); expect(byId('staff-school')).toBeDefined(); expect(posts).toHaveLength(0);
+});
 it('a late ignored-cancellation list response cannot repopulate concealed information', async () => {
   render(); change('staff-org', id(1)); change('staff-school', id(2)); let finish!: (r: Response) => void; list = () => new Promise(resolve => { finish = resolve; });
   click('verify'); await settle(); const area = dom(); window.dispatchEvent(new Event('blur')); finish(data([item])); await settle();

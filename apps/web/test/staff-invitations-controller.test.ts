@@ -22,6 +22,34 @@ it('does not invent role discovery or accept malformed school selectors', async 
   await c.verify({ ...scope, schoolId: 'forged' }); expect(api.list).not.toHaveBeenCalled(); expect(c.snapshot().errorCode).toBe('ACCOUNT_INPUT_INVALID');
   await c.verify(scope); await invite(); expect(api.command).not.toHaveBeenCalled(); expect(api.role).not.toHaveBeenCalled();
 });
+it.each([undefined, { organizationId: scope.organizationId, schoolId: '' }, { organizationId: '', schoolId: 'partial' }])('explicitly restores incomplete concealed selectors through identity alone: %j', async input => {
+  c.conceal(); expect(api.identity).not.toHaveBeenCalled(); await c.verify(input);
+  expect(c.snapshot()).toMatchObject({ phase: 'IDLE', items: [], role: null, receipt: null, outcome: 'NONE', pending: false, errorCode: null });
+  expect(api.identity).toHaveBeenCalledExactlyOnceWith('staff-manager', expect.any(AbortSignal));
+  expect(api.list).not.toHaveBeenCalled(); expect(api.role).not.toHaveBeenCalled(); expect(api.command).not.toHaveBeenCalled();
+});
+it('identity-only restoration clears earlier private records and cannot authorize a role or command', async () => {
+  await ready(); c.conceal(); vi.clearAllMocks(); await c.verify({ organizationId: '', schoolId: '' });
+  expect(c.snapshot()).toMatchObject({ phase: 'IDLE', items: [], role: null, receipt: null, outcome: 'NONE', pending: false });
+  await c.loadRole(role.id, c.snapshot().revision); await invite(); expect(api.identity).toHaveBeenCalledOnce(); expect(api.list).not.toHaveBeenCalled(); expect(api.role).not.toHaveBeenCalled(); expect(api.command).not.toHaveBeenCalled();
+});
+it.each([[401, 'SIGN_IN_REQUIRED', 'SESSION'], [403, 'ACCOUNT_IDENTITY_CHANGED', 'IDENTITY'], [403, 'ACCOUNT_FORBIDDEN', 'DENIED'], [503, 'ACCOUNT_UNAVAILABLE', 'UNAVAILABLE']] as const)('incomplete-selector restoration fails closed on identity %s %s', async (status, code, phase) => {
+  c.conceal(); vi.mocked(api.identity).mockRejectedValueOnce(new StaffAccountError(status, code)); await c.verify();
+  expect(c.snapshot()).toMatchObject({ phase, items: [], role: null, receipt: null, pending: false, errorCode: code });
+  expect(api.list).not.toHaveBeenCalled(); expect(api.role).not.toHaveBeenCalled(); expect(api.command).not.toHaveBeenCalled(); expect(event).not.toHaveBeenCalled();
+});
+it('retired identity-only restoration cannot reopen concealed selector entry', async () => {
+  c.conceal(); let finish!: () => void; vi.mocked(api.identity).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const task = c.verify(); await tick(); expect(c.snapshot().phase).toBe('READING'); const signal = vi.mocked(api.identity).mock.calls[0]![1];
+  c.conceal(); finish(); await task; expect(signal.aborted).toBe(true); expect(c.snapshot().phase).toBe('CONCEALED'); expect(api.list).not.toHaveBeenCalled();
+});
+it('incomplete selectors cannot release or move an UNKNOWN command capsule', async () => {
+  await ready(); vi.mocked(api.command).mockRejectedValueOnce(Error('lost')); await invite(); const original = vi.mocked(api.command).mock.calls[0]![0]; c.conceal(); vi.clearAllMocks();
+  await c.verify(); await c.verify({ organizationId: id(8), schoolId: id(9) }); await c.retry(c.snapshot().revision);
+  expect(c.snapshot()).toMatchObject({ phase: 'CONCEALED', pending: true, outcome: 'UNKNOWN', items: [], role: null, receipt: null });
+  expect(api.identity).not.toHaveBeenCalled(); expect(api.list).not.toHaveBeenCalled(); expect(api.command).not.toHaveBeenCalled();
+  await c.verify(scope); await c.retry(c.snapshot().revision); expect(vi.mocked(api.command).mock.calls[0]![0]).toBe(original); expect(c.snapshot().outcome).toBe('SUCCESS');
+});
 it('a known role is read through its exact organization/school before it can be selected', async () => {
   await ready(); expect(api.role).toHaveBeenCalledWith(scope, role.id, expect.any(AbortSignal)); expect(c.snapshot().role).toEqual(role);
   expect(api.command).not.toHaveBeenCalled();

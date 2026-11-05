@@ -1,3 +1,9 @@
+## PR #138 — explicit recovery before school selectors are complete
+
+- [x] Restore selector entry only after an explicit matching-subject identity check when privacy concealed incomplete selectors and no command is retained. Return IDLE with no school authorization, private records or list/role/command read; retain all original pending/UNKNOWN scope and retry boundaries.
+- Hosted run `42003409620`, job `127164059514`, timed out while filling the concealed school selector. Reproduce the controller and mounted lifecycle deadlock before correcting it; keep privacy events enabled and add browser foreground/conditional restoration plus bounded failure diagnostics. No backend/schema/provider changes.
+- Before correction, 16 new controller/mounted lifecycle regressions failed and 42 tests passed. After correction, all 81 focused tests, web TypeScript, harness syntax and whitespace checks pass. Fresh exact-head hosted blank/partial-selector, privacy, signed-session API/PostgreSQL and full browser evidence remains pending; no local mounted-browser/database pass is claimed.
+
 ## Sprint 2 — staff invitation native-browser fault verification
 
 - Preserve the existing frontend draft and normally incorporate Claude's reconciled #135 `7d1134ac2ea98f791b5a30291c3ebe0b1e1c9ef0`, including accepted main through0203. API/packages/infra match that backend source exactly;196 historical checksum-locked migrations are unchanged.

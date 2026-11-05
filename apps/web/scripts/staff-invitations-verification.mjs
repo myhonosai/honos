@@ -29,7 +29,7 @@ const session = { mode: 'OIDC', audience: 'hon-staff-frontend-disposable', secre
 const origin = 'http://127.0.0.1:3000';
 Object.assign(process.env, { HON_AUTH_MODE: session.mode, HON_SESSION_AUDIENCE: session.audience, HON_SESSION_JWT_SECRET: session.secret, HON_PUBLIC_ORIGIN: origin });
 const database = new RuntimeDatabaseService(), admin = new Client({ connectionString: owner.href, ssl: false });
-const actualFetch = globalThis.fetch, groups = [], browserCases = []; let app, next, browser, actor, lostResponse = false, nextLog = '', sends = [];
+const actualFetch = globalThis.fetch, groups = [], browserCases = []; let app, next, browser, actor, lostResponse = false, nextLog = '', sends = [], activeBrowserPage, browserDiagnostic;
 const results = process.env.HON_STAFF_INVITATIONS_RESULTS; assert(results && resolve(results) === results && !results.startsWith(repo + '/'));
 await mkdir(results, { recursive: true });
 const pass = name => { groups.push(name); console.log('PASS STAFF FRONTEND ' + name); };
@@ -170,13 +170,37 @@ try {
   browser = await chromium.launch({ executablePath: process.env.HON_STAFF_INVITATIONS_CHROME, headless: true });
   const { staffInvitationText: t } = await import(await compile('apps/web/src/components/staff-invitations/copy.ts'));
   const blockedFonts = new Set();
+  async function foreground(page, language, acceptance = false) {
+    await page.bringToFront(); const status = page.getByTestId('staff-account-status');
+    if (await status.textContent() === t(language, 'CONCEALED')) {
+      await page.getByRole('button', { name: t(language, 'restore'), exact: true }).click();
+      await status.filter({ hasText: t(language, acceptance ? 'READY' : 'IDLE') }).waitFor();
+    }
+  }
   for (const language of ['en', 'ko', 'es']) for (const mode of ['modern', 'classic', 'big']) for (const width of [390, 834, 1440]) {
     const school = matrices[language], context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: 'block' });
     const scope = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, school.who.externalSubject])).digest('hex');
     await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(school.who).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }, { name: design.localeCookieName(scope), value: encodeURIComponent(JSON.stringify({ ...design.DEFAULT_LOCALE, language })), url: origin, sameSite: 'Lax' }]);
     const requests = [], errors = []; await context.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin !== origin) { await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin), 'Unexpected external operation'); blockedFonts.add(u.origin); return; }
       requests.push({ path: u.pathname, method: route.request().method() }); await route.continue(); });
-    const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message)); await page.goto(origin + '/staff/team/invitations');
+    const page = await context.newPage(); activeBrowserPage = page; browserDiagnostic = { case: 'matrix-selector-entry', language, mode, width };
+    page.on('pageerror', e => errors.push(e.message)); await page.goto(origin + '/staff/team/invitations'); await foreground(page, language);
+    if (language === 'en' && mode === 'modern' && width === 390) {
+      browserDiagnostic.case = 'incomplete-selector-privacy-recovery';
+      const schoolReads = () => requests.filter(r => r.method === 'GET' && (r.path.endsWith('/staff-invitations') || r.path.includes('/staff-roles/custom/'))).length;
+      for (const entry of ['blank', 'organization-only']) {
+        if (entry === 'organization-only') await page.getByTestId('staff-org').fill(school.organizationId);
+        const reads = schoolReads(), identities = requests.filter(r => r.path === '/api/identity/me').length, commands = requests.filter(r => r.method === 'POST').length;
+        assert(await page.evaluate(() => { const area = document.querySelector('[data-testid="staff-account-private"]'); window.dispatchEvent(new Event('blur')); return area.hidden && area.inert; }));
+        await page.getByTestId('staff-account-status').filter({ hasText: t(language, 'CONCEALED') }).waitFor(); assert.equal(await page.getByTestId('staff-school').count(), 0); assert.equal(schoolReads(), reads);
+        await page.bringToFront(); await page.getByRole('button', { name: t(language, 'restore'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t(language, 'IDLE') }).waitFor();
+        assert.equal(await page.getByTestId('staff-org').inputValue(), entry === 'blank' ? '' : school.organizationId); assert.equal(await page.getByTestId('staff-school').inputValue(), ''); assert.equal(await page.getByTestId('staff-role-id').count(), 0);
+        assert.equal(schoolReads(), reads); assert.equal(requests.filter(r => r.path === '/api/identity/me').length, identities + 1); assert.equal(requests.filter(r => r.method === 'POST').length, commands);
+        await page.getByTestId('staff-org').fill('');
+      }
+      pass('mounted blur before blank or partial selectors conceals controls; explicit same-identity restoration opens only IDLE selector entry without school reads or commands');
+      browserDiagnostic.case = 'matrix-selector-entry';
+    }
     await page.getByTestId('staff-org').fill(school.organizationId); await page.getByTestId('staff-school').fill(school.schoolId);
     await page.getByRole('button', { name: t(language, 'verify'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t(language, 'READY') }).waitFor();
     await page.getByTestId('staff-role-id').fill(school.targetRole); await page.getByRole('button', { name: t(language, 'loadRole'), exact: true }).click(); await page.getByText('Front desk', { exact: true }).waitFor();
@@ -224,12 +248,12 @@ try {
       const recipientScope = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, recipient.externalSubject])).digest('hex');
       await acceptContext.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(recipient).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }, { name: design.localeCookieName(recipientScope), value: encodeURIComponent(JSON.stringify({ ...design.DEFAULT_LOCALE, language })), url: origin, sameSite: 'Lax' }]);
       await acceptContext.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin === origin) return route.continue(); await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin)); });
-      const acceptPage = await acceptContext.newPage(); await acceptPage.goto(origin + '/account/staff-invitation');
+      const acceptPage = await acceptContext.newPage(); activeBrowserPage = acceptPage; browserDiagnostic.case = 'recipient-acceptance'; await acceptPage.goto(origin + '/account/staff-invitation'); await foreground(acceptPage, language, true);
       await acceptPage.getByRole('button', { name: t(language, 'verifyAccept'), exact: true }).click(); await acceptPage.getByTestId('staff-invitation-id').fill(inviteId); await acceptPage.getByTestId('staff-token').fill(privateToken); await acceptPage.getByTestId('staff-confirm').check();
       await acceptPage.getByRole('button', { name: t(language, 'accept'), exact: true }).click(); await acceptPage.getByRole('heading', { name: t(language, 'success'), exact: true }).waitFor();
       assert.equal((await q('SELECT count(*) n FROM hon.principal_role_grants g JOIN hon.principals p ON p.id=g.principal_id JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1 AND g.school_id=$2 AND g.role_id=$3', [recipient.externalSubject, school.schoolId, school.targetRole]))[0].n, '1');
       await acceptPage.addScriptTag({ content: axe }); const acceptanceScan = await acceptPage.evaluate(() => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })); assert.deepEqual(acceptanceScan.violations.map(v => v.id), []);
-      await acceptPage.screenshot({ path: join(results, `staff-acceptance-${language}-390.png`), fullPage: true }); await acceptContext.close();
+      await acceptPage.screenshot({ path: join(results, `staff-acceptance-${language}-390.png`), fullPage: true }); await acceptContext.close(); activeBrowserPage = page; browserDiagnostic.case = 'matrix-restoration'; await page.bringToFront();
       // Capture receipts with the private handoff concealed; no token belongs in an artifact.
       await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.getByRole('button', { name: t(language, 'restore'), exact: true }).click(); await page.getByRole('heading', { name: t(language, 'success'), exact: true }).waitFor();
     }
@@ -243,7 +267,7 @@ try {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     const setActor = who => context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(who).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }]);
     await setActor(A.who); await context.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin === origin) return route.continue(); await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin)); });
-    const page = await context.newPage(); await page.goto(origin + '/staff/team/invitations');
+    const page = await context.newPage(); activeBrowserPage = page; browserDiagnostic = { case: 'silent-session-switch', language: 'en', mode: 'modern', width: 1280 }; await page.goto(origin + '/staff/team/invitations'); await foreground(page, 'en');
     await page.getByTestId('staff-org').fill(A.organizationId); await page.getByTestId('staff-school').fill(A.schoolId); await page.getByRole('button', { name: t('en', 'verify'), exact: true }).click();
     await page.getByTestId('staff-role-id').fill(A.targetRole); await page.getByRole('button', { name: t('en', 'loadRole'), exact: true }).click(); await page.getByText('Front desk', { exact: true }).waitFor();
     const recipient = person('silent-session-switch');
@@ -270,6 +294,14 @@ try {
   await writeFile(join(results, 'staff-invitations-report.json'), JSON.stringify({ sourceSha, groups, browserCases, protectedTables: protectedTables.length, actualNextNestSignedSessionsAndPostgres: true, externalOidcLoginVerified: false, syntheticFixtureDataOnly: true,
     screenshots: browserCases.length + 3, acceptanceBrowserFlows: 3, commandFaultInjection: 'Native browser fetch after verified 200; no APIRequestContext command proxy', localePreferenceSource: 'Scoped synthetic locale cookie and actual unavailable-remote fallback; server language persistence not exercised', blockedStaticFonts: [...blockedFonts], externalPageRequestsAllowed: 0, providerCalls: 0, deliveryPerformed: false }, null, 2) + '\n');
   console.log(JSON.stringify({ passed: true, groups: groups.length, browserCases: browserCases.length, protectedTables: protectedTables.length }));
+} catch (error) {
+  if (activeBrowserPage && browserDiagnostic) {
+    const status = await activeBrowserPage.getByTestId('staff-account-status').textContent().catch(() => null);
+    const evidence = { ...browserDiagnostic, status: typeof status === 'string' ? status.slice(0, 400) : 'UNAVAILABLE' };
+    console.error('STAFF FRONTEND BROWSER FAILURE ' + JSON.stringify(evidence));
+    await writeFile(join(results, 'staff-browser-failure.json'), JSON.stringify(evidence, null, 2) + '\n').catch(() => {});
+  }
+  throw error;
 } finally {
   globalThis.fetch = actualFetch;
   try { await browser?.close(); } finally {

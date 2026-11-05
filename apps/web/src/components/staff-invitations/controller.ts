@@ -41,11 +41,16 @@ export class StaffInvitationController {
   private error(e: unknown): StaffAccountError { return e instanceof StaffAccountError ? e : new StaffAccountError(503, 'ACCOUNT_UNAVAILABLE'); }
   async verify(input?: StaffScope): Promise<void> {
     if (!this.mounted || this.state.commandBusy || this.state.phase === 'READING') return;
-    let scope: StaffScope | null = null;
+    let scope: StaffScope | null = null, selectorEntry = false;
     if (!this.acceptance) {
       try { scope = Object.freeze({ organizationId: accountUuid(input?.organizationId), schoolId: accountUuid(input?.schoolId) }); }
-      catch { this.update({ errorCode: 'ACCOUNT_INPUT_INVALID' }); return; }
-      if (this.pending && (this.pending.request.scope?.schoolId !== scope.schoolId || this.pending.request.scope.organizationId !== scope.organizationId)) return;
+      catch {
+        if (this.pending || this.state.phase === 'IDLE' || this.state.phase === 'READY') { this.update({ errorCode: 'ACCOUNT_INPUT_INVALID' }); return; }
+        // An explicit restore can reopen incomplete selector entry after the
+        // original identity is proven. It grants no school access or recovery.
+        selectorEntry = true; this.scope = null;
+      }
+      if (this.pending && scope && (this.pending.request.scope?.schoolId !== scope.schoolId || this.pending.request.scope.organizationId !== scope.organizationId)) return;
     }
     this.read?.abort(); const controller = new AbortController(); this.read = controller;
     this.privateClear('READING'); const revision = this.state.revision, lifetime = this.lifetime;
@@ -53,6 +58,7 @@ export class StaffInvitationController {
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(12000)]);
     try {
       await this.api.identity(this.subject, signal); if (!current()) return;
+      if (selectorEntry) { this.update({ phase: 'IDLE', items: [], role: null, receipt: null, outcome: 'NONE', errorCode: null, pending: false }); return; }
       const items = scope ? await this.api.list(scope, signal) : []; if (!current()) return;
       await this.api.identity(this.subject, signal); if (!current()) return;
       this.scope = scope;
