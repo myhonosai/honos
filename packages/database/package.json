@@ -17,7 +17,7 @@
     "db:test-curriculum": "node scripts/test-curriculum-integrity.mjs",
     "db:test-booking": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-booking-integrity.mjs",
     "db:setup-class-sessions-read": "node scripts/setup-class-sessions-read-validation.mjs",
-    "db:test-class-sessions-read": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-sessions-read-integrity.mjs",
+    "db:test-class-sessions-read": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-sessions-read-integrity.mjs && node scripts/test-class-sessions-read-microsecond-order.mjs",
     "db:setup-flexible-billing-accounts": "node scripts/setup-flexible-billing-accounts-validation.mjs",
     "db:test-flexible-billing-accounts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-flexible-billing-account-integrity.mjs",
     "db:test-billing-account-crm-draft-compatibility": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-billing-account-crm-draft-compatibility-integrity.mjs",
