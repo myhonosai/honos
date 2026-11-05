@@ -127,7 +127,7 @@ Owner policy, confirmed 2026-10-24: an approved pilot or demonstration exception
 - **Atomic binding** (`hon.provision_school_from_hq_human`, the only runtime entry point): the database resolves the actor from the verified session subject and refuses before any write unless it is exactly the expected principal (`409 HQ_EXPECTED_PRINCIPAL_MISMATCH`). This covers a browser whose session changed between the screen's check and the POST, and a replay under another principal.
 - **Authority order**: the authority rule from 0185 (active human principal, the user's only active principal, HQ owner or an HQ grant carrying `hq.onboarding.manage`) is judged on `clock_timestamp()` with the identity rows share-locked, and checked again after the last durable write and before a replay is returned. A grant that ends or is removed meanwhile rolls back the organization, entitlement, school, role, grant, audit, outbox and request claim (`403 HQ_PROVISIONING_FORBIDDEN`).
 - **Receipt**: `{ data: { organizationId, schoolId, ownerRoleId, replayed, actorPrincipalId, entitlementStatus }, meta: { replayed } }`, `201` new / `200` replayed. `actorPrincipalId` always equals the expected principal; `entitlementStatus` is read when the response is produced (`SUSPENDED` for a new school: no operating access). The API checks this shape closed and returns `503` on drift.
-- **Errors** carry codes only: `403 HQ_PROVISIONING_FORBIDDEN`, `409 HQ_EXPECTED_PRINCIPAL_MISMATCH`, `409 HQ_PROVISIONING_CONFLICT` (key reused for a different request, or slug taken), `409 HQ_PROVISIONING_IN_PROGRESS`, `400 HQ_PROVISIONING_INPUT_INVALID`, `400 HQ_EXPECTED_PRINCIPAL_REQUIRED`, `409 IDEMPOTENCY_KEY_REQUIRED`, `503 HQ_PROVISIONING_UNAVAILABLE`. Before this change, database refusals surfaced as `500`.
+- **Errors** carry a fixed code (and, for a few, a fixed generic `detail` sentence); database detail never reaches the client: `403 HQ_PROVISIONING_FORBIDDEN`, `409 HQ_EXPECTED_PRINCIPAL_MISMATCH`, `409 HQ_PROVISIONING_CONFLICT` (key reused for a different request, or slug taken), `409 HQ_PROVISIONING_IN_PROGRESS`, `400 HQ_PROVISIONING_INPUT_INVALID`, `400 HQ_EXPECTED_PRINCIPAL_REQUIRED`, `409 IDEMPOTENCY_KEY_REQUIRED`, `503 HQ_PROVISIONING_UNAVAILABLE`. Before this change, database refusals surfaced as `500`.
 - Runtime can no longer execute the 11-argument `hon.provision_school_from_hq` or `hon.hq_provisioning_actor`; disposable fixtures still call the 11-argument function as the migration owner.
 
 ## Security boundary
@@ -176,7 +176,7 @@ Nothing in `0185` updates an existing entitlement, subscription, renewal, lifeti
 
 ## For Codex (frontend)
 
-**HQ onboarding.** The response shape is unchanged. Explain that a new school has no access until it pays or an HQ owner grants an exception.
+**HQ onboarding.** The response adds `actorPrincipalId` and `entitlementStatus` (section 5), and the POST needs the section 5 headers. Explain that a new school has no access until it pays or an HQ owner grants an exception.
 
 **HQ exceptions screen.** Use the four routes above.
 - Show the lifecycle, scope, purpose, start, expiry and the "no AI credits" line.

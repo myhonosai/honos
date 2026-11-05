@@ -236,23 +236,29 @@ try{
   await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'PRIVATE_DIRECTORY')",[late.user,late.subject,`${late.user}@example.test`]);
   await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)",[late.id,late.user]);
   await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_OWNER','{}',clock_timestamp()-interval '1 hour')",[late.id]);
+  // Sequences are not transactional: a trigger entry stays counted even when the command rolls back.
+  await admin.query('CREATE SEQUENCE public.d9_clock_barrier_entries');
   await admin.query('CREATE TABLE public.d9_clock_barrier_at(until timestamptz)');await admin.query('INSERT INTO public.d9_clock_barrier_at VALUES(NULL)');
   await admin.query(`CREATE FUNCTION public.d9_clock_barrier() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
    DECLARE u timestamptz; BEGIN SELECT until INTO u FROM public.d9_clock_barrier_at;
-   IF u IS NOT NULL AND NEW.event_type='organization.provisioned' THEN PERFORM pg_sleep(greatest(0,extract(epoch FROM u-clock_timestamp()))+0.02); END IF; RETURN NEW; END $$`);
+   IF u IS NOT NULL AND NEW.event_type='organization.provisioned' THEN PERFORM nextval('public.d9_clock_barrier_entries'); PERFORM pg_sleep(greatest(0,extract(epoch FROM u-clock_timestamp()))+0.02); END IF; RETURN NEW; END $$`);
   // The outbox row is the last insert; only the request-completion update follows it.
   await admin.query('CREATE TRIGGER d9_clock_barrier BEFORE INSERT ON hon.outbox_events FOR EACH ROW EXECUTE FUNCTION public.d9_clock_barrier()');
+  const entries=async()=>Number((await row('SELECT CASE WHEN is_called THEN last_value ELSE 0 END n FROM public.d9_clock_barrier_entries')).n);
+  const durable=['organizations','organization_entitlements','schools','roles','role_permissions','principal_role_grants','audit_events','outbox_events','hq_onboarding_requests'];
+  const durableCounts=async()=>Object.fromEntries(await Promise.all(durable.map(async t=>[t,(await row(`SELECT count(*)::int n FROM hon.${t}`)).n])));
   const pin=async()=>{const t=(await row("SELECT clock_timestamp()+interval '1500 milliseconds' t")).t;await admin.query('UPDATE public.d9_clock_barrier_at SET until=$1',[t]);return t;};
   try{
    // Control: intact authority completes through the same barrier.
-   let t=await pin();const kCtl=K(),slugCtl=slug('late-ctl');
+   let t=await pin();const kCtl=K(),slugCtl=slug('late-ctl');let e0=await entries();
    const ctl=await provision('late',slugCtl,'COMPLETE',kCtl);P.PL=ctl;
-   assert.ok(Date.now()>=t.getTime(),'control passed the barrier');assert.equal(ctl.actorPrincipalId,late.id);
+   assert.equal(await entries(),e0+1,'control entered the barrier');assert.ok(Date.now()>=t.getTime(),'control passed the barrier');assert.equal(ctl.actorPrincipalId,late.id);
    // The grant ends at the barrier: nothing is committed.
    t=await pin();await admin.query('UPDATE hon.hq_operator_grants SET effective_until=$2 WHERE principal_id=$1',[late.id,t]);
-   const kL=K(),slugL=slug('late');
+   const kL=K(),slugL=slug('late');const beforeLate=await durableCounts();e0=await entries();
    await deny(provision('late',slugL,'COMPLETE',kL),403,'HQ_PROVISIONING_FORBIDDEN');
-   assert.ok(Date.now()>=t.getTime(),'refused only after reaching the last write');
+   assert.equal(await entries(),e0+1,'refused only after entering the last insert');assert.ok(Date.now()>=t.getTime(),'refused only after the expiry instant');
+   assert.deepEqual(await durableCounts(),beforeLate,'every durable provisioning table rolled back');
    assert.deepEqual(await provisioningRows('late',kL,slugL),{schools:0,requests:0},'late expiry rolls back the school and the request claim');
    // The control request cannot be replayed once authority ended.
    await admin.query('UPDATE public.d9_clock_barrier_at SET until=NULL');
@@ -263,7 +269,7 @@ try{
    await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id=$1',[late.id]);
    await deny(provision('late',slugCtl,'COMPLETE',kCtl),403,'HQ_PROVISIONING_FORBIDDEN');
   }finally{
-   await admin.query('DROP TRIGGER IF EXISTS d9_clock_barrier ON hon.outbox_events');await admin.query('DROP FUNCTION IF EXISTS public.d9_clock_barrier()');await admin.query('DROP TABLE IF EXISTS public.d9_clock_barrier_at');
+   await admin.query('DROP TRIGGER IF EXISTS d9_clock_barrier ON hon.outbox_events');await admin.query('DROP FUNCTION IF EXISTS public.d9_clock_barrier()');await admin.query('DROP TABLE IF EXISTS public.d9_clock_barrier_at');await admin.query('DROP SEQUENCE IF EXISTS public.d9_clock_barrier_entries');
   }
  }
  // A second active principal on the same user is ambiguous and refused.

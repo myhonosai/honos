@@ -178,7 +178,12 @@ BEGIN
   SELECT * INTO STRICT r FROM hon.provision_school_from_hq(p_external_subject, p_legal_name, p_display_name, p_school_name,
     p_school_slug, p_timezone, p_initial_tier, p_idempotency_key, p_request_fingerprint, p_request_id, p_correlation_id);
   SELECT e.status::text INTO STRICT v_status FROM hon.organization_entitlements AS e WHERE e.organization_id = r.organization_id;
-  IF hon.hq_provisioning_actor(p_external_subject) IS DISTINCT FROM p_expected_principal_id THEN
+  -- Final decision point: authority that ended is forbidden; a different live actor is a mismatch. Both roll back.
+  actor := hon.hq_provisioning_actor(p_external_subject);
+  IF actor IS NULL THEN
+    RAISE EXCEPTION 'HON HQ tenant provisioning is not authorized for this account.' USING ERRCODE = '42501';
+  END IF;
+  IF actor <> p_expected_principal_id THEN
     RAISE EXCEPTION 'HQ_EXPECTED_PRINCIPAL_MISMATCH' USING ERRCODE = '42501';
   END IF;
   RETURN jsonb_build_object('organizationId', r.organization_id, 'schoolId', r.school_id, 'ownerRoleId', r.owner_role_id,
