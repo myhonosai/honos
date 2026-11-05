@@ -76,7 +76,7 @@ Creation privacy now conceals/inerts the private form/receipt DOM in the same ev
 
 The earlier corrected application checkpoint passed 55 focused regressions (including catalog policy guards), all 1,351 web tests in 152 files, web typecheck/production build and 191 migration checksum validations. Three retired-read 401 cases fail against the original #112 HTTP transports and pass with the correction; the current files were restored byte-for-byte after that reproduction. The mounted harness adds 27 EN/KO/ES × presentation × width cases, synchronous DOM concealment and explicit restoration. Hosted execution is pending; the previous local socket restriction is not mounted-browser evidence.
 
-Accepted main advanced through `bb9f83f176897651aaa7a0e11949dc45aab9551d` (#122) to `029de0cadbeb047ef8e38767de4e60e460325821` (#130). Local normal merge `217938b` preserves all accepted-main API/packages/infra bytes, all 195 checksum-locked migrations including `0203_class_sessions_read_millisecond_order.sql`, and the full accepted-main TODO below this branch's reconciliation section. Frontend source, tests and harnesses are byte-identical to checkpoint `66b5adb`; the earlier 1,351-test and production-build results are retained for that unchanged frontend, not reported as fresh full runs on the latest merge.
+Accepted main advanced through `bb9f83f176897651aaa7a0e11949dc45aab9551d` (#122) to `029de0cadbeb047ef8e38767de4e60e460325821` (#130). Local normal merge `217938b` preserves all accepted-main API/packages/infra bytes, all 195 checksum-locked migrations including `0203_class_sessions_read_millisecond_order.sql`, and the full accepted-main TODO below this branch's reconciliation section. At that merge, frontend source, tests and harnesses were byte-identical to checkpoint `66b5adb`; the earlier 1,351-test and production-build results are retained for that unchanged frontend, not reported as fresh full runs on the latest merge.
 
 Fresh local checks on the merged source pass: 55 focused tests across six files, web `tsc --noEmit`, syntax checking of both HQ school-create scripts, 195 migration checksum validations and `git diff --check`. The current pnpm launcher stopped before running checks while attempting to bootstrap dependencies, so the installed Vitest/TypeScript tools and the repository's migration verifier were invoked directly with Node `v24.19.0`; the pinned Node `22.23.4` hosted run remains pending. Reproducible commands from the indicated directories:
 
@@ -92,4 +92,16 @@ node --check apps/web/scripts/hq-school-create-api-verification.mjs
 git diff --check
 ```
 
-Final published-head workspace/build/migration and real signed-session API/disposable-database/browser verification remain pending the hosted run. The separate #141 backend review/merge gate remains open; frontend identity checks do not atomically bind the command's expected principal. This evidence update changes only documentation and TODO, with no provider, deployment or merge action.
+Final published-head workspace/build/migration and real signed-session API/disposable-database/browser verification remain pending the hosted run. The separate #141 backend review/merge gate remains open; frontend identity checks do not atomically bind the command's expected principal. That evidence update changed only documentation and TODO, with no provider, deployment or merge action.
+
+## Hosted frontend-loader correction
+
+Published head `dd43b5f5d9d9900ca4e5f6cda769f24c1d51379f` has the same tree as local `cb133da`. Its [connected job `127137588905` in run `41995513902`](https://github.com/myhonosai/honos/actions/runs/41995513902/job/127137588905) completed dependency/build and fixture migration setup through `0203`, then failed during native ESM linking: `ERR_UNSUPPORTED_RESOLVE_REQUEST`, caused by `ERR_INVALID_URL` for `./session-invalidation`. The transpiled creation controller now imports that signal directly, while its data-module loader mapped only the HTTP dependency. No API proof group or browser check completed in that job.
+
+The API harness now uses `hq-school-create-frontend-loader.mjs` with an explicit signal mapping for the controller as well as both HTTP transports. The existing fixture guard, controllers, production transports and backend remain unchanged. A socket-free regression imports this exact loader under native Node ESM, verifies inert import/mount and real controller authorization, then proves creation and directory 401s share privacy invalidation. The original omitted mapping reproduces the same URL error locally; the corrected loader passes. Run it with:
+
+```bash
+node apps/web/scripts/hq-school-create-frontend-loader-check.mjs
+```
+
+Local correction checks pass: that loader regression, the existing 55 focused tests, web typecheck, syntax checks for both harnesses and the two loader files, and `git diff --check`. These checks do not verify the real API/database or mounted browser outcome; a new published-head hosted run remains required. No production source, guard, backend or #141 integration is included.

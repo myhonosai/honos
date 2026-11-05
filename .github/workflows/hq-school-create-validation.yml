@@ -83,6 +83,8 @@ jobs:
           cache: pnpm
       - run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
       - run: pnpm install --frozen-lockfile && pnpm prepare:workspace && pnpm --filter @hon/api build && pnpm --filter @hon/web build
+      - name: Check actual frontend module loading before database setup
+        run: node --test apps/web/scripts/hq-school-create-frontend-loader-check.mjs
       - name: Actual frontend transport through signed-session API and disposable PostgreSQL
         run: |
           set -euo pipefail

@@ -2,19 +2,19 @@
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { issueSession, HON_SESSION_COOKIE } from '@hon/auth';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from '../../../packages/database/scripts/flexible-billing-accounts-local-guard.mjs';
+import { loadSchoolCreateFrontend } from './hq-school-create-frontend-loader.mjs';
 
 assert.equal(process.env.HON_HQ_CREATE_API_TEST, '1');
 const urls = await requireFlexibleBillingAccountsLocalUrls(); // Includes private descriptor, exact aliases and external-execution refusal.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const apiRequire = createRequire(resolve(root, 'apps/api/package.json')), webRequire = createRequire(resolve(root, 'apps/web/package.json'));
+const apiRequire = createRequire(resolve(root, 'apps/api/package.json'));
 const dbRequire = createRequire(resolve(root, 'packages/database/package.json'));
 apiRequire('reflect-metadata');
-const { Test } = apiRequire('@nestjs/testing'), { ValidationPipe } = apiRequire('@nestjs/common'), { Client } = dbRequire('pg'), ts = webRequire('typescript');
+const { Test } = apiRequire('@nestjs/testing'), { ValidationPipe } = apiRequire('@nestjs/common'), { Client } = dbRequire('pg');
 const load = path => import(pathToFileURL(resolve(root, 'apps/api/dist', path)).href);
 const { RuntimeDatabaseService } = await load('foundation/runtime-database.service.js');
 const { HonIdentityService } = await load('foundation/hon-identity.service.js'), { HonIdentityGuard } = await load('foundation/hon-identity.guard.js');
@@ -51,15 +51,7 @@ try {
   app = module.createNestApplication({ logger: false }); app.setGlobalPrefix('v1');
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
   await app.listen(0, '127.0.0.1'); const origin = 'http://127.0.0.1:' + app.getHttpServer().address().port; process.env.HON_PUBLIC_ORIGIN = origin;
-  async function compile(path, imports = {}) {
-    let code = ts.transpileModule(await readFile(resolve(root, path), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
-    for (const [from, to] of Object.entries(imports)) for (const quote of ["'", '"']) code = code.replaceAll('from ' + quote + from + quote, 'from ' + JSON.stringify(to));
-    return 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
-  }
-  const signalUrl = await compile('apps/web/src/components/session-invalidation.ts');
-  const httpUrl = await compile('apps/web/src/components/hq-onboarding-http.ts', { './session-invalidation': signalUrl }), http = await import(httpUrl);
-  const { SchoolCreationController } = await import(await compile('apps/web/src/components/hq-onboarding-controller.ts', { './hq-onboarding-http': httpUrl }));
-  const directory = await import(await compile('apps/web/src/components/hq-school-directory-http.ts', { './session-invalidation': signalUrl, '@hon/contracts': pathToFileURL(webRequire.resolve('@hon/contracts')).href }));
+  const { http, SchoolCreationController, directory } = await loadSchoolCreateFrontend(root);
   globalThis.fetch = async (path, options = {}) => {
     assert.match(path, /^\/api\/v1\/hq\/(?:session|organizations|schools)$/); // No provider or arbitrary network bridge.
     const headers = new Headers(options.headers); headers.set('Origin', origin); headers.set('Sec-Fetch-Site', 'same-origin'); headers.set('Sec-Fetch-Mode', 'same-origin'); headers.set('Sec-Fetch-Dest', 'empty');
