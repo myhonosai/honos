@@ -1,3 +1,11 @@
+## 2026-11-03 — Lead-bound membership recovery frontend (dependency draft)
+
+- Implement actual CRM-list/journey navigation to an idle, signed-session-gated saved-memberships screen. Reuse PR #122's exact closed discovery validator; reopen each adult/child record through existing activation/date/history components, with original lead selectors retained for an authorized return. No school directory, matching, new backend or migration.
+- Explicit identity checks before/after read; distinct 401/403/404/409/503/unverifiable/empty states; synchronous session/school/focus/pagehide concealment, cancellation, late-response rejection, independent detail command ownership, EN/KO/ES, three inherited presentation modes and no sensitive browser storage.
+- Dependency branch starts at #122 `2446820575ae13cdd65284c2168003140fc5b8da`, which already contains accepted main `fac44beba30f5bec3d06d32022c6875ac7019f41`. Draft PR targets that branch; no #122/S4 merge or backend edit. All inherited 192 migrations remain byte-identical, including accepted main's 184; proposed 0200 allocation and upstream security/merge gates remain.
+- Executed locally: 120 focused regressions, 1,354 full web tests, web typecheck, production build and 192 checksum-locked migrations. New signed-session API/PostgreSQL discovery/revocation scenarios and mounted recovery browser/screenshots/axe checks await exact-head GitHub CI; local listeners/PostgreSQL/Chromium are unavailable. No environmental failure is called a pass.
+- Existing authorized bookings/attendance links remain. A verified student/session operational context and supported selector handoff are the next separate integration dependency; do not invent a route or claim a booking/benefit from this lookup. Issue #125 P3 and #121 remain separate. No provider, S4, payment, activation or production changes.
+
 ## 2026-11-02 — PR #104 dates/history integration after merged #117
 
 - Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
