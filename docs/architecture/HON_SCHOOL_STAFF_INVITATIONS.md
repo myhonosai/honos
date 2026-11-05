@@ -74,7 +74,7 @@ POST commands need an `Idempotency-Key` UUID. The contracts and validators are i
 
 ## Evidence
 
-`packages/database/scripts/test-school-staff-invitations-integrity.mjs` runs as part of `run-db-proofs.sh`, on the disposable Champions fixture. It runs 12 groups through real signed sessions, Nest, the restricted runtime role and PostgreSQL, with no provider.
+`packages/database/scripts/test-school-staff-invitations-integrity.mjs` runs as part of `run-db-proofs.sh`, on the disposable Champions fixture. It runs 14 groups through real signed sessions, Nest, the restricted runtime role and PostgreSQL, with no provider.
 
 `apps/api/test/school-staff-invitations.test.cjs` covers the contracts, the guard, the session-only email and the error mapping.
 
