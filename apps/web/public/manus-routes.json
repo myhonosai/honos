@@ -370,7 +370,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
+      "title": "HON HQ | Pricing & Offers · Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -387,6 +387,14 @@
     {
       "path": "/staff/crm/journey",
       "title": "Human CRM leads"
+    },
+    {
+      "path": "/staff/family-access",
+      "title": "HON OS | Family access"
+    },
+    {
+      "path": "/account/family-invitation",
+      "title": "HON OS | Family invitation"
     }
   ]
 }
