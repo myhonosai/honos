@@ -381,6 +381,14 @@
       "title": "HON OS | Owner invitation"
     },
     {
+      "path": "/account/staff-invitation",
+      "title": "HON OS | Accept staff invitation"
+    },
+    {
+      "path": "/staff/team/invitations",
+      "title": "HON OS | Staff invitations"
+    },
+    {
       "path": "/hq/school-owner-invitations",
       "title": "HON HQ | Owner invitations"
     },
