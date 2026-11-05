@@ -1,3 +1,40 @@
+## Sprint 2 — accepted main 0204 reconciliation
+
+- Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after the owner-authorized #135 squash; its backend tree is identical to reviewed #135 `7d1134a`. All196 migration checksums and canonical API/package/infra bytes are preserved. No backend logic is authored here.
+- Reviewed #129 production frontend remains unchanged. The prior four-job green run at `41e06bc…` is evidence for the195-migration checkpoint, not fresh verification of this196-migration composition. Publish one batch and obtain fresh final-head verification; do not repeat unchanged-head runs.
+- Existing exact retries, privacy, callback retirement and original-microsecond HTTP200 proof remain unchanged. Tracking#131; no merge/deployment/provider activation.
+
+## Sprint 2 — final accepted backend / reviewed CRM frontend integration
+
+- [x] Normally incorporate accepted main `029de0cadbeb047ef8e38767de4e60e460325821`; preserve all 195 migrations/checksums and all canonical backend/ACL source. Reviewed #126/#127/#129 production UI files remain byte-identical and are included once.
+- [x] Replace the obsolete HTTP 500 expectation with HTTP 200 on the original microsecond collision; assert published-ms/UUID order and unchanged raw timestamps, without fixture normalization or parser/grant workaround.
+- [x] Consolidate #129's overlapping CI: keep the complete four jobs and port the unique trial/journey API/browser scripts into it. Other PRs' workflows are unaffected. Local YAML, syntax, retained-proof mapping and checksum checks pass.
+- [ ] Hosted exact-head full repository, canonical PostgreSQL, commercial and API/browser/axe evidence; focused delta review and explicit owner merge approval remain required. No production/browser launch or activation is claimed.
+- Shared tracking is GitHub #131. Older checkpoints below retain historical evidence only.
+
+## Membership operations — isolated canonical-ACL integration candidate (DRAFT)
+
+- Combine exact reviewed frontend sources #126 `67e01f2a346dbdb0390824b2ebaf856f248750a1` / #127 `6241e34d9632be1cfc430fa6a6e96e26b996fab1`, current reconciled backend #122 `952f20118a867295d67a80049f9807e98541f112`, and accepted main/#128 `7096f916f5aa350876aff19e7eba5f9da6f1406b` in an isolated candidate. Original frontend and Claude branches remain unchanged; this is not backend merge approval.
+- The ACL append conflict was reconciled to Claude's final canonical file exactly after the chain integrated #128; both accepted grant/verifier and current S4 blocks are preserved without custom grant logic. Require canonical EXECUTE/verifier and a positive signed class-list read; remove the old fixture-only GRANT/403 fallback. A rollback-only revoked-grant probe must fail verification, then recover by rollback alone. Existing permission/entitlement/tenant and six canonical drift proofs remain required.
+- Preserve reviewed synchronous callback retirement, identity/tenant binding, read/reconfirmation, exact UNKNOWN URL/body/key retry and concealment unchanged. Keep the microsecond-to-millisecond HTTP 500 reproduction as an unresolved production ordering limitation; fixture normalization is not a production fix.
+- Executed locally: 123 focused tests, web typecheck and all 192 checksum validations pass; source comparisons preserve all 184 accepted-main migrations and the reviewed frontend. One complete integrated-head workflow follows (repository, canonical DB proofs, commercial, real signed API/database, mounted synthetic browser/accessibility). Final exact-head evidence is recorded in the draft PR; no historical pass is presented as fresh integrated evidence. No production, provider, activation or persistent-database operation.
+
+## 2026-11-03 — Connected student booking and attendance (dependency draft)
+
+- PR #127 P2 correction: synchronously retire submit revisions before releasing the command lock, on read replacement/failure and on deliberate abandonment. Ten added component cases reproduce five failures before the fix (including SUCCESS/CONFLICT replacement POSTs) and pass afterward; all 70 focused component/transport/handoff tests pass. Mounted React regressions and fresh exact-head CI verify retained callbacks, fresh confirmed versions and exact UNKNOWN retry without backend, migration or grant changes; final run evidence belongs in the PR report.
+- Final CI repair: normalize only synthetic class-session fixture times to avoid microsecond SQL ordering collapsing into millisecond/UUID contract ties. Add a deterministic actual signed-API reproduction and retain the ACL-denial regression. The mounted CONFLICT test must await completed reread before confirming; no production validator, backend or grant is changed. PR #128 remains the separate canonical ACL dependency.
+- Connect the verified adult/child membership-discovery student reference to the existing bounded sessions, canonical booking, and exact attendance APIs. No new backend, roster, eligibility, financial or provider logic.
+- Keep selections and exact unknown requests in private mounted memory; shield/reauthorize, prevent mounted replacement bookings, require attendance reads and versions, and preserve EN/KO/ES and Modern/Classic/Big Button.
+- Reusable workbench first committed on accepted main; connected handoff depends on #126/#122, without changing those PRs. Signed-session/disposable-DB and mounted browser evidence run in the dedicated draft-safe workflow. See docs/architecture/CONNECTED_STUDENT_BOOKING_ATTENDANCE.md for actual boundaries and dependencies.
+
+## 2026-11-03 — Lead-bound membership recovery frontend (dependency draft)
+
+- Implement actual CRM-list/journey navigation to an idle, signed-session-gated saved-memberships screen. Reuse PR #122's exact closed discovery validator; reopen each adult/child record through existing activation/date/history components, with original lead selectors retained for an authorized return. No school directory, matching, new backend or migration.
+- Explicit identity checks before/after read; distinct 401/403/404/409/503/unverifiable/empty states; synchronous session/school/focus/pagehide concealment, cancellation, late-response rejection, independent detail command ownership, EN/KO/ES, three inherited presentation modes and no sensitive browser storage.
+- Dependency branch starts at #122 `2446820575ae13cdd65284c2168003140fc5b8da`, which already contains accepted main `fac44beba30f5bec3d06d32022c6875ac7019f41`. Draft PR targets that branch; no #122/S4 merge or backend edit. All inherited 192 migrations remain byte-identical, including accepted main's 184; proposed 0200 allocation and upstream security/merge gates remain.
+- Executed locally: 120 focused regressions, 1,354 full web tests, web typecheck, production build and 192 checksum-locked migrations. New signed-session API/PostgreSQL discovery/revocation scenarios and mounted recovery browser/screenshots/axe checks await exact-head GitHub CI; local listeners/PostgreSQL/Chromium are unavailable. No environmental failure is called a pass.
+- Existing authorized bookings/attendance links remain. A verified student/session operational context and supported selector handoff are the next separate integration dependency; do not invent a route or claim a booking/benefit from this lookup. Issue #125 P3 and #121 remain separate. No provider, S4, payment, activation or production changes.
+
 ## 2026-11-02 — PR #104 dates/history integration after merged #117
 
 - Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
