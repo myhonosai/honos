@@ -7,8 +7,11 @@ on:
       - 'apps/web/src/app/hq/schools/**'
       - 'apps/web/src/components/hq-onboarding-*'
       - 'apps/web/src/components/hq-school-directory*'
+      - 'apps/web/src/components/hq-school-management-copy.ts'
       - 'apps/web/test/hq-onboarding*'
       - 'apps/web/test/hq-school-directory*'
+      - 'apps/web/test/hq-school-session-retirement*'
+      - 'apps/web/test/hq-school-management-localization*'
       - 'apps/web/scripts/hq-school-create*'
       - '.github/workflows/hq-school-create-validation.yml'
 permissions:

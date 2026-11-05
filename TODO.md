@@ -1,11 +1,48 @@
-## C-HQ-2 — guarded HQ school creation integration
+## C-HQ-2 — existing HQ school management, Sprint 2 reconciliation
 
-- [x] Mount the existing provisioning panel on `/hq/schools`; use explicit HQ-owner authorization, human confirmation, immutable owner-bound exact retries, verified creation receipts and privacy clearing. Preserve the minimized directory and all backend/contracts/migrations.
-- Provisioning uses the merged `POST /v1/hq/organizations`, with internal `initialTier: COMPLETE` only; HON OS stays one product with no public tier/price selector. D9 creates SUSPENDED entitlements without access. The HTTP receipt returns IDs/replay only, so policy copy must not claim returned entitlement/payment facts.
-- Existing contract limits: `/hq/session` exposes no onboarding capability list (owner-only UI is conservative); provisioning independently resolves `hq.onboarding.manage` but has no server human-command/origin guard. An advisory browser marker cannot supply that server protection. No new backend authority is introduced here.
-- Local evidence: all 1,078 web tests passed (140 files); 39 focused checks cover creation, directory lifecycle/coupling, minimized directory and catalog regressions. Final production web build, sequential typecheck, browser-script syntax check and whitespace check passed. Details: `docs/CODEX_HQ_SCHOOL_CREATE.md`.
-- [x] Correct the demonstrated page-coupling privacy gap: synchronously hide/inert directory facts on shared session/school/privacy events, abort/invalidate late reads, require explicit fresh restoration with pre/post current OWNER/OPERATOR principal checks, and preserve the independently mounted creation request. Coupled transport-401/late-read/retained-retry tests pass.
-- [ ] Exact-head CI and mounted desktop/mobile accessibility verification remain pending. Local loopback sockets and Chromium are refused by the sandbox (`EPERM`); no browser pass or screenshots are claimed. The existing missing server human-origin/atomic actor binding remains an operational review gate. No provider, database, commercial activation, publication or deployment.
+- [x] Preserve #112 checkpoint `2fdca2b` and normally merge accepted main `029de0cadbeb047ef8e38767de4e60e460325821` through local merge `217938b`. API/packages/infra bytes remain those of accepted main, including migration `0203`.
+- [x] Localize creation/directory EN/KO/ES; retain the shared Modern/Classic/Big Button controls and existing visual sources. Add persistent directory status and immediate DOM concealment for form/receipts, read retirement, same-owner exact UNKNOWN recovery and late retired-401 rejection.
+- [x] Re-run 55 focused frontend regressions, web typecheck, both harness syntax checks and 195 migration checksum validations locally on merged main `029de0c`. Earlier all 1,351 web tests and the production web build remain evidence for unchanged frontend source; those broader runs were not repeated for this backend-only merge. Hosted harness prepares 27 language/view/width browser/axe captures; local socket restrictions are not passing browser evidence.
+- [ ] Complete final-head hosted workspace/build/migration and signed-session API/database/browser verification, then focused independent review and owner approval. Do not infer full success from a source check.
+- [ ] Claude backend gate: canonical human-Origin enforcement and immutable expected-principal binding for legacy HQ provisioning are tracked in separate [draft #141](https://github.com/myhonosai/honos/pull/141) at `bac9cb55138733ea036be7a181e8c1f98d221f75`, pending independent review and merge. That draft is not integrated here; the accepted-main gaps remain. Creation remains suspended/no operating access, payment or AI. Frontend pre/post identity checks are not atomic command binding, and no frontend marker supplies backend authority.
+- Shared sprint tracking and dependencies: GitHub Issue #131; original #111/#129/#134 and Claude branches are preserved. No merge, deployment or provider activation.
+
+## 2026-11-02 — PR #104 dates/history integration after merged #117
+
+- Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
+- Connect a fresh authorized ACTIVE lifecycle observation to independently authorized current effective dates/history, two-step date changes, exact-request recovery, and existing bookings/attendance links. Historical receipts cannot establish current status, eligibility or payment. No automatic reads or consequential retries.
+- Complete EN/KO/ES date copy, three presentation modes, persistent accessible status, bound-stage keyboard focus, readonly handoff selectors, stale callback rejection and safe deliberate retry abandonment. Preserve merged #117 privacy/session invalidation and adult/family activation.
+- Executed local evidence: 81 focused safety/localization tests; 1,308 complete web tests in 148 files; web typecheck and production build; 184 unchanged checksum-locked migrations. Fresh final-head GitHub repository, signed-session API/disposable PostgreSQL, commercial, browser/screenshots and accessibility results remain pending publication; do not infer those results from local source checks.
+- Durable ACTIVE discovery after full reload is the next separate backend lookup dependency, already handed off to Claude on PR #104. Issue #121 remains separate. No backend, contract, migration, S4, billing, provider, entitlement or production changes.
+
+## Current full-product frontend delivery — Codex
+
+- Owner direction: preview-only PRs #101/#102 are paused; retain their work without merging preview scaffolding into production. Continue the actual application in small reviewed PRs, with Manus coordinating and Claude owning backend/S4/financial boundaries. Use Manus's [consolidated full-product backlog PR #103](https://github.com/myhonosai/honos/pull/103) for coordination; do not maintain a competing roadmap here.
+- Resume authorized membership-date issue #56 from preserved `fb767a874469bb82bf242d474f42fe3c8c09351b` on main `6ab871cd781935fc633dfec7685075b3d95432be`; retain all newer application and migration changes. Original checkpoint code is preserved, with current shared session invalidation/pagehide/school-context protection, final identity checks and narrow regression tests added.
+- Local verification: 51 focused date frontend tests, web typecheck and all 183 historical migration checksums pass. Full exact-head repository, signed-session API/disposable PostgreSQL, browser/accessibility and commercial evidence remain pending publication. No backend, migration, billing, provider, entitlement or parent-publication behavior changes.
+- #94/#95 corrected heads are independently source-reviewed; await current regular CI and owner merge authorization. #97 is AI-0 test-only evidence, not S4; its separately reported P2 connection-guard correction is required before source readiness. #90 retains its migration-ledger/policy gates. No merge, activation, paid call or deployment is authorized here.
+
+## 2026-11-02 — Connected school membership integration (in review)
+
+- Existing CRM registration and creator-visible current adult/child DRAFTs now hand off to the existing independently authorized E1a two-step activation UI without manual IDs. No backend, contract, migration, billing or provider behavior is added.
+- Activation privacy, original-identity verification, command settlement and exact-request retry protections extended; localized EN/KO/ES activation and three presentation modes. Current lifecycle observation remains distinct from historical receipt/effective status/payment.
+- Separate draft PR and exact-head CI evidence required before source merge. Local initial web suite: 1,222 passed; focused safety suite: 52 passed; web typecheck/build and 183 checksum-locked migration validation passed. New final regressions and real disposable API/browser verification are tracked in the PR, not inferred from these earlier results.
+- PR #104 remains unchanged/separate. Durable active-membership lookup after a full reload, effective-status integration, historical plan terms, financial enrollment and deployment remain dependencies. See `docs/architecture/MEMBERSHIP_ACTIVATION_GATE_CODEX_HANDOFF.md` connected-workflow section.
+
+## Connected CRM — persistent trial recovery integration
+
+- [x] Prepare explicit saved-trial list/detail reads, current-version outcome review, strict duplicate-conflict evidence and retained exact retries on top of PR #95; preserve F1 scheduling holds, F2 lead-refresh barriers, EN/KR/ES, privacy and all existing registration workflows.
+- [x] Normally incorporate accepted #107/main `dce550e7c286dcf34a8ca6beb175b39289f7c69e`, source-identical to reviewed `9e8289fc0e9485ea8f4cc4b76f3765940c8b7f52`. Preserve the reviewed frontend application code from `bc6c0188d9c0354845ac660d60052497fd736120` and run the recovery proof against this same combined checkout, without an alternate backend.
+- Local evidence: 131 focused regressions and all 1,191 web tests passed, with typecheck and 183 unchanged migration checksums. Browser/API/PostgreSQL evidence remains pending on the final published head; no local socket/database pass is claimed.
+- [ ] Verify the final reconciled PR #95 head through fresh repository/build, browser/accessibility, all 48 canonical PostgreSQL proofs and combined-source signed-session recovery tests. Earlier `bc6c0188` passed all five draft-safe jobs; that history does not establish this new head. Keep draft for independent frontend review, required regular CI and owner merge approval; entitlement-lapse policy remains a pilot gate.
+
+## Connected staff CRM operating journey — Codex (in progress)
+
+- PR #95 independent-review corrections F1/F2: retain school-scoped trial scheduling holds for this mounted lifetime across lead switches, refreshes and deliberate abandonment; retain required lead refresh until a successful authorized lead read. Add negative key/POST/preparation regressions and fresh draft-safe verification. No backend reader is invented; cross-session trial recovery and pilot readiness remain blocked.
+
+- [ ] Connect verified lead selection, internal self-assigned follow-up, trial schedule/outcome, CRM-only WON/LOST and optional registration record through existing exact-school commands. No provider, messaging, billing, membership activation or AI execution.
+- [ ] Preserve in-memory immutable exact retries, command ownership across privacy concealment, explicit session/school restoration, and honest historical receipts versus current reads. Three modes and EN/KR/ES; independent draft PR, no changes to PRs #90/#94.
+- [ ] Verify targeted interactions, complete workspace/build/migration checks, disposable security proofs and desktop/tablet/mobile browser accessibility on the final exact head. Inventory: `docs/architecture/CONNECTED_STAFF_CRM_JOURNEY.md`.
 
 ## Web production authentication startup guard — Codex
 
@@ -13,6 +50,50 @@
 
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
+
+## S4-d lost AI outcomes (UNKNOWN) and HQ owner resolution — Claude (2026-11-01, owner-authorized draft, stacked on S4-c)
+
+- Migration `0196_ai_unknown_resolution.sql` (number proposed; owner allocates). Owner decision AI-D3. Finding AI-8. Design: `docs/architecture/HON_AI_UNKNOWN_RESOLUTION_S4D.md`.
+- [x] Window-scoped counting: UNKNOWN and stale (1 hour) SENDING holds count only in the window in which they were held; in-flight calls always count.
+- [x] `resolve_ai_unknown_invocation` (human HQ owner only; RECORD_PROVIDER_COST / NO_PROVIDER_CHARGE / WRITE_OFF with closed evidence; one ledger row in the original window or none; immutable record, audit, inert outbox; idempotent; once per call) and the HQ queue read; `GET /v1/hq/ai/unknown-invocations`, `POST .../:agent/:invocationId/resolve`.
+- [x] AI-0: KF-AI8 flipped to `FIXED_BY_S4D`, replaced by INV-19 and INV-20; no open known failures remain. API test `ai-unknown-resolution.test.cjs`.
+- [ ] Codex: HQ queue and resolution screen.
+- [ ] Later slice: UNKNOWN escalation monitor (more than 5 in 24 hours pauses the organization; older than 72 hours alerts HQ).
+- [ ] Independent review; owner merge after #97, S4-a, S4-b and S4-c.
+
+## S4-c AI spend access decision and HQ pause — Claude (2026-11-01, owner-authorized draft, stacked on S4-b)
+
+- Migration `0195_ai_spend_access_decision.sql` (number proposed; owner allocates). Owner decision AI-D1 = A. Findings AI-9, AI-1. Design: `docs/architecture/HON_AI_ACCESS_DECISION_S4C.md`.
+- [x] One access decision `ai_spend_allowed(org, at, class)`: HQ pause, promotional hook (off), live exception refuses (`AI_EXCEPTION_NO_AI`), legacy unchanged, explicit mapping for every paid-access state (unknown refuses). Applied at begin, at every hold increase (before the budget check) and at B3 reservation insert. Evidence steps never gated.
+- [x] HQ emergency pause: append-only `ai_spend_pauses`, human HQ owner only, organization or platform, per class or ALL, idempotent per key; `GET/POST /v1/hq/ai/spend-pauses` with exact human-command guard.
+- [x] AI-0: KF-AI9 flipped to `FIXED_BY_S4C`, replaced by INV-16 (all three agents); INV-17 (state mapping) and INV-18 (pause) added. API test `ai-spend-pause.test.cjs`.
+- [ ] Codex: HQ pause screen and plain refusal copy on agent screens.
+- [ ] Owner decisions before the hooks do anything: promotional AI access, trial AI funding.
+- [ ] Independent review; owner merge after #97, S4-a and S4-b.
+
+## S4-b organization agent budget and lock — Claude (2026-11-01, owner-authorized draft, stacked on S4-a)
+
+- Migration `0194_ai_org_budget_lock.sql` (number proposed; owner allocates). Findings AI-2, AI-3, AI-17. Design: `docs/architecture/HON_AI_ORG_BUDGET_LOCK_S4B.md`.
+- [x] One organization agent budget: `ai_org_committed_credits` (agent-inference ledger credits in the `ai_spend_window` plus every open Marcus/Claire/Chad hold), `ai_org_ceiling` (12,000, the only literal left), `ai_budget_lock` (`ai.budget:<org>`, taken first in every prepare, before the gate row locks; see the design doc for the deadlock it avoids). The three prepares use them; refusal stays durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED`. Reserve guard trigger re-checks any hold increase (`AI_ORG_BUDGET_EXCEEDED`, 42501).
+- [x] `ai_usage_ledger.spend_class` (AGENT_INFERENCE / CREATIVE_MEDIA / HQ_INTERNAL); B3 rows backfilled and written CREATIVE_MEDIA; agent writers set AGENT_INFERENCE; planning eligibility counts agent rows only.
+- [x] AI-0: KF-AI2 and KF-AI3 flipped to `FIXED_BY_S4B`, replaced by INV-14 (all 6 arrival orders at used 11,990) and INV-15 (deterministic pg_locks serialization, 3 same-agent + 3 cross-agent pairs). KF-AI8 probe now shows the stale hold blocking both agents (still open for S4-d).
+- [ ] B3 creative reservations keep their own allowance check (closed program); the B3 budget guard is deferred to the creative-wallet slices (AI-17 keeps creative out of the agent budget).
+- [ ] Independent review; owner merge after #97 and S4-a.
+
+## S4-a durable AI usage evidence — Claude (2026-11-01, owner-authorized draft, stacked on AI-0)
+
+- Migration `0193_ai_spend_durable_evidence.sql` (number proposed; owner allocates). Owner decisions AI-D6, AI-D7. Design: `docs/architecture/HON_AI_SPEND_DURABLE_EVIDENCE_S4A.md`.
+- [x] Evidence-only actor `ai_evidence_actor`; the six `record_*`/`fail_*` functions check only tenant, requester and SENDING, so a charged result is recorded after a mid-flight lapse (AI-14). Recording ends `RESULT_RECORDED`; the approval proposal is a separate transaction under the full gate (AI-16); a lapse ends `RESULT_HELD` / `ACCESS_LAPSED` and retry binds it once after access returns (AI-D7). `ai_usage_ledger.source_invocation_id` unique per invocation (AI-5, agent rows).
+- [x] AI-0 KF-AI14 flipped to `FIXED_BY_S4A`, replaced by INV-13 (3 agents x 3 lapse kinds, failed-proposal survival, replay, duplicate ledger refusal).
+- [ ] Independent review (Manus or Codex); regular CI after mark-ready; owner merge after PR #97. Codex: web workbenches should label `RESULT_RECORDED`/`RESULT_HELD` (validators already accept them).
+
+## AI-0 spend-authority regression baseline — Claude (2026-10-31)
+
+- Test only; not the security fix. No migration, runtime, policy, provider or deployment change. Design: `docs/architecture/HON_AI_SPEND_AUTHORITY_BASELINE.md`.
+- [x] Dedicated single-use disposable fixture `hon_ai_spend_baseline_validation`; strict inventory `packages/database/scripts/ai-spend-entrypoints.json` (spend tables/functions, ledger/reservation/allowance/credit writers, 12000 ceilings, grants, programs, AI policy records); 12 invariants; fake providers only; wired into `run-db-proofs.sh` (AI-10 closed for the baseline) and `db:test-ai-spend-baseline`.
+- [x] Known failures pinned OPEN: KF-AI2 cross-agent over-commit (S4), KF-AI9 unpaid HQ COMPLETE exception reaches the provider (S4), KF-AI8 UNKNOWN hold never released and not month-scoped (AI-D3 slice), KF-AI3 same-agent race (S4; observed serialized, not reproduced), and new KF-AI14: an entitlement lapse while a call is in flight loses its usage record and leaves the hold SENDING for all three agents (S4).
+- [ ] Independent review of the draft PR, then owner merge decision. AI-D1 (S4 scope/order) stays open.
+- [ ] S4 must flip KF-AI2/AI9/AI3/AI14 to FIXED_BY_S4 and replace each probe with its invariant in the same reviewed PR; an explicit exception refusal (`AI_EXCEPTION_NO_AI`) and an organization-wide budget lock and unguarded evidence steps (record/fail after a lapse) are required.
 
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 

@@ -40,7 +40,7 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
       if (event === 'visibilitychange') { p.documentTarget.visibilityState = 'hidden'; p.documentTarget.dispatchEvent(new Event(event)); }
       else p.browser.dispatchEvent(new Event(event));
       expect(p.facts).toEqual({ hidden: true, inert: true }); expect(oldSignal.aborted).toBe(true);
-      expect(s.controller.snapshot()).toEqual({ kind: 'concealed', directory: null, busy: false });
+      expect(s.controller.snapshot()).toEqual({ kind: event === HON_SESSION_INVALIDATED_EVENT ? 'unauthorized' : 'concealed', directory: null, busy: false });
       p.browser.dispatchEvent(new Event('focus')); p.documentTarget.visibilityState = 'visible'; p.documentTarget.dispatchEvent(new Event('visibilitychange'));
       await Promise.resolve(); expect(s.api.load).toHaveBeenCalledTimes(1);
       await s.controller.load(); expect(s.api.load).toHaveBeenCalledTimes(2); expect(s.controller.snapshot().directory).toEqual(directory); p.unbind();
@@ -76,11 +76,11 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
     const creation = new SchoolCreationController(api); creation.start(); await creation.authorize();
     for (const key of Object.keys(form) as (keyof typeof form)[]) creation.edit(key, form[key]);
     api.send.mockRejectedValueOnce(new Error('unknown')); creation.confirm(true); await creation.submit(); const original = api.send.mock.calls[0]![0];
-    p.browser.addEventListener(HON_SESSION_INVALIDATED_EVENT, creation.conceal);
+    p.browser.addEventListener(HON_SESSION_INVALIDATED_EVENT, () => creation.conceal(true));
     const json = vi.fn(); vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 401, json } as unknown as Response);
     await expect(schoolCreationApi.send(createSchoolRequest(form, principal))).rejects.toMatchObject({ status: 401 });
     expect(json).not.toHaveBeenCalled(); expect(p.facts).toEqual({ hidden: true, inert: true });
-    expect(s.controller.snapshot()).toMatchObject({ kind: 'concealed', directory: null }); expect(creation.snapshot().concealed).toBe(true);
+    expect(s.controller.snapshot()).toMatchObject({ kind: 'unauthorized', directory: null }); expect(creation.snapshot().concealed).toBe(true);
     await creation.authorize(); expect(creation.snapshot().uncertain).toBe(true); creation.confirm(true); await creation.submit();
     expect(api.send.mock.calls[1]![0]).toBe(original); p.unbind(); creation.stop();
   });
@@ -90,7 +90,7 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
     p.browser.dispatchEvent(new Event('blur')); expect(p.hide).toHaveBeenCalledTimes(calls);
     const source = readFileSync('src/components/hq-school-directory.tsx', 'utf8');
     expect(source).toContain('facts.current.hidden = true; facts.current.inert = true;'); expect(source).toContain('}, [controller]);');
-    expect(source).toContain('Verify and read school directory'); expect(source).toContain('inert={state.kind');
+    expect(source).toContain("t('directoryRead')"); expect(source).toContain('inert={state.kind');
     expect(readFileSync('src/app/hq/schools/page.tsx', 'utf8')).toContain('<HqSchoolDirectory /><HqOnboardingPanel />');
   });
 });

@@ -70,7 +70,7 @@ export class MarketingAssistantService {
   async generate(context: MarketingAssistantContext, id: string): Promise<MarketingInvocationView> {
     uuid(id);
     const ref = await this.transaction(context, async (client) => (await client.query<{ data: { planId: string | null; workItemId: string; workVersion: number } | null }>('SELECT hon.marketing_planning_reference($1,$2::uuid) data', [context.externalSubject, id])).rows[0]!.data);
-    if (!ref) return this.read(context, id);
+    if (!ref) { await this.resumeRecorded(context, id); return this.read(context, id); }
     let planId = ref.planId;
     if (!planId) {
       const planned = await this.plans.plan({ ...context, idempotencyKey: id }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'marcus', modality: 'TEXT', taskClass: 'DRAFT_MARKETING', inputBudget: MARKETING_LIMITS.inputTokens, outputBudget: MARKETING_LIMITS.outputTokens, maxProviderCostMicrounits: MARKETING_LIMITS.maxProviderCostMicrounits });
@@ -89,19 +89,38 @@ export class MarketingAssistantService {
       await this.transaction(context, async (client) => { await client.query('SELECT hon.fail_marketing_invocation($1,$2::uuid,$3,$4)', [context.externalSubject, id, failure.outcome, failure.reason]); });
       return this.read(context, id);
     }
+    // S4-a transaction 1: durable usage evidence only. It never shares a transaction with draft creation,
+    // and its evidence-only check still succeeds after an entitlement lapse while the call was in flight.
+    let payload: Record<string, unknown> | null;
     try {
-      await this.transaction(context, async (client) => {
-        const payload = (await client.query<{ data: Record<string, unknown> | null }>('SELECT hon.record_marketing_result($1,$2::uuid,$3::jsonb) data', [context.externalSubject, id, JSON.stringify(result)])).rows[0]!.data;
-        if (!payload) return;
-        const proposal = await this.actions.proposeInTransaction({ ...context, idempotencyKey: `marketing-draft:${id}` }, { actionCode: 'marketing.draft.save', normalizedPayload: payload }, client);
-        if (proposal.effectiveAuthorityMode !== 'CONFIRM' || proposal.status !== 'AWAITING_APPROVAL') throw new ConflictException({ code: 'MARKETING_CONFIRM_REQUIRED' });
-        await client.query('SELECT hon.bind_marketing_proposal($1,$2::uuid,$3::uuid)', [context.externalSubject, id, proposal.id]);
-      });
+      payload = await this.transaction(context, async (client) => (await client.query<{ data: Record<string, unknown> | null }>('SELECT hon.record_marketing_result($1,$2::uuid,$3::jsonb) data', [context.externalSubject, id, JSON.stringify(result)])).rows[0]!.data);
     } catch {
       try { await this.transaction(context, async (client) => { await client.query('SELECT hon.fail_marketing_invocation($1,$2::uuid,$3,$4)', [context.externalSubject, id, 'UNKNOWN', 'PROVIDER_UNKNOWN']); }); } catch { /* In-flight durable send remains quarantined; status read reports stale SENDING as UNKNOWN. */ }
       throw new ServiceUnavailableException({ code: 'MARKETING_PERSISTENCE_UNKNOWN', detail: 'Provider outcome requires reconciliation. No resend is allowed.' });
     }
+    if (payload) await this.bindRecorded(context, id, payload);
     return this.read(context, id);
+  }
+
+  /** Re-attempts the approval proposal for a recorded or held result (for example after access returns). Never calls a provider. */
+  private async resumeRecorded(context: MarketingAssistantContext, id: string): Promise<void> {
+    const payload = await this.transaction(context, async (client) => (await client.query<{ data: Record<string, unknown> | null }>('SELECT hon.read_marketing_result_payload($1,$2::uuid) data', [context.externalSubject, id])).rows[0]!.data);
+    if (payload) await this.bindRecorded(context, id, payload);
+  }
+
+  /** S4-a transaction 2: proposal under the full access gate. A refusal never touches the recorded usage. */
+  private async bindRecorded(context: MarketingAssistantContext, id: string, payload: Record<string, unknown>): Promise<void> {
+    try {
+      await this.transaction(context, async (client) => {
+        const proposal = await this.actions.proposeInTransaction({ ...context, idempotencyKey: `marketing-draft:${id}` }, { actionCode: 'marketing.draft.save', normalizedPayload: payload }, client);
+        if (proposal.effectiveAuthorityMode !== 'CONFIRM' || proposal.status !== 'AWAITING_APPROVAL') throw new ConflictException({ code: 'MARKETING_CONFIRM_REQUIRED' });
+        await client.query('SELECT hon.bind_marketing_proposal($1,$2::uuid,$3::uuid)', [context.externalSubject, id, proposal.id]);
+      });
+    } catch (error) {
+      // Hold succeeds only when the database confirms access has lapsed; otherwise the result stays RESULT_RECORDED for retry.
+      try { await this.transaction(context, async (client) => { await client.query('SELECT hon.hold_marketing_result($1,$2::uuid)', [context.externalSubject, id]); }); } catch { throw error; }
+      throw new ForbiddenException({ code: 'MARKETING_RESULT_HELD', detail: 'The result and its usage are recorded and held. It becomes reviewable only after access returns.' });
+    }
   }
 
   /** Internal typed adapter only; no arbitrary content/action/provider parameter is accepted. */

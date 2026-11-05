@@ -270,7 +270,7 @@ try{
  const g1=await grant('owner',P.P1.organizationId,in1,kG);
  const x1=g1.exception;
  assert.deepEqual([g1.replayed,x1.lifecycle,x1.status,x1.purpose,x1.scopeTier,x1.aiCredits,x1.maxDays,x1.policyVersion,x1.grantedByPrincipalId,x1.schoolId],
-  [false,'IN_EFFECT','GRANTED','PRODUCT_DEMONSTRATION','COMPLETE','NONE',90,1,humans.owner.id,P.P1.schoolId]);
+  [false,'IN_EFFECT','GRANTED','PRODUCT_DEMONSTRATION','COMPLETE','NONE',90,2,humans.owner.id,P.P1.schoolId]);
  assert.deepEqual([x1.priorEntitlement.status,x1.grantedEntitlement.status,x1.grantedEntitlement.effectiveUntil],['SUSPENDED','ACTIVE',in1.expiresAt]);
  assert.deepEqual((await ent(P.P1.organizationId)).status,'ACTIVE');
  assert.deepEqual([g1.access.source,g1.access.capabilities],['PROVISIONED',[...contracts.SAAS_PLAN_CAPABILITIES.COMPLETE]]);

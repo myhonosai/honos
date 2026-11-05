@@ -66,6 +66,12 @@ proof() { # fixture, script, description
   summary+=("| $description | \`$script\` | pass |")
 }
 
+# AI-0 spend-authority regression baseline (test only, no fix). Single-use dedicated fixture with
+# fake providers only; known failures KF-AI2/AI9/AI14/AI8/AI3 pass only while they reproduce exactly as
+# pinned OPEN in ai-spend-entrypoints.json and must be replaced by S4 (or the approved AI-D3 slice).
+setup ai-spend-baseline HON_AI_SPEND_BASELINE_VALIDATION_TARGET hon_ai_spend_baseline_validation HON_AI_SPEND_BASELINE_ENV_FILE
+proof ai-spend-baseline test-ai-spend-authority-baseline.mjs "AI-0 spend-authority baseline: strict inventory of AI spend paths, grants and ceilings; closed credit/trial/access/payment programs; entitlement gates for all three agents; 5 known failures (open, replaced by S4 or a later approved slice)"
+
 # Public lead forms use the uniquely marked marketing fixture. Keep its descriptor
 # separate from every other proof and invoke the package's existing db:test-public-forms
 # command so it builds the current contracts/config/database/API before both proofs.
@@ -89,10 +95,12 @@ setup class-sessions-read HON_CLASS_SESSIONS_READ_VALIDATION_TARGET hon_class_se
 proof class-sessions-read test-security-boundaries.mjs "Tenant isolation, restricted runtime role, parent-family boundaries"
 proof class-sessions-read test-outbox-leases.mjs "Outbox leases never treat UNKNOWN as published"
 proof class-sessions-read test-class-sessions-read-integrity.mjs "Class Sessions current-school read boundary"
+proof class-sessions-read test-class-sessions-read-microsecond-order.mjs "Class Sessions read: signed-session HTTP 200 and one (published millisecond, UUID) order across SQL, 50-row boundary and contract"
 
 setup crm-lead-close HON_CRM_LEAD_CLOSE_VALIDATION_TARGET hon_crm_close_validation HON_CRM_LEAD_CLOSE_ENV_FILE
 proof crm-lead-close verify-rls.mjs "Forced RLS on every tracked operational table"
 proof crm-lead-close test-crm-lead-close-integrity.mjs "CRM lead close authority, atomicity and replay"
+proof crm-lead-close test-crm-trial-appointment-integrity.mjs "CRM trial appointments: one active trial per lead (new-key, cross-tab, concurrent), exact-key replay before the clock rule, direct-human reconciliation reads, revocation, outcome integrity"
 proof crm-lead-close test-platform-least-privilege.mjs "Platform least privilege: nothing in schema hon reachable through PUBLIC or Supabase client roles; injected regressions rejected"
 proof crm-lead-close test-migration-runner-safety.mjs "Migration tooling: single-runner lock, read-only db:status (current, divergent history), TLS refusal before connecting"
 proof crm-lead-close test-restore-drill.mjs "Backup/restore drill: pg_dump, total loss, pg_restore, identical data/ledger/security posture, verifiers pass on the restored database"
@@ -112,8 +120,12 @@ proof champions-club test-champions-club-leaderboard-integrity.mjs "Champions Cl
 proof champions-club test-champions-club-contests-integrity.mjs "Champions Club contests: HQ lifecycle, frozen standings, winner review, liabilities"
 proof champions-club test-champions-club-journey-integrity.mjs "Champions Club end-to-end journey: code to winner, automatic reward reconciliation, audit"
 proof champions-club test-saas-subscription-integrity.mjs "HON subscription catalog (B1): owner-only offers, atomic founder inventory, entitlement-linked records, no billing effect"
+proof champions-club test-saas-billing-utc-periods-integrity.mjs "Issue #100 (0201): SaaS billing periods are UTC calendar months from the original anchor (month-end clamping, leap years, DST, time of day) whatever the session, database default or reused pooled connection TimeZone; pre-0201 drift reproduced only with the pin removed"
+proof champions-club test-saas-billing-utc-webhook-periods.mjs "0201 on the production webhook path: monthly and annual HON OS activation and renewals at month ends, a leap day and DST days on one reused pooled session across zones and a non-UTC database default; pre-0201 drift reproduced only with pins removed; read-only operator checks find exactly the drifted rows"
 proof champions-club test-saas-invoicing-integrity.mjs "HON invoices and payment evidence (B2): gapless numbering, verified tax before issue, HQ attestation only, no collection or reward effect"
 proof champions-club test-saas-credits-integrity.mjs "HON premium credits (B3): owner-gated program, verified-cost pricing, reserve/finalize/release/expire ledger, concurrency-safe balance"
+proof champions-club test-saas-creative-wallet-integrity.mjs "HON OS creative credit wallet (CW1, 0202): school-owned wallets: 12,000 monthly window per eligible paid HON OS school, separate from the agent budget; HQ-owner rates/grants/corrections; concurrency-safe reserve/settle; actual provider cost recorded separately; top-up intents and TEST MODE exactly-once fulfillment; no provider call, no card charge"
+proof champions-club test-saas-creative-wallet-review-regressions.mjs "CW1 review regressions: exact-school isolation for two schools in one organization; school-owned allowances, purchases and locks; S4 HQ pause/access refuse new reservations but never accounting; CREATIVE_MEDIA expense separate in HQ usage; unknown provider cost stays UNKNOWN and is recorded exactly once"
 proof champions-club test-saas-refunds-rewards-integrity.mjs "HON refunds and Champions rewards (B4): 30-day first-purchase guarantee records, owner-gated reward application, alerts block fulfillment, no execution or payout"
 proof champions-club test-saas-payments-integrity.mjs "HON payments (B5, test mode, simulated Stripe): hosted checkout, signature-verified idempotent webhooks, provider-verified accounting, renewals, refunds, recovery"
 proof champions-club test-saas-school-billing-integrity.mjs "HON school billing reads (B5.1) and inactive paid-access foundation: exact-school billing.hon.view, organization billing, stable pagination, verified vs recorded, dry run with enforcement NONE"
@@ -141,6 +153,7 @@ proof flexible-billing-accounts test-crm-lead-registration-recovery-integrity.mj
 proof flexible-billing-accounts test-school-membership-plan-catalog-integrity.mjs "School membership plan catalog (0175): per-school versioned plans, immutable terms, AVAILABLE-only staff options, plan-bound adult DRAFT with exact version binding, no schedule/invoice/payment effect"
 proof flexible-billing-accounts test-crm-guardian-child-enrollment-integrity.mjs "CRM guardian/child enrollment (0176): separate guardian/child identities, explicit payer designation through the canonical account, additional children with staff-review ambiguity, one plan-bound DRAFT per child, no schedule/invoice/payment effect"
 proof flexible-billing-accounts test-membership-activation-gate-integrity.mjs "Membership activation gate (0177): two-step human preview and confirmation, runtime UPDATE revoked and settings-free transition trigger, school-scoped activate/override/cancel authority with live re-checks, identity-review override, school-local inclusive dates across DST, exact idempotency and concurrency, no payment or entitlement effect"
+proof flexible-billing-accounts test-crm-lead-membership-discovery-integrity.mjs "CRM lead membership discovery (0200, D-M1): one lead -> the memberships its own adult or guardian/child workflow created, in any lifecycle state; activation + lead-read direct-human authority, school isolation, full-family ordering, zero effects"
 proof flexible-billing-accounts test-membership-date-revision-integrity.mjs "Membership date revisions (0178): two-step human date revisions bound to immutable history by the extended settings-free trigger, owner-only retroactive authority with live re-checks, school-local inclusive dates, legacy confirmation queue and exact status totals, no-deadlock races with invoices, cancellation, renewal and retention, no payment or financial effect"
 setup crm-lead-registration HON_CRM_LEAD_REGISTRATION_VALIDATION_TARGET hon_crm_registration_validation HON_CRM_LEAD_REGISTRATION_ENV_FILE
 proof crm-lead-registration test-crm-lead-registration-integrity.mjs "CRM lead registration: direct-human scope, adult/guardian-child identity separation, idempotency, rollback, no payment or membership effect"
@@ -177,7 +190,7 @@ summary+=("| Adult CRM registration to one membership DRAFT | \`test-crm-adult-m
 /usr/lib/postgresql/16/bin/pg_ctl -D "$adult_draft_dir/pgdata" -m fast -w stop >/dev/null
 rm -f "$adult_draft_dir/$adult_draft_fixture.env"
 
-echo "All $passed disposable-database proofs passed (8 fixtures, all migrations applied)."
+echo "All $passed disposable-database proofs passed (9 fixtures, all migrations applied)."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Disposable PostgreSQL proofs"

@@ -3,19 +3,23 @@
  */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHmac } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE } from '@hon/auth';
 import { HQ_OVERVIEW_UNAVAILABLE_REASONS, validateMyLanguagePreferenceView } from '@hon/contracts';
+import { DEFAULT_LOCALE, localeCookieName, translate, translateUiText } from '@hon/design-system';
 
 assert(process.env.HON_HQ_BROWSER_LOCAL === '1' || process.env.GITHUB_ACTIONS === 'true', 'Explicit isolated browser verification required.');
 for (const key of ['DATABASE_URL', 'HON_RUNTIME_DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_SECRET_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) assert(!process.env[key], 'Database/provider credentials are forbidden.');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const requireWeb = createRequire(join(root, 'package.json'));
+const ts = requireWeb('typescript');
+const copyCode = ts.transpileModule(await readFile(join(root, 'src/components/hq-school-management-copy.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { hqSchoolText } = await import('data:text/javascript;base64,' + Buffer.from(copyCode).toString('base64'));
 assert(process.env.HON_HQ_BROWSER_TOOLS && process.env.HON_HQ_BROWSER_RESULTS && process.env.HON_HQ_CHROME_BIN);
 const requireTools = createRequire(join(process.env.HON_HQ_BROWSER_TOOLS, 'runner.cjs'));
 const { chromium } = requireTools('playwright-core');
@@ -40,7 +44,7 @@ const api = createServer(async (req, res) => {
       if (req.url === '/v1/hq/overview') send(200, { data: { overview: { ...overview, callerHqRole: f.role === 'HON_HQ_OPERATOR' ? 'OPERATOR' : 'OWNER' } } });
       else if (req.url === '/v1/hq/schools') { f.directoryReads++; f.directoryStarted?.(); if (f.directoryGate) await f.directoryGate; send(200, { data: { directory } }); }
       else if (req.url === '/v1/hq/session') { f.reads++; send(200, { data: { principalId: f.principalId ?? principalId, hqRole: f.role ?? 'HON_HQ_OWNER' } }); }
-      else if (req.url === '/v1/me/language-preference') send(200, { data: validateMyLanguagePreferenceView({ preference: { language: 'en', version: 1, updatedAt: '2026-11-01T00:00:00.000Z' }, schoolDefault: null, effective: { language: 'en', source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] }) });
+      else if (req.url === '/v1/me/language-preference') send(200, { data: validateMyLanguagePreferenceView({ preference: { language: f.language, version: 1, updatedAt: '2026-11-01T00:00:00.000Z' }, schoolDefault: null, effective: { language: f.language, source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] }) });
       else send(503, {});
       return;
     }
@@ -68,16 +72,18 @@ const app = spawn(process.execPath, [requireWeb.resolve('next/dist/bin/next'), '
 });
 let browser;
 const check = async (name, run) => { await run(); report.checks.push(name); console.log('PASS ' + name); };
-async function open(name, viewport, configure = () => {}) {
-  const f = { mode: 'ready', reads: 0, directoryReads: 0, commands: [], requests: new Map() }; configure(f); fixtures.set(name, f);
+async function open(name, viewport, configure = () => {}, language = 'en') {
+  const f = { mode: 'ready', reads: 0, directoryReads: 0, commands: [], requests: new Map(), language }; configure(f); fixtures.set(name, f);
   const context = await browser.newContext({ viewport, reducedMotion: 'reduce', serviceWorkers: 'block' });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
-  await context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject: name }, session), url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  const scope = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, name])).digest('hex');
+  await context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject: name }, session), url: origin, httpOnly: true, sameSite: 'Lax' },
+    { name: localeCookieName(scope), value: encodeURIComponent(JSON.stringify({ ...DEFAULT_LOCALE, language })), url: origin, sameSite: 'Lax' }]);
   const page = await context.newPage(); page.on('pageerror', error => report.pageErrors.push(error.message));
-  await page.goto(origin + '/hq/schools'); await page.getByRole('button', { name: 'Verify HQ-owner access', exact: true }).waitFor();
+  await page.goto(origin + '/hq/schools'); await page.getByRole('button', { name: hqSchoolText(language, 'verifyOwner'), exact: true }).waitFor();
   if (!f.directoryGate) await page.locator('[data-hq-directory-facts]').getByText('Private Synthetic School', { exact: true }).waitFor();
   const panel = page.locator('[data-school-create]');
-  return { context, page, panel, f };
+  return { context, page, panel, f, language };
 }
 async function authorize(s) {
   await s.panel.getByRole('button', { name: 'Verify HQ-owner access', exact: true }).focus();
@@ -122,6 +128,31 @@ try {
     assert.equal(s.f.reads, reads); assert.equal(s.f.directoryReads, directoryReads); assert.equal(s.f.commands.length, 0);
     await s.context.close();
   });
+  for (const language of ['en', 'ko', 'es']) for (const width of [390, 834, 1440]) for (const mode of ['Modern', 'Classic', 'Big Button']) {
+    await check(`${language}/${mode}/${width}: localized, keyboard-operable private school management`, async () => {
+      const s = await open(`localized-${language}-${width}-${mode}`, { width, height: 1000 }, () => {}, language);
+      const t = key => hqSchoolText(language, key);
+      await s.panel.getByRole('button', { name: t('verifyOwner'), exact: true }).click();
+      await s.panel.getByLabel(t('legalName'), { exact: true }).waitFor();
+      await s.panel.getByLabel(t('legalName'), { exact: true }).fill('Private Synthetic Legal Name');
+      const reads = s.f.reads, directoryReads = s.f.directoryReads;
+      await s.page.getByRole('group', { name: translate(language, 'Platform view'), exact: true }).getByRole('button', { name: translateUiText(language, mode), exact: true }).click();
+      assert.equal(s.f.reads, reads); assert.equal(s.f.directoryReads, directoryReads); assert.equal(s.f.commands.length, 0);
+      await s.panel.getByLabel(t('legalName'), { exact: true }).focus();
+      assert(await s.panel.getByLabel(t('legalName'), { exact: true }).evaluate(el => el === document.activeElement));
+      await capture(s, `localized-${language}-${width}-${mode.replaceAll(' ', '-')}`);
+      assert(await s.page.evaluate(() => {
+        const creation = document.querySelector('[data-hq-create-private]'), directory = document.querySelector('[data-hq-directory-facts]');
+        window.dispatchEvent(new Event('blur'));
+        return creation.hidden && creation.inert && directory.hidden && directory.inert;
+      }), 'Private DOM must conceal in the same event turn');
+      assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic Legal Name'));
+      await s.panel.getByRole('button', { name: t('verifyOwner'), exact: true }).click();
+      await s.panel.getByLabel(t('legalName'), { exact: true }).waitFor();
+      assert.equal(await s.panel.getByLabel(t('legalName'), { exact: true }).inputValue(), '');
+      await s.context.close();
+    });
+  }
   for (const [size, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     const s = await open('create-' + size, viewport, f => { f.mode = 'unknown'; });
     await check(size + ': mount performs only independent directory reads and offers no creation command or tier selector', async () => {

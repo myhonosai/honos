@@ -153,6 +153,10 @@
       "title": "Human membership activation only"
     },
     {
+      "path": "/staff/billing/membership-dates",
+      "title": "HON OS | Membership dates and history"
+    },
+    {
       "path": "/staff/billing/invoices",
       "title": "HON | Human Invoice Workbench"
     },
@@ -379,6 +383,10 @@
     {
       "path": "/hq/school-owner-invitations",
       "title": "HON HQ | Owner invitations"
+    },
+    {
+      "path": "/staff/crm/journey",
+      "title": "Human CRM leads"
     }
   ]
 }

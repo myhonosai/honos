@@ -1,6 +1,6 @@
 {
-  "baseline": "8c1c0af12a5d9f6030b4c53d81741d6bd511204c",
-  "chainSha256": "c80ec2889fc1049e350ddbd0e1c8b67c07ebffa9cac0da6b278d630ee71d7ec4",
+  "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
+  "chainSha256": "c38977897f8acfadc02851d68a5d5c96c6e123f8f472757e08d6d5a80806ec9a",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -45,6 +45,54 @@
     {
       "file": "0191_school_owner_invitations.sql",
       "sha256": "807b1b3017d06f59672d6158fbe9a499c801cc9dd9a7e6cf95f297f4664bf49f"
+    },
+    {
+      "file": "0192_crm_suspended_owner_read_only.sql",
+      "sha256": "fd81ffdb1ceb9de6675f30abb4ca81832daa6ee5fbeb4eb7bfc7d6efc901b542"
+    },
+    {
+      "file": "0193_ai_spend_durable_evidence.sql",
+      "sha256": "d86c6ef1def45c4402bcb9d7d76a96c04cc9bb296fb9471c3c8b8c29664b4fe5"
+    },
+    {
+      "file": "0194_ai_org_budget_lock.sql",
+      "sha256": "e1a573cb8a60ff3c2f9111ace85e6553a5142acdf938a375de8c0c855f078b3b"
+    },
+    {
+      "file": "0195_ai_spend_access_decision.sql",
+      "sha256": "08cb95ab587101cd031a003c19f3631d865676815413fb62bafc90f625adb858"
+    },
+    {
+      "file": "0196_ai_unknown_resolution.sql",
+      "sha256": "bcdfc97fc19cda882717b24d7c23add4e53cc64372bfe6f1a765403e2cacba40"
+    },
+    {
+      "file": "0197_ai_school_usage_hq_read.sql",
+      "sha256": "6676e39bf0c523d4bb88c7fd82daf8f107196c005cc29741e415e951658743f6"
+    },
+    {
+      "file": "0198_ai_team_readiness.sql",
+      "sha256": "7eb7cb3b0e64560136a783a97752772e6c67bc7695a57c89e90d6cc172e8d552"
+    },
+    {
+      "file": "0199_hon_conversation_delegation.sql",
+      "sha256": "3e7ff3b67c55bcdec206993f7610c3a1b8a4ece0645c68d9d757461d4eb5ff9b"
+    },
+    {
+      "file": "0200_crm_lead_membership_discovery.sql",
+      "sha256": "bb840d0a0ddda08540c32b59c94550c4314900753dd82fefa67b12ab0656c37c"
+    },
+    {
+      "file": "0201_saas_billing_utc_calendar_periods.sql",
+      "sha256": "ea21b3ea4b4096026da07cd4a547dc0c5c3863b1c7780dd449a375ac66fedd3b"
+    },
+    {
+      "file": "0202_hon_os_creative_credit_wallet.sql",
+      "sha256": "20cf43f41bc5bcd1702e8fbedd38e38044ff400f5a8b661464a6878a3de7fa93"
+    },
+    {
+      "file": "0203_class_sessions_read_millisecond_order.sql",
+      "sha256": "9bfb14c3b22af6d3a0d7e3a06ce7ee1e47a7a9a1286cb7d079423a2f2f5b5429"
     }
   ]
 }

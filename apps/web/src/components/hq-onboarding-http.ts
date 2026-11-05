@@ -56,9 +56,12 @@ function requireSuccess(response: Response) {
 }
 export const schoolCreationApi: SchoolCreationApi = {
   async authorize(signal) {
+    signal.throwIfAborted();
     const response = await fetch('/api/v1/hq/session', { ...options, method: 'GET', headers: { Accept: 'application/json' }, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+    signal.throwIfAborted();
     requireSuccess(response);
     const root = closed(await response.json(), ['data']);
+    signal.throwIfAborted();
     const scope = closed(root.data, ['principalId', 'hqRole']);
     // Session does not expose onboarding permission codes. Owner is the only provable UI capability.
     if (scope.hqRole !== 'HON_HQ_OWNER') throw new SchoolCreationError(403);

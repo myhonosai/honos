@@ -15,8 +15,10 @@ vi.mock('../src/components/crm-enrollment-privacy', () => ({ verifyEnrollmentSes
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: 'en', region: 'auto', timeZone: 'UTC', currencyDisplay: 'symbol' }, date: (s: string) => s }) }));
 import { MembershipActivationWorkbench } from '../src/components/membership-activation-workbench';
 import { MEMBERSHIP_ACTIVATION_OVERRIDE_CONFIRMATION } from '@hon/contracts';
+import { PlanAccessError } from '../src/components/membership-plans/http';
 import { scope, id, current, preview, receipt, envelope, rejected } from './membership-activation-fixtures';
-const render = () => { harness.cursor = 0; return MembershipActivationWorkbench({ sessionSubject: 'synthetic-staff' }); };
+let props: Parameters<typeof MembershipActivationWorkbench>[0] = { sessionSubject: 'synthetic-staff' };
+const render = () => { harness.cursor = 0; return MembershipActivationWorkbench(props); };
 const nodes = (tree: any, type: string): any[] => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(value => nodes(value, type)) : [...(tree.type === type ? [tree] : []), ...nodes(tree.props?.children, type)];
 const text = (tree: any): string => typeof tree === 'string' ? tree : Array.isArray(tree) ? tree.map(text).join('') : tree && typeof tree === 'object' ? text(tree.props?.children) : '';
 const html = () => renderToStaticMarkup(render());
@@ -31,7 +33,7 @@ async function load() {
 }
 function final() { nodes(render(), 'form')[1].props.onSubmit({ preventDefault: vi.fn() }); }
 function confirm() { final(); tick('I confirm this membership'); button('Confirm membership activation').props.onClick(); }
-beforeEach(() => { harness.slots = []; harness.cursor = 0; harness.effects = []; harness.session.mockReset().mockResolvedValue(undefined); vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
+beforeEach(() => { props = { sessionSubject: 'synthetic-staff' }; harness.slots = []; harness.cursor = 0; harness.effects = []; harness.session.mockReset().mockResolvedValue(undefined); vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' })); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('E1a explicit two-step activation lifecycle', () => {
   it('does nothing on mount, requires a preview and a separate final confirmation, and duplicate clicks submit once', async () => {
@@ -78,7 +80,8 @@ describe('E1a explicit two-step activation lifecycle', () => {
     render(); harness.effects[0]!(); await load(); confirm(); await flush(); window.dispatchEvent(new Event('blur'));
     expect(html()).toContain('Membership information hidden'); expect(html()).not.toContain('Synthetic Student'); expect(button('Verify access and resume').props.disabled).toBe(true);
     reject(new DOMException('Unknown timeout', 'TimeoutError')); await flush(); expect(button('Verify access and resume').props.disabled).toBe(false);
-    button('Verify access and resume').props.onClick(); await flush(); expect(html()).not.toContain('Membership information hidden'); expect(harness.session).toHaveBeenCalledTimes(2); expect(f).toHaveBeenCalledTimes(3);
+    button('Verify access and resume').props.onClick(); await flush(); expect(html()).not.toContain('Membership information hidden'); expect(harness.session).toHaveBeenCalledTimes(5); expect(f).toHaveBeenCalledTimes(3);
+    expect(html().match(/Session and exact-school activation access verified\./g)).toHaveLength(1);
     button('Retry exact retained activation').props.onClick(); await flush();
     expect(f.mock.calls[3]![0]).toBe(f.mock.calls[1]![0]); expect(f.mock.calls[3]![1]!.body).toBe(f.mock.calls[1]![1]!.body); expect(f.mock.calls[3]![1]!.headers).toEqual(f.mock.calls[1]![1]!.headers); expect(html()).toContain('idempotent replay');
   });
@@ -89,8 +92,84 @@ describe('E1a explicit two-step activation lifecycle', () => {
     let resolve!: (r: Response) => void; f.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     button('Verify access and resume').props.onClick(); await flush(); window.dispatchEvent(new Event('blur')); resolve(envelope(current, false, true)); await flush(); expect(html()).toContain('Membership information hidden');
   });
+  it('announces failed restoration even when a real 401 simultaneously invalidates its read epoch', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview()));
+    render(); harness.effects[0]!(); await load(); window.dispatchEvent(new Event('blur'));
+    harness.session.mockImplementationOnce(async () => { window.dispatchEvent(new Event('hon:session-invalidated')); throw new PlanAccessError('expired'); });
+    button('Verify access and resume').props.onClick(); await flush();
+    expect(html()).toContain('Access could not be verified. Information remains hidden.'); expect(html()).not.toContain('Synthetic Student');
+    expect(button('Verify access and resume').props.disabled).toBe(false); expect(f).toHaveBeenCalledOnce();
+  });
+  it('a superseded restoration cannot insert its error into a newer authorized attempt', async () => {
+    let refuseOld!: (value: Error) => void, finishNew!: (value: Response) => void;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview())).mockImplementationOnce(() => new Promise(done => { finishNew = done; }));
+    render(); harness.effects[0]!(); await load(); window.dispatchEvent(new Event('blur'));
+    harness.session.mockImplementationOnce(() => new Promise((_, reject) => { refuseOld = reject; }));
+    button('Verify access and resume').props.onClick(); await flush(); window.dispatchEvent(new Event('blur'));
+    button('Verify access and resume').props.onClick(); await flush(); refuseOld(new Error('old network outcome')); await flush();
+    expect(html()).not.toContain('Access could not be verified. Information remains hidden.');
+    finishNew(envelope(current, false, true)); await flush();
+    expect(html()).toContain('Current membership observation'); expect(html()).not.toContain('Access could not be verified. Information remains hidden.');
+  });
   it('does not shield an empty view and ignores a late preview for edited selectors', async () => {
     let resolve!: (r: Response) => void; const f = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     render(); harness.effects[0]!(); window.dispatchEvent(new Event('blur')); expect(html()).not.toContain('Membership information hidden'); await load(); fill('Already-known membership ID', id('9')); resolve(envelope(preview())); await flush(); expect(html()).not.toContain('Synthetic Student'); expect(f).toHaveBeenCalledTimes(1);
+  });
+  it('binds CRM selectors without an automatic read and refuses selector editing', async () => {
+    props = { ...props, initialMembership: scope, onReturn: vi.fn() };
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValue(envelope(preview()));
+    render(); expect(f).not.toHaveBeenCalled();
+    expect(field('Already-known membership ID').props.readOnly).toBe(true);
+    fill('Already-known membership ID', id('9')); expect(field('Already-known membership ID').props.value).toBe(scope.membershipId);
+    nodes(render(), 'form')[0].props.onSubmit({ preventDefault: vi.fn() }); await flush();
+    expect(f.mock.calls[0]![0]).toContain(scope.membershipId); expect(harness.session.mock.calls.every(call => call[0] === 'synthetic-staff')).toBe(true);
+  });
+  it('requires the original identity before dispatch and never reports a new unknown command when preflight failed', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview())); await load();
+    harness.session.mockRejectedValueOnce(new Error('identity changed')); confirm(); await flush();
+    expect(f).toHaveBeenCalledTimes(1); expect(html()).toContain('No activation request was sent.');
+    expect(button('Retry exact retained activation')).toBeUndefined(); expect(html()).not.toContain('Membership confirmation receipt');
+  });
+  it('preserves the exact unknown request when a later retry fails session verification before dispatch', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview())).mockRejectedValueOnce(new DOMException('timeout', 'TimeoutError'));
+    render(); harness.effects[0]!(); await load(); confirm(); await flush();
+    const original = f.mock.calls[1]!; harness.session.mockRejectedValueOnce(new PlanAccessError('expired'));
+    button('Retry exact retained activation').props.onClick(); await flush(); expect(f).toHaveBeenCalledTimes(2);
+    f.mockResolvedValueOnce(envelope(current, false, true)); button('Verify access and resume').props.onClick(); await flush();
+    expect(button('Retry exact retained activation')).toBeDefined();
+    f.mockResolvedValueOnce(envelope(receipt(), true)); button('Retry exact retained activation').props.onClick(); await flush();
+    expect(f.mock.calls[3]![0]).toBe(original[0]); expect(f.mock.calls[3]![1]!.body).toBe(original[1]!.body); expect(f.mock.calls[3]![1]!.headers).toEqual(original[1]!.headers);
+  });
+  it.each(['pagehide', 'hon:session-invalidated', 'hon:school-context-changed'])('%s conceals loaded facts, rejects a late read and never auto-restores', async event => {
+    let settle!: (value: Response) => void;
+    const f = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(done => { settle = done; }));
+    render(); harness.effects[0]!(); await load(); window.dispatchEvent(new Event(event));
+    settle(envelope(preview())); await flush(); expect(html()).not.toContain('Synthetic Student'); expect(html()).toContain('Membership information hidden');
+    window.dispatchEvent(new Event('focus')); await flush(); expect(f).toHaveBeenCalledTimes(1);
+  });
+  it('blocks return and discard during a command, and deliberate bound abandonment returns to an empty CRM without revealing IDs', async () => {
+    const back = vi.fn(); props = { ...props, initialMembership: scope, onReturn: back };
+    let reject!: (value: Error) => void;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview())).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    render(); harness.effects[0]!(); nodes(render(), 'form')[0].props.onSubmit({ preventDefault: vi.fn() }); await flush(); confirm(); await flush();
+    button('Return to CRM registration').props.onClick(); expect(back).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('blur'));
+    const findDiscard = (tree: any): any => !tree || typeof tree !== 'object' ? undefined : Array.isArray(tree) ? tree.map(findDiscard).find(Boolean) : tree.type?.name === 'CrmEnrollmentDiscard' ? tree : findDiscard(tree.props?.children);
+    let control = findDiscard(render()); expect(control.props.disabled).toBe(true); control.props.onDiscard(); expect(back).not.toHaveBeenCalled();
+    reject(new DOMException('Unknown', 'TimeoutError')); await flush(); control = findDiscard(render()); expect(control.props.disabled).toBe(false); control.props.onDiscard();
+    expect(back).toHaveBeenCalledOnce(); expect(html()).toContain('Membership information hidden'); expect(html()).not.toContain(scope.membershipId);
+  });
+  it('a successful current-context refresh is distinct from historical receipt or effective status', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(envelope(preview())).mockResolvedValueOnce(envelope(receipt())).mockResolvedValueOnce(envelope({ ...current, state: 'ACTIVE', version: 2 }, false, true));
+    await load(); confirm(); await flush(); button('Check current membership status').props.onClick(); await flush();
+    expect(html()).toContain('Current membership observation'); expect(html()).toContain('ACTIVE alone does not prove current effective dates, payment or agreement.'); expect(harness.session).toHaveBeenCalledTimes(6);
+  });
+  it('requires a fresh ACTIVE read for date handoff and invalidates captured handoffs on session loss or another read',async()=>{
+    const manage=vi.fn();props={...props,initialMembership:scope,onManageDates:manage};
+    const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(envelope(preview())).mockResolvedValueOnce(envelope(receipt())).mockResolvedValueOnce(envelope({...current,state:'ACTIVE',version:2},false,true));
+    await load();expect(button('Review membership dates and history')).toBeUndefined();confirm();await flush();expect(button('Review membership dates and history')).toBeUndefined();
+    button('Check current membership status').props.onClick();await flush();const old=button('Review membership dates and history').props.onClick;old();expect(manage).toHaveBeenCalledExactlyOnceWith(scope);expect(Object.isFrozen(manage.mock.calls[0]![0])).toBe(true);manage.mockClear();
+    harness.effects[0]!();window.dispatchEvent(new Event('hon:session-invalidated'));old();expect(manage).not.toHaveBeenCalled();expect(html()).toContain('Membership information hidden');
+    expect(f.mock.calls.filter(([,o])=>String(o?.method)==='POST')).toHaveLength(2);
   });
 });

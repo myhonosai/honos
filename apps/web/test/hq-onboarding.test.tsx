@@ -171,7 +171,9 @@ describe('existing HQ transport and verified receipt', () => {
     expect(html).toContain('exception requires an approved policy and verified eligibility');
     const route = readFileSync('src/app/hq/schools/page.tsx', 'utf8'); expect(route).toContain('<HqSchoolDirectory /><HqOnboardingPanel />');
     const ui = readFileSync('src/components/hq-onboarding-panel.tsx', 'utf8');
-    for (const event of ['blur', 'pagehide', 'visibilitychange', 'HON_SESSION_INVALIDATED_EVENT', 'HON_SCHOOL_CONTEXT_CHANGED_EVENT']) expect(ui).toContain(event);
+    expect(ui).toContain('bindSchoolCreationPrivacy');
+    const privacy = readFileSync('src/components/hq-onboarding-controller.ts', 'utf8');
+    for (const event of ['blur', 'pagehide', 'visibilitychange', 'HON_SESSION_INVALIDATED_EVENT', 'HON_SCHOOL_CONTEXT_CHANGED_EVENT']) expect(privacy).toContain(event);
     expect(ui).toContain('useHqModern');
     expect(ui).not.toContain('COMPLETE');
   });

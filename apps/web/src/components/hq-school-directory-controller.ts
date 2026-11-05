@@ -13,11 +13,12 @@ export class HqSchoolDirectoryController {
   private read: AbortController | null = null;
   constructor(private api: DirectoryApi = { principal: readHqSchoolDirectoryPrincipal, load: loadHqSchoolDirectory }) {}
   snapshot = () => this.view;
+  revision = (): number => this.epoch;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private update(patch: Partial<DirectoryView>) { this.view = { ...this.view, ...patch }; for (const listener of this.listeners) listener(); }
   start() { this.mounted = true; return this.load(); }
   stop() { this.mounted = false; this.conceal(); }
-  conceal = () => { ++this.epoch; this.read?.abort(); this.update({ kind: 'concealed', directory: null, busy: false }); };
+  conceal = (sessionEnded = false) => { ++this.epoch; this.read?.abort(); this.update({ kind: sessionEnded || this.view.kind === 'unauthorized' ? 'unauthorized' : 'concealed', directory: null, busy: false }); };
   private current(epoch: number) { return this.mounted && this.epoch === epoch; }
   async load() {
     if (!this.mounted || this.view.busy) return;
@@ -41,13 +42,14 @@ export class HqSchoolDirectoryController {
 
 /** Hide facts synchronously before React commits, then invalidate and clear their read state. */
 export function bindHqSchoolDirectoryPrivacy(controller: HqSchoolDirectoryController, concealDom: () => void, browser: EventTarget, documentTarget: EventTarget & { readonly visibilityState: string }): () => void {
-  const conceal = () => { concealDom(); controller.conceal(); };
-  const visibility = () => { if (documentTarget.visibilityState === 'hidden') conceal(); };
+  const conceal = (event: Event) => { concealDom(); controller.conceal(event.type === HON_SESSION_INVALIDATED_EVENT); };
+  const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); };
   const events = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
   for (const event of events) browser.addEventListener(event, conceal);
   documentTarget.addEventListener('visibilitychange', visibility);
+  visibility();
   return () => {
-    conceal();
+    conceal(new Event('unmount'));
     for (const event of events) browser.removeEventListener(event, conceal);
     documentTarget.removeEventListener('visibilitychange', visibility);
   };

@@ -164,8 +164,10 @@ export async function runFamilyBrowserChecks({ fixture, reset, open, visual, che
       if(scenario==='revoked')fixture.mode='family-denied';
       if(scenario==='scope-change'){await page.getByRole('checkbox',{name:'I understand and deliberately abandon local recovery.',exact:true}).check();await page.getByRole('button',{name:'Discard local view',exact:true}).click();await page.getByLabel('School UUID',{exact:true}).fill(id(99));assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert.equal(fixture.commands.length,0);return;}
       const button=page.getByRole('button',{name:'Verify access and resume',exact:true});await button.waitFor();await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Verify access and resume')?.disabled);
+      const expired=scenario==='expired'?page.waitForResponse(r=>new URL(r.url()).pathname==='/api/identity/me'&&r.status()===401):null;
       await button.click();
       if(scenario==='slow-command'){await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).waitFor();assert.equal(fixture.commands.length,1);}
+      else if(expired){await expired;await page.getByRole('heading',{name:'CRM information hidden',exact:true}).waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));assert.equal(await page.getByRole('heading',{name:'Family setup for Ari Stone',exact:true}).count(),0);assert.equal(fixture.commands.length,0);}
       else{await page.getByRole('main').getByRole('alert').waitFor();assert(!(await page.getByRole('main').innerText()).includes('Ari Stone'));assert.equal(await page.getByLabel('School UUID',{exact:true}).inputValue(),'');assert.equal(fixture.commands.length,0);}
     }finally{await context.close();}
   });

@@ -88,6 +88,7 @@ export function verifyHqSchoolDirectorySnapshot(value: unknown): HqSchoolDirecto
 
 /** Fixed same-origin GET: there is no selector, body, redirect follow, or cache fallback. */
 export async function loadHqSchoolDirectory(signal: AbortSignal = new AbortController().signal): Promise<HqSchoolDirectory> {
+  signal.throwIfAborted();
   const response = await fetch(PATH, {
     method: 'GET',
     credentials: 'same-origin',
@@ -98,6 +99,7 @@ export async function loadHqSchoolDirectory(signal: AbortSignal = new AbortContr
     headers: { Accept: 'application/json' },
     signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
   });
+  signal.throwIfAborted();
   if (response.status === 401) reportConfirmedSessionInvalidation();
   if (!response.ok) {
     if (response.status === 401) throw new HqSchoolDirectoryAccessError('Sign in with a verified platform HQ session to view schools.', 401);
@@ -107,6 +109,7 @@ export async function loadHqSchoolDirectory(signal: AbortSignal = new AbortContr
   let envelope: unknown;
   try {
     envelope = await response.json();
+    signal.throwIfAborted();
   } catch {
     invalid();
   }
@@ -117,16 +120,19 @@ export async function loadHqSchoolDirectory(signal: AbortSignal = new AbortContr
 
 /** Fixed resolver-backed session read; directory capability includes owners and operators. */
 export async function readHqSchoolDirectoryPrincipal(signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted();
   const response = await fetch('/api/v1/hq/session', {
     method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
     headers: { Accept: 'application/json' }, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
   });
+  signal.throwIfAborted();
   if (response.status === 401) reportConfirmedSessionInvalidation();
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) throw new HqSchoolDirectoryAccessError('Current HQ directory access could not be verified.', response.status);
     invalid();
   }
   const root = closed(await response.json(), ['data']);
+  signal.throwIfAborted();
   const scope = closed(root.data, ['principalId', 'hqRole']);
   if (scope.hqRole !== 'HON_HQ_OWNER' && scope.hqRole !== 'HON_HQ_OPERATOR') throw new HqSchoolDirectoryAccessError('Current HQ directory access could not be verified.', 403);
   return opaqueId(scope.principalId);

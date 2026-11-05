@@ -68,8 +68,13 @@ describe('public plan catalog', () => {
     expect(referenceSource).not.toContain('Public plan catalog');
     expect(referenceSource).not.toMatch(/(?:monthlyDisplayPriceUsd|premiumAiCreditPlanningAllowance|planning allowance|grant credits)/i);
     expect(hqOnboardingSource).not.toMatch(/PUBLIC_PLAN_CATALOG|DEFAULT_PUBLIC_PLAN_TIER|<select|monthlyDisplayPriceUsd|premiumAiCreditPlanningAllowance/);
-    expect(hqOnboardingSource).toContain('HON OS is one product.');
-    expect(hqOnboardingSource).toContain('This form grants no subscription, payment or AI credits.');
+    // The closed localization catalog now owns this copy; the actual panel must
+    // still render both policy keys, and the same financial guardrails apply.
+    const hqCopy = readFileSync('src/components/hq-school-management-copy.ts', 'utf8');
+    expect(hqOnboardingSource).toContain("t('productNote')");
+    expect(hqOnboardingSource).toContain("t('provisionPolicy')");
+    expect(hqCopy).toContain('HON OS is one product.');
+    expect(hqCopy).toContain('This form grants no subscription, payment or AI credits.');
     expect(hqOnboardingHttpSource).toContain("initialTier: 'COMPLETE'");
     expect(hqOnboardingHttpSource).toContain("fetch('/api/v1/hq/organizations'");
     expect(hqOnboardingHttpSource).not.toMatch(/fetch\([^)]*\/(?:subscriptions?|memberships|invoices|payments)/is);

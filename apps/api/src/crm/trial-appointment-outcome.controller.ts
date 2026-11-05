@@ -17,13 +17,14 @@ import { randomUUID } from 'node:crypto';
 import type { CommandContext } from '@hon/contracts';
 import type { Response } from 'express';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
+import { TrialAppointmentHumanUiGuard } from './trial-appointment-human-ui.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { RecordTrialAppointmentOutcomeDto } from './record-trial-appointment-outcome.dto.js';
 import { TrialAppointmentOutcomeService } from './trial-appointment-outcome.service.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/crm/appointments')
-@UseGuards(HonIdentityGuard)
+@UseGuards(TrialAppointmentHumanUiGuard, HonIdentityGuard)
 export class TrialAppointmentOutcomeController {
   constructor(
     private readonly database: RuntimeDatabaseService,
@@ -77,7 +78,7 @@ export class TrialAppointmentOutcomeController {
       idempotencyKey: normalizedIdempotencyKey,
       source: 'HUMAN_UI',
     };
-    const result = await this.outcomes.record(context, appointmentId, input);
+    const result = await this.outcomes.record(context, appointmentId, input, { externalSubject: identity.externalSubject });
 
     response.status(HttpStatus.OK);
     return {
