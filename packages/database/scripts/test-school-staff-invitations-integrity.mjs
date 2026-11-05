@@ -63,10 +63,10 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const fns=await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%school_staff%')");
- assert.equal(fns.length,10);
- for(const f of fns){const entry=['manage_school_staff_invitation','accept_school_staff_invitation','read_school_staff_invitations'].includes(f.proname);
+ assert.equal(fns.length,11);
+ for(const f of fns){const entry=['manage_school_staff_invitation','accept_school_staff_invitation','read_school_staff_invitations','read_school_staff_invitation_roles'].includes(f.proname);
   assert.equal(f.prosecdef,entry,f.proname);assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry,f.proname);}
- pass('forced deny-all RLS on new custody tables; runtime executes exactly the three fixed entry points');
+ pass('forced deny-all RLS on new custody tables; runtime executes exactly the four fixed entry points (three from 0204, role discovery from 0207)');
 
  // Fixture: two HQ-provisioned schools (each bootstraps an OWNER), a dedicated staff manager, roles.
  const hq={subject:'s2-hq-'+K()};const hqPrincipal=await human({externalSubject:hq.subject,email:K()+'@example.invalid'},'S2 synthetic HQ');
@@ -124,6 +124,41 @@ try{
   await denied(()=>send('school/staff-invitations',{identity:manager,body:invite(A.schoolId,frontDesk,'busy-'+K()+'@example.invalid')}),503);
  }finally{await blocker.query('ROLLBACK');}
  pass('IAM authority envelope: unauthorized denied before contended locks; authorized callers get explicit recoverable busy, no partial writes');
+
+ // 4b. Role discovery (0207): exactly the roles this manager may invite into at this school, nothing else, no writes.
+ const rolesPath=o=>'school/schools/'+o.schoolId+'/staff-invitation-roles';
+ const expectedRoles=async(principal,o)=>(await q('SELECT r.id FROM hon.roles r WHERE r.organization_id=$1 AND hon.school_staff_role_grantable($2,$1,$3,r.id) ORDER BY r.name,r.id',[o.organizationId,principal,o.schoolId])).map(r=>r.id);
+ {
+  const before=await counts();const found=receipt(await send(rolesPath(A),{identity:manager,method:'GET'}));assert.deepEqual(await counts(),before);
+  assert.equal(found.truncated,false);assert.deepEqual(found.roles.map(r=>r.roleId),await expectedRoles(managerPrincipal,A));
+  const ids=found.roles.map(r=>r.roleId);assert(ids.includes(frontDesk));for(const bad of [escalation,ownerRoleA,roleB,managerRoleB])assert(!ids.includes(bad));
+  const fd=found.roles.find(r=>r.roleId===frontDesk);assert.equal(fd.roleName,'FRONT_DESK');assert.deepEqual(fd.permissionCodes,['family.read','school.view']);
+  assert.deepEqual(receipt(await send(rolesPath(B),{identity:managerB,method:'GET'})).roles.map(r=>r.roleId),await expectedRoles(managerBPrincipal,B));
+  await denied(()=>send(rolesPath(A),{identity:outsider,method:'GET'}),403);
+  await denied(()=>send(rolesPath(A),{identity:managerB,method:'GET'}),403);
+  await denied(()=>send(rolesPath(B),{identity:manager,method:'GET'}),403);
+  await denied(()=>send('school/schools/not-a-uuid/staff-invitation-roles',{identity:manager,method:'GET'}),400);
+  await denied(()=>send(rolesPath(A)+'?schoolId='+B.schoolId,{identity:manager,method:'GET'}),400);
+  await assert.rejects(()=>restricted.query('SELECT hon.read_school_staff_invitation_roles($1,$2)',[null,A.schoolId]),e=>e.code==='42501');
+  await assert.rejects(()=>restricted.query('SELECT hon.read_school_staff_invitation_roles($1,$2)',['oidc:unknown:'+K(),A.schoolId]),e=>e.code==='42501');
+  // A role that gains a permission the manager lacks drops out; removing it restores the role.
+  await q('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)',[frontDesk,A.organizationId,'family.member.manage']);
+  assert(!receipt(await send(rolesPath(A),{identity:manager,method:'GET'})).roles.some(r=>r.roleId===frontDesk));
+  await q("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='family.member.manage'",[frontDesk]);
+  assert(receipt(await send(rolesPath(A),{identity:manager,method:'GET'})).roles.some(r=>r.roleId===frontDesk));
+  // Paid access fails closed for discovery too.
+  const ent=(await q('SELECT status FROM hon.organization_entitlements WHERE organization_id=$1',[A.organizationId]))[0];
+  await q("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1",[A.organizationId]);
+  try{await denied(()=>send(rolesPath(A),{identity:manager,method:'GET'}),403);}finally{await q('UPDATE hon.organization_entitlements SET status=$2 WHERE organization_id=$1',[A.organizationId,ent.status]);}
+  // Bounded: more than 100 eligible roles returns the first 100 by name with truncated=true.
+  const bulk=(await q("INSERT INTO hon.roles(organization_id,management_school_id,code,name) SELECT $1,$2,'CUSTOM_BULK_'||lpad(g::text,3,'0'),'BULK '||lpad(g::text,3,'0') FROM generate_series(1,101) g RETURNING id",[B.organizationId,B.schoolId])).map(r=>r.id);
+  try{
+   await q("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) SELECT id,$2,'school.view' FROM unnest($1::uuid[]) id",[bulk,B.organizationId]);
+   const big=receipt(await send(rolesPath(B),{identity:managerB,method:'GET'}));
+   assert.equal(big.truncated,true);assert.equal(big.roles.length,100);assert.deepEqual(big.roles.map(r=>r.roleId),(await expectedRoles(managerBPrincipal,B)).slice(0,100));
+  }finally{await q('DELETE FROM hon.role_permissions WHERE role_id=ANY($1::uuid[])',[bulk]);await q('DELETE FROM hon.roles WHERE id=ANY($1::uuid[])',[bulk]);}
+ }
+ pass('role discovery returns exactly the roles this manager may invite into at this exact school (same grantable rule, ordered, <=100 with truncated flag); outsiders, other-school managers, unknown subjects and suspended organizations are refused; read-only');
 
  // 5. Acceptance refusals.
  for(const [identity,body]of [[person('wrong-email'),accept(invA,inputA.token)],[staffA,accept(invA,tokenOf())],[{...staffA,emailVerified:undefined},accept(invA,inputA.token)]])
