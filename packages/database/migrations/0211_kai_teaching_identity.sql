@@ -325,13 +325,39 @@ END $$;
 -- this invocation and requester only). Its recorded key and metadata are kept; prepare accepts it as a legacy plan.
 -- Otherwise unchanged from 0100.
 CREATE OR REPLACE FUNCTION hon.teaching_planning_reference(p_subject text,p_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE actor uuid:=hon.require_teaching_assistant_actor(p_subject,true); i hon.teaching_ai_invocations%ROWTYPE; w hon.work_items%ROWTYPE; recorded uuid[]; plan uuid;
+DECLARE actor uuid:=hon.require_teaching_assistant_actor(p_subject,true); i hon.teaching_ai_invocations%ROWTYPE; w hon.work_items%ROWTYPE; plan uuid;
+  rec hon.idempotency_records%ROWTYPE; rec_plan text;
 BEGIN SELECT * INTO i FROM hon.teaching_ai_invocations WHERE id=p_id AND organization_id=hon.current_organization_id() AND school_id=hon.current_school_id() AND requested_by=actor FOR UPDATE; IF NOT FOUND THEN RAISE EXCEPTION 'TEACHING_INVOCATION_NOT_FOUND' USING ERRCODE='P0002'; END IF; IF i.status='SENDING' AND i.updated_at<clock_timestamp()-interval '30 seconds' THEN UPDATE hon.teaching_ai_invocations SET status='UNKNOWN',reason='PROVIDER_UNKNOWN',updated_at=clock_timestamp() WHERE id=i.id; UPDATE hon.work_items SET status='NEEDS_ATTENTION',version=version+1 WHERE id=i.work_item_id; PERFORM hon.teaching_assistant_event(i.id,'teaching.assistant.unknown'); RETURN NULL; END IF; IF i.status NOT IN('PENDING','CONFIGURATION_REQUIRED','BLOCKED') THEN RETURN NULL; END IF; SELECT * INTO STRICT w FROM hon.work_items WHERE id=i.work_item_id AND organization_id=i.organization_id AND school_id=i.school_id FOR UPDATE;
   plan := i.plan_id;
+  -- Recovery of a plan committed before prepare linked it (for example a pre-K1 'claire' plan). The only evidence is this
+  -- invocation's own completed planning outcome: requester i.requested_by, key i.id. It must name a plan for this work item
+  -- with the teaching budgets, the recorded request hash and the original successful planning audit. With no such record
+  -- and no plan for the work item, planning starts fresh. Any other state (a plan for the work item under another key or
+  -- requester, an incomplete or mismatched record, several candidates) stops here for reconciliation: no fresh plan and
+  -- no provider preparation.
   IF plan IS NULL THEN
-    SELECT array_agg(p.id) INTO recorded FROM hon.ai_invocation_plans p WHERE p.organization_id=i.organization_id AND p.school_id=i.school_id AND p.work_item_id=i.work_item_id
-      AND p.task_class='DRAFT_TEACHING' AND p.agent_key IN ('claire','kai') AND p.input_budget=4096 AND p.output_budget=1024 AND p.max_provider_cost_microunits=100000;
-    IF cardinality(recorded)=1 THEN plan := recorded[1]; END IF;
+    SELECT * INTO rec FROM hon.idempotency_records WHERE organization_id=i.organization_id AND school_id=i.school_id
+      AND principal_id=i.requested_by AND idempotency_key=i.id::text FOR SHARE;
+    IF NOT FOUND THEN
+      IF EXISTS (SELECT 1 FROM hon.ai_invocation_plans p WHERE p.organization_id=i.organization_id AND p.school_id=i.school_id AND p.work_item_id=i.work_item_id) THEN
+        RAISE EXCEPTION 'TEACHING_PLAN_EVIDENCE_CONFLICT' USING ERRCODE='23505';
+      END IF;
+    ELSE
+      IF rec.status <> 'COMPLETED' OR rec.response_body IS NULL THEN RAISE EXCEPTION 'TEACHING_PLAN_IN_PROGRESS' USING ERRCODE='40001'; END IF;
+      rec_plan := rec.response_body->'plan'->>'id';
+      IF rec_plan IS NULL OR rec_plan !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
+        RAISE EXCEPTION 'TEACHING_PLAN_EVIDENCE_CONFLICT' USING ERRCODE='23505';
+      END IF;
+      SELECT p.id INTO plan FROM hon.ai_invocation_plans p WHERE p.id=rec_plan::uuid AND p.organization_id=i.organization_id AND p.school_id=i.school_id
+        AND p.work_item_id=i.work_item_id AND p.task_class='DRAFT_TEACHING' AND p.agent_key IN ('claire','kai') AND p.modality='TEXT'
+        AND p.input_budget=4096 AND p.output_budget=1024 AND p.max_provider_cost_microunits=100000 AND p.request_hash=rec.request_fingerprint
+        AND EXISTS (SELECT 1 FROM hon.audit_events a WHERE a.organization_id=i.organization_id AND a.school_id=i.school_id
+          AND a.actor_principal_id=i.requested_by AND a.entity_id=p.id AND a.entity_type='AI_INVOCATION_PLAN' AND a.action_code='ai.invocation.plan'
+          AND a.source='HUMAN_UI' AND a.result='SUCCEEDED')
+        AND NOT EXISTS (SELECT 1 FROM hon.ai_invocation_plans q WHERE q.organization_id=i.organization_id AND q.school_id=i.school_id
+          AND q.work_item_id=i.work_item_id AND q.id<>p.id);
+      IF plan IS NULL THEN RAISE EXCEPTION 'TEACHING_PLAN_EVIDENCE_CONFLICT' USING ERRCODE='23505'; END IF;
+    END IF;
   END IF;
   IF plan IS NULL AND w.status<>'READY' THEN UPDATE hon.work_items SET status='READY',version=version+1 WHERE id=w.id RETURNING * INTO w; END IF;
   RETURN jsonb_build_object('planId',plan,'workItemId',w.id,'workVersion',w.version); END $$;
