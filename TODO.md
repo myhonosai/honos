@@ -1,3 +1,9 @@
+## Sprint 3 closure → Sprint 4 — accepted-main Account & Usage integration
+
+- [x] Normally merge actual main `685e23ef43cd9a1f16333d144d5bf05f6a90822d` after accepted #143/#147 into the existing #146 preparation. Preserve the prior prepared tree exactly, both original wallet-positive assertions and final family retry receipt barrier. No API/packages/infra delta; all 201 accepted migration files/checksums retained.
+- [ ] Publish/retarget existing draft #146 to main, run one final integrated verification plus original account API/browser positives, and request focused Manus delta review. Prior green 42128265348 is historical, not fresh final-head evidence.
+- [ ] Manus continues approved private two-school B–G acceptance. A and initial CRM intake/persistence are independently verified; full owner-device acceptance remains separate. Frontend corrections require concrete findings, not invented success or test authority.
+
 ## Sprint 3 — read-only school account and usage (incremental preparation)
 
 - [x] Publish dependent #146 application/proof `dac9b15c1703851218fab76988941e241e3effba`. Hosted run 42087632292 passed 2,984 workspace tests plus 3 fixture/diagnostic guards, types/build/200 hashes and 27 native account/browser/accessibility cases with all HON hashes unchanged. The integration job remains **FAILED**: both mandatory no-subscription wallet200 cases receive503; restricted PostgreSQL confirms SQLSTATE55000 / UNASSIGNED_PERIOD_RECORD. Claude owns the additive correction; no dummy subscription or relaxed assertion. Keep source review, backend acceptance, final integrated verification and real-owner acceptance separate. The [operator checklist](docs/OWNER_OPERATIONAL_CHECKLIST.md) preserves #143's failure and #145's four complete flows; #145 must not merge.
