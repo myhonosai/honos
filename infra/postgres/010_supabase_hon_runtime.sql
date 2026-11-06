@@ -2219,3 +2219,19 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.provision_school_from_hq_human(text,uuid,text,text,text,text,text,hon.plan_tier,text,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- C2 0210 (proposed) Ask HON: the reply table is reached only through functions; internal helpers stay private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.hon_reply_invocations') IS NULL THEN RAISE EXCEPTION 'Apply C2 migration 0210 first'; END IF;
+  REVOKE ALL ON TABLE hon.hon_reply_invocations FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.hon_reply_invocations FROM '||quote_ident(r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon_reply_limits()','hon_reply_access(text)','hon_reply_planning_reference(text,uuid)','prepare_hon_reply(text,uuid,uuid,boolean)',
+      'fail_hon_reply(text,uuid,text,text)','record_hon_reply_result(text,uuid,jsonb)','release_held_hon_reply(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.hon_reply_planning_reference(text,uuid), hon.prepare_hon_reply(text,uuid,uuid,boolean), hon.fail_hon_reply(text,uuid,text,text),
+      hon.record_hon_reply_result(text,uuid,jsonb), hon.release_held_hon_reply(text,uuid) TO hon_runtime;
+  END IF;
+END $$;

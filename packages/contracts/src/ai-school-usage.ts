@@ -12,7 +12,7 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
 
 export const AI_USAGE_SPEND_CLASSES = ['AGENT_INFERENCE', 'CREATIVE_MEDIA', 'HQ_INTERNAL'] as const;
 export type AiUsageSpendClass = typeof AI_USAGE_SPEND_CLASSES[number];
-export const AI_USAGE_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP', 'UNATTRIBUTED'] as const;
+export const AI_USAGE_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP', 'HON_REPLY', 'UNATTRIBUTED'] as const;
 export type AiUsageAgent = typeof AI_USAGE_AGENTS[number];
 
 export interface AiUsageAmount {

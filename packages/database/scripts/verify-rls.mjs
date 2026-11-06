@@ -103,6 +103,7 @@ const expectedRlsTables = [
   'ai_unknown_resolutions',
   'hon_conversations',
   'hon_conversation_turns',
+  'hon_reply_invocations',
   'ai_late_provider_expenses',
   'ai_spend_pause_commands',
   'ai_invocation_plans',

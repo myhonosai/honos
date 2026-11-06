@@ -7,6 +7,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { MARKETING_PROVIDER_RUNTIME, type ProviderRuntime } from '../ai/provider-runtime.js';
 import { CLAIRE_PROVIDER_RUNTIME } from '../ai/claire-provider-runtime.js';
 import { CHAD_PROVIDER_RUNTIME } from '../ai/chad-provider-runtime.js';
+import { HON_REPLY_PROVIDER_RUNTIME } from '../ai/hon-reply-provider-runtime.js';
 
 type Readiness = { readiness(providerId: string): string };
 
@@ -22,6 +23,7 @@ export class AiTeamReadinessService {
     @Inject(MARKETING_PROVIDER_RUNTIME) private readonly marcus: ProviderRuntime,
     @Inject(CLAIRE_PROVIDER_RUNTIME) private readonly claire: Readiness,
     @Inject(CHAD_PROVIDER_RUNTIME) private readonly chad: Readiness,
+    @Inject(HON_REPLY_PROVIDER_RUNTIME) private readonly hon: Readiness,
   ) {}
   async read(context: { organizationId: string; schoolId: string; principalId: string; externalSubject: string }) {
     const requestId = randomUUID();
@@ -39,7 +41,7 @@ export class AiTeamReadinessService {
     let validated;
     try { validated = validateAiTeamReadinessRow(row); } catch { throw new ServiceUnavailableException({ code: 'AI_TEAM_READINESS_UNAVAILABLE' }); }
     if (validated.organizationId !== context.organizationId || validated.schoolId !== context.schoolId) throw new ServiceUnavailableException({ code: 'AI_TEAM_READINESS_UNAVAILABLE' });
-    const runtimes: Record<AiTeamReadyAgentKey, Readiness> = { marcus: this.marcus, claire: this.claire, chad: this.chad };
+    const runtimes: Record<AiTeamReadyAgentKey, Readiness> = { marcus: this.marcus, claire: this.claire, chad: this.chad, hon: this.hon };
     return { data: composeAiTeamReadiness(validated, (key) => (runtimes[key].readiness('OPENROUTER') === 'READY' ? 'READY' : 'CONFIGURATION_REQUIRED')), meta: { requestId, correlationId: requestId } };
   }
 }
