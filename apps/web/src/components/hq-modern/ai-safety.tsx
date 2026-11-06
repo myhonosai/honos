@@ -93,7 +93,7 @@ function PausesPanel({ list, locked, onPause, onResume }: { list: AiSpendPauseLi
           {AI_SPEND_PAUSE_CLASSES.map(value => <option key={value} value={value}>{SPEND_CLASS_LABEL[value]}</option>)}</select></label>
         <label>Reason (10–500 characters)<textarea value={form.reason} maxLength={500} rows={2} onChange={e => setForm({ ...form, reason: e.target.value, confirmed: false })} /></label>
         <label className={styles.check}><input type="checkbox" checked={form.confirmed} onChange={e => setForm({ ...form, confirmed: e.target.checked })} />
-          I understand new {SPEND_CLASS_LABEL[form.spendClass].toLowerCase()} stops for {form.scope === 'PLATFORM' ? 'every school' : 'this organization'} until a human HQ owner resumes it.</label>
+          I understand that new work in “{SPEND_CLASS_LABEL[form.spendClass]}” stops for {form.scope === 'PLATFORM' ? 'every school' : 'this organization'} until a human HQ owner resumes it.</label>
         <button type="submit" disabled={!form.confirmed}>Pause</button>
       </fieldset>
     </form>
@@ -128,7 +128,7 @@ function UnknownPanel({ queue, locked, onResolve }: { queue: AiUnknownQueue; loc
       : <ul className={styles.records}>{queue.open.map(item => <li key={item.invocationId} data-unknown={item.invocationId}>
         <strong>{AGENT_LABEL[item.agent]} · {item.status === 'UNKNOWN' ? 'result lost' : 'still marked sending'}</strong>
         <p className={shared.note}>Call {short(item.invocationId)} · school {short(item.schoolId)} · organization {short(item.organizationId)}</p>
-        <p className={shared.note}>Held {time(item.heldAt)} · {n(item.reservedCredits)} internal usage units held{item.countsAgainstCurrentWindow ? ' · counts toward this month’s included limit' : ''}</p>
+        <p className={shared.note}>{item.heldAt === null ? 'Hold time not recorded' : `Held ${time(item.heldAt)}`} · {n(item.reservedCredits)} internal usage units held{item.countsAgainstCurrentWindow ? ' · counts toward this month’s included limit' : ''}</p>
         {open !== item.invocationId
           ? <button type="button" disabled={locked} onClick={() => { setOpen(item.invocationId); setForm(EMPTY_RESOLVE); }}>Resolve</button>
           : <form className={styles.form} onSubmit={event => { event.preventDefault(); onResolve(item, form); }}>
