@@ -27,3 +27,20 @@ export function validateTeachingDraft(v: unknown): TeachingDraftContent {
   if (!closed(v, ['title', 'content']) || !teachingSafeText(v.title, 160) || !teachingSafeText(v.content, 6000)) throw new Error('INVALID_TEACHING_DRAFT');
   return { title: v.title, content: v.content };
 }
+/** One published curriculum of the caller's school, for the Kai delegation picker (GET /v1/staff/teaching-assistant/curricula). */
+export interface TeachingCurriculumOption { id: string; name: string; version: number }
+export interface TeachingCurriculumOptions { items: TeachingCurriculumOption[] }
+export const TEACHING_CURRICULUM_OPTIONS_LIMIT = 200;
+/** Closed validator: exactly { items: [{ id, name, version }] }, at most 200 unique UUID ids, positive integer versions. */
+export function validateTeachingCurriculumOptions(v: unknown): TeachingCurriculumOptions {
+  if (!closed(v, ['items']) || !Array.isArray(v.items) || v.items.length > TEACHING_CURRICULUM_OPTIONS_LIMIT) throw new Error('INVALID_TEACHING_CURRICULUM_OPTIONS');
+  const seen = new Set<string>();
+  const items = v.items.map((item: unknown): TeachingCurriculumOption => {
+    if (!closed(item, ['id', 'name', 'version']) || typeof item.id !== 'string' || !UUID.test(item.id) || seen.has(item.id.toLowerCase())
+      || typeof item.name !== 'string' || item.name.length === 0 || item.name.length > 1000
+      || typeof item.version !== 'number' || !Number.isSafeInteger(item.version) || item.version < 1) throw new Error('INVALID_TEACHING_CURRICULUM_OPTIONS');
+    seen.add(item.id.toLowerCase());
+    return { id: item.id, name: item.name, version: item.version };
+  });
+  return { items };
+}

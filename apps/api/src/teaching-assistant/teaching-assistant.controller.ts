@@ -19,6 +19,8 @@ export class TeachingAssistantController {
   private empty(value: unknown) { if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length) throw new BadRequestException({ code: 'EMPTY_COMMAND_REQUIRED' }); }
   @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Post() @HttpCode(200)
   async submit(@Req() req: HonRequest, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) { this.noQuery(query); return { data: await this.assistant.submit(await this.context(req, key ?? ''), input) }; }
+  @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Get('curricula')
+  async curricula(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { this.noQuery(query); return { data: await this.assistant.listCurricula(await this.context(req)) }; }
   @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Get('mine')
   async mine(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { this.noQuery(query); return { data: await this.assistant.listMine(await this.context(req)) }; }
   @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Get(':invocationId')

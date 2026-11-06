@@ -38,5 +38,6 @@ await client.connect();
 try {
   await client.query(`GRANT USAGE ON SCHEMA hon TO ${runtimeRole}`);
   await client.query(`GRANT EXECUTE ON FUNCTION hon.list_my_teaching_invocations(text) TO ${runtimeRole}`);
+  await client.query(`GRANT EXECUTE ON FUNCTION hon.list_teaching_assistant_curricula(text) TO ${runtimeRole}`);
 } finally { await client.end(); }
 console.log('Reset only marked hon_teaching_ai_validation on localhost using local postgres for database lifecycle and the restricted runtime for no capability beyond migration-defined fixed functions. No provider credential, gate, canonical default-privilege change, or remote target was accepted.');
