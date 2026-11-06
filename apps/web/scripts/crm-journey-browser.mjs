@@ -1,5 +1,6 @@
 /** Mounted Next/React and signed HON sessions with synthetic API fixtures. Not real database authority proof. */
 import assert from 'node:assert/strict';
+import {isSchoolShellRead} from './school-shell-reads.mjs';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {randomBytes} from 'node:crypto';
@@ -25,6 +26,8 @@ const api=createServer(async(r,s)=>{
  try{verifySession(cookieValue(r.headers.cookie,HON_SESSION_COOKIE)??'',session);}catch{send(401);return;}
  if(r.url==='/v1/me/language-preference'){assert.equal(r.method,'GET');send(200,{preference:{language:state.language,version:1,updatedAt:'2026-10-30T12:00:00.000Z'},schoolDefault:null,effective:{language:state.language,source:'PERSONAL'},supportedLanguages:['en','ko','es']},false);return;}
  if(r.url==='/v1/staff/current-reporting-school'){send(200,{state:'RESOLVED',...scope},false);return;}
+ // The school shell's own reads are not this journey's CRM reads.
+ if(isSchoolShellRead(r.method,(r.url??'').split('?')[0])){report.shellReads=(report.shellReads??0)+1;send(404);return;}
  state.reads+=r.method==='GET'?1:0;
  if(state.deny){send(403);return;}
  if(r.method==='GET'&&r.url===`/v1/organizations/${id(1)}/schools/${id(2)}/crm/leads?limit=50`){send(200,state.empty?[]:state.withSecondLead?[lead(),otherLead()]:[lead()]);return;}

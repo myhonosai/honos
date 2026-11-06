@@ -9,7 +9,7 @@ import { loadInterfaceThemePreference, saveInterfaceThemePreference } from './in
 import progressStyles from './owner-launch-progress.module.css';
 
 export function ownerDashboardHandoffPath(context: Pick<OwnerLaunchProjection, 'organizationId' | 'schoolId'>): string {
-  return `/staff/dashboard?${new URLSearchParams({ organizationId: context.organizationId, schoolId: context.schoolId }).toString()}`;
+  return `/staff/operations?${new URLSearchParams({ organizationId: context.organizationId, schoolId: context.schoolId }).toString()}`;
 }
 
 type OwnerLaunchProgressState = 'RECORDED' | 'NOT_RECORDED' | 'UNAVAILABLE';

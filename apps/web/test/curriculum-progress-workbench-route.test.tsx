@@ -2,7 +2,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<void>>() }));
+const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<{ externalSubject: string; viewKey: string }>>() }));
 vi.mock('../src/server/require-web-session', () => ({ requireVerifiedWebSession: session.require }));
 import StaffLayout from '../src/app/staff/layout';
 import StaffCurriculumProgressPage, { dynamic, metadata } from '../src/app/staff/curriculum/progress/page';
@@ -13,7 +13,7 @@ describe('protected human curriculum progress route', () => {
     const child = React.createElement('p', null, 'protected child');
     session.require.mockRejectedValueOnce(new Error('redirect:/auth/login'));
     await expect(StaffLayout({ children: child })).rejects.toThrow('redirect:/auth/login');
-    session.require.mockResolvedValueOnce(); expect(await StaffLayout({ children: child })).toBe(child);
+    session.require.mockResolvedValueOnce({ externalSubject: 'synthetic-staff', viewKey: 'k' }); expect((await StaffLayout({ children: child }) as React.ReactElement<{ children: unknown }>).props.children).toBe(child);
     expect(session.require).toHaveBeenCalledTimes(2);
   });
   it('is dynamic/noindex and sends no query, selector prefill, read or command on the route', () => {

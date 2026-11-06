@@ -1,4 +1,5 @@
 /** Real Next UI + deterministic authenticated localhost B5/B3 fixtures; never real Stripe evidence. */
+import { isSchoolShellRead } from './school-shell-reads.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -83,6 +84,7 @@ const api=createServer(async(req,res)=>{
     if(commandMode==='unknown'||commandMode==='provider-off'){fixture.state='created';send(res,commandMode==='unknown'?409:503,{code:commandMode==='unknown'?'SAAS_OUTCOME_UNKNOWN':'SAAS_PAYMENTS_NOT_CONFIGURED',private:'never-echo-private'});return;}
     fixture.state='open';const receipt=schoolCheckoutReceipt(fixture);send(res,200,{data:receipt},80);return;
   }
+  if(isSchoolShellRead(req.method,url.pathname)){report.shellReads=(report.shellReads??0)+1;send(res,404,{});return;}
   report.unexpectedRequests.push({method:req.method,path:url.pathname});send(res,404,{});
 });
 await new Promise((done,reject)=>{api.once('error',reject);api.listen(3001,'127.0.0.1',done);});

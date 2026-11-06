@@ -13,6 +13,8 @@ vi.mock('react', async () => {
       if (index >= hooks.cells.length) hooks.cells[index] = initial;
       return [hooks.cells[index], (value: unknown) => { hooks.cells[index] = typeof value === 'function' ? (value as (previous: unknown) => unknown)(hooks.cells[index]) : value; }];
     },
+    // No provider in this hook shim: every context reads its default value.
+    useContext: (context: { _currentValue: unknown }) => context._currentValue,
     useRef: (initial: unknown) => {
       const index = hooks.cursor++;
       if (index >= hooks.cells.length) hooks.cells[index] = { current: initial };
