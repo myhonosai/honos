@@ -1,7 +1,9 @@
 // C1 HON conversation delegation. A conversation belongs to one human at one school; each human turn names exactly one
 // live specialist and that specialist's own typed target. The specialist's existing service, S4 spend protections and
 // the Action Engine CONFIRM proposal do the work; nothing consequential runs without a human approval in Action Center.
-// HON writes no text of its own in this slice: a turn without a named specialist is refused, never answered.
+// C2 "Ask HON": a turn may instead be a question for HON ({ text, delegation: null }). HON answers in text from the
+// school's authorized aggregate facts and this conversation only; it can recommend but never act. Its reply is shown
+// only once the reply is COMPLETED (usage recorded first); a held, failed or unknown reply shows no text.
 import { championsExactKeys as exactKeys, championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
 import { marketingSafeText } from './marketing-assistant.js';
 import { FOLLOW_UP_DRAFT_PURPOSES, type FollowUpDraftPurpose } from './chad-follow-up-assistant.js';
@@ -16,29 +18,78 @@ export type HonDelegation =
   | { agentKey: 'marcus'; campaignId: string }
   | { agentKey: 'claire'; curriculumId: string }
   | { agentKey: 'chad'; leadId: string; expectedLeadVersion: number; purpose: FollowUpDraftPurpose };
-export interface HonTurnRequest { text: string; delegation: HonDelegation }
+/**
+ * HON reply modes (owner decision 2026-11-06 16:10Z). The human chooses the mode; the server never upgrades one. Both
+ * share the owner's hard $0.08 provider-cost ceiling per call. The planner reserves the worst case
+ * (reservedCredits = ceil((input+output)/1000)) and the result settles to the measured tokens, releasing the rest.
+ */
+export const HON_REPLY_MODES = {
+  STANDARD: { taskClass: 'SUMMARIZE', inputTokens: 8000, outputTokens: 1500, maxProviderCostMicrounits: 80000, reservedCredits: 10 },
+  DETAILED: { taskClass: 'ANALYZE', inputTokens: 11000, outputTokens: 4000, maxProviderCostMicrounits: 80000, reservedCredits: 15 },
+} as const;
+export type HonReplyMode = keyof typeof HON_REPLY_MODES;
+export const HON_REPLY_MODE_KEYS = ['STANDARD', 'DETAILED'] as const satisfies readonly HonReplyMode[];
+/** An answer cut off at its output limit may be continued by the human, at most this many steps per answer in total. */
+export const HON_REPLY_MAX_STEPS = 3;
+export const HON_REPLY_LIMITS = { questionCharacters: 2000, replyCharacters: 24000 } as const;
+export interface HonTurnRequest {
+  text: string; delegation: HonDelegation | null;
+  /** Question turns only. Defaults to STANDARD. A continuation keeps the mode of the answer it continues. */
+  replyMode?: HonReplyMode;
+  /** Question turns only: continue this turn's cut-off answer (replyDetail.canContinue). */
+  continueTurnId?: string;
+}
+/** The conversational responder of a question turn (not one of the delegate specialists). */
+export const HON_REPLY_ROLE = 'hon' as const;
+/** How a HON reply was produced. truncated: cut off at the output limit (shown as incomplete, never as complete). */
+export interface HonReplyDetail { mode: HonReplyMode; step: number; maxSteps: number; truncated: boolean; canContinue: boolean; continuesTurnId: string | null }
 export interface HonConversationCreate { title: string }
 
 export interface HonConversationSummary { id: string; title: string; createdAt: string; updatedAt: string; turnCount: number; status: HonTurnStatus }
 export interface HonConversationPage { items: HonConversationSummary[]; nextCursor: string | null }
 export interface HonConversationTurn {
-  turnId: string; role: 'HUMAN' | HonDelegateAgentKey; text: string | null; createdAt: string; status: HonTurnStatus; reason: string | null;
+  turnId: string; role: 'HUMAN' | HonDelegateAgentKey | typeof HON_REPLY_ROLE; text: string | null; createdAt: string; status: HonTurnStatus; reason: string | null;
   references: { workItemId: string | null; actionRequestId: string | null; invocationId: string | null };
+  /** HON question turns only (role 'hon'); null for the human's turn and for specialists. */
+  replyDetail: HonReplyDetail | null;
 }
 export interface HonConversationThread extends HonConversationSummary { turns: HonConversationTurn[] }
 export interface HonTurnReceipt {
   turnId: string; conversationId: string; status: HonTurnStatus; reason: string | null; delegatedAgentKeys: HonDelegateAgentKey[];
   actionRequestIds: string[]; workItemIds: string[]; invocationId: string | null;
+  /** HON's reply text for a COMPLETED question turn; null otherwise (and always null for a delegation). */
+  reply: string | null;
+  /** HON question turns only; null for a delegation. */
+  replyDetail: HonReplyDetail | null;
 }
 /** Server-confirmed composer prerequisites for this requester. The composer offers only availableAgentKeys. */
 export interface HonConversationReadiness {
-  contract: true; providerRoute: boolean; entitlement: boolean; authorization: boolean; availableAgentKeys: HonDelegateAgentKey[]; asOf: string;
+  contract: true; providerRoute: boolean; entitlement: boolean; authorization: boolean; availableAgentKeys: HonDelegateAgentKey[];
+  /** True when a question to HON would be admitted now (authorized, spend allowed, routed, runtime ready, budget left). */
+  honReply: boolean; asOf: string;
 }
 
 const fail = (code: string) => (): never => { throw new Error(code); };
 const invalid = fail('INVALID_HON_CONVERSATION_INPUT');
 const drift = fail('INVALID_HON_CONVERSATION_RESPONSE');
 const isAgent = (v: unknown): v is HonDelegateAgentKey => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(v);
+const isReply = (v: unknown): v is string => typeof v === 'string' && v.trim().length >= 1 && v.length <= HON_REPLY_LIMITS.replyCharacters;
+const isReplyDetail = (v: unknown, completed: boolean): boolean => {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
+  const d = v as Record<string, unknown>;
+  const keys = Object.keys(d).sort().join(',');
+  return keys === 'canContinue,continuesTurnId,maxSteps,mode,step,truncated'
+    && (HON_REPLY_MODE_KEYS as readonly unknown[]).includes(d.mode) && d.maxSteps === HON_REPLY_MAX_STEPS
+    && Number.isSafeInteger(d.step) && (d.step as number) >= 1 && (d.step as number) <= HON_REPLY_MAX_STEPS
+    && ((d.step === 1) === (d.continuesTurnId === null)) && (d.continuesTurnId === null || isUuid(d.continuesTurnId))
+    && typeof d.truncated === 'boolean' && typeof d.canContinue === 'boolean'
+    // Only a completed answer can be cut off or continued; the last step can never be continued.
+    && (completed || (!d.truncated && !d.canContinue)) && (!d.canContinue || (d.truncated && (d.step as number) < HON_REPLY_MAX_STEPS));
+};
+/** A COMPLETED reply whose source authority or AI access no longer holds for this reader: no text, never continued. */
+export const HON_REPLY_CONCEALED_REASON = 'RESULT_CONCEALED';
+const CONCEALED = HON_REPLY_CONCEALED_REASON;
+const completedText = (text: unknown, reason: unknown): boolean => (reason === CONCEALED ? text === null : reason === null && isReply(text));
 const isStatus = (v: unknown): v is HonTurnStatus => (HON_TURN_STATUSES as readonly unknown[]).includes(v);
 const isReason = (v: unknown): v is string | null => v === null || (typeof v === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(v));
 const uuidOrNull = (v: unknown): boolean => v === null || isUuid(v);
@@ -50,7 +101,16 @@ export function validateHonConversationCreate(value: unknown): HonConversationCr
 }
 
 export function validateHonTurnRequest(value: unknown): HonTurnRequest {
-  const r = record(value, invalid); exactKeys(r, ['text', 'delegation'], invalid);
+  const r = record(value, invalid);
+  if (r.delegation === null) {
+    exactKeys(r, ['text', 'delegation', ...('replyMode' in r ? ['replyMode'] : []), ...('continueTurnId' in r ? ['continueTurnId'] : [])], invalid);
+    if (!marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
+    if ('replyMode' in r && !(HON_REPLY_MODE_KEYS as readonly unknown[]).includes(r.replyMode)) invalid();
+    if ('continueTurnId' in r && !isUuid(r.continueTurnId)) invalid();
+    return { text: r.text as string, delegation: null,
+      ...('replyMode' in r ? { replyMode: r.replyMode as HonReplyMode } : {}), ...('continueTurnId' in r ? { continueTurnId: r.continueTurnId as string } : {}) };
+  }
+  exactKeys(r, ['text', 'delegation'], invalid);
   const d = record(r.delegation, invalid);
   if (!isAgent(d.agentKey) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[d.agentKey])) invalid();
   const text = r.text as string;
@@ -73,25 +133,35 @@ export function validateHonConversationThread(value: unknown): HonConversationTh
   const r = validateHonConversationSummary(value, ['turns']) as HonConversationThread;
   if (!Array.isArray(r.turns) || r.turns.length !== r.turnCount * 2) drift();
   r.turns.forEach((x, i) => {
-    const t = record(x, drift); exactKeys(t, ['turnId', 'role', 'text', 'createdAt', 'status', 'reason', 'references'], drift);
+    const t = record(x, drift); exactKeys(t, ['turnId', 'role', 'text', 'createdAt', 'status', 'reason', 'references', 'replyDetail'], drift);
     const refs = record(t.references, drift); exactKeys(refs, ['workItemId', 'actionRequestId', 'invocationId'], drift);
     const human = i % 2 === 0;
     if (!isUuid(t.turnId) || !isTimestamp(t.createdAt) || !isStatus(t.status) || !isReason(t.reason) || !uuidOrNull(refs.workItemId) || !uuidOrNull(refs.actionRequestId) || !uuidOrNull(refs.invocationId)) drift();
     if (human ? (t.role !== 'HUMAN' || typeof t.text !== 'string' || t.reason !== null || refs.workItemId !== null || refs.actionRequestId !== null || refs.invocationId !== null)
-      : (!isAgent(t.role) || t.text !== null || (r.turns[i - 1] as HonConversationTurn).turnId !== t.turnId)) drift();
+      : ((r.turns[i - 1] as HonConversationTurn).turnId !== t.turnId
+        // A specialist's draft never appears here; HON's own reply appears only when COMPLETED, with no Action Center link.
+        || (t.role === HON_REPLY_ROLE ? (refs.actionRequestId !== null || (t.status === 'COMPLETED' ? !completedText(t.text, t.reason) : t.text !== null)
+            || !isReplyDetail(t.replyDetail, t.status === 'COMPLETED') || (t.reason === CONCEALED && (t.replyDetail as HonReplyDetail).canContinue))
+          : (!isAgent(t.role) || t.text !== null || t.replyDetail !== null)))) drift();
+    if (human && t.replyDetail !== null) drift();
   });
   return r;
 }
 
 export function validateHonTurnReceipt(value: unknown): HonTurnReceipt {
   const r = record(value, drift);
-  exactKeys(r, ['turnId', 'conversationId', 'status', 'reason', 'delegatedAgentKeys', 'actionRequestIds', 'workItemIds', 'invocationId'], drift);
+  exactKeys(r, ['turnId', 'conversationId', 'status', 'reason', 'delegatedAgentKeys', 'actionRequestIds', 'workItemIds', 'invocationId', 'reply', 'replyDetail'], drift);
   if (!isUuid(r.turnId) || !isUuid(r.conversationId) || !isStatus(r.status) || r.status === 'READY' || !isReason(r.reason) || !uuidOrNull(r.invocationId)
-    || !Array.isArray(r.delegatedAgentKeys) || r.delegatedAgentKeys.length !== 1 || !r.delegatedAgentKeys.every(isAgent)
+    || !Array.isArray(r.delegatedAgentKeys) || r.delegatedAgentKeys.length > 1 || !r.delegatedAgentKeys.every(isAgent)
     || !Array.isArray(r.actionRequestIds) || r.actionRequestIds.length > 1 || !r.actionRequestIds.every(isUuid)
     || !Array.isArray(r.workItemIds) || r.workItemIds.length > 1 || !r.workItemIds.every(isUuid)) drift();
   // An approval is claimed only with its Action Center reference.
   if (r.status === 'AWAITING_APPROVAL' && (r.actionRequestIds as unknown[]).length !== 1) drift();
+  // A question turn (no delegate) has no approval; its reply is present exactly when COMPLETED. A delegation has no reply.
+  if ((r.delegatedAgentKeys as unknown[]).length === 0
+    ? ((r.actionRequestIds as unknown[]).length !== 0 || r.status === 'AWAITING_APPROVAL' || (r.status === 'COMPLETED' ? !completedText(r.reply, r.reason) : r.reply !== null)
+      || !isReplyDetail(r.replyDetail, r.status === 'COMPLETED') || (r.reason === CONCEALED && (r.replyDetail as HonReplyDetail).canContinue))
+    : (r.reply !== null || r.replyDetail !== null)) drift();
   return r as unknown as HonTurnReceipt;
 }
 
@@ -101,12 +171,14 @@ export function composeHonConversationReadiness(team: {
   agents: readonly { agentKey: string; authorized: boolean; spendDecision: string; route: string; providerRuntime: string; available: boolean }[];
 }): HonConversationReadiness {
   const agents = team.agents.filter((a) => isAgent(a.agentKey));
+  const hon = team.agents.find((a) => a.agentKey === HON_REPLY_ROLE);
   return {
     contract: true,
     authorization: agents.some((a) => a.authorized),
     entitlement: team.completeEntitlement && agents.length > 0 && agents.every((a) => a.spendDecision === 'ALLOWED'),
     providerRoute: agents.some((a) => a.route === 'CONFIGURED' && a.providerRuntime === 'READY'),
     availableAgentKeys: agents.filter((a) => a.available).map((a) => a.agentKey as HonDelegateAgentKey),
+    honReply: hon?.available === true,
     asOf: team.asOf,
   };
 }

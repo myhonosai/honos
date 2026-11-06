@@ -1,5 +1,5 @@
 import {
-  AI_INVOCATION_TASK_CLASSES, AI_INVOCATION_PLANNING_STATES, HON_AI_TEAM_AGENT_KEYS,
+  AI_INVOCATION_TASK_CLASSES, AI_INVOCATION_PLANNING_STATES, AI_INVOCATION_PLANNING_AGENT_KEYS,
   type PlanAiInvocationInput,
 } from '@hon/contracts';
 import { AI_INVOCATION_PLANNING_LIMITS } from '@hon/config';
@@ -17,7 +17,7 @@ export function validateAiInvocationPlanInput(input: unknown): PlanAiInvocationI
     || maxProviderCostMicrounits > AI_INVOCATION_PLANNING_LIMITS.maxProviderCostMicrounits) throw new Error('VALIDATION_FAILED');
   return {
     expectedVersion, expectedState: aiConfigEnum(value.expectedState, AI_INVOCATION_PLANNING_STATES),
-    agentKey: aiConfigEnum(value.agentKey, HON_AI_TEAM_AGENT_KEYS),
+    agentKey: aiConfigEnum(value.agentKey, AI_INVOCATION_PLANNING_AGENT_KEYS),
     modality: aiConfigEnum(value.modality, [AI_INVOCATION_PLANNING_LIMITS.modality]),
     taskClass: aiConfigEnum(value.taskClass, AI_INVOCATION_TASK_CLASSES),
     inputBudget, outputBudget, maxProviderCostMicrounits,

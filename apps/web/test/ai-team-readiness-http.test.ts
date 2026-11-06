@@ -6,7 +6,7 @@ const agent = (agentKey: string, name: string, credits: number, over: Record<str
   route: 'CONFIGURED', requestCredits: credits, providerRuntime: 'CONFIGURATION_REQUIRED', available: false, blockedBy: 'PROVIDER_RUNTIME_NOT_CONFIGURED', ...over });
 const readinessFixture = (over: Record<string, unknown> = {}) => ({
   organizationId: A, schoolId: B, completeEntitlement: true, agentBudget: null, asOf: '2026-11-06T10:00:00.000Z', honConversation: { contract: true },
-  agents: [agent('marcus', 'MARKETING', 6), agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3)], ...over,
+  agents: [agent('marcus', 'MARKETING', 6), agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3), agent('hon', 'HON_REPLY', 10)], ...over,
 });
 const envelope = (data: unknown) => ({ data, meta: { requestId: 'r', correlationId: 'r' } });
 
@@ -20,13 +20,13 @@ describe('AI team readiness client', () => {
   });
 
   it('accepts the exact contract for the requested school only', () => {
-    expect(verifyAiTeamReadiness(envelope(readinessFixture()), A, B).agents.map(item => item.agentKey)).toEqual(['marcus', 'claire', 'chad']);
+    expect(verifyAiTeamReadiness(envelope(readinessFixture()), A, B).agents.map(item => item.agentKey)).toEqual(['marcus', 'claire', 'chad', 'hon']);
     expect(() => verifyAiTeamReadiness(envelope(readinessFixture({ schoolId: C })), A, B)).toThrow();
     expect(() => verifyAiTeamReadiness({ data: readinessFixture() }, A, B)).toThrow();
     expect(() => verifyAiTeamReadiness(envelope({ ...readinessFixture(), extra: 1 }), A, B)).toThrow();
     // A provider-off agent may never be reported available.
     expect(() => verifyAiTeamReadiness(envelope(readinessFixture({ agents: [agent('marcus', 'MARKETING', 6, { available: true, blockedBy: null }),
-      agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3)] })), A, B)).toThrow();
+      agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3), agent('hon', 'HON_REPLY', 10)] })), A, B)).toThrow();
   });
 
   it('maps 401/403 to an access error and anything else to an unverified failure', async () => {

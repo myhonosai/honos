@@ -6,6 +6,7 @@
   "spendTables": [
     "ai_usage_ledger",
     "chad_follow_up_invocations",
+    "hon_reply_invocations",
     "marketing_ai_invocations",
     "saas_creative_reservations",
     "saas_credit_reservations",
@@ -13,16 +14,20 @@
   ],
   "spendFunctions": [
     "hon.begin_chad_follow_up_request(text,jsonb,uuid)",
+    "hon.begin_hon_turn(text,uuid,jsonb,uuid)",
     "hon.begin_marketing_request(text,jsonb,uuid)",
     "hon.begin_teaching_request(text,jsonb,uuid)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
+    "hon.fail_hon_reply(text,uuid,text,text)",
     "hon.fail_marketing_invocation(text,uuid,text,text)",
     "hon.fail_teaching_invocation(text,uuid,text,text)",
     "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_hon_reply(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_hon_reply_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
     "hon.require_ai_invocation_plan_access()",
@@ -33,6 +38,7 @@
   ],
   "ledgerWriters": [
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_hon_reply_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
     "hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)",
@@ -41,12 +47,15 @@
   ],
   "reservationWriters": [
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
+    "hon.fail_hon_reply(text,uuid,text,text)",
     "hon.fail_marketing_invocation(text,uuid,text,text)",
     "hon.fail_teaching_invocation(text,uuid,text,text)",
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_hon_reply(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_hon_reply_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
     "hon.reserve_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)",
@@ -74,6 +83,7 @@
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
+    "hon.fail_hon_reply(text,uuid,text,text)",
     "hon.fail_marketing_invocation(text,uuid,text,text)",
     "hon.fail_teaching_invocation(text,uuid,text,text)",
     "hon.guard_chad_follow_up()",
@@ -82,6 +92,7 @@
     "hon.guard_teaching_assistant()",
     "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
+    "hon.prepare_hon_reply(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
     "hon.read_ai_school_usage_from_hq(text,timestamp with time zone,timestamp with time zone)",
@@ -96,6 +107,7 @@
     "hon.read_teaching_invocation(text,uuid)",
     "hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
+    "hon.record_hon_reply_result(text,uuid,jsonb)",
     "hon.record_marketing_result(text,uuid,jsonb)",
     "hon.record_teaching_result(text,uuid,jsonb)",
     "hon.reserve_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)",
@@ -141,6 +153,11 @@
       "public": false,
       "security_definer": true
     },
+    "hon.begin_hon_turn(text,uuid,jsonb,uuid)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
     "hon.begin_marketing_request(text,jsonb,uuid)": {
       "runtime": true,
       "public": false,
@@ -157,6 +174,11 @@
       "security_definer": true
     },
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.fail_hon_reply(text,uuid,text,text)": {
       "runtime": true,
       "public": false,
       "security_definer": true
@@ -181,6 +203,11 @@
       "public": false,
       "security_definer": true
     },
+    "hon.prepare_hon_reply(text,uuid,uuid,boolean)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)": {
       "runtime": true,
       "public": false,
@@ -192,6 +219,11 @@
       "security_definer": true
     },
     "hon.record_chad_follow_up_result(text,uuid,jsonb)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.record_hon_reply_result(text,uuid,jsonb)": {
       "runtime": true,
       "public": false,
       "security_definer": true
@@ -262,6 +294,13 @@
       "delete": false,
       "truncate": false
     },
+    "hon_reply_invocations": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
     "marketing_ai_invocations": {
       "select": false,
       "insert": false,
@@ -300,6 +339,12 @@
       "chad_follow_up_invocations_immutable",
       "chad_follow_up_invocations_no_truncate",
       "hon_turn_binding",
+      "zz_ai_hold_origin"
+    ],
+    "hon_reply_invocations": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
       "zz_ai_hold_origin"
     ],
     "marketing_ai_invocations": [

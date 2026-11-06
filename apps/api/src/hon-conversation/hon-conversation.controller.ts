@@ -16,20 +16,26 @@ import { MarketingAssistantService } from '../marketing/marketing-assistant.serv
 import { TeachingAssistantService } from '../teaching-assistant/teaching-assistant.service.js';
 import { ChadFollowUpAssistantService } from '../chad-follow-up-assistant/chad-follow-up-assistant.service.js';
 import { AiTeamReadinessService } from '../ai-team/ai-team-readiness.controller.js';
+import { HonReplyService } from './hon-reply.service.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Scope = ResolvedPrincipalScope & { externalSubject: string };
-type Begun = { turnId: string; agentKey: HonDelegateAgentKey; delegation: Record<string, unknown>; handOff: boolean };
+type Begun = { turnId: string; agentKey: HonDelegateAgentKey | 'hon'; delegation: Record<string, unknown> | null; handOff: boolean };
 type Failure = 'AGENT_NOT_AUTHORIZED' | 'AGENT_REQUEST_INVALID' | 'AGENT_TARGET_NOT_FOUND' | 'AGENT_REQUEST_CONFLICT';
 
 function boundaryError(error: unknown): never {
   if (error instanceof HttpException) throw error;
   const code = (error as { code?: string }).code;
+  const message = (error as { message?: string }).message ?? '';
+  // S4 spend decision (HQ pause, HQ exception, access state) refused a question before any turn or call was recorded.
+  if (code === '42501' && /^AI_[A-Z_]+$/.test(message)) throw new ForbiddenException({ code: 'HON_AI_SPEND_REFUSED', reason: message });
   if (code === '42501') throw new ForbiddenException({ code: 'HON_CONVERSATION_FORBIDDEN' });
   if (code === 'P0002') throw new NotFoundException({ code: 'HON_CONVERSATION_NOT_FOUND' });
   if (code === '23505') throw new ConflictException({ code: 'HON_IDEMPOTENCY_CONFLICT', detail: 'This Idempotency-Key was already used with a different request.' });
   if (code === '23514') throw new ConflictException({ code: 'HON_CONVERSATION_FULL', detail: 'Start a new conversation.' });
-  if (code === '22023' || code === '22P02') throw new BadRequestException({ code: (error as { message?: string }).message === 'HON_DELEGATION_REQUIRED' ? 'HON_DELEGATION_REQUIRED' : 'INVALID_HON_CONVERSATION_REQUEST' });
+  if (code === '22023' || code === '22P02') {
+    throw new BadRequestException({ code: message === 'HON_DELEGATION_REQUIRED' || message === 'HON_REPLY_NOT_CONTINUABLE' ? message : 'INVALID_HON_CONVERSATION_REQUEST' });
+  }
   if (code === '57014' || code === '55P03') throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_TIMEOUT', detail: 'No success assumed. Read the conversation before resending.' });
   throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' });
 }
@@ -60,7 +66,8 @@ function refusal(error: unknown): Failure | null {
  * C1 HON conversation. The conversation and turn are stored here; the work is done by the named specialist's existing
  * service (its own actor gate, S4 spend protections, plan, provider runtime, usage evidence and Action Engine CONFIRM
  * proposal). The specialist's idempotency key is the turn id, so resending a turn never creates a second request or a
- * second provider call. No HON-authored text and no provider call happens in this service itself.
+ * second provider call. A question turn (C2, delegation null) is answered by HonReplyService through the same secure
+ * runtime; this service itself never calls a provider.
  */
 @Injectable()
 export class HonConversationService {
@@ -70,6 +77,7 @@ export class HonConversationService {
     private readonly claire: TeachingAssistantService,
     private readonly chad: ChadFollowUpAssistantService,
     private readonly team: AiTeamReadinessService,
+    private readonly reply: HonReplyService,
   ) {}
 
   private async transaction<T>(scope: Scope, work: (client: PoolClient) => Promise<T>, readOnly = false): Promise<T> {
@@ -118,10 +126,17 @@ export class HonConversationService {
   async sendTurn(scope: Scope, conversationId: string, input: unknown, key: string | undefined): Promise<HonTurnReceipt> {
     if (typeof key !== 'string' || !UUID.test(key)) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
     let normalized;
-    try { normalized = validateHonTurnRequest(input); } catch { throw new BadRequestException({ code: 'INVALID_HON_TURN', detail: 'Name one specialist (marcus, claire or chad) with its own target and a safe message; never credentials or personal records.' }); }
+    try { normalized = validateHonTurnRequest(input); } catch { throw new BadRequestException({ code: 'INVALID_HON_TURN', detail: 'Ask HON (delegation null) or name one specialist (marcus, claire or chad) with its own target, with a safe message; never credentials or personal records.' }); }
     const begun = await this.transaction(scope, async (client) => (await client.query<{ data: Begun }>('SELECT hon.begin_hon_turn($1,$2::uuid,$3::jsonb,$4::uuid) data', [scope.externalSubject, conversationId, JSON.stringify(normalized), key])).rows[0]!.data);
+    if (begun.agentKey === 'hon') {
+      try {
+        if (begun.handOff) await this.reply.run(scope, begun.turnId);
+        else await this.reply.releaseHeld(scope, begun.turnId);
+      } catch (error) { boundaryError(error); }
+      return this.receipt(scope, begun.turnId);
+    }
     if (begun.handOff) {
-      const failure = await this.handOff(scope, begun);
+      const failure = await this.handOff(scope, begun as Begun & { delegation: Record<string, unknown> });
       if (failure) await this.transaction(scope, async (client) => { await client.query('SELECT hon.fail_hon_turn($1,$2::uuid,$3)', [scope.externalSubject, begun.turnId, failure]); });
     }
     return this.receipt(scope, begun.turnId);
@@ -133,7 +148,7 @@ export class HonConversationService {
   }
 
   /** Hands the turn to the specialist's own service at this exact school. Returns a refusal to record, or null. */
-  private async handOff(scope: Scope, begun: Begun): Promise<Failure | null> {
+  private async handOff(scope: Scope, begun: Begun & { delegation: Record<string, unknown> }): Promise<Failure | null> {
     const agentScope = begun.agentKey === 'marcus' ? await this.database.resolveCampaignScope(scope.externalSubject, 'marketing.campaign.read')
       : begun.agentKey === 'claire' ? await this.database.resolveTeachingAssistantScope(scope.externalSubject)
       : await this.database.resolveChadFollowUpAssistantScope(scope.externalSubject);
