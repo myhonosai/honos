@@ -30,6 +30,35 @@ BEGIN
   END IF;
 END $$;
 
+-- 0212: authority is checked again after the planner's last wait. The first checks above run before the work-item row
+-- lock, the per-key advisory lock and the idempotency row lock, any of which can wait behind another transaction; a grant
+-- revoked or expired, a role permission removed, or the Complete entitlement ended during that wait must not still plan.
+-- Lock order is the canonical authority-hold order (0199): organization, school, principal, the actor's grants by id, their
+-- roles by id, then the two permission rows by role. All FOR SHARE, so a concurrent staff-role command (which takes the
+-- organization FOR UPDATE first) waits for this planning transaction instead of changing authority under it. The re-check
+-- reads live time (clock_timestamp) for grants and the entitlement.
+CREATE FUNCTION hon.hold_and_recheck_ai_planning_authority(p_agent text) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE org uuid := hon.current_organization_id(); school uuid := hon.current_school_id();
+  actor uuid := nullif(current_setting('app.hon_principal_id', true), '')::uuid;
+  cap text := hon.ai_agent_capability_permission(p_agent);
+BEGIN
+  PERFORM 1 FROM hon.organizations WHERE id = org FOR SHARE;
+  PERFORM 1 FROM hon.schools WHERE id = school AND organization_id = org FOR SHARE;
+  PERFORM 1 FROM hon.principals WHERE id = actor FOR SHARE;
+  PERFORM 1 FROM hon.principal_role_grants WHERE principal_id = actor AND organization_id = org AND school_id = school ORDER BY id FOR SHARE;
+  PERFORM 1 FROM hon.roles WHERE id IN (SELECT role_id FROM hon.principal_role_grants WHERE principal_id = actor AND organization_id = org AND school_id = school) ORDER BY id FOR SHARE;
+  PERFORM 1 FROM hon.role_permissions WHERE permission_code IN ('ai.invocation.plan', cap)
+    AND role_id IN (SELECT role_id FROM hon.principal_role_grants WHERE principal_id = actor AND organization_id = org AND school_id = school)
+    ORDER BY role_id, permission_code FOR SHARE;
+  PERFORM hon.require_ai_invocation_plan_access();
+  PERFORM hon.require_ai_agent_capability(p_agent);
+  IF NOT EXISTS (SELECT 1 FROM hon.organization_entitlements WHERE organization_id = org AND tier = 'COMPLETE' AND status = 'ACTIVE'
+      AND effective_from <= clock_timestamp() AND (effective_until IS NULL OR clock_timestamp() < effective_until)) THEN
+    RAISE EXCEPTION 'Active Complete entitlement required for AI planning' USING ERRCODE = '42501';
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION hon.plan_ai_invocation(p_work_id uuid, p_data jsonb, p_key uuid, p_request_id uuid, p_correlation_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -42,7 +71,7 @@ DECLARE
   v_work hon.work_items%ROWTYPE; v_policy hon.hq_ai_routing_policies%ROWTYPE;
   v_choice record; v_plan_id uuid; v_hash text; v_existing hon.idempotency_records%ROWTYPE;
   v_response jsonb; v_payload jsonb; v_units integer; v_credits integer; v_used numeric;
-  v_denial text; v_risk text; v_replay_id text; v_replay jsonb;
+  v_denial text; v_risk text; v_replay_id text; v_replay jsonb; v_found boolean;
 BEGIN
   PERFORM hon.require_ai_invocation_plan_access();
   PERFORM hon.validate_ai_invocation_plan_input(p_data);
@@ -61,7 +90,10 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended(v_org::text || ':' || v_school::text || ':' || v_actor::text || ':' || p_key::text, 0));
   SELECT * INTO v_existing FROM hon.idempotency_records
     WHERE organization_id = v_org AND school_id = v_school AND principal_id = v_actor AND idempotency_key = p_key::text FOR UPDATE;
-  IF FOUND THEN
+  v_found := FOUND;
+  -- 0212: live authority after every wait, for the replay and the fresh plan alike.
+  PERFORM hon.hold_and_recheck_ai_planning_authority(p_data->>'agentKey');
+  IF v_found THEN
     IF v_existing.request_fingerprint <> v_hash THEN RAISE EXCEPTION 'AI planning idempotency conflict' USING ERRCODE = '23505'; END IF;
     IF v_existing.status <> 'COMPLETED' OR v_existing.response_body IS NULL THEN RAISE EXCEPTION 'AI planning request in progress' USING ERRCODE = '40001'; END IF;
     v_replay_id := v_existing.response_body->'plan'->>'id';
@@ -145,7 +177,7 @@ BEGIN
 END $function$;
 
 DO $$ DECLARE f regprocedure; r text; BEGIN
-  FOREACH f IN ARRAY ARRAY['hon.ai_agent_capability_permission(text)'::regprocedure, 'hon.require_ai_agent_capability(text)'::regprocedure] LOOP
+  FOREACH f IN ARRAY ARRAY['hon.ai_agent_capability_permission(text)'::regprocedure, 'hon.require_ai_agent_capability(text)'::regprocedure, 'hon.hold_and_recheck_ai_planning_authority(text)'::regprocedure] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);
