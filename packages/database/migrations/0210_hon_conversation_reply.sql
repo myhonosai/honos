@@ -149,7 +149,8 @@ BEGIN
   SELECT coalesce(jsonb_agg(z.h ORDER BY z.seq), '[]'::jsonb) INTO history FROM (
     SELECT x.seq, jsonb_strip_nulls(jsonb_build_object('question', left(x.text, 400),
         'answer', CASE WHEN x.agent_key = 'hon' THEN left(r.reply_text, 600) END,
-        'delegatedTo', CASE WHEN x.agent_key <> 'hon' THEN x.agent_key END)) h
+      -- Owner blueprint: the legacy 'claire' teaching delegate is Kai; HON never sees it as Claire.
+        'delegatedTo', CASE WHEN x.agent_key = 'claire' THEN 'kai' WHEN x.agent_key <> 'hon' THEN x.agent_key END)) h
     FROM hon.hon_conversation_turns x
     LEFT JOIN hon.hon_reply_invocations r ON r.turn_id = x.id AND r.status = 'COMPLETED'
     WHERE x.conversation_id = t.conversation_id AND x.seq < t.seq
