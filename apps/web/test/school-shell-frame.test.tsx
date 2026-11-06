@@ -106,6 +106,15 @@ describe('school shell frame', () => {
     expect(render({ mode: 'modern' })).not.toContain('role="dialog"');
   });
 
+  it('makes the page behind the Menu panel inert and marks private school content for synchronous concealment', () => {
+    const open = render({ mode: 'modern', menuOpen: true, path: '/staff/work' });
+    expect(open).toContain('aria-modal="true"');
+    expect((open.match(/ inert=""/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(render({ mode: 'modern', path: '/staff/work' })).not.toContain(' inert=""');
+    const ready = render({ phase: 'READY', schoolName: 'Sunrise Taekwondo' });
+    expect(ready).toMatch(/<strong data-shell-private="">Sunrise Taekwondo<\/strong>/);
+    expect(render({ phase: 'CONCEALED', schoolName: null })).not.toContain('data-shell-private');
+  });
   it('keeps HON in the corner on other pages, but not on the dashboard or in HON itself', () => {
     const launcher = /class="[^"]*honLauncher[^"]*" href="\/staff\/hon"/;
     expect(render({ path: '/staff/crm/leads' })).toMatch(launcher);

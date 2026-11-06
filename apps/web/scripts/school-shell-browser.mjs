@@ -38,7 +38,7 @@ async function axeScan(page, name) {
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const schoolA = { organizationId: id(1), schoolId: id(2) }, schoolB = { organizationId: id(1), schoolId: id(3) };
 const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCalls: false, checks: [], failures: [], screenshots: [], pageErrors: [], apiRequests: [] };
-let theme = 'modern', multi = false, readinessDenied = false;
+let theme = 'modern', multi = false, readinessDenied = false, leadsGate = null;
 const iso = () => '2026-11-06T09:00:00.000Z';
 const snapshot = (scope) => ({
   organizationId: scope.organizationId, schoolId: scope.schoolId, generatedAt: iso(), from: '2026-10-07T09:00:00.000Z', to: iso(),
@@ -97,7 +97,7 @@ function api(route) {
     const prefix = `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
     if (path === `${prefix}/command-center`) return json(route, 200, { data: { commandCenter: commandCenter(scope) }, meta: {} });
     if (path === `${prefix}/ai/team/capabilities`) return readinessDenied ? json(route, 403, { code: 'AI_TEAM_READINESS_FORBIDDEN' }) : json(route, 200, { data: readiness(scope), meta: { requestId: 'r', correlationId: 'r' } });
-    if (path === `${prefix}/crm/leads`) return json(route, 200, { data: leads(), meta: {} });
+    if (path === `${prefix}/crm/leads`) return leadsGate ? leadsGate.then(() => json(route, 200, { data: leads(), meta: {} })) : json(route, 200, { data: leads(), meta: {} });
     if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
@@ -201,6 +201,58 @@ for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lis
   assert.equal(await panel.locator('[data-menu]').count(), 13);
   await page.waitForTimeout(250); await axeScan(page, `menu-${mode}`); await shot(page, `u2-menu-${mode}-desktop`);
   await page.keyboard.press('Escape'); await panel.waitFor({ state: 'detached' }); await ctx.close();
+});
+const privateNow = (page, trigger) => page.evaluate((how) => {
+  if (how === 'hidden') { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); }
+  else window.dispatchEvent(new Event(how));
+  // Read in the same task as the event: concealment must not wait for a re-render.
+  const nodes = [...document.querySelectorAll('[data-shell-private]')];
+  if (how === 'hidden') delete document.visibilityState;
+  return { count: nodes.length, concealed: nodes.every((node) => node.hidden && node.inert) };
+}, trigger);
+const phaseIs = (page, phase) => page.waitForFunction((value) => document.querySelector('[data-phase]')?.getAttribute('data-phase') === value, phase);
+await check('blur, a hidden tab and session end conceal the school and dashboard at once; a late read never repaints; only re-verification restores', async () => {
+  theme = 'modern'; multi = false; let release = () => {}; leadsGate = new Promise((done) => { release = done; });
+  const { ctx, page } = await open(viewports.desktop, '/staff/dashboard');
+  await phaseIs(page, 'READY'); await page.waitForSelector('[data-kpi="students"][data-state="VALUE"]');
+  const blur = await privateNow(page, 'blur');
+  assert.equal(blur.count >= 2 && blur.concealed, true, `blur hides private content synchronously: ${JSON.stringify(blur)}`);
+  await phaseIs(page, 'CONCEALED');
+  const requestsAfterConceal = report.apiRequests.length;
+  release(); leadsGate = null; await page.waitForTimeout(600);
+  assert.equal(await page.locator('[data-home="ready"]').count(), 0, 'no dashboard while concealed');
+  assert.equal(await page.getByText('Avery Sample').count(), 0, 'the pending lead read that settled after concealment is never shown');
+  assert.equal(report.apiRequests.length, requestsAfterConceal, 'no reads while concealed');
+  await page.waitForSelector('[data-home="no-school"]'); await shot(page, 'u3-home-concealed-desktop');
+  const identities = () => report.apiRequests.filter((line) => line === 'GET /api/identity/me').length, before = identities();
+  await page.getByRole('button', { name: 'Show school', exact: true }).click();
+  await phaseIs(page, 'READY'); await page.waitForSelector('[data-home="ready"]');
+  assert.equal(identities() > before, true, 'restoring re-verifies the current identity');
+  const hidden = await privateNow(page, 'hidden');
+  assert.equal(hidden.count >= 2 && hidden.concealed, true, `a hidden tab hides private content synchronously: ${JSON.stringify(hidden)}`);
+  await phaseIs(page, 'CONCEALED');
+  await page.getByRole('button', { name: 'Show school', exact: true }).click(); await phaseIs(page, 'READY'); await page.waitForSelector('[data-home="ready"]');
+  const ended = await privateNow(page, 'hon:session-invalidated');
+  assert.equal(ended.concealed, true, 'session end hides private content synchronously');
+  await phaseIs(page, 'SESSION');
+  assert.equal(await page.getByRole('button', { name: 'Show school', exact: true }).count(), 0, 'an ended session cannot be restored in place');
+  await privateNow(page, 'blur'); await page.waitForTimeout(200);
+  assert.equal(await page.locator('[data-phase]').getAttribute('data-phase'), 'SESSION', 'a later blur never downgrades an ended session');
+  await ctx.close();
+});
+await check('menu panel keeps keyboard focus inside and returns it to the opener', async () => {
+  theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
+  await phaseIs(page, 'READY');
+  const opener = page.getByRole('button', { name: 'Open navigation' }); await opener.focus(); await page.keyboard.press('Enter');
+  const panel = page.getByRole('dialog', { name: 'Menu' }); await panel.waitFor();
+  for (let i = 0; i < 70; i += 1) {
+    await page.keyboard.press(i % 3 === 0 ? 'Shift+Tab' : 'Tab');
+    assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]'))), true, 'focus left the open menu');
+  }
+  assert.equal(await page.evaluate(() => Boolean(document.getElementById('hon-main')?.closest('[inert]'))), true, 'the page behind the menu is inert');
+  await page.keyboard.press('Escape'); await panel.waitFor({ state: 'detached' });
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Open navigation', 'focus returns to the menu button');
+  await ctx.close();
 });
 await check('home shows a refused AI readiness as hidden, never as available', async () => {
   theme = 'modern'; multi = false; readinessDenied = true; const { ctx, page } = await open(viewports.desktop, '/staff/dashboard');

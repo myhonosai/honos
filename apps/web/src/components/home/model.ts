@@ -68,7 +68,15 @@ export function membershipMix(snapshot: OperationalSnapshot): Bar[] {
 
 // ---------------------------------------------------------------- lists
 
-/** Sessions that start on the viewer's current local day, earliest first. */
+/** The class-session read returns at most this many start-ordered rows (prior 30 / next 90 days). */
+export const CLASS_SESSION_SNAPSHOT_LIMIT = 50;
+
+/** A full snapshot may have left out some of today's classes, so the Home must not claim there are none. */
+export function sessionSnapshotSaturated(sessions: readonly unknown[]): boolean {
+  return sessions.length >= CLASS_SESSION_SNAPSHOT_LIMIT;
+}
+
+/** Loaded sessions that start on the viewer's device-local day, earliest first (a bounded snapshot, not the full day). */
 export function todaySessions(sessions: readonly CurrentSchoolClassSession[], now: Date): CurrentSchoolClassSession[] {
   const start = new Date(now); start.setHours(0, 0, 0, 0);
   const end = new Date(start); end.setDate(end.getDate() + 1);

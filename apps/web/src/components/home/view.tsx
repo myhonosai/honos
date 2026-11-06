@@ -6,12 +6,12 @@ import { shellText } from '../school-shell/copy';
 import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
 import { homeText, type HomeKey } from './copy';
-import { homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
+import { homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, sessionSnapshotSaturated, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
 import styles from './home.module.css';
 
 export type SchoolHomeViewProps = Readonly<{
   language: string; mode: HonInterfaceTheme; schoolName: string | null; selection: OperationalSchoolScope | null;
-  sources: HomeSources; now: Date; timeZone?: string; waiting?: boolean;
+  sources: HomeSources; now: Date; timeZone?: string; waiting?: boolean; concealed?: boolean;
   /** The viewer's AI team art style; defaults to the mode's original pairing. */
   artStyle?: HonArtStyle; onArtStyle?: (style: HonArtStyle) => void;
 }>;
@@ -28,14 +28,14 @@ function greetingKey(now: Date): HomeKey {
  * The school Home. Pure presentation of already verified reads: each panel shows its own
  * loading, denied or unverified state, and nothing is estimated or filled with samples.
  */
-export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false, artStyle, onArtStyle }: SchoolHomeViewProps): React.ReactElement {
+export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false, concealed = false, artStyle, onArtStyle }: SchoolHomeViewProps): React.ReactElement {
   const t = (key: HomeKey, values?: Record<string, string | number>) => homeText(language, key, values);
   const locale = LOCALES[language] ?? 'en-US';
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
   const time = (value: string) => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', ...(timeZone ? { timeZone } : {}) }).format(new Date(value));
   const day = (value: string) => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) }).format(new Date(value));
 
-  if (!selection) return <main className={styles.home} data-hon-native data-home="no-school"><p className={styles.empty} role="status">{t(waiting ? 'loading' : 'noSchool')}</p></main>;
+  if (!selection) return <main className={styles.home} data-hon-native data-home="no-school"><p className={styles.empty} role="status">{t(concealed ? 'concealed' : waiting ? 'loading' : 'noSchool')}</p></main>;
 
   const style = artStyle ?? defaultArtStyle(mode);
   const team = homeAiTeam(sources.readiness, style);
@@ -98,10 +98,12 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
         {snapshot => <Bars bars={membershipMix(snapshot)} t={t} number={number} />}
       </Card>
       <Card title={t('scheduleTitle')} panel={sources.sessions} t={t} footer={<a href="/staff/schedule/sessions">{t('scheduleOpen')} →</a>}>
-        {sessions => { const today = todaySessions(sessions, now); return today.length ? <ol className={styles.list}>{today.map(session => <li key={session.sessionId}>
-          <time dateTime={session.startsAt}>{time(session.startsAt)}</time>
-          <span><strong>{session.name}</strong><small>{[session.roomName, t('spots', { count: number(session.capacity) })].filter(Boolean).join(' · ')}</small></span>
-        </li>)}</ol> : <p className={styles.empty}>{t('scheduleEmpty')}</p>; }}
+        {sessions => { const today = todaySessions(sessions, now), partial = sessionSnapshotSaturated(sessions);
+          return <>{today.length ? <ol className={styles.list}>{today.map(session => <li key={session.sessionId}>
+            <time dateTime={session.startsAt}>{time(session.startsAt)}</time>
+            <span><strong>{session.name}</strong><small>{[session.roomName, t('capacity', { count: number(session.capacity) })].filter(Boolean).join(' · ')}</small></span>
+          </li>)}</ol> : !partial ? <p className={styles.empty}>{t('scheduleEmpty')}</p> : null}
+          {partial && <p className={styles.empty} data-schedule="partial">{t('schedulePartial')}</p>}</>; }}
       </Card>
       <Card title={t('recentTitle')} panel={sources.leads} t={t} footer={<a href={scoped('/staff/crm/leads', selection)}>{t('recentOpen')} →</a>}>
         {leads => { const recent = recentLeads(leads); return recent.length ? <ol className={styles.list}>{recent.map(lead => <li key={lead.id}>

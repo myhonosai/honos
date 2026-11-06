@@ -10,7 +10,7 @@ import { SchoolHome, panelFromError } from '../src/components/home/home';
 import { CommandCenterAccessError } from '../src/components/command-center-http';
 import { CrmLeadAccessError } from '../src/components/crm-leads-http';
 import { AiTeamReadinessAccessError } from '../src/components/ai-team-readiness-http';
-import { NOW, ORG, SCHOOL, ready } from './school-home-fixtures';
+import { NOW, ORG, SCHOOL, ready, sessions } from './school-home-fixtures';
 
 const esc = (value: string) => value.replaceAll('&', '&amp;').replaceAll('’', '’');
 const base: SchoolHomeViewProps = { language: 'en', mode: 'modern', schoolName: 'Sunrise Taekwondo', selection: { organizationId: ORG, schoolId: SCHOOL }, sources: ready(), now: NOW };
@@ -42,6 +42,22 @@ describe('school home view', () => {
     expect(html).toContain('Open workspace: Kai');
   });
 
+  it('never claims there are no classes today from a bounded snapshot, and labels capacity as capacity', () => {
+    expect(render()).toContain('Capacity 20');
+    expect(render()).not.toMatch(/spots/);
+    const none = render({ sources: { ...ready(), sessions: { state: 'READY', value: [] } } });
+    expect(none).toContain(esc(homeText('en', 'scheduleEmpty'))); expect(none).toContain('loaded schedule');
+    // Fifty earlier rows fill the snapshot: today may be missing, so say so instead of "none".
+    const earlier = Array.from({ length: 50 }, (_, index) => ({ ...sessions()[0]!, sessionId: `s-${index}`, startsAt: new Date(NOW.getTime() - (index + 2) * 86_400_000).toISOString() }));
+    const saturated = render({ sources: { ...ready(), sessions: { state: 'READY', value: earlier } } });
+    expect(saturated).toContain('data-schedule="partial"');
+    expect(saturated).not.toContain(esc(homeText('en', 'scheduleEmpty')));
+  });
+  it('tells the viewer the overview is hidden while away, with no school content', () => {
+    const html = render({ selection: null, schoolName: null, concealed: true });
+    expect(html).toContain(esc(homeText('en', 'concealed')));
+    expect(html).not.toContain('Sunrise Taekwondo');
+  });
   it('shows each refused or unverified panel on its own, with no numbers in its place', () => {
     const html = render({ sources: { ...ready(), operations: { state: 'DENIED' }, leads: { state: 'UNAVAILABLE' }, readiness: { state: 'DENIED' } } });
     expect(html).toContain(esc(homeText('en', 'panelDenied')));

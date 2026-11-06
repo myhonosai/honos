@@ -31,10 +31,13 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   // HON waits in the corner on every page except where it is already the main content.
   const honHere = path === '/staff/dashboard' || path === '/staff/hon' || path.startsWith('/staff/hon/');
 
+  // The Menu panel is modal: everything behind it is inert, so keyboard focus stays inside it.
+  const modal = menuOpen && !sidebar;
+
   const school = <section className={styles.school} aria-label={t('schoolRegion')} data-phase={phase}>
     <span className={styles.schoolMark} aria-hidden="true"><ShellIcon name="school" /></span>
     <div className={styles.schoolText}>
-      <strong>{phase === 'READY' ? props.schoolName ?? t('READY') : t(phase)}</strong>
+      {phase === 'READY' ? <strong key="school-name" data-shell-private="">{props.schoolName ?? t('READY')}</strong> : <strong key="school-phase">{t(phase)}</strong>}
       <small>{phase === 'READY' ? t('verified') : t('schoolLabel')}</small>
     </div>
     {ended ? <a className={styles.schoolAction} href="/auth/login">{t('signIn')}</a>
@@ -42,7 +45,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         : phase === 'DENIED' || phase === 'UNAVAILABLE' ? <button type="button" className={styles.schoolAction} onClick={props.onSwitch}>{t('recheck')}</button>
           : phase === 'READY' ? <button type="button" className={styles.schoolAction} onClick={props.onSwitch} aria-label={t('switchSchool')}><ShellIcon name="swap" /><span>{t('switchSchool')}</span></button>
             : null}
-    {phase === 'CHOICE' && props.choices.length > 0 && <ul className={styles.choices} aria-label={t('chooseSchool')}>
+    {phase === 'CHOICE' && props.choices.length > 0 && <ul className={styles.choices} aria-label={t('chooseSchool')} data-shell-private="">
       {props.choices.map(choice => <li key={choice.schoolId}><button type="button" onClick={() => props.onChoose(choice.schoolId)}>
         <strong>{choice.schoolName}</strong><small>{choice.organizationName}</small></button></li>)}
     </ul>}
@@ -65,13 +68,13 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   </>;
 
   return <div className={styles.shell} data-hon-ui="school" data-hon-mode={mode} data-hon-layout={sidebar ? 'sidebar' : mode === 'modern' ? 'topnav' : 'cards'}>
-    <a className={styles.skip} href="#hon-main">{t('skip')}</a>
-    <aside className={styles.rail} data-drawer={menuOpen ? 'open' : 'closed'}>
+    <a className={styles.skip} href="#hon-main" inert={modal}>{t('skip')}</a>
+    <aside className={styles.rail} data-drawer={menuOpen ? 'open' : 'closed'} inert={modal}>
       <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)}><ShellIcon name="close" /></button>
       {rail}
     </aside>
     {menuOpen && <div className={styles.scrim} aria-hidden="true" onClick={() => onMenu(false)} />}
-    {menuOpen && !sidebar && <div className={styles.menuPanel} role="dialog" aria-modal="true" aria-label={t('menuTitle')}>
+    {modal && <div className={styles.menuPanel} role="dialog" aria-modal="true" aria-label={t('menuTitle')}>
       <header><strong>{t('menuTitle')}</strong><small>{t('menuLead')}</small>
         <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)} autoFocus><ShellIcon name="close" /></button></header>
       <ul className={styles.menuGrid}>
@@ -81,7 +84,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         </li>)}
       </ul>
     </div>}
-    <div className={styles.workspace}>
+    <div className={styles.workspace} inert={modal}>
       <header className={styles.topbar}>
         <button type="button" className={styles.menuButton} aria-label={t('openMenu')} aria-expanded={menuOpen} onClick={() => onMenu(true)}><ShellIcon name="menu" /></button>
         <div className={styles.titleBlock}>
@@ -101,9 +104,9 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       </nav>}
       <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>
     </div>
-    {!honHere && <a className={styles.honLauncher} href="/staff/hon" aria-label={t('askHon')} title={t('honLauncher')}>
+    {!honHere && <a inert={modal} className={styles.honLauncher} href="/staff/hon" aria-label={t('askHon')} title={t('honLauncher')}>
       <img src="/ai/hon-core.webp" alt="" width={44} height={44} /><span>{t('askHon')}</span></a>}
-    <nav className={styles.mobileNav} aria-label={t('mobileNav')}>
+    <nav className={styles.mobileNav} aria-label={t('mobileNav')} inert={modal}>
       {SCHOOL_SHELL_MOBILE.map(key => { const item = SCHOOL_SHELL_NAV.find(candidate => candidate.key === key)!;
         return <a key={key} href={schoolShellHref(item.routes[0]!, verified)} aria-current={active?.key === key ? 'page' : undefined}><ShellIcon name={key} /><span>{t(item.titleKey)}</span></a>; })}
       <button type="button" aria-expanded={menuOpen} onClick={() => onMenu(true)}><ShellIcon name="more" /><span>{t('more')}</span></button>

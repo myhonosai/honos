@@ -28,8 +28,8 @@ const en = {
   leadsTitle: 'Lead outcomes', leadsLead: 'Current leads by status', leadOpen: 'Open', leadWon: 'Won', leadLost: 'Lost',
   membersTitle: 'Membership mix', membersLead: 'Current memberships by state', memberActive: 'Active', memberFrozen: 'Frozen',
   memberCancelling: 'Cancelling', memberDraft: 'Draft',
-  scheduleTitle: 'Today’s classes', scheduleEmpty: 'No classes start today.', scheduleOpen: 'Open schedule',
-  spots: '{count} spots',
+  scheduleTitle: 'Today’s classes', scheduleEmpty: 'No classes for today (this device’s date) in the loaded schedule.', schedulePartial: 'This list shows up to 50 loaded classes, so some of today’s classes may be missing. Open the schedule to see them all.', scheduleOpen: 'Open schedule',
+  capacity: 'Capacity {count}',
   recentTitle: 'Newest open leads', recentEmpty: 'No open leads right now.', recentOpen: 'Open CRM', followUp: 'Follow-up',
   tasksTitle: 'My tasks', tasksEmpty: 'Nothing assigned to you is open.', tasksOpen: 'Open work', due: 'Due', noDue: 'No due date',
   priorityHIGH: 'High', priorityNORMAL: 'Normal', priorityLOW: 'Low',
@@ -39,7 +39,7 @@ const en = {
   honCore: 'Your AI command center', helpTitle: 'How can I help you today?', quickTitle: 'Quick actions', quickLeads: 'Review new leads', quickClasses: 'Today’s classes',
   quickApprovals: 'Open approvals', quickTasks: 'My tasks', quickReport: 'Operations report', artStyle: 'Team art style', artrealistic: 'Realistic', artillustrated: 'Illustrated', artchibi: 'Chibi',
   areasTitle: 'Your school', areasLead: 'Tap an area to open it.',
-  operationsReport: 'Full operations report', noSchool: 'Choose your school to see today’s overview.',
+  operationsReport: 'Full operations report', noSchool: 'Choose your school to see today’s overview.', concealed: 'Hidden while you were away. Use “Show school” to check your access and continue.',
 } as const;
 
 export type HomeKey = keyof typeof en;
@@ -72,8 +72,8 @@ const ko: Record<HomeKey, string> = {
   leadsTitle: '리드 결과', leadsLead: '상태별 현재 리드', leadOpen: '진행 중', leadWon: '성사', leadLost: '실패',
   membersTitle: '회원권 구성', membersLead: '상태별 현재 회원권', memberActive: '활성', memberFrozen: '일시 정지',
   memberCancelling: '해지 예정', memberDraft: '초안',
-  scheduleTitle: '오늘의 수업', scheduleEmpty: '오늘 시작하는 수업이 없습니다.', scheduleOpen: '일정 열기',
-  spots: '정원 {count}명',
+  scheduleTitle: '오늘의 수업', scheduleEmpty: '불러온 일정에 오늘(이 기기 날짜) 수업이 없습니다.', schedulePartial: '이 목록은 불러온 수업 최대 50개만 보여 주므로 오늘 수업 일부가 빠질 수 있습니다. 전체는 일정에서 확인하세요.', scheduleOpen: '일정 열기',
+  capacity: '정원 {count}명',
   recentTitle: '최신 진행 중 리드', recentEmpty: '진행 중인 리드가 없습니다.', recentOpen: 'CRM 열기', followUp: '후속 연락',
   tasksTitle: '내 작업', tasksEmpty: '나에게 배정된 열린 작업이 없습니다.', tasksOpen: '작업 열기', due: '마감', noDue: '마감일 없음',
   priorityHIGH: '높음', priorityNORMAL: '보통', priorityLOW: '낮음',
@@ -83,7 +83,7 @@ const ko: Record<HomeKey, string> = {
   honCore: 'AI 커맨드 센터', helpTitle: '오늘 무엇을 도와드릴까요?', quickTitle: '빠른 작업', quickLeads: '새 리드 확인', quickClasses: '오늘의 수업',
   quickApprovals: '승인 열기', quickTasks: '내 업무', quickReport: '운영 보고서', artStyle: '팀 그림 스타일', artrealistic: '실사', artillustrated: '일러스트', artchibi: '치비',
   areasTitle: '도장 메뉴', areasLead: '영역을 눌러 여세요.',
-  operationsReport: '전체 운영 보고서', noSchool: '오늘의 개요를 보려면 도장을 선택하세요.',
+  operationsReport: '전체 운영 보고서', noSchool: '오늘의 개요를 보려면 도장을 선택하세요.', concealed: '자리를 비운 동안 숨겼습니다. 계속하려면 도장 표시를 눌러 접근 권한을 확인하세요.',
 };
 
 const es: Record<HomeKey, string> = {
@@ -114,8 +114,8 @@ const es: Record<HomeKey, string> = {
   leadsTitle: 'Resultados de prospectos', leadsLead: 'Prospectos actuales por estado', leadOpen: 'Abiertos', leadWon: 'Ganados', leadLost: 'Perdidos',
   membersTitle: 'Mezcla de membresías', membersLead: 'Membresías actuales por estado', memberActive: 'Activas', memberFrozen: 'Congeladas',
   memberCancelling: 'En cancelación', memberDraft: 'Borrador',
-  scheduleTitle: 'Clases de hoy', scheduleEmpty: 'Hoy no empieza ninguna clase.', scheduleOpen: 'Abrir horario',
-  spots: '{count} plazas',
+  scheduleTitle: 'Clases de hoy', scheduleEmpty: 'No hay clases para hoy (fecha de este dispositivo) en el horario cargado.', schedulePartial: 'Esta lista muestra hasta 50 clases cargadas, así que pueden faltar clases de hoy. Abre el horario para verlas todas.', scheduleOpen: 'Abrir horario',
+  capacity: 'Capacidad: {count}',
   recentTitle: 'Prospectos abiertos más recientes', recentEmpty: 'No hay prospectos abiertos.', recentOpen: 'Abrir CRM', followUp: 'Seguimiento',
   tasksTitle: 'Mis tareas', tasksEmpty: 'No tienes tareas abiertas asignadas.', tasksOpen: 'Abrir trabajo', due: 'Vence', noDue: 'Sin fecha',
   priorityHIGH: 'Alta', priorityNORMAL: 'Normal', priorityLOW: 'Baja',
@@ -125,7 +125,7 @@ const es: Record<HomeKey, string> = {
   honCore: 'Tu centro de mando con IA', helpTitle: '¿En qué puedo ayudarte hoy?', quickTitle: 'Acciones rápidas', quickLeads: 'Revisar prospectos nuevos', quickClasses: 'Clases de hoy',
   quickApprovals: 'Abrir aprobaciones', quickTasks: 'Mis tareas', quickReport: 'Informe de operaciones', artStyle: 'Estilo del equipo', artrealistic: 'Realista', artillustrated: 'Ilustrado', artchibi: 'Chibi',
   areasTitle: 'Tu escuela', areasLead: 'Toca un área para abrirla.',
-  operationsReport: 'Informe completo de operaciones', noSchool: 'Elige tu escuela para ver el resumen de hoy.',
+  operationsReport: 'Informe completo de operaciones', noSchool: 'Elige tu escuela para ver el resumen de hoy.', concealed: 'Oculto mientras estabas fuera. Usa “Mostrar escuela” para verificar tu acceso y continuar.',
 };
 
 const CATALOG: Record<HonLanguage, Record<HomeKey, string>> = { en, ko, es };

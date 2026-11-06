@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
+import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { CommandCenterAccessError, loadCommandCenter } from '../command-center-http';
 import { StaffDashboardAccessError, loadStaffDashboard } from '../staff-dashboard-http';
@@ -39,7 +40,8 @@ export function panelFromError(error: unknown): Panel<never> {
 
 /**
  * Loads the Home reads for the school the shell verified, each independently. A school
- * change, session end or page hide clears every result before anything else is shown.
+ * change, session end, blur, hidden tab or page hide hides and clears every result at once;
+ * reads start again only after the shell re-verifies the identity and exact school.
  */
 export function SchoolHome({ api = HOME_API }: { api?: HomeApi }): React.ReactElement {
   const { preferences } = useLocale();
@@ -49,12 +51,10 @@ export function SchoolHome({ api = HOME_API }: { api?: HomeApi }): React.ReactEl
   const [now, setNow] = useState(() => new Date());
   const generation = useRef(0);
 
-  useEffect(() => {
-    const clear = () => { generation.current++; setSources(HOME_LOADING); };
-    const events = [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT, 'pagehide'];
-    for (const name of events) window.addEventListener(name, clear);
-    return () => { for (const name of events) window.removeEventListener(name, clear); };
-  }, []);
+  useEffect(() => onShellPrivacyEvent(() => {
+    // Hide first, then retire every pending read so a late response can never repaint.
+    concealShellPrivateNow(); generation.current++; setSources(HOME_LOADING);
+  }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
     const current = ++generation.current;
@@ -70,5 +70,9 @@ export function SchoolHome({ api = HOME_API }: { api?: HomeApi }): React.ReactEl
     return () => { abort.abort(); };
   }, [selection?.organizationId, selection?.schoolId, api]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <SchoolHomeView language={preferences.language} mode={shell.mode} artStyle={shell.artStyle} onArtStyle={shell.onArtStyle} schoolName={shell.schoolName} selection={selection} sources={sources} now={now} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} />;
+  // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
+  return <div key={shell.phase} data-shell-private="" data-hon-native="">
+    <SchoolHomeView language={preferences.language} mode={shell.mode} artStyle={shell.artStyle} onArtStyle={shell.onArtStyle} schoolName={shell.schoolName} selection={selection} sources={sources} now={now}
+      waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} />
+  </div>;
 }

@@ -13,6 +13,7 @@ import { loadInterfaceThemePreference, saveInterfaceThemePreference } from '../i
 import { SchoolEntryController, type EntrySnapshot } from '../school-entry/controller';
 import { schoolEntryApi } from '../school-entry/http';
 import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
+import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
 import { SchoolShellFrame, type ShellViewState } from './frame';
 import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
@@ -42,7 +43,8 @@ export function shellNeedsLegacyCanvas(root: Element | null): boolean {
 /**
  * School app shell. Holds a navigation selector in mounted memory only; every page
  * and API keeps authorizing the exact school itself. Session invalidation, a school
- * context change or page hide conceal the school and drop the prefill.
+ * context change, blur, a hidden tab or page hide conceal the school and drop the prefill;
+ * only an explicit re-verification of the current identity and exact school restores it.
  */
 export { SCHOOL_SHELL_BARE_ROUTES } from './paths';
 
@@ -71,12 +73,14 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   useEffect(() => {
     entry.activate();
     const unsubscribe = entry.subscribe(next => { if (next.phase !== 'READY') setSchoolName(current => next.phase === 'LOADING' ? current : null); setSnapshot(next); });
-    const conceal = (event: Event) => { setSchoolName(null); entry.conceal(event.type === HON_SESSION_INVALIDATED_EVENT ? 'SESSION' : 'CONCEALED'); };
-    const events = [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT, 'pagehide'];
-    for (const name of events) window.addEventListener(name, conceal);
+    const conceal = (event: Event) => {
+      concealShellPrivateNow();
+      setSchoolName(null); entry.conceal(event.type === HON_SESSION_INVALIDATED_EVENT ? 'SESSION' : 'CONCEALED');
+    };
+    const stop = onShellPrivacyEvent(conceal, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]);
     const preferred = shellPreferredSchool(window.location.search);
     void (preferred ? entry.loadPreferred(preferred) : entry.load());
-    return () => { unsubscribe(); entry.dispose(); for (const name of events) window.removeEventListener(name, conceal); };
+    return () => { unsubscribe(); entry.dispose(); stop(); };
   }, [entry]);
 
   // Verified personal view preference for the selected school; presentation only.
@@ -102,6 +106,12 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [selection?.organizationId, selection?.schoolId, schoolName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setMenuOpen(false); }, [path]);
+  // Focus returns to whatever opened the menu once it closes (recorded before the panel takes focus).
+  const menuOpener = useRef<HTMLElement | null>(null);
+  const openMenu = useCallback((open: boolean) => {
+    if (open) menuOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setMenuOpen(open);
+  }, []);
 
   // Transitional: pages not yet migrated to the UI system may rely on the old light page
   // background. Give those (and only those) a light canvas so their text stays readable.
@@ -116,9 +126,22 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [path]);
   useEffect(() => {
     if (!menuOpen) return;
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
+    const opener = menuOpener.current;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setMenuOpen(false); return; }
+      if (event.key !== 'Tab') return;
+      // Keyboard focus wraps inside the modal Menu panel (the page behind it is inert).
+      const dialog = document.querySelector<HTMLElement>('[data-hon-ui="school"] [role="dialog"][aria-modal="true"]');
+      if (!dialog) return;
+      const focusable = [...dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')];
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      const inside = dialog.contains(document.activeElement);
+      if (event.shiftKey && (!inside || document.activeElement === first)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (!inside || document.activeElement === last)) { event.preventDefault(); first.focus(); }
+    };
     window.addEventListener('keydown', escape);
-    return () => window.removeEventListener('keydown', escape);
+    return () => { window.removeEventListener('keydown', escape); if (opener?.isConnected) opener.focus(); };
   }, [menuOpen]);
 
   const chooseMode = useCallback((next: HonInterfaceTheme) => {
@@ -152,7 +175,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
-    onMode={chooseMode} onMenu={setMenuOpen} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
+    onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
 }
