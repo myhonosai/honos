@@ -1,21 +1,16 @@
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { HON_SESSION_COOKIE, sessionConfig, verifySession } from '@hon/auth';
-import { StaffDashboard } from '../../../components/staff-dashboard';
+import React from 'react';
+import { requireVerifiedWebSession } from '../../../server/require-web-session';
+import { SchoolHome } from '../../../components/home/home';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'HON | Staff Operations Dashboard', description: 'Verified aggregate-only school operations dashboard.', referrer: 'no-referrer', robots: { index: false, follow: false } };
+export const metadata = { title: 'HON | Staff Operations Dashboard', description: 'Verified school home: today’s operations, AI team readiness and HON.', referrer: 'no-referrer', robots: { index: false, follow: false } };
 
-type StaffDashboardPageProps = { searchParams: Promise<{ organizationId?: string; schoolId?: string }> };
-function prefill(value: unknown): string | undefined { return typeof value === 'string' && value.length <= 80 ? value : undefined; }
-
-export default async function StaffDashboardPage({ searchParams }: StaffDashboardPageProps) {
-  let authenticated = false;
-  try {
-    const token = (await cookies()).get(HON_SESSION_COOKIE)?.value;
-    if (token) { verifySession(token, sessionConfig()); authenticated = true; }
-  } catch { /* fail closed */ }
-  if (!authenticated) redirect('/auth/login');
-  const query = await searchParams;
-  return <StaffDashboard initialScope={{ organizationId: prefill(query.organizationId), schoolId: prefill(query.schoolId) }} />;
+/**
+ * School Home. Fails closed without a verified session. The school comes from the shell's
+ * server-verified selection (the URL prefill is only a candidate); every panel's API
+ * re-authorizes the exact school.
+ */
+export default async function StaffDashboardPage(): Promise<React.ReactElement> {
+  await requireVerifiedWebSession();
+  return <SchoolHome />;
 }

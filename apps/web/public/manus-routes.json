@@ -213,6 +213,10 @@
       "title": "HON | Staff Operations Dashboard"
     },
     {
+      "path": "/staff/operations",
+      "title": "HON | Operations Report"
+    },
+    {
       "path": "/staff/command-center",
       "title": "HON | School Command Center"
     },
