@@ -14,7 +14,7 @@ const { ActionEngineService } = await import('../../../apps/api/dist/action/acti
 const ids = Object.fromEntries(['org','otherOrg','school','otherSchool','foreignSchool','user','actor','role','ai','work','otherWork','foreignWork','analysisWork','wrongWork','catalog','fallback','policy','otherPolicy'].map((key) => [key, randomUUID()]));
 const subject = `plan-${randomUUID()}`;
 const context = { organizationId: ids.org, schoolId: ids.school, principalId: ids.actor, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: randomUUID() };
-const input = { expectedVersion: 1, expectedState: 'READY', agentKey: 'alex', modality: 'TEXT', taskClass: 'SUMMARIZE', inputBudget: 1000, outputBudget: 500, maxProviderCostMicrounits: 100000 };
+const input = { expectedVersion: 1, expectedState: 'READY', agentKey: 'hon', modality: 'TEXT', taskClass: 'SUMMARIZE', inputBudget: 1000, outputBudget: 500, maxProviderCostMicrounits: 100000 };
 const database = new RuntimeDatabaseService();
 let groups = 0;
 const checked = () => { groups++; };
