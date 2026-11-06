@@ -10,6 +10,7 @@ HON HQ is a high-trust, separate company operator plane, not a back door into st
 
 - Organization/school directory, owned multi-location relationships, tenant lifecycle, authenticated support access, provisioning, suspended/restored accounts, and secure asset ownership transfer with source/target authorization.
 - Versioned plan catalog: Core/Complete, grandfathered Essential, founder/annual/lifetime grants, coupons, payment term and tier functionality changes enforced across API and UI.
+- Included AI team cost (internal, never billed per message; see [INCLUDED_AI_AND_FAIR_USE.md](INCLUDED_AI_AND_FAIR_USE.md)): per-school provider cost, internal usage units, fair-use alerts and pauses. Customer creative credits are a separate wallet.
 - Provider cost and premium credits: actual per-operation incurred cost, allowance issuance/reset, ledger, available versus reserved/spent credits, vendor reconciliation, alerts and gross contribution by tenant/tier.
 - HON company marketing: create and schedule *HON's own* landing pages, referral campaigns, social assets and provider-connected ads within approved budgets and owner publication steps.
 - Permanent referral program and optional scheduled, owner-activated contests. Verify milestones, dispute/refund eligibility, prize selection, fulfillment budget, public opt-in leaderboard, fraud checks.
