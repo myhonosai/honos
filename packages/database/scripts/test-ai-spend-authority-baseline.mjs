@@ -129,6 +129,7 @@ const { ClaireProviderRuntimeError } = await import('../../../apps/api/dist/ai/c
 const { ChadProviderRuntimeError } = await import('../../../apps/api/dist/ai/chad-provider-runtime.js');
 const { HonReplyProviderRuntimeError } = await import('../../../apps/api/dist/ai/hon-reply-provider-runtime.js');
 const { HonReplyService } = await import('../../../apps/api/dist/hon-conversation/hon-reply.service.js');
+const { StaffRoleService } = await import('../../../apps/api/dist/staff-roles/staff-role.service.js');
 const { CampaignService } = await import('../../../apps/api/dist/marketing/campaign.service.js');
 const { SaasBillingService } = await import('../../../apps/api/dist/saas-billing/saas-billing.service.js');
 const { SaasSchoolBillingService } = await import('../../../apps/api/dist/school-billing/saas-school-billing.service.js');
@@ -2120,7 +2121,16 @@ try {
   assert.equal(legacyInv.status, 'PENDING');
   const legacyRef = (await tenant(context(o), (c) => c.query('SELECT hon.teaching_planning_reference($1,$2::uuid) d', [o.subject, legacyInv.id]))).rows[0].d;
   assert.equal(legacyRef.planId, null);
-  const legacyPlan = await plans.plan({ ...context(o), idempotencyKey: legacyInv.id }, legacyRef.workItemId, { expectedVersion: legacyRef.workVersion, expectedState: 'READY', agentKey: 'claire', modality: 'TEXT', taskClass: 'DRAFT_TEACHING', inputBudget: 4096, outputBudget: 1024, maxProviderCostMicrounits: 100000 });
+  // The pre-K1 planner accepted any agent key; 0212 (later) binds each agent to a capability and never plans 'claire'.
+  // Simulate the old planner for this one call by temporarily mapping 'claire' to its old teaching permission, then
+  // restore the exact 0212 definition (INV-12 checks programs are unchanged).
+  const capabilityDef = (await row("SELECT pg_get_functiondef('hon.ai_agent_capability_permission(text)'::regprocedure) d")).d;
+  let legacyPlan;
+  try {
+    await admin.query(capabilityDef.replace("WHEN 'kai' THEN", "WHEN 'claire' THEN 'teaching.assistant.use' WHEN 'kai' THEN"));
+    legacyPlan = await plans.plan({ ...context(o), idempotencyKey: legacyInv.id }, legacyRef.workItemId, { expectedVersion: legacyRef.workVersion, expectedState: 'READY', agentKey: 'claire', modality: 'TEXT', taskClass: 'DRAFT_TEACHING', inputBudget: 4096, outputBudget: 1024, maxProviderCostMicrounits: 100000 });
+  } finally { await admin.query(capabilityDef); }
+  assert.equal((await row("SELECT hon.ai_agent_capability_permission('claire') c")).c, null, '0212 binding restored');
   assert.equal(legacyPlan.status, 'PLANNED', JSON.stringify(legacyPlan));
   // Why recovery is needed: planning Kai under the same key conflicts with the recorded claire fingerprint.
   const kaiReplan = await settle(plans.plan({ ...context(o), idempotencyKey: legacyInv.id }, legacyRef.workItemId, { expectedVersion: legacyRef.workVersion, expectedState: 'READY', agentKey: 'kai', modality: 'TEXT', taskClass: 'DRAFT_TEACHING', inputBudget: 4096, outputBudget: 1024, maxProviderCostMicrounits: 100000 }));
@@ -2176,6 +2186,101 @@ try {
   const freshView = await agents.claire.service.generate(context(o), fresh.inv.id);
   assert.deepEqual([freshView.status, await plansFor(fresh.ref.workItemId), fakes.claire.calls - nFresh, (await row('SELECT p.agent_key FROM hon.teaching_ai_invocations i JOIN hon.ai_invocation_plans p ON p.id=i.plan_id WHERE i.id=$1', [fresh.inv.id])).agent_key], ['AWAITING_APPROVAL', 1, 1, 'kai'], JSON.stringify(freshView));
   pass('INV-26', 'K1: Kai is the Teaching & Curriculum assistant: teaching turns and plans are recorded as kai (resend replays), the deprecated claire alias is stored as kai, legacy claire turns keep their recorded key and are shown as Kai, a pre-K1 committed but unlinked claire plan resumes exactly once with its recorded key, recovery adopts only the invocation own completed planning outcome (wrong key, wrong requester, ambiguous and mismatched evidence stop with no fresh plan or call; absent evidence plans fresh once), a kai plan is teaching only, readiness and the delegate list name Kai, and Kai without teaching.assistant.use is refused before any provider call');
+  }
+  // ---- INV-27 (0212): per-agent capability binding in the planner; teaching-only staff use Kai and nothing else ----
+  {
+  const { TEACHING_STAFF_ROLE_PRESET, TEACHING_STAFF_ROLE_EXCLUDED_PREFIXES } = await import('@hon/contracts');
+  const o = await makeOrg('inv-27');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const work = async (type) => (await row("INSERT INTO hon.work_items(organization_id,school_id,work_type,status,subject_type,subject_id,payload,correlation_id) VALUES($1,$2,$5,'READY','AI0_INV27',$3,'{}',$4) RETURNING id", [o.id, o.school, K(), K(), type])).id;
+  const plan = async (agentKey, taskClass = 'ANALYZE', ctx = context(o)) => {
+    const r = await settle(plans.plan(ctx, await work(taskClass === 'DRAFT_TEACHING' ? 'AI_DRAFT_TEACHING' : 'AI_ANALYZE'), { expectedVersion: 1, expectedState: 'READY', agentKey, modality: 'TEXT', taskClass, inputBudget: 1000, outputBudget: 200, maxProviderCostMicrounits: 10000 }));
+    return r.error ? (r.error.getResponse?.().code ?? r.error.constructor?.name ?? r.error.message) : r.value.status;
+  };
+  // 1. The owner (every capability) may plan each working agent; profile-only agents are never plannable.
+  for (const agentKey of ['hon', 'marcus', 'chad']) assert.equal(await plan(agentKey), 'PLANNED', `${agentKey} plannable by an owner`);
+  assert.equal(await plan('kai', 'DRAFT_TEACHING'), 'PLANNED', 'kai plannable for teaching by an owner');
+  for (const agentKey of ['alex', 'maya', 'jordan', 'lena', 'eian', 'claire']) assert.equal(await plan(agentKey), 'PERMISSION_DENIED', `${agentKey} has no working backend and is never planned`);
+  // 2. The reviewed teaching-staff preset: every code exists and is staff-assignable, none is excluded.
+  const codes = [...TEACHING_STAFF_ROLE_PRESET.permissionCodes];
+  const known = await rows('SELECT code, is_staff_assignable FROM hon.permissions WHERE code = ANY($1::text[]) ORDER BY code', [codes]);
+  assert.deepEqual(known.map((k) => [k.code, k.is_staff_assignable]), codes.sort().map((c) => [c, true]), JSON.stringify(known));
+  assert(codes.every((c) => !TEACHING_STAFF_ROLE_EXCLUDED_PREFIXES.some((x) => c.startsWith(x))));
+  // 3. The owner creates the exported preset through the canonical staff-role command and grants it to a separate,
+  // registered staff member. The owner keeps every permission; the instructor holds exactly the preset.
+  const t = { user: K(), principal: K(), subject: `ai0-inv-27-instructor-${K()}` };
+  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1::uuid,$2,$1::uuid::text||'@example.test','AI-0 synthetic instructor')", [t.user, t.subject]);
+  await admin.query("INSERT INTO hon.principals(id,principal_type,user_id,display_name) VALUES($1,'HUMAN_USER',$2,'AI-0 synthetic instructor')", [t.principal, t.user]);
+  const staffRoles = new StaffRoleService(db);
+  const created = (await staffRoles.create(context(o), { ...TEACHING_STAFF_ROLE_PRESET, permissionCodes: [...TEACHING_STAFF_ROLE_PRESET.permissionCodes] })).record;
+  assert.deepEqual([created.code, created.name, [...created.permissionCodes].sort()], ['CUSTOM_TEACHING_STAFF', 'Teaching staff', [...codes].sort()], JSON.stringify(created));
+  const grantInstructor = async () => (await staffRoles.grant(context(o), { roleId: created.id, targetPrincipalId: t.principal, targetExternalSubject: t.subject })).record;
+  let grant = await grantInstructor();
+  assert.deepEqual((await rows('SELECT role_id FROM hon.principal_role_grants WHERE principal_id=$1 AND revoked_at IS NULL', [t.principal])).map((r) => r.role_id), [created.id], 'the instructor holds only the preset role');
+  const tctx = (patch = {}) => context(o, { principalId: t.principal, externalSubject: t.subject, ...patch });
+  const tscope = { organizationId: o.id, schoolId: o.school, principalId: t.principal, externalSubject: t.subject };
+  assert.equal(await plan('kai', 'DRAFT_TEACHING', tctx()), 'PLANNED', 'teaching staff plan Kai');
+  assert.equal(await plan('hon', 'ANALYZE', tctx()), 'PLANNED', 'teaching staff may ask HON');
+  for (const agentKey of ['marcus', 'chad', 'alex', 'claire']) assert.equal(await plan(agentKey, 'ANALYZE', tctx()), 'PERMISSION_DENIED', `teaching staff cannot plan ${agentKey}`);
+  const conv = await hon.create(tscope, { title: 'Teaching staff' }, K());
+  const before = { kai: fakes.claire.calls, marcus: fakes.marcus.calls, chad: fakes.chad.calls };
+  const kai = await hon.sendTurn(tscope, conv.id, { text: 'Outline a white belt practice.', delegation: { agentKey: 'kai', curriculumId: o.curriculum } }, K());
+  assert.deepEqual([kai.status, kai.delegatedAgentKeys], ['AWAITING_APPROVAL', ['kai']], JSON.stringify(kai));
+  const marcus = await hon.sendTurn(tscope, conv.id, { text: 'Draft a spring post.', delegation: { agentKey: 'marcus', campaignId: o.campaign ?? K() } }, K());
+  const chad = await hon.sendTurn(tscope, conv.id, { text: 'Check in kindly.', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' } }, K());
+  assert.deepEqual([marcus.status, chad.status], ['FAILED', 'FAILED'], JSON.stringify([marcus, chad]));
+  assert.deepEqual([fakes.claire.calls - before.kai, fakes.marcus.calls - before.marcus, fakes.chad.calls - before.chad], [1, 0, 0], 'one Kai call; no marketing or CRM provider call');
+  // HON answers teaching staff without school business facts (no reporting.view).
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY';
+  const asked = await hon.sendTurn(tscope, conv.id, { text: 'What should I teach today?', delegation: null }, K());
+  assert.equal(asked.status, 'COMPLETED', JSON.stringify(asked));
+  assert.match(fakes.hon.inputs.at(-1).facts, /NOT_AUTHORIZED/, 'teaching staff get no school business facts');
+  // 4. Authority is checked again after the planner's last wait. A blocker holds the per-key advisory lock the planner
+  // takes after its first checks; once pg_locks shows the planner waiting there, the instructor's grant is revoked (or
+  // its effective_until passes), then the blocker commits. The fresh plan and the exact replay must both be refused with
+  // no plan, audit, outbox or idempotency effect.
+  const advisoryWaiting = async () => (await row("SELECT count(*)::int n FROM pg_locks WHERE locktype='advisory' AND NOT granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database())")).n > 0;
+  const effects = (workId) => row(`SELECT (SELECT count(*)::int FROM hon.ai_invocation_plans WHERE work_item_id=$1) plans,
+    (SELECT count(*)::int FROM hon.audit_events WHERE organization_id=$2 AND actor_principal_id=$3 AND action_code='ai.invocation.plan') audits,
+    (SELECT count(*)::int FROM hon.outbox_events WHERE organization_id=$2 AND event_type='ai.invocation.planned' AND payload->>'workItemId'=$1::text) outbox,
+    (SELECT count(*)::int FROM hon.idempotency_records WHERE organization_id=$2 AND principal_id=$3) keys`, [workId, o.id, t.principal]);
+  const raceEvidence = [];
+  for (const [replay, change] of [[false, 'revoke'], [false, 'expire'], [true, 'revoke'], [true, 'expire']]) {
+    const label = `${replay ? 'replay' : 'fresh'}/${change}`;
+    if (!(await row('SELECT EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id=$1 AND revoked_at IS NULL AND (effective_until IS NULL OR effective_until>clock_timestamp())) live', [t.principal])).live) grant = await grantInstructor();
+    const workId = await work('AI_DRAFT_TEACHING');
+    const input = { expectedVersion: 1, expectedState: 'READY', agentKey: 'kai', modality: 'TEXT', taskClass: 'DRAFT_TEACHING', inputBudget: 1000, outputBudget: 200, maxProviderCostMicrounits: 10000 };
+    const key = K();
+    if (replay) assert.equal((await plans.plan(tctx({ idempotencyKey: key }), workId, input)).status, 'PLANNED', `${label}: first plan`);
+    if (change === 'expire') await admin.query("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()+interval '3 seconds' WHERE id=$1", [grant.id]);
+    const prior = await effects(workId);
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    let outcome, settledEarly = false;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`${o.id}:${o.school}:${t.principal}:${key}`]);
+      const pending = settle(plans.plan(tctx({ idempotencyKey: key }), workId, input)).then((r) => { settledEarly = true; return r; });
+      for (const end = Date.now() + 2500; !(await advisoryWaiting()); await sleep(20)) {
+        if (settledEarly || Date.now() > end) throw new Error(`${label}: the planner did not pass its first checks and wait on the per-key lock`);
+      }
+      if (change === 'revoke') await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE id=$1', [grant.id, o.principal]);
+      else for (const end = Date.now() + 6000; !(await row('SELECT clock_timestamp()>=effective_until gone FROM hon.principal_role_grants WHERE id=$1', [grant.id])).gone; await sleep(50)) if (Date.now() > end) throw new Error(`${label}: grant did not expire`);
+      assert.equal(settledEarly, false, `${label}: still waiting when authority ended`);
+      await blocker.query('COMMIT');
+      outcome = await pending;
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await blocker.end();
+    }
+    const code = outcome.error ? (outcome.error.getResponse?.().code ?? String(outcome.error)) : outcome.value.status;
+    assert.equal(code, 'PERMISSION_DENIED', `${label}: authority ended during the wait: ${JSON.stringify(outcome.value ?? String(outcome.error))}`);
+    assert.deepEqual(await effects(workId), prior, `${label}: no plan, audit, outbox or idempotency effect`);
+    raceEvidence.push(label);
+  }
+  for (const f of ['ai_agent_capability_permission(text)', 'require_ai_agent_capability(text)', 'hold_and_recheck_ai_planning_authority(text)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
+  pass('INV-27', `0212: the planner requires each agent's own capability (hon ai.invocation.plan, kai teaching.assistant.use, marcus marketing.assistant.use, chad crm.assistant.follow_up_draft); profile-only agents (alex, maya, jordan, lena, eian, claire) are never planned; the reviewed teaching-staff preset (CUSTOM_TEACHING_STAFF) is staff-assignable, excludes CRM/people/billing/reporting/marketing/approval, and is created through StaffRoleService and granted to a separate instructor; the instructor plans and uses Kai, is refused for Marcus, Chad and profile-only agents before any provider call, and gets HON answers without school business facts; authority is re-held and re-checked after the planner waits (pg_locks-observed ${raceEvidence.join(', ')}: refused, no plan/audit/outbox/idempotency effect)`);
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
