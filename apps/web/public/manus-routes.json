@@ -29,6 +29,10 @@
       "title": "HON HQ | School Directory"
     },
     {
+      "path": "/hq/ai-safety",
+      "title": "HON HQ | AI Safety"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },
