@@ -53,6 +53,11 @@ describe('school home view', () => {
     expect(saturated).toContain('data-schedule="partial"');
     expect(saturated).not.toContain(esc(homeText('en', 'scheduleEmpty')));
   });
+  it('presents the AI team as included: a reached limit is never a customer charge, and no credit wording appears', () => {
+    expect(homeText('en', 'statusBUDGET')).toBe('Included AI limit reached this month. Nothing is charged.');
+    for (const language of ['en', 'ko', 'es']) expect(homeText(language, 'statusBUDGET')).not.toMatch(/budget|presupuesto|예산/i);
+    expect(render()).not.toMatch(/credit|crédito|크레딧/i);
+  });
   it('tells the viewer the overview is hidden while away, with no school content', () => {
     const html = render({ selection: null, schoolName: null, concealed: true });
     expect(html).toContain(esc(homeText('en', 'concealed')));
