@@ -90,7 +90,7 @@ const draftWork = {
 const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AWAITING_APPROVAL', requestedByPrincipalId: id(60), effectiveAuthorityMode: 'CONFIRM', policyVersion: 1, approvalExpiresAt: iso(hours + 48), createdAt: iso(hours) });
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
-const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0 };
+const hon = { kai: true, reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0 };
 const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'claire', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
 const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, ...over });
 let honSeq = 700;
@@ -124,6 +124,15 @@ async function honApi(route, path, method, prefix) {
   const c = turn && hon.conversations.find((x) => x.id === turn[1]);
   if (!c) return json(route, 404, { code: 'HON_CONVERSATION_NOT_FOUND' });
   const ask = JSON.parse(body); const turnId = id(honSeq += 1);
+  if (ask.delegation) {
+    const agent = ask.delegation.agentKey; const actionRequestId = id(honSeq += 1); const workItemId = id(honSeq += 1); const invocationId = id(honSeq += 1);
+    c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
+    c.turns.push({ turnId, role: agent, text: null, createdAt: iso(0), status: 'AWAITING_APPROVAL', reason: null, references: { workItemId, actionRequestId, invocationId }, replyDetail: null });
+    c.turnCount += 1; c.status = 'AWAITING_APPROVAL';
+    const receipt = { turnId, conversationId: c.id, status: 'AWAITING_APPROVAL', reason: null, delegatedAgentKeys: [agent], actionRequestIds: [actionRequestId], workItemIds: [workItemId], invocationId, reply: null, replyDetail: null };
+    hon.turns.set(headers['idempotency-key'], receipt);
+    return json(route, 200, { data: receipt });
+  }
   const long = /long/i.test(ask.text);
   const text = ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
     : long ? 'Here is a detailed plan for this week. First, follow up the three new leads from the weekend…' : 'You have 3 new leads in the last 24 hours and 2 trial appointments tomorrow. I suggest following up the leads first.';
@@ -149,6 +158,12 @@ async function api(route) {
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
   if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
+  if (path === '/api/v1/marketing/campaigns') return json(route, 200, { data: [
+    { id: id(81), code: 'SPRING', name: 'Spring beginner classes', goal: 'Trials', offerLabel: 'Free week', channel: 'REFERRAL', startsAt: iso(0), endsAt: iso(720), plannedBudgetMinor: 0, currency: 'USD', version: 2, status: 'ACTIVE', createdAt: iso(-48), updatedAt: iso(-2) },
+    { id: id(82), code: 'OLD', name: 'Archived summer camp', goal: 'Camp', offerLabel: '', channel: 'REFERRAL', startsAt: iso(-900), endsAt: iso(-700), plannedBudgetMinor: 0, currency: 'USD', version: 1, status: 'ARCHIVED', createdAt: iso(-900), updatedAt: iso(-700) }] });
+  if (path === `${prefix}/crm/leads`) return json(route, 200, { data: [
+    { id: id(91), status: 'OPEN', pipelineStageId: id(92), primaryPersonId: id(93), version: 3, createdAt: iso(-20), givenName: 'Sam', familyName: 'Rivera' }], meta: {} });
+  if (path === '/api/v1/staff/teaching-assistant/curricula') return hon.kai ? json(route, 200, { data: { items: [{ id: id(95), name: 'Kids belt curriculum', version: 4 }] } }) : json(route, 404, { code: 'NOT_FOUND' });
   if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot() }, meta: {} });
   if (path === `${prefix}/interface-theme`) {
     if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -435,7 +450,7 @@ await check('no unsupported capability presented as operational', async () => {
 });
 
 // ---------- Ask HON conversation ----------
-function resetHon(reply) { hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; }
+function resetHon(reply) { hon.kai = true; hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; }
 async function fullHon(viewport, nextTheme = 'modern') {
   theme = nextTheme; mode = 'ready';
   const ctx = await context(viewport); const page = await ctx.newPage();
@@ -558,6 +573,60 @@ await check('Ask HON: leaving the page mid-reply conceals it; the late result st
   await shot(page, 'ask-hon-concealed');
   await pageRefresh(ask).click();
   await ask.getByText('Private follow-up about Sam').waitFor();
+  await ctx.close();
+});
+
+await check('Ask HON: delegate to Marcus, Chad and Kai with server-listed targets only', async () => {
+  resetHon(true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  const who = ask.getByLabel('Who should handle this?');
+  await who.selectOption('marcus');
+  const campaign = ask.getByLabel('Campaign', { exact: true });
+  await campaign.waitFor();
+  assert.deepEqual(await campaign.locator('option').allInnerTexts(), ['Choose…', 'Spring beginner classes'], 'archived campaigns are not offered');
+  await askBox(ask).waitFor({ state: 'detached' }).catch(() => {});
+  const instructions = ask.getByRole('textbox', { name: 'Instructions for Marcus' });
+  await instructions.fill('Draft a friendly spring beginner email');
+  assert.equal(await ask.getByRole('button', { name: 'Send to Marcus' }).isDisabled(), true, 'no campaign picked');
+  await campaign.selectOption(id(81));
+  await ask.getByRole('button', { name: 'Send to Marcus' }).click();
+  await ask.getByText('Awaiting approval').first().waitFor();
+  assert.ok(await ask.getByRole('link', { name: /Review this proposal in Action Center/ }).first().isVisible());
+  assert.deepEqual(JSON.parse(hon.posts.at(-1).body), { text: 'Draft a friendly spring beginner email', delegation: { agentKey: 'marcus', campaignId: id(81) } });
+  await axe(page, 'ask-hon-delegate-marcus');
+  await shot(page, 'ask-hon-delegate-marcus');
+  await who.selectOption('chad');
+  await ask.getByLabel('Lead', { exact: true }).selectOption(id(91));
+  await ask.getByLabel('Purpose').selectOption('TRIAL_REMINDER');
+  await ask.getByRole('textbox', { name: 'Instructions for Chad' }).fill('Remind Sam about Tuesday');
+  await ask.getByRole('button', { name: 'Send to Chad' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('section[data-hon-conversation] [data-role="chad"]').length === 1);
+  assert.deepEqual(JSON.parse(hon.posts.at(-1).body).delegation, { agentKey: 'chad', leadId: id(91), expectedLeadVersion: 3, purpose: 'TRIAL_REMINDER' });
+  await who.selectOption('claire');
+  await ask.getByLabel('Curriculum', { exact: true }).selectOption(id(95));
+  await ask.getByRole('textbox', { name: 'Instructions for Kai' }).fill('Notes for the next yellow belt class');
+  await ask.getByRole('button', { name: 'Send to Kai' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('section[data-hon-conversation] [data-role="claire"]').length === 1);
+  assert.deepEqual(JSON.parse(hon.posts.at(-1).body).delegation, { agentKey: 'claire', curriculumId: id(95) });
+  await shot(page, 'ask-hon-delegate-all', true);
+  // Hiding drops the lead list; picking again re-reads it.
+  await who.selectOption('chad');
+  await ask.getByLabel('Lead', { exact: true }).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => document.querySelector('section[data-hon-conversation]')?.getAttribute('data-hon-conversation') === 'CONCEALED');
+  assert.ok(!(await ask.innerText()).includes('Sam Rivera'), 'lead names hidden');
+  await ctx.close();
+});
+
+await check('Ask HON: Kai without a curriculum read cannot be sent', async () => {
+  resetHon(true); hon.kai = false;
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  await ask.getByLabel('Who should handle this?').selectOption('claire');
+  await ask.getByText(/Kai isn’t available to you here yet/).waitFor();
+  await ask.getByRole('textbox', { name: 'Instructions for Kai' }).fill('Notes');
+  assert.equal(await ask.getByRole('button', { name: 'Send to Kai' }).isDisabled(), true);
+  assert.equal(hon.posts.length, 0);
+  await shot(page, 'ask-hon-kai-unavailable');
   await ctx.close();
 });
 

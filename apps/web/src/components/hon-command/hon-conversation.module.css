@@ -60,3 +60,8 @@
 }
 @media (prefers-reduced-motion: reduce) { .conversation * { scroll-behavior: auto; } }
 .turn > button { justify-self: start; }
+.delegate { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0d1d2e; }
+.delegate select { min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid #3b5269; border-radius: 10px; background: #0a1625; color: #eef6fc; font: inherit; }
+.delegate select:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.delegate, .composer { min-width: 0; }
+.delegate select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; text-overflow: ellipsis; }

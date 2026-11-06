@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   HON_REPLY_CONCEALED_REASON, HON_REPLY_LIMITS, type HonConversationReadiness, type HonConversationSummary, type HonConversationThread,
-  type HonConversationTurn, type HonReplyMode, type HonTurnReceipt,
+  type FollowUpDraftPurpose, type HonConversationTurn, type HonReplyMode, type HonTurnReceipt, type HonTurnRequest,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import {
@@ -11,6 +11,10 @@ import {
   type HonSchool, type PreparedHonCommand,
 } from './hon-conversation-http';
 import { honTurnStatusPresentation } from './hon-conversation';
+import {
+  FOLLOW_UP_PURPOSE_LABEL, HON_DELEGATE_PRESENTATION, HON_DELEGATION_TARGETS, HON_FOLLOW_UP_PURPOSES, delegateTextLimit, honDelegation,
+  type HonDelegateChoice, type HonDelegationTarget, type HonDelegationTargetsApi,
+} from './hon-delegation-targets';
 import styles from './hon-conversation.module.css';
 
 const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Kai', chad: 'Chad', HUMAN: 'You' };
@@ -54,7 +58,12 @@ export type ConversationPhase = 'LOADING' | 'READY' | 'CONCEALED' | HonConversat
 type Pending = { prepared: PreparedHonCommand; kind: 'create' | 'turn'; label: string; state: 'SENDING' | HonConversationFailure; conversationId: string | null; code?: string | null;
   /** The question as typed, restored to the composer after a definitive refusal so nothing typed is lost. */
   text?: string;
-  first?: Readonly<{ text: string; replyMode: HonReplyMode }> };
+  first?: Readonly<HonTurnRequest> };
+
+/** Who handles the next message. Targets come only from server reads; `null` means no read exists for that specialist yet. */
+export type HonDelegateState = Readonly<{ choice: HonDelegateChoice; targets: 'IDLE' | 'LOADING' | 'FAILED' | null | readonly HonDelegationTarget[]; targetId: string; purpose: FollowUpDraftPurpose }>;
+export const HON_DELEGATE_IDLE: HonDelegateState = { choice: 'hon', targets: 'IDLE', targetId: '', purpose: 'INTRODUCTION' };
+const selectedTarget = (d: HonDelegateState) => Array.isArray(d.targets) ? (d.targets as readonly HonDelegationTarget[]).find((t) => t.id === d.targetId) ?? null : null;
 
 export type HonConversationViewProps = {
   presentation: 'panel' | 'full'; phase: ConversationPhase; readiness: HonConversationReadiness | null; conversations: HonConversationSummary[];
@@ -62,6 +71,7 @@ export type HonConversationViewProps = {
   draft: string; mode: HonReplyMode;
   onDraft(text: string): void; onMode(mode: HonReplyMode): void; onSend(): void; onOpen(id: string): void; onNew(): void;
   onContinue(turn: HonConversationTurn): void; onRetry(): void; onDismiss(): void; onRefresh(): void;
+  delegate?: HonDelegateState; onDelegate?(choice: HonDelegateChoice): void; onTarget?(id: string): void; onPurpose?(purpose: FollowUpDraftPurpose): void;
 };
 
 function Turn({ turn, onContinue, locked }: { turn: HonConversationTurn; onContinue: (turn: HonConversationTurn) => void; locked: boolean }): React.ReactElement {
@@ -87,7 +97,12 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
   const locked = pending !== null && pending.state === 'SENDING';
   const canAsk = phase === 'READY' && readiness?.honReply === true && !locked;
   const id = `hon-ask-${props.presentation}`;
-  const left = HON_REPLY_LIMITS.questionCharacters - props.draft.length;
+  const delegate = props.delegate ?? HON_DELEGATE_IDLE;
+  const specialists = (readiness?.availableAgentKeys ?? []).filter((key) => key in HON_DELEGATE_PRESENTATION);
+  const choice: HonDelegateChoice = delegate.choice !== 'hon' && specialists.includes(delegate.choice) ? delegate.choice : 'hon';
+  const limit = delegateTextLimit(choice, HON_REPLY_LIMITS.questionCharacters);
+  const left = limit - props.draft.length;
+  const delegationReady = choice === 'hon' || honDelegation(choice, selectedTarget(delegate), delegate.purpose) !== null;
   return <section className={styles.conversation} aria-labelledby={`${id}-title`} data-hon-conversation={phase} data-presentation={props.presentation}>
     <div className={styles.head}>
       <h3 id={`${id}-title`}>Ask HON</h3>
@@ -120,15 +135,38 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
           {thread.turns.map((turn, index) => <Turn key={`${turn.turnId}-${index}`} turn={turn} onContinue={props.onContinue} locked={locked} />)}
         </ol> : null}
         {thread === null && props.threadPhase === 'NONE' ? <p className={styles.note}>Ask about leads, trials, memberships, attendance or what to do next. Your first message starts a new conversation.</p> : null}
-        <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); if (canAsk && props.draft.trim()) props.onSend(); }}>
-          <label htmlFor={`${id}-text`}>Message HON</label>
-          <textarea id={`${id}-text`} rows={props.presentation === 'full' ? 3 : 2} maxLength={HON_REPLY_LIMITS.questionCharacters} value={props.draft} disabled={!canAsk}
+        <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); if (canAsk && delegationReady && props.draft.trim()) props.onSend(); }}>
+          {specialists.length ? <div className={styles.delegate}>
+            <label htmlFor={`${id}-who`}>Who should handle this?</label>
+            <select id={`${id}-who`} value={choice} disabled={!canAsk} onChange={(event) => props.onDelegate?.(event.target.value as HonDelegateChoice)}>
+              <option value="hon">HON · answer a question</option>
+              {specialists.map((key) => <option key={key} value={key}>{HON_DELEGATE_PRESENTATION[key].name} · {HON_DELEGATE_PRESENTATION[key].task}</option>)}
+            </select>
+            {choice !== 'hon' ? <>
+              {delegate.targets === 'LOADING' || delegate.targets === 'IDLE' ? <p role="status" className={styles.meta}>Loading choices…</p> : null}
+              {delegate.targets === 'FAILED' ? <p role="alert" className={styles.meta}>Choices could not be verified. Nothing can be picked right now.</p> : null}
+              {delegate.targets === null ? <p className={styles.meta} data-target-unavailable="">{HON_DELEGATE_PRESENTATION[choice].name} isn’t available to you here yet: no {HON_DELEGATE_PRESENTATION[choice].pick.toLowerCase()} can be picked for your role at this school.</p> : null}
+              {Array.isArray(delegate.targets) ? (delegate.targets.length === 0 ? <p className={styles.meta}>{HON_DELEGATE_PRESENTATION[choice].empty}</p>
+                : <><label htmlFor={`${id}-target`}>{HON_DELEGATE_PRESENTATION[choice].pick}</label>
+                  <select id={`${id}-target`} value={delegate.targetId} disabled={!canAsk} onChange={(event) => props.onTarget?.(event.target.value)}>
+                    <option value="">Choose…</option>
+                    {(delegate.targets as readonly HonDelegationTarget[]).map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
+                  </select></>) : null}
+              {choice === 'chad' && Array.isArray(delegate.targets) && delegate.targets.length ? <><label htmlFor={`${id}-purpose`}>Purpose</label>
+                <select id={`${id}-purpose`} value={delegate.purpose} disabled={!canAsk} onChange={(event) => props.onPurpose?.(event.target.value as FollowUpDraftPurpose)}>
+                  {HON_FOLLOW_UP_PURPOSES.map((item) => <option key={item} value={item}>{FOLLOW_UP_PURPOSE_LABEL[item]}</option>)}
+                </select></> : null}
+              <p className={styles.meta}>{HON_DELEGATE_PRESENTATION[choice].name} prepares a draft for Action Center. Nothing is sent, published or changed until a person approves it.</p>
+            </> : null}
+          </div> : null}
+          <label htmlFor={`${id}-text`}>{choice === 'hon' ? 'Message HON' : `Instructions for ${HON_DELEGATE_PRESENTATION[choice].name}`}</label>
+          <textarea id={`${id}-text`} rows={props.presentation === 'full' ? 3 : 2} maxLength={limit} value={props.draft} disabled={!canAsk}
             onChange={(event) => props.onDraft(event.target.value)} aria-describedby={`${id}-help`} placeholder={canAsk ? 'How can I help you today?' : 'HON is not available right now'} />
           <div className={styles.composerRow}>
-            <fieldset className={styles.modes} disabled={!canAsk}><legend>Answer</legend>
+            {choice === 'hon' ? <fieldset className={styles.modes} disabled={!canAsk}><legend>Answer</legend>
               {(['STANDARD', 'DETAILED'] as const).map((mode) => <label key={mode}><input type="radio" name={`${id}-mode`} checked={props.mode === mode} onChange={() => props.onMode(mode)} />{mode === 'STANDARD' ? 'Quick' : 'Detailed'}</label>)}
-            </fieldset>
-            <button type="submit" disabled={!canAsk || props.draft.trim().length === 0}>Send</button>
+            </fieldset> : <span />}
+            <button type="submit" disabled={!canAsk || !delegationReady || props.draft.trim().length === 0}>{choice === 'hon' ? 'Send' : `Send to ${HON_DELEGATE_PRESENTATION[choice].name}`}</button>
           </div>
           <p id={`${id}-help`} className={styles.meta}>{left.toLocaleString()} characters left. Don’t include passwords, card numbers or medical details.</p>
         </form>
@@ -142,7 +180,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
  * Private conversation content is concealed synchronously on blur, a hidden tab, page hide or session end, and shown again
  * only after an explicit Refresh. A sent message is never cancelled: its outcome and exact retry are kept.
  */
-export function HonConversation({ school, presentation, api = HON_CONVERSATION_API }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi }): React.ReactElement {
+export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, targets = HON_DELEGATION_TARGETS }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; targets?: HonDelegationTargetsApi }): React.ReactElement {
   const [phase, setPhase] = useState<ConversationPhase>('LOADING');
   const [readiness, setReadiness] = useState<HonConversationReadiness | null>(null);
   const [conversations, setConversations] = useState<HonConversationSummary[]>([]);
@@ -153,6 +191,17 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const [mode, setMode] = useState<HonReplyMode>('STANDARD');
   const generation = useRef(0), reads = useRef<AbortController | null>(null), concealed = useRef(false), ended = useRef(false), mounted = useRef(true);
   const openId = useRef<string | null>(null);
+  const [delegate, setDelegate] = useState<HonDelegateState>(HON_DELEGATE_IDLE);
+  const targetRead = useRef<AbortController | null>(null);
+  const chooseDelegate = useCallback((choice: HonDelegateChoice) => {
+    targetRead.current?.abort(); targetRead.current = null;
+    if (choice === 'hon' || concealed.current) { setDelegate({ ...HON_DELEGATE_IDLE, choice: concealed.current ? 'hon' : choice }); return; }
+    const abort = new AbortController(); targetRead.current = abort;
+    setDelegate({ ...HON_DELEGATE_IDLE, choice, targets: 'LOADING' });
+    targets.load(school, choice, abort.signal).then(
+      (list) => { if (!abort.signal.aborted && !concealed.current) setDelegate((now) => now.choice === choice ? { ...now, targets: list } : now); },
+      () => { if (!abort.signal.aborted && !concealed.current) setDelegate((now) => now.choice === choice ? { ...now, targets: 'FAILED' } : now); });
+  }, [targets, school]);
 
   const readThread = useCallback((conversationId: string, current: number, signal: AbortSignal) => {
     setThreadPhase('LOADING');
@@ -183,12 +232,14 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       concealed.current = true; generation.current++; reads.current?.abort();
       for (const node of document.querySelectorAll<HTMLElement>('[data-hon-private]')) { node.hidden = true; node.inert = true; }
       setConversations([]); setThread(null); setThreadPhase('NONE');
+      // Target lists name real leads and campaigns: dropped while hidden, re-read only when picked again.
+      targetRead.current?.abort(); targetRead.current = null; setDelegate(HON_DELEGATE_IDLE);
       if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
     };
     const windowEvents = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT];
     for (const name of windowEvents) window.addEventListener(name, conceal);
     document.addEventListener('visibilitychange', conceal);
-    return () => { mounted.current = false; generation.current++; reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); document.removeEventListener('visibilitychange', conceal); };
+    return () => { mounted.current = false; generation.current++; reads.current?.abort(); targetRead.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); document.removeEventListener('visibilitychange', conceal); };
   }, [load]);
 
   const afterSuccess = useCallback(() => { setPending(null); if (!concealed.current) load(); }, [load]);
@@ -203,7 +254,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
         const created = result as HonConversationSummary; openId.current = created.id;
         const first = next.first;
         if (first) {
-          try { run({ prepared: prepareTurn(school, created.id, { text: first.text, delegation: null, replyMode: first.replyMode }), kind: 'turn', label: 'Your message to HON', state: 'SENDING', conversationId: created.id, text: first.text }); return; }
+          try { run({ prepared: prepareTurn(school, created.id, first), kind: 'turn', label: next.label, state: 'SENDING', conversationId: created.id, text: first.text }); return; }
           catch { /* fall through to refresh */ }
         }
       }
@@ -220,22 +271,27 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const send = () => {
     const text = draft.trim();
     if (!text || concealed.current) return;
+    const delegation = delegate.choice === 'hon' ? null : honDelegation(delegate.choice, selectedTarget(delegate), delegate.purpose);
+    if (delegate.choice !== 'hon' && !delegation) return;
+    const request: HonTurnRequest = delegation ? { text, delegation } : { text, delegation: null, replyMode: mode };
+    const label = delegation ? `Your request to ${HON_DELEGATE_PRESENTATION[delegation.agentKey].name}` : 'Your message to HON';
     try {
       if (thread) {
         openId.current = thread.id;
-        run({ prepared: prepareTurn(school, thread.id, { text, delegation: null, replyMode: mode }), kind: 'turn', label: 'Your message to HON', state: 'SENDING', conversationId: thread.id, text });
+        run({ prepared: prepareTurn(school, thread.id, request), kind: 'turn', label, state: 'SENDING', conversationId: thread.id, text });
       } else {
         const title = text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text;
-        const pendingCreate: Pending = { prepared: prepareConversation(school, title), kind: 'create', label: 'Starting a conversation with HON', state: 'SENDING', conversationId: null, text,
-          first: Object.freeze({ text, replyMode: mode }) };
-        run(pendingCreate);
+        // Validate the first turn before anything is created, so an invalid message never leaves an empty conversation.
+        prepareTurn(school, '00000000-0000-4000-8000-000000000000', request);
+        run({ prepared: prepareConversation(school, title), kind: 'create', label, state: 'SENDING', conversationId: null, text, first: Object.freeze(request) });
       }
       setDraft('');
-    } catch { setPending({ prepared: { path: '', key: '', body: '' }, kind: 'turn', label: 'Your message to HON', state: 'INVALID', conversationId: null }); return; }
+    } catch { setPending({ prepared: { path: '', key: '', body: '' }, kind: 'turn', label, state: 'INVALID', conversationId: null }); return; }
   };
 
   return <HonConversationView presentation={presentation} phase={phase} readiness={readiness} conversations={conversations} thread={thread} threadPhase={threadPhase}
     pending={pending} draft={draft} mode={mode} onDraft={setDraft} onMode={setMode} onSend={send}
+    delegate={delegate} onDelegate={chooseDelegate} onTarget={(targetId) => setDelegate((now) => ({ ...now, targetId }))} onPurpose={(purpose) => setDelegate((now) => ({ ...now, purpose }))}
     onOpen={(conversationId) => { if (concealed.current) return; openId.current = conversationId; const abort = new AbortController(); reads.current?.abort(); reads.current = abort; readThread(conversationId, generation.current, abort.signal); }}
     onNew={() => { openId.current = null; setThread(null); setThreadPhase('NONE'); }}
     onContinue={(turn) => {

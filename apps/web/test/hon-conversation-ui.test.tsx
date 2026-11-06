@@ -8,6 +8,8 @@ import {
 import { HonConversationView, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
+import { HON_DELEGATE_IDLE } from '../src/components/hon-command/hon-conversation-panel';
+import { campaignTargets, curriculumTargets, honDelegation } from '../src/components/hon-command/hon-delegation-targets';
 
 const id = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
 const AT = '2026-11-06T18:00:00.000Z';
@@ -168,5 +170,49 @@ describe('HON workspace wiring', () => {
     expect(renderToStaticMarkup(<HonWorkspaceView {...base} />)).toContain('Not connected');
     const live = renderToStaticMarkup(<HonWorkspaceView {...base} conversation={<HonConversationView {...props()} />} />);
     expect(live).toContain('data-hon-conversation="READY"'); expect(live).not.toContain('Conversation is not connected yet');
+  });
+});
+
+describe('HON delegation composer', () => {
+  const ready = { ...readiness(), availableAgentKeys: ['marcus', 'claire', 'chad'] as Array<'marcus' | 'claire' | 'chad'> };
+  it('builds only complete contract delegations', () => {
+    expect(honDelegation('hon', null, 'INTRODUCTION')).toBeNull();
+    expect(honDelegation('marcus', null, 'INTRODUCTION')).toBeNull();
+    expect(honDelegation('marcus', { id: id(4).toUpperCase(), label: 'Spring', version: null }, 'INTRODUCTION')).toEqual({ agentKey: 'marcus', campaignId: id(4) });
+    expect(honDelegation('claire', { id: id(4), label: 'Kids belt', version: null }, 'INTRODUCTION')).toEqual({ agentKey: 'claire', curriculumId: id(4) });
+    expect(honDelegation('chad', { id: id(4), label: 'Sam Lee', version: null }, 'CHECK_IN')).toBeNull();
+    expect(honDelegation('chad', { id: id(4), label: 'Sam Lee', version: 3 }, 'CHECK_IN')).toEqual({ agentKey: 'chad', leadId: id(4), expectedLeadVersion: 3, purpose: 'CHECK_IN' });
+    expect(honDelegation('marcus', { id: 'not-a-uuid', label: 'x', version: null }, 'INTRODUCTION')).toBeNull();
+  });
+  it('accepts only verified target lists', () => {
+    expect(campaignTargets([{ id: id(4), name: 'Spring', status: 'ACTIVE', version: 2, extra: 'ignored' }, { id: id(5), name: 'Old', status: 'ARCHIVED', version: 1 }])).toEqual([{ id: id(4), label: 'Spring', version: null }]);
+    expect(() => campaignTargets([{ id: 'x', name: 'Bad', status: 'ACTIVE', version: 1 }])).toThrow();
+    expect(curriculumTargets({ data: { items: [{ id: id(4), name: 'Kids belt', version: 1 }] } })).toEqual([{ id: id(4), label: 'Kids belt', version: null }]);
+    for (const bad of [{ data: { items: [{ id: id(4), name: 'Kids', version: 1, extra: 1 }] } }, { data: { items: [] }, meta: {} }, { data: { items: [{ id: id(4), name: 'Kids', version: 1.5 }] } }])
+      expect(() => curriculumTargets(bad)).toThrow();
+  });
+  it('offers only the specialists the server lists, and HON answers by default', () => {
+    expect(render({ readiness: readiness() })).toContain('Who should handle this?');
+    expect(render({ readiness: readiness() })).not.toContain('Kai ·');
+    const html = render({ readiness: ready });
+    for (const text of ['HON · answer a question', 'Marcus · Marketing draft for a campaign', 'Chad · Follow-up draft for a lead', 'Kai · Teaching notes for a curriculum']) expect(html).toContain(text);
+    expect(render({ readiness: { ...readiness(), availableAgentKeys: [] } })).not.toContain('Who should handle this?');
+  });
+  it('requires a server-listed target before a specialist request can be sent', () => {
+    const none = render({ readiness: ready, draft: 'Spring promo', delegate: { ...HON_DELEGATE_IDLE, choice: 'marcus', targets: [{ id: id(4), label: 'Spring', version: null }] } });
+    expect(none).toContain('Send to Marcus'); expect(none).toMatch(/<button type="submit" disabled=""/); expect(none).toContain('Nothing is sent, published or changed until a person approves it');
+    expect(none).not.toContain('Quick');
+    const picked = render({ readiness: ready, draft: 'Spring promo', delegate: { ...HON_DELEGATE_IDLE, choice: 'marcus', targets: [{ id: id(4), label: 'Spring', version: null }], targetId: id(4) } });
+    expect(picked).not.toMatch(/<button type="submit" disabled=""/);
+    const kai = render({ readiness: ready, draft: 'Notes', delegate: { ...HON_DELEGATE_IDLE, choice: 'claire', targets: null } });
+    expect(kai).toContain('Kai isn’t available to you here yet'); expect(kai).toMatch(/<button type="submit" disabled=""/);
+    const chad = render({ readiness: ready, delegate: { ...HON_DELEGATE_IDLE, choice: 'chad', targets: [{ id: id(4), label: 'Sam Lee', version: 2 }] } });
+    expect(chad).toContain('Purpose'); expect(chad).toContain('Trial reminder'); expect(chad).toMatch(/maxLength="2000"/);
+    expect(render({ readiness: ready, delegate: { ...HON_DELEGATE_IDLE, choice: 'claire', targets: [] } })).toMatch(/maxLength="1200"/);
+    expect(render({ readiness: ready, delegate: { ...HON_DELEGATE_IDLE, choice: 'marcus', targets: 'FAILED' } })).toContain('Choices could not be verified');
+  });
+  it('shows no specialist targets while concealed', () => {
+    const html = render({ phase: 'CONCEALED', readiness: ready, delegate: { ...HON_DELEGATE_IDLE, choice: 'chad', targets: [{ id: id(4), label: 'Sam Lee', version: 2 }] } });
+    expect(html).not.toContain('Sam Lee'); expect(html).not.toContain('Who should handle this?');
   });
 });
