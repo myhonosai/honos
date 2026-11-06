@@ -75,7 +75,7 @@ function Turn({ turn, onContinue, locked }: { turn: HonConversationTurn; onConti
     {!human && turn.text === null && turn.status !== 'COMPLETED' ? <p className={styles.note}>{reasonText(turn.reason) ?? status.detail}</p> : null}
     {!human && turn.status === 'COMPLETED' && turn.reason !== null ? <p className={styles.note}>{reasonText(turn.reason)}</p> : null}
     {turn.role !== 'HUMAN' && turn.role !== 'hon' && turn.references.actionRequestId
-      ? <a className={styles.link} href="/staff/actions">Review this proposal in Action Center →</a> : null}
+      ? <a className={styles.link} href="/staff/action-center/approvals">Review this proposal in Action Center →</a> : null}
     {detail?.truncated ? <p className={styles.note} data-incomplete="">This answer is incomplete: it reached its length limit (part {detail.step} of {detail.maxSteps}).</p> : null}
     {detail?.canContinue ? <button type="button" className={styles.secondary} disabled={locked} onClick={() => onContinue(turn)}>Continue this answer</button> : null}
   </li>;

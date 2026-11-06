@@ -138,7 +138,7 @@ describe('Ask HON view', () => {
     const marcus: HonConversationTurn = { turnId: id(6), role: 'marcus', text: null, createdAt: AT, status: 'AWAITING_APPROVAL', reason: null,
       references: { workItemId: id(8), actionRequestId: id(7), invocationId: id(9) }, replyDetail: null };
     const html = render({ thread: thread([human(6, 'Draft a campaign'), marcus]), threadPhase: 'READY' });
-    expect(html).toContain('Marcus'); expect(html).toContain('Awaiting approval'); expect(html).toContain('href="/staff/actions"');
+    expect(html).toContain('Marcus'); expect(html).toContain('Awaiting approval'); expect(html).toContain('href="/staff/action-center/approvals"');
   });
   it('locks sending while a message is in flight and offers the exact retry only for an unknown outcome', () => {
     const prepared = { path: `${BASE}/conversations/${id(5)}/turns`, key: id(7), body: '{}' };
