@@ -2,7 +2,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<void>>() }));
+const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<{ externalSubject: string; viewKey: string }>>() }));
 vi.mock('../src/server/require-web-session', () => ({ requireVerifiedWebSession: session.require }));
 import StaffLayout from '../src/app/staff/layout';
 import StaffPromotionDecisionPage, { dynamic, metadata } from '../src/app/staff/testing/promotion-decisions/page';
@@ -12,7 +12,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('protected final human promotion-decision route', () => {
   it('inherits the existing fail-closed verified staff session boundary', async () => {
     const child = React.createElement('p', null, 'protected child'); session.require.mockRejectedValueOnce(new Error('redirect:/auth/login'));
-    await expect(StaffLayout({ children: child })).rejects.toThrow('redirect:/auth/login'); session.require.mockResolvedValueOnce(); expect(await StaffLayout({ children: child })).toBe(child); expect(session.require).toHaveBeenCalledTimes(2);
+    await expect(StaffLayout({ children: child })).rejects.toThrow('redirect:/auth/login'); session.require.mockResolvedValueOnce({ externalSubject: 'synthetic-staff', viewKey: 'k' }); expect((await StaffLayout({ children: child }) as React.ReactElement<{ children: unknown }>).props.children).toBe(child); expect(session.require).toHaveBeenCalledTimes(2);
   });
   it('is dynamic/noindex and blank with no route prefill, command, I/O or idempotency-key allocation', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch'); const key = vi.spyOn(crypto, 'randomUUID');

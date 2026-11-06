@@ -1,0 +1,133 @@
+'use client';
+import '@hon/design-system/src/tokens.css';
+import './shell-global.css';
+import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
+import { useLocale } from '../localization/provider';
+import { LocaleUtility } from '../localization/utility';
+import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
+import { parseOperationalSchoolSelectors } from '../operational-navigation';
+import { loadInterfaceThemePreference, saveInterfaceThemePreference } from '../interface-theme-preference';
+import { SchoolEntryController, type EntrySnapshot } from '../school-entry/controller';
+import { schoolEntryApi } from '../school-entry/http';
+import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
+import { SchoolShellFrame, type ShellViewState } from './frame';
+
+/** The URL prefill is a candidate only: just the two closed keys, then server-verified by the controller. */
+export function shellPreferredSchool(search: string): { organizationId: string; schoolId: string } | null {
+  const params = new URLSearchParams(search);
+  const parsed = parseOperationalSchoolSelectors({ organizationId: params.get('organizationId') ?? undefined, schoolId: params.get('schoolId') ?? undefined });
+  return parsed.initialOrganizationId && parsed.initialSchoolId ? { organizationId: parsed.initialOrganizationId, schoolId: parsed.initialSchoolId } : null;
+}
+
+/** A page root with no own background (and no UI-system marker) was designed for the old light body. */
+export function shellNeedsLegacyCanvas(root: Element | null): boolean {
+  if (!root || root.closest('[data-hon-native]') || root.hasAttribute('data-hon-native')) return false;
+  const background = getComputedStyle(root).backgroundColor;
+  const image = getComputedStyle(root).backgroundImage;
+  return (background === 'transparent' || background === 'rgba(0, 0, 0, 0)') && (!image || image === 'none');
+}
+
+/**
+ * School app shell. Holds a navigation selector in mounted memory only; every page
+ * and API keeps authorizing the exact school itself. Session invalidation, a school
+ * context change or page hide conceal the school and drop the prefill.
+ */
+export function SchoolShell({ sessionSubject, children }: { sessionSubject: string; children?: ReactNode }): React.ReactElement {
+  const path = usePathname() ?? '/staff';
+  const { preferences } = useLocale();
+  const controller = useRef<SchoolEntryController | null>(null);
+  if (!controller.current) controller.current = new SchoolEntryController(sessionSubject);
+  const entry = controller.current;
+  const [snapshot, setSnapshot] = useState<EntrySnapshot>(entry.snapshot());
+  const [schoolName, setSchoolName] = useState<string | null>(null);
+  const [mode, setMode] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
+  const [viewState, setViewState] = useState<ShellViewState>('LOCAL');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const themeGeneration = useRef(0);
+
+  useEffect(() => {
+    entry.activate();
+    const unsubscribe = entry.subscribe(next => { if (next.phase !== 'READY') setSchoolName(current => next.phase === 'LOADING' ? current : null); setSnapshot(next); });
+    const conceal = (event: Event) => { setSchoolName(null); entry.conceal(event.type === HON_SESSION_INVALIDATED_EVENT ? 'SESSION' : 'CONCEALED'); };
+    const events = [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT, 'pagehide'];
+    for (const name of events) window.addEventListener(name, conceal);
+    const preferred = shellPreferredSchool(window.location.search);
+    void (preferred ? entry.loadPreferred(preferred) : entry.load());
+    return () => { unsubscribe(); entry.dispose(); for (const name of events) window.removeEventListener(name, conceal); };
+  }, [entry]);
+
+  // Verified personal view preference for the selected school; presentation only.
+  const selection = snapshot.phase === 'READY' ? snapshot.selection : null;
+  useEffect(() => {
+    if (!selection) return;
+    const generation = ++themeGeneration.current;
+    loadInterfaceThemePreference(selection).then(
+      preference => { if (generation !== themeGeneration.current) return; setMode(preference.interfaceTheme); setViewState(preference.selectedVia === 'DEFAULT' ? 'LOCAL' : 'SAVED'); },
+      () => { if (generation === themeGeneration.current) setViewState('LOCAL'); });
+  }, [selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Name only: the existing closed choices read lists names for multi-school staff. Single-school staff see a generic label.
+  useEffect(() => {
+    if (!selection || schoolName) return;
+    const abort = new AbortController();
+    schoolEntryApi.choices(AbortSignal.any([abort.signal, AbortSignal.timeout(8000)])).then(result => {
+      if (abort.signal.aborted || result.state !== 'SELECTION_REQUIRED') return;
+      const match = result.schools.find(choice => choice.schoolId === selection.schoolId && choice.organizationId === selection.organizationId);
+      if (match && entry.snapshot().phase === 'READY' && entry.snapshot().selection?.schoolId === match.schoolId) setSchoolName(match.schoolName);
+    }, () => {});
+    return () => abort.abort();
+  }, [selection?.organizationId, selection?.schoolId, schoolName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setMenuOpen(false); }, [path]);
+
+  // Transitional: pages not yet migrated to the UI system may rely on the old light page
+  // background. Give those (and only those) a light canvas so their text stays readable.
+  useEffect(() => {
+    const main = document.getElementById('hon-main');
+    if (!main) return;
+    const classify = () => main.setAttribute('data-canvas', shellNeedsLegacyCanvas(main.firstElementChild) ? 'legacy-light' : 'native');
+    classify();
+    const observer = new MutationObserver(classify);
+    observer.observe(main, { childList: true });
+    return () => observer.disconnect();
+  }, [path]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, [menuOpen]);
+
+  const chooseMode = useCallback((next: HonInterfaceTheme) => {
+    setMode(next);
+    const scope = entry.snapshot().phase === 'READY' ? entry.snapshot().selection : null;
+    if (!scope) { setViewState('LOCAL'); return; }
+    const generation = ++themeGeneration.current;
+    setViewState('SAVING');
+    saveInterfaceThemePreference(scope, next, crypto.randomUUID(), 'SETTINGS').then(
+      () => { if (generation === themeGeneration.current) setViewState('SAVED'); },
+      () => { if (generation === themeGeneration.current) setViewState('ERROR'); });
+  }, [entry]);
+
+  const choose = useCallback((schoolId: string) => {
+    const current = entry.snapshot();
+    const choice = current.choices.find(candidate => candidate.schoolId === schoolId);
+    if (!choice) return;
+    void entry.choose(schoolId, current.revision).then(() => {
+      const after = entry.snapshot();
+      if (after.phase !== 'READY' || after.selection?.schoolId !== choice.schoolId) return;
+      setSchoolName(choice.schoolName);
+      // A new school starts every page fresh: pages drop old-school memory on a full load.
+      window.dispatchEvent(new Event(HON_SCHOOL_CONTEXT_CHANGED_EVENT));
+      window.location.assign(schoolShellHref(SCHOOL_SHELL_NAV[0]!.routes[0]!, after.selection));
+    });
+  }, [entry]);
+
+  return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
+    choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility />}
+    onMode={chooseMode} onMenu={setMenuOpen} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
+    {children}
+  </SchoolShellFrame>;
+}

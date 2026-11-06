@@ -1,0 +1,5 @@
+/* The school shell owns the language selector; hide the page-level strip only where the shell is mounted. */
+body:has([data-hon-ui='school']) > [data-locale-utility] { display: none; }
+body:has([data-hon-ui='school']) { margin: 0; background: #050a18; }
+/* One Ask HON entry point: the shell's top-bar button replaces the floating launcher inside the shell. */
+body:has([data-hon-ui='school']) [data-hon-launcher] { display: none; }

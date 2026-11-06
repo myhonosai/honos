@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<void>>() }));
+const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<{ externalSubject: string; viewKey: string }>>() }));
 vi.mock('../src/server/require-web-session', () => ({ requireVerifiedWebSession: session.require }));
 import StaffLayout from '../src/app/staff/layout';
 import StaffClassSessionCreatePage, { dynamic, metadata } from '../src/app/staff/schedule/sessions/create/page';
@@ -13,7 +13,7 @@ describe('protected staff class-session creation page', () => {
     const child = React.createElement('p', null, 'protected child');
     session.require.mockRejectedValueOnce(new Error('redirect:/auth/login'));
     await expect(StaffLayout({ children: child })).rejects.toThrow('redirect:/auth/login');
-    session.require.mockResolvedValueOnce(); expect(await StaffLayout({ children: child })).toBe(child);
+    session.require.mockResolvedValueOnce({ externalSubject: 'synthetic-staff', viewKey: 'k' }); expect((await StaffLayout({ children: child }) as React.ReactElement<{ children: unknown }>).props.children).toBe(child);
   });
   it('is dynamic/noindex, renders only the idle workbench, and has no selector/prefill/auto command', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch'); const key = vi.spyOn(crypto, 'randomUUID');

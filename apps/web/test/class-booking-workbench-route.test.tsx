@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<void>>() }));
+const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<{ externalSubject: string; viewKey: string }>>() }));
 vi.mock('../src/server/require-web-session', () => ({ requireVerifiedWebSession: session.require }));
 import StaffLayout from '../src/app/staff/layout';
 import StaffClassBookingsPage, { dynamic, metadata } from '../src/app/staff/schedule/bookings/page';
@@ -15,8 +15,8 @@ describe('protected staff manual class-booking page', () => {
     const child = React.createElement('p', null, 'protected child');
     session.require.mockRejectedValueOnce(new Error('redirect:/auth/login'));
     await expect(StaffLayout({ children: child })).rejects.toThrow('redirect:/auth/login');
-    session.require.mockResolvedValueOnce();
-    expect(await StaffLayout({ children: child })).toBe(child);
+    session.require.mockResolvedValueOnce({ externalSubject: 'synthetic-staff', viewKey: 'k' });
+    expect((await StaffLayout({ children: child }) as React.ReactElement<{ children: unknown }>).props.children).toBe(child);
     expect(session.require).toHaveBeenCalledTimes(2);
   });
   it('is dynamic/no-index and accepts only the exact closed three-UUID handoff without any automatic command', async () => {

@@ -81,3 +81,13 @@ it('links only established workflows with inert school selectors; no student, me
     expect(['/staff/crm/journey', '/staff/dashboard', '/staff/team/invitations', '/staff/family-access', '/staff/account-status']).toContain(u.pathname);
   }
 });
+it('a preferred school from navigation is only a candidate: it is verified exactly like a deliberate choice', async () => {
+  await c.loadPreferred(b);
+  expect(c.snapshot()).toMatchObject({ phase: 'READY', selection: b });
+  expect(api.current).not.toHaveBeenCalled(); expect(api.verifySchool).toHaveBeenCalledWith(b, expect.any(AbortSignal));
+  expect(api.identity).toHaveBeenCalledTimes(2);
+});
+it('a preferred school that fails verification selects nothing', async () => {
+  vi.mocked(api.verifySchool).mockRejectedValue(new SchoolEntryError('DENIED'));
+  await c.loadPreferred(b); expect(c.snapshot()).toMatchObject({ phase: 'DENIED', selection: null });
+});
