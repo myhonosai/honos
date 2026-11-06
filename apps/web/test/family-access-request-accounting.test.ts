@@ -14,8 +14,19 @@ it('accounts for the actual LocaleProvider transport GET without treating it as 
   });
   await expect(loadMyLanguage()).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
   reads.observe('GET', origin + '/api/identity/me');
-  expect(reads.snapshot()).toEqual({ familyGets: [], languageGets: 1, identityGets: 1, unexpectedGets: [] });
+  expect(reads.snapshot()).toEqual({ familyGets: [], languageGets: 1, identityGets: 1, shellGets: 0, unexpectedGets: [] });
   expect(() => reads.assertDomainReads(0, 'inert prefill')).not.toThrow();
+});
+it('sets aside only the school shell\'s own exact GETs, never a family read', () => {
+  const reads = createFamilyReadAccounting(origin, scope);
+  for (const path of ['/api/v1/staff/current-reporting-school', '/api/v1/staff/reporting-schools',
+    `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/reports/operations`,
+    `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/interface-theme`]) reads.observe('GET', origin + path);
+  reads.observe('POST', origin + `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/interface-theme`);
+  expect(reads.snapshot()).toMatchObject({ familyGets: [], shellGets: 4, unexpectedGets: [] });
+  expect(() => reads.assertDomainReads(0, 'shell')).not.toThrow();
+  reads.observe('GET', origin + '/api/v1/staff/reporting-schools?schoolId=' + scope.schoolId);
+  expect(() => reads.assertDomainReads(0, 'shell query')).toThrow(/Unexpected API GET/);
 });
 it.each([familyPath, invitationPath])('still rejects an automatic family-domain GET before explicit verification: %s', path => {
   const reads = createFamilyReadAccounting(origin, scope);

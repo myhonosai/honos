@@ -1,6 +1,7 @@
 /** Read-only Account & Usage: signed synthetic HON session -> production Next ->
  * actual narrow Nest controllers/identity/IAM -> restricted marked disposable PostgreSQL.
  * No external OIDC/owner-device acceptance, response mocks, header repair, AppModule or workers. */
+import { isSchoolShellRead } from './school-shell-reads.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes, createHmac } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
@@ -112,6 +113,7 @@ async function open(who, { language = 'en', width = 1280, query = scopeQuery(who
     if (url.origin !== origin) { await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(url.origin), 'Unexpected external request blocked.'); report.blockedExternalOrigins.push(url.origin); return; }
     if (url.pathname.startsWith('/api/')) {
       assert.equal(request.method(), 'GET', 'Account page may only issue GETs.');
+      if (isSchoolShellRead(request.method(), url.pathname)) { report.shellReads = (report.shellReads ?? 0) + 1; await route.continue(); return; }
       assert(url.pathname === '/api/identity/me' || url.pathname === '/api/v1/me/language-preference' || domainPath(url.pathname), 'Unexpected account API path.');
       const observation = nativeTransportObservation(request.method(), request.url(), await request.allHeaders(), origin);
       requests.push(observation); report.nativeBrowserRequests.push(observation);

@@ -42,6 +42,11 @@ describe('school shell frame', () => {
     }
   });
 
+  it('names the school card region distinctly from any page field labelled School', () => {
+    expect(render()).toContain('aria-label="Current school"');
+    expect(render()).not.toContain('aria-label="School"');
+  });
+
   it('never prints school identifiers, only a verified name when one is known', () => {
     expect(render()).not.toMatch(new RegExp(`>[^<]*${B}`));
     expect(render({ schoolName: 'Sunrise Taekwondo' })).toContain('Sunrise Taekwondo');
@@ -68,6 +73,8 @@ describe('school shell frame', () => {
       const html = render({ mode });
       expect(html).toMatch(new RegExp(`data-hon-ui="school"[^>]*data-hon-mode="${mode}"|data-hon-mode="${mode}"[^>]*data-hon-ui="school"`));
       expect(html).toMatch(new RegExp(`aria-pressed="true"[^>]*>${shellText('en', mode)}<`));
+      // Distinct names: a page's own view picker keeps its plain "Modern"/"Classic" buttons.
+      expect(html).toContain(`aria-label="${shellText('en', 'view')}: ${shellText('en', mode)}"`);
     }
   });
 

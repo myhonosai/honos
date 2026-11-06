@@ -99,7 +99,7 @@
   min-height: calc(var(--hon-control-h) - 8px); padding: 0 var(--hon-space-3); border: 0; border-radius: 999px; cursor: pointer;
   background: transparent; color: var(--hon-text-muted); font: inherit; font-size: var(--hon-text-sm); font-weight: 600; white-space: nowrap;
 }
-.views button[aria-pressed='true'] { background: var(--hon-accent); color: #fff; box-shadow: var(--hon-glow); }
+.views button[aria-pressed='true'] { background: var(--hon-accent-strong); color: #fff; box-shadow: var(--hon-glow); }
 .views small { position: absolute; top: 100%; right: 8px; margin-top: 4px; color: var(--hon-text-subtle); font-size: 10px; white-space: nowrap; }
 .askHon {
   display: inline-flex; align-items: center; gap: var(--hon-space-2); min-height: var(--hon-control-h); padding: 0 var(--hon-space-4) 0 6px;

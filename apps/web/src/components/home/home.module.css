@@ -43,7 +43,7 @@
   display: inline-flex; align-items: center; min-height: var(--hon-control-h); padding: 0 var(--hon-space-4);
   border-radius: var(--hon-radius-sm); font-weight: 700; font-size: var(--hon-text-sm); text-decoration: none;
 }
-.primary { background: linear-gradient(180deg, var(--hon-accent), var(--hon-accent-strong)); color: #fff !important; box-shadow: var(--hon-glow); }
+.primary { background: var(--hon-accent-strong); color: #fff !important; box-shadow: var(--hon-glow); }
 .secondary { border: 1px solid var(--hon-border-strong); color: var(--hon-text) !important; }
 
 /* AI team */

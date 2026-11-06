@@ -24,6 +24,16 @@ const results = process.env.HON_SHELL_BROWSER_RESULTS;
 assert(results, 'HON_SHELL_BROWSER_RESULTS is required.');
 const { chromium } = createRequire(import.meta.url)(process.env.HON_SHELL_PLAYWRIGHT ?? 'playwright');
 await mkdir(results, { recursive: true });
+// Optional: path to axe-core's axe.min.js for a WCAG 2.1 AA scan of the shell and Home.
+const axeSource = process.env.HON_SHELL_AXE ? await (await import('node:fs/promises')).readFile(process.env.HON_SHELL_AXE, 'utf8') : null;
+async function axeScan(page, name) {
+  if (!axeSource) return;
+  await page.addScriptTag({ content: axeSource });
+  const result = await page.evaluate(() => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } }));
+  const violations = result.violations.map((v) => ({ id: v.id, impact: v.impact, targets: v.nodes.slice(0, 6).map((n) => n.target.join(' ')) }));
+  report.accessibility = [...(report.accessibility ?? []), { name, violations }];
+  assert.deepEqual(violations, [], `${name}: ${JSON.stringify(violations)}`);
+}
 
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const schoolA = { organizationId: id(1), schoolId: id(2) }, schoolB = { organizationId: id(1), schoolId: id(3) };
@@ -147,6 +157,7 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const [size, viewpo
     assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'NOT_AVAILABLE');
     await page.waitForTimeout(150);
     await noOverflow(page);
+    await axeScan(page, `home-${mode}-${size}`);
     await shot(page, `u2-home-${mode}-${size}`);
     if (size === 'desktop') { await page.screenshot({ path: join(results, `u2-home-${mode}-desktop-full.png`), fullPage: true }); report.screenshots.push(`u2-home-${mode}-desktop-full.png`); }
     await ctx.close();
@@ -164,6 +175,18 @@ await check('operations report keeps the previous dashboard on its own route', a
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   assert.equal(await page.locator('nav[aria-label="Pages in this section"] a[aria-current="page"]').textContent(), 'Operations report');
   await page.waitForTimeout(800); await shot(page, 'u2-operations-report-desktop'); await ctx.close();
+});
+for (const path of ['/staff/crm/lead-memberships', '/staff/account-status', '/staff/work', '/staff/crm/follow-ups']) {
+  await check(`axe on ${path} inside the shell`, async () => {
+    theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, path);
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.waitForTimeout(600); await axeScan(page, path); await ctx.close();
+  });
+}
+await check('school entry renders without the shell', async () => {
+  const { ctx, page } = await open(viewports.desktop, '/staff/entry');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('[data-hon-ui="school"]').count(), 0); await ctx.close();
 });
 await check('section tabs on follow-ups (desktop)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/crm/follow-ups');
@@ -194,7 +217,7 @@ await check('multi-school staff choose a named school; the dashboard reloads for
 await check('view switch saves the personal preference', async () => {
   theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
-  await page.getByRole('button', { name: 'Classic', exact: true }).click();
+  await page.getByRole('button', { name: 'Platform view: Classic', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('[data-hon-ui="school"]')?.getAttribute('data-hon-mode') === 'classic');
   await page.getByText('Saved for you at this school').waitFor();
   assert.equal(theme, 'classic'); await ctx.close();

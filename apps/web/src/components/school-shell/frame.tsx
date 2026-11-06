@@ -26,7 +26,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   const active = schoolShellActiveItem(path), activeRoute = schoolShellActiveRoute(path);
   const ended = phase === 'SESSION' || phase === 'IDENTITY';
 
-  const school = <section className={styles.school} aria-label={t('schoolLabel')} data-phase={phase}>
+  const school = <section className={styles.school} aria-label={t('schoolRegion')} data-phase={phase}>
     <span className={styles.schoolMark} aria-hidden="true"><ShellIcon name="school" /></span>
     <div className={styles.schoolText}>
       <strong>{phase === 'READY' ? props.schoolName ?? t('READY') : t(phase)}</strong>
@@ -74,12 +74,12 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
           <p className={styles.pageTitle}>{activeRoute ? t(activeRoute.titleKey) : t('brand')}</p>
         </div>
         <div className={styles.views} role="group" aria-label={t('view')} title={t('viewHelp')}>
-          {MODES.map(value => <button type="button" key={value} aria-pressed={mode === value} onClick={() => props.onMode(value)}>{t(value)}</button>)}
+          {MODES.map(value => <button type="button" key={value} aria-pressed={mode === value} aria-label={`${t('view')}: ${t(value)}`} onClick={() => props.onMode(value)}>{t(value)}</button>)}
           <small role="status">{t(VIEW_STATE[props.viewState])}</small>
         </div>
         {props.utility && <div className={styles.locale}>{props.utility}</div>}
         <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>
-        <a className={styles.askHon} href="/staff/hon"><span className={styles.honOrb} aria-hidden="true" /><span>{t('askHon')}</span></a>
+        <a className={styles.askHon} href="/staff/hon" aria-label={t('askHon')}><span className={styles.honOrb} aria-hidden="true" /><span>{t('askHon')}</span></a>
       </header>
       {active && active.routes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')}>
         {active.routes.map(route => <a key={route.href} href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'page' : undefined}>{t(route.titleKey)}</a>)}

@@ -36,3 +36,12 @@ it('gives a light canvas only to unmigrated page roots that have no background o
   expect(shellNeedsLegacyCanvas(null)).toBe(false);
   vi.unstubAllGlobals();
 });
+
+it('renders the school entry page bare: it is already the school chooser', async () => {
+  vi.resetModules();
+  vi.doMock('next/navigation', () => ({ usePathname: () => '/staff/entry' }));
+  const { SchoolShell: Bare } = await import('../src/components/school-shell/shell');
+  const html = renderToStaticMarkup(<Bare sessionSubject="synthetic-owner"><p>entry page</p></Bare>);
+  expect(html).toBe('<p>entry page</p>');
+  vi.doUnmock('next/navigation');
+});
