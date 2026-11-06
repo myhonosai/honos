@@ -4,6 +4,7 @@ import {randomUUID as K,randomBytes,createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {request} from 'node:http';
 import pg from 'pg';
+import {pauseSchoolAccountAuthorityAutovacuum} from './school-account-security.mjs';
 const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
 for(const [u,user]of [[owner,'hon_champions_owner'],[runtime,'hon_champions_runtime']]){
  assert.equal(u.protocol,'postgresql:');assert.equal(u.hostname,'localhost');assert.equal(u.port,'5432');assert.equal(u.pathname,'/hon_champions_validation');assert.equal(u.username,user);assert(u.password);assert.equal(u.search,'');assert.equal(u.hash,'');
@@ -52,8 +53,10 @@ const grant=async(o,principal,role)=>(await q('INSERT INTO hon.principal_role_gr
 const scope=async(identity,o)=>(await restricted.query('SELECT family_id::text f,access_level::text a FROM hon.resolve_parent_family_scope($1,$2) ORDER BY 1',[identity.externalSubject,o.schoolId])).rows;
 const has=async(identity,o,perm)=>(await restricted.query('SELECT * FROM hon.resolve_authorized_scope($1,$2,$3)',[identity.externalSubject,o.schoolId,perm])).rowCount===1;
 
+let restoreAutovacuum=async()=>{};
 try{
  await Promise.all([admin.connect(),restricted.connect(),blocker.connect()]);
+ restoreAutovacuum=await pauseSchoolAccountAuthorityAutovacuum(admin);
  assert.equal((await q("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()"))[0].m,'HON disposable Champions Club validation');
  // 1. Custody and exact runtime ACL.
  for(const t of ['school_family_access_invitations','school_family_account_events']){
@@ -317,4 +320,4 @@ try{
  assert.deepEqual(await snapshot(),baseline);assert.deepEqual(await entitlementState(),entitlementBaseline);assert.deepEqual(await familyState(),familyBaseline);
  pass('no entitlement, billing, credit, AI, CRM, student or outbox table changed: identity, family grant and private evidence only');
  console.log(`PASS: school family access invitations (${groups} groups)`);
-}finally{await app?.close();await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);}
+}finally{await app?.close();await restoreAutovacuum().catch(()=>{});await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);}

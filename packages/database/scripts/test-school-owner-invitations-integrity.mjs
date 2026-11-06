@@ -4,7 +4,7 @@ import {randomUUID as K,randomBytes,createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {request} from 'node:http';
 import pg from 'pg';
-import {verifySchoolAccountSecurity} from './school-account-security.mjs';
+import {verifySchoolAccountSecurity,pauseSchoolAccountAuthorityAutovacuum} from './school-account-security.mjs';
 const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
 for(const [u,user]of [[owner,'hon_champions_owner'],[runtime,'hon_champions_runtime']]){
  assert.equal(u.protocol,'postgresql:');assert.equal(u.hostname,'localhost');assert.equal(u.port,'5432');assert.equal(u.pathname,'/hon_champions_validation');assert.equal(u.username,user);assert(u.password);assert.equal(u.search,'');assert.equal(u.hash,'');
@@ -50,8 +50,10 @@ async function waitBehindInvitationRow(pid,blockerPid){
  }
  throw Error('Consequential command did not reach the protected row-wait rendezvous');
 }
+let restoreAutovacuum=async()=>{};
 try{
  await Promise.all([admin.connect(),restricted.connect(),blocker.connect()]);
+ restoreAutovacuum=await pauseSchoolAccountAuthorityAutovacuum(admin);
  assert.equal((await q("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()"))[0].m,'HON disposable Champions Club validation');
  await verifySchoolAccountSecurity(admin,runtime.username);pass('forced deny-all RLS, exact runtime function privileges, no table/column or public helper bypass');
  for(const [kind,a]of Object.entries(actor)){
@@ -271,5 +273,5 @@ try{
  console.log('PASS P0-1: '+groups+' real signed-session/PostgreSQL scenario groups; no live accounts/providers.');
 }finally{
  try{await blocker.query('ROLLBACK');}catch{}
- try{if(app)await app.close();else await database.onModuleDestroy();}finally{await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);}
+ try{if(app)await app.close();else await database.onModuleDestroy();}finally{await restoreAutovacuum().catch(()=>{});await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);}
 }
