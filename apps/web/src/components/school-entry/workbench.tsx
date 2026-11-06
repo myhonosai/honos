@@ -61,6 +61,6 @@ export function SchoolEntry({ sessionSubject }: { sessionSubject: string }): Rea
       </>}
     </div>
     <aside className={styles.unavailable}><h2>{t('unavailable')}</h2><p>{t('unavailableHelp')}</p></aside>
-    <nav aria-label={t('nav')}><a href="/hq">{t('hq')}</a></nav>
+    <nav aria-label={t('nav')}><a href="/hq">{t('hq')}</a> <a href="/staff/account-status">{t('account')}</a></nav>
   </main>;
 }

@@ -12,7 +12,7 @@ export function parseOperationalSchoolSelectors(query: unknown): OperationalScho
   return initialOrganizationId && initialSchoolId ? { initialOrganizationId, initialSchoolId } : {};
 }
 
-export type SchoolWorkflowKey = 'crm' | 'registration' | 'membership' | 'booking' | 'attendance' | 'dashboard' | 'team' | 'family';
+export type SchoolWorkflowKey = 'crm' | 'registration' | 'membership' | 'booking' | 'attendance' | 'dashboard' | 'team' | 'family' | 'account';
 /** Closed local destinations; no record, identity, token, command or retry selector is admitted. */
 export function schoolWorkflowLinks(scope: OperationalSchoolScope): ReadonlyArray<{ key: SchoolWorkflowKey; href: string }> {
   const parsed = parseOperationalSchoolSelectors({ organizationId: scope.organizationId, schoolId: scope.schoolId });
@@ -28,5 +28,6 @@ export function schoolWorkflowLinks(scope: OperationalSchoolScope): ReadonlyArra
     { key: 'dashboard', href: `/staff/dashboard?${ids}` },
     { key: 'team', href: `/staff/team/invitations?${ids}` },
     { key: 'family', href: `/staff/family-access?${ids}` },
+    { key: 'account', href: `/staff/account-status?${ids}` },
   ];
 }

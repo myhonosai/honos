@@ -1,6 +1,10 @@
 {
   "routes": [
     {
+      "path": "/staff/account-status",
+      "title": "HON | School Account & Usage"
+    },
+    {
       "path": "/staff/entry",
       "title": "HON | School Workspace"
     },

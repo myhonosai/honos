@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { useLocale } from '../localization/provider';
+import { entryText } from './copy';
 import styles from '../../app/auth/access/page.module.css';
 
 const copy = {
@@ -11,6 +12,6 @@ const copy = {
 export function AccessNotice(): React.ReactElement {
   const { preferences } = useLocale(), t = copy[preferences.language];
   return <main className={styles.page}><p>HON OS</p><h1>{t.title}</h1><p>{t.help}</p><p>{t.boundary}</p>
-    <nav aria-label={t.nav}><a href="/hq">{t.hq}</a><a href="/staff/entry">{t.staff}</a><a href="/parent">{t.parent}</a></nav>
+    <nav aria-label={t.nav}><a href="/hq">{t.hq}</a><a href="/staff/entry">{t.staff}</a><a href="/parent">{t.parent}</a><a href="/staff/account-status">{entryText(preferences.language, 'account')}</a></nav>
     <p>{t.parentHelp}</p><a href="/auth/continue">{t.verify}</a><a href="/auth/login">{t.login}</a></main>;
 }

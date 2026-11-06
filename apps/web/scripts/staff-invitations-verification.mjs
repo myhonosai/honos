@@ -180,6 +180,23 @@ try {
   }
   for (const language of ['en', 'ko', 'es']) for (const mode of ['modern', 'classic', 'big']) for (const width of [390, 834, 1440]) {
     const school = matrices[language], context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: 'block' });
+    // SSR exposes the empty selector markup before React installs its effects.
+    // Observe native registration without replacing handlers, dispatch or API traffic.
+    await context.addInitScript(() => {
+      const registered = new Map(['blur', 'pagehide', 'hon:session-invalidated', 'hon:school-context-changed'].map(type => [type, new Set()]));
+      const add = window.addEventListener, remove = window.removeEventListener;
+      window.addEventListener = function (type, listener, options) {
+        const result = Reflect.apply(add, this, [type, listener, options]);
+        if (this === window && listener) registered.get(type)?.add(listener);
+        return result;
+      };
+      window.removeEventListener = function (type, listener, options) {
+        const result = Reflect.apply(remove, this, [type, listener, options]);
+        if (this === window) registered.get(type)?.delete(listener);
+        return result;
+      };
+      Object.defineProperty(window, '__honStaffLifecycleMounted', { get: () => [...registered.values()].every(listeners => listeners.size > 0) });
+    });
     const scope = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, school.who.externalSubject])).digest('hex');
     await context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(school.who).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }, { name: design.localeCookieName(scope), value: encodeURIComponent(JSON.stringify({ ...design.DEFAULT_LOCALE, language })), url: origin, sameSite: 'Lax' }]);
     const requests = [], errors = []; await context.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin !== origin) { await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin), 'Unexpected external operation'); blockedFonts.add(u.origin); return; }
@@ -188,6 +205,10 @@ try {
     page.on('pageerror', e => errors.push(e.message)); await page.goto(origin + '/staff/team/invitations'); await foreground(page, language);
     if (language === 'en' && mode === 'modern' && width === 390) {
       browserDiagnostic.case = 'incomplete-selector-privacy-recovery';
+      const readyBeforeWait = await page.evaluate(() => window.__honStaffLifecycleMounted === true);
+      await page.waitForFunction(() => window.__honStaffLifecycleMounted === true);
+      await foreground(page, language);
+      console.log('STAFF FRONTEND lifecycle readiness', JSON.stringify({ readyBeforeWait, mounted: true }));
       const schoolReads = () => requests.filter(r => r.method === 'GET' && (r.path.endsWith('/staff-invitations') || r.path.endsWith('/staff-invitation-roles') || r.path.includes('/staff-roles/custom/'))).length;
       for (const entry of ['blank', 'organization-only']) {
         if (entry === 'organization-only') await page.getByTestId('staff-org').fill(school.organizationId);
