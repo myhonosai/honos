@@ -15,6 +15,7 @@ These existing documents define hard safety invariants: PostgreSQL + forced RLS;
 1. [PRODUCT_VISION_AND_PLANS.md](PRODUCT_VISION_AND_PLANS.md) — users, product positioning, Core vs Complete and the actual school lifecycle.
 2. [OWNER_COMMERCIAL_POLICY.md](OWNER_COMMERCIAL_POLICY.md) — subscription/founder/lifetime policy, premium AI costs, payments, planning margins, unresolved terms.
 3. [CHAMPIONS_CLUB_AND_GROWTH.md](CHAMPIONS_CLUB_AND_GROWTH.md) — 30-day guarantee, referrals, leaderboard, owner-launchable contests, acquisition phases.
+   - [INCLUDED_AI_AND_FAIR_USE.md](INCLUDED_AI_AND_FAIR_USE.md) — 2026-11-06: the AI team is included; internal usage accounting vs Creative Studio credits; fair-use proposal.
 4. [HQ_AUTONOMY_AND_AI.md](HQ_AUTONOMY_AND_AI.md) — HQ as operating control plane, governed agents and owner-configurable operations.
 5. [IMPLEMENTATION_AND_COLLABORATION.md](IMPLEMENTATION_AND_COLLABORATION.md) — implementation truth, GitHub coordination, first Claude task and development priorities.
 

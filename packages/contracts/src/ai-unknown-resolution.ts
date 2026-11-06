@@ -4,7 +4,7 @@
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsTimestamp as isTimestamp,
   championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
 
-export const AI_UNKNOWN_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP'] as const;
+export const AI_UNKNOWN_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP', 'HON_REPLY'] as const;
 export type AiUnknownAgent = typeof AI_UNKNOWN_AGENTS[number];
 export const AI_UNKNOWN_DECISIONS = ['RECORD_PROVIDER_COST', 'NO_PROVIDER_CHARGE', 'WRITE_OFF'] as const;
 export type AiUnknownDecision = typeof AI_UNKNOWN_DECISIONS[number];

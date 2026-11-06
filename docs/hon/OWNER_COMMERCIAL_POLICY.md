@@ -2,6 +2,8 @@
 
 **This is the business intent, not live billing authorization.** For implemented current limits see `docs/architecture/PUBLIC_PLAN_CATALOG.md`, `docs/architecture/CORE_COMPLETE_ENTITLEMENT_ENFORCEMENT_AUDIT_2026-10-17.md` and current domain contracts.
 
+> **2026-11-06 owner clarification:** HON and the whole AI team (Kai, Alex, Chad, Maya, Marcus, Jordan, Claire, Lena) are included in the subscription. Customers never spend purchased or creative credits to use them. Customer credits apply only to Creative Studio media generation (per-school creative wallet). Internal AI usage accounting, fair use and safeguards: [INCLUDED_AI_AND_FAIR_USE.md](INCLUDED_AI_AND_FAIR_USE.md), which supersedes the "premium AI credits" wording below where it covers agent work.
+
 ## Subscription and founder prices
 
 | | Core | Complete |
