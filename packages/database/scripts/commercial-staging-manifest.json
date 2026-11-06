@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "69cf8fed4e5a0c298bc80ea6117c7dd6a27ca5879f68375b88e1a11f1913c26e",
+  "chainSha256": "b48e981de1135fb5911fb1511479c77a0fce34c575ab011cc02445fc9e38dfc5",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -125,6 +125,10 @@
     {
       "file": "0211_kai_teaching_identity.sql",
       "sha256": "f67511246e8920eb43da4f70c65458683e08ca59a31164d55651ba56a9e972f3"
+    },
+    {
+      "file": "0212_ai_agent_capability_binding.sql",
+      "sha256": "b8c37750d269a168676b1a19ba4da3311bde53befed63e37bdd0fe78ff0031d6"
     }
   ]
 }

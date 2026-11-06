@@ -1957,6 +1957,48 @@ try {
   assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_presented_agent(text)','EXECUTE') s", [runtimeRole])).s, false, 'presentation helper is internal');
   pass('INV-26', 'K1: Kai is the Teaching & Curriculum assistant: teaching turns and plans are recorded as kai (resend replays), the deprecated claire alias is stored as kai, legacy claire turns keep their recorded key and are shown as Kai, a kai plan is teaching only, readiness and the delegate list name Kai, and Kai without teaching.assistant.use is refused before any provider call');
   }
+  // ---- INV-27 (0212): per-agent capability binding in the planner; teaching-only staff use Kai and nothing else ----
+  {
+  const { TEACHING_STAFF_ROLE_PRESET, TEACHING_STAFF_ROLE_EXCLUDED_PREFIXES } = await import('@hon/contracts');
+  const o = await makeOrg('inv-27');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const work = async (type) => (await row("INSERT INTO hon.work_items(organization_id,school_id,work_type,status,subject_type,subject_id,payload,correlation_id) VALUES($1,$2,$5,'READY','AI0_INV27',$3,'{}',$4) RETURNING id", [o.id, o.school, K(), K(), type])).id;
+  const plan = async (agentKey, taskClass = 'ANALYZE') => {
+    const r = await settle(plans.plan(context(o), await work(taskClass === 'DRAFT_TEACHING' ? 'AI_DRAFT_TEACHING' : 'AI_ANALYZE'), { expectedVersion: 1, expectedState: 'READY', agentKey, modality: 'TEXT', taskClass, inputBudget: 1000, outputBudget: 200, maxProviderCostMicrounits: 10000 }));
+    return r.error ? (r.error.getResponse?.().code ?? r.error.constructor?.name ?? r.error.message) : r.value.status;
+  };
+  // 1. The owner (every capability) may plan each working agent; profile-only agents are never plannable.
+  for (const agentKey of ['hon', 'marcus', 'chad']) assert.equal(await plan(agentKey), 'PLANNED', `${agentKey} plannable by an owner`);
+  assert.equal(await plan('kai', 'DRAFT_TEACHING'), 'PLANNED', 'kai plannable for teaching by an owner');
+  for (const agentKey of ['alex', 'maya', 'jordan', 'lena', 'eian', 'claire']) assert.equal(await plan(agentKey), 'PERMISSION_DENIED', `${agentKey} has no working backend and is never planned`);
+  // 2. The reviewed teaching-staff preset: every code exists and is staff-assignable, none is excluded.
+  const codes = [...TEACHING_STAFF_ROLE_PRESET.permissionCodes];
+  const known = await rows('SELECT code, is_staff_assignable FROM hon.permissions WHERE code = ANY($1::text[]) ORDER BY code', [codes]);
+  assert.deepEqual(known.map((k) => [k.code, k.is_staff_assignable]), codes.sort().map((c) => [c, true]), JSON.stringify(known));
+  assert(codes.every((c) => !TEACHING_STAFF_ROLE_EXCLUDED_PREFIXES.some((x) => c.startsWith(x))));
+  // 3. Reduce this school's role to exactly the preset: Kai works, every other specialist is refused before any provider call.
+  await admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1', [o.role]);
+  for (const c of codes) await admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [o.role, o.id, c]);
+  assert.equal(await plan('kai', 'DRAFT_TEACHING'), 'PLANNED', 'teaching staff plan Kai');
+  assert.equal(await plan('hon'), 'PLANNED', 'teaching staff may ask HON');
+  for (const agentKey of ['marcus', 'chad', 'alex', 'claire']) assert.equal(await plan(agentKey), 'PERMISSION_DENIED', `teaching staff cannot plan ${agentKey}`);
+  const conv = await hon.create(scope, { title: 'Teaching staff' }, K());
+  const before = { kai: fakes.claire.calls, marcus: fakes.marcus.calls, chad: fakes.chad.calls };
+  const kai = await hon.sendTurn(scope, conv.id, { text: 'Outline a white belt practice.', delegation: { agentKey: 'kai', curriculumId: o.curriculum } }, K());
+  assert.deepEqual([kai.status, kai.delegatedAgentKeys], ['AWAITING_APPROVAL', ['kai']], JSON.stringify(kai));
+  const marcus = await hon.sendTurn(scope, conv.id, { text: 'Draft a spring post.', delegation: { agentKey: 'marcus', campaignId: o.campaign ?? K() } }, K());
+  const chad = await hon.sendTurn(scope, conv.id, { text: 'Check in kindly.', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' } }, K());
+  assert.deepEqual([marcus.status, chad.status], ['FAILED', 'FAILED'], JSON.stringify([marcus, chad]));
+  assert.deepEqual([fakes.claire.calls - before.kai, fakes.marcus.calls - before.marcus, fakes.chad.calls - before.chad], [1, 0, 0], 'one Kai call; no marketing or CRM provider call');
+  // HON answers teaching staff without school business facts (no reporting.view).
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY';
+  const asked = await hon.sendTurn(scope, conv.id, { text: 'What should I teach today?', delegation: null }, K());
+  assert.equal(asked.status, 'COMPLETED', JSON.stringify(asked));
+  assert.match(fakes.hon.inputs.at(-1).facts, /NOT_AUTHORIZED/, 'teaching staff get no school business facts');
+  for (const f of ['ai_agent_capability_permission(text)', 'require_ai_agent_capability(text)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
+  pass('INV-27', '0212: the planner requires each agent\'s own capability (hon ai.invocation.plan, kai teaching.assistant.use, marcus marketing.assistant.use, chad crm.assistant.follow_up_draft); profile-only agents (alex, maya, jordan, lena, eian, claire) are never planned; the reviewed teaching-staff preset is staff-assignable and excludes CRM/people/billing/reporting/marketing/approval; teaching-only staff plan and use Kai, are refused for Marcus, Chad and profile-only agents before any provider call, and get HON answers without school business facts');
+  }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
