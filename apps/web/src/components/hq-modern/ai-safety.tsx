@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AI_SPEND_PAUSE_CLASSES, AI_UNKNOWN_DECISIONS,
-  type AiSpendPause, type AiSpendPauseClass, type AiSpendPauseList, type AiUnknownDecision, type AiUnknownOpenItem, type AiUnknownQueue,
+  type AiSpendPause, type AiSpendPauseClass, type AiSpendPauseList, type AiUnknownAgent, type AiUnknownDecision, type AiUnknownOpenItem, type AiUnknownQueue,
   type AiUnknownResolutionInput,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
@@ -21,7 +21,7 @@ export const DECISION_LABEL: Record<AiUnknownDecision, string> = {
   NO_PROVIDER_CHARGE: 'Provider did not charge',
   WRITE_OFF: 'Cannot be verified: write off at HON’s expense',
 };
-const AGENT_LABEL = { MARKETING: 'Marcus · marketing drafts', TEACHING: 'Kai · teaching drafts', CHAD_FOLLOW_UP: 'Chad · follow-up drafts' } as const;
+const AGENT_LABEL: Record<AiUnknownAgent, string> = { MARKETING: 'Marcus · marketing drafts', TEACHING: 'Kai · teaching drafts', CHAD_FOLLOW_UP: 'Chad · follow-up drafts', HON_REPLY: 'HON · assistant replies' };
 const FAILURE_TEXT: Record<AiSafetyFailure, string> = {
   SESSION: 'Your session ended. Sign in again.',
   FORBIDDEN: 'Not permitted. Only a human HQ owner can pause, resume or resolve; billing staff can read.',

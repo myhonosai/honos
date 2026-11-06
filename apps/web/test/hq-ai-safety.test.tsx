@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AI_UNKNOWN_AGENTS } from '@hon/contracts';
 import { HQ_AI_SAFETY_API, HqAiSafetyError, preparePause, prepareResolution } from '../src/components/hq-modern/ai-safety-http';
 import { HqAiSafetyView, pauseInput, resolutionInput, type AiSafetyViewProps, type Records } from '../src/components/hq-modern/ai-safety';
 
@@ -61,6 +62,15 @@ describe('HQ AI safety view', () => {
     }
     const visible = render({ notice: 'Resolve call 11111111: recorded.', pending: { prepared, label: 'Resolve call 11111111', kind: 'resolve', state: 'UNKNOWN' } });
     expect(visible.match(/data-ai-safety-private=""/g)).toHaveLength(2);
+  });
+});
+
+describe('HQ AI safety agents', () => {
+  it('labels every canonical UNKNOWN agent, including HON assistant replies', () => {
+    const base = records();
+    const html = render({ records: { ...base, queue: { ...base.queue, open: AI_UNKNOWN_AGENTS.map((agent, index) => ({ ...base.queue.open[0]!, agent, invocationId: id(index + 1) })) } } });
+    for (const label of ['Marcus', 'Kai', 'Chad', 'HON · assistant replies']) expect(html).toContain(label);
+    expect(html).not.toContain('undefined');
   });
 });
 
