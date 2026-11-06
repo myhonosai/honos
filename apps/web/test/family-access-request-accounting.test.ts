@@ -14,7 +14,7 @@ it('accounts for the actual LocaleProvider transport GET without treating it as 
   });
   await expect(loadMyLanguage()).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
   reads.observe('GET', origin + '/api/identity/me');
-  expect(reads.snapshot()).toEqual({ familyGets: [], languageGets: 1, identityGets: 1, shellGets: 0, unexpectedGets: [] });
+  expect(reads.snapshot()).toEqual({ familyGets: [], languageGets: 1, identityGets: 1, shellIdentityGets: 0, shellGets: 0, unexpectedGets: [] });
   expect(() => reads.assertDomainReads(0, 'inert prefill')).not.toThrow();
 });
 it('sets aside only the school shell\'s own exact GETs, never a family read', () => {
@@ -27,6 +27,14 @@ it('sets aside only the school shell\'s own exact GETs, never a family read', ()
   expect(() => reads.assertDomainReads(0, 'shell')).not.toThrow();
   reads.observe('GET', origin + '/api/v1/staff/reporting-schools?schoolId=' + scope.schoolId);
   expect(() => reads.assertDomainReads(0, 'shell query')).toThrow(/Unexpected API GET/);
+});
+it('attributes one identity read to each school shell entry and counts any further identity read as the page\'s own', () => {
+  const reads = createFamilyReadAccounting(origin, scope);
+  reads.observe('GET', origin + '/api/identity/me');
+  reads.observe('GET', origin + '/api/v1/staff/current-reporting-school');
+  expect(reads.snapshot()).toMatchObject({ identityGets: 0, shellIdentityGets: 1, shellGets: 1 });
+  reads.observe('GET', origin + '/api/identity/me');
+  expect(reads.snapshot()).toMatchObject({ identityGets: 1, shellIdentityGets: 1 });
 });
 it.each([familyPath, invitationPath])('still rejects an automatic family-domain GET before explicit verification: %s', path => {
   const reads = createFamilyReadAccounting(origin, scope);

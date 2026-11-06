@@ -8,19 +8,22 @@ export function createFamilyReadAccounting(origin, { organizationId, schoolId })
     `/api/v1/school/schools/${schoolId}/family-access-invitations`,
   ]);
   const familyGets = [], unexpectedGets = [];
-  let languageGets = 0, identityGets = 0, shellGets = 0;
+  // The school shell verifies identity once per entry, immediately before its
+  // current-reporting-school read; only identity reads beyond those are the page's own.
+  let languageGets = 0, rawIdentityGets = 0, shellGets = 0, shellEntries = 0;
   function observe(method, url) {
     if (method !== 'GET') return;
     const target = new URL(url, origin);
     if (!target.pathname.startsWith('/api/')) return;
     const exact = target.origin === origin && !target.search && !target.hash;
-    if (exact && isSchoolShellRead(method, target.pathname)) shellGets++;
+    if (exact && isSchoolShellRead(method, target.pathname)) { shellGets++; if (target.pathname === '/api/v1/staff/current-reporting-school') shellEntries++; }
     else if (exact && target.pathname === '/api/v1/me/language-preference') languageGets++;
-    else if (exact && target.pathname === '/api/identity/me') identityGets++;
+    else if (exact && target.pathname === '/api/identity/me') rawIdentityGets++;
     else if (exact && familyPaths.has(target.pathname)) familyGets.push(target.pathname);
     else unexpectedGets.push({ path: target.pathname, sameOrigin: target.origin === origin, hasQuery: Boolean(target.search), hasFragment: Boolean(target.hash) });
   }
-  function snapshot() { return { familyGets: [...familyGets], languageGets, identityGets, shellGets, unexpectedGets: unexpectedGets.map(value => ({ ...value })) }; }
+  function snapshot() { const shellIdentityGets = Math.min(rawIdentityGets, shellEntries);
+    return { familyGets: [...familyGets], languageGets, identityGets: rawIdentityGets - shellIdentityGets, shellIdentityGets, shellGets, unexpectedGets: unexpectedGets.map(value => ({ ...value })) }; }
   function diagnostics(stage) { return `${stage}: ${JSON.stringify(snapshot())}`; }
   function assertAllowedGets(stage) { assert.equal(unexpectedGets.length, 0, `Unexpected API GET. ${diagnostics(stage)}`); }
   function assertDomainReads(expected, stage) {
