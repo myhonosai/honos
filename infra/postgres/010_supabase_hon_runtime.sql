@@ -2225,7 +2225,7 @@ DO $$ DECLARE r text; f text; BEGIN
   IF to_regclass('hon.hon_reply_invocations') IS NULL THEN RAISE EXCEPTION 'Apply C2 migration 0210 first'; END IF;
   REVOKE ALL ON TABLE hon.hon_reply_invocations FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON TABLE hon.hon_reply_invocations FROM '||quote_ident(r); END LOOP;
-  FOREACH f IN ARRAY ARRAY['hon_reply_limits()','hon_reply_access(text)','hon_reply_planning_reference(text,uuid)','prepare_hon_reply(text,uuid,uuid,boolean)',
+  FOREACH f IN ARRAY ARRAY['hon_reply_limits(text)','hon_reply_max_steps()','hon_reply_detail(uuid)','hon_reply_access(text)','hon_reply_planning_reference(text,uuid)','prepare_hon_reply(text,uuid,uuid,boolean)',
       'fail_hon_reply(text,uuid,text,text)','record_hon_reply_result(text,uuid,jsonb)','release_held_hon_reply(text,uuid)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
