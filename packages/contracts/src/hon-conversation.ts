@@ -10,13 +10,18 @@ import { FOLLOW_UP_DRAFT_PURPOSES, type FollowUpDraftPurpose } from './chad-foll
 
 export const HON_TURN_STATUSES = ['READY', 'PROCESSING', 'DELEGATING', 'AWAITING_APPROVAL', 'COMPLETED', 'FAILED', 'UNKNOWN'] as const;
 export type HonTurnStatus = typeof HON_TURN_STATUSES[number];
-export const HON_DELEGATE_AGENTS = ['marcus', 'claire', 'chad'] as const;
+/** Delegate specialists as clients see them. Kai is the Teaching & Curriculum assistant (owner blueprint 2026-11-06). */
+export const HON_DELEGATE_AGENTS = ['marcus', 'kai', 'chad'] as const;
+/** @deprecated Accepted for one release as an alias of 'kai' (legacy teaching key); responses always say 'kai'. */
+export const HON_LEGACY_TEACHING_AGENT = 'claire' as const;
 export type HonDelegateAgentKey = typeof HON_DELEGATE_AGENTS[number];
-export const HON_TURN_TEXT_LIMITS: Readonly<Record<HonDelegateAgentKey, number>> = { marcus: 2000, claire: 1200, chad: 2000 };
+export const HON_TURN_TEXT_LIMITS: Readonly<Record<HonDelegateAgentKey, number>> = { marcus: 2000, kai: 1200, chad: 2000 };
 
 export type HonDelegation =
   | { agentKey: 'marcus'; campaignId: string }
-  | { agentKey: 'claire'; curriculumId: string }
+  | { agentKey: 'kai'; curriculumId: string }
+  /** @deprecated use 'kai'. Passed through unchanged so a resend of an earlier turn still matches its fingerprint. */
+  | { agentKey: typeof HON_LEGACY_TEACHING_AGENT; curriculumId: string }
   | { agentKey: 'chad'; leadId: string; expectedLeadVersion: number; purpose: FollowUpDraftPurpose };
 export interface HonTurnRequest { text: string; delegation: HonDelegation | null }
 /** The conversational responder of a question turn (not one of the delegate specialists). */
@@ -66,10 +71,11 @@ export function validateHonTurnRequest(value: unknown): HonTurnRequest {
     return { text: r.text as string, delegation: null };
   }
   const d = record(r.delegation, invalid);
-  if (!isAgent(d.agentKey) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[d.agentKey])) invalid();
+  const teaching = d.agentKey === 'kai' || d.agentKey === HON_LEGACY_TEACHING_AGENT;
+  if (!(isAgent(d.agentKey) || teaching) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[teaching ? 'kai' : d.agentKey as HonDelegateAgentKey])) invalid();
   const text = r.text as string;
   if (d.agentKey === 'marcus') { exactKeys(d, ['agentKey', 'campaignId'], invalid); if (!isUuid(d.campaignId)) invalid(); return { text, delegation: { agentKey: 'marcus', campaignId: d.campaignId as string } }; }
-  if (d.agentKey === 'claire') { exactKeys(d, ['agentKey', 'curriculumId'], invalid); if (!isUuid(d.curriculumId)) invalid(); return { text, delegation: { agentKey: 'claire', curriculumId: d.curriculumId as string } }; }
+  if (teaching) { exactKeys(d, ['agentKey', 'curriculumId'], invalid); if (!isUuid(d.curriculumId)) invalid(); return { text, delegation: { agentKey: d.agentKey as 'kai' | typeof HON_LEGACY_TEACHING_AGENT, curriculumId: d.curriculumId as string } }; }
   exactKeys(d, ['agentKey', 'leadId', 'expectedLeadVersion', 'purpose'], invalid);
   if (!isUuid(d.leadId) || !Number.isSafeInteger(d.expectedLeadVersion) || (d.expectedLeadVersion as number) < 1 || (d.expectedLeadVersion as number) > 999_999_999
     || !(FOLLOW_UP_DRAFT_PURPOSES as readonly unknown[]).includes(d.purpose)) invalid();

@@ -1280,13 +1280,14 @@ try {
   // ---- INV-23 (AI-R1): team readiness agrees with what a real request would do, and writes nothing ----
   {
   const ready = async (o, patch = {}) => (await tenant(context(o, patch), (client) => client.query('SELECT hon.read_ai_team_readiness($1) r', [o.subject]))).rows[0].r;
-  const byKey = (r) => Object.fromEntries(r.agents.map((a) => [a.agentKey, a]));
+  // K1: the teaching fixture driver keeps its legacy name 'claire'; clients see that agent as Kai ('kai').
+  const byKey = (r) => Object.fromEntries(r.agents.map((a) => [a.agentKey === 'kai' ? 'claire' : a.agentKey, a]));
   const counts = async () => (await row(`SELECT (SELECT count(*) FROM hon.ai_invocation_plans)::int p, (SELECT count(*) FROM hon.ai_usage_ledger)::int l,
     (SELECT count(*) FROM hon.audit_events)::int a, (SELECT count(*) FROM hon.marketing_ai_invocations)+(SELECT count(*) FROM hon.teaching_ai_invocations)+(SELECT count(*) FROM hon.chad_follow_up_invocations)+(SELECT count(*) FROM hon.hon_reply_invocations) i`));
   const r0 = await makeOrg('inv-23');
   const before = await counts(), calls0 = Object.values(fakes).reduce((n, f) => n + f.calls, 0);
   const base = await ready(r0);
-  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['claire', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED'], ['hon', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
+  assert.deepEqual(base.agents.map((a) => [a.agentKey, a.available, a.route, a.spendDecision]), [['marcus', true, 'CONFIGURED', 'ALLOWED'], ['kai', true, 'CONFIGURED', 'ALLOWED'], ['chad', true, 'CONFIGURED', 'ALLOWED'], ['hon', true, 'CONFIGURED', 'ALLOWED']], JSON.stringify(base));
   assert.deepEqual([base.organizationId, base.schoolId, base.completeEntitlement, base.agentBudget.ceilingCredits], [r0.id, r0.school, true, 12000]);
   assert.deepEqual(await counts(), before, 'readiness writes nothing');
   assert.equal(Object.values(fakes).reduce((n, f) => n + f.calls, 0), calls0, 'readiness never reaches a provider');
@@ -1495,7 +1496,7 @@ try {
   const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? 'OK'; };
   const calls = () => fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls;
   const readiness = (await hon.readiness(scope)).data;
-  assert.deepEqual([readiness.contract, readiness.authorization, readiness.entitlement, readiness.providerRoute, readiness.availableAgentKeys], [true, true, true, true, ['marcus', 'claire', 'chad']]);
+  assert.deepEqual([readiness.contract, readiness.authorization, readiness.entitlement, readiness.providerRoute, readiness.availableAgentKeys], [true, true, true, true, ['marcus', 'kai', 'chad']]);
   const k1 = K();
   const conv = await hon.create(scope, { title: 'Spring enrollment push' }, k1);
   assert.deepEqual([conv.status, conv.turnCount], ['READY', 0]);
@@ -1530,7 +1531,7 @@ try {
   fakes.marcus.mode = 'RESULT';
   assert.equal(unknown.status, 'UNKNOWN');
   const thread = await hon.read(scope, conv.id);
-  assert.deepEqual(thread.turns.map((t) => t.role), ['HUMAN', 'marcus', 'HUMAN', 'claire', 'HUMAN', 'chad', 'HUMAN', 'marcus', 'HUMAN', 'marcus']);
+  assert.deepEqual(thread.turns.map((t) => t.role), ['HUMAN', 'marcus', 'HUMAN', 'kai', 'HUMAN', 'chad', 'HUMAN', 'marcus', 'HUMAN', 'marcus']);
   assert.deepEqual(thread.turns.filter((t) => t.role !== 'HUMAN').map((t) => t.status), ['AWAITING_APPROVAL', 'AWAITING_APPROVAL', 'AWAITING_APPROVAL', 'FAILED', 'UNKNOWN']);
   assert.ok(thread.turns.filter((t) => t.role !== 'HUMAN').every((t) => t.text === null), 'specialist drafts stay behind their own reads');
   assert.equal(thread.status, 'UNKNOWN');
@@ -1786,7 +1787,7 @@ try {
   fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY';
   const readiness = (await hon.readiness(scope)).data;
   assert.equal(readiness.honReply, true, JSON.stringify(readiness));
-  assert.deepEqual(readiness.availableAgentKeys, ['marcus', 'claire', 'chad'], 'HON is not offered as a delegate');
+  assert.deepEqual(readiness.availableAgentKeys, ['marcus', 'kai', 'chad'], 'HON is not offered as a delegate');
   const conv = await hon.create(scope, { title: 'Ask HON' }, K());
 
   // 1. A genuine reply from the (injected) provider, recorded once, persisted and readable after reload.
@@ -1911,6 +1912,50 @@ try {
   assert.equal((await row("SELECT has_table_privilege($1,'hon.hon_reply_invocations','SELECT') s", [runtimeRole])).s, false, 'functions only');
   for (const f of ['hon_reply_limits()', 'hon_reply_access(text)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
   pass('INV-25', 'C2: Ask HON answers through the planning boundary, S4 budget lock and access decision with one provider call and one ledger row per question (resend replays), using only server-built aggregate school facts (NOT_AUTHORIZED without reporting.view) and trimmed history of the same conversation; persisted after reload; config/rejection/over-budget/unknown are reported honestly; UNKNOWN holds count and resolve in the HQ queue as HON_REPLY; a mid-flight lapse holds the reply until access returns; budget, HQ pause and lost permission refuse before any call; school-isolated and attributed in HQ usage');
+  }
+  // ---- INV-26 (K1): Kai is the Teaching & Curriculum assistant; legacy 'claire' teaching records stay as recorded ----
+  {
+  const o = await makeOrg('inv-26');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const conv = await hon.create(scope, { title: 'Kai' }, K());
+  const turnRow = (id) => row('SELECT agent_key FROM hon.hon_conversation_turns WHERE id=$1', [id]);
+  const planOf = (invocationId) => row('SELECT p.agent_key, p.task_class FROM hon.teaching_ai_invocations i JOIN hon.ai_invocation_plans p ON p.id=i.plan_id WHERE i.id=$1', [invocationId]);
+  // 1. A teaching delegation to Kai is recorded and planned as 'kai'; clients see 'kai'.
+  const k1 = K();
+  const kaiTurn = { text: 'Outline a white belt practice.', delegation: { agentKey: 'kai', curriculumId: o.curriculum } };
+  const r1 = await hon.sendTurn(scope, conv.id, kaiTurn, k1);
+  assert.deepEqual([r1.status, r1.delegatedAgentKeys], ['AWAITING_APPROVAL', ['kai']], JSON.stringify(r1));
+  assert.equal((await turnRow(r1.turnId)).agent_key, 'kai');
+  assert.deepEqual(await planOf(r1.invocationId), { agent_key: 'kai', task_class: 'DRAFT_TEACHING' }, 'new teaching plans are Kai\'s');
+  assert.deepEqual(await hon.sendTurn(scope, conv.id, kaiTurn, k1), r1, 'resend replays');
+  // 2. The deprecated alias 'claire' is accepted for one release and stored as 'kai'.
+  const r2 = await hon.sendTurn(scope, conv.id, { text: 'Outline a yellow belt practice.', delegation: { agentKey: 'claire', curriculumId: o.curriculum } }, K());
+  assert.deepEqual([r2.status, r2.delegatedAgentKeys, (await turnRow(r2.turnId)).agent_key], ['AWAITING_APPROVAL', ['kai'], 'kai']);
+  // 3. A turn recorded before K1 under 'claire' keeps its recorded key, still resolves its teaching record and is shown as Kai.
+  await admin.query('ALTER TABLE hon.hon_conversation_turns DISABLE TRIGGER USER');
+  try { await admin.query("UPDATE hon.hon_conversation_turns SET agent_key='claire' WHERE id=$1", [r2.turnId]); }
+  finally { await admin.query('ALTER TABLE hon.hon_conversation_turns ENABLE TRIGGER USER'); }
+  assert.equal((await turnRow(r2.turnId)).agent_key, 'claire', 'the recorded key is never rewritten');
+  const shown = (await hon.read(scope, conv.id)).turns.filter((t) => t.role !== 'HUMAN');
+  assert.deepEqual(shown.map((t) => [t.role, t.status]), [['kai', 'AWAITING_APPROVAL'], ['kai', 'AWAITING_APPROVAL']], JSON.stringify(shown));
+  const resent = await hon.sendTurn(scope, conv.id, { text: 'Outline a yellow belt practice.', delegation: { agentKey: 'claire', curriculumId: o.curriculum } }, r2.turnId === null ? K() : (await row('SELECT idempotency_key FROM hon.hon_conversation_turns WHERE id=$1', [r2.turnId])).idempotency_key);
+  assert.deepEqual([resent.turnId, resent.delegatedAgentKeys, resent.status], [r2.turnId, ['kai'], 'AWAITING_APPROVAL'], 'a resend of the legacy turn matches it and is shown as Kai');
+  // 4. Kai can only be planned for teaching; readiness and the HON delegate list name Kai, never 'claire'.
+  const kaiOnly = await row("SELECT convalidated, pg_get_constraintdef(oid) d FROM pg_constraint WHERE conname='ai_invocation_plans_kai_teaching_only' AND conrelid='hon.ai_invocation_plans'::regclass");
+  assert.equal(kaiOnly?.convalidated, true); assert.match(kaiOnly.d, /agent_key <> 'kai'.*task_class = 'DRAFT_TEACHING'/, 'a Kai plan is teaching only');
+  const readiness = (await hon.readiness(scope)).data;
+  assert.deepEqual(readiness.availableAgentKeys, ['marcus', 'kai', 'chad']);
+  const team = (await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data;
+  assert.deepEqual(team.agents.map((a) => a.agentKey), ['marcus', 'kai', 'chad', 'hon']);
+  // 5. Without teaching.assistant.use, Kai is refused before any provider call (teaching-only permission boundary unchanged).
+  await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='teaching.assistant.use'", [o.role]);
+  const n = fakes.claire.calls;
+  const refused = await hon.sendTurn(scope, conv.id, { text: 'Outline a green belt practice.', delegation: { agentKey: 'kai', curriculumId: o.curriculum } }, K());
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'teaching.assistant.use')", [o.role, o.id]);
+  assert.deepEqual([refused.status, refused.reason, fakes.claire.calls - n], ['FAILED', 'AGENT_NOT_AUTHORIZED', 0], JSON.stringify(refused));
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_presented_agent(text)','EXECUTE') s", [runtimeRole])).s, false, 'presentation helper is internal');
+  pass('INV-26', 'K1: Kai is the Teaching & Curriculum assistant: teaching turns and plans are recorded as kai (resend replays), the deprecated claire alias is stored as kai, legacy claire turns keep their recorded key and are shown as Kai, a kai plan is teaching only, readiness and the delegate list name Kai, and Kai without teaching.assistant.use is refused before any provider call');
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----

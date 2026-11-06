@@ -3,7 +3,7 @@
 import { championsDrift as drift, championsExactKeys as exactKeys, championsIsTimestamp as isTimestamp, championsIsUuid as isUuid,
   championsRecord as record } from './champions-club.js';
 
-export const AI_TEAM_READY_AGENTS = [['marcus', 'MARKETING', 6], ['claire', 'TEACHING', 6], ['chad', 'CHAD_FOLLOW_UP', 3], ['hon', 'HON_REPLY', 9]] as const;
+export const AI_TEAM_READY_AGENTS = [['marcus', 'MARKETING', 6], ['kai', 'TEACHING', 6], ['chad', 'CHAD_FOLLOW_UP', 3], ['hon', 'HON_REPLY', 9]] as const;
 export type AiTeamReadyAgentKey = typeof AI_TEAM_READY_AGENTS[number][0];
 /** S4-c decisions plus ALLOWED. */
 export const AI_TEAM_SPEND_DECISIONS = ['ALLOWED', 'AI_PAUSED_BY_HQ', 'AI_EXCEPTION_NO_AI', 'AI_ACCESS_UNKNOWN_STATE', 'AI_TRIAL_FUNDING_NOT_APPROVED',
