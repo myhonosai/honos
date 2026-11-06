@@ -150,7 +150,7 @@ export class HonConversationService {
   /** Hands the turn to the specialist's own service at this exact school. Returns a refusal to record, or null. */
   private async handOff(scope: Scope, begun: Begun & { delegation: Record<string, unknown> }): Promise<Failure | null> {
     const agentScope = begun.agentKey === 'marcus' ? await this.database.resolveCampaignScope(scope.externalSubject, 'marketing.campaign.read')
-      : begun.agentKey === 'claire' ? await this.database.resolveTeachingAssistantScope(scope.externalSubject)
+      : begun.agentKey === 'kai' ? await this.database.resolveTeachingAssistantScope(scope.externalSubject)
       : await this.database.resolveChadFollowUpAssistantScope(scope.externalSubject);
     // The specialist resolves its own school from the verified identity; it must be this conversation's school and human.
     if (!agentScope || agentScope.organizationId !== scope.organizationId || agentScope.schoolId !== scope.schoolId || agentScope.principalId !== scope.principalId) return 'AGENT_NOT_AUTHORIZED';
@@ -158,7 +158,7 @@ export class HonConversationService {
     const context = { ...agentScope, externalSubject: scope.externalSubject, principalType: 'HUMAN_USER' as const, source: 'HUMAN_UI' as const, requestId, correlationId: requestId, idempotencyKey: begun.turnId };
     try {
       if (begun.agentKey === 'marcus') await this.marcus.submit(context, begun.delegation);
-      else if (begun.agentKey === 'claire') await this.claire.submit(context, begun.delegation);
+      else if (begun.agentKey === 'kai') await this.claire.submit(context, begun.delegation);
       else await this.chad.submit(context, begun.delegation);
       return null;
     } catch (error) {
