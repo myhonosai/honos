@@ -36,7 +36,9 @@ async function axeScan(page, name) {
 
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const asOf = '2026-11-06T18:00:00.000Z';
-let active = true, commandMode = 'ok', role = 'owner';
+let active = true, commandMode = 'ok', role = 'owner', reads = 0, held = null;
+// Per-POST behaviours, consumed in order: 'lost' | 'timeout' (409 SAAS_OUTCOME_UNKNOWN) | 'refuse:<CODE>' (422) | 'hold' (deferred until released).
+let commandQueue = [];
 const pauses = () => ({ asOf, pauses: [
   ...(active ? [{ pauseId: id(11), organizationId: null, spendClass: 'CREATIVE_MEDIA', reason: 'Provider incident under review', pausedAt: asOf, pausedByPrincipalId: id(2), status: 'ACTIVE', endReason: null, endedAt: null, endedByPrincipalId: null }] : []),
   { pauseId: id(12), organizationId: id(4), spendClass: 'ALL', reason: 'Suspected abuse being checked', pausedAt: asOf, pausedByPrincipalId: id(2), status: 'ENDED', endReason: 'Checked and cleared by owner', endedAt: asOf, endedByPrincipalId: id(2) },
@@ -48,15 +50,22 @@ const queue = () => ({ asOf, staleAfterSeconds: 900, resolved: [], open: [
 // The HQ shell's own access read: a synthetic owner with no company data, so the page-level reads decide what shows.
 const overview = { asOf, callerHqRole: 'OWNER', organizationCount: 0, schoolCount: 0, onboarding: { availability: 'AVAILABLE', requestCount: 0, inProgressRequestCount: 0, completedRequestCount: 0 }, configuredProviderStates: { disabled: 0, configured: 0, healthy: 0, degraded: 0, unavailable: 0 }, taskProfileCount: 0, financialMetrics: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics }, aiUsage: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage }, durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork } };
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
-function api(route) {
+async function api(route) {
   const request = route.request(), path = new URL(request.url()).pathname;
   if (path === '/api/v1/hq/overview' && request.method() === 'GET') return json(route, 200, { data: { overview } });
+  if (path.startsWith('/api/v1/hq/ai/') && request.method() === 'GET') reads += 1;
   if (path === '/api/v1/hq/ai/spend-pauses' && request.method() === 'GET') return role === 'none' ? json(route, 403, { code: 'SAAS_FORBIDDEN' }) : json(route, 200, { data: pauses() });
   if (path === '/api/v1/hq/ai/unknown-invocations' && request.method() === 'GET') return role === 'none' ? json(route, 403, { code: 'SAAS_FORBIDDEN' }) : json(route, 200, { data: queue() });
   if (request.method() === 'POST' && path.startsWith('/api/v1/hq/ai/')) {
     const headers = request.headers();
     report.commands.push({ path, command: headers['x-hon-human-command'], key: headers['idempotency-key'], body: request.postData() });
     if (commandMode === 'lost') { commandMode = 'ok'; return route.abort('failed'); }
+    const next = commandQueue.shift() ?? 'ok';
+    if (next === 'lost') return route.abort('failed');
+    if (next === 'timeout') return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN', detail: 'Retry the identical request with the same key; do not assume the command took effect.' });
+    if (next.startsWith('refuse:')) return json(route, 422, { code: next.slice(7) });
+    if (next.startsWith('hold')) { const outcome = await new Promise((release) => { held = release; }); held = null;
+      if (outcome === 'timeout') return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' }); }
     if (role === 'reader') return json(route, 403, { code: 'SAAS_FORBIDDEN' });
     if (path === '/api/v1/hq/ai/spend-pauses') {
       const body = JSON.parse(request.postData() ?? '{}'); active = body.action === 'PAUSE';
@@ -114,6 +123,45 @@ await check('a lost response keeps the exact request; retry resends the same bod
   assert.equal(report.commands.length, 2);
   assert.equal(report.commands[0].key, report.commands[1].key); assert.equal(report.commands[0].body, report.commands[1].body); await ctx.close();
 });
+const hideTab = (page) => page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange'));
+  return [...document.querySelectorAll('[data-ai-safety-records],[data-ai-safety-private]')].every((node) => node.hidden && node.inert); });
+const showTab = (page) => page.evaluate(() => { delete document.visibilityState; });
+const waitHeld = async () => { for (let i = 0; i < 100 && !held; i += 1) await new Promise((done) => setTimeout(done, 50)); assert(held, 'command reached the fixture'); };
+for (const outcome of ['success', 'timeout']) {
+  await check(`a pending command settling (${outcome}) after concealment never repaints records; only an explicit refresh does`, async () => {
+    active = true; role = 'owner'; report.commands = []; commandQueue = ['hold']; const { ctx, page } = await open({ width: 1440, height: 900 }); await ready(page);
+    await page.locator('[data-pause] textarea').fill('Provider incident resolved');
+    await page.locator('[data-pause]').getByRole('button', { name: 'Resume' }).click(); await page.waitForSelector('[data-pending="SENDING"]'); await waitHeld();
+    assert.equal(await hideTab(page), true, 'records and request label hidden in the event handler'); await page.waitForSelector('[data-ai-safety="CONCEALED"]');
+    const before = reads; held(outcome === 'success' ? 'ok' : 'timeout');
+    await page.waitForTimeout(800);
+    assert.equal(await page.locator('[data-ai-safety]').getAttribute('data-ai-safety'), 'CONCEALED');
+    assert.equal(reads, before, 'no re-read after the command settled'); assert.equal(await page.locator('[data-ai-safety-records]').count(), 0);
+    assert.equal(await page.getByText('Provider incident under review').count(), 0); assert.equal(await page.getByText(/Resume creative studio media/i).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Retry the same request' }).count(), 0);
+    await showTab(page);
+    await page.locator('[data-ai-safety] section[role="status"]').getByRole('button', { name: 'Refresh', exact: true }).click(); await ready(page);
+    if (outcome === 'success') { assert.equal(await page.locator('[data-pending]').count(), 0); assert.match(await page.locator('[role="status"]').first().textContent(), /recorded/); }
+    else { await page.waitForSelector('[data-pending="UNKNOWN"]'); await page.getByRole('button', { name: 'Retry the same request' }).click(); await page.waitForSelector('[data-pending]', { state: 'detached' });
+      assert.equal(report.commands.length, 2); assert.equal(report.commands[0].key, report.commands[1].key); assert.equal(report.commands[0].body, report.commands[1].body); }
+    await ctx.close();
+  });
+}
+await check('lost success, then a 409 outcome-unknown timeout, then recovery all reuse the exact request', async () => {
+  active = true; role = 'owner'; report.commands = []; commandQueue = ['lost', 'timeout', 'ok']; const { ctx, page } = await open({ width: 1440, height: 900 }); await ready(page);
+  await page.locator('[data-pause] textarea').fill('Provider incident resolved');
+  await page.locator('[data-pause]').getByRole('button', { name: 'Resume' }).click(); await page.waitForSelector('[data-pending="UNKNOWN"]');
+  await page.getByRole('button', { name: 'Retry the same request' }).click(); await page.waitForSelector('[data-pending="SENDING"]', { state: 'detached' }); await page.waitForSelector('[data-pending="UNKNOWN"]');
+  await page.getByRole('button', { name: 'Retry the same request' }).click(); await page.waitForSelector('[data-pending]', { state: 'detached' });
+  assert.equal(report.commands.length, 3); assert.equal(new Set(report.commands.map((c) => c.key)).size, 1); assert.equal(new Set(report.commands.map((c) => c.body)).size, 1); await ctx.close();
+});
+await check('a 422 rule refusal is definitive: no outcome-recovery retry, only a refresh', async () => {
+  active = true; role = 'owner'; report.commands = []; commandQueue = ['refuse:AI_SPEND_PAUSE_NOT_ACTIVE']; const { ctx, page } = await open({ width: 1440, height: 900 }); await ready(page);
+  await page.locator('[data-pause] textarea').fill('Provider incident resolved');
+  await page.locator('[data-pause]').getByRole('button', { name: 'Resume' }).click(); await page.waitForSelector('[data-pending="REFUSED"]');
+  assert.equal(await page.getByRole('button', { name: 'Retry the same request' }).count(), 0); assert.match(await page.locator('[data-pending]').textContent(), /no longer active/);
+  const before = reads; await page.getByRole('button', { name: 'Refresh records' }).click(); await ready(page); assert.equal(reads > before, true); assert.equal(report.commands.length, 1); await ctx.close();
+});
 await check('a billing reader is told only an HQ owner may act', async () => {
   active = true; role = 'reader'; const { ctx, page } = await open({ width: 1440, height: 900 }); await ready(page);
   await page.locator('[data-unknown]').first().getByRole('button', { name: 'Resolve' }).click();
@@ -126,7 +174,7 @@ await check('blur and a hidden tab conceal the records at once; refresh re-reads
   const hiddenNow = await page.evaluate(() => { window.dispatchEvent(new Event('blur')); return [...document.querySelectorAll('[data-ai-safety-records]')].every((node) => node.hidden && node.inert); });
   assert.equal(hiddenNow, true); await page.waitForSelector('[data-ai-safety="CONCEALED"]');
   assert.equal(await page.getByText('Provider incident under review').count(), 0);
-  await page.getByRole('button', { name: 'Refresh' }).last().click(); await ready(page);
+  await page.locator('[data-ai-safety] section[role="status"]').getByRole('button', { name: 'Refresh', exact: true }).click(); await ready(page);
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; });
   await page.waitForSelector('[data-ai-safety="CONCEALED"]'); await ctx.close();
 });

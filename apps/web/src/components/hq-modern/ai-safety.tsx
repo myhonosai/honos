@@ -7,7 +7,7 @@ import {
   type AiUnknownResolutionInput,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { HQ_AI_SAFETY_API, HqAiSafetyError, preparePause, prepareResolution, type AiSafetyFailure, type HqAiSafetyApi, type PreparedCommand } from './ai-safety-http';
+import { HQ_AI_SAFETY_API, HqAiSafetyError, preparePause, prepareResolution, type AiSafetyFailure, type AiSafetyRefusal, type HqAiSafetyApi, type PreparedCommand } from './ai-safety-http';
 import { formatSaasMoney } from './saas-review';
 import base from './hq-modern.module.css';
 import shared from './champions-management.module.css';
@@ -27,8 +27,15 @@ const FAILURE_TEXT: Record<AiSafetyFailure, string> = {
   FORBIDDEN: 'Not permitted. Only a human HQ owner can pause, resume or resolve; billing staff can read.',
   INVALID: 'The request was refused as invalid. Check the fields and try again.',
   CONFLICT: 'This record changed or is already settled. Refresh to see the current state.',
+  REFUSED: 'Refused: nothing was recorded. Refresh and review the current records before acting again.',
   UNAVAILABLE: 'HQ AI safety records are unavailable right now. Nothing is shown in their place.',
   UNKNOWN: 'The outcome is unknown: it may or may not have been recorded. Retry sends the exact same request and cannot apply it twice.',
+};
+const REFUSAL_TEXT: Record<AiSafetyRefusal, string> = {
+  AI_SPEND_PAUSE_ALREADY_ACTIVE: 'Refused: a pause for this scope and AI work is already active. Nothing new was recorded. Refresh and review before acting again.',
+  AI_SPEND_PAUSE_NOT_ACTIVE: 'Refused: this pause is no longer active (it may have been resumed). Nothing was recorded. Refresh and review before acting again.',
+  AI_UNKNOWN_NOT_RESOLVABLE: 'Refused: this call is not ready to resolve or is already settled. Nothing was recorded. Refresh and review before acting again.',
+  AI_UNKNOWN_ORIGIN_UNAVAILABLE: 'Refused: the original call’s records are unavailable, so it cannot be resolved here. Nothing was recorded. Refresh before acting again.',
 };
 const time = (value: string | null) => value === null ? 'No trustworthy time recorded' : `${new Date(value).toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
 const short = (value: string) => value.slice(0, 8);
@@ -36,7 +43,7 @@ const n = (value: number) => value.toLocaleString('en-US');
 
 export type Records = { pauses: AiSpendPauseList; queue: AiUnknownQueue };
 export type ViewPhase = 'LOADING' | 'READY' | 'CONCEALED' | AiSafetyFailure;
-type Pending = { prepared: PreparedCommand; label: string; kind: 'pause' | 'resolve'; state: 'SENDING' | AiSafetyFailure };
+type Pending = { prepared: PreparedCommand; label: string; kind: 'pause' | 'resolve'; state: 'SENDING' | AiSafetyFailure; refusal?: AiSafetyRefusal | null };
 
 // ---------------------------------------------------------------- pure view
 
@@ -51,19 +58,23 @@ export type ResolveForm = { decision: AiUnknownDecision; reason: string; referen
 export function HqAiSafetyView(props: AiSafetyViewProps): React.ReactElement {
   const { phase, records, pending } = props;
   const locked = pending !== null;
+  // Concealed or ended: request labels name records, so only a generic line is rendered (as a new node).
+  const hidden = phase === 'CONCEALED' || phase === 'SESSION';
   return <div className={styles.page} data-ai-safety={phase}>
     <section className={base.panel}>
       <div className={base.sectionHeader}><div><h1 className={styles.title}>AI safety</h1>
         <p>Emergency pauses and lost provider outcomes. The database decides who may act: a human HQ owner pauses, resumes and resolves; billing staff can read.</p></div>
         <button type="button" onClick={props.onRefresh} disabled={locked}>Refresh</button></div>
       <p className={shared.note}>The AI team is included in HON OS. Nothing here charges a school: pauses stop new AI work before any provider call, and resolutions settle HON’s own internal usage records.</p>
-      {props.notice && <p role="status" className={styles.notice}>{props.notice}</p>}
-      {pending && <div role="alert" className={styles.pending} data-pending={pending.state}>
+      {props.notice && !hidden && <p key="notice" role="status" className={styles.notice} data-ai-safety-private="">{props.notice}</p>}
+      {pending && hidden && <div key="pending-hidden" role="status" className={styles.pending} data-pending-hidden="">
+        <p>A request you sent is still tracked{pending.state === 'SENDING' ? ' and waiting for its outcome' : ''}. Refresh to see it again.</p></div>}
+      {pending && !hidden && <div key="pending" role="alert" className={styles.pending} data-pending={pending.state} data-ai-safety-private="">
         <strong>{pending.label}</strong>
-        <p>{pending.state === 'SENDING' ? 'Sending…' : FAILURE_TEXT[pending.state]}</p>
-        {pending.state === 'UNKNOWN' && <div className={styles.actions}><button type="button" onClick={props.onRetry}>Retry the same request</button>
+        <p>{pending.state === 'SENDING' ? 'Sending…' : pending.state === 'REFUSED' && pending.refusal ? REFUSAL_TEXT[pending.refusal] : FAILURE_TEXT[pending.state]}</p>
+        {pending.state === 'UNKNOWN' && phase === 'READY' && <div className={styles.actions}><button type="button" onClick={props.onRetry}>Retry the same request</button>
           <button type="button" onClick={props.onDiscard}>Stop and refresh</button></div>}
-        {pending.state !== 'SENDING' && pending.state !== 'UNKNOWN' && <button type="button" onClick={props.onDiscard}>Dismiss</button>}
+        {pending.state !== 'SENDING' && pending.state !== 'UNKNOWN' && <button type="button" onClick={props.onDiscard}>{pending.state === 'REFUSED' || pending.state === 'CONFLICT' ? 'Refresh records' : 'Dismiss'}</button>}
       </div>}
     </section>
     {phase !== 'READY' || !records
@@ -186,36 +197,41 @@ export function HqAiSafety({ api = HQ_AI_SAFETY_API }: { api?: HqAiSafetyApi }):
   const [pending, setPending] = useState<Pending | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const generation = useRef(0), reads = useRef<AbortController | null>(null), ended = useRef(false);
+  // Synchronous privacy gate: set by concealment, cleared only by an explicit refresh under the current session.
+  const concealed = useRef(false), mounted = useRef(true);
 
   const load = useCallback(() => {
     if (ended.current) return;
     const current = ++generation.current; reads.current?.abort(); const abort = new AbortController(); reads.current = abort;
     setPhase('LOADING'); setRecords(null);
     Promise.all([api.pauses(abort.signal), api.queue(abort.signal)]).then(
-      ([pauses, queue]) => { if (current === generation.current) { setRecords({ pauses, queue }); setPhase('READY'); } },
+      ([pauses, queue]) => { if (current === generation.current && !concealed.current && !ended.current) { setRecords({ pauses, queue }); setPhase('READY'); } },
       error => { if (current !== generation.current || abort.signal.aborted) return; const kind = error instanceof HqAiSafetyError ? error.kind : 'UNAVAILABLE';
         if (kind === 'SESSION') ended.current = true; setPhase(kind); });
   }, [api]);
 
   useEffect(() => {
-    load();
+    mounted.current = true; load();
     const conceal = (event: Event) => {
       if (event.type === 'visibilitychange' && document.visibilityState === 'visible') return;
-      generation.current++; reads.current?.abort(); setRecords(null);
-      for (const node of document.querySelectorAll<HTMLElement>('[data-ai-safety-records]')) { node.hidden = true; node.inert = true; }
+      concealed.current = true; generation.current++; reads.current?.abort(); setRecords(null);
+      for (const node of document.querySelectorAll<HTMLElement>('[data-ai-safety-records],[data-ai-safety-private]')) { node.hidden = true; node.inert = true; }
       if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase(current => current === 'SESSION' ? current : 'CONCEALED');
     };
     const windowEvents = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT];
     for (const name of windowEvents) window.addEventListener(name, conceal);
     document.addEventListener('visibilitychange', conceal);
-    return () => { generation.current++; reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); document.removeEventListener('visibilitychange', conceal); };
+    return () => { mounted.current = false; generation.current++; reads.current?.abort(); for (const name of windowEvents) window.removeEventListener(name, conceal); document.removeEventListener('visibilitychange', conceal); };
   }, [load]);
 
   const run = useCallback((next: Pending) => {
     setPending({ ...next, state: 'SENDING' }); setNotice(null);
     const send = next.kind === 'pause' ? api.sendPause(next.prepared) : api.sendResolution(next.prepared);
-    send.then(() => { setPending(null); setNotice(`${next.label}: recorded.`); load(); },
-      error => { const kind = error instanceof HqAiSafetyError ? error.kind : 'UNKNOWN'; if (kind === 'SESSION') ended.current = true; setPending({ ...next, state: kind }); });
+    // The outcome is always kept (never cancelled or discarded), but it never re-reads or repaints records by itself
+    // once the screen was concealed: only an explicit refresh does that.
+    send.then(() => { if (!mounted.current) return; setPending(null); setNotice(`${next.label}: recorded.`); if (!concealed.current) load(); },
+      error => { if (!mounted.current) return; const kind = error instanceof HqAiSafetyError ? error.kind : 'UNKNOWN'; if (kind === 'SESSION') ended.current = true;
+        setPending({ ...next, state: kind, refusal: error instanceof HqAiSafetyError ? error.refusal : null }); });
   }, [api, load]);
 
   const prepare = (work: () => PreparedCommand, label: string, kind: Pending['kind']) => {
@@ -223,13 +239,13 @@ export function HqAiSafety({ api = HQ_AI_SAFETY_API }: { api?: HqAiSafetyApi }):
   };
 
   return <HqAiSafetyView phase={phase} records={records} pending={pending} notice={notice}
-    onRefresh={() => { setNotice(null); load(); }}
+    onRefresh={() => { if (!concealed.current) setNotice(null); concealed.current = false; load(); }}
     onPause={form => { const input = pauseInput(form); if (!input) { setNotice('Pause: confirm, give a 10–500 character reason and, for one organization, a valid organization ID.'); return; }
       prepare(() => preparePause(input), `Pause ${SPEND_CLASS_LABEL[input.spendClass].toLowerCase()}`, 'pause'); }}
     onResume={(pause, reason) => prepare(() => preparePause({ action: 'RESUME', organizationId: pause.organizationId, spendClass: pause.spendClass, reason: reason.trim() }),
       `Resume ${SPEND_CLASS_LABEL[pause.spendClass].toLowerCase()}`, 'pause')}
     onResolve={(item, form) => { const input = resolutionInput(form); if (!input) { setNotice('Resolve: give a 10–500 character reason.'); return; }
       prepare(() => prepareResolution(item.agent, item.invocationId, input), `Resolve call ${short(item.invocationId)}`, 'resolve'); }}
-    onRetry={() => { if (pending) run({ ...pending, state: 'SENDING' }); }}
-    onDiscard={() => { setPending(null); load(); }} />;
+    onRetry={() => { if (pending && !concealed.current) run({ ...pending, state: 'SENDING', refusal: null }); }}
+    onDiscard={() => { setPending(null); if (!concealed.current) load(); }} />;
 }
