@@ -1,6 +1,6 @@
 import type { AiTeamReadiness, CurrentSchoolClassSession, HumanWorkQueueItem, LeadListItem, OperationalSnapshot, SchoolCommandCenterSnapshot } from '@hon/contracts';
-import { HON_AI_TEAM, type HonInterfaceTheme } from '@hon/design-system';
-import { teachingAiPortrait } from '../hon-command/roster';
+import { HON_AI_TEAM } from '@hon/design-system';
+import { aiTeamPortrait, type HonArtStyle } from '../hon-command/roster';
 import type { HomeKey } from './copy';
 
 /** One independently loaded source. DENIED = the API refused this person; UNAVAILABLE = no verified result. */
@@ -120,12 +120,13 @@ export function agentStatus(readiness: Panel<AiTeamReadiness>, key: 'chad' | 'ma
   }
 }
 
-export function homeAiTeam(readiness: Panel<AiTeamReadiness>, mode: HonInterfaceTheme): AgentCard[] {
-  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, portrait: teachingAiPortrait(mode), color: '#34d6e8', status: agentStatus(readiness, 'claire'), href: LIVE.kai!.href };
+/** Kai and the seven specialists in the viewer's art style. Status is readiness only; the style never changes it. */
+export function homeAiTeam(readiness: Panel<AiTeamReadiness>, style: HonArtStyle): AgentCard[] {
+  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, portrait: aiTeamPortrait('kai', style)!, color: '#34d6e8', status: agentStatus(readiness, 'claire'), href: LIVE.kai!.href };
   const order = ['chad', 'marcus', 'alex', 'maya', 'jordan', 'claire', 'lena'];
   const team = order.map(id => HON_AI_TEAM.find(member => member.id === id)!).map((member): AgentCard => {
     const live = LIVE[member.id];
-    return { id: member.id, name: member.name, title: TITLES[member.id]!, portrait: member.portrait, color: member.color,
+    return { id: member.id, name: member.name, title: TITLES[member.id]!, portrait: aiTeamPortrait(member.id, style) ?? member.portrait, color: member.color,
       status: live ? agentStatus(readiness, live.key) : 'NOT_AVAILABLE', href: live?.href ?? null };
   });
   return [kai, ...team];

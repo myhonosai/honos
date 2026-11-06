@@ -70,5 +70,5 @@ export function SchoolHome({ api = HOME_API }: { api?: HomeApi }): React.ReactEl
     return () => { abort.abort(); };
   }, [selection?.organizationId, selection?.schoolId, api]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <SchoolHomeView language={preferences.language} mode={shell.mode} schoolName={shell.schoolName} selection={selection} sources={sources} now={now} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} />;
+  return <SchoolHomeView language={preferences.language} mode={shell.mode} artStyle={shell.artStyle} onArtStyle={shell.onArtStyle} schoolName={shell.schoolName} selection={selection} sources={sources} now={now} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} />;
 }

@@ -1,15 +1,19 @@
 import React, { type ReactNode } from 'react';
 import type { HonInterfaceTheme } from '@hon/design-system';
 import type { OperationalSchoolScope } from '../operational-navigation';
-import { schoolShellHref } from '../school-shell/catalog';
+import { SCHOOL_SHELL_NAV, schoolShellHref } from '../school-shell/catalog';
+import { shellText } from '../school-shell/copy';
+import { HON_ART_STYLES, defaultArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { ShellIcon } from '../school-shell/icons';
 import { homeText, type HomeKey } from './copy';
-import { homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, type Bar, type HomeSources, type Kpi, type Panel } from './model';
+import { homeAiTeam, homeKpis, leadOutcomes, membershipMix, myTasks, recentLeads, todaySessions, type AgentCard, type Bar, type HomeSources, type Kpi, type Panel } from './model';
 import styles from './home.module.css';
 
 export type SchoolHomeViewProps = Readonly<{
   language: string; mode: HonInterfaceTheme; schoolName: string | null; selection: OperationalSchoolScope | null;
   sources: HomeSources; now: Date; timeZone?: string; waiting?: boolean;
+  /** The viewer's AI team art style; defaults to the mode's original pairing. */
+  artStyle?: HonArtStyle; onArtStyle?: (style: HonArtStyle) => void;
 }>;
 
 const LOCALES: Record<string, string> = { en: 'en-US', ko: 'ko-KR', es: 'es-US' };
@@ -24,7 +28,7 @@ function greetingKey(now: Date): HomeKey {
  * The school Home. Pure presentation of already verified reads: each panel shows its own
  * loading, denied or unverified state, and nothing is estimated or filled with samples.
  */
-export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false }: SchoolHomeViewProps): React.ReactElement {
+export function SchoolHomeView({ language, mode, schoolName, selection, sources, now, timeZone, waiting = false, artStyle, onArtStyle }: SchoolHomeViewProps): React.ReactElement {
   const t = (key: HomeKey, values?: Record<string, string | number>) => homeText(language, key, values);
   const locale = LOCALES[language] ?? 'en-US';
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
@@ -33,44 +37,53 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 
   if (!selection) return <main className={styles.home} data-hon-native data-home="no-school"><p className={styles.empty} role="status">{t(waiting ? 'loading' : 'noSchool')}</p></main>;
 
-  const team = homeAiTeam(sources.readiness, mode);
+  const style = artStyle ?? defaultArtStyle(mode);
+  const team = homeAiTeam(sources.readiness, style);
   const kpis = homeKpis(sources);
+  const half = Math.ceil(team.length / 2);
+  const today = new Intl.DateTimeFormat(locale, { weekday: 'long', month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) }).format(now);
+  const quick: readonly [string, HomeKey][] = [[scoped('/staff/crm/leads', selection), 'quickLeads'], ['/staff/schedule/sessions', 'quickClasses'],
+    ['/staff/action-center/approvals', 'quickApprovals'], ['/staff/work', 'quickTasks'], [scoped('/staff/operations', selection), 'quickReport']];
 
-  return <main className={styles.home} data-hon-native data-home="ready">
+  return <main className={styles.home} data-hon-native data-home="ready" data-mode={mode} data-art={style}>
     <section className={styles.hero} aria-labelledby="home-greeting">
-      <div className={styles.heroCopy}>
+      <header className={styles.heroHead}>
         <h1 id="home-greeting" className={styles.greeting}>{t(greetingKey(now))}, <span>{schoolName ?? t('yourSchool')}</span></h1>
         <p className={styles.lead}>{t('heroLead')}</p>
-        <a className={styles.askBar} href="/staff/hon"><ShellIcon name="hon" /><span>{t('askHon')}</span><kbd aria-hidden="true">↵</kbd></a>
-      </div>
-      <article className={styles.honCore} aria-labelledby="home-hon">
-        <div className={styles.orb} aria-hidden="true"><span>HON</span></div>
-        <div>
-          <h2 id="home-hon">{t('honTitle')} <small>{t('honRole')}</small></h2>
-          <p>{t('honBody')}</p>
+        <p className={styles.today}><time dateTime={now.toISOString()}>{today}</time></p>
+      </header>
+      <div className={styles.stage}>
+        <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(0, half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
+        <article className={styles.honCore} aria-labelledby="home-hon">
+          <img className={styles.orb} src="/ai/hon-core.webp" alt="" width={168} height={168} />
+          <h2 id="home-hon">{t('honTitle')}</h2>
+          <p className={styles.honRole}>{t('honCore')}</p>
           <p className={styles.honStatus} data-status="pending">{t('honStatus')}</p>
-          <div className={styles.actions}>
-            <a className={styles.primary} href="/staff/hon">{t('askHon')}</a>
-            <a className={styles.secondary} href="/staff/action-center/approvals">{t('openApprovals')}</a>
-          </div>
+          <a className={styles.primary} href="/staff/hon"><ShellIcon name="hon" /><span>{t('askHon')}</span></a>
+        </article>
+        <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
+      </div>
+      <footer className={styles.teamFoot}>
+        <p>{t('teamLead')}</p>
+        <div className={styles.artStyle} role="group" aria-label={t('artStyle')}>
+          <span aria-hidden="true">{t('artStyle')}</span>
+          {HON_ART_STYLES.map(value => <button type="button" key={value} aria-pressed={style === value} disabled={!onArtStyle} onClick={() => onArtStyle?.(value)}>{t(`art${value}` as HomeKey)}</button>)}
         </div>
-      </article>
+      </footer>
     </section>
 
-    <section className={styles.team} aria-labelledby="home-team">
-      <header className={styles.sectionHead}><h2 id="home-team">{t('teamTitle')}</h2><p>{t('teamLead')}</p></header>
-      <ul className={styles.agents}>
-        {team.map(agent => <li key={agent.id} className={styles.agent} data-agent={agent.id} data-status={agent.status} style={{ '--agent': agent.color } as React.CSSProperties}>
-          <img src={agent.portrait} alt="" width={56} height={56} loading="lazy" />
-          <div>
-            <strong>{agent.name}</strong>
-            <span className={styles.agentTitle}>{t(agent.title)}</span>
-            <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>
-          </div>
-          {agent.href && agent.status !== 'NOT_AVAILABLE' && <a className={styles.agentLink} href={agent.href} aria-label={`${t('openWorkspace')}: ${agent.name}`}>→</a>}
-        </li>)}
-      </ul>
-    </section>
+    <nav className={styles.help} aria-labelledby="home-help">
+      <a className={styles.helpAsk} href="/staff/hon"><span className={styles.helpMic} aria-hidden="true"><ShellIcon name="hon" /></span><strong id="home-help">{t('helpTitle')}</strong></a>
+      <ul aria-label={t('quickTitle')}>{quick.map(([href, key]) => <li key={key}><a href={href}>{t(key)}</a></li>)}</ul>
+    </nav>
+
+    {mode === 'big-button' && <section className={styles.areas} aria-labelledby="home-areas">
+      <header className={styles.sectionHead}><h2 id="home-areas">{t('areasTitle')}</h2><p>{t('areasLead')}</p></header>
+      <ul>{SCHOOL_SHELL_NAV.filter(item => item.key !== 'home').map(item => <li key={item.key} data-area={item.key}>
+        <a href={schoolShellHref(item.routes[0]!, selection)}><span className={styles.areaIcon} aria-hidden="true"><ShellIcon name={item.key} size={30} /></span>
+          <strong>{shellText(language, item.titleKey)}</strong><small>{item.routes.slice(0, 2).map(route => shellText(language, route.titleKey)).join(' · ')}</small></a>
+      </li>)}</ul>
+    </section>}
 
     <section aria-labelledby="home-kpis">
       <h2 id="home-kpis" className={styles.visuallyHidden}>{t('kpiTitle')}</h2>
@@ -110,6 +123,19 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
 
     <p className={styles.more}><a href={scoped('/staff/operations', selection)}>{t('operationsReport')} →</a></p>
   </main>;
+}
+
+function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }): React.ReactElement {
+  const live = agent.href !== null && agent.status !== 'NOT_AVAILABLE';
+  return <li className={styles.agent} data-agent={agent.id} data-status={agent.status} style={{ '--agent': agent.color } as React.CSSProperties}>
+    <span className={styles.portrait}><img src={agent.portrait} alt="" width={280} height={350} loading="lazy" /></span>
+    <span className={styles.agentText}>
+      <strong>{agent.name}</strong>
+      <span className={styles.agentTitle}>{t(agent.title)}</span>
+      <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>
+    </span>
+    {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t('openWorkspace')}: ${agent.name}`}>{t('openWorkspace')}</a>}
+  </li>;
 }
 
 function KpiTile({ kpi, t, number }: { kpi: Kpi; t: (key: HomeKey, values?: Record<string, string | number>) => string; number: (value: number) => string }): React.ReactElement {

@@ -80,7 +80,7 @@ describe('school shell frame', () => {
   });
 
   it.each(['ko', 'es'] as const)('renders %s navigation copy', language => {
-    const html = render({ language });
+    const html = render({ language, path: '/staff/work' });
     expect(html).toContain(esc(shellText(language, 'navCrm')));
     expect(html).toContain(shellText(language, 'askHon'));
     expect(html).not.toContain('>CRM &amp; Sales<');
@@ -89,6 +89,29 @@ describe('school shell frame', () => {
   it('performs no network read while rendering', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     render(); expect(fetcher).not.toHaveBeenCalled(); fetcher.mockRestore();
+  });
+
+  it('lays out Classic as a sidebar, Modern as a top bar and Big Button as cards, with one school region each', () => {
+    const layout = (mode: 'modern' | 'classic' | 'big-button') => render({ mode }).match(/data-hon-layout="([^"]+)"/)?.[1];
+    expect([layout('classic'), layout('modern'), layout('big-button')]).toEqual(['sidebar', 'topnav', 'cards']);
+    for (const mode of ['modern', 'classic', 'big-button'] as const) expect(render({ mode }).match(/aria-label="Current school"/g)).toHaveLength(1);
+  });
+
+  it('opens a menu panel of every area outside Classic, and the sidebar drawer in Classic', () => {
+    const panel = render({ mode: 'modern', menuOpen: true });
+    expect(panel).toMatch(/role="dialog"[^>]*aria-label="Menu"/);
+    for (const key of ['navHome', 'navCrm', 'navSettings'] as const) expect(panel.split('aria-label="Menu"')[1]).toContain(esc(shellText('en', key)));
+    expect(render({ mode: 'big-button', menuOpen: true })).toContain('aria-label="Menu"');
+    expect(render({ mode: 'classic', menuOpen: true })).not.toContain('aria-label="Menu"');
+    expect(render({ mode: 'modern' })).not.toContain('role="dialog"');
+  });
+
+  it('keeps HON in the corner on other pages, but not on the dashboard or in HON itself', () => {
+    const launcher = /class="[^"]*honLauncher[^"]*" href="\/staff\/hon"/;
+    expect(render({ path: '/staff/crm/leads' })).toMatch(launcher);
+    expect(render({ path: '/staff/work', phase: 'SESSION', selection: null })).toMatch(launcher);
+    expect(render({ path: '/staff/dashboard' })).not.toMatch(launcher);
+    expect(render({ path: '/staff/hon' })).not.toMatch(launcher);
   });
 
   it('keeps the drawer closed unless the menu is open', () => {

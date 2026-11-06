@@ -25,6 +25,11 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   const verified = phase === 'READY' ? props.selection : null;
   const active = schoolShellActiveItem(path), activeRoute = schoolShellActiveRoute(path);
   const ended = phase === 'SESSION' || phase === 'IDENTITY';
+  // Owner direction 2026-11-06: Classic keeps the left sidebar, Modern a top navigation bar with a
+  // Menu panel, Big Button large cards. Presentation only; every link is the same closed catalog.
+  const sidebar = mode === 'classic';
+  // HON waits in the corner on every page except where it is already the main content.
+  const honHere = path === '/staff/dashboard' || path === '/staff/hon' || path.startsWith('/staff/hon/');
 
   const school = <section className={styles.school} aria-label={t('schoolRegion')} data-phase={phase}>
     <span className={styles.schoolMark} aria-hidden="true"><ShellIcon name="school" /></span>
@@ -47,7 +52,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
     <a className={styles.brand} href={schoolShellHref(SCHOOL_SHELL_NAV[0]!.routes[0]!, verified)}>
       <span className={styles.brandMark} aria-hidden="true" /><span><strong>{t('brand')}</strong><small>{t('brandTagline')}</small></span>
     </a>
-    {school}
+    {sidebar && school}
     <nav className={styles.nav} aria-label={t('primaryNav')}>
       {SCHOOL_SHELL_NAV.map(item => <a key={item.key} data-nav={item.key} href={schoolShellHref(item.routes[0]!, verified)}
         aria-current={active?.key === item.key ? 'page' : undefined} onClick={() => onMenu(false)}>
@@ -59,13 +64,23 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
     </footer>
   </>;
 
-  return <div className={styles.shell} data-hon-ui="school" data-hon-mode={mode}>
+  return <div className={styles.shell} data-hon-ui="school" data-hon-mode={mode} data-hon-layout={sidebar ? 'sidebar' : mode === 'modern' ? 'topnav' : 'cards'}>
     <a className={styles.skip} href="#hon-main">{t('skip')}</a>
     <aside className={styles.rail} data-drawer={menuOpen ? 'open' : 'closed'}>
       <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)}><ShellIcon name="close" /></button>
       {rail}
     </aside>
     {menuOpen && <div className={styles.scrim} aria-hidden="true" onClick={() => onMenu(false)} />}
+    {menuOpen && !sidebar && <div className={styles.menuPanel} role="dialog" aria-modal="true" aria-label={t('menuTitle')}>
+      <header><strong>{t('menuTitle')}</strong><small>{t('menuLead')}</small>
+        <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)} autoFocus><ShellIcon name="close" /></button></header>
+      <ul className={styles.menuGrid}>
+        {SCHOOL_SHELL_NAV.map(item => <li key={item.key} data-menu={item.key} aria-current={active?.key === item.key ? 'true' : undefined}>
+          <a href={schoolShellHref(item.routes[0]!, verified)} onClick={() => onMenu(false)}><span className={styles.menuIcon} aria-hidden="true"><ShellIcon name={item.key} size={24} /></span><strong>{t(item.titleKey)}</strong></a>
+          <ul>{item.routes.slice(1, 5).map(route => <li key={route.href}><a href={schoolShellHref(route, verified)} onClick={() => onMenu(false)}>{t(route.titleKey)}</a></li>)}</ul>
+        </li>)}
+      </ul>
+    </div>}
     <div className={styles.workspace}>
       <header className={styles.topbar}>
         <button type="button" className={styles.menuButton} aria-label={t('openMenu')} aria-expanded={menuOpen} onClick={() => onMenu(true)}><ShellIcon name="menu" /></button>
@@ -79,13 +94,15 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         </div>
         {props.utility && <div className={styles.locale}>{props.utility}</div>}
         <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>
-        <a className={styles.askHon} href="/staff/hon" aria-label={t('askHon')}><span className={styles.honOrb} aria-hidden="true" /><span>{t('askHon')}</span></a>
       </header>
+      {!sidebar && <div className={styles.schoolStrip}>{school}</div>}
       {active && active.routes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')}>
         {active.routes.map(route => <a key={route.href} href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'page' : undefined}>{t(route.titleKey)}</a>)}
       </nav>}
       <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>
     </div>
+    {!honHere && <a className={styles.honLauncher} href="/staff/hon" aria-label={t('askHon')} title={t('honLauncher')}>
+      <img src="/ai/hon-core.webp" alt="" width={44} height={44} /><span>{t('askHon')}</span></a>}
     <nav className={styles.mobileNav} aria-label={t('mobileNav')}>
       {SCHOOL_SHELL_MOBILE.map(key => { const item = SCHOOL_SHELL_NAV.find(candidate => candidate.key === key)!;
         return <a key={key} href={schoolShellHref(item.routes[0]!, verified)} aria-current={active?.key === key ? 'page' : undefined}><ShellIcon name={key} /><span>{t(item.titleKey)}</span></a>; })}

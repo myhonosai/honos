@@ -165,6 +165,37 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const [size, viewpo
     await ctx.close();
   });
 }
+await check('art style chip redraws the team without changing availability, and is remembered on this device', async () => {
+  theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/dashboard');
+  await page.waitForSelector('[data-agent="kai"][data-status="PROVIDER_OFF"]');
+  assert.equal(await page.locator('[data-agent="chad"] img').getAttribute('src'), '/ai/chad.webp');
+  for (const [label, style] of [['Illustrated', 'illustrated'], ['Chibi', 'chibi']]) {
+    await page.getByRole('group', { name: 'Team art style' }).getByRole('button', { name: label, exact: true }).click();
+    await page.waitForSelector(`[data-art="${style}"]`);
+    assert.equal(await page.locator('[data-agent="chad"] img').getAttribute('src'), `/ai/chad-${style}.webp`);
+    assert.equal(await page.locator('[data-agent="kai"]').getAttribute('data-status'), 'PROVIDER_OFF');
+    assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'NOT_AVAILABLE');
+    await page.waitForTimeout(300); await shot(page, `u2-home-art-${style}-desktop`);
+  }
+  await page.reload(); await page.waitForSelector('[data-art="chibi"]');
+  assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').count(), 0, 'no corner HON on the dashboard');
+  await ctx.close();
+});
+await check('HON waits in the corner on other pages', async () => {
+  theme = 'classic'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').isVisible(), true);
+  await page.waitForTimeout(500); await shot(page, 'u2-hon-corner-classic-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'big-button']) await check(`${mode} menu panel lists every area`, async () => {
+  theme = mode; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  const panel = page.getByRole('dialog', { name: 'Menu' }); await panel.waitFor();
+  assert.equal(await panel.locator('[data-menu]').count(), 13);
+  await page.waitForTimeout(250); await axeScan(page, `menu-${mode}`); await shot(page, `u2-menu-${mode}-desktop`);
+  await page.keyboard.press('Escape'); await panel.waitFor({ state: 'detached' }); await ctx.close();
+});
 await check('home shows a refused AI readiness as hidden, never as available', async () => {
   theme = 'modern'; multi = false; readinessDenied = true; const { ctx, page } = await open(viewports.desktop, '/staff/dashboard');
   await page.waitForSelector('[data-agent="chad"][data-status="HIDDEN"]');
@@ -197,8 +228,8 @@ await check('section tabs on follow-ups (desktop)', async () => {
   assert.equal(await page.locator('a[data-nav="crm"]').getAttribute('aria-current'), 'page');
   await shot(page, 'u1-follow-ups-tabs-desktop'); await ctx.close();
 });
-await check('drawer opens and closes with Escape (phone)', async () => {
-  theme = 'modern'; const { ctx, page } = await open(viewports.phone, '/staff/crm/leads');
+await check('Classic drawer opens and closes with Escape (phone)', async () => {
+  theme = 'classic'; const { ctx, page } = await open(viewports.phone, '/staff/crm/leads');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.waitForSelector('[data-drawer="open"]'); await page.waitForTimeout(250);

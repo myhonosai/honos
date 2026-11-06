@@ -15,6 +15,14 @@ import { schoolEntryApi } from '../school-entry/http';
 import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { SchoolShellFrame, type ShellViewState } from './frame';
 import { SchoolShellProvider, type SchoolShellState } from './context';
+import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
+
+/** Per-viewer convenience only (never authority, never shared): the chosen AI team art style. */
+export const HON_ART_STYLE_STORAGE_KEY = 'hon.ai-team.art-style';
+export function readStoredArtStyle(): HonArtStyle | null {
+  try { const value = window.localStorage.getItem(HON_ART_STYLE_STORAGE_KEY); return isHonArtStyle(value) ? value : null; } catch { return null; }
+}
+function storeArtStyle(style: HonArtStyle): void { try { window.localStorage.setItem(HON_ART_STYLE_STORAGE_KEY, style); } catch { /* device storage unavailable */ } }
 
 /** The URL prefill is a candidate only: just the two closed keys, then server-verified by the controller. */
 export function shellPreferredSchool(search: string): { organizationId: string; schoolId: string } | null {
@@ -55,6 +63,9 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   const [mode, setMode] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
   const [viewState, setViewState] = useState<ShellViewState>('LOCAL');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [artChoice, setArtChoice] = useState<HonArtStyle | null>(null);
+  useEffect(() => { setArtChoice(readStoredArtStyle()); }, []);
+  const chooseArtStyle = useCallback((style: HonArtStyle) => { setArtChoice(style); storeArtStyle(style); }, []);
   const themeGeneration = useRef(0);
 
   useEffect(() => {
@@ -136,7 +147,8 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, [entry]);
 
   const shared = useMemo<SchoolShellState>(() => ({ phase: snapshot.phase, selection: snapshot.phase === 'READY' ? snapshot.selection : null,
-    schoolName: snapshot.phase === 'READY' ? schoolName : null, mode }), [snapshot, schoolName, mode]);
+    schoolName: snapshot.phase === 'READY' ? schoolName : null, mode, artStyle: artChoice ?? defaultArtStyle(mode), onArtStyle: chooseArtStyle }),
+  [snapshot, schoolName, mode, artChoice, chooseArtStyle]);
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}

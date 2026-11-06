@@ -36,6 +36,9 @@ const en = {
   panelDenied: 'Your role does not include this view.', panelUnavailable: 'This could not be verified right now. Nothing is shown in its place.',
   pendingTitle: 'Coming next', pendingLead: 'These views need data the system does not record yet, so they are not shown with sample numbers.',
   pendingFunnel: 'Enrollment funnel over time', pendingMarketing: 'Marketing performance by source', pendingTrend: 'Revenue and attendance trends',
+  honCore: 'Your AI command center', helpTitle: 'How can I help you today?', quickTitle: 'Quick actions', quickLeads: 'Review new leads', quickClasses: 'Today’s classes',
+  quickApprovals: 'Open approvals', quickTasks: 'My tasks', quickReport: 'Operations report', artStyle: 'Team art style', artrealistic: 'Realistic', artillustrated: 'Illustrated', artchibi: 'Chibi',
+  areasTitle: 'Your school', areasLead: 'Tap an area to open it.',
   operationsReport: 'Full operations report', noSchool: 'Choose your school to see today’s overview.',
 } as const;
 
@@ -77,6 +80,9 @@ const ko: Record<HomeKey, string> = {
   panelDenied: '내 역할에는 이 화면이 포함되지 않습니다.', panelUnavailable: '지금은 확인할 수 없습니다. 대신 표시되는 내용은 없습니다.',
   pendingTitle: '다음 단계', pendingLead: '아래 화면은 아직 기록되지 않는 데이터가 필요하므로 예시 숫자로 표시하지 않습니다.',
   pendingFunnel: '기간별 등록 퍼널', pendingMarketing: '유입 경로별 마케팅 성과', pendingTrend: '매출 및 출석 추세',
+  honCore: 'AI 커맨드 센터', helpTitle: '오늘 무엇을 도와드릴까요?', quickTitle: '빠른 작업', quickLeads: '새 리드 확인', quickClasses: '오늘의 수업',
+  quickApprovals: '승인 열기', quickTasks: '내 업무', quickReport: '운영 보고서', artStyle: '팀 그림 스타일', artrealistic: '실사', artillustrated: '일러스트', artchibi: '치비',
+  areasTitle: '도장 메뉴', areasLead: '영역을 눌러 여세요.',
   operationsReport: '전체 운영 보고서', noSchool: '오늘의 개요를 보려면 도장을 선택하세요.',
 };
 
@@ -116,6 +122,9 @@ const es: Record<HomeKey, string> = {
   panelDenied: 'Tu rol no incluye esta vista.', panelUnavailable: 'No se pudo verificar ahora. No se muestra nada en su lugar.',
   pendingTitle: 'Próximamente', pendingLead: 'Estas vistas necesitan datos que el sistema aún no registra, así que no se muestran con números de ejemplo.',
   pendingFunnel: 'Embudo de inscripción en el tiempo', pendingMarketing: 'Rendimiento de marketing por fuente', pendingTrend: 'Tendencias de ingresos y asistencia',
+  honCore: 'Tu centro de mando con IA', helpTitle: '¿En qué puedo ayudarte hoy?', quickTitle: 'Acciones rápidas', quickLeads: 'Revisar prospectos nuevos', quickClasses: 'Clases de hoy',
+  quickApprovals: 'Abrir aprobaciones', quickTasks: 'Mis tareas', quickReport: 'Informe de operaciones', artStyle: 'Estilo del equipo', artrealistic: 'Realista', artillustrated: 'Ilustrado', artchibi: 'Chibi',
+  areasTitle: 'Tu escuela', areasLead: 'Toca un área para abrirla.',
   operationsReport: 'Informe completo de operaciones', noSchool: 'Elige tu escuela para ver el resumen de hoy.',
 };
 

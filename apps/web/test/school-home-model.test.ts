@@ -38,22 +38,29 @@ describe('school home model', () => {
   });
 
   it('shows the owner roster: Kai for teaching, then the seven specialists, with Claire as Business Performance', () => {
-    const team = homeAiTeam({ state: 'READY', value: readiness() }, 'modern');
+    const team = homeAiTeam({ state: 'READY', value: readiness() }, 'realistic');
     expect(team.map(card => card.name)).toEqual(['Kai', 'Chad', 'Marcus', 'Alex', 'Maya', 'Jordan', 'Claire', 'Lena']);
     expect(team.find(card => card.id === 'claire')).toMatchObject({ title: 'agentClaire', status: 'NOT_AVAILABLE', href: null });
     expect(team.find(card => card.id === 'kai')).toMatchObject({ href: '/staff/teaching-assistant', portrait: '/ai/kai.webp' });
     expect(team.some(card => card.id === 'eian')).toBe(false);
     for (const id of ['alex', 'maya', 'jordan', 'lena']) expect(team.find(card => card.id === id)).toMatchObject({ status: 'NOT_AVAILABLE', href: null });
-    expect(homeAiTeam({ state: 'READY', value: readiness() }, 'classic')[0]!.portrait).toBe('/ai/kai-illustrated.webp');
-    expect(homeAiTeam({ state: 'READY', value: readiness() }, 'big-button')[0]!.portrait).toBe('/ai/kai-chibi.webp');
     for (const member of HON_AI_TEAM) expect(team.find(card => card.id === member.id)?.portrait).toBe(member.portrait);
+  });
+
+  it('draws every agent in the chosen art style without changing who is available', () => {
+    const realistic = homeAiTeam({ state: 'READY', value: readiness() }, 'realistic');
+    for (const style of ['illustrated', 'chibi'] as const) {
+      const team = homeAiTeam({ state: 'READY', value: readiness() }, style);
+      for (const card of team) expect(card.portrait).toBe(`/ai/${card.id}-${style}.webp`);
+      expect(team.map(card => card.status)).toEqual(realistic.map(card => card.status));
+    }
   });
 
   it('takes agent status from readiness: the teaching key belongs to Kai, never to Claire', () => {
     const live = readiness([readinessAgent('marcus', 'MARKETING', 6, { authorized: false, available: false, blockedBy: 'NOT_AUTHORIZED' }),
       readinessAgent('claire', 'TEACHING', 6, { providerRuntime: 'READY', available: true, blockedBy: null }),
       readinessAgent('chad', 'CHAD_FOLLOW_UP', 3, { spendDecision: 'AI_PAUSED_BY_HQ', available: false, blockedBy: 'AI_PAUSED_BY_HQ' })]);
-    const team = homeAiTeam({ state: 'READY', value: live }, 'modern');
+    const team = homeAiTeam({ state: 'READY', value: live }, 'realistic');
     expect(team.find(card => card.id === 'kai')?.status).toBe('READY');
     expect(team.find(card => card.id === 'claire')?.status).toBe('NOT_AVAILABLE');
     expect(team.find(card => card.id === 'marcus')?.status).toBe('NO_PERMISSION');

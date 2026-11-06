@@ -141,7 +141,7 @@
 }
 @media (max-width: 760px) {
   .topbar { flex-wrap: wrap; row-gap: var(--hon-space-2); }
-  .views { order: 3; flex: 1 1 0; min-width: 0; justify-content: space-between; }
+  .views { order: 4; flex: 1 1 100%; min-width: 0; justify-content: space-between; }
   .locale { order: 3; flex: none; }
   .views button { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .locale select { max-width: 104px; }
@@ -206,3 +206,82 @@
 }
 @media (max-width: 1099px) { .main[data-canvas='legacy-light'] { margin: var(--hon-space-3); } }
 @media (max-width: 760px) { .main[data-canvas='legacy-light'] { margin: var(--hon-space-2) var(--hon-space-2) 96px; padding: var(--hon-space-3); } }
+
+/* ---------------------------------------------------------------- per-mode layout (owner 2026-11-06)
+   Classic: left sidebar. Modern: top navigation bar + Menu panel. Big Button: no bar, big cards. */
+.shell[data-hon-layout='topnav'], .shell[data-hon-layout='cards'] { grid-template-columns: minmax(0, 1fr); }
+.shell[data-hon-layout='topnav'] .menuButton, .shell[data-hon-layout='cards'] .menuButton { display: grid; }
+.shell[data-hon-layout='cards'] .rail { display: none; }
+@media (min-width: 1100px) {
+  .shell[data-hon-layout='topnav'] .rail {
+    position: relative; height: auto; overflow: visible; flex-direction: row; align-items: center; gap: var(--hon-space-5);
+    padding: 10px var(--hon-space-6); border-right: 0; border-bottom: 1px solid var(--hon-border);
+    background: linear-gradient(90deg, #071029, rgba(8, 17, 42, 0.96));
+  }
+  .shell[data-hon-layout='topnav'] .brand small, .shell[data-hon-layout='topnav'] .railFoot { display: none; }
+  .shell[data-hon-layout='topnav'] .nav { display: flex; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .shell[data-hon-layout='topnav'] .nav a { flex: none; min-height: 36px; padding: 0 12px; border-radius: 999px; font-size: var(--hon-text-sm); }
+  .shell[data-hon-layout='topnav'] .nav a svg { width: 16px; height: 16px; }
+  /* Like the reference: the top bar carries the main areas; the Menu grid holds every area. The current area stays visible. */
+  .shell[data-hon-layout='topnav'] .brand strong { white-space: nowrap; }
+  .shell[data-hon-layout='topnav'] .nav a:nth-child(n+5):not([aria-current='page']) { display: none; }
+}
+@media (min-width: 1400px) { .shell[data-hon-layout='topnav'] .nav a:nth-child(n+5):not([aria-current='page']) { display: flex; }
+  .shell[data-hon-layout='topnav'] .nav a:nth-child(n+7):not([aria-current='page']) { display: none; } }
+@media (max-width: 1099px) { .shell[data-hon-layout='topnav'] .rail { display: none; } }
+
+.schoolStrip { padding: var(--hon-space-2) var(--hon-space-6) 0; }
+.schoolStrip .school {
+  max-width: var(--hon-content-max); margin: 0 auto; grid-template-columns: auto minmax(0, 1fr) auto; padding: 8px 12px;
+  background: rgba(14, 27, 58, 0.55);
+}
+.schoolStrip .schoolMark { grid-row: auto; width: 30px; height: 30px; }
+.schoolStrip .schoolAction { grid-column: 3; grid-row: 1; justify-self: end; }
+.schoolStrip .choices { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+@media (max-width: 1099px) { .schoolStrip { padding: var(--hon-space-2) var(--hon-space-4) 0; } }
+@media (max-width: 460px) { .schoolStrip .schoolAction span { display: none; } }
+
+.menuPanel {
+  position: fixed; z-index: 40; top: 76px; left: 50%; transform: translateX(-50%);
+  width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 100px); overflow-y: auto;
+  padding: var(--hon-space-5); border-radius: var(--hon-radius-lg); border: 1px solid var(--hon-border-strong);
+  background: var(--hon-surface-solid); box-shadow: var(--hon-shadow-2);
+}
+.menuPanel > header { display: flex; align-items: baseline; gap: var(--hon-space-3); margin-bottom: var(--hon-space-4); }
+.menuPanel > header strong { font-family: var(--hon-font-display); font-size: var(--hon-text-xl); }
+.menuPanel > header small { color: var(--hon-text-subtle); }
+.menuPanel > header .closeMenu { display: grid; margin-left: auto; place-items: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--hon-border); background: transparent; color: var(--hon-text); cursor: pointer; }
+.menuGrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--hon-space-3); }
+.menuGrid > li { padding: var(--hon-space-3); border-radius: var(--hon-radius-md); background: var(--hon-surface-2); border: 1px solid var(--hon-border); }
+.menuGrid > li[aria-current='true'] { border-color: var(--hon-accent); }
+.menuGrid > li > a { display: flex; align-items: center; gap: var(--hon-space-3); color: var(--hon-text); text-decoration: none; }
+.menuGrid > li > a strong { font-size: var(--hon-text-md); }
+.menuIcon { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 12px; color: #fff; background: linear-gradient(135deg, var(--hon-accent-strong), #6a4dff); }
+.menuGrid ul { list-style: none; margin: var(--hon-space-2) 0 0; padding: 0 0 0 56px; display: grid; gap: 2px; }
+.menuGrid ul a { color: var(--hon-text-muted); font-size: var(--hon-text-sm); text-decoration: none; }
+.menuGrid ul a:hover, .menuGrid > li > a:hover strong { color: var(--hon-text); text-decoration: underline; }
+.shell[data-hon-layout='cards'] .menuGrid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.shell[data-hon-layout='cards'] .menuIcon { width: 56px; height: 56px; border-radius: 16px; }
+.shell[data-hon-layout='cards'] .menuGrid > li > a strong { font-size: var(--hon-text-lg); }
+@media (max-width: 760px) {
+  .menuPanel { top: 12px; max-height: calc(100vh - 110px); padding: var(--hon-space-4); }
+  .menuGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .menuGrid ul { display: none; }
+  .menuGrid > li > a { flex-direction: column; text-align: center; }
+  .shell[data-hon-layout='cards'] .menuGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* HON waits in the corner on every page except the dashboard and HON's own workspace. */
+.honLauncher {
+  position: fixed; right: 20px; bottom: 20px; z-index: 22; display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 16px 4px 4px; border-radius: 999px; color: #fff; font-weight: 700; text-decoration: none;
+  background: linear-gradient(90deg, rgba(14, 40, 102, 0.96), rgba(10, 26, 66, 0.96)); border: 1px solid rgba(110, 170, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(47, 123, 255, 0.12), 0 10px 30px rgba(20, 80, 220, 0.45);
+}
+.honLauncher img { width: 44px; height: 44px; border-radius: 50%; }
+.honLauncher:hover { border-color: #9fd0ff; }
+@media (max-width: 760px) {
+  .honLauncher { bottom: 84px; right: 14px; padding: 3px; }
+  .honLauncher span { display: none; }
+}
+@media (max-width: 1099px) { .shell[data-hon-mode='big-button'] .honLauncher { bottom: 92px; } }
