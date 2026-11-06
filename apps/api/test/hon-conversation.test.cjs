@@ -75,6 +75,11 @@ test('C2 contracts: a question is delegation null with safe text; HON reply text
   const detail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null };
   const q = { turnId: ID(), conversationId: ID(), status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [ID()], invocationId: ID(), reply: 'You have two trials tomorrow.', replyDetail: detail };
   assert.equal(contracts.validateHonTurnReceipt({ ...q, replyDetail: { ...detail, mode: 'DETAILED', step: 2, truncated: true, canContinue: true, continuesTurnId: ID() } }).replyDetail.canContinue, true);
+  // A completed answer whose source authority lapsed is concealed: no text and never continuable.
+  assert.equal(contracts.validateHonTurnReceipt({ ...q, reason: 'RESULT_CONCEALED', reply: null }).reply, null);
+  for (const bad of [{ ...q, reason: 'RESULT_CONCEALED' }, { ...q, reason: 'RESULT_CONCEALED', reply: null, replyDetail: { ...detail, truncated: true, canContinue: true } }, { ...q, reason: 'OTHER', reply: null }]) {
+    assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/, JSON.stringify(bad).slice(0, 120));
+  }
   assert.equal(contracts.validateHonTurnReceipt(q).reply, 'You have two trials tomorrow.');
   assert.equal(contracts.validateHonTurnReceipt({ ...q, status: 'PROCESSING', reply: null }).reply, null);
   for (const bad of [{ ...q, reply: null }, { ...q, reply: '' }, { ...q, status: 'FAILED' }, { ...q, actionRequestIds: [ID()] }, { ...q, status: 'AWAITING_APPROVAL', actionRequestIds: [ID()] }, { ...q, reply: 'x'.repeat(24001) },

@@ -15,7 +15,8 @@ BEGIN;
 --      STANDARD (default)  task class SUMMARIZE (risk LOW), 8000 input / 1500 output tokens, 80,000 microunits ($0.08)
 --      DETAILED (explicit) task class ANALYZE (risk MODERATE), 11000 input / 4000 output tokens, 80,000 microunits ($0.08)
 --    The planner reserves the worst case (ceil((input+output)/1000) credits: 10 or 15) and the result settles to the
---    measured tokens; the rest of the reservation is released. A short answer costs one or two credits.
+--    measured tokens; the rest of the reservation is released. Credits follow measured input plus output tokens
+--    (the facts and history count as input), and never more than the reservation.
 --    An answer cut off at its output limit is never shown as complete: it is recorded with truncated = true and the
 --    human may ask HON to continue it, at most HON_REPLY_MAX_STEPS (3) steps per answer, each its own planned,
 --    reserved, capped and settled call. Nothing continues by itself.
@@ -31,6 +32,13 @@ BEGIN;
 --    organization committed credits, UNKNOWN resolution (agent HON_REPLY), late provider expense, HQ per-school usage
 --    and AI team readiness now include the HON reply. Usage evidence is recorded before the reply is shown; a reply
 --    whose access lapsed mid-flight is recorded and held, and shown only after access returns.
+--
+-- 6. Source authority stays with the answer. A reply built from reporting facts (directly, or from an earlier
+--    reporting-derived answer in its history or continuation) is marked used_reporting. Its text is shown, reused as
+--    history or continued only while the human still holds reporting.view at this school and the live AI access gate
+--    (active school and organization, Complete at clock_timestamp()) holds; otherwise the text is concealed
+--    (RESULT_CONCEALED) and the usage evidence stays. An answer that never used reporting facts needs no
+--    reporting.view. An HQ pause stops new spend only; it never conceals a valid answer.
 --
 -- Tables stay forced-RLS with no policies and no grants: the runtime reaches them only through these functions.
 
@@ -63,6 +71,8 @@ CREATE TABLE hon.hon_reply_invocations (
   step smallint NOT NULL DEFAULT 1 CHECK (step BETWEEN 1 AND 3),
   continues_turn_id uuid UNIQUE REFERENCES hon.hon_conversation_turns(id),
   truncated boolean NOT NULL DEFAULT false,
+  -- Source provenance (header item 6): the context included reporting-derived content.
+  used_reporting boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(), updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   FOREIGN KEY (conversation_id, organization_id, school_id) REFERENCES hon.hon_conversations(id, organization_id, school_id),
   CHECK ((reply_text IS NOT NULL) = (status IN ('RESULT_HELD', 'COMPLETED'))),
@@ -95,24 +105,54 @@ CREATE FUNCTION hon.hon_reply_max_steps() RETURNS integer LANGUAGE sql IMMUTABLE
 
 -- What the receipt and the thread show about a HON reply: its mode, step, whether it was cut off at its limit and
 -- whether the human may ask HON to continue it (COMPLETED, cut off, below the step limit, not yet continued).
-CREATE FUNCTION hon.hon_reply_detail(p_turn uuid) RETURNS jsonb
+-- p_visible: the reply's text may be shown to this reader now (hon.hon_reply_visible); a concealed reply cannot be continued.
+CREATE FUNCTION hon.hon_reply_detail(p_turn uuid, p_visible boolean) RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   SELECT jsonb_build_object('mode', r.reply_mode, 'step', r.step, 'maxSteps', hon.hon_reply_max_steps(),
     'truncated', r.status = 'COMPLETED' AND r.truncated,
-    'canContinue', r.status = 'COMPLETED' AND r.truncated AND r.step < hon.hon_reply_max_steps()
+    'canContinue', r.status = 'COMPLETED' AND coalesce(p_visible, false) AND r.truncated AND r.step < hon.hon_reply_max_steps()
       AND NOT EXISTS (SELECT 1 FROM hon.hon_reply_invocations n WHERE n.continues_turn_id = r.turn_id),
     'continuesTurnId', r.continues_turn_id)
   FROM hon.hon_reply_invocations r WHERE r.turn_id = p_turn;
 $$;
 
--- True when this transaction's direct human may still spend on a HON reply at this exact school: the conversation
--- actor (ai.invocation.plan here) plus the AI planning access gate (active school and organization, Complete).
+-- Complete for this organization at the live clock. The inherited planning gate compares with the transaction start
+-- (now()), which a lock wait can carry past the entitlement's end; every HON reply decision also checks this.
+CREATE FUNCTION hon.hon_reply_complete_live(p_org uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+  SELECT EXISTS (SELECT 1 FROM hon.organization_entitlements WHERE organization_id = p_org AND tier = 'COMPLETE' AND status = 'ACTIVE'
+    AND effective_from <= clock_timestamp() AND (effective_until IS NULL OR clock_timestamp() < effective_until));
+$$;
+
+-- True when this transaction's direct human may still spend on, or see, a HON reply at this exact school: the
+-- conversation actor (ai.invocation.plan here), the AI planning access gate (active school and organization,
+-- Complete) and Complete again at the live clock.
 CREATE FUNCTION hon.hon_reply_access(p_subject text) RETURNS boolean
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 BEGIN
   PERFORM hon.hon_conversation_actor(p_subject);
   PERFORM hon.require_ai_invocation_plan_access();
-  RETURN true;
+  RETURN hon.hon_reply_complete_live(hon.current_organization_id());
+EXCEPTION WHEN insufficient_privilege THEN RETURN false;
+END $$;
+
+-- The reply's source authority for its own requester now: a reporting-derived reply needs live reporting.view.
+CREATE FUNCTION hon.hon_reply_source_allowed(i hon.hon_reply_invocations) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+  SELECT NOT i.used_reporting OR hon.principal_has_school_permission(i.requested_by, i.organization_id, i.school_id, 'reporting.view');
+$$;
+
+-- Whether a COMPLETED reply's text may be shown to (or reused for) its requester now: the live access gate and its
+-- source authority. Never true for another principal, school or organization. Usage evidence is unaffected.
+CREATE FUNCTION hon.hon_reply_visible(p_subject text, p_turn uuid) RETURNS boolean
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE i hon.hon_reply_invocations%ROWTYPE;
+BEGIN
+  SELECT * INTO i FROM hon.hon_reply_invocations WHERE turn_id = p_turn AND organization_id = hon.current_organization_id()
+    AND school_id = hon.current_school_id() AND status = 'COMPLETED';
+  IF NOT FOUND THEN RETURN false; END IF;
+  IF NOT hon.hon_reply_access(p_subject) OR i.requested_by IS DISTINCT FROM hon.hon_conversation_actor(p_subject) THEN RETURN false; END IF;
+  RETURN hon.hon_reply_source_allowed(i);
 EXCEPTION WHEN insufficient_privilege THEN RETURN false;
 END $$;
 
@@ -138,7 +178,8 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE budget_locked boolean := hon.ai_budget_lock(hon.current_organization_id());
   actor uuid := hon.hon_conversation_actor(p_subject); lim jsonb;
   i hon.hon_reply_invocations%ROWTYPE; p hon.ai_invocation_plans%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
-  why text; school_facts jsonb; history jsonb; facts jsonb; continuation jsonb;
+  why text; school_facts jsonb; history jsonb; facts jsonb; continuation jsonb; has_reporting boolean; derived boolean := false;
+  prior hon.hon_reply_invocations%ROWTYPE;
 BEGIN
   SELECT * INTO i FROM hon.hon_reply_invocations WHERE turn_id = p_turn AND organization_id = hon.current_organization_id()
     AND school_id = hon.current_school_id() AND requested_by = actor FOR UPDATE;
@@ -147,7 +188,14 @@ BEGIN
   lim := hon.hon_reply_limits(i.reply_mode);
   -- The row lock can wait behind a concurrent resend: conversation authority is held and checked again first.
   PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
+  -- After every wait above: the live-clock access gate (Complete at clock_timestamp(), not the transaction start).
   IF NOT hon.hon_reply_access(p_subject) THEN why := 'AI_ACCESS_REFUSED'; END IF;
+  has_reporting := hon.principal_has_school_permission(actor, i.organization_id, i.school_id, 'reporting.view');
+  -- A continuation of a reporting-derived answer needs that source authority now; otherwise nothing is reserved.
+  IF why IS NULL AND i.continues_turn_id IS NOT NULL THEN
+    SELECT * INTO prior FROM hon.hon_reply_invocations WHERE turn_id = i.continues_turn_id AND status = 'COMPLETED';
+    IF NOT FOUND OR (prior.used_reporting AND NOT has_reporting) THEN why := 'SOURCE_ACCESS_REFUSED'; END IF;
+  END IF;
   IF why IS NULL THEN why := hon.ai_spend_allowed(i.organization_id, clock_timestamp(), 'AGENT_INFERENCE'); END IF;
   IF why IS NULL THEN
     IF p_plan IS NULL THEN why := 'NO_ELIGIBLE_ROUTE';
@@ -172,7 +220,7 @@ BEGIN
   WHERE id = i.work_item_id;
   IF why IS NOT NULL THEN RETURN NULL; END IF;
   -- Authorized school context only (see header). The Command Center projection re-checks reporting.view itself.
-  IF hon.principal_has_school_permission(actor, i.organization_id, i.school_id, 'reporting.view') THEN
+  IF has_reporting THEN
     BEGIN
       school_facts := hon.read_school_command_center(p_subject, i.organization_id, i.school_id)->'metrics';
     EXCEPTION WHEN insufficient_privilege THEN school_facts := NULL;
@@ -181,13 +229,17 @@ BEGIN
   SELECT * INTO STRICT t FROM hon.hon_conversation_turns WHERE id = i.turn_id;
   SELECT coalesce(jsonb_agg(z.h ORDER BY z.seq), '[]'::jsonb) INTO history FROM (
     SELECT x.seq, jsonb_strip_nulls(jsonb_build_object('question', left(x.text, 400),
-        'answer', CASE WHEN x.agent_key = 'hon' THEN left(r.reply_text, 600) END,
+        -- A reporting-derived earlier answer is reused only while this human still holds reporting.view.
+        'answer', CASE WHEN x.agent_key = 'hon' AND (NOT r.used_reporting OR has_reporting) THEN left(r.reply_text, 600) END,
       -- Owner blueprint: the legacy 'claire' teaching delegate is Kai; HON never sees it as Claire.
         'delegatedTo', CASE WHEN x.agent_key = 'claire' THEN 'kai' WHEN x.agent_key <> 'hon' THEN x.agent_key END)) h
     FROM hon.hon_conversation_turns x
     LEFT JOIN hon.hon_reply_invocations r ON r.turn_id = x.id AND r.status = 'COMPLETED'
     WHERE x.conversation_id = t.conversation_id AND x.seq < t.seq
     ORDER BY x.seq DESC LIMIT 3) z;
+  SELECT coalesce(bool_or(r.used_reporting AND has_reporting), false) INTO derived FROM (
+    SELECT x.id FROM hon.hon_conversation_turns x WHERE x.conversation_id = t.conversation_id AND x.seq < t.seq ORDER BY x.seq DESC LIMIT 3) z
+    JOIN hon.hon_reply_invocations r ON r.turn_id = z.id AND r.status = 'COMPLETED';
   -- A continuation also gets the answer's original question and the end of the part already given (data only).
   IF i.continues_turn_id IS NOT NULL THEN
     WITH RECURSIVE chain AS (
@@ -198,10 +250,11 @@ BEGIN
         'originalQuestion', (SELECT left(x.text, 2000) FROM chain c JOIN hon.hon_conversation_turns x ON x.id = c.turn_id WHERE c.continues_turn_id IS NULL),
         'previousAnswerEnd', (SELECT right(r.reply_text, 2500) FROM hon.hon_reply_invocations r WHERE r.turn_id = i.continues_turn_id AND r.status = 'COMPLETED'))
       INTO continuation;
+    derived := derived OR prior.used_reporting;
   END IF;
   facts := jsonb_strip_nulls(jsonb_build_object('school', coalesce(school_facts, jsonb_build_object('availability', 'NOT_AUTHORIZED')), 'history', history,
     'continuation', continuation));
-  UPDATE hon.hon_reply_invocations SET context_digest = encode(sha256(convert_to(jsonb_build_object('question', t.text, 'facts', facts)::text, 'UTF8')), 'hex')
+  UPDATE hon.hon_reply_invocations SET used_reporting = school_facts IS NOT NULL OR derived, context_digest = encode(sha256(convert_to(jsonb_build_object('question', t.text, 'facts', facts)::text, 'UTF8')), 'hex')
   WHERE id = i.id;
   RETURN jsonb_build_object('providerId', p.provider_id, 'modelId', p.model_id, 'providerRequestId', i.provider_request_id,
     'replyMode', i.reply_mode, 'step', i.step, 'question', t.text, 'facts', facts::text, 'inputBudget', p.input_budget, 'outputBudget', p.output_budget,
@@ -259,9 +312,12 @@ BEGIN
       (p_result->>'inputTokens')::bigint, (p_result->>'outputTokens')::bigint, (p_result->>'providerCostMicrounits')::bigint, credits,
       nullif(current_setting('app.hon_request_id', true), '')::uuid, i.id, 'AGENT_INFERENCE')
     RETURNING id INTO uid;
-  outcome := CASE WHEN over THEN 'FAILED' WHEN hon.hon_reply_access(p_subject) THEN 'COMPLETED' ELSE 'RESULT_HELD' END;
+  -- Shown only while the live access gate and the reply's source authority (reporting.view if it used reporting
+  -- facts) both hold now; otherwise recorded and held. The evidence above is written either way.
+  outcome := CASE WHEN over THEN 'FAILED' WHEN NOT hon.hon_reply_access(p_subject) OR NOT hon.hon_reply_source_allowed(i) THEN 'RESULT_HELD' ELSE 'COMPLETED' END;
   UPDATE hon.hon_reply_invocations SET usage_id = uid, reserved_credits = 0, status = outcome,
-    reason = CASE outcome WHEN 'FAILED' THEN 'RESULT_BUDGET_EXCEEDED' WHEN 'RESULT_HELD' THEN 'ACCESS_LAPSED' END,
+    reason = CASE WHEN outcome = 'FAILED' THEN 'RESULT_BUDGET_EXCEEDED' WHEN outcome = 'RESULT_HELD' AND NOT hon.hon_reply_source_allowed(i) THEN 'SOURCE_ACCESS_LAPSED'
+                  WHEN outcome = 'RESULT_HELD' THEN 'ACCESS_LAPSED' END,
     reply_text = CASE WHEN outcome = 'FAILED' THEN NULL ELSE reply END,
     truncated = outcome <> 'FAILED' AND coalesce((p_result->>'truncated')::boolean, false), updated_at = clock_timestamp()
   WHERE id = i.id;
@@ -280,7 +336,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_REPLY_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   IF i.status <> 'RESULT_HELD' THEN RETURN false; END IF;
   PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
-  IF NOT hon.hon_reply_access(p_subject) THEN RETURN false; END IF;
+  IF NOT hon.hon_reply_access(p_subject) OR NOT hon.hon_reply_source_allowed(i) THEN RETURN false; END IF;
   UPDATE hon.hon_reply_invocations SET status = 'COMPLETED', reason = NULL, updated_at = clock_timestamp() WHERE id = i.id;
   UPDATE hon.work_items SET status = 'COMPLETED', version = version + 1, updated_at = clock_timestamp() WHERE id = i.work_item_id;
   RETURN true;
@@ -783,6 +839,7 @@ BEGIN
         SELECT * INTO prior FROM hon.hon_reply_invocations WHERE turn_id = lower(p_input->>'continueTurnId')::uuid AND conversation_id = c.id
           AND organization_id = c.organization_id AND school_id = c.school_id AND requested_by = actor FOR UPDATE;
         IF NOT FOUND OR prior.status <> 'COMPLETED' OR NOT prior.truncated OR prior.step >= hon.hon_reply_max_steps()
+           OR NOT hon.hon_reply_source_allowed(prior)
            OR EXISTS (SELECT 1 FROM hon.hon_reply_invocations n WHERE n.continues_turn_id = prior.turn_id)
            OR (p_input ? 'replyMode' AND p_input->>'replyMode' <> prior.reply_mode) THEN
           RAISE EXCEPTION 'HON_REPLY_NOT_CONTINUABLE' USING ERRCODE = '22023';
@@ -822,13 +879,15 @@ BEGIN
   -- (C2) is shown only when COMPLETED; a held, failed or unknown reply shows no text.
   SELECT coalesce(jsonb_agg(x ORDER BY t.seq, x->>'role' <> 'HUMAN'), '[]'::jsonb) INTO turns
   FROM hon.hon_conversation_turns t CROSS JOIN LATERAL (SELECT hon.hon_turn_view(t) v) v
+  -- Source authority and the live access gate are re-checked for every HON reply shown (header item 6).
+  CROSS JOIN LATERAL (SELECT t.agent_key = 'hon' AND hon.hon_reply_visible(p_subject, t.id) AS visible) s
   CROSS JOIN LATERAL (VALUES
     (jsonb_build_object('turnId', t.id, 'role', 'HUMAN', 'text', t.text, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
        'reason', NULL, 'references', jsonb_build_object('workItemId', NULL, 'actionRequestId', NULL, 'invocationId', NULL), 'replyDetail', NULL)),
     (jsonb_build_object('turnId', t.id, 'role', t.agent_key,
-       'text', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' THEN (SELECT r.reply_text FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') END, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
-       'reason', v.v->>'reason', 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId'),
-       'replyDetail', CASE WHEN t.agent_key = 'hon' THEN hon.hon_reply_detail(t.id) END))
+       'text', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' AND s.visible THEN (SELECT r.reply_text FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') END, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
+       'reason', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' AND NOT s.visible THEN 'RESULT_CONCEALED' ELSE v.v->>'reason' END, 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId'),
+       'replyDetail', CASE WHEN t.agent_key = 'hon' THEN hon.hon_reply_detail(t.id, s.visible) END))
   ) AS r(x)
   WHERE t.conversation_id = c.id;
   RETURN hon.hon_conversation_summary(c) || jsonb_build_object('turns', turns);
@@ -836,18 +895,21 @@ END $$;
 
 CREATE OR REPLACE FUNCTION hon.read_hon_turn_receipt(p_subject text, p_turn uuid) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE actor uuid := hon.hon_conversation_actor(p_subject); t hon.hon_conversation_turns%ROWTYPE; v jsonb;
+DECLARE actor uuid := hon.hon_conversation_actor(p_subject); t hon.hon_conversation_turns%ROWTYPE; v jsonb; visible boolean;
 BEGIN
   SELECT * INTO t FROM hon.hon_conversation_turns WHERE id = p_turn AND organization_id = hon.current_organization_id() AND school_id = hon.current_school_id() AND requested_by = actor;
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_TURN_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   v := hon.hon_turn_view(t);
+  -- Source authority and the live access gate are re-checked before a HON reply is shown (header item 6).
+  visible := t.agent_key = 'hon' AND hon.hon_reply_visible(p_subject, t.id);
+  IF t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' AND NOT visible THEN v := v || jsonb_build_object('reason', 'RESULT_CONCEALED'); END IF;
   RETURN jsonb_build_object('turnId', t.id, 'conversationId', t.conversation_id, 'status', v->>'status', 'reason', v->'reason',
     'delegatedAgentKeys', CASE WHEN t.agent_key = 'hon' THEN '[]'::jsonb ELSE jsonb_build_array(t.agent_key) END,
     'actionRequestIds', CASE WHEN v->>'actionRequestId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'actionRequestId') END,
     'workItemIds', CASE WHEN v->>'workItemId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'workItemId') END,
     'invocationId', v->'invocationId',
-    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END,
-    'replyDetail', CASE WHEN t.agent_key = 'hon' THEN coalesce(hon.hon_reply_detail(t.id), 'null'::jsonb) ELSE 'null'::jsonb END);
+    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' AND visible THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END,
+    'replyDetail', CASE WHEN t.agent_key = 'hon' THEN coalesce(hon.hon_reply_detail(t.id, visible), 'null'::jsonb) ELSE 'null'::jsonb END);
 END $$;
 
 DO $$ DECLARE f regprocedure; r text; BEGIN
@@ -856,7 +918,8 @@ DO $$ DECLARE f regprocedure; r text; BEGIN
     EXECUTE format('REVOKE ALL ON hon.hon_reply_invocations FROM %I', r);
   END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.hon_reply_limits(text)'::regprocedure, 'hon.hon_reply_max_steps()'::regprocedure,
-      'hon.hon_reply_detail(uuid)'::regprocedure, 'hon.hon_reply_access(text)'::regprocedure,
+      'hon.hon_reply_detail(uuid,boolean)'::regprocedure, 'hon.hon_reply_access(text)'::regprocedure, 'hon.hon_reply_complete_live(uuid)'::regprocedure,
+      'hon.hon_reply_source_allowed(hon.hon_reply_invocations)'::regprocedure, 'hon.hon_reply_visible(text,uuid)'::regprocedure,
       'hon.hon_reply_planning_reference(text,uuid)'::regprocedure, 'hon.prepare_hon_reply(text,uuid,uuid,boolean)'::regprocedure,
       'hon.fail_hon_reply(text,uuid,text,text)'::regprocedure, 'hon.record_hon_reply_result(text,uuid,jsonb)'::regprocedure,
       'hon.release_held_hon_reply(text,uuid)'::regprocedure] LOOP

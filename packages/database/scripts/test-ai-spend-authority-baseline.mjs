@@ -1831,9 +1831,20 @@ try {
 
   // 2. Without reporting.view HON is told the facts are NOT_AUTHORIZED (never another source); restored afterwards.
   await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
-  assert.equal((await ask(conv, 'How many leads came in?')).status, 'COMPLETED');
-  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).school, { availability: 'NOT_AUTHORIZED' });
+  const noReporting = await ask(conv, 'How many leads came in?');
+  assert.deepEqual([noReporting.status, noReporting.reply, noReporting.reason], ['COMPLETED', fakes.hon.reply, null], 'an answer that used no reporting facts needs no reporting.view');
+  const downgraded = JSON.parse(fakes.hon.inputs.at(-1).facts);
+  assert.deepEqual(downgraded.school, { availability: 'NOT_AUTHORIZED' });
+  // Reporting-derived earlier answers are not reused as history without reporting.view (the questions remain).
+  assert.ok(downgraded.history.length > 0 && downgraded.history.every((h) => !('answer' in h)), JSON.stringify(downgraded.history));
+  assert.deepEqual([(await reply(r1.turnId)).used_reporting, (await reply(noReporting.turnId)).used_reporting], [true, false]);
+  // Completed reporting-derived answers are concealed (evidence kept) while reporting.view is missing.
+  const hidden = await hon.receipt(scope, r1.turnId);
+  assert.deepEqual([hidden.status, hidden.reason, hidden.reply], ['COMPLETED', 'RESULT_CONCEALED', null]);
+  const hiddenThread = (await hon.read(scope, conv.id)).turns.filter((t) => t.role === 'hon');
+  assert.deepEqual(hiddenThread.map((t) => [t.text === null, t.reason]), [[true, 'RESULT_CONCEALED'], [true, 'RESULT_CONCEALED'], [false, null]]);
   await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  assert.deepEqual([(await hon.receipt(scope, r1.turnId)).reply, (await hon.receipt(scope, r1.turnId)).reason], [fakes.hon.reply, null], 'shown again once reporting.view returns');
 
   // 3. Safe failures: runtime not configured, provider rejection, over-budget result, unknown outcome.
   const quiet = async (label, mode, ready, expect) => {
@@ -1911,6 +1922,61 @@ try {
   assert.deepEqual(dThread.map((t) => [t.replyDetail.step, t.replyDetail.truncated, t.replyDetail.canContinue]), [[1, true, false], [2, true, false], [3, true, false]]);
   fakes.hon.mode = 'RESULT';
 
+  // 4c. Source authority is re-checked at release and for continuations (Manus P1-148-1).
+  const dropReporting = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addReporting = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  // Mid-flight reporting revocation: the result is recorded (usage kept) and held, then shown once reporting.view returns.
+  fakes.hon.mode = 'HOLD';
+  const kSrc = K();
+  const srcPending = settle(ask(conv, 'Mid-flight source probe', kSrc));
+  for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
+  await dropReporting();
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  const srcHeld = (await srcPending).value;
+  const srcRow = await reply(srcHeld.turnId);
+  assert.deepEqual([srcHeld.status, srcHeld.reason, srcHeld.reply, srcRow.status, srcRow.reason, Boolean(srcRow.usage_id)], ['PROCESSING', 'RESULT_HELD', null, 'RESULT_HELD', 'SOURCE_ACCESS_LAPSED', true]);
+  const nSrc = fakes.hon.calls;
+  assert.equal((await ask(conv, 'Mid-flight source probe', kSrc)).reply, null, 'not released without reporting.view');
+  await addReporting();
+  const srcShown = await ask(conv, 'Mid-flight source probe', kSrc);
+  assert.deepEqual([srcShown.status, srcShown.reply, fakes.hon.calls - nSrc], ['COMPLETED', fakes.hon.reply, 0]);
+  // A concealed answer cannot be continued; a continuation admitted before revocation is refused at prepare.
+  fakes.hon.mode = 'TRUNCATED';
+  const e1 = await hon.sendTurn(scope, conv.id, { text: 'Detailed retention review please.', delegation: null, replyMode: 'DETAILED' }, K());
+  assert.equal(e1.replyDetail.canContinue, true);
+  await dropReporting();
+  const nCont = { calls: fakes.hon.calls, ledger: await ledgerRows(o) };
+  const e1Hidden = await hon.receipt(scope, e1.turnId);
+  assert.deepEqual([e1Hidden.reason, e1Hidden.reply, e1Hidden.replyDetail.truncated, e1Hidden.replyDetail.canContinue], ['RESULT_CONCEALED', null, true, false]);
+  assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: e1.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
+  await addReporting();
+  const kCont = K(), contInput = { text: 'Continue', delegation: null, continueTurnId: e1.turnId };
+  const begun = await tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) d', [o.subject, conv.id, JSON.stringify(contInput), kCont]));
+  assert.equal(begun.rows[0].d.handOff, true, 'the continuation turn is recorded and pending');
+  await dropReporting();
+  const refusedCont = await hon.sendTurn(scope, conv.id, contInput, kCont);
+  const refusedRow = await reply(refusedCont.turnId);
+  assert.deepEqual([refusedCont.status, refusedCont.reason, refusedRow.status, refusedRow.reserved_credits, fakes.hon.calls - nCont.calls, (await ledgerRows(o)) - nCont.ledger],
+    ['FAILED', 'SOURCE_ACCESS_REFUSED', 'BLOCKED', 0, 0, 0], JSON.stringify(refusedCont));
+  await addReporting();
+  fakes.hon.mode = 'RESULT';
+
+  // 4d. Complete ending while prepare waits on the organization budget lock refuses at the live clock (Manus P2-148-2):
+  // the transaction began while Complete was active, so the inherited now()-based gate alone would still admit it.
+  await admin.query('BEGIN');
+  await admin.query('SELECT hon.ai_budget_lock($1)', [o.id]);
+  const nExp = { calls: fakes.hon.calls, ledger: await ledgerRows(o) };
+  const expPending = settle(ask(conv, 'Expiry during wait probe'));
+  for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM pg_locks WHERE locktype='advisory' AND NOT granted")).n; await sleep(20)) assert.ok(Date.now() < end, 'prepare never waited on the budget lock');
+  await sleep(1200);
+  await admin.query("UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '300 milliseconds' WHERE organization_id=$1", [o.id]);
+  await admin.query('COMMIT');
+  const expired = (await expPending).value;
+  const expRow = await reply(expired.turnId);
+  assert.deepEqual([expired.status, expired.reason, expRow.status, expRow.reserved_credits, fakes.hon.calls - nExp.calls, (await ledgerRows(o)) - nExp.ledger],
+    ['FAILED', 'AI_ACCESS_REFUSED', 'BLOCKED', 0, 0, 0], JSON.stringify(expired ?? (await expPending).error));
+  await restoreEntitlement(o);
+
   // 5. Budget, HQ pause and lost permission refuse before any call; a refused question records no turn.
   const b = await makeOrg('inv-25-budget');
   const bScope = { organizationId: b.id, schoolId: b.school, principalId: b.principal, externalSubject: b.subject };
@@ -1947,7 +2013,7 @@ try {
   const mine = usage.schools.find((x) => x.schoolId === o.school);
   assert.ok(mine?.byClass.AGENT_INFERENCE.byAgent.HON_REPLY?.credits >= 4, JSON.stringify(mine));
   assert.equal((await row("SELECT has_table_privilege($1,'hon.hon_reply_invocations','SELECT') s", [runtimeRole])).s, false, 'functions only');
-  for (const f of ['hon_reply_limits(text)', 'hon_reply_max_steps()', 'hon_reply_detail(uuid)', 'hon_reply_access(text)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
+  for (const f of ['hon_reply_limits(text)', 'hon_reply_max_steps()', 'hon_reply_detail(uuid,boolean)', 'hon_reply_access(text)', 'hon_reply_complete_live(uuid)', 'hon_reply_source_allowed(hon.hon_reply_invocations)', 'hon_reply_visible(text,uuid)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
   pass('INV-25', 'C2: Ask HON answers through the planning boundary, S4 budget lock and access decision with one provider call and one ledger row per question (resend replays), using only server-built aggregate school facts (NOT_AUTHORIZED without reporting.view) and trimmed history of the same conversation; persisted after reload; config/rejection/over-budget/unknown are reported honestly; UNKNOWN holds count and resolve in the HQ queue as HON_REPLY; a mid-flight lapse holds the reply until access returns; STANDARD (SUMMARIZE 8000/1500) and DETAILED (ANALYZE 11000/4000) both under the $0.08 ceiling, reserving 10/15 and settling to measured tokens; a cut-off answer is marked truncated and continues only on the human\'s request, at most 3 steps, each its own call and ledger row; budget, HQ pause and lost permission refuse before any call; school-isolated and attributed in HQ usage');
   }
   // ---- INV-26 (K1): Kai is the Teaching & Curriculum assistant; legacy 'claire' teaching records stay as recorded ----

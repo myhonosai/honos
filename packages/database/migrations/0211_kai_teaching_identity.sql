@@ -192,6 +192,7 @@ BEGIN
         SELECT * INTO prior FROM hon.hon_reply_invocations WHERE turn_id = lower(p_input->>'continueTurnId')::uuid AND conversation_id = c.id
           AND organization_id = c.organization_id AND school_id = c.school_id AND requested_by = actor FOR UPDATE;
         IF NOT FOUND OR prior.status <> 'COMPLETED' OR NOT prior.truncated OR prior.step >= hon.hon_reply_max_steps()
+           OR NOT hon.hon_reply_source_allowed(prior)
            OR EXISTS (SELECT 1 FROM hon.hon_reply_invocations n WHERE n.continues_turn_id = prior.turn_id)
            OR (p_input ? 'replyMode' AND p_input->>'replyMode' <> prior.reply_mode) THEN
           RAISE EXCEPTION 'HON_REPLY_NOT_CONTINUABLE' USING ERRCODE = '22023';
@@ -222,18 +223,21 @@ END $$;
 
 CREATE OR REPLACE FUNCTION hon.read_hon_turn_receipt(p_subject text, p_turn uuid) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE actor uuid := hon.hon_conversation_actor(p_subject); t hon.hon_conversation_turns%ROWTYPE; v jsonb;
+DECLARE actor uuid := hon.hon_conversation_actor(p_subject); t hon.hon_conversation_turns%ROWTYPE; v jsonb; visible boolean;
 BEGIN
   SELECT * INTO t FROM hon.hon_conversation_turns WHERE id = p_turn AND organization_id = hon.current_organization_id() AND school_id = hon.current_school_id() AND requested_by = actor;
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_TURN_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   v := hon.hon_turn_view(t);
+  -- Source authority and the live access gate are re-checked before a HON reply is shown (0210 header item 6).
+  visible := t.agent_key = 'hon' AND hon.hon_reply_visible(p_subject, t.id);
+  IF t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' AND NOT visible THEN v := v || jsonb_build_object('reason', 'RESULT_CONCEALED'); END IF;
   RETURN jsonb_build_object('turnId', t.id, 'conversationId', t.conversation_id, 'status', v->>'status', 'reason', v->'reason',
     'delegatedAgentKeys', CASE WHEN t.agent_key = 'hon' THEN '[]'::jsonb ELSE jsonb_build_array(hon.hon_presented_agent(t.agent_key)) END,
     'actionRequestIds', CASE WHEN v->>'actionRequestId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'actionRequestId') END,
     'workItemIds', CASE WHEN v->>'workItemId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'workItemId') END,
     'invocationId', v->'invocationId',
-    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END,
-    'replyDetail', CASE WHEN t.agent_key = 'hon' THEN coalesce(hon.hon_reply_detail(t.id), 'null'::jsonb) ELSE 'null'::jsonb END);
+    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' AND visible THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END,
+    'replyDetail', CASE WHEN t.agent_key = 'hon' THEN coalesce(hon.hon_reply_detail(t.id, visible), 'null'::jsonb) ELSE 'null'::jsonb END);
 END $$;
 
 CREATE OR REPLACE FUNCTION hon.read_hon_conversation(p_subject text, p_id uuid) RETURNS jsonb
@@ -247,13 +251,15 @@ BEGIN
   -- (C2) is shown only when COMPLETED; a held, failed or unknown reply shows no text.
   SELECT coalesce(jsonb_agg(x ORDER BY t.seq, x->>'role' <> 'HUMAN'), '[]'::jsonb) INTO turns
   FROM hon.hon_conversation_turns t CROSS JOIN LATERAL (SELECT hon.hon_turn_view(t) v) v
+  -- Source authority and the live access gate are re-checked for every HON reply shown (0210 header item 6).
+  CROSS JOIN LATERAL (SELECT t.agent_key = 'hon' AND hon.hon_reply_visible(p_subject, t.id) AS visible) s
   CROSS JOIN LATERAL (VALUES
     (jsonb_build_object('turnId', t.id, 'role', 'HUMAN', 'text', t.text, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
        'reason', NULL, 'references', jsonb_build_object('workItemId', NULL, 'actionRequestId', NULL, 'invocationId', NULL), 'replyDetail', NULL)),
     (jsonb_build_object('turnId', t.id, 'role', hon.hon_presented_agent(t.agent_key),
-       'text', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' THEN (SELECT r.reply_text FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') END, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
-       'reason', v.v->>'reason', 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId'),
-       'replyDetail', CASE WHEN t.agent_key = 'hon' THEN hon.hon_reply_detail(t.id) END))
+       'text', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' AND s.visible THEN (SELECT r.reply_text FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') END, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
+       'reason', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' AND NOT s.visible THEN 'RESULT_CONCEALED' ELSE v.v->>'reason' END, 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId'),
+       'replyDetail', CASE WHEN t.agent_key = 'hon' THEN hon.hon_reply_detail(t.id, s.visible) END))
   ) AS r(x)
   WHERE t.conversation_id = c.id;
   RETURN hon.hon_conversation_summary(c) || jsonb_build_object('turns', turns);
