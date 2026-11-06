@@ -89,6 +89,53 @@ const draftWork = {
 };
 const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AWAITING_APPROVAL', requestedByPrincipalId: id(60), effectiveAuthorityMode: 'CONFIRM', policyVersion: 1, approvalExpiresAt: iso(hours + 48), createdAt: iso(hours) });
 
+// Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
+const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0 };
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'claire', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
+const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, ...over });
+let honSeq = 700;
+async function honApi(route, path, method, prefix) {
+  const base = `${prefix}/hon`;
+  if (path === `${base}/readiness` && method === 'GET') { hon.readinessReads += 1; return json(route, 200, { data: honReadiness(), meta: { requestId: 'synthetic', correlationId: 'synthetic' } }); }
+  if (path === `${base}/conversations` && method === 'GET') return json(route, 200, { data: { items: hon.conversations.map(({ turns, ...rest }) => rest), nextCursor: null } });
+  const read = path.match(new RegExp(`^${base}/conversations/([0-9a-f-]{36})$`));
+  if (read && method === 'GET') { const c = hon.conversations.find((x) => x.id === read[1]); return c ? json(route, 200, { data: c }) : json(route, 404, { code: 'HON_CONVERSATION_NOT_FOUND' }); }
+  if (method !== 'POST') return json(route, 404, { code: 'NOT_FOUND' });
+  const request = route.request();
+  const headers = request.headers();
+  const body = request.postData() ?? '';
+  hon.posts.push({ path, key: headers['idempotency-key'], body, command: headers['x-hon-human-command'] });
+  assert.equal(headers['x-hon-human-command'], 'hon-conversation');
+  const step = hon.queue.shift();
+  if (step === 'lost') return route.abort('connectionreset');
+  if (step === 'timeout') return json(route, 503, { code: 'HON_CONVERSATION_TIMEOUT' });
+  if (step === 'paused') return json(route, 403, { code: 'HON_AI_SPEND_REFUSED', reason: 'AI_SPEND_PAUSED' });
+  if (step === 'hold') await new Promise((done) => { hon.held = done; });
+  // Idempotent replay: the same key returns the first result.
+  const prior = hon.turns.get(headers['idempotency-key']);
+  if (prior) return json(route, 200, { data: prior });
+  if (path === `${base}/conversations`) {
+    const c = { id: id(honSeq += 1), title: JSON.parse(body).title, createdAt: iso(0), updatedAt: iso(0), turnCount: 0, status: 'READY', turns: [] };
+    hon.conversations.unshift(c); const summary = { ...c }; delete summary.turns;
+    hon.turns.set(headers['idempotency-key'], summary);
+    return json(route, 200, { data: summary });
+  }
+  const turn = path.match(new RegExp(`^${base}/conversations/([0-9a-f-]{36})/turns$`));
+  const c = turn && hon.conversations.find((x) => x.id === turn[1]);
+  if (!c) return json(route, 404, { code: 'HON_CONVERSATION_NOT_FOUND' });
+  const ask = JSON.parse(body); const turnId = id(honSeq += 1);
+  const long = /long/i.test(ask.text);
+  const text = ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
+    : long ? 'Here is a detailed plan for this week. First, follow up the three new leads from the weekend…' : 'You have 3 new leads in the last 24 hours and 2 trial appointments tomorrow. I suggest following up the leads first.';
+  const detail = ask.continueTurnId ? replyDetail('DETAILED', { step: 2, continuesTurnId: ask.continueTurnId }) : replyDetail(ask.replyMode ?? 'STANDARD', long ? { truncated: true, canContinue: true } : {});
+  c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
+  c.turns.push({ turnId, role: 'hon', text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: id(honSeq += 1), actionRequestId: null, invocationId: id(honSeq += 1) }, replyDetail: detail });
+  c.turnCount += 1; c.status = 'COMPLETED';
+  const receipt = { turnId, conversationId: c.id, status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [c.turns.at(-1).references.workItemId], invocationId: c.turns.at(-1).references.invocationId, reply: text, replyDetail: detail };
+  hon.turns.set(headers['idempotency-key'], receipt);
+  return json(route, 200, { data: receipt });
+}
+
 function json(route, status, body, headers = {}) {
   return route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', ...headers }, body: JSON.stringify(body) });
 }
@@ -101,6 +148,7 @@ async function api(route) {
   const prefix = `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
+  if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
   if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot() }, meta: {} });
   if (path === `${prefix}/interface-theme`) {
     if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -141,7 +189,9 @@ async function context(viewport) {
   });
   return value;
 }
+// HON_COMMAND_BROWSER_ONLY=<prefix> runs only the checks whose name starts with it (local iteration).
 async function check(name, work) {
+  if (process.env.HON_COMMAND_BROWSER_ONLY && !name.startsWith(process.env.HON_COMMAND_BROWSER_ONLY)) return;
   try { await work(); report.checks.push(name); } catch (error) { report.failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); }
 }
 async function shot(page, name, fullPage = false) { await page.screenshot({ path: join(results, `${name}.png`), fullPage }); report.screenshots.push(`${name}.png`); }
@@ -381,6 +431,133 @@ await check('no unsupported capability presented as operational', async () => {
   for (const forbidden of ['Working now', 'Thinking', 'Online', 'Completed today', 'Alex is ready']) assert.ok(!text.includes(forbidden), forbidden);
   assert.equal(await dialog.getByText('Planned · not yet available').count(), 6, 'five planned management employees plus the separate provisional Teaching AI');
   assert.equal(await dialog.getByText('Drafts · approval required').count(), 2);
+  await ctx.close();
+});
+
+// ---------- Ask HON conversation ----------
+function resetHon(reply) { hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; }
+async function fullHon(viewport, nextTheme = 'modern') {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport); const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/hon`);
+  const ask = page.locator('section[data-hon-conversation]');
+  await page.waitForFunction(() => document.querySelector('section[data-hon-conversation]')?.getAttribute('data-hon-conversation') === 'READY');
+  return { ctx, page, ask };
+}
+const askBox = (ask) => ask.getByRole('textbox', { name: 'Message HON' });
+const pageRefresh = (ask) => ask.locator(':scope > div').first().getByRole('button', { name: 'Refresh', exact: true });
+
+await check('Ask HON: honest closed state while the AI provider is not activated', async () => {
+  resetHon(false);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  assert.equal(await askBox(ask).isDisabled(), true);
+  assert.ok(await ask.getByText(/the AI provider is not activated yet/).isVisible());
+  assert.ok(await ask.getByText('Not available', { exact: true }).isVisible());
+  assert.equal(hon.posts.length, 0);
+  await shot(page, 'ask-hon-not-activated');
+  await ctx.close();
+});
+
+for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['desktop-1440', { width: 1440, height: 900 }, 'classic'], ['phone-390', { width: 390, height: 844 }, 'big-button']]) {
+  await check(`Ask HON ${mode_} ${name}: ask, reply, incomplete answer, continue`, async () => {
+    resetHon(true);
+    const { ctx, page, ask } = await fullHon(viewport, mode_);
+    await askBox(ask).fill('Who should I follow up with today?');
+    await ask.getByRole('button', { name: 'Send' }).click();
+    await ask.getByText(/You have 3 new leads in the last 24 hours/).waitFor();
+    assert.equal(hon.posts.length, 2, 'create then the first turn');
+    assert.deepEqual(JSON.parse(hon.posts[1].body), { text: 'Who should I follow up with today?', delegation: null, replyMode: 'STANDARD' });
+    assert.notEqual(hon.posts[0].key, hon.posts[1].key);
+    await ask.getByText('Detailed', { exact: true }).click();
+    await askBox(ask).fill('Give me a long plan for this week');
+    await ask.getByRole('button', { name: 'Send' }).click();
+    await ask.getByText(/This answer is incomplete/).waitFor();
+    assert.equal(JSON.parse(hon.posts[2].body).replyMode, 'DETAILED');
+    await noOverflow(page, `ask-hon-${mode_}-${name}`);
+    await axe(page, `ask-hon-${mode_}-${name}`);
+    await shot(page, `ask-hon-${mode_}-${name}-incomplete`);
+    await ask.getByRole('button', { name: 'Continue this answer' }).click();
+    await ask.getByText(/Second part: book the two trial follow-ups/).waitFor();
+    const cont = JSON.parse(hon.posts[3].body);
+    assert.equal(cont.continueTurnId, JSON.parse(JSON.stringify(hon.conversations[0].turns[2].turnId)));
+    assert.equal('replyMode' in cont, false, 'a continuation keeps the mode of the answer it continues');
+    await shot(page, `ask-hon-${mode_}-${name}-continued`, true);
+    await ctx.close();
+  });
+}
+
+await check('Ask HON from the school shell corner on another staff page', async () => {
+  resetHon(true);
+  theme = 'modern'; mode = 'ready';
+  const ctx = await context({ width: 1440, height: 900 }); const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/crm/follow-ups`);
+  await page.getByRole('link', { name: 'Ask HON' }).click();
+  await page.waitForURL(/\/staff\/hon/);
+  await page.waitForFunction(() => document.querySelector('section[data-hon-conversation]')?.getAttribute('data-hon-conversation') === 'READY');
+  const ask = page.locator('section[data-hon-conversation]');
+  await askBox(ask).fill('What needs my attention?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/You have 3 new leads/).waitFor();
+  await shot(page, 'ask-hon-from-shell-corner');
+  await ctx.close();
+});
+
+await check('Ask HON: lost outcome keeps one exact request until it settles', async () => {
+  resetHon(true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  hon.queue = ['lost', 'timeout'];
+  await askBox(ask).fill('How many trials this week?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByRole('button', { name: 'Retry the same request' }).waitFor();
+  assert.ok(await ask.getByText(/cannot create a second reply/).isVisible());
+  assert.equal(await askBox(ask).isDisabled(), false);
+  await ask.getByRole('button', { name: 'Retry the same request' }).click();
+  await ask.getByRole('button', { name: 'Retry the same request' }).waitFor();
+  await ask.getByRole('button', { name: 'Retry the same request' }).click();
+  await ask.getByText(/You have 3 new leads/).waitFor();
+  const creates = hon.posts.filter((p) => p.path.endsWith('/conversations'));
+  assert.equal(creates.length, 3); assert.equal(new Set(creates.map((p) => p.key)).size, 1); assert.equal(new Set(creates.map((p) => p.body)).size, 1);
+  assert.equal(hon.conversations.length, 1, 'exactly one conversation exists');
+  await shot(page, 'ask-hon-recovered');
+  await ctx.close();
+});
+
+await check('Ask HON: HQ pause is a definitive refusal; the question is kept, no retry', async () => {
+  resetHon(true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  hon.queue = ['paused'];
+  await askBox(ask).fill('Draft a reply for the Lee family');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/paused by HON HQ/).waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Retry the same request' }).count(), 0);
+  assert.equal(await askBox(ask).inputValue(), 'Draft a reply for the Lee family');
+  await shot(page, 'ask-hon-paused');
+  await ctx.close();
+});
+
+await check('Ask HON: leaving the page mid-reply conceals it; the late result stays hidden until Refresh', async () => {
+  resetHon(true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  await askBox(ask).fill('First question');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/You have 3 new leads/).waitFor();
+  hon.queue = ['hold'];
+  await askBox(ask).fill('Private follow-up about Sam');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText('HON is working on it…').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => document.querySelector('section[data-hon-conversation]')?.getAttribute('data-hon-conversation') === 'CONCEALED');
+  const reads = hon.readinessReads;
+  hon.held(); hon.held = null;
+  await page.waitForTimeout(800);
+  const hiddenText = await ask.innerText();
+  for (const secret of ['Sam', 'You have 3 new leads', 'First question']) assert.ok(!hiddenText.includes(secret), `concealed view shows ${secret}`);
+  assert.equal(hon.readinessReads, reads, 'no re-read while concealed');
+  await shot(page, 'ask-hon-concealed');
+  await pageRefresh(ask).click();
+  await ask.getByText('Private follow-up about Sam').waitFor();
   await ctx.close();
 });
 
