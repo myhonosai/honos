@@ -312,6 +312,24 @@ BEGIN
     'agents', agents, 'asOf', hon.saas_ts(at));
 END $$;
 
+-- K1 recovery (Manus P2-150-1): a teaching request interrupted before K1 may already hold a committed 'claire' plan
+-- (planned under the invocation's own key) that prepare never linked. Planning again as 'kai' under that key would
+-- conflict with the immutable plan fingerprint. The planning reference therefore returns that existing plan: exactly
+-- one DRAFT_TEACHING plan with the fixed teaching budgets for this invocation's own work item (the work item belongs to
+-- this invocation and requester only). Its recorded key and metadata are kept; prepare accepts it as a legacy plan.
+-- Otherwise unchanged from 0100.
+CREATE OR REPLACE FUNCTION hon.teaching_planning_reference(p_subject text,p_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE actor uuid:=hon.require_teaching_assistant_actor(p_subject,true); i hon.teaching_ai_invocations%ROWTYPE; w hon.work_items%ROWTYPE; recorded uuid[]; plan uuid;
+BEGIN SELECT * INTO i FROM hon.teaching_ai_invocations WHERE id=p_id AND organization_id=hon.current_organization_id() AND school_id=hon.current_school_id() AND requested_by=actor FOR UPDATE; IF NOT FOUND THEN RAISE EXCEPTION 'TEACHING_INVOCATION_NOT_FOUND' USING ERRCODE='P0002'; END IF; IF i.status='SENDING' AND i.updated_at<clock_timestamp()-interval '30 seconds' THEN UPDATE hon.teaching_ai_invocations SET status='UNKNOWN',reason='PROVIDER_UNKNOWN',updated_at=clock_timestamp() WHERE id=i.id; UPDATE hon.work_items SET status='NEEDS_ATTENTION',version=version+1 WHERE id=i.work_item_id; PERFORM hon.teaching_assistant_event(i.id,'teaching.assistant.unknown'); RETURN NULL; END IF; IF i.status NOT IN('PENDING','CONFIGURATION_REQUIRED','BLOCKED') THEN RETURN NULL; END IF; SELECT * INTO STRICT w FROM hon.work_items WHERE id=i.work_item_id AND organization_id=i.organization_id AND school_id=i.school_id FOR UPDATE;
+  plan := i.plan_id;
+  IF plan IS NULL THEN
+    SELECT array_agg(p.id) INTO recorded FROM hon.ai_invocation_plans p WHERE p.organization_id=i.organization_id AND p.school_id=i.school_id AND p.work_item_id=i.work_item_id
+      AND p.task_class='DRAFT_TEACHING' AND p.agent_key IN ('claire','kai') AND p.input_budget=4096 AND p.output_budget=1024 AND p.max_provider_cost_microunits=100000;
+    IF cardinality(recorded)=1 THEN plan := recorded[1]; END IF;
+  END IF;
+  IF plan IS NULL AND w.status<>'READY' THEN UPDATE hon.work_items SET status='READY',version=version+1 WHERE id=w.id RETURNING * INTO w; END IF;
+  RETURN jsonb_build_object('planId',plan,'workItemId',w.id,'workVersion',w.version); END $$;
+
 DO $$ DECLARE r text; BEGIN
   REVOKE ALL ON FUNCTION hon.hon_presented_agent(text) FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP

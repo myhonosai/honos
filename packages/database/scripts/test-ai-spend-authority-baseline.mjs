@@ -1992,7 +1992,26 @@ try {
   await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'teaching.assistant.use')", [o.role, o.id]);
   assert.deepEqual([refused.status, refused.reason, fakes.claire.calls - n], ['FAILED', 'AGENT_NOT_AUTHORIZED', 0], JSON.stringify(refused));
   assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_presented_agent(text)','EXECUTE') s", [runtimeRole])).s, false, 'presentation helper is internal');
-  pass('INV-26', 'K1: Kai is the Teaching & Curriculum assistant: teaching turns and plans are recorded as kai (resend replays), the deprecated claire alias is stored as kai, legacy claire turns keep their recorded key and are shown as Kai, a kai plan is teaching only, readiness and the delegate list name Kai, and Kai without teaching.assistant.use is refused before any provider call');
+  // 6. A pre-K1 interruption (Manus P2-150-1): the old service committed a 'claire' plan under the invocation's own key,
+  // then stopped before prepare linked it. The K1 retry resumes with that plan exactly once instead of conflicting.
+  const legacyBegin = await tenant(context(o), (c) => c.query('SELECT hon.begin_teaching_request($1,$2::jsonb,$3::uuid) d', [o.subject, JSON.stringify({ curriculumId: o.curriculum, brief: 'Synthetic pre-K1 interruption' }), K()]));
+  const legacyInv = legacyBegin.rows[0].d;
+  assert.equal(legacyInv.status, 'PENDING');
+  const legacyRef = (await tenant(context(o), (c) => c.query('SELECT hon.teaching_planning_reference($1,$2::uuid) d', [o.subject, legacyInv.id]))).rows[0].d;
+  assert.equal(legacyRef.planId, null);
+  const legacyPlan = await plans.plan({ ...context(o), idempotencyKey: legacyInv.id }, legacyRef.workItemId, { expectedVersion: legacyRef.workVersion, expectedState: 'READY', agentKey: 'claire', modality: 'TEXT', taskClass: 'DRAFT_TEACHING', inputBudget: 4096, outputBudget: 1024, maxProviderCostMicrounits: 100000 });
+  assert.equal(legacyPlan.status, 'PLANNED', JSON.stringify(legacyPlan));
+  // Why recovery is needed: planning Kai under the same key conflicts with the recorded claire fingerprint.
+  const kaiReplan = await settle(plans.plan({ ...context(o), idempotencyKey: legacyInv.id }, legacyRef.workItemId, { expectedVersion: legacyRef.workVersion, expectedState: 'READY', agentKey: 'kai', modality: 'TEXT', taskClass: 'DRAFT_TEACHING', inputBudget: 4096, outputBudget: 1024, maxProviderCostMicrounits: 100000 }));
+  assert.ok(kaiReplan.error, 'a Kai plan under the legacy key is refused');
+  const nLegacy = { calls: fakes.claire.calls, ledger: await ledgerRows(o) };
+  const resumed = await agents.claire.service.generate(context(o), legacyInv.id);
+  const linked = await row('SELECT i.plan_id, p.agent_key, (SELECT count(*)::int FROM hon.ai_invocation_plans x WHERE x.work_item_id=i.work_item_id) plans FROM hon.teaching_ai_invocations i JOIN hon.ai_invocation_plans p ON p.id=i.plan_id WHERE i.id=$1', [legacyInv.id]);
+  assert.deepEqual([resumed.status, linked.plan_id, linked.agent_key, linked.plans, fakes.claire.calls - nLegacy.calls, (await ledgerRows(o)) - nLegacy.ledger],
+    ['AWAITING_APPROVAL', legacyPlan.plan.id, 'claire', 1, 1, 1], JSON.stringify(resumed));
+  await agents.claire.service.generate(context(o), legacyInv.id);
+  assert.deepEqual([fakes.claire.calls - nLegacy.calls, (await ledgerRows(o)) - nLegacy.ledger], [1, 1], 'a second retry never calls again');
+  pass('INV-26', 'K1: Kai is the Teaching & Curriculum assistant: teaching turns and plans are recorded as kai (resend replays), the deprecated claire alias is stored as kai, legacy claire turns keep their recorded key and are shown as Kai, a pre-K1 committed but unlinked claire plan resumes exactly once with its recorded key, a kai plan is teaching only, readiness and the delegate list name Kai, and Kai without teaching.assistant.use is refused before any provider call');
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
