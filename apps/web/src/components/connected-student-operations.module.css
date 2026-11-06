@@ -1,0 +1,18 @@
+.page { composes: page from './membership-activation-workbench.module.css'; }
+.mode_modern { composes: mode_modern from './membership-activation-workbench.module.css'; }
+.mode_classic { composes: mode_classic from './membership-activation-workbench.module.css'; }
+.mode_big { composes: mode_big from './membership-activation-workbench.module.css'; }
+.status { min-height: 1.6em; }
+.error { composes: error from './membership-activation-workbench.module.css'; }
+.check { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0; }
+.page .check input { width: 20px; min-height: 20px; height: 20px; flex: 0 0 20px; }
+.records { display: grid; gap: 16px; list-style: none; padding: 0; }
+.record { padding: 16px; border: 1px solid #8195ac; border-radius: 8px; }
+.page code { overflow-wrap: anywhere; }
+.page fieldset { display: grid; gap: 14px; min-width: 0; border: 0; padding: 16px 0; }
+.page dl { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 8px; }
+.page dd { margin: 0; }
+.page h1:focus, .page h2:focus { outline: 3px solid #3274d9; outline-offset: 4px; }
+.page button { min-height: 44px; }
+@media (min-width: 1000px) { .records { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .page { padding: 18px 14px 90px; } .page button { width: 100%; overflow-wrap: anywhere; } }

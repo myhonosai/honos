@@ -17,10 +17,12 @@ concurrency:
   cancel-in-progress: true
 env:
   NEXT_TELEMETRY_DISABLED: '1'
+# PR #129 runs the complete superseding connected-student-operations workflow,
+# including these API/browser proofs. Avoid duplicate repository/database/commercial jobs.
 jobs:
   checks:
     name: Repository tests, typecheck, build and migrations
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.number != 129
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -42,7 +44,7 @@ jobs:
       - run: git diff --exit-code
   database:
     name: Complete disposable PostgreSQL security proofs
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.number != 129
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -61,7 +63,7 @@ jobs:
       - run: .github/scripts/run-db-proofs.sh
   commercial:
     name: Guarded commercial regression rehearsal
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.number != 129
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

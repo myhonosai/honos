@@ -145,7 +145,7 @@ function policy(value: unknown, scope: AttendanceKnownScope): AttendanceProgress
   return { programId: data.programId as string, version: data.version as number, categories: exactCategories(data.categories) };
 }
 
-function attendance(value: unknown, scope: AttendanceKnownScope): AttendanceRecordSummary {
+function attendance(value: unknown, scope: Pick<AttendanceKnownScope, 'sessionId' | 'studentProfileId'>): AttendanceRecordSummary {
   optionalClosed(value,
     ['id', 'classSessionId', 'studentProfileId', 'status', 'category', 'progressionPolicyVersion', 'progressionEnabled', 'progressionWeightMilli', 'progressionCreditMilli', 'recordedAt', 'version', 'createdAt', 'updatedAt'],
     ['classBookingId', 'recordedByPrincipalId', 'note']);
@@ -159,6 +159,15 @@ function attendance(value: unknown, scope: AttendanceKnownScope): AttendanceReco
   for (const field of ['classBookingId', 'recordedByPrincipalId']) if (field in data) uuid(data[field]);
   if ('note' in data && (typeof data.note !== 'string' || data.note.length > 2000)) invalid();
   return data as unknown as AttendanceRecordSummary;
+}
+
+/** Exact record projection only; no program selector or attendance-policy lookup is needed. */
+export function verifyExactAttendanceEnvelope(value: unknown, scope: Pick<AttendanceKnownScope, 'sessionId' | 'studentProfileId'>, mutation: boolean): { attendance: AttendanceRecordSummary | null; replayed: boolean } {
+  uuid(scope.sessionId); uuid(scope.studentProfileId);
+  closed(value, ['data', 'meta']);
+  const meta = responseMeta(value.meta, mutation);
+  if (value.data === null && !mutation) return { attendance: null, replayed: false };
+  return { attendance: attendance(value.data, scope), replayed: meta.replayed === true };
 }
 
 async function request(path: string, operation: AttendanceOperation, body?: ConfigureAttendancePolicyInput | RecordAttendanceInput, idempotencyKey?: string): Promise<{ data: unknown; meta: ResponseMeta }> {
