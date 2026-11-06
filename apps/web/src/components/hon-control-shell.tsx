@@ -49,7 +49,7 @@ const aiTeam = [
 function Rail(): React.ReactElement {
   return (
     <aside className="side-rail" aria-label="HON operational navigation">
-      <div className="brand-lockup"><img className="hon-mark" src="/manus-storage/async-images/V2i1yOxmOLQ5wsG9Ltutn8/image-1.webp" alt="" /><div><strong>HON</strong><span>For Martial Arts</span></div></div>
+      <div className="brand-lockup"><img className="hon-mark" src="/ai/hon-core.webp" alt="" /><div><strong>HON</strong><span>For Martial Arts</span></div></div>
       <div className="context-capsule"><span>ACTIVE CONTEXT</span><strong>Foundation Workspace</strong><small>No organization or school is selected</small></div>
       <nav>{navigation.map(([label, hint], index) => <a className={index === 0 ? 'active' : ''} href={label === 'Achievements' ? '/staff/students/achievements' : label === 'Community' ? '/community' : label === 'Action Center' ? '/staff/action-center/approvals' : label === 'Voice' ? '/staff/voice' : label === 'Work' ? '/staff/work' : `#${label.toLowerCase().replaceAll(' ', '-')}`}  key={label} title={hint}><span className="nav-index">{String(index + 1).padStart(2, '0')}</span>{label}</a>)}</nav>
       <div className="rail-foot"><a className="hq-launch" href="/hq">HON HQ <span>↗</span></a><span className="pulse-dot" />Conventional controls remain available if AI, voice, or a provider is unavailable.</div>

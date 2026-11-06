@@ -112,7 +112,7 @@ export function HonLauncher({ pathname }: { pathname: string }): React.ReactElem
   // The dashboard embeds its own verified HON band and the full workspace is HON itself.
   if (!pathname.startsWith('/staff/') || pathname === '/staff/dashboard' || pathname.startsWith('/staff/hon')) return null;
   return <>
-    <button ref={button} type="button" className={styles.launcher} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+    <button ref={button} type="button" className={styles.launcher} data-hon-launcher aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
       <HonMark size="sm" /><span>Ask HON</span>
     </button>
     {open ? <HonPanel open onClose={close} returnPath={pathname} /> : null}
