@@ -29,15 +29,21 @@ describe('included AI team wording (docs/hon/INCLUDED_AI_AND_FAIR_USE.md)', () =
     expect(page).toContain("question: 'What are creative credits?'");
     expect(page).toContain("question: 'Is the AI team included?'");
     expect(page).toMatch(/never charged per message/);
+    // P2-154-1: the legacy offer/catalog allowance (5,000 / 12,000 premium planning field) is never shown as the creative wallet amount.
+    expect(page).not.toMatch(/monthlyPremiumCredits|premiumAiCreditPlanningAllowance/);
+    expect(page).not.toMatch(/5,000 for Core/);
+    expect(page).toContain('SAAS_CREATIVE_MONTHLY_INCLUDED_CREDITS.toLocaleString(formattingLocale)');
+    expect(page).toMatch(/12,000 included creative credits a month, the same on every plan/);
     expect(source('../src/components/school-subscription/catalog.ts')).not.toMatch(/Metered premium AI/);
   });
 
   it('keeps every locale free of premium-AI-credit labels for these strings', () => {
     for (const locale of LOCALES) {
       const text = source(`../../../packages/design-system/src/localization/${locale}.ts`);
-      for (const key of ['What are creative credits?', 'Is the AI team included?', 'planned creative credits / month', 'offer’s monthly creative credit allowance', 'Creative Studio media']) expect(text, `${locale}: ${key}`).toContain(`"${key}":`);
-      expect(text, locale).not.toMatch(/"What are premium AI credits\?"|"planned premium AI credits \/ month"|"Metered premium AI tools"/);
+      for (const key of ['What are creative credits?', 'Is the AI team included?', 'planned creative credits / month for every paid school', 'Creative Studio media', 'Creative credits', '{credits} planned per month for every paid school; actual balance is shown separately.']) expect(text, `${locale}: ${key}`).toContain(`"${key}":`);
+      expect(text, locale).not.toMatch(/"What are premium AI credits\?"|"planned premium AI credits \/ month"|"Metered premium AI tools"|"Monthly premium allowance"|"\{credits\} per offer/);
     }
-    for (const file of ['pricing-operations.ts', 'pricing-offers.ts']) expect(source(`../../../packages/design-system/src/localization/${file}`), file).not.toMatch(/premium AI credits|프리미엄 AI 크레딧|Créditos premium de IA/);
+    // HQ pricing labels describe the legacy offer planning field; they stay as they are until I1b and must not be relabelled as creative credits.
+    for (const file of ['pricing-operations.ts', 'pricing-offers.ts']) expect(source(`../../../packages/design-system/src/localization/${file}`), file).not.toMatch(/creative credits|크리에이티브 크레딧|Créditos creativos/);
   });
 });
