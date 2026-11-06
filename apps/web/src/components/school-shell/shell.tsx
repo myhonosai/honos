@@ -1,7 +1,7 @@
 'use client';
 import '@hon/design-system/src/tokens.css';
 import './shell-global.css';
-import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
@@ -13,6 +13,7 @@ import { SchoolEntryController, type EntrySnapshot } from '../school-entry/contr
 import { schoolEntryApi } from '../school-entry/http';
 import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { SchoolShellFrame, type ShellViewState } from './frame';
+import { SchoolShellProvider, type SchoolShellState } from './context';
 
 /** The URL prefill is a candidate only: just the two closed keys, then server-verified by the controller. */
 export function shellPreferredSchool(search: string): { organizationId: string; schoolId: string } | null {
@@ -125,9 +126,12 @@ export function SchoolShell({ sessionSubject, children }: { sessionSubject: stri
     });
   }, [entry]);
 
+  const shared = useMemo<SchoolShellState>(() => ({ phase: snapshot.phase, selection: snapshot.phase === 'READY' ? snapshot.selection : null,
+    schoolName: snapshot.phase === 'READY' ? schoolName : null, mode }), [snapshot, schoolName, mode]);
+
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility />}
     onMode={chooseMode} onMenu={setMenuOpen} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
-    {children}
+    <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
 }

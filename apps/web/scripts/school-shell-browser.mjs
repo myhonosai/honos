@@ -1,5 +1,5 @@
 /**
- * Disposable local browser proof for the U1 school shell. Synthetic fixtures only:
+ * Disposable local browser proof for the U1 school shell and the U2 school Home. Synthetic fixtures only:
  * every /api request is answered in the browser by this script. No database,
  * provider, payment or production backend is used. Requires `pnpm build` first.
  *
@@ -28,7 +28,7 @@ await mkdir(results, { recursive: true });
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const schoolA = { organizationId: id(1), schoolId: id(2) }, schoolB = { organizationId: id(1), schoolId: id(3) };
 const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCalls: false, checks: [], failures: [], screenshots: [], pageErrors: [], apiRequests: [] };
-let theme = 'modern', multi = false;
+let theme = 'modern', multi = false, readinessDenied = false;
 const iso = () => '2026-11-06T09:00:00.000Z';
 const snapshot = (scope) => ({
   organizationId: scope.organizationId, schoolId: scope.schoolId, generatedAt: iso(), from: '2026-10-07T09:00:00.000Z', to: iso(),
@@ -39,6 +39,40 @@ const snapshot = (scope) => ({
   invoices: { inRangeByStatus: { DRAFT: 2, ISSUED: 6, PAID: 118, VOID: 1, UNCOLLECTIBLE: 0 } },
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 118, FAILED: 3, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 1 } },
 });
+
+const day = 86_400_000, at = (offset) => new Date(Date.parse(iso()) + offset).toISOString();
+const win = (count, from, to) => ({ availability: 'AVAILABLE', windowFrom: at(from), windowTo: at(to), count });
+const commandCenter = (scope) => ({
+  organizationId: scope.organizationId, schoolId: scope.schoolId, entitlementTier: 'COMPLETE', generatedAt: iso(),
+  metrics: { newLeads24h: win(5, -day, 0), upcomingTrials24h: win(2, 0, day), upcomingTestingEvents30d: win(1, 0, 30 * day),
+    pendingActionApprovals: { availability: 'AVAILABLE', count: 3 }, outstandingWorkItems: { availability: 'AVAILABLE', count: 2 }, membershipTermsEnding30d: win(4, 0, 30 * day),
+    paidInvoicesCreated30d: { ...win(2, -30 * day, 0), amountsByCurrency: [{ currency: 'USD', count: 2, totalMinor: 30000 }] },
+    unansweredInquiries: { availability: 'UNAVAILABLE', reason: 'No approved inquiry response-state projection exists.' },
+    attendanceDecline: { availability: 'INSUFFICIENT_DATA', reason: 'No approved attendance-decline policy or longitudinal projection exists.' },
+    trialConversion: { availability: 'UNAVAILABLE', reason: 'No authoritative trial-to-enrollment linkage is available.' },
+    revenue: { availability: 'UNAVAILABLE', reason: 'Current paid invoice state is not authoritative cash revenue or collection data.' } },
+  dailyBriefing: 'Daily briefing: 5 new leads in the last 24 hours; 2 trial appointments scheduled in the next 24 hours; 1 testing event in the next 30 days; 4 membership terms ending in the next 30 days; 3 action approvals awaiting review; 2 outstanding durable work items.',
+  recommendations: [
+    { id: 'REVIEW_PENDING_APPROVALS', title: 'Review pending approvals', why: '3 current action requests are awaiting a qualified human review.', route: '/staff/action-center/approvals', action: 'NAVIGATE', automaticExecution: false },
+    { id: 'REVIEW_OUTSTANDING_WORK', title: 'Review outstanding work', why: '2 durable work items remain in a nonterminal state.', route: '/staff/work', action: 'NAVIGATE', automaticExecution: false },
+    { id: 'PREPARE_UPCOMING_TRIALS', title: 'Prepare upcoming trials', why: '2 scheduled trial appointments start within 24 hours.', route: '/staff/search', action: 'NAVIGATE', automaticExecution: false },
+    { id: 'REVIEW_NEW_LEADS', title: 'Review new leads', why: '5 CRM leads were created in the last 24 hours.', route: '/staff/search', action: 'NAVIGATE', automaticExecution: false },
+    { id: 'PREPARE_MEMBERSHIP_RENEWALS', title: 'Prepare membership reviews', why: '4 active or cancellation-pending membership terms end within 30 days.', route: '/staff/billing/renewals', action: 'NAVIGATE', automaticExecution: false },
+  ],
+});
+const agent = (agentKey, name, credits) => ({ agentKey, agent: name, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', requestCredits: credits,
+  providerRuntime: 'CONFIGURATION_REQUIRED', available: false, blockedBy: 'PROVIDER_RUNTIME_NOT_CONFIGURED' });
+const readiness = (scope) => ({ ...scope, completeEntitlement: true, agentBudget: null, asOf: iso(), honConversation: { contract: true },
+  agents: [agent('marcus', 'MARKETING', 6), agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3)] });
+const today = new Date(); today.setHours(0, 0, 0, 0);
+const todayAt = (hours) => new Date(today.getTime() + hours * 3_600_000).toISOString();
+const sessions = () => [['Little Tigers', 16.5, 'Main mat'], ['Junior Black Belt Club', 17.5, 'Main mat'], ['Adult Sparring', 19, 'Studio B']]
+  .map(([name, hour, room], i) => ({ sessionId: id(100 + i), name, startsAt: todayAt(hour), endsAt: todayAt(hour + 1), roomName: room, capacity: 20, bookingPolicy: 'WALK_IN', status: 'SCHEDULED', createdAt: iso() }));
+const leads = () => [['Avery', 'Sample', 1], ['Rowan', 'Example', 2], ['Kim', 'Placeholder', 3]]
+  .map(([givenName, familyName, n]) => ({ id: id(200 + n), status: 'OPEN', pipelineStageId: id(300), primaryPersonId: id(400 + n), version: 1, createdAt: at(-n * day), givenName, familyName }));
+const work = (scope) => ({ schoolId: scope.schoolId, principalId: id(500), canManage: true, canCreate: true, humanOnly: true, executionAllowed: false, queue: 'mine', status: 'ACTIVE',
+  items: [{ title: 'Call back trial family', workItemId: id(601), version: 1, status: 'READY', priority: 'HIGH', dueAt: at(day), assigneeId: id(500) },
+    { title: 'Order new belts for testing', workItemId: id(602), version: 1, status: 'WAITING', priority: 'NORMAL', dueAt: null, assigneeId: id(500) }], nextAfter: null });
 const json = (route, status, body) => route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
 function api(route) {
   const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
@@ -48,8 +82,13 @@ function api(route) {
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: multi
     ? { state: 'SELECTION_REQUIRED', schools: [{ ...schoolA, organizationName: 'Synthetic Dojo Group', schoolName: 'Synthetic North Academy' }, { ...schoolB, organizationName: 'Synthetic Dojo Group', schoolName: 'Synthetic South Academy' }] }
     : { state: 'MANUAL_ENTRY_REQUIRED' } });
+  if (path === '/api/v1/staff/work') return json(route, 200, { data: work(multi ? schoolB : schoolA) });
   for (const scope of [schoolA, schoolB]) {
     const prefix = `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
+    if (path === `${prefix}/command-center`) return json(route, 200, { data: { commandCenter: commandCenter(scope) }, meta: {} });
+    if (path === `${prefix}/ai/team/capabilities`) return readinessDenied ? json(route, 403, { code: 'AI_TEAM_READINESS_FORBIDDEN' }) : json(route, 200, { data: readiness(scope), meta: { requestId: 'r', correlationId: 'r' } });
+    if (path === `${prefix}/crm/leads`) return json(route, 200, { data: leads(), meta: {} });
+    if (path === `${prefix}/schedule/sessions`) return json(route, 200, { data: sessions(), meta: { requestId: id(700), correlationId: id(700) } });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -100,11 +139,32 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const [size, viewpo
     await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
     const href = await page.locator('nav[aria-label="School navigation"] a[data-nav="home"]').getAttribute('href');
     assert.equal(href, `/staff/dashboard?organizationId=${schoolA.organizationId}&schoolId=${schoolA.schoolId}`);
+    await page.waitForSelector('[data-kpi="activeMemberships"][data-state="VALUE"]');
+    await page.waitForSelector('[data-agent="kai"][data-status="PROVIDER_OFF"]');
+    await page.getByText('Little Tigers').waitFor(); await page.getByText('Call back trial family').waitFor(); await page.getByText('Rowan Example').waitFor();
+    assert.equal(await page.locator('[data-kpi="activeMemberships"] strong').textContent(), '131');
+    assert.equal(await page.locator('[data-kpi="revenue"]').getAttribute('data-state'), 'NOT_CONNECTED');
+    assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'NOT_AVAILABLE');
+    await page.waitForTimeout(150);
     await noOverflow(page);
-    await shot(page, `u1-dashboard-${mode}-${size}`);
+    await shot(page, `u2-home-${mode}-${size}`);
+    if (size === 'desktop') { await page.screenshot({ path: join(results, `u2-home-${mode}-desktop-full.png`), fullPage: true }); report.screenshots.push(`u2-home-${mode}-desktop-full.png`); }
     await ctx.close();
   });
 }
+await check('home shows a refused AI readiness as hidden, never as available', async () => {
+  theme = 'modern'; multi = false; readinessDenied = true; const { ctx, page } = await open(viewports.desktop, '/staff/dashboard');
+  await page.waitForSelector('[data-agent="chad"][data-status="HIDDEN"]');
+  assert.equal(await page.locator('[data-status="READY"]').count(), 0);
+  await page.waitForSelector('[data-kpi="students"][data-state="VALUE"]');
+  readinessDenied = false; await ctx.close();
+});
+await check('operations report keeps the previous dashboard on its own route', async () => {
+  theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, `/staff/operations?organizationId=${schoolA.organizationId}&schoolId=${schoolA.schoolId}`);
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  assert.equal(await page.locator('nav[aria-label="Pages in this section"] a[aria-current="page"]').textContent(), 'Operations report');
+  await page.waitForTimeout(800); await shot(page, 'u2-operations-report-desktop'); await ctx.close();
+});
 await check('section tabs on follow-ups (desktop)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/crm/follow-ups');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');

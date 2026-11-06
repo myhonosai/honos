@@ -19,7 +19,7 @@ const r = (href: string, titleKey: ShellKey, scoped = false): SchoolShellRoute =
  * connected page exists; nothing links to an inert screen.
  */
 export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
-  { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/command-center', 'routeCommandCenter')] },
+  { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/operations', 'routeOperationsReport', true), r('/staff/command-center', 'routeCommandCenter')] },
   { key: 'hon', titleKey: 'navHon', routes: [r('/staff/hon', 'routeHon'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork')] },
   { key: 'aiTeam', titleKey: 'navAiTeam', routes: [r('/staff/leads/assistant', 'routeLeadAssistant'), r('/staff/marketing/assistant', 'routeMarketingAssistant'),
     r('/staff/teaching-assistant', 'routeKai'), r('/staff/teaching-studio', 'routeTeachingStudio')] },
