@@ -16,7 +16,7 @@ const contracts = require('@hon/contracts');
 const ORG = randomUUID(), SCHOOL = randomUUID(), T = '2026-11-02T00:00:00.000Z';
 const agent = (agentKey, agent, requestCredits, patch = {}) => ({ agentKey, agent, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', requestCredits, available: true, blockedBy: null, ...patch });
 const row = (patch = {}) => ({ organizationId: ORG, schoolId: SCHOOL, completeEntitlement: true, agentBudget: { committedCredits: 10, ceilingCredits: 12000 },
-  agents: [agent('marcus', 'MARKETING', 6), agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3), agent('hon', 'HON_REPLY', 9)], asOf: T, ...patch });
+  agents: [agent('marcus', 'MARKETING', 6), agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3), agent('hon', 'HON_REPLY', 10)], asOf: T, ...patch });
 
 test('AI-R1 contracts: closed agent list and consistent blockers; runtime refusal only where the database allowed', () => {
   assert.equal(contracts.validateAiTeamReadinessRow(row()).agents.length, 4, 'three specialists and the C2 HON reply');
@@ -26,7 +26,7 @@ test('AI-R1 contracts: closed agent list and consistent blockers; runtime refusa
     row({ agentBudget: { committedCredits: -1, ceilingCredits: 12000 } })])
     assert.throws(() => contracts.validateAiTeamReadinessRow(bad), JSON.stringify(bad.agentBudget));
   assert.equal(contracts.validateAiTeamReadiness(contracts.composeAiTeamReadiness(contracts.validateAiTeamReadinessRow(row({ agentBudget: null })), () => 'READY')).agentBudget, null);
-  const blocked = row({ agents: [agent('marcus', 'MARKETING', 6, { authorized: false, available: false, blockedBy: 'NOT_AUTHORIZED' }), agent('claire', 'TEACHING', 6, { spendDecision: 'AI_PAUSED_BY_HQ', available: false, blockedBy: 'AI_PAUSED_BY_HQ' }), agent('chad', 'CHAD_FOLLOW_UP', 3, { route: 'NO_ELIGIBLE_ROUTE', available: false, blockedBy: 'NO_ELIGIBLE_ROUTE' }), agent('hon', 'HON_REPLY', 9)] });
+  const blocked = row({ agents: [agent('marcus', 'MARKETING', 6, { authorized: false, available: false, blockedBy: 'NOT_AUTHORIZED' }), agent('claire', 'TEACHING', 6, { spendDecision: 'AI_PAUSED_BY_HQ', available: false, blockedBy: 'AI_PAUSED_BY_HQ' }), agent('chad', 'CHAD_FOLLOW_UP', 3, { route: 'NO_ELIGIBLE_ROUTE', available: false, blockedBy: 'NO_ELIGIBLE_ROUTE' }), agent('hon', 'HON_REPLY', 10)] });
   assert.equal(contracts.validateAiTeamReadinessRow(blocked).agents[0].blockedBy, 'NOT_AUTHORIZED');
   for (const bad of [row({ agents: row().agents.slice(0, 3) }), row({ agents: [...row().agents.slice(0, 3), agent('hon', 'HON_REPLY', 3)] }), row({ agents: [agent('kai', 'TEACHING', 6), ...row().agents.slice(1)] }),
     row({ agents: [agent('marcus', 'MARKETING', 6, { authorized: false }), ...row().agents.slice(1)] }),
