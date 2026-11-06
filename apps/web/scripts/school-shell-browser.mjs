@@ -179,6 +179,12 @@ await check('art style chip redraws the team without changing availability, and 
   }
   await page.reload(); await page.waitForSelector('[data-art="chibi"]');
   assert.equal(await page.locator('a[href="/staff/hon"][class*="honLauncher"]').count(), 0, 'no corner HON on the dashboard');
+  // The HON workspace follows the same chosen style and shows the HON core orb.
+  await page.goto(origin + '/staff/hon');
+  await page.waitForSelector('img[src="/ai/chad-chibi.webp"]');
+  assert.equal(await page.locator('img[src="/ai/hon-core.webp"]').count() > 0, true, 'HON workspace shows the HON core');
+  assert.equal(await page.locator('img[src="/ai/kai-chibi.webp"]').count() > 0, true, 'Kai follows the chosen style');
+  await page.waitForTimeout(400); await shot(page, 'u3-hon-workspace-chibi-desktop');
   await ctx.close();
 });
 await check('HON waits in the corner on other pages', async () => {

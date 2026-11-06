@@ -286,3 +286,6 @@ export function aiTeamPortrait(id: string, style: unknown): string | null {
   if (id !== 'kai' && !AI_TEAM_IDS.has(id)) return null;
   return `/ai/${id}${ART_STYLE_SUFFIX[isHonArtStyle(style) ? style : 'realistic']}.webp`;
 }
+
+/** The HON core orb (generated 2026-11-06), used wherever HON itself is shown. Presentation only. */
+export const HON_CORE_SOURCE = '/ai/hon-core.webp';
