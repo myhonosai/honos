@@ -1977,6 +1977,61 @@ try {
     ['FAILED', 'AI_ACCESS_REFUSED', 'BLOCKED', 0, 0, 0], JSON.stringify(expired ?? (await expPending).error));
   await restoreEntitlement(o);
 
+  // 4e. A later wait on the reply's own work item (Manus residual of P1-148-1 / P2-148-2): the turn is begun and planned,
+  // then prepare is called while a blocker holds the work-item row. Prepare locks that row before any decision, so a
+  // reporting removal or a Complete expiry during the wait is seen: no protected facts or history leave prepare, and an
+  // expired school gets no provider input at all.
+  const barrierPrepare = async (label, change) => {
+    const kTurn = K();
+    const begun = await tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) d', [o.subject, conv.id, JSON.stringify({ text: `Work-item barrier ${label}`, delegation: null }), kTurn]));
+    const turnId = begun.rows[0].d.turnId;
+    const ref = (await tenant(context(o), (c) => c.query('SELECT hon.hon_reply_planning_reference($1,$2::uuid) d', [o.subject, turnId]))).rows[0].d;
+    const lim = ref.limits;
+    const planned = await plans.plan({ ...context(o), idempotencyKey: ref.invocationId }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'hon', modality: 'TEXT', taskClass: lim.taskClass, inputBudget: lim.inputBudget, outputBudget: lim.outputBudget, maxProviderCostMicrounits: lim.maxProviderCostMicrounits });
+    assert.equal(planned.status, 'PLANNED', `${label}: planned`);
+    const prior = (await rows("SELECT x.agent_key, r.status, r.used_reporting FROM hon.hon_conversation_turns x LEFT JOIN hon.hon_reply_invocations r ON r.turn_id=x.id AND r.status='COMPLETED' WHERE x.conversation_id=$1 AND x.seq<(SELECT seq FROM hon.hon_conversation_turns WHERE id=$2) ORDER BY x.seq DESC LIMIT 3", [conv.id, turnId])).filter((r) => r.agent_key === 'hon' && r.status === 'COMPLETED');
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    let out;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT 1 FROM hon.work_items WHERE id=$1 FOR UPDATE', [ref.workItemId]);
+      const bpid = (await blocker.query('SELECT pg_backend_pid() p')).rows[0].p;
+      let done = false;
+      const pending = settle(tenant(context(o), async (c) => {
+        await c.query("SELECT set_config('app.hon_external_subject',$1,true)", [o.subject]);
+        return (await c.query('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,true) d', [o.subject, turnId, planned.plan.id])).rows[0].d;
+      })).then((r) => { done = true; return r; });
+      for (const end = Date.now() + 5000; !(await row('SELECT count(*)::int n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [bpid])).n; await sleep(20)) {
+        assert.ok(!done && Date.now() < end, `${label}: prepare never waited on the work-item row`);
+      }
+      await change();
+      await blocker.query('COMMIT');
+      out = await pending;
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await blocker.end();
+    }
+    if (out.error) throw out.error;
+    return { turnId, prior, input: out.value, row: await reply(turnId) };
+  };
+  // Reporting removed during the wait: provider input carries no school facts and no reporting-derived answer.
+  const nBar = fakes.hon.calls;
+  const lostSrc = await barrierPrepare('reporting', dropReporting);
+  assert.ok(lostSrc.input, 'a non-reporting reply may still be prepared');
+  assert(lostSrc.prior.some((r) => r.used_reporting), 'the recent history held a reporting-derived answer');
+  const lostFacts = JSON.parse(lostSrc.input.facts);
+  assert.deepEqual(lostFacts.school, { availability: 'NOT_AUTHORIZED' });
+  assert.equal((lostFacts.history ?? []).filter((h) => h.answer).length, lostSrc.prior.filter((r) => !r.used_reporting).length, 'only non-reporting earlier answers leave prepare');
+  assert.deepEqual([lostSrc.row.status, lostSrc.row.used_reporting], ['SENDING', false]);
+  await tenant(context(o), (c) => c.query('SELECT hon.fail_hon_reply($1,$2::uuid,$3,$4)', [o.subject, lostSrc.turnId, 'PRE_SEND', 'CONFIGURATION_REQUIRED']));
+  assert.equal((await reply(lostSrc.turnId)).reserved_credits, 0, 'released');
+  await addReporting();
+  // Complete expires during the wait: nothing is reserved and no provider input is returned.
+  const goneEnt = await barrierPrepare('expiry', () => admin.query("UPDATE hon.organization_entitlements SET effective_until=clock_timestamp()-interval '50 milliseconds' WHERE organization_id=$1", [o.id]));
+  assert.deepEqual([goneEnt.input, goneEnt.row.status, goneEnt.row.reason, goneEnt.row.reserved_credits, fakes.hon.calls - nBar], [null, 'BLOCKED', 'AI_ACCESS_REFUSED', 0, 0], JSON.stringify(goneEnt));
+  await restoreEntitlement(o);
+
   // 5. Budget, HQ pause and lost permission refuse before any call; a refused question records no turn.
   const b = await makeOrg('inv-25-budget');
   const bScope = { organizationId: b.id, schoolId: b.school, principalId: b.principal, externalSubject: b.subject };

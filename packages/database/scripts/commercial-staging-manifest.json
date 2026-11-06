@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "b676b8f9482922370c3af2891f1e97e7409f092f6aabcfcf64ea93b820aeca1f",
+  "chainSha256": "9ca036d0a28e141076f5580c76b2204b099690dd21566ba9657c87c3a0986071",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -120,11 +120,11 @@
     },
     {
       "file": "0210_hon_conversation_reply.sql",
-      "sha256": "ce95e813b2bb23f636a27f0c61bb79c2f881c7f2d4c08d6fa3eac7dc4403cd27"
+      "sha256": "2982dd0588dd4e6156e6377dfcd89803103dc38628cc46b1526830ca2db27523"
     },
     {
       "file": "0211_kai_teaching_identity.sql",
-      "sha256": "3839a914c87cb3258fd9de34925b9446fb42af168b949f07e7d46e87b880ea36"
+      "sha256": "9004f729df3a8246cf5895184f95e36849607e35c53eb681f129211278e5537d"
     }
   ]
 }
