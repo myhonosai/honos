@@ -202,6 +202,6 @@
     "0207_school_staff_invitation_roles.sql": "6aac8ca234e4c85dd54c3c1239906b2bbc4935f21fcf03bd2253fbea28dd09cf",
     "0208_hq_school_provisioning_human_binding.sql": "e00d379296721782d2eafcbb245dbb03500a327e799a12c15b022e1c6611ad7f",
     "0209_creative_wallet_no_subscription_eligibility.sql": "da14eaa9d96b8fe0185dfd14510de357a6ced6416bbc6066af15d3812ad7009f",
-    "0210_hon_conversation_reply.sql": "51eeab0b78a7858d84284316a5047ff16cc242df688f0ebc598238c619b88e07"
+    "0210_hon_conversation_reply.sql": "ce95e813b2bb23f636a27f0c61bb79c2f881c7f2d4c08d6fa3eac7dc4403cd27"
   }
 }

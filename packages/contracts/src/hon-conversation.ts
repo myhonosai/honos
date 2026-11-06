@@ -86,6 +86,10 @@ const isReplyDetail = (v: unknown, completed: boolean): boolean => {
     // Only a completed answer can be cut off or continued; the last step can never be continued.
     && (completed || (!d.truncated && !d.canContinue)) && (!d.canContinue || (d.truncated && (d.step as number) < HON_REPLY_MAX_STEPS));
 };
+/** A COMPLETED reply whose source authority or AI access no longer holds for this reader: no text, never continued. */
+export const HON_REPLY_CONCEALED_REASON = 'RESULT_CONCEALED';
+const CONCEALED = HON_REPLY_CONCEALED_REASON;
+const completedText = (text: unknown, reason: unknown): boolean => (reason === CONCEALED ? text === null : reason === null && isReply(text));
 const isStatus = (v: unknown): v is HonTurnStatus => (HON_TURN_STATUSES as readonly unknown[]).includes(v);
 const isReason = (v: unknown): v is string | null => v === null || (typeof v === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(v));
 const uuidOrNull = (v: unknown): boolean => v === null || isUuid(v);
@@ -136,8 +140,8 @@ export function validateHonConversationThread(value: unknown): HonConversationTh
     if (human ? (t.role !== 'HUMAN' || typeof t.text !== 'string' || t.reason !== null || refs.workItemId !== null || refs.actionRequestId !== null || refs.invocationId !== null)
       : ((r.turns[i - 1] as HonConversationTurn).turnId !== t.turnId
         // A specialist's draft never appears here; HON's own reply appears only when COMPLETED, with no Action Center link.
-        || (t.role === HON_REPLY_ROLE ? (refs.actionRequestId !== null || (t.status === 'COMPLETED' ? !isReply(t.text) : t.text !== null)
-            || !isReplyDetail(t.replyDetail, t.status === 'COMPLETED'))
+        || (t.role === HON_REPLY_ROLE ? (refs.actionRequestId !== null || (t.status === 'COMPLETED' ? !completedText(t.text, t.reason) : t.text !== null)
+            || !isReplyDetail(t.replyDetail, t.status === 'COMPLETED') || (t.reason === CONCEALED && (t.replyDetail as HonReplyDetail).canContinue))
           : (!isAgent(t.role) || t.text !== null || t.replyDetail !== null)))) drift();
     if (human && t.replyDetail !== null) drift();
   });
@@ -155,8 +159,8 @@ export function validateHonTurnReceipt(value: unknown): HonTurnReceipt {
   if (r.status === 'AWAITING_APPROVAL' && (r.actionRequestIds as unknown[]).length !== 1) drift();
   // A question turn (no delegate) has no approval; its reply is present exactly when COMPLETED. A delegation has no reply.
   if ((r.delegatedAgentKeys as unknown[]).length === 0
-    ? ((r.actionRequestIds as unknown[]).length !== 0 || r.status === 'AWAITING_APPROVAL' || (r.status === 'COMPLETED' ? !isReply(r.reply) : r.reply !== null)
-      || !isReplyDetail(r.replyDetail, r.status === 'COMPLETED'))
+    ? ((r.actionRequestIds as unknown[]).length !== 0 || r.status === 'AWAITING_APPROVAL' || (r.status === 'COMPLETED' ? !completedText(r.reply, r.reason) : r.reply !== null)
+      || !isReplyDetail(r.replyDetail, r.status === 'COMPLETED') || (r.reason === CONCEALED && (r.replyDetail as HonReplyDetail).canContinue))
     : (r.reply !== null || r.replyDetail !== null)) drift();
   return r as unknown as HonTurnReceipt;
 }
