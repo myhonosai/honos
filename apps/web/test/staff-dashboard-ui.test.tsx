@@ -134,7 +134,7 @@ describe('staff operations dashboard', () => {
   });
 
   it('is a protected no-index staff route and adds only the verified current-school presentation preference save, never a dashboard business mutation or execution client', () => {
-    const route = readFileSync('src/app/staff/dashboard/page.tsx', 'utf8');
+    const route = readFileSync('src/app/staff/operations/page.tsx', 'utf8');
     const component = readFileSync('src/components/staff-dashboard.tsx', 'utf8');
     const http = readFileSync('src/components/staff-dashboard-http.ts', 'utf8');
     const preference = readFileSync('src/components/interface-theme-preference.ts', 'utf8');
@@ -167,5 +167,6 @@ describe('staff operations dashboard', () => {
     expect(preference).not.toMatch(/localStorage|sessionStorage|invokeLLM|executeAction|sendMessage|provider/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/dashboard')).toHaveLength(1);
+    expect(manifest.routes.filter((item: { path: string }) => item.path === '/staff/operations')).toHaveLength(1);
   });
 });

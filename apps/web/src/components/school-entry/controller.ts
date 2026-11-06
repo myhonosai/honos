@@ -31,6 +31,8 @@ export class SchoolEntryController {
       && this.state.selection?.schoolId === scope.schoolId && this.state.selection.organizationId === scope.organizationId;
   }
   async load(): Promise<void> { await this.run(); }
+  /** A navigation prefill is only a candidate; it gets the same identity + exact-school verification as a choice. */
+  async loadPreferred(scope: SchoolScope): Promise<void> { await this.run({ organizationId: scope.organizationId, schoolId: scope.schoolId }); }
   async choose(schoolId: string, revision: number): Promise<void> {
     if (revision !== this.state.revision || !['CHOICE', 'READY'].includes(this.state.phase)) return;
     const option = this.state.choices.find(c => c.schoolId === schoolId);

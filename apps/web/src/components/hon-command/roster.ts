@@ -260,3 +260,32 @@ export function teachingAiPortrait(theme: unknown): string {
     ? HON_TEACHING_AI_PORTRAITS[theme as HonInterfaceTheme]
     : HON_TEACHING_AI.portrait;
 }
+
+/**
+ * Owner direction (2026-11-06): the team's art style is the viewer's own choice, separate
+ * from the presentation mode. Realistic, illustrated and chibi exist for Kai and for each of
+ * the seven specialists. Presentation only: a portrait never says an agent is available,
+ * which only AI team readiness can say.
+ */
+export type HonArtStyle = 'realistic' | 'illustrated' | 'chibi';
+export const HON_ART_STYLES: readonly HonArtStyle[] = ['realistic', 'illustrated', 'chibi'];
+const ART_STYLE_SUFFIX: Readonly<Record<HonArtStyle, string>> = { realistic: '', illustrated: '-illustrated', chibi: '-chibi' };
+const AI_TEAM_IDS: ReadonlySet<string> = new Set(['alex', 'chad', 'maya', 'marcus', 'jordan', 'claire', 'lena']);
+
+export function isHonArtStyle(value: unknown): value is HonArtStyle {
+  return typeof value === 'string' && (HON_ART_STYLES as readonly string[]).includes(value);
+}
+
+/** The style each mode starts with until the viewer picks one: Kai's original owner-approved pairing. */
+export function defaultArtStyle(theme: unknown): HonArtStyle {
+  return theme === 'classic' ? 'illustrated' : theme === 'big-button' ? 'chibi' : 'realistic';
+}
+
+/** Kai or a specialist in an art style; an unknown agent gets no portrait, an unknown style the realistic one. */
+export function aiTeamPortrait(id: string, style: unknown): string | null {
+  if (id !== 'kai' && !AI_TEAM_IDS.has(id)) return null;
+  return `/ai/${id}${ART_STYLE_SUFFIX[isHonArtStyle(style) ? style : 'realistic']}.webp`;
+}
+
+/** The HON core orb (generated 2026-11-06), used wherever HON itself is shown. Presentation only. */
+export const HON_CORE_SOURCE = '/ai/hon-core.webp';

@@ -1,0 +1,96 @@
+/*
+ * HON OS design tokens (U1). Scoped to [data-hon-ui] so legacy pages are untouched.
+ * Modes are presentation only: [data-hon-mode="modern" | "classic" | "big-button"].
+ */
+[data-hon-ui] {
+  color-scheme: dark;
+  --hon-bg: #050a18;
+  --hon-bg-raised: #08112a;
+  --hon-rail: #060c1d;
+  --hon-surface: rgba(14, 27, 58, 0.72);
+  --hon-surface-solid: #0d1a38;
+  --hon-surface-2: rgba(22, 40, 82, 0.66);
+  --hon-border: rgba(96, 150, 255, 0.18);
+  --hon-border-strong: rgba(96, 165, 255, 0.42);
+  --hon-text: #eef3ff;
+  --hon-text-muted: #a9b8d6;
+  --hon-text-subtle: #7486aa;
+  --hon-text-inverse: #04102a;
+  --hon-accent: #2f7bff;
+  --hon-accent-strong: #1d63f0;
+  --hon-accent-2: #34d6e8;
+  --hon-accent-contrast: #ffffff;
+  --hon-glow: 0 0 0 1px rgba(80, 150, 255, 0.35), 0 8px 30px rgba(36, 110, 255, 0.28);
+  --hon-success: #3ee08f;
+  --hon-success-soft: rgba(62, 224, 143, 0.14);
+  --hon-warning: #ffc34d;
+  --hon-warning-soft: rgba(255, 195, 77, 0.14);
+  --hon-danger: #ff6b7d;
+  --hon-danger-soft: rgba(255, 107, 125, 0.14);
+  --hon-info: #6fb2ff;
+  --hon-info-soft: rgba(111, 178, 255, 0.14);
+  --hon-focus: 0 0 0 3px rgba(52, 214, 232, 0.65);
+  --hon-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --hon-font-display: 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --hon-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --hon-text-xs: 12px;
+  --hon-text-sm: 13px;
+  --hon-text-md: 15px;
+  --hon-text-lg: 18px;
+  --hon-text-xl: 22px;
+  --hon-text-2xl: 30px;
+  --hon-text-3xl: 40px;
+  --hon-space-1: 4px;
+  --hon-space-2: 8px;
+  --hon-space-3: 12px;
+  --hon-space-4: 16px;
+  --hon-space-5: 20px;
+  --hon-space-6: 24px;
+  --hon-space-7: 32px;
+  --hon-space-8: 40px;
+  --hon-radius-sm: 8px;
+  --hon-radius-md: 12px;
+  --hon-radius-lg: 18px;
+  --hon-shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px rgba(0, 4, 20, 0.35);
+  --hon-shadow-2: 0 20px 60px rgba(0, 4, 20, 0.55);
+  --hon-rail-w: 248px;
+  --hon-control-h: 40px;
+  --hon-row-h: 44px;
+  --hon-gap: 16px;
+  --hon-content-max: 1320px;
+  --hon-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --hon-dur: 160ms;
+}
+[data-hon-ui][data-hon-mode='classic'] {
+  --hon-text-sm: 12px;
+  --hon-text-md: 13px;
+  --hon-text-lg: 16px;
+  --hon-text-xl: 19px;
+  --hon-text-2xl: 24px;
+  --hon-text-3xl: 30px;
+  --hon-radius-md: 8px;
+  --hon-radius-lg: 10px;
+  --hon-rail-w: 220px;
+  --hon-control-h: 32px;
+  --hon-row-h: 34px;
+  --hon-gap: 10px;
+  --hon-content-max: 1600px;
+}
+[data-hon-ui][data-hon-mode='big-button'] {
+  --hon-text-sm: 15px;
+  --hon-text-md: 17px;
+  --hon-text-lg: 20px;
+  --hon-text-xl: 24px;
+  --hon-text-2xl: 32px;
+  --hon-text-3xl: 40px;
+  --hon-radius-md: 16px;
+  --hon-radius-lg: 22px;
+  --hon-rail-w: 272px;
+  --hon-control-h: 52px;
+  --hon-row-h: 60px;
+  --hon-gap: 18px;
+  --hon-content-max: 1100px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-hon-ui] { --hon-dur: 0ms; }
+}
