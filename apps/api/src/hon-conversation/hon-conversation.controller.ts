@@ -33,7 +33,9 @@ function boundaryError(error: unknown): never {
   if (code === 'P0002') throw new NotFoundException({ code: 'HON_CONVERSATION_NOT_FOUND' });
   if (code === '23505') throw new ConflictException({ code: 'HON_IDEMPOTENCY_CONFLICT', detail: 'This Idempotency-Key was already used with a different request.' });
   if (code === '23514') throw new ConflictException({ code: 'HON_CONVERSATION_FULL', detail: 'Start a new conversation.' });
-  if (code === '22023' || code === '22P02') throw new BadRequestException({ code: (error as { message?: string }).message === 'HON_DELEGATION_REQUIRED' ? 'HON_DELEGATION_REQUIRED' : 'INVALID_HON_CONVERSATION_REQUEST' });
+  if (code === '22023' || code === '22P02') {
+    throw new BadRequestException({ code: message === 'HON_DELEGATION_REQUIRED' || message === 'HON_REPLY_NOT_CONTINUABLE' ? message : 'INVALID_HON_CONVERSATION_REQUEST' });
+  }
   if (code === '57014' || code === '55P03') throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_TIMEOUT', detail: 'No success assumed. Read the conversation before resending.' });
   throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' });
 }

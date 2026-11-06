@@ -10,8 +10,15 @@ BEGIN;
 -- 1. A turn may now be a question to HON ({ text, delegation: null }) instead of a delegation to Marcus, Claire or
 --    Chad. C1 delegations are unchanged.
 -- 2. A question creates one durable hon_reply_invocations row in the same transaction as the turn (turn id is its key),
---    planned as agent 'hon', task class ANALYZE (already approved, risk MODERATE), with fixed budgets
---    8000 input / 800 output tokens / 80,000 provider-cost microunits.
+--    planned as agent 'hon' in one of two reply modes the human chooses (owner decision 2026-11-06 16:10Z: flexible
+--    reply length under a hard backend cost ceiling; hon.hon_reply_limits):
+--      STANDARD (default)  task class SUMMARIZE (risk LOW), 8000 input / 1500 output tokens, 80,000 microunits ($0.08)
+--      DETAILED (explicit) task class ANALYZE (risk MODERATE), 11000 input / 4000 output tokens, 80,000 microunits ($0.08)
+--    The planner reserves the worst case (ceil((input+output)/1000) credits: 10 or 15) and the result settles to the
+--    measured tokens; the rest of the reservation is released. A short answer costs one or two credits.
+--    An answer cut off at its output limit is never shown as complete: it is recorded with truncated = true and the
+--    human may ask HON to continue it, at most HON_REPLY_MAX_STEPS (3) steps per answer, each its own planned,
+--    reserved, capped and settled call. Nothing continues by itself.
 -- 3. The context HON receives is built here, never taken from the request: the school's existing aggregate
 --    Command Center metrics (hon.read_school_command_center, which re-checks the human, the exact school, live
 --    reporting.view and the entitlement itself; without reporting.view HON is told the facts are NOT_AUTHORIZED) and
@@ -50,11 +57,18 @@ CREATE TABLE hon.hon_reply_invocations (
   usage_id uuid UNIQUE REFERENCES hon.ai_usage_ledger(id),
   provider_request_id uuid NOT NULL DEFAULT gen_random_uuid(),
   context_digest text CHECK (context_digest IS NULL OR context_digest ~ '^[a-f0-9]{64}$'),
-  reply_text text CHECK (reply_text IS NULL OR length(btrim(reply_text)) BETWEEN 1 AND 4000),
+  reply_text text CHECK (reply_text IS NULL OR length(btrim(reply_text)) BETWEEN 1 AND 24000),
+  reply_mode text NOT NULL DEFAULT 'STANDARD' CHECK (reply_mode IN ('STANDARD', 'DETAILED')),
+  -- A continuation of a cut-off answer: step 2 or 3, naming the turn it continues (one continuation per answer).
+  step smallint NOT NULL DEFAULT 1 CHECK (step BETWEEN 1 AND 3),
+  continues_turn_id uuid UNIQUE REFERENCES hon.hon_conversation_turns(id),
+  truncated boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(), updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   FOREIGN KEY (conversation_id, organization_id, school_id) REFERENCES hon.hon_conversations(id, organization_id, school_id),
   CHECK ((reply_text IS NOT NULL) = (status IN ('RESULT_HELD', 'COMPLETED'))),
-  CHECK (status <> 'SENDING' OR (plan_id IS NOT NULL AND reserved_credits > 0))
+  CHECK (status <> 'SENDING' OR (plan_id IS NOT NULL AND reserved_credits > 0)),
+  CHECK ((step = 1) = (continues_turn_id IS NULL)),
+  CHECK (NOT truncated OR status IN ('RESULT_HELD', 'COMPLETED'))
 );
 CREATE INDEX hon_reply_invocations_hold_idx ON hon.hon_reply_invocations (organization_id) WHERE reserved_credits > 0;
 ALTER TABLE hon.hon_reply_invocations ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.hon_reply_invocations FORCE ROW LEVEL SECURITY;
@@ -68,9 +82,27 @@ CREATE TRIGGER ai_spend_reserve_guard_insert BEFORE INSERT ON hon.hon_reply_invo
   FOR EACH ROW WHEN (NEW.reserved_credits > 0) EXECUTE FUNCTION hon.ai_spend_reserve_guard();
 CREATE TRIGGER zz_ai_hold_origin BEFORE INSERT OR UPDATE ON hon.hon_reply_invocations FOR EACH ROW EXECUTE FUNCTION hon.ai_stamp_hold_origin();
 
--- Fixed reply budgets: the plan must carry exactly these (a swapped plan is refused).
-CREATE FUNCTION hon.hon_reply_limits() RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
-  SELECT jsonb_build_object('inputBudget', 8000, 'outputBudget', 800, 'maxProviderCostMicrounits', 80000);
+-- Fixed budgets per reply mode: the plan must carry exactly these (a swapped plan is refused). The cost ceiling is the
+-- owner's $0.08 per reply call in both modes; only the token limits and the task class (route) differ.
+CREATE FUNCTION hon.hon_reply_limits(p_mode text) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,hon AS $$
+BEGIN
+  RETURN CASE p_mode
+    WHEN 'STANDARD' THEN jsonb_build_object('replyMode', 'STANDARD', 'taskClass', 'SUMMARIZE', 'inputBudget', 8000, 'outputBudget', 1500, 'maxProviderCostMicrounits', 80000)
+    WHEN 'DETAILED' THEN jsonb_build_object('replyMode', 'DETAILED', 'taskClass', 'ANALYZE', 'inputBudget', 11000, 'outputBudget', 4000, 'maxProviderCostMicrounits', 80000)
+  END;
+END $$;
+CREATE FUNCTION hon.hon_reply_max_steps() RETURNS integer LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 3 $$;
+
+-- What the receipt and the thread show about a HON reply: its mode, step, whether it was cut off at its limit and
+-- whether the human may ask HON to continue it (COMPLETED, cut off, below the step limit, not yet continued).
+CREATE FUNCTION hon.hon_reply_detail(p_turn uuid) RETURNS jsonb
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+  SELECT jsonb_build_object('mode', r.reply_mode, 'step', r.step, 'maxSteps', hon.hon_reply_max_steps(),
+    'truncated', r.status = 'COMPLETED' AND r.truncated,
+    'canContinue', r.status = 'COMPLETED' AND r.truncated AND r.step < hon.hon_reply_max_steps()
+      AND NOT EXISTS (SELECT 1 FROM hon.hon_reply_invocations n WHERE n.continues_turn_id = r.turn_id),
+    'continuesTurnId', r.continues_turn_id)
+  FROM hon.hon_reply_invocations r WHERE r.turn_id = p_turn;
 $$;
 
 -- True when this transaction's direct human may still spend on a HON reply at this exact school: the conversation
@@ -94,7 +126,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_REPLY_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   IF i.status <> 'PENDING' THEN RETURN NULL; END IF;
   SELECT version INTO v FROM hon.work_items WHERE id = i.work_item_id;
-  RETURN jsonb_build_object('invocationId', i.id, 'workItemId', i.work_item_id, 'workVersion', v);
+  RETURN jsonb_build_object('invocationId', i.id, 'workItemId', i.work_item_id, 'workVersion', v, 'limits', hon.hon_reply_limits(i.reply_mode));
 END $$;
 
 -- Moves a pending reply to SENDING (with its reservation) or records why it cannot be sent, then returns the provider
@@ -104,14 +136,15 @@ END $$;
 CREATE FUNCTION hon.prepare_hon_reply(p_subject text, p_turn uuid, p_plan uuid, p_ready boolean) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE budget_locked boolean := hon.ai_budget_lock(hon.current_organization_id());
-  actor uuid := hon.hon_conversation_actor(p_subject); lim jsonb := hon.hon_reply_limits();
+  actor uuid := hon.hon_conversation_actor(p_subject); lim jsonb;
   i hon.hon_reply_invocations%ROWTYPE; p hon.ai_invocation_plans%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
-  why text; school_facts jsonb; history jsonb; facts jsonb;
+  why text; school_facts jsonb; history jsonb; facts jsonb; continuation jsonb;
 BEGIN
   SELECT * INTO i FROM hon.hon_reply_invocations WHERE turn_id = p_turn AND organization_id = hon.current_organization_id()
     AND school_id = hon.current_school_id() AND requested_by = actor FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_REPLY_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   IF i.status <> 'PENDING' THEN RETURN NULL; END IF;
+  lim := hon.hon_reply_limits(i.reply_mode);
   -- The row lock can wait behind a concurrent resend: conversation authority is held and checked again first.
   PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
   IF NOT hon.hon_reply_access(p_subject) THEN why := 'AI_ACCESS_REFUSED'; END IF;
@@ -120,7 +153,7 @@ BEGIN
     IF p_plan IS NULL THEN why := 'NO_ELIGIBLE_ROUTE';
     ELSE
       SELECT * INTO p FROM hon.ai_invocation_plans WHERE id = p_plan AND organization_id = i.organization_id AND school_id = i.school_id
-        AND work_item_id = i.work_item_id AND agent_key = 'hon' AND task_class = 'ANALYZE' AND input_budget = (lim->>'inputBudget')::integer
+        AND work_item_id = i.work_item_id AND agent_key = 'hon' AND task_class = lim->>'taskClass' AND input_budget = (lim->>'inputBudget')::integer
         AND output_budget = (lim->>'outputBudget')::integer AND max_provider_cost_microunits = (lim->>'maxProviderCostMicrounits')::bigint;
       IF NOT FOUND THEN RAISE EXCEPTION 'HON_REPLY_PLAN_SWAP' USING ERRCODE = '42501'; END IF;
       IF p.provider_id <> 'OPENROUTER' THEN why := 'UNSUPPORTED_PROVIDER'; ELSIF NOT p_ready THEN why := 'CONFIGURATION_REQUIRED'; END IF;
@@ -155,11 +188,23 @@ BEGIN
     LEFT JOIN hon.hon_reply_invocations r ON r.turn_id = x.id AND r.status = 'COMPLETED'
     WHERE x.conversation_id = t.conversation_id AND x.seq < t.seq
     ORDER BY x.seq DESC LIMIT 3) z;
-  facts := jsonb_build_object('school', coalesce(school_facts, jsonb_build_object('availability', 'NOT_AUTHORIZED')), 'history', history);
+  -- A continuation also gets the answer's original question and the end of the part already given (data only).
+  IF i.continues_turn_id IS NOT NULL THEN
+    WITH RECURSIVE chain AS (
+      SELECT r.turn_id, r.continues_turn_id FROM hon.hon_reply_invocations r WHERE r.turn_id = i.continues_turn_id
+      UNION ALL
+      SELECT r.turn_id, r.continues_turn_id FROM hon.hon_reply_invocations r JOIN chain c ON r.turn_id = c.continues_turn_id)
+    SELECT jsonb_build_object('step', i.step, 'maxSteps', hon.hon_reply_max_steps(),
+        'originalQuestion', (SELECT left(x.text, 2000) FROM chain c JOIN hon.hon_conversation_turns x ON x.id = c.turn_id WHERE c.continues_turn_id IS NULL),
+        'previousAnswerEnd', (SELECT right(r.reply_text, 2500) FROM hon.hon_reply_invocations r WHERE r.turn_id = i.continues_turn_id AND r.status = 'COMPLETED'))
+      INTO continuation;
+  END IF;
+  facts := jsonb_strip_nulls(jsonb_build_object('school', coalesce(school_facts, jsonb_build_object('availability', 'NOT_AUTHORIZED')), 'history', history,
+    'continuation', continuation));
   UPDATE hon.hon_reply_invocations SET context_digest = encode(sha256(convert_to(jsonb_build_object('question', t.text, 'facts', facts)::text, 'UTF8')), 'hex')
   WHERE id = i.id;
   RETURN jsonb_build_object('providerId', p.provider_id, 'modelId', p.model_id, 'providerRequestId', i.provider_request_id,
-    'question', t.text, 'facts', facts::text, 'inputBudget', p.input_budget, 'outputBudget', p.output_budget,
+    'replyMode', i.reply_mode, 'step', i.step, 'question', t.text, 'facts', facts::text, 'inputBudget', p.input_budget, 'outputBudget', p.output_budget,
     'maxCostMicrounits', p.max_provider_cost_microunits);
 END $$;
 
@@ -183,7 +228,9 @@ END $$;
 
 -- S4-a for the reply: evidence-only actor (succeeds after a mid-flight lapse); exactly one ledger row per call; the
 -- hold is released; the reply is shown only while access holds, otherwise it is recorded and held. A result above
--- the plan's budgets or the reservation is recorded (the provider charged it) but never shown.
+-- the plan's budgets or the reservation is recorded (the provider charged it) but never shown. Credits settle to the
+-- measured tokens (ceil((input+output)/1000)); the rest of the reservation is released. 'truncated' (optional) marks an
+-- answer the provider cut off at the output limit: it is shown as incomplete and may be continued, never as complete.
 CREATE FUNCTION hon.record_hon_reply_result(p_subject text, p_turn uuid, p_result jsonb) RETURNS text
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.ai_evidence_actor(p_subject); i hon.hon_reply_invocations%ROWTYPE; p hon.ai_invocation_plans%ROWTYPE;
@@ -194,8 +241,9 @@ BEGIN
   IF NOT FOUND OR i.status <> 'SENDING' OR i.usage_id IS NOT NULL THEN RAISE EXCEPTION 'HON_REPLY_OUTCOME_REPLAY' USING ERRCODE = '40001'; END IF;
   SELECT * INTO STRICT p FROM hon.ai_invocation_plans WHERE id = i.plan_id;
   IF p_result IS NULL OR jsonb_typeof(p_result) <> 'object' OR NOT p_result ?& ARRAY['reply', 'inputTokens', 'outputTokens', 'providerCostMicrounits']
-     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_result) k WHERE k NOT IN ('reply', 'inputTokens', 'outputTokens', 'providerCostMicrounits'))
-     OR jsonb_typeof(p_result->'reply') <> 'string' OR length(btrim(p_result->>'reply')) NOT BETWEEN 1 AND 4000
+     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_result) k WHERE k NOT IN ('reply', 'inputTokens', 'outputTokens', 'providerCostMicrounits', 'truncated'))
+     OR (p_result ? 'truncated' AND jsonb_typeof(p_result->'truncated') <> 'boolean')
+     OR jsonb_typeof(p_result->'reply') <> 'string' OR length(btrim(p_result->>'reply')) NOT BETWEEN 1 AND 24000
      OR jsonb_typeof(p_result->'inputTokens') <> 'number' OR (p_result->>'inputTokens') !~ '^[1-9][0-9]{0,6}$'
      OR jsonb_typeof(p_result->'outputTokens') <> 'number' OR (p_result->>'outputTokens') !~ '^[1-9][0-9]{0,6}$'
      OR jsonb_typeof(p_result->'providerCostMicrounits') <> 'number' OR (p_result->>'providerCostMicrounits') !~ '^(0|[1-9][0-9]{0,9})$' THEN
@@ -214,7 +262,8 @@ BEGIN
   outcome := CASE WHEN over THEN 'FAILED' WHEN hon.hon_reply_access(p_subject) THEN 'COMPLETED' ELSE 'RESULT_HELD' END;
   UPDATE hon.hon_reply_invocations SET usage_id = uid, reserved_credits = 0, status = outcome,
     reason = CASE outcome WHEN 'FAILED' THEN 'RESULT_BUDGET_EXCEEDED' WHEN 'RESULT_HELD' THEN 'ACCESS_LAPSED' END,
-    reply_text = CASE WHEN outcome = 'FAILED' THEN NULL ELSE reply END, updated_at = clock_timestamp()
+    reply_text = CASE WHEN outcome = 'FAILED' THEN NULL ELSE reply END,
+    truncated = outcome <> 'FAILED' AND coalesce((p_result->>'truncated')::boolean, false), updated_at = clock_timestamp()
   WHERE id = i.id;
   UPDATE hon.work_items SET status = CASE outcome WHEN 'COMPLETED' THEN 'COMPLETED' ELSE 'NEEDS_ATTENTION' END, version = version + 1, updated_at = clock_timestamp()
   WHERE id = i.work_item_id;
@@ -580,7 +629,7 @@ BEGIN
   committed := hon.ai_org_committed_credits(org, at);
   ceiling := hon.ai_org_ceiling(org, at);
   FOR a IN SELECT * FROM (VALUES ('marcus', 'MARKETING', 5120::bigint, 100000::bigint, 6), ('claire', 'TEACHING', 5120, 100000, 6),
-                                 ('chad', 'CHAD_FOLLOW_UP', 2648, 60000, 3), ('hon', 'HON_REPLY', 8800, 80000, 9)) v(agent_key, agent, units, max_cost, estimate) LOOP
+                                 ('chad', 'CHAD_FOLLOW_UP', 2648, 60000, 3), ('hon', 'HON_REPLY', 9500, 80000, 10)) v(agent_key, agent, units, max_cost, estimate) LOOP
     BEGIN
       IF a.agent_key = 'marcus' THEN PERFORM hon.marketing_owner(p_subject);
       ELSIF a.agent_key = 'claire' THEN PERFORM hon.require_teaching_assistant_actor(p_subject, false);
@@ -670,9 +719,15 @@ CREATE OR REPLACE FUNCTION hon.begin_hon_turn(p_subject text, p_conversation uui
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.hon_conversation_actor(p_subject); c hon.hon_conversations%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
   fingerprint text; d jsonb; agent text; target jsonb; v jsonb; handoff boolean; wid uuid;
+  mode text; prior hon.hon_reply_invocations%ROWTYPE; step integer := 1;
 BEGIN
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object' OR NOT p_input ?& ARRAY['text', 'delegation']
-     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_input) k WHERE k NOT IN ('text', 'delegation'))
+     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_input) k WHERE k NOT IN ('text', 'delegation', 'replyMode', 'continueTurnId'))
+     -- C2 reply mode and continuation belong to a question for HON only.
+     OR ((p_input ? 'replyMode' OR p_input ? 'continueTurnId') AND jsonb_typeof(p_input->'delegation') IS DISTINCT FROM 'null')
+     OR (p_input ? 'replyMode' AND (jsonb_typeof(p_input->'replyMode') <> 'string' OR p_input->>'replyMode' NOT IN ('STANDARD', 'DETAILED')))
+     OR (p_input ? 'continueTurnId' AND (jsonb_typeof(p_input->'continueTurnId') <> 'string'
+         OR (p_input->>'continueTurnId') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'))
      OR jsonb_typeof(p_input->'text') IS DISTINCT FROM 'string' OR NOT hon.marketing_safe_text(p_input->>'text', 2000)
      OR jsonb_typeof(p_input->'delegation') NOT IN ('object', 'null') THEN
     RAISE EXCEPTION 'INVALID_HON_TURN' USING ERRCODE = '22023';
@@ -720,11 +775,26 @@ BEGIN
       -- The reply is created with the turn, under the same AI planning access gate and S4 start guard (HQ pause,
       -- exception, access state): a refused question records no turn at all.
       PERFORM hon.require_ai_invocation_plan_access();
+      mode := coalesce(p_input->>'replyMode', 'STANDARD');
+      IF p_input ? 'continueTurnId' THEN
+        -- Continue a cut-off answer: this human's own COMPLETED, truncated HON reply in this conversation, below the
+        -- step limit and not yet continued (the conversation row lock above serializes concurrent continuations).
+        -- The continuation keeps the answer's mode; it is its own planned, reserved and settled call.
+        SELECT * INTO prior FROM hon.hon_reply_invocations WHERE turn_id = lower(p_input->>'continueTurnId')::uuid AND conversation_id = c.id
+          AND organization_id = c.organization_id AND school_id = c.school_id AND requested_by = actor FOR UPDATE;
+        IF NOT FOUND OR prior.status <> 'COMPLETED' OR NOT prior.truncated OR prior.step >= hon.hon_reply_max_steps()
+           OR EXISTS (SELECT 1 FROM hon.hon_reply_invocations n WHERE n.continues_turn_id = prior.turn_id)
+           OR (p_input ? 'replyMode' AND p_input->>'replyMode' <> prior.reply_mode) THEN
+          RAISE EXCEPTION 'HON_REPLY_NOT_CONTINUABLE' USING ERRCODE = '22023';
+        END IF;
+        mode := prior.reply_mode; step := prior.step + 1;
+      END IF;
       INSERT INTO hon.work_items (organization_id, school_id, work_type, status, subject_type, subject_id, payload, correlation_id)
-      VALUES (c.organization_id, c.school_id, 'AI_ANALYZE', 'READY', 'HON_CONVERSATION_TURN', t.id, '{}', nullif(current_setting('app.hon_request_id', true), '')::uuid)
+      VALUES (c.organization_id, c.school_id, 'AI_' || (hon.hon_reply_limits(mode)->>'taskClass'), 'READY', 'HON_CONVERSATION_TURN', t.id, '{}',
+        nullif(current_setting('app.hon_request_id', true), '')::uuid)
       RETURNING id INTO wid;
-      INSERT INTO hon.hon_reply_invocations (organization_id, school_id, conversation_id, turn_id, requested_by, work_item_id)
-      VALUES (c.organization_id, c.school_id, c.id, t.id, actor, wid);
+      INSERT INTO hon.hon_reply_invocations (organization_id, school_id, conversation_id, turn_id, requested_by, work_item_id, reply_mode, step, continues_turn_id)
+      VALUES (c.organization_id, c.school_id, c.id, t.id, actor, wid, mode, step, prior.turn_id);
     END IF;
   END IF;
   v := hon.hon_turn_view(t);
@@ -754,10 +824,11 @@ BEGIN
   FROM hon.hon_conversation_turns t CROSS JOIN LATERAL (SELECT hon.hon_turn_view(t) v) v
   CROSS JOIN LATERAL (VALUES
     (jsonb_build_object('turnId', t.id, 'role', 'HUMAN', 'text', t.text, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
-       'reason', NULL, 'references', jsonb_build_object('workItemId', NULL, 'actionRequestId', NULL, 'invocationId', NULL))),
+       'reason', NULL, 'references', jsonb_build_object('workItemId', NULL, 'actionRequestId', NULL, 'invocationId', NULL), 'replyDetail', NULL)),
     (jsonb_build_object('turnId', t.id, 'role', t.agent_key,
        'text', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' THEN (SELECT r.reply_text FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') END, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
-       'reason', v.v->>'reason', 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId')))
+       'reason', v.v->>'reason', 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId'),
+       'replyDetail', CASE WHEN t.agent_key = 'hon' THEN hon.hon_reply_detail(t.id) END))
   ) AS r(x)
   WHERE t.conversation_id = c.id;
   RETURN hon.hon_conversation_summary(c) || jsonb_build_object('turns', turns);
@@ -775,7 +846,8 @@ BEGIN
     'actionRequestIds', CASE WHEN v->>'actionRequestId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'actionRequestId') END,
     'workItemIds', CASE WHEN v->>'workItemId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'workItemId') END,
     'invocationId', v->'invocationId',
-    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END);
+    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END,
+    'replyDetail', CASE WHEN t.agent_key = 'hon' THEN coalesce(hon.hon_reply_detail(t.id), 'null'::jsonb) ELSE 'null'::jsonb END);
 END $$;
 
 DO $$ DECLARE f regprocedure; r text; BEGIN
@@ -783,7 +855,8 @@ DO $$ DECLARE f regprocedure; r text; BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
     EXECUTE format('REVOKE ALL ON hon.hon_reply_invocations FROM %I', r);
   END LOOP;
-  FOREACH f IN ARRAY ARRAY['hon.hon_reply_limits()'::regprocedure, 'hon.hon_reply_access(text)'::regprocedure,
+  FOREACH f IN ARRAY ARRAY['hon.hon_reply_limits(text)'::regprocedure, 'hon.hon_reply_max_steps()'::regprocedure,
+      'hon.hon_reply_detail(uuid)'::regprocedure, 'hon.hon_reply_access(text)'::regprocedure,
       'hon.hon_reply_planning_reference(text,uuid)'::regprocedure, 'hon.prepare_hon_reply(text,uuid,uuid,boolean)'::regprocedure,
       'hon.fail_hon_reply(text,uuid,text,text)'::regprocedure, 'hon.record_hon_reply_result(text,uuid,jsonb)'::regprocedure,
       'hon.release_held_hon_reply(text,uuid)'::regprocedure] LOOP

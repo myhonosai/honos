@@ -125,9 +125,15 @@ CREATE OR REPLACE FUNCTION hon.begin_hon_turn(p_subject text, p_conversation uui
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.hon_conversation_actor(p_subject); c hon.hon_conversations%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
   fingerprint text; d jsonb; agent text; target jsonb; v jsonb; handoff boolean; wid uuid;
+  mode text; prior hon.hon_reply_invocations%ROWTYPE; step integer := 1;
 BEGIN
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input) <> 'object' OR NOT p_input ?& ARRAY['text', 'delegation']
-     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_input) k WHERE k NOT IN ('text', 'delegation'))
+     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_input) k WHERE k NOT IN ('text', 'delegation', 'replyMode', 'continueTurnId'))
+     -- C2 reply mode and continuation belong to a question for HON only.
+     OR ((p_input ? 'replyMode' OR p_input ? 'continueTurnId') AND jsonb_typeof(p_input->'delegation') IS DISTINCT FROM 'null')
+     OR (p_input ? 'replyMode' AND (jsonb_typeof(p_input->'replyMode') <> 'string' OR p_input->>'replyMode' NOT IN ('STANDARD', 'DETAILED')))
+     OR (p_input ? 'continueTurnId' AND (jsonb_typeof(p_input->'continueTurnId') <> 'string'
+         OR (p_input->>'continueTurnId') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'))
      OR jsonb_typeof(p_input->'text') IS DISTINCT FROM 'string' OR NOT hon.marketing_safe_text(p_input->>'text', 2000)
      OR jsonb_typeof(p_input->'delegation') NOT IN ('object', 'null') THEN
     RAISE EXCEPTION 'INVALID_HON_TURN' USING ERRCODE = '22023';
@@ -178,11 +184,26 @@ BEGIN
       -- The reply is created with the turn, under the same AI planning access gate and S4 start guard (HQ pause,
       -- exception, access state): a refused question records no turn at all.
       PERFORM hon.require_ai_invocation_plan_access();
+      mode := coalesce(p_input->>'replyMode', 'STANDARD');
+      IF p_input ? 'continueTurnId' THEN
+        -- Continue a cut-off answer: this human's own COMPLETED, truncated HON reply in this conversation, below the
+        -- step limit and not yet continued (the conversation row lock above serializes concurrent continuations).
+        -- The continuation keeps the answer's mode; it is its own planned, reserved and settled call.
+        SELECT * INTO prior FROM hon.hon_reply_invocations WHERE turn_id = lower(p_input->>'continueTurnId')::uuid AND conversation_id = c.id
+          AND organization_id = c.organization_id AND school_id = c.school_id AND requested_by = actor FOR UPDATE;
+        IF NOT FOUND OR prior.status <> 'COMPLETED' OR NOT prior.truncated OR prior.step >= hon.hon_reply_max_steps()
+           OR EXISTS (SELECT 1 FROM hon.hon_reply_invocations n WHERE n.continues_turn_id = prior.turn_id)
+           OR (p_input ? 'replyMode' AND p_input->>'replyMode' <> prior.reply_mode) THEN
+          RAISE EXCEPTION 'HON_REPLY_NOT_CONTINUABLE' USING ERRCODE = '22023';
+        END IF;
+        mode := prior.reply_mode; step := prior.step + 1;
+      END IF;
       INSERT INTO hon.work_items (organization_id, school_id, work_type, status, subject_type, subject_id, payload, correlation_id)
-      VALUES (c.organization_id, c.school_id, 'AI_ANALYZE', 'READY', 'HON_CONVERSATION_TURN', t.id, '{}', nullif(current_setting('app.hon_request_id', true), '')::uuid)
+      VALUES (c.organization_id, c.school_id, 'AI_' || (hon.hon_reply_limits(mode)->>'taskClass'), 'READY', 'HON_CONVERSATION_TURN', t.id, '{}',
+        nullif(current_setting('app.hon_request_id', true), '')::uuid)
       RETURNING id INTO wid;
-      INSERT INTO hon.hon_reply_invocations (organization_id, school_id, conversation_id, turn_id, requested_by, work_item_id)
-      VALUES (c.organization_id, c.school_id, c.id, t.id, actor, wid);
+      INSERT INTO hon.hon_reply_invocations (organization_id, school_id, conversation_id, turn_id, requested_by, work_item_id, reply_mode, step, continues_turn_id)
+      VALUES (c.organization_id, c.school_id, c.id, t.id, actor, wid, mode, step, prior.turn_id);
     END IF;
   END IF;
   v := hon.hon_turn_view(t);
@@ -211,7 +232,8 @@ BEGIN
     'actionRequestIds', CASE WHEN v->>'actionRequestId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'actionRequestId') END,
     'workItemIds', CASE WHEN v->>'workItemId' IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v->'workItemId') END,
     'invocationId', v->'invocationId',
-    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END);
+    'reply', CASE WHEN t.agent_key = 'hon' AND v->>'status' = 'COMPLETED' THEN (SELECT to_jsonb(r.reply_text) FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') ELSE 'null'::jsonb END,
+    'replyDetail', CASE WHEN t.agent_key = 'hon' THEN coalesce(hon.hon_reply_detail(t.id), 'null'::jsonb) ELSE 'null'::jsonb END);
 END $$;
 
 CREATE OR REPLACE FUNCTION hon.read_hon_conversation(p_subject text, p_id uuid) RETURNS jsonb
@@ -227,10 +249,11 @@ BEGIN
   FROM hon.hon_conversation_turns t CROSS JOIN LATERAL (SELECT hon.hon_turn_view(t) v) v
   CROSS JOIN LATERAL (VALUES
     (jsonb_build_object('turnId', t.id, 'role', 'HUMAN', 'text', t.text, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
-       'reason', NULL, 'references', jsonb_build_object('workItemId', NULL, 'actionRequestId', NULL, 'invocationId', NULL))),
+       'reason', NULL, 'references', jsonb_build_object('workItemId', NULL, 'actionRequestId', NULL, 'invocationId', NULL), 'replyDetail', NULL)),
     (jsonb_build_object('turnId', t.id, 'role', hon.hon_presented_agent(t.agent_key),
        'text', CASE WHEN t.agent_key = 'hon' AND v.v->>'status' = 'COMPLETED' THEN (SELECT r.reply_text FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'COMPLETED') END, 'createdAt', hon.saas_ts(t.created_at), 'status', v.v->>'status',
-       'reason', v.v->>'reason', 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId')))
+       'reason', v.v->>'reason', 'references', jsonb_build_object('workItemId', v.v->'workItemId', 'actionRequestId', v.v->'actionRequestId', 'invocationId', v.v->'invocationId'),
+       'replyDetail', CASE WHEN t.agent_key = 'hon' THEN hon.hon_reply_detail(t.id) END))
   ) AS r(x)
   WHERE t.conversation_id = c.id;
   RETURN hon.hon_conversation_summary(c) || jsonb_build_object('turns', turns);
@@ -261,7 +284,7 @@ BEGIN
   committed := hon.ai_org_committed_credits(org, at);
   ceiling := hon.ai_org_ceiling(org, at);
   FOR a IN SELECT * FROM (VALUES ('marcus', 'MARKETING', 5120::bigint, 100000::bigint, 6), ('kai', 'TEACHING', 5120, 100000, 6),
-                                 ('chad', 'CHAD_FOLLOW_UP', 2648, 60000, 3), ('hon', 'HON_REPLY', 8800, 80000, 9)) v(agent_key, agent, units, max_cost, estimate) LOOP
+                                 ('chad', 'CHAD_FOLLOW_UP', 2648, 60000, 3), ('hon', 'HON_REPLY', 9500, 80000, 10)) v(agent_key, agent, units, max_cost, estimate) LOOP
     BEGIN
       IF a.agent_key = 'marcus' THEN PERFORM hon.marketing_owner(p_subject);
       ELSIF a.agent_key = 'kai' THEN PERFORM hon.require_teaching_assistant_actor(p_subject, false);

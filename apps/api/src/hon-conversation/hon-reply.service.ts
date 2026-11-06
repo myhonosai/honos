@@ -1,7 +1,7 @@
 import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { HON_REPLY_LIMITS } from '@hon/contracts';
+import { HON_REPLY_LIMITS, HON_REPLY_MODES, type HonReplyMode } from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
 import {
@@ -9,16 +9,27 @@ import {
 } from '../ai/hon-reply-provider-runtime.js';
 
 type Scope = ResolvedPrincipalScope & { externalSubject: string };
-type Reference = { invocationId: string; workItemId: string; workVersion: number };
+type Limits = { replyMode: HonReplyMode; taskClass: string; inputBudget: number; outputBudget: number; maxProviderCostMicrounits: number };
+type Reference = { invocationId: string; workItemId: string; workVersion: number; limits: Limits };
+
+/** The database names the mode; its budgets must be exactly the contract's (no caller or stored value can raise them). */
+function modeLimits(limits: Limits | undefined) {
+  const mode = limits?.replyMode;
+  const fixed = mode && Object.prototype.hasOwnProperty.call(HON_REPLY_MODES, mode) ? HON_REPLY_MODES[mode] : null;
+  if (!fixed || limits!.taskClass !== fixed.taskClass || limits!.inputBudget !== fixed.inputTokens || limits!.outputBudget !== fixed.outputTokens
+    || limits!.maxProviderCostMicrounits !== fixed.maxProviderCostMicrounits) throw new Error('HON_REPLY_LIMITS_DRIFT');
+  return fixed;
+}
 
 const tokens = (n: unknown, max: number) => Number.isSafeInteger(n) && (n as number) >= 1 && (n as number) <= max;
 function verified(result: HonReplyResult): HonReplyResult {
   const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
   if (reply.length < 1 || reply.length > HON_REPLY_LIMITS.replyCharacters || !tokens(result.inputTokens, 1_000_000) || !tokens(result.outputTokens, 1_000_000)
-    || !Number.isSafeInteger(result.providerCostMicrounits) || result.providerCostMicrounits < 0 || result.providerCostMicrounits > 1_000_000_000) {
+    || !Number.isSafeInteger(result.providerCostMicrounits) || result.providerCostMicrounits < 0 || result.providerCostMicrounits > 1_000_000_000
+    || typeof result.truncated !== 'boolean') {
     throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   }
-  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits };
+  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits, truncated: result.truncated };
 }
 
 /**
@@ -53,11 +64,12 @@ export class HonReplyService {
   async run(scope: Scope, turnId: string): Promise<void> {
     const ref = await this.transaction(scope, async (client) => (await client.query<{ data: Reference | null }>('SELECT hon.hon_reply_planning_reference($1,$2::uuid) data', [scope.externalSubject, turnId])).rows[0]!.data);
     if (!ref) return;
+    const limits = modeLimits(ref.limits);
     let planId: string | null = null;
     try {
       const planned = await this.plans.plan({ ...this.context(scope), idempotencyKey: ref.invocationId }, ref.workItemId, {
-        expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'hon', modality: 'TEXT', taskClass: 'ANALYZE',
-        inputBudget: HON_REPLY_LIMITS.inputTokens, outputBudget: HON_REPLY_LIMITS.outputTokens, maxProviderCostMicrounits: HON_REPLY_LIMITS.maxProviderCostMicrounits,
+        expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'hon', modality: 'TEXT', taskClass: limits.taskClass,
+        inputBudget: limits.inputTokens, outputBudget: limits.outputTokens, maxProviderCostMicrounits: limits.maxProviderCostMicrounits,
       });
       planId = planned.status === 'PLANNED' ? planned.plan.id : null;
     } catch (error) {

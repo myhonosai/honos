@@ -33,16 +33,17 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
     { text: '', delegation: { agentKey: 'marcus', campaignId } }, { text: 'hi', delegation: { agentKey: 'marcus', campaignId }, providerId: 'x' }]) {
     assert.throws(() => contracts.validateHonTurnRequest(bad), /INVALID_HON_CONVERSATION_INPUT/, JSON.stringify(bad).slice(0, 80));
   }
-  const receipt = { turnId: ID(), conversationId: ID(), status: 'AWAITING_APPROVAL', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [ID()], workItemIds: [ID()], invocationId: ID(), reply: null };
+  const receipt = { turnId: ID(), conversationId: ID(), status: 'AWAITING_APPROVAL', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [ID()], workItemIds: [ID()], invocationId: ID(), reply: null, replyDetail: null };
   assert.equal(contracts.validateHonTurnReceipt(receipt).status, 'AWAITING_APPROVAL');
   for (const bad of [{ ...receipt, actionRequestIds: [] }, { ...receipt, status: 'READY' }, { ...receipt, status: 'DONE' }, { ...receipt, delegatedAgentKeys: ['marcus', 'chad'] }, { ...receipt, extra: 1 },
-    { ...receipt, reply: 'A specialist draft never rides on the receipt' }, (({ reply, ...rest }) => rest)(receipt)]) {
+    { ...receipt, reply: 'A specialist draft never rides on the receipt' }, (({ reply, ...rest }) => rest)(receipt),
+    { ...receipt, replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null } }]) {
     assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/);
   }
   const turnId = ID();
   const thread = { id: ID(), title: 'Spring', createdAt: T, updatedAt: T, turnCount: 1, status: 'DELEGATING', turns: [
-    { turnId, role: 'HUMAN', text: 'Spring promo', createdAt: T, status: 'DELEGATING', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null } },
-    { turnId, role: 'marcus', text: null, createdAt: T, status: 'DELEGATING', reason: null, references: { workItemId: ID(), actionRequestId: null, invocationId: ID() } }] };
+    { turnId, role: 'HUMAN', text: 'Spring promo', createdAt: T, status: 'DELEGATING', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null },
+    { turnId, role: 'marcus', text: null, createdAt: T, status: 'DELEGATING', reason: null, references: { workItemId: ID(), actionRequestId: null, invocationId: ID() }, replyDetail: null }] };
   assert.equal(contracts.validateHonConversationThread(thread).turns.length, 2);
   assert.throws(() => contracts.validateHonConversationThread({ ...thread, turns: [thread.turns[0], { ...thread.turns[1], text: 'AI says hello' }] }), 'specialist text is never copied into the thread');
   assert.throws(() => contracts.validateHonConversationThread({ ...thread, turns: [thread.turns[0]] }));
@@ -58,24 +59,40 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
 test('C2 contracts: a question is delegation null with safe text; HON reply text only when COMPLETED; receipts stay consistent', () => {
   assert.deepEqual(contracts.validateHonTurnRequest({ text: 'What should I focus on this week?', delegation: null }), { text: 'What should I focus on this week?', delegation: null });
   for (const bad of [{ text: '', delegation: null }, { text: '   ', delegation: null }, { text: 'x'.repeat(2001), delegation: null }, { text: 'password: hunter2', delegation: null },
-    { text: 'hi' }, { text: 'hi', delegation: null, model: 'any' }, { text: 'hi', delegation: { agentKey: 'hon' } }]) {
+    { text: 'hi' }, { text: 'hi', delegation: null, model: 'any' }, { text: 'hi', delegation: { agentKey: 'hon' } },
+    { text: 'hi', delegation: null, replyMode: 'UNLIMITED' }, { text: 'hi', delegation: null, continueTurnId: 'nope' },
+    { text: 'hi', delegation: { agentKey: 'marcus', campaignId: ID() }, replyMode: 'DETAILED' }, { text: 'hi', delegation: { agentKey: 'marcus', campaignId: ID() }, continueTurnId: ID() }]) {
     assert.throws(() => contracts.validateHonTurnRequest(bad), /INVALID_HON_CONVERSATION_INPUT/, JSON.stringify(bad).slice(0, 80));
   }
-  assert.deepEqual(contracts.HON_REPLY_LIMITS.inputTokens + contracts.HON_REPLY_LIMITS.outputTokens, 8800);
-  const q = { turnId: ID(), conversationId: ID(), status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [ID()], invocationId: ID(), reply: 'You have two trials tomorrow.' };
+  const cont = ID();
+  assert.deepEqual(contracts.validateHonTurnRequest({ text: 'Continue', delegation: null, replyMode: 'DETAILED', continueTurnId: cont }), { text: 'Continue', delegation: null, replyMode: 'DETAILED', continueTurnId: cont });
+  // Owner 2026-11-06 16:10Z: same $0.08 ceiling per call; the reservation is the worst case and settles to measured use.
+  for (const [mode, m] of Object.entries(contracts.HON_REPLY_MODES)) {
+    assert.equal(m.maxProviderCostMicrounits, 80000, mode);
+    assert.equal(m.reservedCredits, Math.ceil((m.inputTokens + m.outputTokens) / 1000), mode);
+  }
+  assert.deepEqual([contracts.HON_REPLY_MODES.STANDARD.taskClass, contracts.HON_REPLY_MODES.STANDARD.outputTokens, contracts.HON_REPLY_MODES.DETAILED.taskClass, contracts.HON_REPLY_MODES.DETAILED.outputTokens, contracts.HON_REPLY_MAX_STEPS], ['SUMMARIZE', 1500, 'ANALYZE', 4000, 3]);
+  const detail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null };
+  const q = { turnId: ID(), conversationId: ID(), status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [ID()], invocationId: ID(), reply: 'You have two trials tomorrow.', replyDetail: detail };
+  assert.equal(contracts.validateHonTurnReceipt({ ...q, replyDetail: { ...detail, mode: 'DETAILED', step: 2, truncated: true, canContinue: true, continuesTurnId: ID() } }).replyDetail.canContinue, true);
   assert.equal(contracts.validateHonTurnReceipt(q).reply, 'You have two trials tomorrow.');
   assert.equal(contracts.validateHonTurnReceipt({ ...q, status: 'PROCESSING', reply: null }).reply, null);
-  for (const bad of [{ ...q, reply: null }, { ...q, reply: '' }, { ...q, status: 'FAILED' }, { ...q, actionRequestIds: [ID()] }, { ...q, status: 'AWAITING_APPROVAL', actionRequestIds: [ID()] }, { ...q, reply: 'x'.repeat(4001) }]) {
+  for (const bad of [{ ...q, reply: null }, { ...q, reply: '' }, { ...q, status: 'FAILED' }, { ...q, actionRequestIds: [ID()] }, { ...q, status: 'AWAITING_APPROVAL', actionRequestIds: [ID()] }, { ...q, reply: 'x'.repeat(24001) },
+    { ...q, replyDetail: null }, { ...q, replyDetail: { ...detail, step: 4 } }, { ...q, replyDetail: { ...detail, step: 3, truncated: true, canContinue: true, continuesTurnId: ID() } },
+    { ...q, replyDetail: { ...detail, step: 2 } }, { ...q, replyDetail: { ...detail, canContinue: true } }, { ...q, replyDetail: { ...detail, mode: 'MAX' } },
+    { ...q, status: 'PROCESSING', reply: null, replyDetail: { ...detail, truncated: true } }, { ...q, replyDetail: { ...detail, extra: 1 } }]) {
     assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/, JSON.stringify(bad).slice(0, 120));
   }
   const turnId = ID(), refs = { workItemId: ID(), actionRequestId: null, invocationId: ID() };
-  const human = { turnId, role: 'HUMAN', text: 'What should I focus on?', createdAt: T, status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null } };
+  const human = { turnId, role: 'HUMAN', text: 'What should I focus on?', createdAt: T, status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null };
   const thread = (honTurn) => ({ id: ID(), title: 'Ask', createdAt: T, updatedAt: T, turnCount: 1, status: honTurn.status, turns: [{ ...human, status: honTurn.status }, honTurn] });
-  assert.equal(contracts.validateHonConversationThread(thread({ turnId, role: 'hon', text: 'Review the two new leads.', createdAt: T, status: 'COMPLETED', reason: null, references: refs })).turns[1].text, 'Review the two new leads.');
-  assert.equal(contracts.validateHonConversationThread(thread({ turnId, role: 'hon', text: null, createdAt: T, status: 'UNKNOWN', reason: 'PROVIDER_UNKNOWN', references: refs })).turns[1].text, null);
-  for (const bad of [{ turnId, role: 'hon', text: null, createdAt: T, status: 'COMPLETED', reason: null, references: refs },
-    { turnId, role: 'hon', text: 'A held reply is never shown', createdAt: T, status: 'PROCESSING', reason: 'RESULT_HELD', references: refs },
-    { turnId, role: 'hon', text: 'ok', createdAt: T, status: 'COMPLETED', reason: null, references: { ...refs, actionRequestId: ID() } }]) {
+  assert.equal(contracts.validateHonConversationThread(thread({ turnId, role: 'hon', text: 'Review the two new leads.', createdAt: T, status: 'COMPLETED', reason: null, references: refs, replyDetail: detail })).turns[1].text, 'Review the two new leads.');
+  assert.equal(contracts.validateHonConversationThread(thread({ turnId, role: 'hon', text: null, createdAt: T, status: 'UNKNOWN', reason: 'PROVIDER_UNKNOWN', references: refs, replyDetail: detail })).turns[1].text, null);
+  for (const bad of [{ turnId, role: 'hon', text: null, createdAt: T, status: 'COMPLETED', reason: null, references: refs, replyDetail: detail },
+    { turnId, role: 'hon', text: 'A held reply is never shown', createdAt: T, status: 'PROCESSING', reason: 'RESULT_HELD', references: refs, replyDetail: detail },
+    { turnId, role: 'hon', text: 'ok', createdAt: T, status: 'COMPLETED', reason: null, references: { ...refs, actionRequestId: ID() }, replyDetail: detail },
+    { turnId, role: 'hon', text: 'ok', createdAt: T, status: 'COMPLETED', reason: null, references: refs, replyDetail: null },
+    { turnId, role: 'hon', text: 'ok', createdAt: T, status: 'COMPLETED', reason: null, references: refs }]) {
     assert.throws(() => contracts.validateHonConversationThread(thread(bad)), JSON.stringify(bad).slice(0, 100));
   }
 });
@@ -83,8 +100,9 @@ test('C2 contracts: a question is delegation null with safe text; HON reply text
 function harness({ begun, agentScope = { organizationId: ORG, schoolId: SCHOOL, principalId: PRINCIPAL }, agentError = null, replyError = null } = {}) {
   const calls = [];
   const turnId = begun?.turnId ?? ID();
-  const receipt = { turnId, conversationId: ID(), status: 'DELEGATING', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [], workItemIds: [], invocationId: null, reply: null,
-    ...(begun?.agentKey === 'hon' ? { status: 'COMPLETED', delegatedAgentKeys: [], workItemIds: [ID()], invocationId: ID(), reply: 'Two trials are booked tomorrow.' } : {}) };
+  const receipt = { turnId, conversationId: ID(), status: 'DELEGATING', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [], workItemIds: [], invocationId: null, reply: null, replyDetail: null,
+    ...(begun?.agentKey === 'hon' ? { status: 'COMPLETED', delegatedAgentKeys: [], workItemIds: [ID()], invocationId: ID(), reply: 'Two trials are booked tomorrow.',
+      replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null } } : {}) };
   const database = {
     async resolveCampaignScope(subject, permission) { calls.push(['scope:marcus', subject, permission]); return agentScope; },
     async resolveTeachingAssistantScope(subject) { calls.push(['scope:claire', subject]); return agentScope; },
