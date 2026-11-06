@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNod
 import { usePathname } from 'next/navigation';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
-import { LocaleUtility } from '../localization/utility';
+import { LocaleUtility, useShellLocaleUtility } from '../localization/utility';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { parseOperationalSchoolSelectors } from '../operational-navigation';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from '../interface-theme-preference';
@@ -45,6 +45,7 @@ export function SchoolShell({ sessionSubject, children }: { sessionSubject: stri
 }
 
 function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: string; children?: ReactNode }): React.ReactElement {
+  useShellLocaleUtility();
   const path = usePathname() ?? '/staff';
   const { preferences } = useLocale();
   const controller = useRef<SchoolEntryController | null>(null);
@@ -139,7 +140,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     schoolName: snapshot.phase === 'READY' ? schoolName : null, mode }), [snapshot, schoolName, mode]);
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
-    choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility />}
+    choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
     onMode={chooseMode} onMenu={setMenuOpen} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
