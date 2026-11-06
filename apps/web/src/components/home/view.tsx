@@ -31,12 +31,12 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
   const time = (value: string) => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', ...(timeZone ? { timeZone } : {}) }).format(new Date(value));
   const day = (value: string) => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) }).format(new Date(value));
 
-  if (!selection) return <div className={styles.home} data-hon-native data-home="no-school"><p className={styles.empty} role="status">{t(waiting ? 'loading' : 'noSchool')}</p></div>;
+  if (!selection) return <main className={styles.home} data-hon-native data-home="no-school"><p className={styles.empty} role="status">{t(waiting ? 'loading' : 'noSchool')}</p></main>;
 
   const team = homeAiTeam(sources.readiness, mode);
   const kpis = homeKpis(sources);
 
-  return <div className={styles.home} data-hon-native data-home="ready">
+  return <main className={styles.home} data-hon-native data-home="ready">
     <section className={styles.hero} aria-labelledby="home-greeting">
       <div className={styles.heroCopy}>
         <h1 id="home-greeting" className={styles.greeting}>{t(greetingKey(now))}, <span>{schoolName ?? t('yourSchool')}</span></h1>
@@ -109,7 +109,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
     </div>
 
     <p className={styles.more}><a href={scoped('/staff/operations', selection)}>{t('operationsReport')} →</a></p>
-  </div>;
+  </main>;
 }
 
 function KpiTile({ kpi, t, number }: { kpi: Kpi; t: (key: HomeKey, values?: Record<string, string | number>) => string; number: (value: number) => string }): React.ReactElement {

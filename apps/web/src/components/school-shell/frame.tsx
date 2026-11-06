@@ -84,7 +84,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       {active && active.routes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')}>
         {active.routes.map(route => <a key={route.href} href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'page' : undefined}>{t(route.titleKey)}</a>)}
       </nav>}
-      <main id="hon-main" tabIndex={-1} className={styles.main}>{children}</main>
+      <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>
     </div>
     <nav className={styles.mobileNav} aria-label={t('mobileNav')}>
       {SCHOOL_SHELL_MOBILE.map(key => { const item = SCHOOL_SHELL_NAV.find(candidate => candidate.key === key)!;

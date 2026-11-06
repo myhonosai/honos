@@ -15,11 +15,12 @@ const render = (props: Partial<SchoolShellFrameProps> = {}) => renderToStaticMar
   <SchoolShellFrame {...base} {...props}><p data-testid="page">private page</p></SchoolShellFrame>);
 
 describe('school shell frame', () => {
-  it('wraps the exact page in one main landmark after a skip link and the primary navigation', () => {
+  it('wraps the exact page after a skip link and the primary navigation, leaving the main landmark to the page', () => {
     const html = render();
     expect(html).toContain('href="#hon-main"');
-    expect(html).toMatch(/<main[^>]*id="hon-main"[^>]*>.*<p data-testid="page">private page<\/p>/s);
-    expect(html.match(/<main/g)).toHaveLength(1);
+    expect(html).toMatch(/<div[^>]*id="hon-main"[^>]*>.*<p data-testid="page">private page<\/p>/s);
+    // Pages render their own <main>; a second one around them would duplicate the landmark.
+    expect(html).not.toContain('<main');
     for (const key of ['navHome', 'navHon', 'navAiTeam', 'navCrm', 'navStudents', 'navBilling', 'navClasses', 'navAttendance',
       'navMarketing', 'navCommunity', 'navAnalytics', 'navStaff', 'navSettings'] as const) expect(html).toContain(esc(shellText('en', key)));
   });

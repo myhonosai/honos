@@ -83,7 +83,7 @@
 .topbar {
   position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--hon-space-3);
   padding: var(--hon-space-3) var(--hon-space-6); min-height: 68px;
-  background: rgba(5, 10, 24, 0.72); backdrop-filter: blur(14px); border-bottom: 1px solid var(--hon-border);
+  background: rgba(5, 10, 24, 0.95); backdrop-filter: blur(14px); border-bottom: 1px solid var(--hon-border);
 }
 .menuButton { display: none; }
 .menuButton, .iconButton {
@@ -94,7 +94,7 @@
 .titleBlock { min-width: 0; margin-right: auto; }
 .eyebrow { margin: 0; color: var(--hon-accent-2); font-family: var(--hon-font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
 .pageTitle { margin: 2px 0 0; font-family: var(--hon-font-display); font-size: var(--hon-text-lg); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.views { display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: var(--hon-surface); border: 1px solid var(--hon-border); position: relative; }
+.views { display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: var(--hon-surface-solid); border: 1px solid var(--hon-border); position: relative; }
 .views button {
   min-height: calc(var(--hon-control-h) - 8px); padding: 0 var(--hon-space-3); border: 0; border-radius: 999px; cursor: pointer;
   background: transparent; color: var(--hon-text-muted); font: inherit; font-size: var(--hon-text-sm); font-weight: 600; white-space: nowrap;
@@ -141,10 +141,12 @@
 }
 @media (max-width: 760px) {
   .topbar { flex-wrap: wrap; row-gap: var(--hon-space-2); }
-  .views { order: 3; width: 100%; justify-content: space-between; }
-  .views button { flex: 1; }
+  .views { order: 3; flex: 1 1 0; min-width: 0; justify-content: space-between; }
+  .locale { order: 3; flex: none; }
+  .views button { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .locale select { max-width: 104px; }
   .views small, .iconButton { display: none; }
-  .views button { padding: 0 10px; font-size: 12px; }
+  .views button { padding: 0 6px; font-size: 12px; }
   .askHon span:last-child { display: none; }
   .askHon { padding: 0 6px; }
   .main { padding: var(--hon-space-4) var(--hon-space-4) 96px; }
@@ -196,7 +198,6 @@
   min-height: var(--hon-control-h); padding: 0 10px; border-radius: 999px; border: 1px solid var(--hon-border);
   background: var(--hon-surface); color: var(--hon-text); font: inherit; font-size: var(--hon-text-sm);
 }
-@media (max-width: 760px) { .locale { display: none; } }
 
 /* Transitional canvas for pages designed for the old light body (removed per area as pages migrate). */
 .main[data-canvas='legacy-light'] {

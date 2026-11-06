@@ -108,3 +108,8 @@ describe('school home view', () => {
     expect(route).not.toMatch(/searchParams|fetch\(/);
   });
 });
+
+it('is the page main landmark (the shell has none of its own)', () => {
+  const html = renderToStaticMarkup(<SchoolHomeView {...base} />);
+  expect(html.match(/<main/g)).toHaveLength(1);
+});

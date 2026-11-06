@@ -154,6 +154,7 @@ for (const mode of ['modern', 'classic', 'big-button']) for (const [size, viewpo
     await page.getByText('Little Tigers').waitFor(); await page.getByText('Call back trial family').waitFor(); await page.getByText('Rowan Example').waitFor();
     assert.equal(await page.locator('[data-kpi="activeMemberships"] strong').textContent(), '131');
     assert.equal(await page.locator('[data-locale-utility] select').count(), 1, 'exactly one language selector');
+    assert.equal(await page.locator('[data-locale-utility] select').isVisible(), true, 'language selector reachable at every width');
     assert.equal(await page.locator('[data-kpi="revenue"]').getAttribute('data-state'), 'NOT_CONNECTED');
     assert.equal(await page.locator('[data-agent="claire"]').getAttribute('data-status'), 'NOT_AVAILABLE');
     await page.waitForTimeout(150);

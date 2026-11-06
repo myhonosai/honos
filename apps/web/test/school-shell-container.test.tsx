@@ -45,3 +45,13 @@ it('renders the school entry page bare: it is already the school chooser', async
   expect(html).toBe('<p>entry page</p>');
   vi.doUnmock('next/navigation');
 });
+
+it('the page-level language strip yields to the shell only on shell-wrapped staff pages', async () => {
+  const { isSchoolShellPath } = await import('../src/components/school-shell/paths');
+  expect(isSchoolShellPath('/staff/crm/leads')).toBe(true);
+  expect(isSchoolShellPath('/staff/dashboard')).toBe(true);
+  expect(isSchoolShellPath('/staff/entry')).toBe(false);
+  expect(isSchoolShellPath('/staffing')).toBe(false);
+  expect(isSchoolShellPath('/hq/dashboard')).toBe(false);
+  expect(isSchoolShellPath('/settings/language-region')).toBe(false);
+});

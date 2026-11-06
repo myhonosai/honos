@@ -5,7 +5,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNod
 import { usePathname } from 'next/navigation';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
-import { LocaleUtility, useShellLocaleUtility } from '../localization/utility';
+import { LocaleUtility } from '../localization/utility';
+import { isSchoolShellPath } from './paths';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { parseOperationalSchoolSelectors } from '../operational-navigation';
 import { loadInterfaceThemePreference, saveInterfaceThemePreference } from '../interface-theme-preference';
@@ -35,17 +36,15 @@ export function shellNeedsLegacyCanvas(root: Element | null): boolean {
  * and API keeps authorizing the exact school itself. Session invalidation, a school
  * context change or page hide conceal the school and drop the prefill.
  */
-/** The school entry page is itself the school chooser; it renders without the shell and without the shell's reads. */
-export const SCHOOL_SHELL_BARE_ROUTES: readonly string[] = ['/staff/entry'];
+export { SCHOOL_SHELL_BARE_ROUTES } from './paths';
 
 export function SchoolShell({ sessionSubject, children }: { sessionSubject: string; children?: ReactNode }): React.ReactElement {
   const path = usePathname() ?? '/staff';
-  if (SCHOOL_SHELL_BARE_ROUTES.includes(path)) return <>{children}</>;
+  if (!isSchoolShellPath(path)) return <>{children}</>;
   return <MountedSchoolShell sessionSubject={sessionSubject}>{children}</MountedSchoolShell>;
 }
 
 function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: string; children?: ReactNode }): React.ReactElement {
-  useShellLocaleUtility();
   const path = usePathname() ?? '/staff';
   const { preferences } = useLocale();
   const controller = useRef<SchoolEntryController | null>(null);
