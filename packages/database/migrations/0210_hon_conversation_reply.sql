@@ -186,7 +186,10 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'HON_REPLY_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   IF i.status <> 'PENDING' THEN RETURN NULL; END IF;
   lim := hon.hon_reply_limits(i.reply_mode);
-  -- The row lock can wait behind a concurrent resend: conversation authority is held and checked again first.
+  -- Every row this prepare writes is locked before any decision (work item first, as the planner does), so no wait can
+  -- fall between the authority checks below and the provider input leaving this function.
+  PERFORM 1 FROM hon.work_items WHERE id = i.work_item_id FOR UPDATE;
+  -- The row locks can wait behind a concurrent resend: conversation authority is held and checked again first.
   PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
   -- After every wait above: the live-clock access gate (Complete at clock_timestamp(), not the transaction start).
   IF NOT hon.hon_reply_access(p_subject) THEN why := 'AI_ACCESS_REFUSED'; END IF;
@@ -223,7 +226,8 @@ BEGIN
   IF has_reporting THEN
     BEGIN
       school_facts := hon.read_school_command_center(p_subject, i.organization_id, i.school_id)->'metrics';
-    EXCEPTION WHEN insufficient_privilege THEN school_facts := NULL;
+    -- A refused fresh read means no reporting authority for this whole context: no protected history either.
+    EXCEPTION WHEN insufficient_privilege THEN school_facts := NULL; has_reporting := false;
     END;
   END IF;
   SELECT * INTO STRICT t FROM hon.hon_conversation_turns WHERE id = i.turn_id;
@@ -251,6 +255,15 @@ BEGIN
         'previousAnswerEnd', (SELECT right(r.reply_text, 2500) FROM hon.hon_reply_invocations r WHERE r.turn_id = i.continues_turn_id AND r.status = 'COMPLETED'))
       INTO continuation;
     derived := derived OR prior.used_reporting;
+  END IF;
+  -- Final live-clock revalidation before any context leaves prepare: access (Complete at clock_timestamp()) and, when the
+  -- context carries reporting-derived material, reporting.view. A lapse here releases the reservation and sends nothing.
+  why := CASE WHEN NOT hon.hon_reply_access(p_subject) THEN 'AI_ACCESS_REFUSED'
+    WHEN (school_facts IS NOT NULL OR derived) AND NOT hon.principal_has_school_permission(actor, i.organization_id, i.school_id, 'reporting.view') THEN 'SOURCE_ACCESS_REFUSED' END;
+  IF why IS NOT NULL THEN
+    UPDATE hon.hon_reply_invocations SET status = 'BLOCKED', reason = why, reserved_credits = 0, updated_at = clock_timestamp() WHERE id = i.id;
+    UPDATE hon.work_items SET status = 'NEEDS_ATTENTION', version = version + 1, updated_at = clock_timestamp() WHERE id = i.work_item_id;
+    RETURN NULL;
   END IF;
   facts := jsonb_strip_nulls(jsonb_build_object('school', coalesce(school_facts, jsonb_build_object('availability', 'NOT_AUTHORIZED')), 'history', history,
     'continuation', continuation));

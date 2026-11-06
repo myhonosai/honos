@@ -35,7 +35,7 @@ Goal: keep the included AI economical and safe without ever charging the custome
 3. **Per-person rate limits** (proposed defaults): 30 HON replies per hour and 200 per day per staff member; 20 Detailed replies per day; at most one reply in flight per person and three per school; continuation stays at 3 steps.
 4. **Human-only use.** Included AI runs only from signed-in human staff sessions (`HUMAN_UI`), never API keys, automations or integrations, unless a later governed feature is approved.
 5. **Input bounds stay.** Question 2,000 characters; facts and history built by the database; idempotency so a resend never calls twice.
-6. **Anomaly alerts to HQ.** A school whose daily provider cost exceeds a set multiple of its average, or repeated identical questions, raises an HQ alert. HQ can pause that one school instantly (existing `/v1/hq/ai/spend-pauses`).
+6. **Anomaly alerts to HQ.** A school whose daily provider cost exceeds a set multiple of its average, or repeated identical questions, raises an HQ alert. Today HQ can pause a whole organization instantly (existing `/v1/hq/ai/spend-pauses`, organization or platform scope only); a pause for one school is future work.
 7. **No silent paid tier.** Any future option to buy more included-AI capacity needs its own owner-approved commercial terms. Until then, hitting a limit only pauses work.
 
 ## What must change to match (follow-up slice "I1", after #148 → #150 → #151)
@@ -43,6 +43,7 @@ Goal: keep the included AI economical and safe without ever charging the custome
 No code in #148, #150 or #151 deducts customer-purchased or creative credits, touches the creative wallet, or touches the legacy premium-credit tables (AI-0 INV-12 proves no allowance, reservation or credit-ledger write). The items below are wording and API naming, mostly already on `main`:
 
 - Ask HON contract `HON_REPLY_MODES.reservedCredits` (new in #148) → rename to an internal-units name.
+- Planner summary `AiInvocationPlanSummary.customerCreditEstimate` (and the plan column `customer_credit_estimate`) → internal-units name.
 - Readiness API (`requestCredits`, `agentBudget.committedCredits/ceilingCredits`) and the refusal reason `CUSTOMER_BUDGET_EXCEEDED` → internal-units names and an "included AI limit" reason for customers.
 - Staff workbenches for Marcus, Chad and Kai print "customer credits N" → remove from customer view (keep for HQ).
 - School `ai/usage` read (`includedCredits`, `remainingCredits` from `INCLUDED_AI_CREDITS`) → HQ-only, or present as "included AI available" without a balance.
