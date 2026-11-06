@@ -5,10 +5,10 @@ import { MEMBERSHIP_DATE_REVISION_CONFIRMATION, MEMBERSHIP_REQUIREMENTS_NOT_EVAL
   validateConfirmMembershipDateRevisionInput, validateMembershipDateConfirmationQueueInput, verifyMembershipDateRevisionPreview,
   verifyMembershipDateRevisionReceipt, verifyMembershipDateHistory, verifySchoolMembershipStatusSummary, verifyMembershipActivationReceipt } from '@hon/contracts';
 
-export function createDateFixture({ id, scope, origin, send, rejected }) {
+export function createDateFixture({ id, scope, origin, send, rejected, participantDisplayName = 'Synthetic Morgan Lee', lifecycle = 'ACTIVE', initialPeriod = null }) {
   let membershipId = id(90), boundPlan = null, planCode = 'JUNIOR-MONTHLY';
   const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`, root = `${prefix}/billing/memberships`;
-  const original = { source: 'ACTIVATION', periodVersion: 1, changeKind: 'INITIAL', startDate: '2026-10-01', endDate: '2026-10-31', endDateInclusive: true, schoolTimezone: 'America/Los_Angeles', termStartedAt: '2026-10-01T07:00:00.000Z', termEndsAt: '2026-11-01T07:00:00.000Z' };
+  const original = { source: 'ACTIVATION', periodVersion: 1, changeKind: 'INITIAL', startDate: '2026-10-01', endDate: '2026-10-31', endDateInclusive: true, schoolTimezone: 'America/Los_Angeles', termStartedAt: '2026-10-01T07:00:00.000Z', termEndsAt: '2026-11-01T07:00:00.000Z', ...(initialPeriod ?? {}) };
   let mode, version, period, keys, commands, reads, finish, held, signalHeld, lastReason, lastReasonCode;
   function reset(next = 'routine') { membershipId = id(90); boundPlan = null; planCode = 'JUNIOR-MONTHLY'; mode = next; lastReason='Synthetic staff reviewed the dates.'; lastReasonCode='MEMBER_REQUESTED'; version = 2; period = next === 'legacy' ? null : { ...original }; keys = new Map(); commands = []; reads = []; finish = null; held = new Promise(done => { signalHeld = done; }); }
   function bindActivation(recorded) {
@@ -19,14 +19,14 @@ export function createDateFixture({ id, scope, origin, send, rejected }) {
   reset();
   const postRead = (res, data) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data, meta: { requestId: id(8), correlationId: id(8) } })); };
   function history() {
-    return verifyMembershipDateHistory({ membershipId, state: 'ACTIVE', version, schoolTimezone: original.schoolTimezone, localToday: '2026-10-23', effectiveStatus: period ? period.startDate > '2026-10-23' ? 'SCHEDULED' : period.endDate && period.endDate < '2026-10-23' ? 'ENDED' : 'IN_EFFECT' : 'UNDATED', datesConfirmed: !!period, currentPeriod: period, legacyStoredTerm: period ? null : { termStartedAt: null, termEndsAt: null }, versions: period ? [{ periodVersion: period.periodVersion, changeKind: period.changeKind, startDate: period.startDate, endDate: period.endDate, schoolTimezone: period.schoolTimezone, dateSource: 'SUGGESTED', reasonCode: lastReasonCode, reasonText: lastReason, actorDisplayName: 'Synthetic Staff', recordedAt: '2026-10-23T12:00:00.000Z', retroactiveDays: null, acknowledgedWarnings: [] }] : [] });
+    return verifyMembershipDateHistory({ membershipId, state: lifecycle, version, schoolTimezone: original.schoolTimezone, localToday: '2026-10-23', effectiveStatus: lifecycle !== 'ACTIVE' ? lifecycle : period ? period.startDate > '2026-10-23' ? 'SCHEDULED' : period.endDate && period.endDate < '2026-10-23' ? 'ENDED' : 'IN_EFFECT' : 'UNDATED', datesConfirmed: !!period, currentPeriod: period, legacyStoredTerm: period ? null : { termStartedAt: null, termEndsAt: null }, versions: period ? [{ periodVersion: period.periodVersion, changeKind: period.changeKind, startDate: period.startDate, endDate: period.endDate, schoolTimezone: period.schoolTimezone, dateSource: 'SUGGESTED', reasonCode: lastReasonCode, reasonText: lastReason, actorDisplayName: 'Synthetic Staff', recordedAt: '2026-10-23T12:00:00.000Z', retroactiveDays: null, acknowledgedWarnings: [] }] : [] });
   }
   function preview(input) {
     const suggested = { startDate: period?.startDate ?? '2026-11-01', endDate: input.changeKind === 'EXTENSION' ? '2026-11-30' : period?.endDate ?? null };
     const dates = 'startDate' in input ? { startDate: input.startDate, endDate: input.endDate } : suggested;
     const future = dates.startDate > '2026-10-23', retro = mode === 'retroactive', financial = mode === 'financial';
     const unchanged = period && dates.startDate === period.startDate && dates.endDate === period.endDate;
-    const data = { membershipId, state: 'ACTIVE', version, participantPersonId: id(91), participantDisplayName: 'Synthetic Morgan Lee', planCode, plan: boundPlan ?? { membershipPlanId: id(92), membershipPlanVersion: 2, terms: { displayName: 'Junior martial arts', termKind: 'FIXED_MONTHS', termMonths: 1 } },
+    const data = { membershipId, state: lifecycle, version, participantPersonId: id(91), participantDisplayName, planCode, plan: boundPlan ?? { membershipPlanId: id(92), membershipPlanVersion: 2, terms: { displayName: 'Junior martial arts', termKind: 'FIXED_MONTHS', termMonths: 1 } },
       schoolTimezone: original.schoolTimezone, localToday: '2026-10-23', changeKind: input.changeKind, currentPeriod: period, legacyStoredTerm: period ? null : { termStartedAt: null, termEndsAt: null },
       suggestedDates: { ...suggested, startBasis: period ? 'CURRENT_START' : 'LEGACY_STORED_START', endBasis: 'PLAN_FIXED_TERM_ANCHORED' }, proposedDates: { ...dates, dateSource: dates.startDate === suggested.startDate && dates.endDate === suggested.endDate ? 'SUGGESTED' : 'STAFF_ADJUSTED' },
       projection: unchanged ? {termStartedAt:period.termStartedAt,termEndsAt:period.termEndsAt} : { termStartedAt: `${dates.startDate}T07:00:00.000Z`, termEndsAt: dates.endDate === null ? null : '2026-12-01T08:00:00.000Z' }, effectiveStatusNow: history().effectiveStatus, effectiveStatusIfConfirmedNow: future ? 'SCHEDULED' : 'IN_EFFECT',
@@ -50,7 +50,7 @@ export function createDateFixture({ id, scope, origin, send, rejected }) {
     if (mode === 'readonly' && step === 'preview') { rejected(res, 403, 'MEMBERSHIP_DATE_REVISION_FORBIDDEN'); return true; }
     if (step !== 'revise') { assert.equal(key, undefined); reads.push({ step, input }); }
     if (step === 'history') { assert.deepEqual(input, {}); postRead(res, history()); return true; }
-    if (step === 'queue') { validateMembershipDateConfirmationQueueInput(input); postRead(res, { items: period ? [] : [{ membershipId, participantDisplayName: 'Synthetic Morgan Lee', planCode: 'JUNIOR-MONTHLY', legacyStoredTerm: { termStartedAt: null, termEndsAt: null }, createdAt: '2026-10-01T12:00:00.000Z' }], next: null }); return true; }
+    if (step === 'queue') { validateMembershipDateConfirmationQueueInput(input); postRead(res, { items: period ? [] : [{ membershipId, participantDisplayName, planCode: 'JUNIOR-MONTHLY', legacyStoredTerm: { termStartedAt: null, termEndsAt: null }, createdAt: '2026-10-01T12:00:00.000Z' }], next: null }); return true; }
     if (step === 'preview') { validateMembershipDateRevisionPreviewInput(input); send(res, 200, preview(input)); return true; }
     validateConfirmMembershipDateRevisionInput(input); assert.match(key, /^[a-f0-9-]{36}$/); commands.push({ raw, key });
     if (keys.has(key)) { const old = keys.get(key); assert.equal(old.raw, raw); send(res, 200, old.data, true); return true; }

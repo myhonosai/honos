@@ -1,66 +1,59 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { DEFAULT_PUBLIC_PLAN_TIER, PUBLIC_PLAN_CATALOG, type PublicPlanTier } from '@hon/config';
-
-type AccessState = 'checking' | 'available' | 'signed-out' | 'forbidden' | 'unavailable';
-type FormState = { kind: 'idle' } | { kind: 'submitting' } | { kind: 'success'; organizationId: string; schoolId: string } | { kind: 'error'; message: string };
-
-const initialForm: { legalName: string; displayName: string; schoolName: string; schoolSlug: string; timezone: string; initialTier: PublicPlanTier } = {
-  legalName: '',
-  displayName: '',
-  schoolName: '',
-  schoolSlug: '',
-  timezone: 'America/Los_Angeles',
-  initialTier: DEFAULT_PUBLIC_PLAN_TIER,
-};
+import { useLocale } from './localization/provider';
+import { hqSchoolText } from './hq-school-management-copy';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { SchoolCreationController, bindSchoolCreationPrivacy } from './hq-onboarding-controller';
+import { useHqModern } from './hq-modern/shell';
+import styles from './hq-onboarding-panel.module.css';
 
 export function HqOnboardingPanel(): React.ReactElement {
-  const [access, setAccess] = useState<AccessState>('checking');
-  const [form, setForm] = useState(initialForm);
-  const [state, setState] = useState<FormState>({ kind: 'idle' });
-
+  const [controller] = useState(() => new SchoolCreationController());
+  const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
+  const privateArea = useRef<HTMLDivElement>(null);
+  const { view } = useHqModern();
+  const { preferences } = useLocale();
+  const t = (key: Parameters<typeof hqSchoolText>[1]) => hqSchoolText(preferences.language, key);
+  const announcement = state.busy ? t('announcementBusy')
+    : state.receipt ? (state.receipt.replayed ? t('announcementReplay') : t('announcementReceipt'))
+      : state.access === 'signed-out' ? t('announcementSignedOut')
+        : state.access === 'forbidden' ? t('announcementForbidden')
+          : state.access === 'unavailable' ? t('announcementUnavailable')
+            : (state.message ? t(state.message) : '') || (state.concealed ? t('announcementConcealed') : t('announcementReady'));
   useEffect(() => {
-    fetch('/api/v1/hq/session', { cache: 'no-store' })
-      .then((response) => setAccess(response.ok ? 'available' : response.status === 401 ? 'signed-out' : response.status === 403 ? 'forbidden' : 'unavailable'))
-      .catch(() => setAccess('unavailable'));
-  }, []);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setState({ kind: 'submitting' });
-    try {
-      const response = await fetch('/api/v1/hq/organizations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify(form),
-      });
-      const payload = await response.json() as { data?: { organizationId?: string; schoolId?: string }; detail?: string; message?: string };
-      if (!response.ok || !payload.data?.organizationId || !payload.data.schoolId) throw new Error(payload.detail ?? payload.message ?? 'HON could not provision the organization.');
-      setState({ kind: 'success', organizationId: payload.data.organizationId, schoolId: payload.data.schoolId });
-    } catch (error) {
-      setState({ kind: 'error', message: error instanceof Error ? error.message : 'HON could not provision the organization.' });
-    }
-  }
-
-  if (access === 'checking') return <section className="hq-provisioning"><p>ONBOARDING</p><h2>Checking governed HQ access…</h2></section>;
-  if (access === 'signed-out') return <section className="hq-provisioning"><p>ONBOARDING</p><h2>Sign in before onboarding a school.</h2><a className="hq-launch" href="/auth/login">Sign in with Manus <span>→</span></a></section>;
-  if (access === 'forbidden') return <section className="hq-provisioning"><p>ONBOARDING</p><h2>This account has no HQ onboarding authority.</h2><small>HON keeps school provisioning unavailable until a separate HQ role grants it.</small></section>;
-  if (access === 'unavailable') return <section className="hq-provisioning"><p>ONBOARDING</p><h2>HQ access could not be verified.</h2><small>HON fails closed; no tenant will be created until the access gate is healthy.</small></section>;
-  if (state.kind === 'success') return <section className="hq-provisioning hq-provisioning-success"><p>ONBOARDING COMPLETE</p><h2>School tenant provisioned through the HQ security boundary.</h2><small>Organization: <code>{state.organizationId}</code><br />School: <code>{state.schoolId}</code></small></section>;
-
-  return <section className="hq-provisioning">
-    <div><p>ONBOARD A SCHOOL</p><h2>Create an organization, its first school, and a scoped School Owner grant.</h2><small>This creates live tenant topology, append-only audit evidence, and a transactional outbox event. It does not create cross-school access.</small></div>
-    <form onSubmit={submit} className="hq-onboarding-form">
-      <label>Legal organization name<input required maxLength={180} value={form.legalName} onChange={(event) => setForm({ ...form, legalName: event.target.value })} placeholder="Example Martial Arts LLC" /></label>
-      <label>School-facing name<input required maxLength={120} value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} placeholder="Example Martial Arts" /></label>
-      <label>First school name<input required maxLength={120} value={form.schoolName} onChange={(event) => setForm({ ...form, schoolName: event.target.value })} placeholder="Example Martial Arts — Main" /></label>
-      <label>School slug<input required maxLength={80} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={form.schoolSlug} onChange={(event) => setForm({ ...form, schoolSlug: event.target.value.toLowerCase() })} placeholder="example-main" /></label>
-      <label>School timezone<input required maxLength={64} value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })} placeholder="America/Los_Angeles" /></label>
-      <label>Initial HON tier<select value={form.initialTier} onChange={(event) => setForm({ ...form, initialTier: event.target.value as PublicPlanTier })}>{PUBLIC_PLAN_CATALOG.map((plan) => <option key={plan.tier} value={plan.tier}>{plan.displayName} — ${plan.monthlyDisplayPriceUsd}/month · {plan.premiumAiCreditPlanningAllowance.toLocaleString()} premium AI credit planning allowance</option>)}</select></label>
-      <small className="hq-plan-catalog-note">Core and Complete values are non-binding public display metadata and planning allowances. This governed tenant-provisioning request does not activate live billing or an offer, create a subscription, issue an invoice, charge a payment, or grant credits.</small>
-      <button type="submit" disabled={state.kind === 'submitting'}>{state.kind === 'submitting' ? 'Provisioning securely…' : 'Provision school tenant →'}</button>
-      {state.kind === 'error' ? <output className="hq-form-error">{state.message}</output> : null}
-    </form>
+    controller.start();
+    const unbind = bindSchoolCreationPrivacy(controller, () => {
+      if (privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; }
+    }, window, document);
+    return () => { unbind(); controller.stop(); };
+  }, [controller]);
+  return <section className={`${styles.panel} ${styles[`presentation_${view}`]}`} aria-labelledby="hq-school-create-title" data-school-create data-school-create-busy={state.busy}>
+    <h2 id="hq-school-create-title">{t('createTitle')}</h2>
+    <p>{t('createIntro')}</p>
+    <p className={styles.policy}><strong>{t('provisionPolicyTitle')}</strong> {t('provisionPolicy')}</p>
+    <p className={styles.announcement} role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
+    {state.concealed ? <>
+      <p>{state.access === 'signed-out' ? t('signedOut') : state.access === 'forbidden' ? t('forbidden') : state.access === 'unavailable' ? t('unavailable') : t('concealed')}</p>
+      {state.access === 'signed-out' && <a href="/auth/login">{t('signIn')}</a>}
+      <button type="button" disabled={state.busy} onClick={() => void controller.authorize()}>{t('verifyOwner')}</button>
+    </> : null}
+    <div key={controller.revision()} ref={privateArea} data-hq-create-private hidden={state.concealed} inert={state.concealed}>
+    {!state.concealed && (state.receipt ? <section aria-labelledby="hq-school-created">
+      <h3 id="hq-school-created">{t('receiptTitle')}</h3>
+      <p>{state.receipt.replayed ? t('receiptReplay') : t('receiptCreated')}</p>
+      <dl><dt>{t('organizationId')}</dt><dd><code>{state.receipt.organizationId}</code></dd><dt>{t('schoolId')}</dt><dd><code>{state.receipt.schoolId}</code></dd></dl>
+      <p>{t('receiptLimit')}</p>
+    </section> : <form onSubmit={event => { event.preventDefault(); void controller.submit(); }}>
+      <fieldset disabled={state.busy || state.uncertain} className={styles.fields}><legend>{t('formLegend')}</legend>
+        {([['legalName', t('legalName'), 180], ['displayName', t('displayName'), 120], ['schoolName', t('schoolName'), 120], ['schoolSlug', t('schoolSlug'), 80], ['timezone', t('timezone'), 64]] as const).map(([key, label, maxLength]) => <label key={key}>{label}<input name={key} required maxLength={maxLength} value={state.form[key]} pattern={key === 'schoolSlug' ? '[a-z0-9]+(-[a-z0-9]+)*' : undefined} onChange={event => controller.edit(key, event.target.value)} /></label>)}
+      </fieldset>
+      <p className={styles.note}>{t('productNote')}</p>
+      {state.uncertain && <p>{t('unknownWarning')}</p>}
+      <label className={styles.confirm}><input type="checkbox" disabled={state.busy} checked={state.confirmed} onChange={event => controller.confirm(event.target.checked)} />{state.uncertain ? t('confirmRetry') : t('confirmCreate')}</label>
+      <button type="submit" disabled={state.busy || !state.confirmed}>{state.uncertain ? t('retry') : t('create')}</button>
+    </form>)}
+    </div>
+    {state.busy && <p>{t('verifying')}</p>}
+    {state.message && <p>{t(state.message)}</p>}
   </section>;
 }

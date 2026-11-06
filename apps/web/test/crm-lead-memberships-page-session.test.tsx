@@ -1,0 +1,14 @@
+import React from 'react';
+import { afterEach, expect, it, vi } from 'vitest';
+import Page from '../src/app/staff/crm/lead-memberships/page';
+const h=vi.hoisted(()=>({subject:'staff',token:'synthetic-session',invalid:false}));
+vi.mock('next/headers',()=>({cookies:async()=>({get:()=>({value:h.token})})}));
+vi.mock('next/navigation',()=>({redirect:(path:string)=>{throw new Error('REDIRECT '+path);}}));
+vi.mock('@hon/auth',()=>({HON_SESSION_COOKIE:'hon_session',sessionConfig:()=>({}),verifySession:()=>{if(h.invalid)throw new Error('expired');return{externalSubject:h.subject};}}));
+const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const scope={organizationId:id(1),schoolId:id(2),leadId:id(3)};
+afterEach(()=>{h.invalid=false;h.subject='staff';h.token='synthetic-session';vi.restoreAllMocks();});
+it('accepts only three idle selectors and never fetches while rendering',async()=>{const f=vi.spyOn(globalThis,'fetch');const page=await Page({searchParams:Promise.resolve(scope)});expect(page.props.scope).toEqual(scope);expect(page.props.sessionSubject).toBe('staff');expect(f).not.toHaveBeenCalled();});
+it.each([{...scope,role:'OWNER'},{...scope,membershipId:id(8)},{...scope,leadId:[id(3),id(4)]},{...scope,schoolId:'invalid'}])('fails closed on unsupported or malformed URL selectors',async query=>{const p=await Page({searchParams:Promise.resolve(query)});expect(p.props.scope).toBeNull();});
+it('redirects an expired/invalid signed session before rendering private content',async()=>{h.invalid=true;await expect(Page({searchParams:Promise.resolve(scope)})).rejects.toThrow('REDIRECT /auth/login');});
+it('changes the mounted memory key for another session or school',async()=>{const a=await Page({searchParams:Promise.resolve(scope)});h.token='new-session';const b=await Page({searchParams:Promise.resolve(scope)});const c=await Page({searchParams:Promise.resolve({...scope,schoolId:id(9)})});expect(new Set([a.key,b.key,c.key]).size).toBe(3);});

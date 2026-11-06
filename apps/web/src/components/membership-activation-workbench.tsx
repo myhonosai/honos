@@ -20,11 +20,11 @@ import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from 
 import styles from './membership-activation-workbench.module.css';
 
 type Dates = { startDate: string; endDate: string | null };
-export function MembershipActivationWorkbench({ sessionSubject, initialMembership, onReturn, onManageDates }: { sessionSubject?: string; initialMembership?: KnownMembership; onReturn?(): void; onManageDates?(selection: KnownMembership): void }): React.ReactElement {
+export function MembershipActivationWorkbench({ sessionSubject, initialMembership, initialPresentation = 'modern', onReturnLabel, onReturn, onManageDates }: { sessionSubject?: string; initialMembership?: KnownMembership; initialPresentation?: 'modern' | 'classic' | 'big'; onReturnLabel?: string; onReturn?(): void; onManageDates?(selection: KnownMembership): void }): React.ReactElement {
   const { preferences, date } = useLocale();
   const t = (key: string, vars?: ActivationVariables) => activationText(preferences.language, key as ActivationTextKey, vars);
   const calendar = (value: string | null) => value === null ? t('Open-ended · no last day') : formatLocaleCalendarDate(preferences, value);
-  const [presentation, setPresentation] = useState<'modern' | 'classic' | 'big'>('modern');
+  const [presentation, setPresentation] = useState<'modern' | 'classic' | 'big'>(initialPresentation);
   const discardCopy = { description: t('An action may already have completed. Discard permanently removes its local retry information; it does not cancel or undo a server action. Retry the exact request to resolve an unknown outcome, or deliberately abandon local recovery and verify saved setup before any new action.'), confirmation: t('I understand and deliberately abandon local recovery.') };
   const [scope, setScope] = useState<KnownMembership>(() => initialMembership ? { ...initialMembership } : { organizationId: '', schoolId: '', membershipId: '' });
   const [preview, setPreview] = useState<MembershipActivationPreview | null>(null), [dates, setDates] = useState<Dates | null>(null);
@@ -192,7 +192,7 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
     <label>{t('Presentation')}<select aria-label={t('Presentation')} value={presentation} onChange={event => setPresentation(event.target.value as typeof presentation)}><option value="modern">{t('Modern')}</option><option value="classic">{t('Classic')}</option><option value="big">{t('Big Button')}</option></select></label>
     <div role="status" aria-live="polite" aria-atomic="true" className={`${styles.status} ${notice ? styles.notice : ''}`}>{commandBusy ? t('Activation request in progress') : reading ? t('Verifying current session, school access and membership facts…') : hidden ? t('Membership information hidden') : notice ? t(notice) : ''}</div>
     <nav aria-label={t("Membership navigation")}><a href="/staff/dashboard">{t("Staff dashboard")}</a><a href="/staff/crm/leads">{t("CRM enrollment")}</a><a href="/staff/billing/membership-dates">{t("Membership dates and history")}</a></nav>
-    {onReturn && <button type="button" disabled={locked || reading} onClick={() => { if (!activeCommand.current && !retained.current && !reading) onReturn(); }}>{t("Return to CRM registration")}</button>}
+    {onReturn && <button type="button" disabled={locked || reading} onClick={() => { if (!activeCommand.current && !retained.current && !reading) onReturn(); }}>{onReturnLabel ?? t("Return to CRM registration")}</button>}
     <header><p>{t("DIRECT HUMAN STAFF · MEMBERSHIP LIFECYCLE")}</p><h1 ref={entryHeading} tabIndex={-1}>{t("Review and confirm membership activation")}</h1><p>{t("1. Review the server preview. 2. Confirm this membership and its exact dates.")}</p></header>
     <aside><strong>{t("Membership confirmation is separate from financial enrollment.")}</strong><p>{t("This does not collect tuition, sign an agreement, record customer consent, authorize recurring payments or complete financial enrollment. No billing schedule is created. Card collection never authorizes recurring billing.")}</p></aside>
     {hidden ? <section aria-labelledby="activation-shield"><h2 id="activation-shield" tabIndex={-1} ref={shieldHeading}>{t("Membership information hidden")}</h2>

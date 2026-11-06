@@ -22,11 +22,11 @@ import styles from './membership-dates-workbench.module.css';
 type Dates = { startDate: string; endDate: string | null };
 type View = 'membership' | 'queue' | 'summary';
 const kinds: Record<MembershipDateChangeKind, string> = { INITIAL_CONFIRMATION: 'Confirm dates', CORRECTION: 'Correct dates', EXTENSION: 'Extend', EARLY_END: 'End early' };
-export function MembershipDatesWorkbench({ sessionSubject, initialMembership, onReturn, onAbandon }: { sessionSubject?: string; initialMembership?: KnownMembership; onReturn?(): void; onAbandon?(): void }): React.ReactElement {
+export function MembershipDatesWorkbench({ sessionSubject, initialMembership, initialPresentation = 'modern', onReturnLabel, onReturn, onAbandon }: { sessionSubject?: string; initialMembership?: KnownMembership; initialPresentation?: 'modern' | 'classic' | 'big'; onReturnLabel?: string; onReturn?(): void; onAbandon?(): void }): React.ReactElement {
   const { preferences, date, number } = useLocale();
   const t = (key: string, vars?: Readonly<Record<string, string | number>>) => dateText(preferences?.language, key, vars);
   const readable = (code: string) => dateCodeText(preferences?.language, code);
-  const [presentation, setPresentation] = useState<'modern' | 'classic' | 'big'>('modern');
+  const [presentation, setPresentation] = useState<'modern' | 'classic' | 'big'>(initialPresentation);
   const discardCopy = { description: t('An action may already have completed. Discard permanently removes its local retry information; it does not cancel or undo a server action. Retry the exact request to resolve an unknown outcome, or deliberately abandon local recovery and verify saved setup before any new action.'), confirmation: t('I understand and deliberately abandon local recovery.') };
   const calendar = (value: string | null) => value === null ? t('Open-ended · no last day') : formatLocaleCalendarDate(preferences, value);
   const instant = (value: string | null) => value === null ? t('Not stored') : date(value);
@@ -221,7 +221,7 @@ export function MembershipDatesWorkbench({ sessionSubject, initialMembership, on
   return <main className={`${styles.page} ${styles[`mode_${presentation}`]}`} data-membership-dates>
     <label>{t('Presentation')}<select aria-label={t('Presentation')} value={presentation} onChange={event => setPresentation(event.target.value as typeof presentation)}><option value="modern">{t('Modern')}</option><option value="classic">{t('Classic')}</option><option value="big">{t('Big Button')}</option></select></label>
     <div role="status" aria-live="polite" aria-atomic="true" className={styles.status}>{busy ? t('Date change in progress') : reading ? t('Verifying current session and authorized school facts…') : hidden ? t('Membership information hidden') : notice ? t(notice) : ''}</div>
-    {onReturn && <button type="button" disabled={locked || reading || hidden} onClick={() => { if (!active.current && !retained.current && !concealed.current && !reading) onReturn(); }}>{t('Return to activation review')}</button>}
+    {onReturn && <button type="button" disabled={locked || reading || hidden} onClick={() => { if (!active.current && !retained.current && !concealed.current && !reading) onReturn(); }}>{onReturnLabel ?? t('Return to activation review')}</button>}
     <nav aria-label={t("Membership navigation")}><a href="/staff/billing/memberships">{t("Activation")}</a><a href="/staff/crm/leads">{t("CRM enrollment")}</a><a href="/staff/dashboard">{t("Staff dashboard")}</a></nav>
     <header><p>{t("DIRECT HUMAN STAFF · MEMBERSHIP DATES")}</p><h1 ref={entryHeading} tabIndex={-1}>{t("Membership dates and history")}</h1><p>{t("Review one confirmed membership, then explicitly confirm its school-local dates.")}</p></header>
     <aside><strong>{t("A date revision changes dates only.")}</strong><p>{t("No payment, refund, credit, invoice, schedule, agreement, consent or entitlement is created or changed. Extending a membership is not a paid renewal. Internal DRAFTs are never published to parents here.")}</p></aside>

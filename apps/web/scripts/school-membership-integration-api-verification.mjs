@@ -17,7 +17,7 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../..'), sourc
 assert.match(sourceSha, /^[0-9a-f]{40}$/); assert.equal(sourceSha, process.env.HON_SCHOOL_MEMBERSHIP_SHA);
 const apiRequire = createRequire(resolve(repo, 'apps/api/package.json')), dbRequire = createRequire(resolve(repo, 'packages/database/package.json')), webRequire = createRequire(resolve(repo, 'apps/web/package.json'));
 apiRequire('reflect-metadata'); const { Test } = apiRequire('@nestjs/testing'), { ValidationPipe } = apiRequire('@nestjs/common'), { Client } = dbRequire('pg'), ts = webRequire('typescript');
-const classes = {}, modules = ['foundation/runtime-database.service', 'foundation/hon-identity.guard', 'foundation/hon-identity.service', 'crm/lead-registration.controller', 'crm/lead-registration.service', 'crm/lead-registration.dto', 'crm/lead-registration-recovery.controller', 'crm/lead-registration-recovery.service', 'crm/lead-registration-recovery.dto', 'crm/guardian-child-enrollment.controller', 'crm/guardian-child-enrollment.service', 'crm/guardian-child-enrollment.dto', 'billing/billing-account.controller', 'billing/billing-account.service', 'billing/billing-account-human-ui.guard', 'billing/membership-plan.controller', 'billing/membership-plan.service', 'billing/membership-plan.dto', 'billing/crm-adult-membership-draft.controller', 'billing/crm-adult-membership-draft.service', 'billing/crm-adult-membership-draft.dto', 'billing/membership.controller', 'billing/membership.service', 'billing/membership-activation-human-ui.guard', 'billing/membership-date-revision.controller', 'billing/membership-date-revision.service', 'billing/membership-date-revision.dto'];
+const classes = {}, modules = ['foundation/runtime-database.service', 'foundation/hon-identity.guard', 'foundation/hon-identity.service', 'crm/lead-registration.controller', 'crm/lead-registration.service', 'crm/lead-registration.dto', 'crm/lead-registration-recovery.controller', 'crm/lead-registration-recovery.service', 'crm/lead-registration-recovery.dto', 'crm/guardian-child-enrollment.controller', 'crm/guardian-child-enrollment.service', 'crm/guardian-child-enrollment.dto', 'billing/billing-account.controller', 'billing/billing-account.service', 'billing/billing-account-human-ui.guard', 'billing/membership-plan.controller', 'billing/membership-plan.service', 'billing/membership-plan.dto', 'billing/crm-adult-membership-draft.controller', 'billing/crm-adult-membership-draft.service', 'billing/crm-adult-membership-draft.dto', 'billing/membership.controller', 'billing/membership.service', 'billing/membership-activation-human-ui.guard', 'billing/membership-date-revision.controller', 'billing/membership-date-revision.service', 'billing/membership-date-revision.dto', 'billing/crm-lead-memberships.controller', 'billing/crm-lead-memberships.service'];
 for (const file of modules) Object.assign(classes, await import(pathToFileURL(resolve(repo, 'apps/api/dist', file + '.js')).href));
 const database = new classes.RuntimeDatabaseService(), owner = new Client({ connectionString: urls.DATABASE_URL, ssl: false }), originalFetch = globalThis.fetch;
 const session = { mode: 'OIDC', audience: 'hon-school-membership-integration-disposable', secret: randomBytes(32).toString('hex') };
@@ -45,7 +45,7 @@ try {
   const A = await school(), B = await school(), S = await staff(A, true), T = await staff(A), U = await staff(B), scope = { organizationId: A.organizationId, schoolId: A.schoolId }; actor = S;
   async function lead() { const person = randomUUID(), leadId = randomUUID(); await sql("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name) VALUES($1,$2,$3,'Synthetic',$4)", [person, A.organizationId, A.schoolId, 'Person-' + person]); await sql("INSERT INTO hon.crm_leads(id,organization_id,school_id,primary_person_id,pipeline_id,pipeline_stage_id,status) VALUES($1,$2,$3,$4,$5,$6,'WON')", [leadId, A.organizationId, A.schoolId, person, A.pipeline, A.stage]); return { person, leadId }; }
   const adultLead = await lead(), familyLead = await lead();
-  const controllers = ['LeadRegistrationController', 'LeadRegistrationRecoveryController', 'GuardianChildEnrollmentController', 'GuardianChildMembershipDraftController', 'BillingAccountController', 'MembershipPlanController', 'CrmAdultMembershipDraftFromPlanController', 'CrmAdultMembershipDraftController', 'MembershipController', 'MembershipDateRevisionController'];
+  const controllers = ['LeadRegistrationController', 'LeadRegistrationRecoveryController', 'GuardianChildEnrollmentController', 'GuardianChildMembershipDraftController', 'BillingAccountController', 'MembershipPlanController', 'CrmAdultMembershipDraftFromPlanController', 'CrmAdultMembershipDraftController', 'MembershipController', 'MembershipDateRevisionController', 'CrmLeadMembershipsController'];
   const providers = [...new Set(['HonIdentityService', ...Object.keys(classes).filter(name => name.endsWith('Guard') || name.endsWith('Service') && name !== 'RuntimeDatabaseService')])].map(name => classes[name]);
   const module = await Test.createTestingModule({ controllers: controllers.map(name => classes[name]), providers: [...providers, { provide: classes.RuntimeDatabaseService, useValue: database }] }).compile();
   app = module.createNestApplication({ logger: false }); app.setGlobalPrefix('v1'); app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })); await app.listen(0, '127.0.0.1');
@@ -58,7 +58,8 @@ try {
     const output = join(compiled, randomUUID() + '.mjs'); await writeFile(output, code); const url = pathToFileURL(output).href; cache.set(file, url); return url;
   }
   const adult = await import(await frontend(resolve(sourceRoot, 'crm-adult-flow-http.ts'))), family = await import(await frontend(resolve(sourceRoot, 'crm-family-http.ts'))), plans = await import(await frontend(resolve(sourceRoot, 'membership-plans/http.ts'))), activation = await import(await frontend(resolve(sourceRoot, 'membership-activation-http.ts'))), dates = await import(await frontend(resolve(sourceRoot, 'membership-dates-http.ts'))), contracts = await import(pathToFileURL(webRequire.resolve('@hon/contracts')).href);
-  const allowed = /^\/api\/v1\/organizations\/[a-f0-9-]+\/schools\/[a-f0-9-]+\/(?:crm\/leads\/[a-f0-9-]+\/(?:register|registration-recovery|guardian-child-enrollment(?:\/payer-designation|\/children)?)|billing\/(?:accounts|membership-plans(?:\/catalog)?|crm-adult-membership-drafts\/(?:plan-options|from-plan|confirmation)|crm-guardian-child-membership-drafts\/from-plan|memberships\/[a-f0-9-]+\/(?:activation-context|activation-preview|activate|effective-period\/history)))$/;
+  const discovery = await import(await frontend(resolve(sourceRoot, 'crm-lead-memberships-http.ts')));
+  const allowed = /^\/api\/v1\/organizations\/[a-f0-9-]+\/schools\/[a-f0-9-]+\/(?:crm\/leads\/[a-f0-9-]+\/(?:memberships|register|registration-recovery|guardian-child-enrollment(?:\/payer-designation|\/children)?)|billing\/(?:accounts|membership-plans(?:\/catalog)?|crm-adult-membership-drafts\/(?:plan-options|from-plan|confirmation)|crm-guardian-child-membership-drafts\/from-plan|memberships\/[a-f0-9-]+\/(?:activation-context|activation-preview|activate|effective-period\/history)))$/;
   globalThis.fetch = async (path, options) => {
     assert.equal(typeof path, 'string'); assert(allowed.test(path), 'Unapproved transport path'); assert(['GET', 'POST'].includes(options.method));
     const headers = new Headers(options.headers); headers.set('Origin', origin); headers.set('Sec-Fetch-Site', 'same-origin'); headers.set('Sec-Fetch-Mode', 'same-origin'); headers.set('Sec-Fetch-Dest', 'empty');
@@ -131,6 +132,41 @@ try {
   assert.notEqual(adultHistory.membershipId, childHistory.membershipId);
   actor = U; await unchanged(() => assert.rejects(dates.loadMembershipDateHistory(adultScope), e => e instanceof dates.MembershipDatesError && [403,404].includes(e.status))); actor = S;
   pass('CRM adult and separate child activations hand off to actual authorized date history; inclusive current periods, scheduled child status, tenant denial and zero read effects');
+  // New human session/read: recover server lineage, never a browser-stored membership selector.
+  actor = T;
+  const discover = leadId => discovery.readLeadMemberships({ ...scope, leadId }, AbortSignal.timeout(15_000));
+  const adultFound = await unchanged(() => discover(adultLead.leadId));
+  assert.equal(adultFound.memberships.length, 1); assert.equal(adultFound.memberships[0].membershipId, adultScope.membershipId);
+  assert.equal(adultFound.memberships[0].studentProfileId, profile); assert.equal(adultFound.memberships[0].state, 'ACTIVE');
+  assert.deepEqual(Object.keys(adultFound.memberships[0]).sort(), ['createdAt','membershipId','origin','state','studentProfileId','version']);
+  const familyFound = await unchanged(() => discover(familyLead.leadId));
+  assert.equal(familyFound.memberships.length, 2); assert.equal(new Set(familyFound.memberships.map(m => m.studentProfileId)).size, 2);
+  assert.deepEqual(new Set(familyFound.memberships.map(m => m.membershipId)), new Set([childScope.membershipId, secondScope.membershipId]));
+  assert.deepEqual(familyFound.memberships.map(m => m.state), ['ACTIVE','DRAFT']);
+  const parallelDiscovery = await unchanged(() => Promise.all([discover(familyLead.leadId), discover(familyLead.leadId)])); assert.deepEqual(parallelDiscovery[0], parallelDiscovery[1]);
+  const recoveredChild = await unchanged(() => dates.loadMembershipDateHistory({ ...scope, membershipId: familyFound.memberships[0].membershipId }));
+  assert.equal(recoveredChild.effectiveStatus, 'SCHEDULED'); assert.equal(recoveredChild.currentPeriod.endDateInclusive, true);
+  pass('fresh signed staff session discovers exact adult ACTIVE and separate child ACTIVE/DRAFT records; current authorized date history remains SCHEDULED, with concurrent zero-effect reads');
+  const refusal = (status, kind) => error => error instanceof discovery.LeadMembershipReadError && error.status === status && error.kind === kind;
+  await unchanged(() => assert.rejects(discover(randomUUID()), refusal(404,'NOT_FOUND')));
+  actor = U; await unchanged(() => assert.rejects(discover(adultLead.leadId), refusal(403,'DENIED')));
+  actor = null; await unchanged(() => assert.rejects(discover(adultLead.leadId), refusal(401,'SESSION')));
+  actor = T; expired = true; await unchanged(() => assert.rejects(discover(adultLead.leadId), refusal(401,'SESSION'))); expired = false;
+  pass('discovery separates missing lead, other-organization denial, absent/expired authentication from empty membership lists');
+  // Barrier changes only timing: actual initial resolver and the actual private database actor still execute.
+  const originalRead = database.withTenantReadOnlyTransaction.bind(database);
+  let reached, release; const reachedGate = new Promise(done => { reached = done; }), held = new Promise(done => { release = done; });
+  let gate = true;
+  database.withTenantReadOnlyTransaction = async (...args) => { if (gate) { gate = false; reached(); await held; } return originalRead(...args); };
+  try {
+    const deniedAfterInitialScope = discover(adultLead.leadId); const captured = assert.rejects(deniedAfterInitialScope, refusal(403,'DENIED'));
+    await reachedGate;
+    await sql("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='crm.lead.read'", [T.role]);
+    const afterRevocation = await snapshot(); release(); await captured; assert.deepEqual(await snapshot(), afterRevocation);
+    await sql("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'crm.lead.read')", [T.role,A.organizationId]);
+  } finally { release(); database.withTenantReadOnlyTransaction = originalRead; }
+  await unchanged(() => discover(adultLead.leadId));
+  pass('permission revocation after real initial scope resolution is refused by the database actor, with no entitlement/audit/outbox/idempotency or other read-side effects');
   assert.deepEqual(await snapshot(protectedTables), protectedBefore, 'Unexpected financial/consent/entitlement/provider/AI or other unrelated effect');
   pass('every unrelated hon table unchanged, including payment schedules, invoices, payments, agreements, consent, entitlements, providers and AI');
   console.log(JSON.stringify({ evidence: 'ACTUAL_FRONTEND_SIGNED_SESSION_NEST_RESTRICTED_DISPOSABLE_POSTGRES', sourceSha, groups: checks.length, apiMocked: false, identityMocked: false, providerCalls: 0, protectedTables: protectedTables.length, syntheticActivations: 2, paidAccessActivated: false }));
