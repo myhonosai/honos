@@ -72,6 +72,14 @@ describe('HQ AI safety agents', () => {
     for (const label of ['Marcus', 'Kai', 'Chad', 'HON · assistant replies']) expect(html).toContain(label);
     expect(html).not.toContain('undefined');
   });
+  it('shows resolved HON reply items and prepares a HON_REPLY resolution on the fixed path', () => {
+    const base = records();
+    const resolved = { agent: 'HON_REPLY' as const, invocationId: id(9), decision: 'NO_PROVIDER_CHARGE' as const, reason: 'Checked the provider usage page', resolvedAt: '2026-11-06T18:00:00.000Z', releasedCredits: 4 };
+    const html = render({ records: { ...base, queue: { ...base.queue, resolved: [{ ...(base.queue.resolved[0] ?? {}), ...resolved } as never] } } });
+    expect(html).toContain('HON · assistant replies');
+    const prepared = prepareResolution('HON_REPLY', id(9), { decision: 'NO_PROVIDER_CHARGE', reason: 'Checked the provider usage page', evidence: { providerLookupReference: 'ref-1' } });
+    expect(prepared.path).toBe(`/api/v1/hq/ai/unknown-invocations/HON_REPLY/${id(9)}/resolve`); expect(prepared.command).toBe('ai-unknown-resolve');
+  });
 });
 
 describe('HQ AI safety input', () => {
