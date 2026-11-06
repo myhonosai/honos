@@ -200,6 +200,7 @@
     "0205_school_family_access_invitations.sql": "c2c34b607e97be4da8b236aefcd630b1fd5282fe5fdedbe84003382b0c1bc449",
     "0206_school_owner_invitation_authority_order.sql": "f72f61c5ee635c8a230abe3d7ba2eafd2622a50c2c92724ca49ddd9c3dcf448c",
     "0207_school_staff_invitation_roles.sql": "6aac8ca234e4c85dd54c3c1239906b2bbc4935f21fcf03bd2253fbea28dd09cf",
-    "0208_hq_school_provisioning_human_binding.sql": "e00d379296721782d2eafcbb245dbb03500a327e799a12c15b022e1c6611ad7f"
+    "0208_hq_school_provisioning_human_binding.sql": "e00d379296721782d2eafcbb245dbb03500a327e799a12c15b022e1c6611ad7f",
+    "0209_creative_wallet_no_subscription_eligibility.sql": "da14eaa9d96b8fe0185dfd14510de357a6ced6416bbc6066af15d3812ad7009f"
   }
 }
