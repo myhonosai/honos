@@ -234,7 +234,8 @@ async function axe(page, name) {
  * Horizontal overflow, measured in the page. The document itself must fit the viewport. Only one container may
  * hold content past the edge: the shell's section tabs ([data-shell-tabs]), and only while that nav is itself a
  * scroll container inside the viewport and the item is laid out in its normal flow (so the nav clips it).
- * The existing Platform View picker is reported separately as a pre-existing finding.
+ * The existing Platform View picker is reported separately as a pre-existing finding; the page-width check in
+ * noOverflow excludes only that picker.
  */
 function overflowAudit() {
   const width = window.innerWidth;
@@ -249,16 +250,26 @@ function overflowAudit() {
   const offenders = [...document.querySelectorAll('body *')]
     .filter((e) => e.getBoundingClientRect().right > width + 1 && getComputedStyle(e).position !== 'fixed' && !clippedByShellTabs(e))
     .map((e) => ({ el: `${e.tagName}.${e.className}`, text: e.textContent?.slice(0, 40), parent: `${e.parentElement?.tagName}.${e.parentElement?.className}`, preExisting: !!e.closest('.view-picker') }));
-  const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
-  return { offenders, documentWidth, viewportWidth: width };
+  return { offenders, viewportWidth: width };
+}
+/** Page width with only the known pre-existing Platform View picker taken out of layout; its inline styles are restored. */
+function widthWithoutPicker() {
+  const pickers = [...document.querySelectorAll('.view-picker')], saved = pickers.map((e) => e.getAttribute('style'));
+  try {
+    for (const e of pickers) e.style.setProperty('display', 'none', 'important');
+    return Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+  } finally {
+    pickers.forEach((e, i) => { if (saved[i] === null) e.removeAttribute('style'); else e.setAttribute('style', saved[i]); });
+  }
 }
 async function noOverflow(page, name) {
-  const { offenders, documentWidth, viewportWidth } = await page.evaluate(overflowAudit);
+  const { offenders, viewportWidth } = await page.evaluate(overflowAudit);
   const preExisting = offenders.filter((o) => o.preExisting), current = offenders.filter((o) => !o.preExisting);
   if (preExisting.length) report.preExistingFindings.push(`${name ?? 'page'}: Platform View picker overflows (${preExisting.length} elements)`);
   assert.deepEqual(current, [], 'horizontal overflow');
-  // The document must fit too, unless the only offenders are the known pre-existing picker.
-  if (!preExisting.length) assert.ok(documentWidth <= viewportWidth + 1, `document is ${documentWidth}px wide in a ${viewportWidth}px viewport`);
+  // The page must fit with only the known picker excluded, so any other overflow (including pseudo-elements) still fails.
+  const remaining = await page.evaluate(widthWithoutPicker);
+  assert.ok(remaining <= viewportWidth + 1, `horizontal overflow: document is ${remaining}px wide in a ${viewportWidth}px viewport without the known picker`);
 }
 async function dashboard(viewport, nextTheme) {
   theme = nextTheme; mode = 'ready';
@@ -605,7 +616,7 @@ await check('Ask HON: leaving the page mid-reply conceals it; the late result st
   await ctx.close();
 });
 
-await check('Overflow gate: clipped shell tabs pass; an escaping scroller or a wide document fails', async () => {
+await check('Overflow gate: clipped shell tabs and the known picker pass; escaping, unlisted or extra page overflow fails', async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const page = await ctx.newPage();
   const layout = (body) => page.setContent(`<!doctype html><html><body style="margin:0">${body}</body></html>`);
   const tabs = '<nav data-shell-tabs style="display:flex;overflow-x:auto;width:390px">' + Array.from({ length: 6 }, (_, n) => `<a style="flex:none;width:120px">Tab ${n}</a>`).join('') + '</nav>';
@@ -617,6 +628,12 @@ await check('Overflow gate: clipped shell tabs pass; an escaping scroller or a w
   await assert.rejects(noOverflow(page, 'gate-unlisted-scroller'), /horizontal overflow/);
   await layout('<nav data-shell-tabs style="display:flex;overflow-x:auto;width:390px"><a style="position:absolute;left:600px;width:100px">escaped tab</a></nav>');
   await assert.rejects(noOverflow(page, 'gate-escaped-tab'), /horizontal overflow/);
+  const picker = '<div class="view-picker" style="width:430px">known picker</div>';
+  await layout(picker);
+  await noOverflow(page, 'gate-picker-only');
+  await page.setContent(`<!doctype html><html><head><style>body::after{content:"";display:block;width:700px;height:1px}</style></head><body style="margin:0">${picker}</body></html>`);
+  await assert.rejects(noOverflow(page, 'gate-picker-plus-pseudo'), /horizontal overflow/);
+  assert.equal(await page.locator('.view-picker').getAttribute('style'), 'width:430px', 'picker styles restored');
   await ctx.close();
 });
 async function creativeStudio(viewport, nextTheme = 'modern') {
