@@ -66,12 +66,18 @@ export const accountStatusApi = {
     return data;
   },
   async wallet(input: AccountScope, signal: AbortSignal): Promise<WalletView> {
-    const scope = accountScope(input), data = validateSaasCreativeSchoolWallet(await read(`/api/v1/schools/${scope.schoolId}/creative-credits`, signal));
-    // This school projection has no organization field. It cannot verify the organization selector.
-    if (data.schoolId !== scope.schoolId) throw new AccountStatusError('UNAVAILABLE');
+    const data = await readSchoolCreativeWallet(input, signal);
     return { schoolId: data.schoolId, programStatus: data.program.status, eligibility: data.eligibility,
       balance: { availableCredits: data.balance.availableCredits, heldCredits: data.balance.heldCredits,
         byKind: data.balance.byKind.map(({ kind, grantedCredits, availableCredits, heldCredits, consumedCredits }) => ({ kind, grantedCredits, availableCredits, heldCredits, consumedCredits })) } };
   },
 };
 export type AccountStatusApi = typeof accountStatusApi;
+
+/** The school's own creative wallet (GET only). The server authorizes the exact school; the response must name it. */
+export async function readSchoolCreativeWallet(input: AccountScope, signal: AbortSignal): Promise<SaasCreativeSchoolWallet> {
+  const scope = accountScope(input), data = validateSaasCreativeSchoolWallet(await read(`/api/v1/schools/${scope.schoolId}/creative-credits`, signal));
+  // This school projection has no organization field. It cannot verify the organization selector.
+  if (data.schoolId !== scope.schoolId) throw new AccountStatusError('UNAVAILABLE');
+  return data;
+}
