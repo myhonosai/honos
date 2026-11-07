@@ -1440,6 +1440,7 @@ BEGIN
     ('hon.teaching_assistant_event(uuid,text)',false,true,'v','search_path=pg_catalog, hon'),
     ('hon.read_teaching_invocation(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
     ('hon.list_my_teaching_invocations(text)',true,true,'v','search_path=pg_catalog, hon'),
+    ('hon.list_teaching_assistant_curricula(text)',true,true,'v','search_path=pg_catalog, hon'),
     ('hon.begin_teaching_request(text,jsonb,uuid)',true,true,'v','search_path=pg_catalog, hon'),
     ('hon.teaching_planning_reference(text,uuid)',true,true,'v','search_path=pg_catalog, hon'),
     ('hon.prepare_teaching_invocation(text,uuid,uuid,boolean)',true,true,'v','search_path=pg_catalog, hon'),

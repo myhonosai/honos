@@ -273,8 +273,8 @@ try {
   const inboxFunctions = runtimeRoleName === 'hon_marketing_ai_runtime'
     ? ['hon.list_my_marketing_invocations(text)']
     : runtimeRoleName === 'hon_teaching_ai_runtime'
-      ? ['hon.list_my_teaching_invocations(text)']
-      : ['hon.list_my_marketing_invocations(text)', 'hon.list_my_teaching_invocations(text)', 'hon.list_my_chad_follow_up_invocations(text)'];
+      ? ['hon.list_my_teaching_invocations(text)', 'hon.list_teaching_assistant_curricula(text)']
+      : ['hon.list_my_marketing_invocations(text)', 'hon.list_my_teaching_invocations(text)', 'hon.list_teaching_assistant_curricula(text)', 'hon.list_my_chad_follow_up_invocations(text)'];
   for (const signature of inboxFunctions) {
     const inbox = (await client.query(`SELECT
       p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AS definition_safe,
