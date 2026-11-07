@@ -136,6 +136,24 @@ async function honApi(route, path, method, prefix) {
   return json(route, 200, { data: receipt });
 }
 
+// Creative Studio: the school's own wallet read (synthetic). 'denied' answers 403.
+let studio = 'ready';
+const studioByKind = (available, held) => ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'].map((kind) => ({ kind,
+  grantedCredits: kind === 'INCLUDED_MONTHLY' ? 12000 : 0, availableCredits: kind === 'INCLUDED_MONTHLY' ? available : 0, heldCredits: kind === 'INCLUDED_MONTHLY' ? held : 0,
+  consumedCredits: kind === 'INCLUDED_MONTHLY' ? 12000 - available - held : 0, expiredCredits: 0, debitedCredits: 0 }));
+const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, program: { status: 'ACTIVE', monthlyIncludedCredits: 12000 },
+  eligibility: { eligible: true, reason: null, window: { index: 1, startsAt: '2026-10-01T00:00:00.000Z', endsAt: '2026-11-01T00:00:00.000Z' } },
+  balance: { availableCredits: 11640, heldCredits: 120, byKind: studioByKind(11640, 120) },
+  lots: [], reservations: [], adjustments: [], purchases: [],
+  history: [
+    { entryId: id(301), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'GRANT', credits: 12000, reservationId: null, adjustmentId: null, occurredAt: '2026-10-01T00:00:00.000Z' },
+    { entryId: id(302), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'FINALIZE', credits: 240, reservationId: null, adjustmentId: null, occurredAt: iso(-30) },
+    { entryId: id(303), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'RESERVE', credits: 120, reservationId: null, adjustmentId: null, occurredAt: iso(-1) }],
+  rates: { rateVersionId: id(310), rateVersion: 1, termsReference: 'synthetic-terms-v1', publishedAt: iso(-200), rates: [
+    { operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 40, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL' },
+    { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' }] },
+  packages: [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({ packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' })),
+  agentConversationsDeductCredits: false, paymentsActive: false });
 function json(route, status, body, headers = {}) {
   return route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', ...headers }, body: JSON.stringify(body) });
 }
@@ -149,6 +167,10 @@ async function api(route) {
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
   if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
+    assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
+    return studio === 'denied' ? json(route, 403, { code: 'FORBIDDEN' }) : json(route, 200, { data: creativeWallet() });
+  }
   if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot() }, meta: {} });
   if (path === `${prefix}/interface-theme`) {
     if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -200,7 +222,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 async function axe(page, name) {
   await page.addScriptTag({ content: axeSource });
   const run = (include) => page.evaluate(async (selectors) => (await window.axe.run(selectors ? { include: selectors.map((s) => [s]) } : document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })), include);
-  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]'].filter((s) => document.querySelector(s)));
+  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]'].filter((s) => document.querySelector(s)));
   const result = await run(selectors);
   report.accessibility.push({ name, scope: selectors, violations: result, wholePage: await run(null) });
   const serious = result.filter((v) => v.impact === 'serious' || v.impact === 'critical');
@@ -210,8 +232,10 @@ async function axe(page, name) {
 // phone width; it is recorded as a pre-existing finding and excluded from this gate.
 async function noOverflow(page, name) {
   const offenders = await page.evaluate(() => [...document.querySelectorAll('body *')]
-    .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed')
-    .map((e) => ({ el: `${e.tagName}.${e.className}`, preExisting: !!e.closest('.view-picker') })));
+    .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed'
+      // Content inside a horizontal scroll container (the shell's section tabs) scrolls; it does not widen the page.
+      && !(function scrolls(node) { for (let p = node.parentElement; p && p !== document.body; p = p.parentElement) if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) return true; return false; })(e))
+    .map((e) => ({ el: `${e.tagName}.${e.className}`, text: e.textContent?.slice(0, 40), parent: `${e.parentElement?.tagName}.${e.parentElement?.className}`, preExisting: !!e.closest('.view-picker') })));
   const preExisting = offenders.filter((o) => o.preExisting);
   if (preExisting.length) report.preExistingFindings.push(`${name ?? 'page'}: Platform View picker overflows (${preExisting.length} elements)`);
   assert.deepEqual(offenders.filter((o) => !o.preExisting), [], 'horizontal overflow');
@@ -558,6 +582,52 @@ await check('Ask HON: leaving the page mid-reply conceals it; the late result st
   await shot(page, 'ask-hon-concealed');
   await pageRefresh(ask).click();
   await ask.getByText('Private follow-up about Sam').waitFor();
+  await ctx.close();
+});
+
+async function creativeStudio(viewport, nextTheme = 'modern') {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport); const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/creative-studio`);
+  await page.getByRole('heading', { name: 'Creative Studio', level: 1 }).waitFor();
+  return { ctx, page };
+}
+for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['desktop-1440', { width: 1440, height: 900 }, 'classic'], ['phone-390', { width: 390, height: 844 }, 'modern']]) {
+  await check(`Creative Studio ${mode_} ${name}: real wallet, creation not connected`, async () => {
+    studio = 'ready';
+    const { ctx, page } = await creativeStudio(viewport, mode_);
+    const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+    await section.getByTestId('creative-available').waitFor();
+    assert.equal(await section.getByTestId('creative-available').innerText(), '11,640');
+    assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+    assert.ok(await section.getByText('Standard image').isVisible());
+    assert.ok(await section.getByText('Buying top-ups is not connected yet. No card is charged.').isVisible());
+    assert.equal(await section.locator('textarea, input, select, form').count(), 0, 'no inert creation controls');
+    await noOverflow(page, `creative-studio-${mode_}-${name}`);
+    await axe(page, `creative-studio-${mode_}-${name}`);
+    await shot(page, `creative-studio-${mode_}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('Creative Studio: a refused wallet read shows no numbers', async () => {
+  studio = 'denied';
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section.getByText(/does not include creative credits/).waitFor();
+  assert.equal(await section.getByTestId('creative-available').count(), 0);
+  assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+  await shot(page, 'creative-studio-denied');
+  studio = 'ready';
+  await ctx.close();
+});
+await check('Creative Studio: leaving the tab hides the wallet', async () => {
+  studio = 'ready';
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section.getByTestId('creative-available').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.querySelector('[data-testid="creative-available"]') || !!document.querySelector('[data-testid="creative-available"]')?.closest('[hidden],[inert]'));
   await ctx.close();
 });
 
