@@ -141,7 +141,7 @@ $$;
 CREATE FUNCTION hon.create_creative_generation(p_subject text, p_school uuid, p jsonb, p_provider jsonb, p_key uuid, p_request uuid, p_correlation uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE scope record; fp text; existing hon.creative_generations%ROWTYPE; receipt jsonb; res hon.saas_creative_reservations%ROWTYPE;
-  created hon.creative_generations%ROWTYPE; busy integer;
+  created hon.creative_generations%ROWTYPE; busy integer; again record; at timestamptz; why text; e jsonb; out jsonb;
 BEGIN
   IF p_key IS NULL OR p IS NULL OR jsonb_typeof(p) <> 'object' OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k) IS DISTINCT FROM ARRAY['format','operationCode','prompt','units']
     OR coalesce(jsonb_typeof(p->'operationCode'), '') <> 'string' OR (p->>'operationCode') !~ '^[a-z][a-z0-9_.]{2,59}$'
@@ -179,7 +179,22 @@ BEGIN
     VALUES (res.school_id, res.organization_id, res.id, scope.principal_id, p_key, fp, res.operation_code, res.media_kind, res.units,
       p->>'format', p->>'prompt', 'SUBMITTING', 1, res.reserved_at)
     RETURNING * INTO created;
-  RETURN jsonb_build_object('generation', hon.creative_generation_json(created), 'balance', receipt->'balance', 'replayed', false);
+  out := jsonb_build_object('generation', hon.creative_generation_json(created), 'balance', receipt->'balance', 'replayed', false);
+  -- Finality (after this wrapper's own writes, any wait they took, and building the answer): the requester's exact-school
+  -- authority, the S4 spend decision and creative eligibility are decided again at the live clock, still under the
+  -- reserve's pause gate, wallet lock and SHARE-locked authority tables. A grant, entitlement or access window that
+  -- ended during that wait refuses the request, and the refusal rolls back the generation, the reservation and its audit
+  -- together, so the API never hands an unauthorized generation to the provider. Nothing is reserved twice.
+  at := clock_timestamp();
+  SELECT * INTO again FROM hon.require_saas_school_actor(p_subject, scope.school_id) LIMIT 1;
+  IF again.principal_id IS DISTINCT FROM scope.principal_id OR again.school_id IS DISTINCT FROM scope.school_id THEN
+    RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE = '42501';
+  END IF;
+  why := hon.ai_spend_allowed(scope.organization_id, at, 'CREATIVE_MEDIA');
+  IF why IS NOT NULL THEN RAISE EXCEPTION '%', 'SAAS_CREATIVE_' || why USING ERRCODE = '23514'; END IF;
+  e := hon.saas_creative_eligibility(scope.school_id, at);
+  IF NOT (e->>'eligible')::boolean THEN RAISE EXCEPTION '%', 'SAAS_CREATIVE_' || (e->>'reason') USING ERRCODE = '23514'; END IF;
+  RETURN out;
 END $$;
 
 -- RECORD: the provider outcome, exactly once, by the generation's own requester (the CW1 evidence actor: no entitlement,

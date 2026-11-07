@@ -73,7 +73,9 @@ function fakeDatabase({ createReplayed = false, createStatus = 'GENERATING', cre
       if (recordError) throw recordError;
       const outcome = JSON.parse(params[2]), g = db.last;
       const status = { SUCCEEDED: 'SUCCEEDED', FAILED: 'FAILED', NOT_SENT: 'FAILED', UNKNOWN: 'UNDER_REVIEW' }[outcome.outcome];
-      return { generation: { ...g, status, failureReason: outcome.failureReason, completedAt: T2, chargedCredits: status === 'SUCCEEDED' ? outcome.finalUnits * 50 : null,
+      // Completed after the generation's own createdAt (never a fixed clock, so the order holds at any wall time).
+      const completedAt = new Date(Date.parse(g.createdAt) + 5_000).toISOString();
+      return { generation: { ...g, status, failureReason: outcome.failureReason, completedAt, chargedCredits: status === 'SUCCEEDED' ? outcome.finalUnits * 50 : null,
         assets: status === 'SUCCEEDED' ? outcome.assets.map((a, i) => ({ assetId: U(), ordinal: i + 1, mediaType: a.mediaType, width: a.width, height: a.height,
           durationSeconds: a.durationSeconds, origin: 'SYNTHETIC' })) : [] }, balance: balance(), replayed: false };
     }
