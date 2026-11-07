@@ -91,7 +91,7 @@ const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AW
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
 const hon = { kai: true, reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0 };
-const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'claire', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
 const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, ...over });
 let honSeq = 700;
 async function honApi(route, path, method, prefix) {
@@ -602,12 +602,12 @@ await check('Ask HON: delegate to Marcus, Chad and Kai with server-listed target
   await ask.getByRole('button', { name: 'Send to Chad' }).click();
   await page.waitForFunction(() => document.querySelectorAll('section[data-hon-conversation] [data-role="chad"]').length === 1);
   assert.deepEqual(JSON.parse(hon.posts.at(-1).body).delegation, { agentKey: 'chad', leadId: id(91), expectedLeadVersion: 3, purpose: 'TRIAL_REMINDER' });
-  await who.selectOption('claire');
+  await who.selectOption('kai');
   await ask.getByLabel('Curriculum', { exact: true }).selectOption(id(95));
   await ask.getByRole('textbox', { name: 'Instructions for Kai' }).fill('Notes for the next yellow belt class');
   await ask.getByRole('button', { name: 'Send to Kai' }).click();
-  await page.waitForFunction(() => document.querySelectorAll('section[data-hon-conversation] [data-role="claire"]').length === 1);
-  assert.deepEqual(JSON.parse(hon.posts.at(-1).body).delegation, { agentKey: 'claire', curriculumId: id(95) });
+  await page.waitForFunction(() => document.querySelectorAll('section[data-hon-conversation] [data-role="kai"]').length === 1);
+  assert.deepEqual(JSON.parse(hon.posts.at(-1).body).delegation, { agentKey: 'kai', curriculumId: id(95) });
   await shot(page, 'ask-hon-delegate-all', true);
   // Hiding drops the lead list; picking again re-reads it.
   await who.selectOption('chad');
@@ -621,7 +621,7 @@ await check('Ask HON: delegate to Marcus, Chad and Kai with server-listed target
 await check('Ask HON: Kai without a curriculum read cannot be sent', async () => {
   resetHon(true); hon.kai = false;
   const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
-  await ask.getByLabel('Who should handle this?').selectOption('claire');
+  await ask.getByLabel('Who should handle this?').selectOption('kai');
   await ask.getByText(/Kai isn’t available to you here yet/).waitFor();
   await ask.getByRole('textbox', { name: 'Instructions for Kai' }).fill('Notes');
   assert.equal(await ask.getByRole('button', { name: 'Send to Kai' }).isDisabled(), true);

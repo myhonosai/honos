@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   HON_REPLY_CONCEALED_REASON, HON_REPLY_LIMITS, type HonConversationReadiness, type HonConversationSummary, type HonConversationThread,
-  type FollowUpDraftPurpose, type HonConversationTurn, type HonReplyMode, type HonTurnReceipt, type HonTurnRequest,
+  type FollowUpDraftPurpose, type HonConversationTurn, type HonDelegateAgentKey, type HonReplyMode, type HonTurnReceipt, type HonTurnRequest,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import {
@@ -17,7 +17,7 @@ import {
 } from './hon-delegation-targets';
 import styles from './hon-conversation.module.css';
 
-const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Kai', chad: 'Chad', HUMAN: 'You' };
+const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Kai', kai: 'Kai', chad: 'Chad', HUMAN: 'You' };
 const FAILURE: Record<HonConversationFailure, string> = {
   SESSION: 'Your session ended. Sign in again.',
   FORBIDDEN: 'This account cannot use HON at this school. Nothing was sent.',
@@ -274,7 +274,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     const delegation = delegate.choice === 'hon' ? null : honDelegation(delegate.choice, selectedTarget(delegate), delegate.purpose);
     if (delegate.choice !== 'hon' && !delegation) return;
     const request: HonTurnRequest = delegation ? { text, delegation } : { text, delegation: null, replyMode: mode };
-    const label = delegation ? `Your request to ${HON_DELEGATE_PRESENTATION[delegation.agentKey].name}` : 'Your message to HON';
+    const label = delegation ? `Your request to ${HON_DELEGATE_PRESENTATION[delegate.choice as HonDelegateAgentKey].name}` : 'Your message to HON';
     try {
       if (thread) {
         openId.current = thread.id;
