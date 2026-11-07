@@ -21,6 +21,11 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
   const campaignId = ID(), curriculumId = ID(), leadId = ID();
   assert.deepEqual(contracts.validateHonTurnRequest({ text: 'Spring promo', delegation: { agentKey: 'marcus', campaignId } }).delegation, { agentKey: 'marcus', campaignId });
   assert.equal(contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'claire', curriculumId } }).delegation.agentKey, 'claire');
+  assert.equal(contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'kai', curriculumId } }).delegation.agentKey, 'kai', 'Kai is the teaching delegate');
+  assert.deepEqual(contracts.HON_DELEGATE_AGENTS, ['marcus', 'kai', 'chad'], 'clients see Kai, never claire, as the teaching delegate');
+  assert.throws(() => contracts.validateHonTurnRequest({ text: 'x'.repeat(1201), delegation: { agentKey: 'kai', curriculumId } }));
+  assert.throws(() => contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'kai', curriculumId, campaignId: curriculumId } }));
+  assert.throws(() => contracts.validateHonTurnRequest({ text: 'Outline', delegation: { agentKey: 'alex' } }), 'profile-only specialists are not delegates');
   assert.equal(contracts.validateHonTurnRequest({ text: 'Note', delegation: { agentKey: 'chad', leadId, expectedLeadVersion: 2, purpose: 'CHECK_IN' } }).delegation.purpose, 'CHECK_IN');
   for (const bad of [{ text: 'hi' }, { text: 'hi', delegation: { agentKey: 'hon' } }, { text: 'hi', delegation: { agentKey: 'marcus', campaignId, extra: 1 } },
     { text: 'x'.repeat(1201), delegation: { agentKey: 'claire', curriculumId } }, { text: 'hi', delegation: { agentKey: 'chad', leadId, expectedLeadVersion: 0, purpose: 'CHECK_IN' } },
@@ -43,11 +48,11 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
   assert.throws(() => contracts.validateHonConversationThread({ ...thread, turns: [thread.turns[0], { ...thread.turns[1], text: 'AI says hello' }] }), 'specialist text is never copied into the thread');
   assert.throws(() => contracts.validateHonConversationThread({ ...thread, turns: [thread.turns[0]] }));
   const a = (agentKey, patch = {}) => ({ agentKey, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED', providerRuntime: 'READY', available: true, ...patch });
-  assert.deepEqual(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [a('marcus'), a('claire', { authorized: false, available: false }), a('chad', { providerRuntime: 'CONFIGURATION_REQUIRED', available: false })] }),
+  assert.deepEqual(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [a('marcus'), a('kai', { authorized: false, available: false }), a('chad', { providerRuntime: 'CONFIGURATION_REQUIRED', available: false })] }),
     { contract: true, authorization: true, entitlement: true, providerRoute: true, availableAgentKeys: ['marcus'], honReply: false, asOf: T });
   assert.equal(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [a('marcus'), a('hon')] }).honReply, true, 'HON reply readiness comes from its own row');
   assert.deepEqual(contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: [a('marcus'), a('hon')] }).availableAgentKeys, ['marcus'], 'HON is not a delegate');
-  const paused = contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: ['marcus', 'claire', 'chad'].map((k) => a(k, { spendDecision: 'AI_PAUSED_BY_HQ', available: false })) });
+  const paused = contracts.composeHonConversationReadiness({ completeEntitlement: true, asOf: T, agents: ['marcus', 'kai', 'chad'].map((k) => a(k, { spendDecision: 'AI_PAUSED_BY_HQ', available: false })) });
   assert.equal(paused.entitlement, false); assert.deepEqual(paused.availableAgentKeys, []);
 });
 

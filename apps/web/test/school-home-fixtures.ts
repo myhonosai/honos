@@ -26,12 +26,12 @@ export const operations = (): OperationalSnapshot => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 0, SUCCEEDED: 30, FAILED: 1, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 0 } },
 });
 
-const agent = (agentKey: 'marcus' | 'claire' | 'chad', agentName: string, credits: number, over: Partial<AiTeamReadiness['agents'][number]> = {}) => ({
+const agent = (agentKey: 'marcus' | 'kai' | 'chad' | 'hon', agentName: string, credits: number, over: Partial<AiTeamReadiness['agents'][number]> = {}) => ({
   agentKey, agent: agentName, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED' as const, requestCredits: credits,
   providerRuntime: 'CONFIGURATION_REQUIRED' as const, available: false, blockedBy: 'PROVIDER_RUNTIME_NOT_CONFIGURED', ...over });
 export const readiness = (agents?: AiTeamReadiness['agents']): AiTeamReadiness => ({
   organizationId: ORG, schoolId: SCHOOL, completeEntitlement: true, agentBudget: null, asOf: '2026-11-06T09:00:00.000Z', honConversation: { contract: true },
-  agents: agents ?? [agent('marcus', 'MARKETING', 6), agent('claire', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3)],
+  agents: agents ?? [agent('marcus', 'MARKETING', 6), agent('kai', 'TEACHING', 6), agent('chad', 'CHAD_FOLLOW_UP', 3)],
 });
 export { agent as readinessAgent };
 

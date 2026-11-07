@@ -44,10 +44,10 @@ No code in #148, #150 or #151 deducts customer-purchased or creative credits, to
 
 - Ask HON contract `HON_REPLY_MODES.reservedCredits` (new in #148) → rename to an internal-units name.
 - Planner summary `AiInvocationPlanSummary.customerCreditEstimate` (and the plan column `customer_credit_estimate`) → internal-units name.
-- Readiness API (`requestCredits`, `agentBudget.committedCredits/ceilingCredits`) and the refusal reason `CUSTOMER_BUDGET_EXCEEDED` → internal-units names and an "included AI limit" reason for customers.
-- Staff workbenches for Marcus, Chad and Kai print "customer credits N" → remove from customer view (keep for HQ).
+- Readiness API (`requestCredits`, `agentBudget.committedCredits/ceilingCredits`) and the refusal reason `CUSTOMER_BUDGET_EXCEEDED` → internal-units names and an "included AI limit" reason for customers. **I1a** maps `CUSTOMER_BUDGET_EXCEEDED` and `ORGANIZATION_AI_BUDGET_REACHED` to "Included AI limit reached this month. Nothing is charged" on the workbenches; the API renames are I1b.
+- Staff workbenches for Marcus, Chad and Kai print "customer credits N" → remove from customer view (keep for HQ). **Done in I1a:** the line now reads "Included in your HON OS subscription. Nothing is charged to your school for this draft." Tokens and provider cost are no longer shown to school staff.
 - School `ai/usage` read (`includedCredits`, `remainingCredits` from `INCLUDED_AI_CREDITS`) → HQ-only, or present as "included AI available" without a balance.
-- School subscription FAQ "What are premium AI credits? 5,000 / 12,000" → creative credits only, with the included AI team described as included.
+- School subscription FAQ "What are premium AI credits? 5,000 / 12,000" → creative credits only, with the included AI team described as included. **Done in I1a** (en/es/ko): the FAQ and the plan cards now describe the owner-approved creative wallet (12,000 included creative credits per eligible paid school per month, the same on every plan, `SAAS_CREATIVE_MONTHLY_INCLUDED_CREDITS`, wallet 0202). The legacy Core 5,000 / Complete 12,000 offer field (`monthlyPremiumCredits`, `premiumAiCreditPlanningAllowance`) is no longer shown to schools as a creative allowance or a premium allowance. It is **not** creative-wallet evidence, and any tier-specific creative amount needs its own owner decision. The HQ pricing labels for that legacy field, the legacy allowance readiness panel (`SchoolCreditStatus`) and the API renames remain for I1b.
 - Legacy premium-credit program (0156) categories `AI_EMPLOYEE_TASK`, `DEEP_RESEARCH` (inactive) → must not be used for included agents; decide whether to retire them.
 
 ## Owner decisions
