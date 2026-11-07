@@ -2236,7 +2236,9 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
--- C3a 0214 (proposed) HON reply suggestions: the capability filter is an internal helper (no role executes it).
+-- C3a 0214 (proposed) HON reply suggestions: the capability filter is an internal helper. No ordinary application role has
+-- direct EXECUTE; trusted SECURITY DEFINER owners call it internally. The table CHECK bounds the closed set and size;
+-- uniqueness of suggested agents is enforced by hon.record_hon_reply_result, not by the CHECK.
 DO $$ DECLARE r text; BEGIN
   IF to_regprocedure('hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])') IS NULL THEN RAISE EXCEPTION 'Apply C3a migration 0214 first'; END IF;
   REVOKE ALL ON FUNCTION hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[]) FROM PUBLIC;
