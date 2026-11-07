@@ -8,7 +8,7 @@ import {
 import { HonConversationView, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
-import { HON_DELEGATE_IDLE } from '../src/components/hon-command/hon-conversation-panel';
+import { HON_DELEGATE_IDLE, honComposerRoute } from '../src/components/hon-command/hon-conversation-panel';
 import { campaignTargets, curriculumTargets, honDelegation } from '../src/components/hon-command/hon-delegation-targets';
 
 const id = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
@@ -214,5 +214,28 @@ describe('HON delegation composer', () => {
   it('shows no specialist targets while concealed', () => {
     const html = render({ phase: 'CONCEALED', readiness: ready, delegate: { ...HON_DELEGATE_IDLE, choice: 'chad', targets: [{ id: id(4), label: 'Sam Lee', version: 2 }] } });
     expect(html).not.toContain('Sam Lee'); expect(html).not.toContain('Who should handle this?');
+  });
+});
+
+describe('HON composer routing (shown == sent)', () => {
+  const kaiPicked = { ...HON_DELEGATE_IDLE, choice: 'kai' as const, targets: [{ id: id(4), label: 'Kids belt', version: null }], targetId: id(4) };
+  it('drops a specialist the current readiness no longer lists, so nothing hidden is sent', () => {
+    const removed = honComposerRoute({ ...readiness(), availableAgentKeys: ['marcus', 'chad'] }, kaiPicked, 'READY', false);
+    expect(removed.choice).toBe('hon'); expect(removed.delegation).toBeNull(); expect(removed.open).toBe(true);
+    const listed = honComposerRoute({ ...readiness(), availableAgentKeys: ['kai'] }, kaiPicked, 'READY', false);
+    expect(listed.delegation).toEqual({ agentKey: 'kai', curriculumId: id(4) });
+  });
+  it('gates HON questions by honReply and specialists by their own availability', () => {
+    const offKai = { ...readiness(false), availableAgentKeys: ['kai' as const] };
+    expect(honComposerRoute(offKai, HON_DELEGATE_IDLE, 'READY', false)).toMatchObject({ chooser: true, open: false });
+    expect(honComposerRoute(offKai, kaiPicked, 'READY', false)).toMatchObject({ chooser: true, open: true, complete: true });
+    expect(honComposerRoute({ ...readiness(false), availableAgentKeys: [] }, HON_DELEGATE_IDLE, 'READY', false)).toMatchObject({ chooser: false, open: false });
+    expect(honComposerRoute(offKai, kaiPicked, 'READY', true)).toMatchObject({ chooser: false, open: false });
+    expect(honComposerRoute(offKai, kaiPicked, 'CONCEALED', false)).toMatchObject({ chooser: false, open: false });
+  });
+  it('renders an open Kai composer while HON answers are off', () => {
+    const html = render({ readiness: { ...readiness(false), availableAgentKeys: ['kai'] }, draft: 'Notes', delegate: kaiPicked });
+    expect(html).toContain('Send to Kai'); expect(html).not.toMatch(/<button type="submit" disabled=""/);
+    expect(render({ readiness: { ...readiness(false), availableAgentKeys: ['kai'] }, draft: 'Hi' })).toMatch(/<button type="submit" disabled=""/);
   });
 });

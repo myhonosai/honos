@@ -63,6 +63,19 @@ type Pending = { prepared: PreparedHonCommand; kind: 'create' | 'turn'; label: s
 /** Who handles the next message. Targets come only from server reads; `null` means no read exists for that specialist yet. */
 export type HonDelegateState = Readonly<{ choice: HonDelegateChoice; targets: 'IDLE' | 'LOADING' | 'FAILED' | null | readonly HonDelegationTarget[]; targetId: string; purpose: FollowUpDraftPurpose }>;
 export const HON_DELEGATE_IDLE: HonDelegateState = { choice: 'hon', targets: 'IDLE', targetId: '', purpose: 'INTRODUCTION' };
+/**
+ * The one routing decision shared by what is shown and what is sent. A specialist counts only while the current readiness
+ * lists it; HON questions are gated by honReply, specialists by their own availability plus a server-listed target.
+ */
+export function honComposerRoute(readiness: HonConversationReadiness | null, delegate: HonDelegateState, phase: ConversationPhase, locked: boolean) {
+  const specialists = (readiness?.availableAgentKeys ?? []).filter((key): key is HonDelegateAgentKey => key in HON_DELEGATE_PRESENTATION);
+  const choice: HonDelegateChoice = delegate.choice !== 'hon' && specialists.includes(delegate.choice) ? delegate.choice : 'hon';
+  const ready = phase === 'READY' && !locked && readiness !== null;
+  const chooser = ready && (readiness?.honReply === true || specialists.length > 0);
+  const open = ready && (choice === 'hon' ? readiness?.honReply === true : true);
+  const delegation = choice === 'hon' ? null : honDelegation(choice, selectedTarget(delegate), delegate.purpose);
+  return { specialists, choice, chooser, open, delegation, complete: choice === 'hon' || delegation !== null };
+}
 const selectedTarget = (d: HonDelegateState) => Array.isArray(d.targets) ? (d.targets as readonly HonDelegationTarget[]).find((t) => t.id === d.targetId) ?? null : null;
 
 export type HonConversationViewProps = {
@@ -95,14 +108,14 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
   const { phase, readiness, thread, pending } = props;
   const hidden = phase === 'CONCEALED' || phase === 'SESSION';
   const locked = pending !== null && pending.state === 'SENDING';
-  const canAsk = phase === 'READY' && readiness?.honReply === true && !locked;
+  const route = honComposerRoute(readiness, props.delegate ?? HON_DELEGATE_IDLE, phase, locked);
+  const canAsk = route.open;
   const id = `hon-ask-${props.presentation}`;
   const delegate = props.delegate ?? HON_DELEGATE_IDLE;
-  const specialists = (readiness?.availableAgentKeys ?? []).filter((key) => key in HON_DELEGATE_PRESENTATION);
-  const choice: HonDelegateChoice = delegate.choice !== 'hon' && specialists.includes(delegate.choice) ? delegate.choice : 'hon';
+  const { specialists, choice } = route;
   const limit = delegateTextLimit(choice, HON_REPLY_LIMITS.questionCharacters);
   const left = limit - props.draft.length;
-  const delegationReady = choice === 'hon' || honDelegation(choice, selectedTarget(delegate), delegate.purpose) !== null;
+  const delegationReady = route.complete;
   return <section className={styles.conversation} aria-labelledby={`${id}-title`} data-hon-conversation={phase} data-presentation={props.presentation}>
     <div className={styles.head}>
       <h3 id={`${id}-title`}>Ask HON</h3>
@@ -136,9 +149,9 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
         </ol> : null}
         {thread === null && props.threadPhase === 'NONE' ? <p className={styles.note}>Ask about leads, trials, memberships, attendance or what to do next. Your first message starts a new conversation.</p> : null}
         <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); if (canAsk && delegationReady && props.draft.trim()) props.onSend(); }}>
-          {specialists.length ? <div className={styles.delegate}>
+          {specialists.length && phase === 'READY' ? <div className={styles.delegate}>
             <label htmlFor={`${id}-who`}>Who should handle this?</label>
-            <select id={`${id}-who`} value={choice} disabled={!canAsk} onChange={(event) => props.onDelegate?.(event.target.value as HonDelegateChoice)}>
+            <select id={`${id}-who`} value={choice} disabled={!route.chooser} onChange={(event) => props.onDelegate?.(event.target.value as HonDelegateChoice)}>
               <option value="hon">HON · answer a question</option>
               {specialists.map((key) => <option key={key} value={key}>{HON_DELEGATE_PRESENTATION[key].name} · {HON_DELEGATE_PRESENTATION[key].task}</option>)}
             </select>
@@ -148,12 +161,12 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
               {delegate.targets === null ? <p className={styles.meta} data-target-unavailable="">{HON_DELEGATE_PRESENTATION[choice].name} isn’t available to you here yet: no {HON_DELEGATE_PRESENTATION[choice].pick.toLowerCase()} can be picked for your role at this school.</p> : null}
               {Array.isArray(delegate.targets) ? (delegate.targets.length === 0 ? <p className={styles.meta}>{HON_DELEGATE_PRESENTATION[choice].empty}</p>
                 : <><label htmlFor={`${id}-target`}>{HON_DELEGATE_PRESENTATION[choice].pick}</label>
-                  <select id={`${id}-target`} value={delegate.targetId} disabled={!canAsk} onChange={(event) => props.onTarget?.(event.target.value)}>
+                  <select id={`${id}-target`} value={delegate.targetId} disabled={!route.chooser} onChange={(event) => props.onTarget?.(event.target.value)}>
                     <option value="">Choose…</option>
                     {(delegate.targets as readonly HonDelegationTarget[]).map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
                   </select></>) : null}
               {choice === 'chad' && Array.isArray(delegate.targets) && delegate.targets.length ? <><label htmlFor={`${id}-purpose`}>Purpose</label>
-                <select id={`${id}-purpose`} value={delegate.purpose} disabled={!canAsk} onChange={(event) => props.onPurpose?.(event.target.value as FollowUpDraftPurpose)}>
+                <select id={`${id}-purpose`} value={delegate.purpose} disabled={!route.chooser} onChange={(event) => props.onPurpose?.(event.target.value as FollowUpDraftPurpose)}>
                   {HON_FOLLOW_UP_PURPOSES.map((item) => <option key={item} value={item}>{FOLLOW_UP_PURPOSE_LABEL[item]}</option>)}
                 </select></> : null}
               <p className={styles.meta}>{HON_DELEGATE_PRESENTATION[choice].name} prepares a draft for Action Center. Nothing is sent, published or changed until a person approves it.</p>
@@ -193,6 +206,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const openId = useRef<string | null>(null);
   const [delegate, setDelegate] = useState<HonDelegateState>(HON_DELEGATE_IDLE);
   const targetRead = useRef<AbortController | null>(null);
+  const delegateRef = useRef(delegate); delegateRef.current = delegate;
   const chooseDelegate = useCallback((choice: HonDelegateChoice) => {
     targetRead.current?.abort(); targetRead.current = null;
     if (choice === 'hon' || concealed.current) { setDelegate({ ...HON_DELEGATE_IDLE, choice: concealed.current ? 'hon' : choice }); return; }
@@ -218,6 +232,9 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       ([nextReadiness, page]) => {
         if (current !== generation.current || concealed.current || ended.current) return;
         setReadiness(nextReadiness); setConversations(page.items); setPhase('READY');
+        // A specialist the new readiness no longer lists is dropped with its targets; the person must choose again.
+        const chosen = delegateRef.current.choice;
+        if (chosen !== 'hon' && !nextReadiness.availableAgentKeys.includes(chosen)) { targetRead.current?.abort(); targetRead.current = null; setDelegate(HON_DELEGATE_IDLE); }
         const keep = openId.current && page.items.some((item) => item.id === openId.current) ? openId.current : null;
         openId.current = keep; if (keep) readThread(keep, current, abort.signal);
       },
@@ -271,10 +288,12 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const send = () => {
     const text = draft.trim();
     if (!text || concealed.current) return;
-    const delegation = delegate.choice === 'hon' ? null : honDelegation(delegate.choice, selectedTarget(delegate), delegate.purpose);
-    if (delegate.choice !== 'hon' && !delegation) return;
+    // Same decision the view renders: a specialist the current readiness no longer lists is never sent.
+    const route = honComposerRoute(readiness, delegate, phase, pending?.state === 'SENDING');
+    if (!route.open || !route.complete) return;
+    const delegation = route.delegation;
     const request: HonTurnRequest = delegation ? { text, delegation } : { text, delegation: null, replyMode: mode };
-    const label = delegation ? `Your request to ${HON_DELEGATE_PRESENTATION[delegate.choice as HonDelegateAgentKey].name}` : 'Your message to HON';
+    const label = delegation ? `Your request to ${HON_DELEGATE_PRESENTATION[route.choice as HonDelegateAgentKey].name}` : 'Your message to HON';
     try {
       if (thread) {
         openId.current = thread.id;

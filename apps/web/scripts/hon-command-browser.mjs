@@ -91,7 +91,7 @@ const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AW
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
 const hon = { kai: true, reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0 };
-const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.agents ?? (hon.reply ? ['marcus', 'kai', 'chad'] : []), honReply: hon.reply, asOf: iso(0) });
 const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, ...over });
 let honSeq = 700;
 async function honApi(route, path, method, prefix) {
@@ -450,7 +450,7 @@ await check('no unsupported capability presented as operational', async () => {
 });
 
 // ---------- Ask HON conversation ----------
-function resetHon(reply) { hon.kai = true; hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; }
+function resetHon(reply) { hon.agents = null; hon.kai = true; hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; }
 async function fullHon(viewport, nextTheme = 'modern') {
   theme = nextTheme; mode = 'ready';
   const ctx = await context(viewport); const page = await ctx.newPage();
@@ -627,6 +627,47 @@ await check('Ask HON: Kai without a curriculum read cannot be sent', async () =>
   assert.equal(await ask.getByRole('button', { name: 'Send to Kai' }).isDisabled(), true);
   assert.equal(hon.posts.length, 0);
   await shot(page, 'ask-hon-kai-unavailable');
+  await ctx.close();
+});
+
+await check('Ask HON: a specialist removed by readiness is never sent after Refresh (P2-156-1)', async () => {
+  resetHon(true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  await askBox(ask).fill('Start');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/You have 3 new leads/).waitFor();
+  await ask.getByLabel('Who should handle this?').selectOption('kai');
+  await ask.getByLabel('Curriculum', { exact: true }).selectOption(id(95));
+  hon.agents = ['marcus', 'chad'];
+  await pageRefresh(ask).click();
+  await page.waitForFunction(() => document.querySelector('section[data-hon-conversation]')?.getAttribute('data-hon-conversation') === 'READY');
+  await ask.getByRole('textbox', { name: 'Message HON' }).waitFor();
+  assert.equal(await ask.getByLabel('Who should handle this?').inputValue(), 'hon');
+  await askBox(ask).fill('An ordinary question for HON');
+  const before = hon.posts.length;
+  await ask.getByRole('button', { name: 'Send', exact: true }).click();
+  await ask.getByText('An ordinary question for HON').waitFor();
+  const sent = hon.posts.slice(before).map((p) => JSON.parse(p.body));
+  assert.equal(sent.length, 1); assert.equal(sent[0].delegation, null, 'no hidden specialist delegation');
+  await ctx.close();
+});
+
+await check('Ask HON: specialists stay usable when HON answers are off (P2-156-2)', async () => {
+  resetHon(false); hon.agents = ['kai'];
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  assert.equal(await askBox(ask).isDisabled(), true, 'HON questions stay closed');
+  const who = ask.getByLabel('Who should handle this?');
+  assert.equal(await who.isDisabled(), false);
+  assert.deepEqual(await who.locator('option').allInnerTexts(), ['HON · answer a question', 'Kai · Teaching notes for a curriculum']);
+  await who.selectOption('kai');
+  await ask.getByLabel('Curriculum', { exact: true }).selectOption(id(95));
+  await ask.getByRole('textbox', { name: 'Instructions for Kai' }).fill('Notes for the yellow belt class');
+  await ask.getByRole('button', { name: 'Send to Kai' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('section[data-hon-conversation] [data-role="kai"]').length === 1);
+  assert.deepEqual(JSON.parse(hon.posts.at(-1).body), { text: 'Notes for the yellow belt class', delegation: { agentKey: 'kai', curriculumId: id(95) } });
+  await who.selectOption('hon');
+  assert.equal(await askBox(ask).isDisabled(), true, 'switching back to HON is still closed');
+  await shot(page, 'ask-hon-kai-only');
   await ctx.close();
 });
 
