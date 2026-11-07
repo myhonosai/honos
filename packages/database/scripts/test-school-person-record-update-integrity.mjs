@@ -105,7 +105,7 @@ try{
  // 2. Read: exact shape, student profile, consent defaults, canEdit from live authority.
  const r1=ok(await read(editor,A.schoolId,student));
  assert.deepEqual({...r1,updatedAt:undefined},{personId:student,schoolId:A.schoolId,givenName:'Ana',familyName:'Rivera',email:'ana@example.invalid',phoneE164:'+15555550100',version:1,updatedAt:undefined,
-  student:{birthDate:'2015-04-02',status:'ACTIVE'},consents:{EMAIL:'NOT_RECORDED',SMS:'NOT_RECORDED'},canEdit:true});
+  student:{birthDate:'2015-04-02',status:'ACTIVE',version:1},consents:{EMAIL:'NOT_RECORDED',SMS:'NOT_RECORDED'},canEdit:true});
  assert.equal(ok(await read(reader,A.schoolId,student)).canEdit,false);
  assert.equal(ok(await read(editor,A.schoolId,guardian)).student,null);
  pass('read returns the closed record with student profile, consent states and canEdit from live authority');
@@ -247,7 +247,69 @@ try{
   assert.deepEqual(await snapshot(id),row);assert.deepEqual(await editEffects(),before);
   assert.deepEqual(ok(await read(editor3,A.schoolId,id)).consents,{EMAIL:'OPTED_IN',SMS:'NOT_RECORDED'});}
  pass('the real consent writer with an uppercase person selector shares the canonical lock: its in-flight first opt-in makes the edit refuse with no contact, audit, outbox or key effects');
- console.log('B-CRM-1a person record proof: '+groups+' groups passed');
+ // 12. B-CRM-1b birth date: posture. One new definer entry point; helpers and the corrections table private.
+ {const fn=(await q("SELECT p.oid,p.prosecdef,p.proconfig FROM pg_proc p WHERE p.oid='hon.update_school_student_birth_date(text,jsonb,uuid)'::regprocedure"))[0];
+  assert.equal(fn.prosecdef,true);assert.deepEqual(fn.proconfig,['search_path=pg_catalog, hon']);
+  assert.equal((await q("SELECT has_function_privilege($1,$2::oid,'EXECUTE') ok",[runtime.username,fn.oid]))[0].ok,true);
+  for(const h of ['hon.crm_guardian_child_current_identity(uuid,uuid,uuid)','hon.record_crm_guardian_child_identity_correction(uuid,uuid,uuid,uuid,uuid)','hon.school_person_is_owner(uuid,uuid)','hon.crm_guardian_child_child_relation(uuid)'])
+   for(const who of [runtime.username,'public'])assert.equal((await q("SELECT has_function_privilege($1,$2::regprocedure,'EXECUTE') ok",[who,h]))[0].ok,false,h+' '+who);
+  assert.deepEqual((await q("SELECT relrowsecurity r,relforcerowsecurity f,(SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)::int policies FROM pg_class c WHERE oid='hon.crm_guardian_child_identity_corrections'::regclass"))[0],{r:true,f:true,policies:0});
+  for(const pr of ['SELECT','INSERT','UPDATE','DELETE'])assert.equal((await q("SELECT has_table_privilege($1,'hon.crm_guardian_child_identity_corrections',$2) ok",[runtime.username,pr]))[0].ok,false,pr);
+  for(const pr of ['UPDATE','DELETE'])assert.equal((await q("SELECT has_table_privilege($1,'hon.student_profiles',$2) ok",[runtime.username,pr]))[0].ok,false,pr);}
+ pass('birth date: one definer entry point for the runtime; the corrections table, helpers and the child relation stay private; no UPDATE on student_profiles');
+
+ // 13. Birth date correction by delegated staff: version, reason audited, outbox without the date, replay, conflicts, refusals.
+ const ownerRole=(await q("SELECT id FROM hon.roles WHERE organization_id=$1 AND code='OWNER' AND is_system_role",[A.organizationId]))[0].id;
+ const owner=person('owner'),ownerPrincipal=await human(owner,'Owner');const ownerGrant=await grant(A,ownerPrincipal,ownerRole);
+ const bd=(personId,expectedVersion,birthDate,reason='Parent supplied the passport date')=>({schoolId:A.schoolId,personId,expectedVersion,birthDate,reason});
+ const setBirth=(identity,b,key=K())=>send('school/people/birth-date',{identity,body:b,key});
+ const profile=async id=>(await q('SELECT birth_date::text birth_date,version,updated_at FROM hon.student_profiles WHERE person_id=$1',[id]))[0];
+ const kid=await addPerson(A,'Kai','Moreno');
+ await q('INSERT INTO hon.student_profiles(organization_id,school_id,person_id,primary_family_id,birth_date) VALUES($1,$2,$3,$4,$5)',[A.organizationId,A.schoolId,kid,fam,'2016-03-01']);
+ const bdDenied=async(work,status,code,id)=>{const row=id?await profile(id):null,c=await counts();const r=await work();
+  assert.equal(r.status,status,JSON.stringify(r.body));assert.equal(r.body.code,code);if(id)assert.deepEqual(await profile(id),row);assert.deepEqual(await counts(),c);};
+ {const c=await counts(),key=K(),b=bd(kid,1,'2016-04-01',' Parent supplied the passport date ');
+  const r=ok(await setBirth(editor3,b,key));
+  assert.deepEqual(r.changedFields,['birthDate']);assert.equal(r.enrollmentCorrected,false);
+  assert.deepEqual(r.person.student,{birthDate:'2016-04-01',status:'ACTIVE',version:2});assert.equal(r.person.version,1);
+  const after=await counts();for(const t of ['audit_events','outbox_events','idempotency_records'])assert.equal(Number(after[t]),Number(c[t])+1,t);
+  const audit=(await q("SELECT prior_state,next_state,entity_type FROM hon.audit_events WHERE action_code='people.student.birth_date.update' AND next_state->>'personId'=$1",[kid]))[0];
+  assert.equal(audit.entity_type,'STUDENT_PROFILE');assert.deepEqual(audit.prior_state,{personId:kid,birthDate:'2016-03-01',version:1});
+  assert.deepEqual(audit.next_state,{personId:kid,birthDate:'2016-04-01',version:2,reason:'Parent supplied the passport date',minorToAdult:false,enrollmentCorrected:false});
+  const ob=(await q("SELECT payload FROM hon.outbox_events WHERE event_type='people.student.updated' AND payload->>'personId'=$1",[kid]))[0].payload;
+  assert.deepEqual(Object.keys(ob).sort(),['changedFields','personId','studentProfileId','version']);assert(!JSON.stringify(ob).includes('2016'));
+  assert.deepEqual(ok(await setBirth(editor3,b,key)),r);assert.deepEqual(await counts(),after);
+  await bdDenied(()=>setBirth(editor3,{...b,birthDate:'2016-05-01'},key),409,'PERSON_IDEMPOTENCY_CONFLICT',kid);}
+ await bdDenied(()=>setBirth(editor3,bd(kid,1,'2016-05-01')),409,'PERSON_VERSION_CONFLICT',kid);
+ await bdDenied(()=>setBirth(editor3,bd(kid,2,'2016-04-01')),400,'PERSON_UNCHANGED',kid);
+ const tomorrow=new Date(Date.now()+2*864e5).toISOString().slice(0,10);
+ for(const b of [bd(kid,2,tomorrow),bd(kid,2,'1899-12-31'),bd(kid,2,'2016-02-30'),bd(kid,2,'2016-05-01',''),{...bd(kid,2,'2016-05-01'),organizationId:A.organizationId},{...bd(kid,2,'2016-05-01'),birthDate:null}])
+  await bdDenied(()=>setBirth(editor3,b),400,'PERSON_INPUT_INVALID',kid);
+ await bdDenied(()=>setBirth(editor3,bd(guardian,1,'1980-01-01')),404,'PERSON_UNAVAILABLE');
+ await bdDenied(()=>setBirth(editorB,{...bd(kid,2,'2016-05-01'),schoolId:B.schoolId}),404,'PERSON_UNAVAILABLE',kid);
+ for(const who of [reader,updateOnly,parent,outsider,inactive])await bdDenied(()=>setBirth(who,bd(kid,2,'2016-05-01')),403,'PERSON_FORBIDDEN',kid);
+ await assert.rejects(()=>restricted.query('UPDATE hon.student_profiles SET birth_date=$1 WHERE person_id=$2',['2000-01-01',kid]),e=>e.code==='42501');
+ pass('a delegated editor corrects a birth date with a reason: version, audit with the reason, outbox without the date, replay, key reuse, stale and unchanged edits, future and invalid dates, no profile, other school and no authority refused with nothing written');
+
+ // 14. Minor to adult needs a school OWNER (it removes the 0177 guardian-of-record requirement); stricter or first-time dates do not.
+ const adultDate=(new Date().getUTCFullYear()-30)+'-01-15';
+ await bdDenied(()=>setBirth(editor3,bd(kid,2,adultDate)),403,'PERSON_BIRTH_DATE_OWNER_REQUIRED',kid);
+ {const r=ok(await setBirth(owner,bd(kid,2,adultDate,'Registered under the wrong date; adult member')));assert.equal(r.person.student.birthDate,adultDate);
+  assert.equal((await q("SELECT next_state->>'minorToAdult' m FROM hon.audit_events WHERE action_code='people.student.birth_date.update' AND next_state->>'personId'=$1 AND next_state->>'version'='3'",[kid]))[0].m,'true');}
+ assert.equal(ok(await setBirth(editor3,bd(kid,3,'2017-06-01'))).person.student.birthDate,'2017-06-01');
+ const unknown=await addPerson(A,'Noa','Moreno');
+ await q('INSERT INTO hon.student_profiles(organization_id,school_id,person_id,primary_family_id) VALUES($1,$2,$3,$4)',[A.organizationId,A.schoolId,unknown,fam]);
+ assert.equal(ok(await setBirth(editor3,bd(unknown,1,adultDate))).person.student.birthDate,adultDate);
+ // The owner rule is decided again after the last write: an OWNER grant revoked while the crossing waited commits nothing.
+ {const row=await profile(kid),c=await counts();
+  await blocker.query('BEGIN');await blocker.query('SELECT 1 FROM hon.student_profiles WHERE person_id=$1 FOR UPDATE',[kid]);
+  const pending=setBirth(owner,bd(kid,row.version,adultDate));
+  await waitForLockWait();
+  await q('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=granted_by_principal_id WHERE id=$1',[ownerGrant]);
+  await blocker.query('COMMIT');
+  const r=await pending;assert.equal(r.status,403,JSON.stringify(r.body));assert.deepEqual(await profile(kid),row);assert.deepEqual(await counts(),c);}
+ pass('making a known minor an adult needs a live school OWNER grant (an OWNER grant revoked while the change waited on the student lock commits nothing); staff may make a date stricter or set a first one');
+ console.log('B-CRM-1a/1b person record proof: '+groups+' groups passed');
 }finally{
  await app?.close();
  await Promise.allSettled([admin.end(),restricted.end(),blocker.end(),blocker2.end()]);

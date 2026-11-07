@@ -4,7 +4,7 @@ const {SchoolPersonRecordHumanGuard}=require('../dist/people/school-person-recor
 const c=require('@hon/contracts');
 const ids={schoolId:randomUUID(),personId:randomUUID()};
 const record={...ids,givenName:'Ana',familyName:'Rivera',email:'ana@example.invalid',phoneE164:'+15555550100',version:2,updatedAt:new Date().toISOString(),
- student:{birthDate:'2015-04-02',status:'ACTIVE'},consents:{EMAIL:'OPTED_IN',SMS:'NOT_RECORDED'},canEdit:true};
+ student:{birthDate:'2015-04-02',status:'ACTIVE',version:1},consents:{EMAIL:'OPTED_IN',SMS:'NOT_RECORDED'},canEdit:true};
 const input={...ids,expectedVersion:1,givenName:'Ana',familyName:'Rivera',email:'ana@example.invalid',phoneE164:null};
 test('closed person update body: no organization, principal, consent, birth date or family can be supplied; values normalized',()=>{
  assert.deepEqual(c.validatePersonRecordUpdateInput({...input,givenName:'  Ana ',email:' ANA@Example.invalid ',phoneE164:' +15555550100 '}),{...input,email:'ana@example.invalid',phoneE164:'+15555550100'});
@@ -17,7 +17,7 @@ test('closed person record and update result responses',()=>{
  assert.deepEqual(c.validatePersonRecord(record),record);
  assert.deepEqual(c.validatePersonRecord({...record,student:null,email:null,phoneE164:null}),{...record,student:null,email:null,phoneE164:null});
  for(const patch of [{organizationId:randomUUID()},{canEdit:'yes'},{version:0},{updatedAt:'soon'},{consents:{EMAIL:'YES',SMS:'NOT_RECORDED'}},{consents:{EMAIL:'OPTED_IN'}},
-   {student:{birthDate:'2015/04/02',status:'ACTIVE'}},{student:{status:'ACTIVE'}},{givenName:''},{email:''},{phoneE164:''},{phoneE164:'+1'.repeat(20)}])
+   {student:{birthDate:'2015/04/02',status:'ACTIVE',version:1}},{student:{status:'ACTIVE',version:1}},{student:{birthDate:null,status:'ACTIVE'}},{student:{birthDate:null,status:'ACTIVE',version:0}},{givenName:''},{email:''},{phoneE164:''},{phoneE164:'+1'.repeat(20)}])
   assert.throws(()=>c.validatePersonRecord({...record,...patch}),/PERSON_RESPONSE_INVALID/);
  assert.deepEqual(c.validatePersonRecord({...record,email:'Mia.Chen@Example.invalid',givenName:' legacy '}).email,'Mia.Chen@Example.invalid');
  assert.deepEqual(c.validatePersonRecordUpdateResult({person:record,changedFields:['familyName']}),{person:record,changedFields:['familyName']});
@@ -60,4 +60,24 @@ test('consent writer serializes on the canonical uuid text, so an uppercase sele
  await assert.rejects(svc.record({organizationId:randomUUID(),schoolId:randomUUID(),principalId:randomUUID(),principalType:'HUMAN_USER',requestId:randomUUID(),correlationId:randomUUID(),idempotencyKey:'k-'+randomUUID(),source:'HUMAN_UI'},
   upper,'EMAIL',{status:'OPTED_IN',source:'STAFF',capturedAt:new Date().toISOString()}),e=>e.stop===true);
  assert.deepEqual(seen.find(([sql])=>sql===lock)[1],[upper,'EMAIL']);
+});
+test('B-CRM-1b closed birth date body: calendar date, reason required, no organization or enrollment selector; result shape',async()=>{
+ const b={schoolId:randomUUID(),personId:randomUUID(),expectedVersion:2,birthDate:'2014-02-28',reason:' Parent supplied the passport date '};
+ assert.deepEqual(c.validateStudentBirthDateUpdateInput(b),{...b,reason:'Parent supplied the passport date'});
+ for(const patch of [{birthDate:'2014-02-30'},{birthDate:'2014-2-28'},{birthDate:'1899-12-31'},{birthDate:null},{birthDate:20140228},{reason:''},{reason:'   '},{reason:'x'.repeat(301)},
+   {reason:'a\u0007b'},{reason:null},{expectedVersion:0},{expectedVersion:'2'},{organizationId:randomUUID()},{studentProfileId:randomUUID()},{personId:'nope'}])
+  assert.throws(()=>c.validateStudentBirthDateUpdateInput({...b,...patch}),/PERSON_INPUT_INVALID/);
+ const {reason,...noReason}=b;assert.throws(()=>c.validateStudentBirthDateUpdateInput(noReason));
+ const result={person:record,changedFields:['birthDate'],enrollmentCorrected:true};
+ assert.deepEqual(c.validateStudentBirthDateUpdateResult(result),result);
+ for(const bad of [{...result,changedFields:['givenName']},{...result,enrollmentCorrected:'yes'},{...result,person:{...record,student:null}},{person:record,changedFields:['birthDate']}])
+  assert.throws(()=>c.validateStudentBirthDateUpdateResult(bad),/PERSON_RESPONSE_INVALID/);
+ const calls=[];const svc=new SchoolPersonRecordService({callSchoolPersonRecord:async(op,args)=>{calls.push([op,args]);return result;}});
+ const key=randomUUID();await svc.updateBirthDate({honIdentity:{externalSubject:'oidc:fixture:owner'}},b,key);
+ assert.equal(calls[0][0],'birthDate');assert.deepEqual(JSON.parse(calls[0][1][1]),{...b,reason:'Parent supplied the passport date'});assert.equal(calls[0][1][2],key);
+ await assert.rejects(svc.updateBirthDate({honIdentity:{externalSubject:'s'}},{...b,birthDate:'2014-13-01'},key),e=>e.getResponse().code==='PERSON_INPUT_INVALID');assert.equal(calls.length,1);
+ const failing=code=>new SchoolPersonRecordService({callSchoolPersonRecord:async()=>{throw Object.assign(new Error(code[1]),{code:code[0]});}});
+ for(const [sqlstate,message,status,expected] of [['42501','PERSON_BIRTH_DATE_OWNER_REQUIRED',403,'PERSON_BIRTH_DATE_OWNER_REQUIRED'],['42501','PERSON_FORBIDDEN',403,'PERSON_FORBIDDEN'],
+   ['22023','PERSON_UNCHANGED',400,'PERSON_UNCHANGED'],['40001','PERSON_VERSION_CONFLICT',409,'PERSON_VERSION_CONFLICT'],['P0002','x',404,'PERSON_UNAVAILABLE']])
+  await assert.rejects(failing([sqlstate,message]).updateBirthDate({honIdentity:{externalSubject:'s'}},b,key),e=>e.getStatus()===status&&e.getResponse().code===expected&&!JSON.stringify(e.getResponse()).includes(message==='x'?'x"':'SELECT'));
 });

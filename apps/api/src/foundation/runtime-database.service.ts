@@ -1237,10 +1237,11 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /** B-CRM-1a person record: the subject is the verified session subject; the database decides school authority. */
-  async callSchoolPersonRecord(operation: 'read'|'update', params: readonly (string|null)[]): Promise<unknown> {
+  async callSchoolPersonRecord(operation: 'read'|'update'|'birthDate', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_school_person($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
       update: {sql: 'SELECT hon.update_school_person($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      birthDate: {sql: 'SELECT hon.update_school_student_birth_date($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
