@@ -146,6 +146,18 @@ BEGIN
       SELECT id INTO STRICT orch FROM hon.hon_orchestrations WHERE source_turn_id = src.turn_id;
       INSERT INTO hon.hon_orchestration_members (orchestration_id, organization_id, school_id, agent_key, turn_id)
       VALUES (orch, c.organization_id, c.school_id, agent, t.id);
+      -- The group and member writes above can wait on locks, and access, a grant or the answer's visibility can
+      -- lapse meanwhile. Re-validate the exact source from a fresh read before handing off: still this human's own
+      -- whole COMPLETED answer at this school, visible now (which re-checks the actor), and still suggesting an agent
+      -- they may use. A refusal here rolls back the turn, the count, the group and the member together. The
+      -- duplicate check is not repeated: the member row this call just wrote would match it.
+      IF NOT EXISTS (SELECT 1 FROM hon.hon_reply_invocations r WHERE r.turn_id = src.turn_id AND r.conversation_id = c.id
+                       AND r.organization_id = c.organization_id AND r.school_id = c.school_id AND r.requested_by = actor
+                       AND r.status = 'COMPLETED' AND NOT r.truncated
+                       AND agent = ANY (hon.hon_reply_allowed_suggestions(actor, c.organization_id, c.school_id, r.suggested_agents)))
+         OR NOT hon.hon_reply_visible(p_subject, src.turn_id) THEN
+        RAISE EXCEPTION 'HON_SUGGESTION_NOT_CONFIRMABLE' USING ERRCODE = '22023';
+      END IF;
     END IF;
   END IF;
   v := hon.hon_turn_view(t);

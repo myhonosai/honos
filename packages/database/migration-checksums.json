@@ -207,6 +207,6 @@
     "0212_ai_agent_capability_binding.sql": "7d81f440c9ec2b8ebc7d1bc50150e75b5af2b05dcc4881ad60392c8f978a968f",
     "0213_kai_curriculum_picker.sql": "28198aeea6ec3a09adaeb77ea244d78da9597ae6c261512230b2bbc8f6426082",
     "0214_hon_reply_suggestions.sql": "441bb399d83144bd831cfedbe23e092d8a856f55356b92a6679e0f5eb888fda4",
-    "0215_hon_orchestration_groups.sql": "6c6610172e69bf19827f583dc7fb75437e0562f9940b15c209c697578ae38782"
+    "0215_hon_orchestration_groups.sql": "658543718b31bcb314ab6e01f039413c9f6adec0fbcdd1c2abe9ec21116fe822"
   }
 }

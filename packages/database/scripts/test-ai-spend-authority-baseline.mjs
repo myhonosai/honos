@@ -2412,6 +2412,62 @@ try {
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'A question', delegation: null, fromSuggestionTurnId: later.turnId }, K())), 'INVALID_HON_TURN', 'questions cannot confirm');
   assert.equal((await settle(tenant(context(o), (client) => client.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify({ text: 'q', delegation: null, fromSuggestionTurnId: later.turnId }), K()])))).error?.message, 'INVALID_HON_TURN');
   assert.equal(await code(marcus(later.turnId)), 'OK', 'confirmable once access returns');
+  // 4b. P2-158-1: eligibility lapses while the new group or member write waits on a lock. A blocker holds a SHARE lock on
+  // one of the two tables (the duplicate read still works, the INSERT waits); the reporting grant behind a
+  // reporting-derived answer, or the Marcus capability, goes during the wait. The confirmation is refused after the wait
+  // with nothing persisted (no turn, count, group or member) and no specialist call.
+  const groupsOf = async (from) => (await row('SELECT count(*)::int g, (SELECT count(*)::int FROM hon.hon_orchestration_members m JOIN hon.hon_orchestrations o ON o.id=m.orchestration_id WHERE o.source_turn_id=$1) m FROM hon.hon_orchestrations WHERE source_turn_id=$1', [from]));
+  const lateWait = async (label, table, from, change, restore) => {
+    const before = { turns: await turnsOf(conv.id), count: (await row('SELECT turn_count n FROM hon.hon_conversations WHERE id=$1', [conv.id])).n, groups: await groupsOf(from), calls: fakes.marcus.calls };
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    let out;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query(`LOCK TABLE hon.${table} IN SHARE MODE`);
+      const bpid = (await blocker.query('SELECT pg_backend_pid() p')).rows[0].p;
+      let done = false;
+      const pending = code(marcus(from)).then((r) => { done = true; return r; });
+      for (const end = Date.now() + 5000; !(await row('SELECT count(*)::int n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [bpid])).n; await sleep(20)) {
+        assert.ok(!done && Date.now() < end, `${label}: the confirmation never waited on ${table}`);
+      }
+      await change();
+      await blocker.query('COMMIT');
+      out = await pending;
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await blocker.end();
+      await restore();
+    }
+    assert.equal(out, 'HON_SUGGESTION_NOT_CONFIRMABLE', `${label}: refused after the wait`);
+    assert.deepEqual({ turns: await turnsOf(conv.id), count: (await row('SELECT turn_count n FROM hon.hon_conversations WHERE id=$1', [conv.id])).n, groups: await groupsOf(from), calls: fakes.marcus.calls }, before, `${label}: nothing persisted, no specialist call`);
+  };
+  const dropCap = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.assistant.use'", [o.role]);
+  const addCap = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'marketing.assistant.use')", [o.role, o.id]);
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  // Wait at the group table (first confirmation from this answer): the answer stops being visible.
+  const w1 = await ask(['marcus', 'kai'], 'How are enrollments trending?');
+  assert.equal((await row('SELECT used_reporting u FROM hon.hon_reply_invocations WHERE turn_id=$1', [w1.turnId])).u, true, 'reporting-derived answer');
+  await lateWait('visibility at group', 'hon_orchestrations', w1.turnId, dropRep, addRep);
+  await lateWait('capability at group', 'hon_orchestrations', w1.turnId, dropCap, addCap);
+  // Wait at the member table (the group already exists from a Kai confirmation).
+  await kai(w1.turnId);
+  assert.deepEqual(await groupsOf(w1.turnId), { g: 1, m: 1 });
+  await lateWait('visibility at member', 'hon_orchestration_members', w1.turnId, dropRep, addRep);
+  await lateWait('capability at member', 'hon_orchestration_members', w1.turnId, dropCap, addCap);
+  // Controls: with nothing lapsing, the same answer confirms; two concurrent fresh-key confirmations of one agent admit
+  // exactly one; two concurrent sends of one key replay one turn.
+  const w2 = await ask(['marcus'], 'Any quick marketing wins?');
+  const racing = await Promise.all([settle(marcus(w2.turnId)), settle(marcus(w2.turnId))]);
+  assert.deepEqual(racing.map((r) => (r.error ? (r.error.getResponse?.().code ?? r.error.code) : 'OK')).sort(), ['HON_SUGGESTION_NOT_CONFIRMABLE', 'OK'], 'fresh keys: one confirmation');
+  assert.deepEqual(await groupsOf(w2.turnId), { g: 1, m: 1 });
+  const w3 = await ask(['marcus'], 'One more marketing idea?');
+  const kr = K();
+  const replayed = await Promise.all([marcus(w3.turnId, kr), marcus(w3.turnId, kr)]);
+  assert.equal(replayed[0].turnId, replayed[1].turnId, 'same key: one turn');
+  assert.deepEqual(await groupsOf(w3.turnId), { g: 1, m: 1 });
+  assert.equal(await code(marcus(w1.turnId)), 'OK', 'the lapsed answer confirms once access is back');
   // 5. Another school's human cannot read or confirm from this conversation.
   assert.equal(await code(hon.orchestrations(otherScope, conv.id)), 'HON_CONVERSATION_NOT_FOUND');
   assert.equal(await code(hon.sendTurn(otherScope, conv.id, { text: 'Draft.', delegation: { agentKey: 'marcus', campaignId: other.campaign }, fromSuggestionTurnId: src.turnId }, K())), 'HON_CONVERSATION_NOT_FOUND');
@@ -2426,7 +2482,7 @@ try {
   for (const t of ['hon_orchestrations', 'hon_orchestration_members']) assert.equal((await row(`SELECT has_table_privilege($1,'hon.${t}','SELECT') s`, [runtimeRole])).s, false, `${t}: functions only`);
   for (const f of ['hon_orchestration_status(text[])', 'hon_orchestration_immutable()']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal`);
   assert.equal((await row("SELECT has_function_privilege($1,'hon.read_hon_orchestrations(text,uuid)','EXECUTE') s", [runtimeRole])).s, true);
-  pass('INV-29', `C3a: a human confirms a HON suggestion as an ordinary delegation turn (own capability, plan and Action Center path; resend replays), grouped per answer with a status derived from the members' recorded statuses (${combos.length} combinations equal in SQL and contract; UNKNOWN never success); each suggestion confirms once; only suggested, capability-held agents from this human's own whole, visible COMPLETED answer in the same conversation with AI access; refusals record no turn; groups are append-only and readable only by their owner`);
+  pass('INV-29', `C3a: a human confirms a HON suggestion as an ordinary delegation turn (own capability, plan and Action Center path; resend replays), grouped per answer with a status derived from the members' recorded statuses (${combos.length} combinations equal in SQL and contract; UNKNOWN never success); each suggestion confirms once; only suggested, capability-held agents from this human's own whole, visible COMPLETED answer in the same conversation with AI access, re-checked after the group and member writes wait (a lapse during either wait is refused with nothing persisted and no specialist call; concurrent fresh keys admit one, one key replays one turn); refusals record no turn; groups are append-only and readable only by their owner`);
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
