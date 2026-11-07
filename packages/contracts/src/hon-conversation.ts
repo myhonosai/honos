@@ -15,6 +15,8 @@ export const HON_DELEGATE_AGENTS = ['marcus', 'kai', 'chad'] as const;
 /** @deprecated Accepted for one release as an alias of 'kai' (legacy teaching key); responses always say 'kai'. */
 export const HON_LEGACY_TEACHING_AGENT = 'claire' as const;
 export type HonDelegateAgentKey = typeof HON_DELEGATE_AGENTS[number];
+/** At most this many specialists HON may suggest for one answer. A suggestion is never run without the human confirming it. */
+export const HON_REPLY_MAX_SUGGESTIONS = 3;
 export const HON_TURN_TEXT_LIMITS: Readonly<Record<HonDelegateAgentKey, number>> = { marcus: 2000, kai: 1200, chad: 2000 };
 
 export type HonDelegation =
@@ -47,7 +49,9 @@ export interface HonTurnRequest {
 /** The conversational responder of a question turn (not one of the delegate specialists). */
 export const HON_REPLY_ROLE = 'hon' as const;
 /** How a HON reply was produced. truncated: cut off at the output limit (shown as incomplete, never as complete). */
-export interface HonReplyDetail { mode: HonReplyMode; step: number; maxSteps: number; truncated: boolean; canContinue: boolean; continuesTurnId: string | null }
+export interface HonReplyDetail { mode: HonReplyMode; step: number; maxSteps: number; truncated: boolean; canContinue: boolean; continuesTurnId: string | null;
+  /** Specialists HON suggests for this answer: only READY delegates this reader may use, never for a cut-off or concealed answer. Suggestions do nothing until confirmed as a delegation turn. */
+  suggestions: HonDelegateAgentKey[] }
 export interface HonConversationCreate { title: string }
 
 export interface HonConversationSummary { id: string; title: string; createdAt: string; updatedAt: string; turnCount: number; status: HonTurnStatus }
@@ -83,7 +87,11 @@ const isReplyDetail = (v: unknown, completed: boolean): boolean => {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
   const d = v as Record<string, unknown>;
   const keys = Object.keys(d).sort().join(',');
-  return keys === 'canContinue,continuesTurnId,maxSteps,mode,step,truncated'
+  const sug = d.suggestions;
+  return keys === 'canContinue,continuesTurnId,maxSteps,mode,step,suggestions,truncated'
+    && Array.isArray(sug) && sug.length <= HON_REPLY_MAX_SUGGESTIONS && sug.every(isAgent) && new Set(sug).size === sug.length
+    // Only a completed, whole answer can carry suggestions.
+    && (sug.length === 0 || (completed && d.truncated === false))
     && (HON_REPLY_MODE_KEYS as readonly unknown[]).includes(d.mode) && d.maxSteps === HON_REPLY_MAX_STEPS
     && Number.isSafeInteger(d.step) && (d.step as number) >= 1 && (d.step as number) <= HON_REPLY_MAX_STEPS
     && ((d.step === 1) === (d.continuesTurnId === null)) && (d.continuesTurnId === null || isUuid(d.continuesTurnId))
@@ -147,7 +155,7 @@ export function validateHonConversationThread(value: unknown): HonConversationTh
       : ((r.turns[i - 1] as HonConversationTurn).turnId !== t.turnId
         // A specialist's draft never appears here; HON's own reply appears only when COMPLETED, with no Action Center link.
         || (t.role === HON_REPLY_ROLE ? (refs.actionRequestId !== null || (t.status === 'COMPLETED' ? !completedText(t.text, t.reason) : t.text !== null)
-            || !isReplyDetail(t.replyDetail, t.status === 'COMPLETED') || (t.reason === CONCEALED && (t.replyDetail as HonReplyDetail).canContinue))
+            || !isReplyDetail(t.replyDetail, t.status === 'COMPLETED') || (t.reason === CONCEALED && ((t.replyDetail as HonReplyDetail).canContinue || (t.replyDetail as HonReplyDetail).suggestions.length > 0)))
           : (!isAgent(t.role) || t.text !== null || t.replyDetail !== null)))) drift();
     if (human && t.replyDetail !== null) drift();
   });
@@ -166,7 +174,7 @@ export function validateHonTurnReceipt(value: unknown): HonTurnReceipt {
   // A question turn (no delegate) has no approval; its reply is present exactly when COMPLETED. A delegation has no reply.
   if ((r.delegatedAgentKeys as unknown[]).length === 0
     ? ((r.actionRequestIds as unknown[]).length !== 0 || r.status === 'AWAITING_APPROVAL' || (r.status === 'COMPLETED' ? !completedText(r.reply, r.reason) : r.reply !== null)
-      || !isReplyDetail(r.replyDetail, r.status === 'COMPLETED') || (r.reason === CONCEALED && (r.replyDetail as HonReplyDetail).canContinue))
+      || !isReplyDetail(r.replyDetail, r.status === 'COMPLETED') || (r.reason === CONCEALED && ((r.replyDetail as HonReplyDetail).canContinue || (r.replyDetail as HonReplyDetail).suggestions.length > 0)))
     : (r.reply !== null || r.replyDetail !== null)) drift();
   return r as unknown as HonTurnReceipt;
 }

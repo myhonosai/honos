@@ -1,7 +1,7 @@
 import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { HON_REPLY_LIMITS, HON_REPLY_MODES, type HonReplyMode } from '@hon/contracts';
+import { HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, type HonReplyMode } from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
 import {
@@ -22,14 +22,20 @@ function modeLimits(limits: Limits | undefined) {
 }
 
 const tokens = (n: unknown, max: number) => Number.isSafeInteger(n) && (n as number) >= 1 && (n as number) <= max;
+/** Optional closed list: delegate keys only, unique, at most HON_REPLY_MAX_SUGGESTIONS, never on a cut-off answer. */
+function suggestionsValid(v: unknown, truncated: boolean): boolean {
+  if (v === undefined) return true;
+  return Array.isArray(v) && v.length <= HON_REPLY_MAX_SUGGESTIONS && (!truncated || v.length === 0) && new Set(v).size === v.length
+    && v.every((k) => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(k));
+}
 function verified(result: HonReplyResult): HonReplyResult {
   const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
   if (reply.length < 1 || reply.length > HON_REPLY_LIMITS.replyCharacters || !tokens(result.inputTokens, 1_000_000) || !tokens(result.outputTokens, 1_000_000)
     || !Number.isSafeInteger(result.providerCostMicrounits) || result.providerCostMicrounits < 0 || result.providerCostMicrounits > 1_000_000_000
-    || typeof result.truncated !== 'boolean') {
+    || typeof result.truncated !== 'boolean' || !suggestionsValid(result.suggestions, result.truncated)) {
     throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   }
-  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits, truncated: result.truncated };
+  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits, truncated: result.truncated, suggestions: [...(result.suggestions ?? [])] };
 }
 
 /**

@@ -205,6 +205,7 @@
     "0210_hon_conversation_reply.sql": "2982dd0588dd4e6156e6377dfcd89803103dc38628cc46b1526830ca2db27523",
     "0211_kai_teaching_identity.sql": "9004f729df3a8246cf5895184f95e36849607e35c53eb681f129211278e5537d",
     "0212_ai_agent_capability_binding.sql": "7d81f440c9ec2b8ebc7d1bc50150e75b5af2b05dcc4881ad60392c8f978a968f",
-    "0213_kai_curriculum_picker.sql": "28198aeea6ec3a09adaeb77ea244d78da9597ae6c261512230b2bbc8f6426082"
+    "0213_kai_curriculum_picker.sql": "28198aeea6ec3a09adaeb77ea244d78da9597ae6c261512230b2bbc8f6426082",
+    "0214_hon_reply_suggestions.sql": "441bb399d83144bd831cfedbe23e092d8a856f55356b92a6679e0f5eb888fda4"
   }
 }

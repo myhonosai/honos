@@ -2235,3 +2235,12 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.record_hon_reply_result(text,uuid,jsonb), hon.release_held_hon_reply(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- C3a 0214 (proposed) HON reply suggestions: the capability filter is an internal helper (no role executes it).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])') IS NULL THEN RAISE EXCEPTION 'Apply C3a migration 0214 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[]) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[]) FROM '||quote_ident(r);
+  END LOOP;
+END $$;
