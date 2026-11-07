@@ -81,6 +81,7 @@
     "hon.ai_stamp_hold_origin()",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
+    "hon.creative_generation_json(hon.creative_generations)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
     "hon.fail_hon_reply(text,uuid,text,text)",

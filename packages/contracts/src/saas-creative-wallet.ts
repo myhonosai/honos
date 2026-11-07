@@ -250,6 +250,8 @@ function validateLot(value: unknown): void {
     || (l.kind === 'PURCHASED_TOPUP' && l.credits !== (l.baseCredits as number) + (l.bonusCredits as number))) drift();
   if (l.window !== null) validateWindow(l.window);
 }
+/** Closed creative balance (also used by the Creative Studio generation receipt, CS1). */
+export function validateSaasCreativeBalance(value: unknown): void { validateBalance(value); }
 function validateBalance(value: unknown): void {
   const b = record(value, drift); exactKeys(b, ['availableCredits','heldCredits','byKind'], drift);
   if (!count(b.availableCredits) || !count(b.heldCredits) || !Array.isArray(b.byKind) || b.byKind.length !== 4) drift();

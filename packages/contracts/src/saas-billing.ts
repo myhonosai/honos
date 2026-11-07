@@ -104,6 +104,7 @@ export const SAAS_COMMANDS = {
   recordCreativeCost: 'saas-creative-cost-record',
   openCreativeWindow: 'saas-creative-window-open',
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
+  createCreativeGeneration: 'saas-creative-generation-create',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

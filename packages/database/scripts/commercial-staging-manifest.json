@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "32ac419a13cd0f0e6166daf66b6be25e81b9f897dafbf94f490b6e7748a301dc",
+  "chainSha256": "a44f7083a7afb9d2e512b92e1f3b03490f1d9e5ffddc938d8fd6229fcdbdd986",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -141,6 +141,10 @@
     {
       "file": "0215_hon_orchestration_groups.sql",
       "sha256": "658543718b31bcb314ab6e01f039413c9f6adec0fbcdd1c2abe9ec21116fe822"
+    },
+    {
+      "file": "0216_creative_studio_generations.sql",
+      "sha256": "5b263ec76370b8456a1b455271275016c4df15c42652c3330cdb16ac6311881d"
     }
   ]
 }
