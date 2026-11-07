@@ -19,7 +19,7 @@ export class CreativeGenerationError extends Error {
 }
 export const CREATIVE_GENERATION_COMMAND = 'saas-creative-generation-create';
 /** Server codes that mean "this exact request may or may not have happened". */
-const OUTCOME_UNKNOWN_CONFLICTS = new Set(['SAAS_OUTCOME_UNKNOWN', 'CREATIVE_GENERATION_IN_PROGRESS', 'SAAS_VERSION_CONFLICT']);
+const OUTCOME_UNKNOWN_CONFLICTS = new Set(['SAAS_OUTCOME_UNKNOWN', 'CREATIVE_GENERATION_IN_PROGRESS', 'SAAS_VERSION_CONFLICT', 'SAAS_CREATIVE_OUTCOME_PENDING']);
 
 const generationsPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/generations`;
 const json = /^application\/json(?:\s*;|$)/i;
@@ -62,7 +62,8 @@ export async function createCreativeGeneration(schoolId: string, input: Creative
   const code = response.status === 200 ? null : codeOf(await body(response));
   if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new CreativeGenerationError('SESSION'); }
   if (response.status === 403) throw new CreativeGenerationError('DENIED', code);
-  if (response.status === 400) throw new CreativeGenerationError('INVALID', code);
+  // 400 (not accepted) and 404 (school or generation not found) roll back before anything is reserved.
+  if (response.status === 400 || response.status === 404) throw new CreativeGenerationError('INVALID', code);
   if (response.status === 422) throw new CreativeGenerationError('REFUSED', code);
   if (response.status === 409) throw new CreativeGenerationError(code && OUTCOME_UNKNOWN_CONFLICTS.has(code) ? 'UNKNOWN' : 'INVALID', code);
   if (response.status === 503 && code === 'CREATIVE_PROVIDER_NOT_CONNECTED') throw new CreativeGenerationError('NOT_CONNECTED', code);
