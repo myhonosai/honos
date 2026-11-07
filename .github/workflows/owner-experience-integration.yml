@@ -7,6 +7,10 @@ on:
       - 'apps/web/**'
       - 'docs/architecture/CRM_LEAD_MEMBERSHIP_RECOVERY_FRONTEND.md'
       - '.github/workflows/owner-experience-integration.yml'
+      # It runs the one commercial rehearsal for these workflows, which skip their own copy for PRs to main.
+      - '.github/workflows/connected-student-operations-validation.yml'
+      - '.github/workflows/crm-membership-recovery-integration.yml'
+      - '.github/workflows/membership-dates-validation.yml'
 permissions:
   contents: read
 concurrency:

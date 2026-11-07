@@ -8,9 +8,15 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
+    # Everything except docs, re-including the docs/markdown that feature workflows trigger on: those workflows skip
+    # their duplicate full suites for ready PRs to main because CI runs them (see docs/CI.md, duplicate suite gating).
+    paths:
+      - '**'
+      - '.github/**'
+      - '!docs/**'
+      - '!**/*.md'
+      - 'apps/web/**'
+      - 'docs/architecture/CRM_LEAD_MEMBERSHIP_RECOVERY_FRONTEND.md'
   workflow_dispatch:
 
 permissions:
