@@ -334,6 +334,56 @@ try{
   await assert.rejects(admin.query("UPDATE hon.creative_generation_assets SET width=1 WHERE generation_id=$1",[g.generationId]),e=>/IMMUTABLE|42501/.test(e.code+e.message));
   await assert.rejects(admin.query("INSERT INTO hon.creative_generation_assets(generation_id,school_id,ordinal,media_type,width,height,origin,provider_asset_reference,created_at) VALUES($1,$2,3,'image/png',1,1,'PROVIDER','x',now())",[g.generationId,S.A1]),e=>e.code==='23514','only SYNTHETIC results in CS1');
  });
+
+ // ---------- P2-162-1 (Manus): authority is final for the generation write, not only for the CW1 reserve ----------
+ // A trusted holder keeps hon.creative_generations IN SHARE MODE: the request passes the CW1 reserve (authority still
+ // valid), then blocks on the generation insert (proved with pg_blocking_pids on the holder's exact PID, never a sleep).
+ // The grant or entitlement ends by the server clock during that wait; the holder releases before the lock timeout.
+ // The request must be refused with nothing written and the provider never called.
+ const serverPassed=async t=>(await row('SELECT clock_timestamp() > $1::timestamptz p',[t])).p;
+ const untilPassed=async t=>{for(let i=0;i<200&&!(await serverPassed(t));i++)await new Promise(z=>setTimeout(z,25));assert.ok(await serverPassed(t),'server clock passed the expiry');};
+ const soon=async ms=>(await row(`SELECT clock_timestamp()+interval '${ms} milliseconds' t`)).t;
+ async function duringGenerationWriteWait(request,during){
+  const holder=await ownerPool.connect();let pending;
+  try{
+   await holder.query('BEGIN');await holder.query('LOCK TABLE hon.creative_generations IN SHARE MODE');
+   const hpid=(await holder.query('SELECT pg_backend_pid() p')).rows[0].p;
+   pending=request().then(v=>({ok:true,v}),e=>({ok:false,e}));
+   let waiter=null;
+   for(let i=0;i<300&&!waiter;i++){waiter=await row("SELECT l.pid,l.mode m FROM pg_locks l WHERE NOT l.granted AND l.locktype='relation' AND l.relation='hon.creative_generations'::regclass AND $1=ANY(pg_blocking_pids(l.pid))",[hpid]);if(!waiter)await new Promise(z=>setTimeout(z,10));}
+   assert.ok(waiter,'the request is blocked on the generation write by the holder PID');
+   assert.equal(waiter.m,'RowExclusiveLock','it waits for the generation insert lock (after the CW1 reserve has run)');
+   await during();
+   await holder.query('ROLLBACK');
+   return await pending;
+  }finally{await holder.query('ROLLBACK').catch(()=>{});holder.release();await pending?.catch?.(()=>{});}
+ }
+ const countsB=async()=>row("SELECT (SELECT count(*)::int FROM hon.creative_generations WHERE school_id=$1) gens,(SELECT count(*)::int FROM hon.saas_creative_reservations WHERE school_id=$1) res,(SELECT count(*)::int FROM hon.saas_creative_ledger WHERE school_id=$1) ledger,(SELECT count(*)::int FROM hon.saas_audit WHERE organization_id=$2) audit,(SELECT count(*)::int FROM hon.saas_outbox o JOIN hon.saas_audit a ON a.id=o.audit_id WHERE a.organization_id=$2) outbox",[S.B,S.orgB]);
+ const setEntitlementUntil=t=>admin.query('UPDATE hon.organization_entitlements SET effective_until=$2 WHERE organization_id=$1',[S.orgB,t]);
+ const setGrantsUntil=async t=>{await admin.query('BEGIN');try{await admin.query('ALTER TABLE hon.principal_role_grants DISABLE TRIGGER USER');
+  await admin.query('UPDATE hon.principal_role_grants SET effective_until=$3 WHERE principal_id=$1 AND organization_id=$2',[humans.ownerB.id,S.orgB,t]);
+  await admin.query('ALTER TABLE hon.principal_role_grants ENABLE TRIGGER USER');await admin.query('COMMIT');}catch(e){await admin.query('ROLLBACK');throw e;}};
+ const lateExpiry=async(set,codes)=>{
+  const until=await soon(1200);await set(until);
+  try{
+   const before=await countsB(),calls=synthetic.calls.length;
+   const out=await duringGenerationWriteWait(()=>gen('B'),async()=>{assert.equal(await serverPassed(until),false,'blocked before the expiry');await untilPassed(until);});
+   assert.equal(out.ok,false,'the waiting request is refused, not completed with the reserve-time decision');
+   assert.ok(codes.includes(out.e?.getResponse?.()?.code),String(out.e?.getResponse?.()?.code??out.e?.stack??out.e));
+   assert.deepEqual(await countsB(),before,'no generation, reservation, ledger entry, audit or outbox row');
+   assert.equal(synthetic.calls.length,calls,'the synthetic provider is never invoked');
+  }finally{await set(null);}
+ };
+ await check('G11a','the generation write re-checks requester authority at the live clock: a role grant that expired while the insert waited refuses, nothing written, no provider call',
+  ()=>lateExpiry(setGrantsUntil,['SAAS_FORBIDDEN']));
+ await check('G11b','the generation write re-checks the entitlement at the live clock: an entitlement that ended while the insert waited refuses, nothing written, no provider call',
+  ()=>lateExpiry(setEntitlementUntil,['SAAS_FORBIDDEN','SAAS_CREATIVE_ENTITLEMENT_NOT_IN_EFFECT','SAAS_CREATIVE_AI_ACCESS_LAPSED']));
+ await check('G11c','control: the same generation-write wait with authority still valid completes once, with one provider call',async()=>{
+  const calls=synthetic.calls.length;
+  const out=await duringGenerationWriteWait(()=>gen('B'),async()=>{});
+  assert.equal(out.ok,true,String(out.e?.stack??out.e));
+  assert.deepEqual([out.v.generation.status,synthetic.calls.length],['SUCCEEDED',calls+1]);
+ });
  await setAccessProgram(false);programTouched=false;
 }finally{
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
