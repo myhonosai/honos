@@ -8,7 +8,8 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
-    # Everything except docs, re-including the docs/markdown that feature workflows trigger on: those workflows skip
+    # Everything except docs, re-including every glob or markdown path that a gated feature workflow triggers on (kept in step by
+    # .github/scripts/ci-trigger-matrix.test.mjs): those workflows skip
     # their duplicate full suites for ready PRs to main because CI runs them (see docs/CI.md, duplicate suite gating).
     paths:
       - '**'
@@ -17,6 +18,32 @@ on:
       - '!**/*.md'
       - 'apps/web/**'
       - 'docs/architecture/CRM_LEAD_MEMBERSHIP_RECOVERY_FRONTEND.md'
+      - 'apps/web/src/components/membership-dates-*'
+      - 'apps/web/src/app/staff/billing/membership-dates/**'
+      - 'apps/web/test/membership-dates-*'
+      - 'apps/web/scripts/membership-dates-*'
+      - 'apps/web/src/app/hq/schools/**'
+      - 'apps/web/src/components/hq-onboarding-*'
+      - 'apps/web/src/components/hq-school-directory*'
+      - 'apps/web/test/hq-onboarding*'
+      - 'apps/web/test/hq-school-directory*'
+      - 'apps/web/test/hq-school-session-retirement*'
+      - 'apps/web/test/hq-school-management-localization*'
+      - 'apps/web/scripts/hq-school-create*'
+      - 'packages/database/scripts/migration-*.mjs'
+      - 'apps/api/src/foundation/runtime-*.ts'
+      - 'packages/database/scripts/*commercial-staging*'
+      - 'packages/database/migrations/0186_*'
+      - 'packages/database/migrations/0187_*'
+      - 'packages/database/migrations/0188_*'
+      - 'packages/database/migrations/0189_*'
+      - 'packages/database/scripts/*subscription-generation*'
+      - 'packages/database/scripts/*price-acceptance*'
+      - 'apps/api/src/saas-pricing/**'
+      - 'packages/database/scripts/*trial-governance*'
+      - 'apps/api/src/saas-trials/**'
+      - 'packages/database/scripts/*exception-policy*'
+      - 'packages/domain/src/saas-introductory-pricing*'
   workflow_dispatch:
 
 permissions:
@@ -51,6 +78,8 @@ jobs:
           node --test .github/scripts/verify-node-runtime.test.mjs
       - name: Install dependencies (lockfile only)
         run: pnpm install --frozen-lockfile
+      - name: Duplicate suite gating keeps every trigger covered
+        run: node --test .github/scripts/ci-trigger-matrix.test.mjs
       - name: pnpm test
         run: pnpm test
       - name: pnpm check
