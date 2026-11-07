@@ -2235,3 +2235,15 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.record_hon_reply_result(text,uuid,jsonb), hon.release_held_hon_reply(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-HQ-1 0219 HQ access overview: the HQ read is the only runtime boundary; its two helpers stay internal.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['saas_exception_policy_ready()','saas_access_overview_row(uuid,boolean)',
+    'read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer) TO hon_runtime;
+  END IF;
+END $$;

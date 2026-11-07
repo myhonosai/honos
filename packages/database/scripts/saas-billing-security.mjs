@@ -315,6 +315,10 @@ export const saasBillingFunctions = [
  ['hon.settle_saas_creative_credits(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.create_saas_creative_topup_purchase(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.saas_fulfill_creative_topup(uuid,jsonb,timestamp with time zone)',false,true],
+ // 0219 B-HQ-1 HQ access overview: read-only HQ list; the helpers stay internal.
+ ['hon.saas_exception_policy_ready()',false,false],
+ ['hon.saas_access_overview_row(uuid,boolean)',false,false],
+ ['hon.read_saas_access_overview_from_hq(text,text,timestamp with time zone,uuid,integer)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 // Issue #100 (0201): functions that add calendar months to timestamptz run with TimeZone=UTC so billing
