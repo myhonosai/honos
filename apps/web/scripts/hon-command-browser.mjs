@@ -154,6 +154,14 @@ const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, prog
     { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' }] },
   packages: [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({ packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' })),
   agentConversationsDeductCredits: false, paymentsActive: false });
+// Creative Studio generations (CS1, synthetic). provider: NOT_CONNECTED unless a check connects it.
+// replies, one per POST: 'ok', 'unknown' (503, nothing stored), 'accepted' (stores a GENERATING row, then the answer is lost),
+// 'notConnected' (503 CREATIVE_PROVIDER_NOT_CONNECTED), 'denied' (403), 'transition' (409 SAAS_TRANSITION_NOT_ALLOWED).
+// gate: when set, the next POST waits for it before answering (a create still in flight).
+const creative = { provider: 'NOT_CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null };
+const creativeGeneration = (body, n) => ({ generationId: id(700 + n), schoolId: scope.schoolId, operationCode: body.operationCode, mediaKind: 'IMAGE', units: body.units,
+  format: body.format, prompt: body.prompt, status: 'SUCCEEDED', failureReason: null, reservedCredits: 40 * body.units, chargedCredits: 40 * body.units,
+  createdAt: iso(0), completedAt: iso(0), assets: Array.from({ length: body.units }, (_, i) => ({ assetId: id(720 + n * 10 + i), ordinal: i + 1, mediaType: 'image/png', width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' })) });
 function json(route, status, body, headers = {}) {
   return route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', ...headers }, body: JSON.stringify(body) });
 }
@@ -167,6 +175,32 @@ async function api(route) {
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
   if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
+    if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
+    const request = route.request();
+    creative.posts.push({ key: request.headers()['idempotency-key'], command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = creative.replies.shift() ?? 'ok', idem = request.headers()['idempotency-key'];
+    if (creative.gate) { const gate = creative.gate; creative.gate = null; await gate; }
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (next === 'notConnected') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    if (next === 'denied') return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    if (next === 'transition') return json(route, 409, { code: 'SAAS_TRANSITION_NOT_ALLOWED' });
+    if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const body = JSON.parse(request.postData() ?? '{}'), prior = creative.byKey.get(idem);
+    if (prior) {
+      const done = { ...creativeGeneration(body, 0), generationId: prior.generationId, createdAt: prior.createdAt };
+      creative.items = creative.items.map((item) => item.generationId === prior.generationId ? done : item);
+      return json(route, 200, { data: { generation: done, balance: creativeWallet().balance, replayed: true } });
+    }
+    const g = creativeGeneration(body, creative.items.length + 1);
+    if (next === 'accepted') {
+      const held = { ...g, status: 'GENERATING', chargedCredits: null, completedAt: null, assets: [] };
+      creative.items = [held, ...creative.items]; creative.byKey.set(idem, held);
+      return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    }
+    creative.items = [g, ...creative.items];
+    return json(route, 200, { data: { generation: g, balance: creativeWallet().balance, replayed: false } });
+  }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
     assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
     return studio === 'denied' ? json(route, 403, { code: 'FORBIDDEN' }) : json(route, 200, { data: creativeWallet() });
@@ -661,6 +695,148 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     await ctx.close();
   });
 }
+await check('Creative Studio: connected provider, lost answer, Check again replays the same request once', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map(), gate: null });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section.locator('[data-create-state="OPEN"]').waitFor();
+  await section.getByLabel('What to make').selectOption('image.standard');
+  await section.getByLabel('How many').fill('2');
+  await section.getByLabel('Portrait').check();
+  await section.getByLabel('Describe what you need').fill('Kids class flyer with a bright orange belt theme');
+  assert.ok(await section.getByText('Uses 80 credits. You have 11,640 available.').isVisible());
+  await section.getByRole('button', { name: 'Create', exact: true }).click();
+  await section.getByText(/We could not confirm whether this request went through/).waitFor();
+  assert.equal(await section.getByLabel('Describe what you need').isDisabled(), true, 'form locked while the outcome is unknown');
+  await shot(page, 'creative-studio-create-unknown');
+  await section.getByRole('button', { name: 'Check again' }).click();
+  await section.getByText('Done. The result is listed below.').waitFor();
+  await section.getByText('Image 1080×1080 · preview not available yet').first().waitFor();
+  assert.equal(creative.posts.length, 2);
+  assert.equal(creative.posts[0].key, creative.posts[1].key, 'Check again reuses the idempotency key');
+  assert.equal(creative.posts[0].body, creative.posts[1].body, 'Check again resends the identical body');
+  assert.equal(creative.posts[0].command, 'saas-creative-generation-create');
+  assert.deepEqual(JSON.parse(creative.posts[0].body), { operationCode: 'image.standard', units: 2, format: 'PORTRAIT', prompt: 'Kids class flyer with a bright orange belt theme' });
+  await noOverflow(page, 'creative-studio-create');
+  await axe(page, 'creative-studio-create');
+  await shot(page, 'creative-studio-create-done', true);
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: an unknown create stays unconfirmed across a conceal and never shows its text', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map(), gate: null });
+  const { ctx, page } = await creativeStudio({ width: 390, height: 844 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Private note about the Lee family');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText(/We could not confirm/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Lee family') || !!document.querySelector('[data-shell-private][hidden], [data-shell-private][inert]'));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await section().getByText(/waiting for confirmation/).waitFor({ timeout: 20000 });
+  assert.ok(!(await section().innerText()).includes('Lee family'), 'the pending request text is not shown after re-verification');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key);
+  await noOverflow(page, 'creative-studio-phone-create');
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: an accepted-but-unknown request is redacted after re-verify and survives refused retries', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['accepted', 'notConnected', 'denied', 'ok'], byKey: new Map(), gate: null });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  const prompt = 'Private note about the Lee family';
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill(prompt);
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText(/We could not confirm whether/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  // The re-verified list now holds the server's GENERATING row for this very request: status and credits, never its text.
+  await section().locator('li[data-status="GENERATING"] [data-prompt-hidden]').waitFor({ timeout: 20000 });
+  assert.ok(!(await section().innerText()).includes('Lee family'), 'the unconfirmed prompt is not shown in the list');
+  assert.ok((await section().innerText()).includes('credits held'));
+  await section().getByText(/waiting for confirmation/).waitFor();
+  for (const blocked of ['creating is not connected right now', 'your access was refused']) {
+    await section().getByRole('button', { name: 'Check again' }).click();
+    await section().getByText(new RegExp(blocked)).waitFor();
+    const text = await section().innerText();
+    assert.ok(text.includes('It is still unconfirmed and nothing new was started'), `${blocked}: still unconfirmed`);
+    assert.ok(!text.includes('Nothing was sent or charged'), `${blocked}: never claims nothing was charged`);
+    assert.ok(!text.includes('Lee family'), `${blocked}: text stays hidden`);
+    assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, `${blocked}: form stays locked`);
+  }
+  await shot(page, 'creative-studio-retry-blocked');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 4);
+  assert.equal(new Set(creative.posts.map((p) => p.key)).size, 1, 'every retry reuses the one idempotency key');
+  assert.equal(new Set(creative.posts.map((p) => p.body)).size, 1, 'every retry resends the identical body');
+  await section().locator('li[data-status="SUCCEEDED"]').getByText(prompt).waitFor();
+  assert.equal(creative.items.length, 1, 'one generation, never two');
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), false, 'released once known');
+  await noOverflow(page, 'creative-studio-retry-blocked');
+  await axe(page, 'creative-studio-retry-blocked');
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: re-verifying while a create is in flight keeps the form locked when its answer is unknown', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['transition', 'ok'], byKey: new Map(), gate });
+  const { ctx, page } = await creativeStudio({ width: 390, height: 844 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Belt test reminder flyer');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText('Creating… keep this tab open.').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await section().locator('[data-create-state="OPEN"]').waitFor({ timeout: 20000 });
+  await section().getByText('Creating… keep this tab open.').waitFor();
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, 'locked while the first send is still in flight');
+  release(); // the in-flight create now answers 409 SAAS_TRANSITION_NOT_ALLOWED: not a refusal, so unknown
+  await section().getByText(/waiting for confirmation/).waitFor();
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, 'still locked after the unknown answer');
+  assert.equal(await section().getByRole('button', { name: 'Create', exact: true }).isDisabled(), true);
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key);
+  await noOverflow(page, 'creative-studio-inflight-reverify');
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: a Refresh while a create is in flight still shows its unknown answer and Check again', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map(), gate });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Summer camp flyer');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText('Creating… keep this tab open.').waitFor();
+  const reads = () => report.apiRequests.filter((r) => r.startsWith('GET') && r.includes('creative-studio/generations')).length;
+  const before = reads();
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  for (let i = 0; i < 50 && reads() === before; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.ok(reads() > before, 'Refresh re-read the list while the create was in flight');
+  release();
+  await section().getByText(/We could not confirm whether this request went through/).waitFor();
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, 'locked after the unknown answer');
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await section().getByText(/We could not confirm whether/).waitFor();
+  assert.equal(creative.posts.length, 1, 'no automatic retry');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key); assert.equal(creative.posts[0].body, creative.posts[1].body);
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
 await check('Creative Studio: a refused wallet read shows no numbers', async () => {
   studio = 'denied';
   const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
