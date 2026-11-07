@@ -37,6 +37,9 @@ import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-fo
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
+import { CREATIVE_PROVIDER_RUNTIME, UnconfiguredCreativeProviderRuntime } from './creative-studio/creative-provider-runtime.js';
+import { CreativeStudioService } from './creative-studio/creative-studio.service.js';
+import { CreativeStudioController } from './creative-studio/creative-studio.controller.js';
 import { TeachingAssistantController, TeachingAssistantHumanUiGuard } from './teaching-assistant/teaching-assistant.controller.js';
 import { TeachingAssistantService } from './teaching-assistant/teaching-assistant.service.js';
 import { CLAIRE_PROVIDER_RUNTIME, OpenRouterClaireRuntime } from './ai/claire-provider-runtime.js';
@@ -375,7 +378,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [SchoolOwnerInvitationService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard,
@@ -405,6 +408,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ChadFollowUpAssistantHumanUiGuard,
     { provide: CHAD_PROVIDER_RUNTIME, useFactory: () => new OpenRouterChadRuntime() },
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
+    // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
+    { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => new UnconfiguredCreativeProviderRuntime() },
     TeachingAssistantService,
     TeachingAssistantHumanUiGuard,
     { provide: CLAIRE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterClaireRuntime() },
@@ -502,7 +507,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
-    SaasBillingService, SaasCreativeWalletService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, AiSpendPauseService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
+    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, AiSpendPauseService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
     // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
     { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },
     HqOverviewService,
