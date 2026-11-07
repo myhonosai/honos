@@ -2244,3 +2244,17 @@ DO $$ DECLARE r text; BEGIN
     EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[]) FROM '||quote_ident(r);
   END LOOP;
 END $$;
+
+-- C3a 0215 (proposed) grouped confirmations: tables reached only through functions; one read for the runtime.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.hon_orchestrations') IS NULL THEN RAISE EXCEPTION 'Apply C3a migration 0215 first'; END IF;
+  REVOKE ALL ON TABLE hon.hon_orchestrations, hon.hon_orchestration_members FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.hon_orchestrations, hon.hon_orchestration_members FROM '||quote_ident(r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon_orchestration_immutable()','hon_orchestration_status(text[])','read_hon_orchestrations(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN GRANT EXECUTE ON FUNCTION hon.read_hon_orchestrations(text,uuid) TO hon_runtime; END IF;
+END $$;

@@ -5,7 +5,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
-  composeHonConversationReadiness, validateHonConversationCreate, validateHonConversationSummary, validateHonConversationThread,
+  composeHonConversationReadiness, validateHonConversationCreate, validateHonConversationSummary, validateHonConversationThread, validateHonOrchestrationList, type HonOrchestrationList,
   validateHonTurnReceipt, validateHonTurnRequest, type HonConversationPage, type HonDelegateAgentKey, type HonTurnReceipt,
 } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
@@ -34,7 +34,7 @@ function boundaryError(error: unknown): never {
   if (code === '23505') throw new ConflictException({ code: 'HON_IDEMPOTENCY_CONFLICT', detail: 'This Idempotency-Key was already used with a different request.' });
   if (code === '23514') throw new ConflictException({ code: 'HON_CONVERSATION_FULL', detail: 'Start a new conversation.' });
   if (code === '22023' || code === '22P02') {
-    throw new BadRequestException({ code: message === 'HON_DELEGATION_REQUIRED' || message === 'HON_REPLY_NOT_CONTINUABLE' ? message : 'INVALID_HON_CONVERSATION_REQUEST' });
+    throw new BadRequestException({ code: ['HON_DELEGATION_REQUIRED', 'HON_REPLY_NOT_CONTINUABLE', 'HON_SUGGESTION_NOT_CONFIRMABLE'].includes(message) ? message : 'INVALID_HON_CONVERSATION_REQUEST' });
   }
   if (code === '57014' || code === '55P03') throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_TIMEOUT', detail: 'No success assumed. Read the conversation before resending.' });
   throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' });
@@ -113,6 +113,12 @@ export class HonConversationService {
   async read(scope: Scope, id: string) {
     const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>('SELECT hon.read_hon_conversation($1,$2::uuid) data', [scope.externalSubject, id])).rows[0]!.data, true);
     try { return validateHonConversationThread(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
+  }
+
+  /** C3a: the specialists confirmed from each HON answer's suggestions, with their derived group status. Read only. */
+  async orchestrations(scope: Scope, id: string): Promise<HonOrchestrationList> {
+    const data = await this.transaction(scope, async (client) => (await client.query<{ data: unknown }>('SELECT hon.read_hon_orchestrations($1,$2::uuid) data', [scope.externalSubject, id])).rows[0]!.data, true);
+    try { return validateHonOrchestrationList(data); } catch { throw new ServiceUnavailableException({ code: 'HON_CONVERSATION_UNAVAILABLE' }); }
   }
 
   async create(scope: Scope, input: unknown, key: string | undefined) {
@@ -200,6 +206,10 @@ export class HonConversationController {
   @Header('Cache-Control', 'private, no-store') @Get('conversations/:conversationId')
   async read(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('conversationId', new ParseUUIDPipe()) id: string, @Query() query: Record<string, unknown>) {
     this.noQuery(query); return { data: await this.conversations.read(await this.scope(req, org, school), id) };
+  }
+  @Header('Cache-Control', 'private, no-store') @Get('conversations/:conversationId/orchestrations')
+  async orchestrations(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('conversationId', new ParseUUIDPipe()) id: string, @Query() query: Record<string, unknown>) {
+    this.noQuery(query); return { data: await this.conversations.orchestrations(await this.scope(req, org, school), id) };
   }
   @Header('Cache-Control', 'private, no-store') @Post('conversations/:conversationId/turns') @HttpCode(200)
   async send(@Req() req: HonRequest, @Param('organizationId', new ParseUUIDPipe()) org: string, @Param('schoolId', new ParseUUIDPipe()) school: string, @Param('conversationId', new ParseUUIDPipe()) id: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) {
