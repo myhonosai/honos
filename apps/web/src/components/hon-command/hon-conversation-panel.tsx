@@ -13,7 +13,7 @@ import {
 import { honTurnStatusPresentation } from './hon-conversation';
 import styles from './hon-conversation.module.css';
 
-const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Kai', chad: 'Chad', HUMAN: 'You' };
+const AGENT_NAME: Record<string, string> = { hon: 'HON', marcus: 'Marcus', claire: 'Kai', kai: 'Kai', chad: 'Chad', HUMAN: 'You' };
 const FAILURE: Record<HonConversationFailure, string> = {
   SESSION: 'Your session ended. Sign in again.',
   FORBIDDEN: 'This account cannot use HON at this school. Nothing was sent.',
