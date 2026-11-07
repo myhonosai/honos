@@ -17,7 +17,8 @@ env:
 jobs:
   checks:
     name: Repository tests, typecheck, build and migrations
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Same commands as ci.yml, which runs on every ready pull request to main; run here only for drafts and stacked bases.
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.base.ref != 'main' || github.event.pull_request.draft)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -39,7 +40,8 @@ jobs:
       - run: git diff --exit-code
   database:
     name: Complete disposable PostgreSQL security proofs
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Same commands as ci.yml, which runs on every ready pull request to main; run here only for drafts and stacked bases.
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.base.ref != 'main' || github.event.pull_request.draft)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

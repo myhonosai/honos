@@ -92,3 +92,20 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.
+
+## Duplicate suite gating (2026-11-07)
+
+Several feature workflows repeated regular CI's full test/build job and complete disposable proof suite on every push,
+and three `apps/web/**` workflows each repeated the same commercial rehearsal. On 2026-11-07 that duplication was about
+two thirds of Actions minutes. Pure duplicates (identical commands, no extra steps or environment) now run only when
+regular CI does not:
+
+- Full test/build (`checks`) and complete proofs (`database`/`regressions`) in `owner-experience-integration`,
+  `connected-student-operations-validation`, `crm-membership-recovery-integration`, `membership-dates-validation`,
+  `hq-school-create-validation` and `commercial-staging-validation`: skipped for a ready PR to `main` (CI runs them);
+  still run for drafts and stacked bases.
+- Commercial rehearsal in `connected-student-operations-validation`, `crm-membership-recovery-integration` and
+  `membership-dates-validation`: skipped for PRs to `main`, where `owner-experience-integration` runs the same rehearsal
+  on the same trigger; still run for stacked bases.
+
+Jobs with their own extra steps, environment or fixtures (browser, mounted application, focused proofs) are unchanged.
