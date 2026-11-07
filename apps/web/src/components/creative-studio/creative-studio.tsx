@@ -76,12 +76,15 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const [lock, setLock] = useState<CreateLock>('NONE');
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
+  // Advances only when the page is concealed (blur, hidden tab, school change, session end), never on a read Refresh,
+  // so a create answer is shown unless private display was retired while it was in flight.
+  const privacy = useRef(0);
   const pending = useRef<Pending | null>(null);
   const sending = useRef(false);
   const loadedSchool = useRef<string | null>(null);
 
   useEffect(() => onShellPrivacyEvent(() => {
-    concealShellPrivateNow(); generation.current++; loadedSchool.current = null;
+    concealShellPrivateNow(); generation.current++; privacy.current++; loadedSchool.current = null;
     setStudio({ state: 'LOADING' }); setGenerations({ state: 'LOADING' }); setOutcome(null);
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
@@ -110,7 +113,7 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
   const send = useCallback(async () => {
     const request = pending.current;
     if (!request || sending.current || !selection || selection.schoolId.toLowerCase() !== request.schoolId) return;
-    sending.current = true; const shown = generation.current;
+    sending.current = true; const shown = privacy.current;
     setLock('SENDING'); setOutcome({ kind: 'SENDING' });
     let next: CreateOutcome, release: boolean;
     try {
@@ -123,7 +126,10 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
     // The lock is state, not display: it is set even when the page was concealed meanwhile.
     setLock(pending.current ? 'UNRESOLVED' : 'NONE');
     if (next?.kind === 'DONE' || next?.kind === 'HELD' || next?.kind === 'FAILED') setRefresh(value => value + 1);
-    if (shown !== generation.current) return; // concealed meanwhile: the result is not shown
+    if (shown !== privacy.current) { // concealed meanwhile: the result is not shown; the lock alone says what is pending
+      setOutcome(prior => prior?.kind === 'SENDING' ? null : prior);
+      return;
+    }
     setOutcome(next);
   }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 

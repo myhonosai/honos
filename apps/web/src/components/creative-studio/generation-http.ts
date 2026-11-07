@@ -23,7 +23,11 @@ export const CREATIVE_GENERATION_COMMAND = 'saas-creative-generation-create';
  * unrecognized or missing code, or a conflict raised while recording a provider result) leaves the outcome unknown.
  */
 const DEFINITIVE_CONFLICTS = new Set(['IDEMPOTENCY_KEY_REUSED']);
-const isRuleRefusal = (code: string | null) => code === 'CREATIVE_TOO_MANY_IN_PROGRESS' || (code !== null && /^SAAS_CREATIVE_[A-Z_]{2,60}$/.test(code));
+/** School rules the server checks before it reserves credits or calls a provider. Any other 422 stays unknown. */
+const PRE_ACCEPTANCE_REFUSALS = new Set(['CREATIVE_TOO_MANY_IN_PROGRESS', 'SAAS_CREATIVE_AI_PAUSED_BY_HQ', 'SAAS_CREATIVE_PROGRAM_INACTIVE',
+  'SAAS_CREATIVE_PAID_ACCESS_REQUIRED', 'SAAS_CREATIVE_RATES_NOT_PUBLISHED', 'SAAS_CREATIVE_WINDOW_UNAVAILABLE', 'SAAS_CREATIVE_WINDOW_NOT_PAID',
+  'SAAS_CREATIVE_ENTITLEMENT_NOT_IN_EFFECT', 'SAAS_CREATIVE_AI_ACCESS_LAPSED', 'SAAS_CREATIVE_DEBIT_EXCEEDS_AVAILABLE']);
+const isRuleRefusal = (code: string | null) => code !== null && PRE_ACCEPTANCE_REFUSALS.has(code);
 
 const generationsPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/generations`;
 const json = /^application\/json(?:\s*;|$)/i;

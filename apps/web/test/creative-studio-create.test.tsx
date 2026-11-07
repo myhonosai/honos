@@ -67,7 +67,10 @@ it('separates definitive refusals from unknown outcomes', async () => {
     [409, 'IDEMPOTENCY_KEY_REUSED', 'INVALID'], [400, 'INVALID_SAAS_INPUT', 'INVALID'], [403, 'SAAS_FORBIDDEN', 'DENIED'], [500, null, 'UNKNOWN'], [404, 'SAAS_UNAVAILABLE', 'INVALID'], [409, 'SAAS_CREATIVE_OUTCOME_PENDING', 'UNKNOWN'],
     // Unrecognized or missing codes never prove a refusal: a conflict raised after the provider call keeps the request.
     [409, 'SAAS_TRANSITION_NOT_ALLOWED', 'UNKNOWN'], [409, null, 'UNKNOWN'], [422, 'SAAS_VALIDATION_FAILED', 'UNKNOWN'], [422, null, 'UNKNOWN'],
-    [422, 'saas_creative_lowercase', 'UNKNOWN']];
+    [422, 'saas_creative_lowercase', 'UNKNOWN'],
+    // Only rules checked before anything is reserved are refusals; other creative codes (or invented ones) stay unknown.
+    [422, 'SAAS_CREATIVE_PROGRAM_INACTIVE', 'REFUSED'], [422, 'SAAS_CREATIVE_LEDGER_MISMATCH', 'UNKNOWN'], [422, 'SAAS_CREATIVE_COST_PROVIDER_MISMATCH', 'UNKNOWN'],
+    [422, 'SAAS_CREATIVE_INVENTED_CODE', 'UNKNOWN']];
   for (const [status, code, kind] of cases) {
     f.mockResolvedValueOnce(Response.json(code ? { code } : {}, { status }));
     await expect(createCreativeGeneration(scope.schoolId, input, key, signal()), `${status} ${code}`).rejects.toMatchObject({ kind, code });

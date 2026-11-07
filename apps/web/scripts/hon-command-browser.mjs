@@ -810,6 +810,33 @@ await check('Creative Studio: re-verifying while a create is in flight keeps the
   creative.provider = 'NOT_CONNECTED'; creative.items = [];
   await ctx.close();
 });
+await check('Creative Studio: a Refresh while a create is in flight still shows its unknown answer and Check again', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map(), gate });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Summer camp flyer');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText('Creating… keep this tab open.').waitFor();
+  const reads = () => report.apiRequests.filter((r) => r.startsWith('GET') && r.includes('creative-studio/generations')).length;
+  const before = reads();
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  for (let i = 0; i < 50 && reads() === before; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.ok(reads() > before, 'Refresh re-read the list while the create was in flight');
+  release();
+  await section().getByText(/We could not confirm whether this request went through/).waitFor();
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, 'locked after the unknown answer');
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await section().getByText(/We could not confirm whether/).waitFor();
+  assert.equal(creative.posts.length, 1, 'no automatic retry');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key); assert.equal(creative.posts[0].body, creative.posts[1].body);
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
 await check('Creative Studio: a refused wallet read shows no numbers', async () => {
   studio = 'denied';
   const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
