@@ -33,6 +33,8 @@ export interface HonWorkspaceViewProps {
   onClose?: (() => void) | undefined;
   expandHref?: string | undefined;
   returnHref?: string | undefined;
+  /** The live conversation for a verified school. Without it the honest not-connected boundary is shown. */
+  conversation?: React.ReactNode | undefined;
 }
 
 const STATUS_WORDS = (value: string): string => value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
@@ -348,7 +350,7 @@ export function HonWorkspaceView(props: HonWorkspaceViewProps): React.ReactEleme
     {scope.state === 'RESOLVING' ? <p className={styles.state} role="status" data-state="LOADING">{scope.message}</p> : null}
     {/* Management agents, suggestions, AI work and approvals render only for a server-verified management scope. */}
     {verified ? <div className={styles.body}>
-      <Conversation presentation={presentation} />
+      {props.conversation ?? <Conversation presentation={presentation} />}
       <section className={styles.sections} aria-label="HON workspace">
         <HonTabs tab={tab} snapshot={snapshot} onTab={props.onTab} idPrefix={idPrefix} />
         <div className={styles.tabPanel} role="tabpanel" id={`${idPrefix}-panel`} aria-labelledby={`${idPrefix}-tab-${tab}`} tabIndex={0}>
