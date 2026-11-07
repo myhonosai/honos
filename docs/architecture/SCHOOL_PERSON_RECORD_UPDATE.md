@@ -96,6 +96,20 @@ response; the same key with a different body is refused.
   values), idempotency completion, then **authority is decided again after the
   last write** so a grant revoked while the command waited commits nothing.
 
+## Consent serialization (Manus P1-161-1)
+
+For each channel whose address changes (EMAIL for email, SMS for phone) the command
+takes the canonical consent writer's transaction advisory lock
+`pg_advisory_xact_lock(hashtextextended(personId || ':' || channel, 0))`
+(`communication-consent.service.ts`), EMAIL before SMS, held to commit, and only then
+reads that channel's consent row `FOR SHARE`. A consent capture in flight for the old
+address (an update or a first insert) therefore finishes first and the edit refuses;
+an edit that wins first finishes before the consent capture, which then applies to the
+new address. The consent writer never waits on the person row (its FK check takes
+KEY SHARE, compatible with the edit's NO KEY UPDATE), so the order person row ->
+advisory lock cannot deadlock. Proof group 10 covers EMAIL and SMS, existing opt-in
+and first insert, change and clear, and the reverse order.
+
 ## Permission
 
 New permission `people.update` ("Edit a person's name and contact details within

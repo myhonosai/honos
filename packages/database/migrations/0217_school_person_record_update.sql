@@ -75,7 +75,7 @@ CREATE FUNCTION hon.update_school_person(p_subject text,p_input jsonb,p_key uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; v_school uuid; v_org uuid; v_person uuid; v_version integer; fp text; prior hon.idempotency_records%ROWTYPE;
   cur hon.people%ROWTYPE; nxt hon.people%ROWTYPE; v_given text; v_family text; v_email text; v_phone text;
-  changed text[]:=ARRAY[]::text[]; before jsonb; result jsonb; v_request uuid:=gen_random_uuid();
+  changed text[]:=ARRAY[]::text[]; v_consent text; before jsonb; result jsonb; v_request uuid:=gen_random_uuid();
   uuid_re constant text:='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 BEGIN
   IF p_subject IS NULL OR p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input)<>'object'
@@ -124,10 +124,25 @@ BEGIN
   IF lower(cur.email::text) IS DISTINCT FROM v_email THEN changed:=array_append(changed,'email'); END IF;
   IF cur.phone_e164 IS DISTINCT FROM v_phone THEN changed:=array_append(changed,'phoneE164'); END IF;
   IF cardinality(changed)=0 THEN RAISE EXCEPTION 'PERSON_UNCHANGED' USING ERRCODE='22023'; END IF;
-  -- Consent records a channel, not an address: never carry an opt-in to a new or cleared address.
-  IF ('email'=ANY(changed) AND EXISTS(SELECT 1 FROM hon.communication_consents WHERE person_id=v_person AND channel='EMAIL' AND status='OPTED_IN'))
-    OR ('phoneE164'=ANY(changed) AND EXISTS(SELECT 1 FROM hon.communication_consents WHERE person_id=v_person AND channel='SMS' AND status='OPTED_IN')) THEN
-    RAISE EXCEPTION 'PERSON_CONTACT_CONSENT_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
+  -- Consent records a channel, not an address: never carry an opt-in to a new or cleared address. Serialize with the
+  -- canonical consent writer (communication-consent.service.ts): the same per person/channel transaction advisory
+  -- lock, taken for each affected channel in a fixed order (EMAIL, then SMS) and held to commit, then the channel's consent row
+  -- read FOR SHARE whatever its status. A consent capture that is in flight for the old address finishes first and is then seen; a
+  -- first-time insert cannot slip past because the advisory lock, not a row lock, is the serialization point.
+  -- The consent writer never waits on the person row (its FK check takes KEY SHARE, which NO KEY UPDATE allows),
+  -- so person row -> advisory cannot invert.
+  IF 'email'=ANY(changed) THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended(v_person::text||':'||'EMAIL',0));
+    SELECT status::text INTO v_consent FROM hon.communication_consents WHERE person_id=v_person AND channel='EMAIL' FOR SHARE;
+    IF v_consent='OPTED_IN' THEN
+      RAISE EXCEPTION 'PERSON_CONTACT_CONSENT_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
+  END IF;
+  IF 'phoneE164'=ANY(changed) THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended(v_person::text||':'||'SMS',0));
+    SELECT status::text INTO v_consent FROM hon.communication_consents WHERE person_id=v_person AND channel='SMS' FOR SHARE;
+    IF v_consent='OPTED_IN' THEN
+      RAISE EXCEPTION 'PERSON_CONTACT_CONSENT_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
+  END IF;
 
   before:=jsonb_build_object('givenName',cur.given_name,'familyName',cur.family_name,'email',cur.email::text,'phoneE164',cur.phone_e164,'version',cur.version);
   -- A case-only email difference is not a change (citext); keep the stored spelling then.

@@ -16,7 +16,7 @@ const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
 const {SchoolPersonRecordService}=require('./dist/people/school-person-record.service.js');
 const {SchoolPersonRecordController,SchoolPersonRecordHumanGuard}=require('./dist/people/school-person-record.controller.js');
 const {PERSON_RECORD_HUMAN_COMMAND}=require('@hon/contracts');
-const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false});
+const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false}),blocker2=new pg.Client({connectionString:owner.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
 const session={mode:'OIDC',audience:'b-crm-1a-disposable',secret:randomBytes(32).toString('hex'),emitVerifiedEmail:true};
 Object.assign(process.env,{HON_AUTH_MODE:session.mode,HON_SESSION_AUDIENCE:session.audience,HON_SESSION_JWT_SECRET:session.secret});
@@ -53,10 +53,14 @@ const addPerson=async(o,given,family,email=null,phone=null)=>(await q('INSERT IN
 const read=(identity,schoolId,personId)=>send('school/schools/'+schoolId+'/people/'+personId,{identity,method:'GET'});
 const body=(schoolId,personId,expectedVersion,patch={})=>({schoolId,personId,expectedVersion,givenName:'Ana',familyName:'Rivera',email:'ana@example.invalid',phoneE164:'+15555550100',...patch});
 const update=(identity,b,key)=>send('school/people/update',{identity,body:b,key});
+const waitFor=async(sql,label)=>{for(let i=0;i<300;i++){if((await q(sql))[0].n!=='0')return;await new Promise(r=>setTimeout(r,10));}throw new Error(label);};
+const waitForAdvisoryWait=()=>waitFor("SELECT count(*) n FROM pg_locks WHERE locktype='advisory' AND NOT granted",'never waited on the consent advisory lock');
+// Exactly the canonical consent writer's serialization key (communication-consent.service.ts).
+const consentKey="SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))";
 const waitForLockWait=async()=>{for(let i=0;i<200;i++){if((await q("SELECT count(*) n FROM pg_locks WHERE NOT granted"))[0].n!=='0')return;await new Promise(r=>setTimeout(r,10));}throw new Error('update never waited on the person lock');};
 
 try{
- await Promise.all([admin.connect(),restricted.connect(),blocker.connect()]);
+ await Promise.all([admin.connect(),restricted.connect(),blocker.connect(),blocker2.connect()]);
  assert.equal((await q("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()"))[0].m,'HON disposable Champions Club validation');
  // 1. Runtime ACL: still no UPDATE on people; exactly two fixed entry points; helpers private.
  for(const p of ['UPDATE','DELETE','TRUNCATE'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.people',p]))[0].ok,false,p);
@@ -191,8 +195,40 @@ try{
   await blocker.query('COMMIT');
   const r=ok(await pending);assert.equal(r.person.version,row.version+1);assert.deepEqual(r.changedFields,['givenName']);}
  pass('the edit takes the people lock before the idempotency insert, so a CRM-style SHARE ROW EXCLUSIVE holder never deadlocks with it');
+ // 10. Contact edits serialize with consent capture through the canonical person/channel advisory lock.
+ const effects=async()=>Object.fromEntries(await Promise.all(['audit_events','outbox_events','idempotency_records'].map(async t=>[t,(await q('SELECT count(*) n FROM hon.'+t))[0].n])));
+ const consentRow=(o,id,channel,status)=>q("INSERT INTO hon.communication_consents(organization_id,school_id,person_id,channel,status,source,captured_at,updated_by_principal_id) VALUES($1,$2,$3,$4,$5,'STAFF',clock_timestamp(),$6)",[o.organizationId,o.schoolId,id,channel,status,editorPrincipal]);
+ const raceEdit=(id,patch)=>update(editor3,body(A.schoolId,id,1,{givenName:'Race',familyName:'Case',email:'race-a@example.invalid',phoneE164:'+15555550200',...patch}));
+ for(const [label,channel,patch,prepare,capture] of [
+  ['existing EMAIL opt-in','EMAIL',{email:'race-b@example.invalid'},id=>consentRow(A,id,'EMAIL','OPTED_OUT'),id=>blocker.query("UPDATE hon.communication_consents SET status='OPTED_IN',version=version+1 WHERE person_id=$1 AND channel='EMAIL'",[id])],
+  ['existing EMAIL opt-in, email cleared','EMAIL',{email:null},id=>consentRow(A,id,'EMAIL','OPTED_OUT'),id=>blocker.query("UPDATE hon.communication_consents SET status='OPTED_IN',version=version+1 WHERE person_id=$1 AND channel='EMAIL'",[id])],
+  ['first SMS opt-in','SMS',{phoneE164:'+15555550299'},async()=>{},id=>blocker.query("INSERT INTO hon.communication_consents(organization_id,school_id,person_id,channel,status,source,captured_at,updated_by_principal_id) VALUES($1,$2,$3,'SMS','OPTED_IN','STAFF',clock_timestamp(),$4)",[A.organizationId,A.schoolId,id,editorPrincipal])],
+  ['first EMAIL opt-in','EMAIL',{email:'race-c@example.invalid'},async()=>{},id=>blocker.query("INSERT INTO hon.communication_consents(organization_id,school_id,person_id,channel,status,source,captured_at,updated_by_principal_id) VALUES($1,$2,$3,'EMAIL','OPTED_IN','STAFF',clock_timestamp(),$4)",[A.organizationId,A.schoolId,id,editorPrincipal])]]){
+  const id=await addPerson(A,'Race','Case','race-a@example.invalid','+15555550200');await prepare(id);
+  const row=await snapshot(id),before=await effects();
+  await blocker.query('BEGIN');await blocker.query(consentKey,[id,channel]);await capture(id);
+  const pending=raceEdit(id,patch);
+  await waitForAdvisoryWait();
+  await blocker.query('COMMIT');
+  const r=await pending;assert.equal(r.status,409,label+':'+JSON.stringify(r.body));assert.equal(r.body.code,'PERSON_CONTACT_CONSENT_REVIEW_REQUIRED',label);
+  assert.deepEqual(await snapshot(id),row,label);assert.deepEqual(await effects(),before,label);
+ }
+ // Reverse order: the edit holds the advisory lock first (paused on the consent row), the consent writer waits for it;
+ // both finish without deadlock and the later opt-in is for the new address.
+ {const id=await addPerson(A,'Race','Case','race-a@example.invalid','+15555550200');await consentRow(A,id,'EMAIL','OPTED_OUT');
+  await blocker.query('BEGIN');await blocker.query("SELECT 1 FROM hon.communication_consents WHERE person_id=$1 AND channel='EMAIL' FOR UPDATE",[id]);
+  const pending=raceEdit(id,{email:'race-d@example.invalid'});
+  await waitFor("SELECT count(*) n FROM pg_locks WHERE locktype='transactionid' AND NOT granted",'edit never reached the consent row');
+  await blocker2.query('BEGIN');const writer=blocker2.query(consentKey,[id,'EMAIL']);
+  await waitForAdvisoryWait();
+  await blocker.query('ROLLBACK');
+  const r=ok(await pending);assert.deepEqual(r.changedFields,['email']);
+  await writer;await blocker2.query("UPDATE hon.communication_consents SET status='OPTED_IN',version=version+1 WHERE person_id=$1 AND channel='EMAIL'",[id]);await blocker2.query('COMMIT');
+  assert.equal((await snapshot(id)).email,'race-d@example.invalid');
+  assert.deepEqual(ok(await read(editor3,A.schoolId,id)).consents,{EMAIL:'OPTED_IN',SMS:'NOT_RECORDED'});}
+ pass('a consent capture in flight (existing opt-in or first insert, EMAIL and SMS, change or clear) makes the edit refuse with nothing written; in the reverse order both finish without deadlock');
  console.log('B-CRM-1a person record proof: '+groups+' groups passed');
 }finally{
  await app?.close();
- await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);
+ await Promise.allSettled([admin.end(),restricted.end(),blocker.end(),blocker2.end()]);
 }
