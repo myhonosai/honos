@@ -51,3 +51,13 @@ test('person human guard: own command header for the edit, same-origin, no autho
     {headers:{...headers,authorization:'Bearer x'}},{originalUrl:'/v1/school/people/update?schoolId=x'},{method:'PUT'},{method:'GET',headers:{'sec-fetch-site':'cross-site'}}])assert.throws(()=>check(patch));
  }finally{process.env=saved;}
 });
+test('consent writer serializes on the canonical uuid text, so an uppercase selector takes the same lock as the person edit',async()=>{
+ const {CommunicationConsentService,COMMUNICATION_CONSENT_ADVISORY_LOCK_SQL:lock}=require('../dist/communication/communication-consent.service.js');
+ assert.match(lock,/hashtextextended\(\$1::uuid::text \|\| ':' \|\| \$2::text, 0\)/);
+ const seen=[];const client={query:async(sql,args)=>{seen.push([sql,args]);if(/^SELECT id FROM hon\.people/.test(sql))return{rowCount:1,rows:[{id:args[0].toLowerCase()}]};
+  if(/INSERT INTO hon\.idempotency_records/.test(sql))return{rowCount:1,rows:[{id:randomUUID()}]};if(sql===lock)throw Object.assign(new Error('stop'),{stop:true});return{rowCount:0,rows:[]};}};
+ const svc=new CommunicationConsentService({withTenantTransaction:async(_c,work)=>work(client)});const upper=randomUUID().toUpperCase();
+ await assert.rejects(svc.record({organizationId:randomUUID(),schoolId:randomUUID(),principalId:randomUUID(),principalType:'HUMAN_USER',requestId:randomUUID(),correlationId:randomUUID(),idempotencyKey:'k-'+randomUUID(),source:'HUMAN_UI'},
+  upper,'EMAIL',{status:'OPTED_IN',source:'STAFF',capturedAt:new Date().toISOString()}),e=>e.stop===true);
+ assert.deepEqual(seen.find(([sql])=>sql===lock)[1],[upper,'EMAIL']);
+});

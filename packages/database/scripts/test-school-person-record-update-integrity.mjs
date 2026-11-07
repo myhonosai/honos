@@ -55,8 +55,10 @@ const body=(schoolId,personId,expectedVersion,patch={})=>({schoolId,personId,exp
 const update=(identity,b,key)=>send('school/people/update',{identity,body:b,key});
 const waitFor=async(sql,label)=>{for(let i=0;i<300;i++){if((await q(sql))[0].n!=='0')return;await new Promise(r=>setTimeout(r,10));}throw new Error(label);};
 const waitForAdvisoryWait=()=>waitFor("SELECT count(*) n FROM pg_locks WHERE locktype='advisory' AND NOT granted",'never waited on the consent advisory lock');
-// Exactly the canonical consent writer's serialization key (communication-consent.service.ts).
-const consentKey="SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))";
+const {CommunicationConsentService,COMMUNICATION_CONSENT_ADVISORY_LOCK_SQL}=require('./dist/communication/communication-consent.service.js');
+// Exactly the canonical consent writer's serialization key (communication-consent.service.ts), not a copy.
+const consentKey=COMMUNICATION_CONSENT_ADVISORY_LOCK_SQL;
+assert.match(consentKey,/\$1::uuid::text/);
 const waitForLockWait=async()=>{for(let i=0;i<200;i++){if((await q("SELECT count(*) n FROM pg_locks WHERE NOT granted"))[0].n!=='0')return;await new Promise(r=>setTimeout(r,10));}throw new Error('update never waited on the person lock');};
 
 try{
@@ -227,6 +229,24 @@ try{
   assert.equal((await snapshot(id)).email,'race-d@example.invalid');
   assert.deepEqual(ok(await read(editor3,A.schoolId,id)).consents,{EMAIL:'OPTED_IN',SMS:'NOT_RECORDED'});}
  pass('a consent capture in flight (existing opt-in or first insert, EMAIL and SMS, change or clear) makes the edit refuse with nothing written; in the reverse order both finish without deadlock');
+ // 11. The real consent writer with an UPPERCASE person selector (accepted by its UUID check and ParseUUIDPipe) takes the
+ // same canonical lock: its first opt-in, held open after the insert, makes the contact edit wait and then refuse.
+ {const consents=new CommunicationConsentService(database);
+  const id=await addPerson(A,'Race','Case','race-a@example.invalid','+15555550200'),row=await snapshot(id);
+  const editEffects=async()=>(await q("SELECT (SELECT count(*) FROM hon.audit_events WHERE action_code='people.update' AND entity_id=$1) a,(SELECT count(*) FROM hon.outbox_events WHERE event_type='people.person.updated' AND payload->>'personId'=$1::text) o,(SELECT count(*) FROM hon.idempotency_records WHERE idempotency_key LIKE 'people.update:%') k",[id]))[0];
+  const before=await editEffects();
+  await blocker.query('BEGIN');await blocker.query('LOCK TABLE hon.audit_events IN SHARE MODE');
+  const writer=consents.record({organizationId:A.organizationId,schoolId:A.schoolId,principalId:editorPrincipal,principalType:'HUMAN_USER',requestId:K(),correlationId:K(),idempotencyKey:'upper-'+K(),source:'HUMAN_UI'},
+   id.toUpperCase(),'EMAIL',{status:'OPTED_IN',source:'STAFF',capturedAt:new Date().toISOString()});
+  await waitFor("SELECT count(*) n FROM pg_locks WHERE NOT granted AND relation='hon.audit_events'::regclass",'consent writer never reached its evidence insert');
+  const pending=raceEdit(id,{email:'race-e@example.invalid'});
+  await waitFor("SELECT (count(*)>=2)::int::text n FROM pg_locks WHERE NOT granted",'edit never waited');
+  await blocker.query('COMMIT');
+  const w=await writer;assert.equal(w.created,true);assert.equal(w.consent.status,'OPTED_IN');
+  const r=await pending;assert.equal(r.status,409,'uppercase first opt-in:'+JSON.stringify(r.body));assert.equal(r.body.code,'PERSON_CONTACT_CONSENT_REVIEW_REQUIRED');
+  assert.deepEqual(await snapshot(id),row);assert.deepEqual(await editEffects(),before);
+  assert.deepEqual(ok(await read(editor3,A.schoolId,id)).consents,{EMAIL:'OPTED_IN',SMS:'NOT_RECORDED'});}
+ pass('the real consent writer with an uppercase person selector shares the canonical lock: its in-flight first opt-in makes the edit refuse with no contact, audit, outbox or key effects');
  console.log('B-CRM-1a person record proof: '+groups+' groups passed');
 }finally{
  await app?.close();

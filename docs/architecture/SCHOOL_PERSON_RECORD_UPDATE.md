@@ -101,7 +101,7 @@ response; the same key with a different body is refused.
 For each channel whose address changes (EMAIL for email, SMS for phone) the command
 takes the canonical consent writer's transaction advisory lock
 `pg_advisory_xact_lock(hashtextextended(personId || ':' || channel, 0))`
-(`communication-consent.service.ts`), EMAIL before SMS, held to commit, and only then
+(`COMMUNICATION_CONSENT_ADVISORY_LOCK_SQL` in `communication-consent.service.ts`), EMAIL before SMS, held to commit, and only then
 reads that channel's consent row `FOR SHARE`. A consent capture in flight for the old
 address (an update or a first insert) therefore finishes first and the edit refuses;
 an edit that wins first finishes before the consent capture, which then applies to the
@@ -109,6 +109,14 @@ new address. The consent writer never waits on the person row (its FK check take
 KEY SHARE, compatible with the edit's NO KEY UPDATE), so the order person row ->
 advisory lock cannot deadlock. Proof group 10 covers EMAIL and SMS, existing opt-in
 and first insert, change and clear, and the reverse order.
+
+Both sides derive the key from canonical uuid text (Manus P1-161-1 follow-up): the consent
+writer hashes `$1::uuid::text`, not the raw route spelling, because its UUID check and
+`ParseUUIDPipe` accept an uppercase person id. Proof group 11 drives the real
+`CommunicationConsentService` with an uppercase selector: its first opt-in, held open after
+the insert, makes the edit wait and refuse with no contact, audit, outbox or key effects
+(with the old raw-text key the edit commits and carries consent; checked by mutation). The
+consent writer's idempotency fingerprint is unchanged.
 
 ## Permission
 
