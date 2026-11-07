@@ -92,7 +92,7 @@ const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AW
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
 const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0 };
 const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'claire', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
-const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, ...over });
+const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], ...over });
 let honSeq = 700;
 async function honApi(route, path, method, prefix) {
   const base = `${prefix}/hon`;
