@@ -36,7 +36,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/testing/readiness', 'routeReadiness'), r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/promotion-decisions', 'routePromotions'),
     r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'marketing', titleKey: 'navMarketing', routes: [r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'),
-    r('/staff/marketing/intake', 'routeIntake')] },
+    r('/staff/marketing/intake', 'routeIntake'), r('/staff/creative-studio', 'routeCreativeStudio')] },
   { key: 'community', titleKey: 'navCommunity', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
   { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
   { key: 'staff', titleKey: 'navStaff', routes: [r('/staff/work', 'routeWork'), r('/staff/automation/rules', 'routeAutomation'), r('/staff/team/invitations', 'routeTeam', true),

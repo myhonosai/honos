@@ -34,6 +34,7 @@ import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
 import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
 import { saasBillingTables, verifySaasBillingSecurity } from './saas-billing-security.mjs';
+import { creativeStudioTables, verifyCreativeStudioSecurity } from './creative-studio-security.mjs';
 import { languagePreferenceTables, verifyLanguagePreferenceSecurity } from './language-preferences-security.mjs';
 import { readFile } from 'node:fs/promises';
 
@@ -85,6 +86,7 @@ const expectedRlsTables = [
   ...communityTables,
   ...championsClubTables,
   ...saasBillingTables,
+  ...creativeStudioTables,
   ...schoolAccountTables,
   ...languagePreferenceTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
@@ -298,6 +300,7 @@ try {
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyChampionsClubSecurity(client, runtimeRoleName);
   await verifySaasBillingSecurity(client, runtimeRoleName);
+  await verifyCreativeStudioSecurity(client, runtimeRoleName);
   await verifyA2pPreparationSecurity(client, runtimeRoleName);
   await verifySchoolAccountSecurity(client, runtimeRoleName);
   await verifyLanguagePreferenceSecurity(client, runtimeRoleName);
