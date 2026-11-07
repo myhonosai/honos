@@ -99,7 +99,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>
       </header>
       {!sidebar && <div className={styles.schoolStrip}>{school}</div>}
-      {active && active.routes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')}>
+      {active && active.routes.length > 1 && <nav className={styles.tabs} aria-label={t('sectionNav')} data-shell-tabs="">
         {active.routes.map(route => <a key={route.href} href={schoolShellHref(route, verified)} aria-current={activeRoute?.href === route.href ? 'page' : undefined}>{t(route.titleKey)}</a>)}
       </nav>}
       <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>

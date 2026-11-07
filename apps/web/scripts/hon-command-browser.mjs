@@ -230,15 +230,35 @@ async function axe(page, name) {
 }
 // The existing Platform View picker (not part of this change) overflows in Classic at
 // phone width; it is recorded as a pre-existing finding and excluded from this gate.
+/**
+ * Horizontal overflow, measured in the page. The document itself must fit the viewport. Only one container may
+ * hold content past the edge: the shell's section tabs ([data-shell-tabs]), and only while that nav is itself a
+ * scroll container inside the viewport and the item is laid out in its normal flow (so the nav clips it).
+ * The existing Platform View picker is reported separately as a pre-existing finding.
+ */
+function overflowAudit() {
+  const width = window.innerWidth;
+  const clippedByShellTabs = (e) => {
+    const nav = e.closest('[data-shell-tabs]');
+    if (!nav || nav === e) return false;
+    const style = getComputedStyle(nav), box = nav.getBoundingClientRect();
+    if (!['auto', 'scroll', 'hidden', 'clip'].includes(style.overflowX) || box.left < -1 || box.right > width + 1) return false;
+    for (let p = e; p && p !== nav; p = p.parentElement) if (['absolute', 'fixed'].includes(getComputedStyle(p).position)) return false;
+    return true;
+  };
+  const offenders = [...document.querySelectorAll('body *')]
+    .filter((e) => e.getBoundingClientRect().right > width + 1 && getComputedStyle(e).position !== 'fixed' && !clippedByShellTabs(e))
+    .map((e) => ({ el: `${e.tagName}.${e.className}`, text: e.textContent?.slice(0, 40), parent: `${e.parentElement?.tagName}.${e.parentElement?.className}`, preExisting: !!e.closest('.view-picker') }));
+  const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+  return { offenders, documentWidth, viewportWidth: width };
+}
 async function noOverflow(page, name) {
-  const offenders = await page.evaluate(() => [...document.querySelectorAll('body *')]
-    .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed'
-      // Content inside a horizontal scroll container (the shell's section tabs) scrolls; it does not widen the page.
-      && !(function scrolls(node) { for (let p = node.parentElement; p && p !== document.body; p = p.parentElement) if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) return true; return false; })(e))
-    .map((e) => ({ el: `${e.tagName}.${e.className}`, text: e.textContent?.slice(0, 40), parent: `${e.parentElement?.tagName}.${e.parentElement?.className}`, preExisting: !!e.closest('.view-picker') })));
-  const preExisting = offenders.filter((o) => o.preExisting);
+  const { offenders, documentWidth, viewportWidth } = await page.evaluate(overflowAudit);
+  const preExisting = offenders.filter((o) => o.preExisting), current = offenders.filter((o) => !o.preExisting);
   if (preExisting.length) report.preExistingFindings.push(`${name ?? 'page'}: Platform View picker overflows (${preExisting.length} elements)`);
-  assert.deepEqual(offenders.filter((o) => !o.preExisting), [], 'horizontal overflow');
+  assert.deepEqual(current, [], 'horizontal overflow');
+  // The document must fit too, unless the only offenders are the known pre-existing picker.
+  if (!preExisting.length) assert.ok(documentWidth <= viewportWidth + 1, `document is ${documentWidth}px wide in a ${viewportWidth}px viewport`);
 }
 async function dashboard(viewport, nextTheme) {
   theme = nextTheme; mode = 'ready';
@@ -585,6 +605,20 @@ await check('Ask HON: leaving the page mid-reply conceals it; the late result st
   await ctx.close();
 });
 
+await check('Overflow gate: clipped shell tabs pass; an escaping scroller or a wide document fails', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const page = await ctx.newPage();
+  const layout = (body) => page.setContent(`<!doctype html><html><body style="margin:0">${body}</body></html>`);
+  const tabs = '<nav data-shell-tabs style="display:flex;overflow-x:auto;width:390px">' + Array.from({ length: 6 }, (_, n) => `<a style="flex:none;width:120px">Tab ${n}</a>`).join('') + '</nav>';
+  await layout(tabs);
+  await noOverflow(page, 'gate-clipped-tabs');
+  await layout('<div style="width:300px;overflow-x:auto"><div style="position:absolute;left:500px;width:200px;overflow-x:auto">escape</div></div>');
+  await assert.rejects(noOverflow(page, 'gate-escaping-scroller'), /horizontal overflow/);
+  await layout('<div style="width:300px;overflow-x:auto"><div style="width:900px">wide but clipped by a non-shell scroller</div></div>');
+  await assert.rejects(noOverflow(page, 'gate-unlisted-scroller'), /horizontal overflow/);
+  await layout('<nav data-shell-tabs style="display:flex;overflow-x:auto;width:390px"><a style="position:absolute;left:600px;width:100px">escaped tab</a></nav>');
+  await assert.rejects(noOverflow(page, 'gate-escaped-tab'), /horizontal overflow/);
+  await ctx.close();
+});
 async function creativeStudio(viewport, nextTheme = 'modern') {
   theme = nextTheme; mode = 'ready';
   const ctx = await context(viewport); const page = await ctx.newPage();
