@@ -2238,7 +2238,7 @@ END $$;
 
 -- B-HQ-1 0219 HQ access overview: the HQ read is the only runtime boundary; its two helpers stay internal.
 DO $$ DECLARE r text; f text; BEGIN
-  FOREACH f IN ARRAY ARRAY['saas_exception_policy_ready()','saas_access_overview_row(uuid,boolean)',
+  FOREACH f IN ARRAY ARRAY['saas_exception_policy_ready()','saas_access_overview_facts(uuid,timestamptz)','saas_access_overview_row(uuid,boolean,timestamptz)',
     'read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;

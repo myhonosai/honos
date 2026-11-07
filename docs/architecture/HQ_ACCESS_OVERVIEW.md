@@ -60,8 +60,29 @@ subscription summary or null), `openCheckout`, `ownerOnboarding`, `exceptionGran
 organization's one `GRANTED` exception (lifecycle `IN_EFFECT`, `SCHEDULED`, `EXPIRED` or `SUPERSEDED`); `revocable`
 is true for `IN_EFFECT` and `SCHEDULED`. Full history stays on the per-organization exceptions read.
 
-`ownerOnboarding`: `{ status, invitedAt, expiresAt, acceptedAt }` from the latest HQ school-owner invitation (0191):
-`NOT_INVITED`, `PENDING`, `EXPIRED`, `ACCEPTED` or `REVOKED`. No email address or token is returned.
+`ownerOnboarding`: `{ status, invitedAt, expiresAt, acceptedAt }` from the HQ school-owner invitations (0191) at any of
+the organization's schools: an accepted invitation wins, otherwise the latest one. `NOT_INVITED`, `PENDING`, `EXPIRED`,
+`ACCEPTED` or `REVOKED` (a `REVOKED` invitation may keep its `acceptedAt` when HQ revoked it after acceptance). No email
+address or token is returned.
+
+Every fact is judged at one instant (`asOf`), so the summary, each status, the exception lifecycle and the blockers
+never disagree. Display names are truncated to 300 characters. The summary and the status filter use a light
+per-organization status; full rows are built only for the requested page.
+
+## For the UI (C-HQ-1, C-HQ-3)
+
+- List: `GET /v1/hq/saas/access-overview` (use `status=NO_ACCESS` for "needs access"); page with `nextCursor`
+  (`encodeSaasAccessOverviewCursor`). Validate with `validateSaasAccessOverview`.
+- Show grant controls only when `viewer.canGrantAndRevokeExceptions` and `exceptionGrant.eligible`; show the blockers as
+  reasons otherwise. When `exceptionPolicy.ready` is false, the HQ owner first approves the policy
+  (`GET|POST /v1/hq/saas/access-exception-policy`).
+- Grant: `POST /v1/hq/saas/organizations/:organizationId/access-exceptions` with
+  `{ schoolId, purpose, reason, scopeTier, startsAt, expiresAt, expectedEntitlementVersion }`, where
+  `expectedEntitlementVersion` is `exceptionGrant.expectedEntitlementVersion`, `startsAt` is at most 30 days ahead and
+  the window at most `exceptionPolicy.maxDays`. Revoke: `POST /v1/hq/saas/access-exceptions/:exceptionId/revoke` with
+  `{ reason }` when `currentException.revocable`. Both are human commands (`x-hon-human-command`, same-origin, an
+  `idempotency-key`), refused by the database for anyone but a current HQ owner.
+- Re-read the overview after every command; a 409 `SAAS_VERSION_CONFLICT` means the row changed.
 
 ## Out of scope
 

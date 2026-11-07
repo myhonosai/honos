@@ -106,6 +106,18 @@ test('contracts: no email, token, credits or price fields; summary, order and cu
   const pending = org({ ownerOnboarding: { status: 'PENDING', invitedAt: T, expiresAt: T2, acceptedAt: null } });
   assert.equal(contracts.validateSaasAccessOverview(view({ organizations: [pending] })).organizations.length, 1);
   assert.throws(() => contracts.validateSaasAccessOverview(view({ organizations: [{ ...pending, ownerOnboarding: { ...pending.ownerOnboarding, status: 'ACCEPTED' } }] })));
+  // HQ may revoke an invitation after it was accepted: the acceptance time stays and the read must not fail.
+  const revokedAfter = org({ ownerOnboarding: { status: 'REVOKED', invitedAt: T, expiresAt: T2, acceptedAt: T2 } });
+  assert.equal(contracts.validateSaasAccessOverview(view({ organizations: [revokedAfter] })).organizations[0].ownerOnboarding.status, 'REVOKED');
+  assert.throws(() => contracts.validateSaasAccessOverview(view({ organizations: [org({ ownerOnboarding: { status: 'PENDING', invitedAt: T, expiresAt: T2, acceptedAt: T2 } })] })));
+  // Long or empty legacy names are shown truncated, never a failed page; over 300 characters is drift.
+  assert.equal(contracts.validateSaasAccessOverview(view({ organizations: [org({ organizationDisplayName: '' })] })).organizations.length, 1);
+  assert.throws(() => contracts.validateSaasAccessOverview(view({ organizations: [org({ organizationDisplayName: 'x'.repeat(301) })] })));
+  // An expired exception no longer blocks; claiming it does is drift.
+  assert.throws(() => contracts.validateSaasAccessOverview(view({ organizations: [org({ currentException: exception({ lifecycle: 'EXPIRED', revocable: false }),
+    exceptionGrant: { eligible: false, blockers: ['ACCESS_EXCEPTION_ACTIVE'], expectedEntitlementVersion: 1 } })] })));
+  assert.equal(contracts.validateSaasAccessOverview(view({ organizations: [org({ currentException: exception({ lifecycle: 'EXPIRED', revocable: false }) })] }))
+    .organizations[0].exceptionGrant.eligible, true);
   const a = org({ createdAt: T }), b = org({ createdAt: T2 });
   const two = summary({ NO_ACCESS: 2, total: 2 });
   assert.equal(contracts.validateSaasAccessOverview(view({ summary: two, organizations: [a, b], limit: 2,

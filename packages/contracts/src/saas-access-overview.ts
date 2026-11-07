@@ -9,7 +9,8 @@ import { SAAS_ORGANIZATION_ACCESS_STATES, validateSaasEntitlementView, type Saas
   type SaasOrganizationAccessState } from './saas-school-billing.js';
 
 const has = (list: readonly unknown[], value: unknown) => list.includes(value);
-const label = (v: unknown, max: number): v is string => typeof v === 'string' && v.length >= 1 && v.length <= max;
+// Display names are unconstrained text in the database; the read truncates them to 300 characters.
+const label = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max;
 const code = (v: unknown): v is string => typeof v === 'string' && /^[A-Z][A-Z0-9_]{0,59}$/.test(v);
 
 export const SAAS_ACCESS_OVERVIEW_STATUSES = ['AWAITING_FIRST_PAYMENT','EXCEPTION_IN_EFFECT','EXCEPTION_SCHEDULED','PAID_ACCESS',
@@ -79,7 +80,7 @@ function organization(value: unknown, policyReady: boolean): SaasAccessOverviewO
   if (!isUuid(o.organizationId) || !label(o.organizationDisplayName, 300) || !code(o.organizationStatus) || !isTimestamp(o.createdAt)
     || !Array.isArray(o.schools) || o.schools.length > 10 || !isInt(o.schoolCount, 0, 1_000_000) || o.schools.length > (o.schoolCount as number)
     || !has(SAAS_ORGANIZATION_ACCESS_STATES, o.accessState) || !has(SAAS_ACCESS_OVERVIEW_STATUSES, o.accessStatus)
-    || (ent === null) !== (o.accessState === 'NONE') || typeof o.openCheckout !== 'boolean') drift();
+    || (o.accessState === 'NONE' && ent !== null) || typeof o.openCheckout !== 'boolean') drift();
   for (const s of o.schools as unknown[]) {
     const r = record(s, drift); exactKeys(r, ['schoolId','schoolDisplayName','schoolStatus'], drift);
     if (!isUuid(r.schoolId) || !label(r.schoolDisplayName, 300) || !code(r.schoolStatus)) drift();
@@ -109,7 +110,8 @@ function organization(value: unknown, policyReady: boolean): SaasAccessOverviewO
   const ob = record(o.ownerOnboarding, drift); exactKeys(ob, ['status','invitedAt','expiresAt','acceptedAt'], drift);
   if (!has(SAAS_OWNER_ONBOARDING_STATUSES, ob.status) || !nullable(ob.invitedAt, isTimestamp) || !nullable(ob.expiresAt, isTimestamp)
     || !nullable(ob.acceptedAt, isTimestamp) || (ob.status === 'NOT_INVITED') !== (ob.invitedAt === null) || (ob.invitedAt === null) !== (ob.expiresAt === null)
-    || (ob.status === 'ACCEPTED') !== (ob.acceptedAt !== null)) drift();
+    // An accepted invitation that HQ later revoked keeps its acceptance time.
+    || (ob.status === 'ACCEPTED' && ob.acceptedAt === null) || (ob.acceptedAt !== null && ob.status !== 'ACCEPTED' && ob.status !== 'REVOKED')) drift();
   // Advisory grant eligibility; must agree with the facts above.
   const g = record(o.exceptionGrant, drift); exactKeys(g, ['eligible','blockers','expectedEntitlementVersion'], drift);
   if (!Array.isArray(g.blockers)) drift();
@@ -126,7 +128,8 @@ function organization(value: unknown, policyReady: boolean): SaasAccessOverviewO
     || (o.subscription !== null) !== blockers.includes('SUBSCRIPTION_EXISTS')
     || o.openCheckout !== blockers.includes('CHECKOUT_OPEN')
     || (o.organizationStatus !== 'ACTIVE') !== blockers.includes('ORGANIZATION_NOT_ACTIVE')
-    || (x?.revocable === true && !blockers.includes('ACCESS_EXCEPTION_ACTIVE'))) drift();
+    // A scheduled or in-effect exception is exactly what the command refuses as an active exception.
+    || (x?.revocable === true) !== blockers.includes('ACCESS_EXCEPTION_ACTIVE')) drift();
   return o as unknown as SaasAccessOverviewOrganization;
 }
 

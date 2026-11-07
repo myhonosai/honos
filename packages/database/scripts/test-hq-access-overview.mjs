@@ -80,7 +80,7 @@ await Promise.all([admin.connect(),restricted.connect()]);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  // ---------- 0. posture ----------
- for(const[sig,allowed]of [['read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer)',true],['saas_access_overview_row(uuid,boolean)',false],['saas_exception_policy_ready()',false]])
+ for(const[sig,allowed]of [['read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer)',true],['saas_access_overview_row(uuid,boolean,timestamptz)',false],['saas_access_overview_facts(uuid,timestamptz)',false],['saas_exception_policy_ready()',false]])
   assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,allowed,sig);
  assert.deepEqual(await row("SELECT prosecdef d,provolatile v,proconfig c FROM pg_proc WHERE oid='hon.read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer)'::regprocedure"),
   {d:true,v:'v',c:['search_path=pg_catalog, hon']});
@@ -108,13 +108,21 @@ try{
   ["INSERT INTO hon.saas_access_states(organization_id,state,reason,version,changed_by_principal_id,created_at,updated_at) VALUES($1,'AWAITING_FIRST_PAYMENT','AWAITING_INITIAL_PAYMENT',1,$2,clock_timestamp(),clock_timestamp())",[O.AW.id,humans.owner.id]]]);
  await admin.query("INSERT INTO hon.school_owner_invitations(organization_id,school_id,email,token_hash,created_by,created_at,expires_at,status) VALUES($1,$2,'invited-owner@example.test',$3,$4,now(),now()+interval '6 days','PENDING')",
   [O.INV.id,O.INV.school,'a'.repeat(64),humans.owner.id]);
+ // LG: an owner invitation accepted, then revoked by HQ (0191 allows it): acceptedAt stays and the read must not fail.
+ const lgGrant=(await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 hour') RETURNING id",
+  [O.LG.id,O.LG.school,humans.schoolOwner.id,O.LG.role,humans.owner.id])).rows[0].id;
+ await admin.query("INSERT INTO hon.school_owner_invitations(organization_id,school_id,email,token_hash,created_by,created_at,expires_at,status,accepted_subject,owner_grant_id,accepted_at,revoked_at) VALUES($1,$2,'accepted-owner@example.test',$3,$4,now(),now()+interval '6 days','REVOKED',$5,$6,now(),now())",
+  [O.LG.id,O.LG.school,'b'.repeat(64),humans.owner.id,H('schoolOwner'),lgGrant]);
+ // OFF: an over-long legacy display name is shown truncated, never a failed page.
+ await admin.query("UPDATE hon.organizations SET display_name=repeat('N',400) WHERE id=$1",[O.OFF.id]);
 
  // ---------- 1. authority ----------
  for(const who of ['support','onboarder','schoolOwner','exowner','stranger'])await deny(read(who),403,'SAAS_FORBIDDEN');
  await deny(access.readAccessOverview('hqao-unknown-'+randomUUID(),{}),403,'SAAS_FORBIDDEN');
  for(const args of [[H('owner'),null,null,null,0],[H('owner'),null,null,null,101],[H('owner'),'SUSPENDED',null,null,10],[H('owner'),null,new Date(),null,10],[H('owner'),null,null,randomUUID(),10]])
   await sqlDeny(restricted.query('SELECT hon.read_saas_access_overview_from_hq($1,$2,$3,$4,$5)',args),'22023');
- await sqlDeny(restricted.query('SELECT hon.saas_access_overview_row($1,true)',[O.NEW.id]),'42501');
+ await sqlDeny(restricted.query('SELECT hon.saas_access_overview_row($1,true,now())',[O.NEW.id]),'42501');
+ await sqlDeny(restricted.query('SELECT hon.saas_access_overview_facts($1,now())',[O.NEW.id]),'42501');
  await deny(access.readAccessOverview(H('owner'),{organizationId:O.NEW.id}),400,'INVALID_SAAS_INPUT');
 
  // ---------- 2. before the exception policy is approved ----------
@@ -147,7 +155,9 @@ try{
  assert.deepEqual({...m.SUB.subscription,subscriptionId:null},{subscriptionId:null,status:'PENDING_ACTIVATION',planCode:'CORE',billingInterval:'NONE'});
  assert.equal(m.NEW.openCheckout,false); assert.equal(m.SUB.openCheckout,false);
  assert.equal(m.INV.ownerOnboarding.status,'PENDING'); assert.equal(m.NEW.ownerOnboarding.status,'NOT_INVITED');
- assert(!JSON.stringify(ownerView).includes('invited-owner@example.test')&&!JSON.stringify(ownerView).includes('a'.repeat(64)),'no invitation email or token');
+ assert.equal(m.LG.ownerOnboarding.status,'REVOKED'); assert.notEqual(m.LG.ownerOnboarding.acceptedAt,null);
+ assert.equal(m.OFF.organizationDisplayName,'N'.repeat(300));
+ assert(!JSON.stringify(ownerView).includes('invited-owner@example.test')&&!JSON.stringify(ownerView).includes('accepted-owner@example.test')&&!JSON.stringify(ownerView).includes('a'.repeat(64)),'no invitation email or token');
  assert.deepEqual(await writes(),afterPolicy,'reads write nothing');
  assert.deepEqual(afterPolicy.v,before.v,'no entitlement changed');
 

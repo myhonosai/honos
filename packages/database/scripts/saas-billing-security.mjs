@@ -317,7 +317,8 @@ export const saasBillingFunctions = [
  ['hon.saas_fulfill_creative_topup(uuid,jsonb,timestamp with time zone)',false,true],
  // 0219 B-HQ-1 HQ access overview: read-only HQ list; the helpers stay internal.
  ['hon.saas_exception_policy_ready()',false,false],
- ['hon.saas_access_overview_row(uuid,boolean)',false,false],
+ ['hon.saas_access_overview_facts(uuid,timestamp with time zone)',false,false],
+ ['hon.saas_access_overview_row(uuid,boolean,timestamp with time zone)',false,false],
  ['hon.read_saas_access_overview_from_hq(text,text,timestamp with time zone,uuid,integer)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
