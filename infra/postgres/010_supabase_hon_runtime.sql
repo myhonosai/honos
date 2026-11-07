@@ -2235,3 +2235,15 @@ DO $$ DECLARE r text; f text; BEGIN
       hon.record_hon_reply_result(text,uuid,jsonb), hon.release_held_hon_reply(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-CRM-1a 0217 (proposed) person record update: one read and one command are the only runtime entry points;
+-- the runtime role still has no UPDATE on hon.people.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['school_person_actor(text,uuid,boolean)','school_person_json(uuid,text)','read_school_person(text,uuid,uuid)','update_school_person(text,jsonb,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_person(text,uuid,uuid),hon.update_school_person(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;
