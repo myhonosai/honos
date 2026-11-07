@@ -117,6 +117,7 @@ try {
   const allowedFunctions = new Set([
     'hon.resolve_teaching_assistant_scope(text)',
     'hon.list_my_teaching_invocations(text)',
+    'hon.list_teaching_assistant_curricula(text)',
     'hon.read_teaching_invocation(text,uuid)',
     'hon.begin_teaching_request(text,jsonb,uuid)',
     'hon.teaching_planning_reference(text,uuid)',
@@ -135,6 +136,7 @@ try {
     'hon.require_teaching_assistant_actor(text,boolean)',
     'hon.teaching_assistant_event(uuid,text)',
     'hon.list_my_teaching_invocations(text)',
+    'hon.list_teaching_assistant_curricula(text)',
     'hon.read_teaching_invocation(text,uuid)',
     'hon.begin_teaching_request(text,jsonb,uuid)',
     'hon.teaching_planning_reference(text,uuid)',
@@ -187,6 +189,8 @@ try {
     await admin.query("INSERT INTO hon.principal_role_grants(id,principal_id,organization_id,school_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,$2,clock_timestamp()-interval '1 day')", [actor.grant, actor.id, actor.organizationId, actor.schoolId, actor.role]);
   }
   await admin.query("INSERT INTO hon.curricula(id,organization_id,school_id,name,description,lifecycle,model_code) VALUES($1,$2,$3,'Published fixture curriculum','Private bounded curriculum facts only','PUBLISHED','LINEAR')", [curriculum, org, school]);
+  // K1b picker fixtures: a draft and an archived curriculum in the same school, and published curricula in a sibling school and a foreign organization. None may appear in the Kai picker.
+  await admin.query("INSERT INTO hon.curricula(id,organization_id,school_id,name,description,lifecycle,model_code) VALUES($1,$2,$3,'A draft fixture curriculum','PRIVATE_DRAFT_DESCRIPTION','DRAFT','LINEAR'),($4,$2,$3,'An archived fixture curriculum',NULL,'ARCHIVED','LINEAR'),($5,$2,$6,'A sibling published curriculum',NULL,'PUBLISHED','LINEAR'),($7,$8,$9,'A foreign published curriculum',NULL,'PUBLISHED','LINEAR')", [randomUUID(), org, school, randomUUID(), randomUUID(), siblingSchool, randomUUID(), foreignOrg, foreignSchool]);
   await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state,credential_secret_ref) VALUES('OPENROUTER','Private local fake route','HEALTHY',$1)", [`hon-secret:${randomUUID()}`]);
   await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER','approved/claire-local','Private local model',ARRAY['TEXT'],ARRAY['TEXT'],true,'COMPLETE',2,'TOKEN','2020-01-01')", [catalog]);
   await admin.query("INSERT INTO hon.hq_ai_routing_policies(policy_id,organization_id,school_id,capability,active,minimum_tier,max_cost_micros,effective_from) VALUES($1,$2,$3,'TEXT',true,'COMPLETE',100000,'2020-01-01')", [policy, org, school]);
@@ -205,6 +209,13 @@ try {
   await sqlDenied(() => runtimeSql.query('SELECT * FROM hon.teaching_ai_invocations'));
   await sqlDenied(() => runtimeSql.query("SELECT hon.require_teaching_assistant_actor('nope',true)"));
 
+  // K1b: the Kai delegation picker lists exactly the published curricula of the caller's own school, and nothing private.
+  const picker = await assistant.listCurricula(context('requester'));
+  assert.deepEqual(picker, { items: [{ id: curriculum, name: 'Published fixture curriculum', version: 1 }] }, 'Picker must list only this school PUBLISHED curricula.');
+  assert.equal(JSON.stringify(picker).includes('Private bounded curriculum facts only'), false, 'Picker must not expose curriculum descriptions.');
+  await denied(() => assistant.listCurricula(context('parent')));
+  await denied(() => assistant.listCurricula(context('requester', { source: 'AI' })));
+  await sqlDenied(() => runtimeSql.query("SELECT hon.list_teaching_assistant_curricula('nope')"));
   const primaryKey = randomUUID();
 	  const primary = await assistant.submit(context('requester', { idempotencyKey: primaryKey }), { curriculumId: curriculum, brief });
 	  assert.equal(primary.status, 'AWAITING_APPROVAL');

@@ -17,7 +17,7 @@ const LABELS: Record<string, { label: string; note?: string }> = {
   'marketing.campaigns_manual_assisted': { label: 'Manual & assisted campaign tools' },
   'attribution.conversion': { label: 'Conversion attribution' },
   'assistant.ordinary': { label: 'Contextual HON assistance', note: 'General conversational service is not connected on this page.' },
-  'ai.premium_metered': { label: 'Metered premium AI tools', note: 'Actual availability and usage require server permission and an active allowance.' },
+  'ai.premium_metered': { label: 'Creative Studio media', note: 'Uses the school’s creative-credit allowance. Availability requires server permission.' },
   'presentation.all_modes': { label: 'Big Button, Modern & Classic views' },
   'champions.participation': { label: 'Champions Club participation' },
   'marketing.campaigns_ai_managed': { label: 'Governed AI-managed campaigns', note: 'Requires available integrations and explicit approvals; not activated by plan selection.' },

@@ -58,7 +58,7 @@ describe('school home model', () => {
 
   it('takes agent status from readiness: the teaching key belongs to Kai, never to Claire', () => {
     const live = readiness([readinessAgent('marcus', 'MARKETING', 6, { authorized: false, available: false, blockedBy: 'NOT_AUTHORIZED' }),
-      readinessAgent('claire', 'TEACHING', 6, { providerRuntime: 'READY', available: true, blockedBy: null }),
+      readinessAgent('kai', 'TEACHING', 6, { providerRuntime: 'READY', available: true, blockedBy: null }),
       readinessAgent('chad', 'CHAD_FOLLOW_UP', 3, { spendDecision: 'AI_PAUSED_BY_HQ', available: false, blockedBy: 'AI_PAUSED_BY_HQ' })]);
     const team = homeAiTeam({ state: 'READY', value: live }, 'realistic');
     expect(team.find(card => card.id === 'kai')?.status).toBe('READY');
@@ -69,7 +69,7 @@ describe('school home model', () => {
     expect(agentStatus({ state: 'DENIED' }, 'chad')).toBe('HIDDEN');
     expect(agentStatus({ state: 'UNAVAILABLE' }, 'chad')).toBe('UNKNOWN');
     expect(agentStatus({ state: 'LOADING' }, 'chad')).toBe('CHECKING');
-    const budget = readiness([readinessAgent('marcus', 'MARKETING', 6, { blockedBy: 'ORGANIZATION_AI_BUDGET_REACHED' }), readinessAgent('claire', 'TEACHING', 6, { route: 'NO_ELIGIBLE_ROUTE', blockedBy: 'NO_ELIGIBLE_ROUTE' }), readinessAgent('chad', 'CHAD_FOLLOW_UP', 3)]);
+    const budget = readiness([readinessAgent('marcus', 'MARKETING', 6, { blockedBy: 'ORGANIZATION_AI_BUDGET_REACHED' }), readinessAgent('kai', 'TEACHING', 6, { route: 'NO_ELIGIBLE_ROUTE', blockedBy: 'NO_ELIGIBLE_ROUTE' }), readinessAgent('chad', 'CHAD_FOLLOW_UP', 3)]);
     expect(agentStatus({ state: 'READY', value: budget }, 'marcus')).toBe('BUDGET');
     expect(agentStatus({ state: 'READY', value: budget }, 'claire')).toBe('NO_ROUTE');
   });
