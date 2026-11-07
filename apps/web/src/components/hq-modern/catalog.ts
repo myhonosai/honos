@@ -33,6 +33,7 @@ export const HQ_AI = [
   { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
   { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
+  { path: '/hq/ai-safety', title: 'AI Safety', icon: 'check' },
 ] as const;
 /** Top-level HQ entries. A grouped entry's path is a route inside that group; grouped children keep their existing URLs. */
 export const HQ_NAV = [
