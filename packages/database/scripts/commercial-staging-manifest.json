@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "ef365982dd465ef840003709127881b2960de3dc7ad1a81ea4ac2e19c44761b4",
+  "chainSha256": "5a5d9021c9ab93c0bb7ca3cc9917dc2b8fd478681644293e6b813bd11b86dc7d",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -133,6 +133,10 @@
     {
       "file": "0213_kai_curriculum_picker.sql",
       "sha256": "28198aeea6ec3a09adaeb77ea244d78da9597ae6c261512230b2bbc8f6426082"
+    },
+    {
+      "file": "0216_creative_studio_generations.sql",
+      "sha256": "8ee1fabb749583db9e9f8ccbe19947f3faded1fd0a220c7242b35031dd063c74"
     }
   ]
 }
