@@ -39,4 +39,8 @@ export type GenerationsState =
 /** What the last create attempt from this tab is known to have done. Nothing here is a balance or a charge. */
 export type CreateOutcome =
   | null | Readonly<{ kind: 'SENDING' }> | Readonly<{ kind: 'UNKNOWN' }> | Readonly<{ kind: 'HIDDEN_PENDING' }>
-  | Readonly<{ kind: 'DONE' | 'HELD' | 'FAILED' | 'DENIED' | 'NOT_CONNECTED' | 'INVALID' }> | Readonly<{ kind: 'REFUSED'; code: string | null }>;
+  | Readonly<{ kind: 'DONE' | 'HELD' | 'FAILED' | 'NOT_CONNECTED' | 'INVALID' }> | Readonly<{ kind: 'REFUSED'; code: string | null }>
+  /** Check again (or a first attempt refused by access) could not settle an earlier request; it stays unconfirmed and kept. */
+  | Readonly<{ kind: 'RETRY_BLOCKED'; cause: 'DENIED' | 'NOT_CONNECTED' | 'REFUSED' | 'INVALID'; code: string | null }>;
+/** Whether this tab holds a create whose outcome is not known. Survives concealment; never shows the request itself. */
+export type CreateLock = 'NONE' | 'SENDING' | 'UNRESOLVED';

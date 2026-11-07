@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CreativeGeneration, CreativeGenerationInput } from '@hon/contracts';
 import { CreativeGenerationError, createCreativeGeneration, listCreativeGenerations, prepareCreativeGeneration } from '../src/components/creative-studio/generation-http';
-import { outcomeFromError, outcomeFromReceipt } from '../src/components/creative-studio/creative-studio';
+import { matchesPending, outcomeFromAttempt, outcomeFromReceipt } from '../src/components/creative-studio/creative-studio';
 import { studioWallet, type CreateOutcome, type GenerationsState } from '../src/components/creative-studio/model';
 import { CreativeStudioView } from '../src/components/creative-studio/view';
 import { id, rawWallet, reply, scope } from './account-status-fixtures';
@@ -64,10 +64,22 @@ it('separates definitive refusals from unknown outcomes', async () => {
   const cases: [number, string | null, string][] = [
     [503, 'CREATIVE_PROVIDER_NOT_CONNECTED', 'NOT_CONNECTED'], [503, 'SAAS_UNAVAILABLE', 'UNKNOWN'], [422, 'CREATIVE_TOO_MANY_IN_PROGRESS', 'REFUSED'],
     [422, 'SAAS_CREATIVE_AI_PAUSED_BY_HQ', 'REFUSED'], [409, 'SAAS_OUTCOME_UNKNOWN', 'UNKNOWN'], [409, 'CREATIVE_GENERATION_IN_PROGRESS', 'UNKNOWN'],
-    [409, 'IDEMPOTENCY_KEY_REUSED', 'INVALID'], [400, 'INVALID_SAAS_INPUT', 'INVALID'], [403, 'SAAS_FORBIDDEN', 'DENIED'], [500, null, 'UNKNOWN'], [404, 'SAAS_UNAVAILABLE', 'INVALID'], [409, 'SAAS_CREATIVE_OUTCOME_PENDING', 'UNKNOWN']];
+    [409, 'IDEMPOTENCY_KEY_REUSED', 'INVALID'], [400, 'INVALID_SAAS_INPUT', 'INVALID'], [403, 'SAAS_FORBIDDEN', 'DENIED'], [500, null, 'UNKNOWN'], [404, 'SAAS_UNAVAILABLE', 'INVALID'], [409, 'SAAS_CREATIVE_OUTCOME_PENDING', 'UNKNOWN'],
+    // Unrecognized or missing codes never prove a refusal: a conflict raised after the provider call keeps the request.
+    [409, 'SAAS_TRANSITION_NOT_ALLOWED', 'UNKNOWN'], [409, null, 'UNKNOWN'], [422, 'SAAS_VALIDATION_FAILED', 'UNKNOWN'], [422, null, 'UNKNOWN'],
+    [422, 'saas_creative_lowercase', 'UNKNOWN']];
   for (const [status, code, kind] of cases) {
     f.mockResolvedValueOnce(Response.json(code ? { code } : {}, { status }));
     await expect(createCreativeGeneration(scope.schoolId, input, key, signal()), `${status} ${code}`).rejects.toMatchObject({ kind, code });
+  }
+  // Malformed or non-JSON bodies on 409/422 carry no code, so they stay unknown too.
+  for (const status of [409, 422]) {
+    f.mockResolvedValueOnce(new Response('{"code":', { status, headers: { 'content-type': 'application/json' } }));
+    await expect(createCreativeGeneration(scope.schoolId, input, key, signal()), `${status} malformed`).rejects.toMatchObject({ kind: 'UNKNOWN', code: null });
+    f.mockResolvedValueOnce(new Response('<html>conflict</html>', { status, headers: { 'content-type': 'text/html' } }));
+    await expect(createCreativeGeneration(scope.schoolId, input, key, signal()), `${status} html`).rejects.toMatchObject({ kind: 'UNKNOWN', code: null });
+    f.mockResolvedValueOnce(Response.json(['IDEMPOTENCY_KEY_REUSED'], { status }));
+    await expect(createCreativeGeneration(scope.schoolId, input, key, signal()), `${status} array`).rejects.toMatchObject({ kind: 'UNKNOWN', code: null });
   }
   f.mockRejectedValueOnce(new TypeError('network'));
   await expect(createCreativeGeneration(scope.schoolId, input, key, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
@@ -81,9 +93,25 @@ it('maps outcomes: only a known result releases the request', () => {
   expect(outcomeFromReceipt(receipt(generation('UNDER_REVIEW')))).toEqual({ kind: 'HELD' });
   expect(outcomeFromReceipt(receipt(generation('FAILED')))).toEqual({ kind: 'FAILED' });
   expect(outcomeFromReceipt(receipt(generation('GENERATING')))).toEqual({ kind: 'UNKNOWN' });
-  expect(outcomeFromError(new CreativeGenerationError('REFUSED', 'X'))).toEqual({ kind: 'REFUSED', code: 'X' });
-  expect(outcomeFromError(new CreativeGenerationError('NOT_CONNECTED'))).toEqual({ kind: 'NOT_CONNECTED' });
-  expect(outcomeFromError(new Error('boom'))).toEqual({ kind: 'UNKNOWN' });
+  // First attempt: a definitive refusal releases the request; a 403 or an unknown answer never does.
+  expect(outcomeFromAttempt(new CreativeGenerationError('REFUSED', 'X'), false)).toEqual({ outcome: { kind: 'REFUSED', code: 'X' }, release: true });
+  expect(outcomeFromAttempt(new CreativeGenerationError('NOT_CONNECTED'), false)).toEqual({ outcome: { kind: 'NOT_CONNECTED' }, release: true });
+  expect(outcomeFromAttempt(new CreativeGenerationError('INVALID'), false)).toEqual({ outcome: { kind: 'INVALID' }, release: true });
+  expect(outcomeFromAttempt(new CreativeGenerationError('DENIED', 'SAAS_FORBIDDEN'), false)).toEqual({ outcome: { kind: 'RETRY_BLOCKED', cause: 'DENIED', code: 'SAAS_FORBIDDEN' }, release: false });
+  expect(outcomeFromAttempt(new CreativeGenerationError('UNKNOWN'), false)).toEqual({ outcome: { kind: 'UNKNOWN' }, release: false });
+  expect(outcomeFromAttempt(new CreativeGenerationError('SESSION'), false)).toEqual({ outcome: { kind: 'UNKNOWN' }, release: false });
+  expect(outcomeFromAttempt(new Error('boom'), false)).toEqual({ outcome: { kind: 'UNKNOWN' }, release: false });
+  // After an unknown attempt, a refused retry says nothing about the first send: the request and key are kept.
+  for (const kind of ['REFUSED', 'NOT_CONNECTED', 'INVALID', 'DENIED'] as const)
+    expect(outcomeFromAttempt(new CreativeGenerationError(kind, 'C'), true)).toEqual({ outcome: { kind: 'RETRY_BLOCKED', cause: kind, code: 'C' }, release: false });
+});
+
+it('matches only rows that could be the unconfirmed request', () => {
+  expect(matchesPending(null, generation('GENERATING'))).toBe(false);
+  expect(matchesPending({ input }, generation('GENERATING'))).toBe(true);
+  expect(matchesPending({ input }, generation('GENERATING', { prompt: 'Other' }))).toBe(false);
+  expect(matchesPending({ input }, generation('GENERATING', { units: 3 }))).toBe(false);
+  expect(matchesPending({ input }, generation('GENERATING', { format: 'PORTRAIT' }))).toBe(false);
 });
 
 function activeWallet() {
@@ -93,8 +121,8 @@ function activeWallet() {
     rates: { rateVersionId: id(40), rateVersion: 1, termsReference: 'terms', publishedAt: '2026-11-01T00:00:00.000Z', rates: [
       { operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 40, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL' }] } });
 }
-const view = (generations: GenerationsState, outcome: CreateOutcome = null, wallet = activeWallet()) => renderToStaticMarkup(
-  <CreativeStudioView language="en" waiting={false} concealed={false} hasSchool studio={{ state: 'READY', wallet }} generations={generations} outcome={outcome} onCreate={() => {}} onCheckAgain={() => {}}/>);
+const view = (generations: GenerationsState, outcome: CreateOutcome = null, wallet = activeWallet(), extra: { locked?: boolean; hidePrompt?: (g: CreativeGeneration) => boolean } = {}) => renderToStaticMarkup(
+  <CreativeStudioView language="en" waiting={false} concealed={false} hasSchool studio={{ state: 'READY', wallet }} generations={generations} outcome={outcome} onCreate={() => {}} onCheckAgain={() => {}} {...extra}/>);
 
 it('offers the create form only when a provider is connected and the school can use it', () => {
   const off = view({ state: 'READY', provider: 'NOT_CONNECTED', items: [] });
@@ -124,6 +152,15 @@ it('says what happened, and offers Check again only for an unknown outcome', () 
   expect(view(connected, { kind: 'UNKNOWN' })).toContain('never creates a second one or charges twice');
   // While a request is unresolved the form is disabled.
   expect(view(connected, { kind: 'SENDING' })).toMatch(/<textarea[^>]*disabled=""/);
+  // A refused retry keeps the request: it offers Check again, never says nothing was charged, and keeps the form locked.
+  for (const cause of ['DENIED', 'NOT_CONNECTED', 'INVALID', 'REFUSED'] as const) {
+    const html = view(connected, { kind: 'RETRY_BLOCKED', cause, code: cause === 'REFUSED' ? 'SAAS_CREATIVE_AI_PAUSED_BY_HQ' : null });
+    expect(html).toContain('It is still unconfirmed and nothing new was started'); expect(html).toContain('Check again');
+    expect(html).not.toContain('Nothing was sent or charged'); expect(html).toMatch(/<textarea[^>]*disabled=""/);
+  }
+  // The lock holds even when no outcome is shown (the page was concealed and re-verified meanwhile).
+  expect(view(connected, null, activeWallet(), { locked: true })).toMatch(/<textarea[^>]*disabled=""/);
+  expect(view(connected, null)).not.toMatch(/<textarea[^>]*disabled=""/);
 });
 
 it('lists creations with status, credits and placeholder previews only', () => {
@@ -132,6 +169,9 @@ it('lists creations with status, credits and placeholder previews only', () => {
   expect(html).toContain('Image 1080×1080 · preview not available yet');
   expect(html).toContain('80 credits held'); expect(html).toContain('Held for HQ review'); expect(html).toContain('Did not work · credits returned');
   expect(html).not.toMatch(/<img|https?:\/\//);
+  // A row that may be this tab's unconfirmed request keeps its status and credits, not its text.
+  const hidden = view({ state: 'READY', provider: 'CONNECTED', items: [generation('GENERATING')] }, null, activeWallet(), { hidePrompt: () => true });
+  expect(hidden).not.toContain('Kids class flyer'); expect(hidden).toContain('data-prompt-hidden'); expect(hidden).toContain('80 credits held');
 });
 
 it('shows nothing private while concealed', () => {

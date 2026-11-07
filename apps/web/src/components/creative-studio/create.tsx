@@ -25,7 +25,8 @@ export function outcomeText(language: string, outcome: CreateOutcome): Readonly<
     case 'DONE': return { tone: 'ok', text: t('resultDone') };
     case 'HELD': return { tone: 'waiting', text: t('resultHeld') };
     case 'FAILED': return { tone: 'blocked', text: t('resultFailed') };
-    case 'DENIED': return { tone: 'blocked', text: t('resultDenied') };
+    case 'RETRY_BLOCKED': return { tone: 'waiting', text: t('retryBlocked', { cause: outcome.cause === 'DENIED' ? t('causeDenied') : outcome.cause === 'NOT_CONNECTED'
+      ? t('causeNotConnected') : outcome.cause === 'INVALID' ? t('causeInvalid') : refusalReason(language, outcome.code) }) };
     case 'NOT_CONNECTED': return { tone: 'blocked', text: t('resultNotConnected') };
     case 'INVALID': return { tone: 'blocked', text: t('resultInvalid') };
     case 'REFUSED': return { tone: 'blocked', text: t('resultRefused', { reason: refusalReason(language, outcome.code) }) };
@@ -34,6 +35,8 @@ export function outcomeText(language: string, outcome: CreateOutcome): Readonly<
 
 export type CreatePanelProps = Readonly<{
   language: string; wallet: StudioWallet | null; generations: GenerationsState; outcome: CreateOutcome;
+  /** True while this tab holds a create that is sending or unconfirmed: the form stays locked. */
+  locked?: boolean | undefined;
   onCreate?: ((input: CreativeGenerationInput) => void) | undefined; onCheckAgain?: (() => void) | undefined;
 }>;
 
@@ -42,12 +45,12 @@ export type CreatePanelProps = Readonly<{
  * eligible school with published rates; otherwise it says plainly why nothing can be created. The cost shown is
  * rate × amount from the published rates; the server reserves the real amount.
  */
-export function CreatePanel({ language, wallet, generations, outcome, onCreate, onCheckAgain }: CreatePanelProps): React.ReactElement {
+export function CreatePanel({ language, wallet, generations, outcome, locked = false, onCreate, onCheckAgain }: CreatePanelProps): React.ReactElement {
   const t: T = (key, vars) => studioText(language, key, vars);
   const connected = generations.state === 'READY' && generations.provider === 'CONNECTED';
   const usable = connected && wallet && wallet.programActive && wallet.eligible && wallet.rates && wallet.rates.length > 0;
   const status = outcomeText(language, outcome);
-  const pending = outcome?.kind === 'SENDING' || outcome?.kind === 'UNKNOWN' || outcome?.kind === 'HIDDEN_PENDING';
+  const pending = locked || outcome?.kind === 'SENDING' || outcome?.kind === 'UNKNOWN' || outcome?.kind === 'HIDDEN_PENDING' || outcome?.kind === 'RETRY_BLOCKED';
   return <article className={styles.create} aria-labelledby="creative-create-title" data-create-state={usable ? 'OPEN' : connected ? 'BLOCKED' : 'NOT_CONNECTED'}>
     <div className={styles.cardHead}><h2 id="creative-create-title">{t('createTitle')}</h2>
       <span className={styles.status} data-tone={usable ? 'ready' : 'planned'}>{usable ? t('readyStatus') : t('createStatus')}</span></div>
@@ -56,7 +59,7 @@ export function CreatePanel({ language, wallet, generations, outcome, onCreate, 
       : <><p className={styles.note}>{t('createNote')}</p><p className={styles.meta}>{t('createPlanned')}</p></>}
     {status ? <div className={styles.outcome} data-tone={status.tone} role="status">
       <p>{status.text}</p>
-      {(outcome?.kind === 'UNKNOWN' || outcome?.kind === 'HIDDEN_PENDING') && onCheckAgain ? <button type="button" className={styles.secondary} onClick={onCheckAgain}>{t('checkAgain')}</button> : null}
+      {(outcome?.kind === 'UNKNOWN' || outcome?.kind === 'HIDDEN_PENDING' || outcome?.kind === 'RETRY_BLOCKED') && onCheckAgain ? <button type="button" className={styles.secondary} onClick={onCheckAgain}>{t('checkAgain')}</button> : null}
     </div> : null}
   </article>;
 }
@@ -105,7 +108,8 @@ function CreateForm({ language, wallet, disabled, onCreate }: { language: string
   </form>;
 }
 
-export function GenerationsPanel({ language, generations }: { language: string; generations: GenerationsState }): React.ReactElement {
+/** hidePrompt: rows that may belong to this tab's unconfirmed request keep status and credits but not their text. */
+export function GenerationsPanel({ language, generations, hidePrompt }: { language: string; generations: GenerationsState; hidePrompt?: ((g: CreativeGeneration) => boolean) | undefined }): React.ReactElement {
   const t: T = (key, vars) => studioText(language, key, vars);
   const number = (n: number) => new Intl.NumberFormat(language).format(n);
   const date = (stamp: string) => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(stamp)) + ' UTC';
@@ -117,7 +121,7 @@ export function GenerationsPanel({ language, generations }: { language: string; 
       <span className={styles.rowMain}><strong>{t(g.mediaKind)}</strong> <small>{t(g.format)}</small>
         <span className={styles.status} data-tone={g.status === 'SUCCEEDED' || g.status === 'RESOLVED_CHARGED' ? 'ready' : g.status === 'FAILED' || g.status === 'RESOLVED_NOT_CHARGED' ? 'planned' : 'waiting'}>{t(g.status)}</span></span>
       <span>{credits(g)}</span>
-      <p className={styles.prompt}>{g.prompt}</p>
+      {hidePrompt?.(g) ? <p className={styles.meta} data-prompt-hidden="">{t('hiddenPrompt')}</p> : <p className={styles.prompt}>{g.prompt}</p>}
       {g.assets.map(a => <small key={a.assetId} className={styles.asset}>{t('assetPreview', { kind: t(g.mediaKind), w: String(a.width), h: String(a.height), d: a.durationSeconds ? t('seconds', { n: String(a.durationSeconds) }) : '' })}</small>)}
       <small><time dateTime={g.createdAt}>{date(g.createdAt)}</time></small>
     </li>)}</ul> : <p className={styles.meta}>{t('generationsNone')}</p>
