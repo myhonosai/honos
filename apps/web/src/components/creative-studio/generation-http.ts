@@ -1,0 +1,76 @@
+import { accountClosed, saasUuid, validateCreativeGenerationInput, validateCreativeGenerationReceipt, validateCreativeStudioGenerationList,
+  type CreativeGenerationInput, type CreativeGenerationReceipt, type CreativeStudioGenerationList } from '@hon/contracts';
+import { reportConfirmedSessionInvalidation } from '../session-invalidation';
+
+/**
+ * Creative Studio generations (CS1). The server decides the provider, model and price, authorizes the exact school and
+ * reserves credits from that school's own wallet; the browser only sends the closed request and keeps one idempotency
+ * key per request until its outcome is known.
+ */
+export type GenerationErrorKind =
+  /** Session ended: nothing more is shown. */ 'SESSION'
+  /** This person cannot use Creative Studio at this school. Definitive. */ | 'DENIED'
+  /** No creative provider is connected; nothing was sent or charged. Definitive. */ | 'NOT_CONNECTED'
+  /** A school rule refused it (credits, HQ pause, eligibility, too many in progress). Definitive. */ | 'REFUSED'
+  /** The request was not accepted as sent. Definitive. */ | 'INVALID'
+  /** The outcome is not known. Retry only the identical request with the same key. */ | 'UNKNOWN';
+export class CreativeGenerationError extends Error {
+  constructor(readonly kind: GenerationErrorKind, readonly code: string | null = null) { super(kind); }
+}
+export const CREATIVE_GENERATION_COMMAND = 'saas-creative-generation-create';
+/** Server codes that mean "this exact request may or may not have happened". */
+const OUTCOME_UNKNOWN_CONFLICTS = new Set(['SAAS_OUTCOME_UNKNOWN', 'CREATIVE_GENERATION_IN_PROGRESS', 'SAAS_VERSION_CONFLICT']);
+
+const generationsPath = (schoolId: string) => `/api/v1/schools/${saasUuid(schoolId).toLowerCase()}/creative-studio/generations`;
+const json = /^application\/json(?:\s*;|$)/i;
+
+async function body(response: Response): Promise<unknown> {
+  if (!json.test(response.headers.get('content-type') ?? '')) return null;
+  try { return await response.json(); } catch { return null; }
+}
+const codeOf = (value: unknown): string | null =>
+  value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { code?: unknown }).code === 'string' ? (value as { code: string }).code : null;
+
+export async function listCreativeGenerations(schoolId: string, signal: AbortSignal): Promise<CreativeStudioGenerationList> {
+  const path = generationsPath(schoolId);
+  const response = await fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+    referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal });
+  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new CreativeGenerationError('SESSION'); }
+  if (response.status === 403) throw new CreativeGenerationError('DENIED', codeOf(await body(response)));
+  if (response.status !== 200) throw new CreativeGenerationError('UNKNOWN', codeOf(await body(response)));
+  try {
+    const list = validateCreativeStudioGenerationList(accountClosed(await response.json(), ['data']).data);
+    if (list.generations.some(g => g.schoolId !== schoolId.toLowerCase())) throw new Error('school');
+    return list;
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+}
+
+/** Validates the request before anything is sent. Throws INVALID for a request the contract would refuse. */
+export function prepareCreativeGeneration(input: CreativeGenerationInput): CreativeGenerationInput {
+  try { return validateCreativeGenerationInput(input); } catch { throw new CreativeGenerationError('INVALID', 'INVALID_SAAS_INPUT'); }
+}
+
+/** One create attempt. Repeating it with the same key and input never makes a second generation. */
+export async function createCreativeGeneration(schoolId: string, input: CreativeGenerationInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeGenerationReceipt> {
+  const path = generationsPath(schoolId), key = saasUuid(idempotencyKey).toLowerCase(), request = prepareCreativeGeneration(input);
+  let response: Response;
+  try {
+    response = await fetch(path, { method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': CREATIVE_GENERATION_COMMAND, 'Idempotency-Key': key },
+      body: JSON.stringify(request), signal });
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+  const code = response.status === 200 ? null : codeOf(await body(response));
+  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new CreativeGenerationError('SESSION'); }
+  if (response.status === 403) throw new CreativeGenerationError('DENIED', code);
+  if (response.status === 400) throw new CreativeGenerationError('INVALID', code);
+  if (response.status === 422) throw new CreativeGenerationError('REFUSED', code);
+  if (response.status === 409) throw new CreativeGenerationError(code && OUTCOME_UNKNOWN_CONFLICTS.has(code) ? 'UNKNOWN' : 'INVALID', code);
+  if (response.status === 503 && code === 'CREATIVE_PROVIDER_NOT_CONNECTED') throw new CreativeGenerationError('NOT_CONNECTED', code);
+  if (response.status !== 200) throw new CreativeGenerationError('UNKNOWN', code);
+  try {
+    const receipt = validateCreativeGenerationReceipt(accountClosed(await response.json(), ['data']).data);
+    const g = receipt.generation;
+    if (g.schoolId !== schoolId.toLowerCase() || g.operationCode !== request.operationCode || g.units !== request.units || g.format !== request.format || g.prompt !== request.prompt) throw new Error('mismatch');
+    return receipt;
+  } catch { throw new CreativeGenerationError('UNKNOWN'); }
+}

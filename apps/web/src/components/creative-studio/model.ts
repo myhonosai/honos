@@ -1,4 +1,4 @@
-import type { SaasCreativeSchoolWallet } from '@hon/contracts';
+import type { CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
 
 /**
  * What Creative Studio shows from the school's own creative wallet read. School views carry no provider
@@ -32,3 +32,11 @@ export function studioWallet(data: SaasCreativeSchoolWallet): StudioWallet {
     packages: data.packages.map(pack => ({ packageCode: pack.packageCode, totalCredits: pack.totalCredits, bonusCredits: pack.bonusCredits, priceMinor: pack.priceMinor, currency: pack.currency })),
   };
 }
+
+export type GenerationsState =
+  | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
+  | Readonly<{ state: 'READY'; provider: CreativeStudioProviderState; items: readonly CreativeGeneration[] }>;
+/** What the last create attempt from this tab is known to have done. Nothing here is a balance or a charge. */
+export type CreateOutcome =
+  | null | Readonly<{ kind: 'SENDING' }> | Readonly<{ kind: 'UNKNOWN' }> | Readonly<{ kind: 'HIDDEN_PENDING' }>
+  | Readonly<{ kind: 'DONE' | 'HELD' | 'FAILED' | 'DENIED' | 'NOT_CONNECTED' | 'INVALID' }> | Readonly<{ kind: 'REFUSED'; code: string | null }>;

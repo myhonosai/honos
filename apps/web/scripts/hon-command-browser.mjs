@@ -154,6 +154,11 @@ const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, prog
     { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' }] },
   packages: [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({ packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' })),
   agentConversationsDeductCredits: false, paymentsActive: false });
+// Creative Studio generations (CS1, synthetic). provider: NOT_CONNECTED unless a check connects it.
+const creative = { provider: 'NOT_CONNECTED', items: [], posts: [], replies: [] };
+const creativeGeneration = (body, n) => ({ generationId: id(700 + n), schoolId: scope.schoolId, operationCode: body.operationCode, mediaKind: 'IMAGE', units: body.units,
+  format: body.format, prompt: body.prompt, status: 'SUCCEEDED', failureReason: null, reservedCredits: 40 * body.units, chargedCredits: 40 * body.units,
+  createdAt: iso(0), completedAt: iso(0), assets: Array.from({ length: body.units }, (_, i) => ({ assetId: id(720 + n * 10 + i), ordinal: i + 1, mediaType: 'image/png', width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' })) });
 function json(route, status, body, headers = {}) {
   return route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', ...headers }, body: JSON.stringify(body) });
 }
@@ -167,6 +172,17 @@ async function api(route) {
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
   if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
+    if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
+    const request = route.request();
+    creative.posts.push({ key: request.headers()['idempotency-key'], command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = creative.replies.shift() ?? 'ok';
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const body = JSON.parse(request.postData() ?? '{}'), g = creativeGeneration(body, creative.items.length + 1);
+    creative.items = [g, ...creative.items];
+    return json(route, 200, { data: { generation: g, balance: creativeWallet().balance, replayed: false } });
+  }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
     assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
     return studio === 'denied' ? json(route, 403, { code: 'FORBIDDEN' }) : json(route, 200, { data: creativeWallet() });
@@ -661,6 +677,55 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     await ctx.close();
   });
 }
+await check('Creative Studio: connected provider, lost answer, Check again replays the same request once', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'] });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section.locator('[data-create-state="OPEN"]').waitFor();
+  await section.getByLabel('What to make').selectOption('image.standard');
+  await section.getByLabel('How many').fill('2');
+  await section.getByLabel('Portrait').check();
+  await section.getByLabel('Describe what you need').fill('Kids class flyer with a bright orange belt theme');
+  assert.ok(await section.getByText('Uses 80 credits. You have 11,640 available.').isVisible());
+  await section.getByRole('button', { name: 'Create', exact: true }).click();
+  await section.getByText(/We could not confirm whether this request went through/).waitFor();
+  assert.equal(await section.getByLabel('Describe what you need').isDisabled(), true, 'form locked while the outcome is unknown');
+  await shot(page, 'creative-studio-create-unknown');
+  await section.getByRole('button', { name: 'Check again' }).click();
+  await section.getByText('Done. The result is listed below.').waitFor();
+  await section.getByText('Image 1080×1080 · preview not available yet').first().waitFor();
+  assert.equal(creative.posts.length, 2);
+  assert.equal(creative.posts[0].key, creative.posts[1].key, 'Check again reuses the idempotency key');
+  assert.equal(creative.posts[0].body, creative.posts[1].body, 'Check again resends the identical body');
+  assert.equal(creative.posts[0].command, 'saas-creative-generation-create');
+  assert.deepEqual(JSON.parse(creative.posts[0].body), { operationCode: 'image.standard', units: 2, format: 'PORTRAIT', prompt: 'Kids class flyer with a bright orange belt theme' });
+  await noOverflow(page, 'creative-studio-create');
+  await axe(page, 'creative-studio-create');
+  await shot(page, 'creative-studio-create-done', true);
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: an unknown create stays unconfirmed across a conceal and never shows its text', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'] });
+  const { ctx, page } = await creativeStudio({ width: 390, height: 844 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Private note about the Lee family');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText(/We could not confirm/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Lee family') || !!document.querySelector('[data-shell-private][hidden], [data-shell-private][inert]'));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await section().getByText(/waiting for confirmation/).waitFor({ timeout: 20000 });
+  assert.ok(!(await section().innerText()).includes('Lee family'), 'the pending request text is not shown after re-verification');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key);
+  await noOverflow(page, 'creative-studio-phone-create');
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
 await check('Creative Studio: a refused wallet read shows no numbers', async () => {
   studio = 'denied';
   const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
