@@ -2531,9 +2531,9 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 END $$;
 -- End school membership plan catalog exact verification.
 
--- CRM guardian/child enrollment exact verification (0176): private immutable tables, four runtime entry points, private helpers and guards, no overloads.
+-- CRM guardian/child enrollment exact verification (0176, child relation + family read replaced by 0218; 0218 person command receipts and correction helpers included): private immutable tables, four runtime entry points, private helpers and guards, no overloads.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
-  FOREACH t IN ARRAY ARRAY['crm_guardian_child_enrolled_children','crm_guardian_child_payer_designations','crm_guardian_child_membership_draft_sources'] LOOP
+  FOREACH t IN ARRAY ARRAY['crm_guardian_child_enrolled_children','crm_guardian_child_payer_designations','crm_guardian_child_membership_draft_sources','crm_guardian_child_identity_corrections','school_person_command_receipts'] LOOP
     SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
       AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
@@ -2545,13 +2545,18 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.capture_crm_guardian_child_registration_child()',true,false,'98c12236c3ea0f866e39aab5707affd1a4ff44b885c2828abf6b797bb742f9aa'),
 ('hon.require_crm_guardian_child_enrollment_actor(text)',true,false,'1ce782ebcd4e6b15183acaa39434c7a7ef5342e875d694dd01dded3d2f2a63e2'),
 ('hon.crm_guardian_child_family_relation(uuid)',true,false,'c28275b6efad28d071aca09a170eb15dd942d586ca22146a856e836419c44232'),
-('hon.crm_guardian_child_child_relation(uuid)',true,false,'182be545c237b678aab241dde1171199f737509672928396f11047f56ac4e3f9'),
+('hon.crm_guardian_child_child_relation(uuid)',true,false,'5098f43db920d04a2043186b83433e96bfbf21f877a15e6700fd9b5fa266a313'),
 ('hon.crm_guardian_child_current_designation(uuid,uuid,uuid,uuid,uuid)',true,false,'c5f51fa97aeaa2901d3515ed42cf9f8c0c31de64cdc1afc1ace7ef0aeb7cf90e'),
 ('hon.crm_guardian_child_membership_draft_current(uuid)',true,false,'0eb5c4cca23e5cda775be4225cbf0259502bfdd9c9883dd2e65953e52ffc07f6'),
-('hon.read_crm_guardian_child_enrollment(text,uuid)',true,true,'d450e56b692dac4e2369245f61257e30c106fa550a2da03c30ab26d1910d3db0'),
+('hon.read_crm_guardian_child_enrollment(text,uuid)',true,true,'adeb793f2a1b9158c9ac1ae68957513f2bf52a7e2874f33a1002fb8f7a2e54b3'),
 ('hon.designate_crm_guardian_child_payer(text,uuid,jsonb,uuid,uuid,uuid)',true,true,'95d672e03d52b5905d289e2ddc373ac2671c2ea8eb3524edfd25858ab65ed3f9'),
 ('hon.add_crm_guardian_child_additional_child(text,uuid,jsonb,uuid,uuid,uuid)',true,true,'0a97e309a147cb531ce874ce806c09c87d43bf01047f70fee84940d51559535a'),
-('hon.draft_crm_guardian_child_membership_from_plan(text,jsonb,uuid,uuid,uuid)',true,true,'9e0a95a431a80c3f3af5f24c0d99aea0558f9141efe24d3239f3a87d90c0635f')) e(signature,definer,runtime_allowed,body_hash) LOOP
+('hon.draft_crm_guardian_child_membership_from_plan(text,jsonb,uuid,uuid,uuid)',true,true,'9e0a95a431a80c3f3af5f24c0d99aea0558f9141efe24d3239f3a87d90c0635f'),
+('hon.crm_guardian_child_current_identity(uuid,uuid,uuid)',false,false,'bd62d2334085e7882e95d598683ac9bfcd6c67aa938d04df039dddd63ca3970d'),
+('hon.record_crm_guardian_child_identity_correction(uuid,uuid,uuid,uuid,uuid,text,text,date)',false,false,'bc1714cfa175e8d9b448d428cbb62824203b9d52deca3c164e7750fc92ce399d'),
+('hon.guard_school_person_command_receipt()',false,false,'6d6c8d3012529d9d3b24627332254cde9b9a38196cfcbbf912313788e11870e5'),
+('hon.school_person_is_owner(uuid,uuid)',false,false,'02b129313c3c282d79072a0342f9301561c324b9623136c0eb8c4b2d6de90d65'),
+('hon.update_school_student_birth_date(text,jsonb,uuid)',true,true,'c06debf31093419c35ad2463803041f206f808412aa2cc719feba4c12c5dda59')) e(signature,definer,runtime_allowed,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -2567,6 +2572,10 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     ('crm_guardian_child_payer_designations','crm_guardian_child_payer_designation_no_truncate','hon.guard_crm_guardian_child_enrollment_history()'),
     ('crm_guardian_child_membership_draft_sources','crm_guardian_child_membership_source_immutable','hon.guard_crm_guardian_child_enrollment_history()'),
     ('crm_guardian_child_membership_draft_sources','crm_guardian_child_membership_source_no_truncate','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_guardian_child_identity_corrections','crm_guardian_child_identity_corrections_immutable','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('crm_guardian_child_identity_corrections','crm_guardian_child_identity_corrections_no_truncate','hon.guard_crm_guardian_child_enrollment_history()'),
+    ('school_person_command_receipts','school_person_command_receipts_complete_once','hon.guard_school_person_command_receipt()'),
+    ('school_person_command_receipts','school_person_command_receipts_no_truncate','hon.guard_school_person_command_receipt()'),
     ('crm_lead_registration_conversions','crm_guardian_child_registration_child_capture','hon.capture_crm_guardian_child_registration_child()')) e(tbl,name,fn) LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
       RAISE EXCEPTION 'Missing CRM guardian/child enrollment guard: %',expected.name; END IF;

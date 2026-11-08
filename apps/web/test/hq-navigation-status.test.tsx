@@ -30,7 +30,7 @@ describe('HQ navigation groups', () => {
     const topLevel = HQ_NAV.map((item) => item.path);
     for (const moved of ['/hq/pricing-offers', '/hq/ai-providers', '/hq/ai-costs']) expect(topLevel).not.toContain(moved);
     for (const entry of [...HQ_NAV, ...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH]) expect(existsSync(`src/app${entry.path}/page.tsx`)).toBe(true);
-    expect(Object.values(HQ_NAV_GROUPS).map((group) => group.key)).toEqual(['revenue', 'ai', 'growth']);
+    expect(Object.values(HQ_NAV_GROUPS).map((group) => group.key)).toEqual(['schools', 'revenue', 'ai', 'growth']);
   });
 
   it('keeps page labels and opens only the group that holds the current page', () => {

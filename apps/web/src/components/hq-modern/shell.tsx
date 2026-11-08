@@ -94,7 +94,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         const links = [...(group.overview ? [group.overview] : []), ...group.children];
         return <details className={styles.growthNav} key={`${group.key}:${hqGroupContains(group, path)}`} open={hqGroupContains(group, path)} data-hq-nav-group={group.key}>
           <summary><HqIcon name={group.icon}/><span>{text(group.title)}</span></summary>
-          {links.map((child) => <Link key={child.path} href={child.path} onClick={() => setMenu(false)} aria-current={path === child.path || (child !== group.overview && child.path !== '/hq/revenue' && path.startsWith(`${child.path}/`)) ? 'page' : undefined}>{child === group.overview ? null : <HqIcon name={child.icon} size={17}/>}{text(child.title)}</Link>)}
+          {links.map((child) => <Link key={child.path} href={child.path} onClick={() => setMenu(false)} aria-current={path === child.path || (child !== group.overview && child.path !== '/hq/revenue' && child.path !== '/hq/schools' && path.startsWith(`${child.path}/`)) ? 'page' : undefined}>{child === group.overview ? null : <HqIcon name={child.icon} size={17}/>}{text(child.title)}</Link>)}
         </details>;
       })}
     </nav>
