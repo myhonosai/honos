@@ -2315,3 +2315,13 @@ DO $$ DECLARE r text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_membership_list(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0221 forward-paging class-session list: the one read-only definer projection is the only runtime boundary (0147's
+-- function-only session read intent).
+DO $$ DECLARE r text; BEGIN
+  EXECUTE 'REVOKE ALL ON FUNCTION hon.read_school_class_session_page(text,jsonb) FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.read_school_class_session_page(text,jsonb) FROM '||quote_ident(r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_class_session_page(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

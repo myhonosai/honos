@@ -13,6 +13,9 @@ const AUTHORITY_HEADERS = new Set([
 /** Browser transport is strict, but database function authorization remains authoritative. */
 @Injectable()
 export class ClassSessionsReadHumanUiGuard implements CanActivate {
+  /** Query keys a subclass accepts (each at most once, as a plain string); the bounded read accepts none. */
+  protected readonly allowedQuery: ReadonlySet<string> = new Set();
+
   canActivate(context: ExecutionContext): boolean {
     const http = context.switchToHttp();
     const request = http.getRequest<HonRequest>();
@@ -25,7 +28,10 @@ export class ClassSessionsReadHumanUiGuard implements CanActivate {
     if (!origin) throw new ServiceUnavailableException({ code: 'HUMAN_UI_ORIGIN_NOT_CONFIGURED' });
 
     const headers = request.headers;
-    const hasSelector = Object.keys(request.query ?? {}).length > 0 || request.originalUrl?.includes('?');
+    const query = (request.query ?? {}) as Record<string, unknown>;
+    const hasSelector = this.allowedQuery.size === 0
+      ? Object.keys(query).length > 0 || request.originalUrl?.includes('?')
+      : Object.entries(query).some(([key, value]) => !this.allowedQuery.has(key) || typeof value !== 'string');
     const unexpectedHonHeader = Object.keys(headers).some((header) => {
       const name = header.toLowerCase();
       return name.startsWith('x-hon-') && name !== 'x-hon-human-read';

@@ -48,7 +48,12 @@ function operationalText(value: unknown): string {
 
 /** Verifies the exact projection; it intentionally has no roster, booking, attendance, or availability fields. */
 export function verifyCurrentSchoolClassSessions(value: unknown): CurrentSchoolClassSession[] {
-  if (!Array.isArray(value) || value.length > CURRENT_SCHOOL_CLASS_SESSIONS_MAXIMUM) invalid();
+  return verifyCurrentSchoolClassSessionItems(value, CURRENT_SCHOOL_CLASS_SESSIONS_MAXIMUM);
+}
+
+/** The same closed row and strict (published startsAt, sessionId) order check, for at most `maximum` rows. */
+export function verifyCurrentSchoolClassSessionItems(value: unknown, maximum: number): CurrentSchoolClassSession[] {
+  if (!Array.isArray(value) || value.length > maximum) invalid();
   const seen = new Set<string>();
   let previous: [number, string] | undefined;
   return value.map((value) => {
