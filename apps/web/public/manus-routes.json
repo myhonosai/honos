@@ -33,6 +33,10 @@
       "title": "HON HQ | School access"
     },
     {
+      "path": "/hq/schools/access/policy",
+      "title": "HON HQ | Exception policy"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },
@@ -117,6 +121,18 @@
       "title": "HON | People"
     },
     {
+      "path": "/staff/crm",
+      "title": "HON | Leads"
+    },
+    {
+      "path": "/staff/schedule",
+      "title": "HON | Class rosters"
+    },
+    {
+      "path": "/staff/marketing",
+      "title": "HON | Marketing"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },
@@ -171,6 +187,10 @@
     {
       "path": "/staff/billing/renewals",
       "title": "Human membership renewal reviews"
+    },
+    {
+      "path": "/staff/memberships",
+      "title": "HON | Memberships"
     },
     {
       "path": "/staff/billing/memberships",

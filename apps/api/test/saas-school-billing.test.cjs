@@ -308,9 +308,15 @@ test('D10 contracts: closed explicit decisions, bounded dates/duration and no au
 });
 test('D10 response contracts: coherent history and historical pre-D10 receipt compatibility', () => {
   const p = policy(), view = { scope: 'ACCESS_EXCEPTIONS_ONLY', current: p, effectiveStatus: 'ACTIVE', history: [p], historyLimit: 100,
-    asOf: T, termsStatus: 'PROPOSED', paidAccessProgram: 'INACTIVE', aiCreditProgram: 'INACTIVE' };
+    asOf: T, termsStatus: 'PROPOSED', terms: { policyVersion: p.termsVersion, exceptionMaxDays: 90, exceptionAuthority: 'HQ_OWNER' },
+    viewer: { canDecide: true }, paidAccessProgram: 'INACTIVE', aiCreditProgram: 'INACTIVE' };
   assert.equal(contracts.validateSaasExceptionPolicyView(view).current.approvalId,p.approvalId);
-  for (const patch of [{ current: null }, { effectiveStatus: 'PROPOSED' }, { termsStatus: 'APPROVED' }, { history: [p,p] }, { scope: 'PAID_ACCESS' }])
+  const newer = { ...view.terms, policyVersion: p.termsVersion + 1 };
+  assert.equal(contracts.validateSaasExceptionPolicyView({ ...view, terms: newer, effectiveStatus: 'SUPERSEDED' }).effectiveStatus, 'SUPERSEDED');
+  for (const patch of [{ current: null }, { effectiveStatus: 'PROPOSED' }, { termsStatus: 'APPROVED' }, { history: [p,p] }, { scope: 'PAID_ACCESS' },
+    { effectiveStatus: 'SUPERSEDED' }, { terms: newer }, { terms: { ...view.terms, policyVersion: p.termsVersion - 1 } }, { terms: undefined },
+    { terms: { ...view.terms, exceptionMaxDays: 91 } }, { terms: { ...view.terms, exceptionAuthority: 'HQ_OPERATOR' } }, { viewer: { canDecide: 'yes' } },
+    { viewer: { canDecide: true, role: 'OWNER' } }])
     assert.throws(() => contracts.validateSaasExceptionPolicyView({ ...view,...patch }));
   const x=accessException();
   assert.equal(validateException(x).governingPolicy,undefined,'old stored exact receipt is not rewritten');
@@ -324,7 +330,8 @@ test('D10 HTTP: explicit human command, origin, closed body, fixed subject and s
   const {app,base}=await appWith(async(operation,params)=>{
     calls.push([operation,params]);
     if(operation==='readExceptionPolicy')return {scope:'ACCESS_EXCEPTIONS_ONLY',current:null,effectiveStatus:'ABSENT',history:[],historyLimit:100,
-      asOf:T,termsStatus:'PROPOSED',paidAccessProgram:'INACTIVE',aiCreditProgram:'INACTIVE'};
+      asOf:T,termsStatus:'PROPOSED',terms:{policyVersion:1,exceptionMaxDays:90,exceptionAuthority:'HQ_OWNER'},viewer:{canDecide:true},
+      paidAccessProgram:'INACTIVE',aiCreditProgram:'INACTIVE'};
     if(operation==='decideExceptionPolicy'){
       const input=JSON.parse(params[1]);
       if(input.reason==='Denied synthetic policy attempt'){const e=new Error('SAAS_FORBIDDEN');e.code='42501';throw e;}

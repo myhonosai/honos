@@ -94,7 +94,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
       <Card title={t('leadsTitle')} lead={t('leadsLead')} panel={sources.operations} t={t} footer={<a href={scoped('/staff/crm/leads', selection)}>{t('recentOpen')} →</a>}>
         {snapshot => <Bars bars={leadOutcomes(snapshot)} t={t} number={number} />}
       </Card>
-      <Card title={t('membersTitle')} lead={t('membersLead')} panel={sources.operations} t={t} footer={<a href="/staff/billing/memberships">{t('kpiActiveMemberships')} →</a>}>
+      <Card title={t('membersTitle')} lead={t('membersLead')} panel={sources.operations} t={t} footer={<a href="/staff/memberships">{t('kpiActiveMemberships')} →</a>}>
         {snapshot => <Bars bars={membershipMix(snapshot)} t={t} number={number} />}
       </Card>
       <Card title={t('scheduleTitle')} panel={sources.sessions} t={t} footer={<a href="/staff/schedule/sessions">{t('scheduleOpen')} →</a>}>

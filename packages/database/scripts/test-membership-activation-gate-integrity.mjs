@@ -669,8 +669,9 @@ try {
     'read_crm_adult_membership_draft_confirmation', 'read_crm_adult_membership_preparation',
     'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_membership_date_confirmation_queue', 'read_membership_date_history',
     'read_owner_launch_membership_draft', 'read_parent_billing_view', 'read_parent_testing_status',
-    'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_status_summary', 'record_retention_attention_alert',
+    'read_retention_review_signals', 'read_school_command_center', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'record_retention_attention_alert',
     'renewal_membership_facts', 'resolve_retention_attention_alert', 'revenue_plan_snapshot', 'revise_membership_dates']);
+  // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0178 (E1b-1) readers are date-management paths only: revision evaluation, its insert guard, history, the legacy
   // confirmation queue and the status summary. None books, checks in or grants a benefit.
   // Four retention/health reads also read attendance as a signal; no reader of memberships books, checks in or records attendance.

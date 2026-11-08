@@ -84,6 +84,11 @@ try{
  const ownerView=await service.readExceptionPolicy(H('owner'));
  assert.equal((await service.readExceptionPolicy(H('operator'))).current.approvalId,approved.approvalId);
  assert.equal(ownerView.effectiveStatus,'ACTIVE');assert.equal(ownerView.current.approvalId,approved.approvalId);
+ {const t=(await admin.query('SELECT policy_version v,exception_max_days d FROM hon.saas_access_policy_terms ORDER BY policy_version DESC LIMIT 1')).rows[0];
+  const operatorView=await service.readExceptionPolicy(H('operator'));
+  assert.deepEqual(ownerView.terms,{policyVersion:Number(t.v),exceptionMaxDays:Number(t.d),exceptionAuthority:'HQ_OWNER'});
+  assert.deepEqual(operatorView.terms,ownerView.terms);assert.equal(ownerView.viewer.canDecide,true);assert.equal(operatorView.viewer.canDecide,false);
+  passed('0222 read names the current terms the next decision must cite; only the HQ owner is told it may decide');}
  for(const who of ['operator','school','expired','ai','delegated']){
   const n=await footprint();
   await deny(approvalAttempt(who),403,'SAAS_FORBIDDEN');assert.deepEqual(await footprint(),n);
