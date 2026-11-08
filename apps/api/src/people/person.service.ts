@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { tierIncludesFeature } from '@hon/config';
 import type { CommandContext, CreatePersonInput, HonTier, PersonSummary } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
-import { cursorInstantSql, decodeListCursor, encodeListCursor } from '../foundation/list-cursor.js';
+import { decodeListCursor, encodeListCursor, staleListCursor } from '../foundation/list-cursor.js';
 
 function fingerprint(input: CreatePersonInput): string {
   return createHash('sha256').update(JSON.stringify({
@@ -12,6 +12,9 @@ function fingerprint(input: CreatePersonInput): string {
   })).digest('hex');
 }
 
+/** A directory position is the last person's (id, version); their live name keys are read from the row. */
+const PERSON_CURSOR = ['uuid', 'version'] as const;
+
 @Injectable()
 export class PersonService {
   constructor(private readonly database: RuntimeDatabaseService) {}
@@ -19,29 +22,40 @@ export class PersonService {
   async list(context: CommandContext, query?: string, page: { limit?: number | undefined; cursor?: string | undefined } = {}): Promise<{ people: PersonSummary[]; nextCursor: string | null; limit: number }> {
     const needle = query?.trim() || null;
     const limit = page.limit ?? 50;
-    // Bound to the exact school and search text; decoded before any database work.
-    const after = decodeListCursor(page.cursor, 'people.directory', context.schoolId, { query: needle }, ['text', 'text', 'instant', 'uuid']);
+    // Signed and bound to the exact school and search text; verified before any database work. The cursor names the
+    // last row by (id, version) only, so no name text travels in URLs or logs and its size is fixed.
+    const after = decodeListCursor(page.cursor, 'people.directory', context.schoolId, { query: needle }, PERSON_CURSOR);
     return this.database.withTenantTransaction(context, async (client) => {
+      if (after) {
+        // The anchor's live sort keys position the page. If that person was edited or removed since the previous page,
+        // the position is no longer the one the reader saw: refuse and let the client reload rather than skip rows.
+        const anchor = await client.query(
+          'SELECT 1 FROM hon.people WHERE organization_id = $1 AND school_id = $2 AND id = $3::uuid AND version = $4::bigint',
+          [context.organizationId, context.schoolId, after[0], after[1]],
+        );
+        if (anchor.rowCount !== 1) staleListCursor();
+      }
       // Keyset page in directory order with the id as a unique tiebreaker. The row comparison uses the same collation
       // as the ORDER BY, so no row is repeated or skipped between pages.
-      const result = await client.query<PersonSummary & { cursorAt: string; sortFamily: string; sortGiven: string }>(
-        `SELECT id, given_name AS "givenName", family_name AS "familyName", email::text AS email,
-                phone_e164 AS "phoneE164", version, created_at AS "createdAt",
-                family_name AS "sortFamily", given_name AS "sortGiven", ${cursorInstantSql('created_at')} AS "cursorAt"
-         FROM hon.people
-         WHERE organization_id = $1 AND school_id = $2
-           AND ($3::text IS NULL OR concat_ws(' ', given_name, family_name, email::text, phone_e164) ILIKE '%' || $3 || '%')
-           AND ($5::text IS NULL OR (family_name, given_name, created_at, id) > ($5::text, $6::text, $7::timestamptz, $8::uuid))
-         ORDER BY family_name ASC, given_name ASC, created_at ASC, id ASC
+      const result = await client.query<PersonSummary>(
+        `SELECT p.id, p.given_name AS "givenName", p.family_name AS "familyName", p.email::text AS email,
+                p.phone_e164 AS "phoneE164", p.version, p.created_at AS "createdAt"
+         FROM hon.people AS p
+         WHERE p.organization_id = $1 AND p.school_id = $2
+           AND ($3::text IS NULL OR concat_ws(' ', p.given_name, p.family_name, p.email::text, p.phone_e164) ILIKE '%' || $3 || '%')
+           AND ($5::uuid IS NULL OR (p.family_name, p.given_name, p.created_at, p.id) > (
+             SELECT a.family_name, a.given_name, a.created_at, a.id FROM hon.people AS a
+             WHERE a.organization_id = $1 AND a.school_id = $2 AND a.id = $5::uuid))
+         ORDER BY p.family_name ASC, p.given_name ASC, p.created_at ASC, p.id ASC
          LIMIT $4`,
-        [context.organizationId, context.schoolId, needle, limit + 1, after?.[0] ?? null, after?.[1] ?? null, after?.[2] ?? null, after?.[3] ?? null],
+        [context.organizationId, context.schoolId, needle, limit + 1, after?.[0] ?? null],
       );
       const rows = result.rows.slice(0, limit);
       const last = result.rows.length > limit ? rows[rows.length - 1] : undefined;
       const nextCursor = last
-        ? encodeListCursor('people.directory', context.schoolId, { query: needle }, [last.sortFamily, last.sortGiven, last.cursorAt, last.id])
+        ? encodeListCursor('people.directory', context.schoolId, { query: needle }, PERSON_CURSOR, [last.id, String(last.version)])
         : null;
-      return { people: rows.map(({ cursorAt: _c, sortFamily: _f, sortGiven: _g, ...person }) => person), nextCursor, limit };
+      return { people: rows, nextCursor, limit };
     });
   }
 

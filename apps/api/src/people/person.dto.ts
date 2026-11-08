@@ -38,6 +38,6 @@ export class ListPeopleDto {
   /** Opaque keyset cursor from the previous page's meta.nextCursor. */
   @IsOptional()
   @IsString()
-  @MaxLength(1024)
+  @MaxLength(512)
   cursor?: string;
 }

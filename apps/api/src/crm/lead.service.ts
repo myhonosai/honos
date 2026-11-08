@@ -31,6 +31,9 @@ function fingerprint(input: CreateLeadInput): string {
   })).digest('hex');
 }
 
+/** Lead positions are immutable (created_at, id), so the signed cursor carries them directly. */
+const LEAD_CURSOR = ['instant', 'uuid'] as const;
+
 @Injectable()
 export class LeadService {
   constructor(private readonly database: RuntimeDatabaseService) {}
@@ -43,7 +46,7 @@ export class LeadService {
     const limit = options.limit ?? 50;
     const status = options.status ?? null;
     // Decoded before any database work: a cursor from another school, list or filter is refused, never reinterpreted.
-    const after = decodeListCursor(options.cursor, 'crm.leads', context.schoolId, { status }, ['instant', 'uuid']);
+    const after = decodeListCursor(options.cursor, 'crm.leads', context.schoolId, { status }, LEAD_CURSOR);
     return this.database.withTenantTransaction(context, async (client) => {
       // The controller authorized before this transaction began; a grant revocation or an organization/school
       // suspension committed since then must refuse the read rather than return CRM data.
@@ -70,7 +73,7 @@ export class LeadService {
       );
       const rows = result.rows.slice(0, limit);
       const last = result.rows.length > limit ? rows[rows.length - 1] : undefined;
-      const nextCursor = last ? encodeListCursor('crm.leads', context.schoolId, { status }, [last.cursorAt, last.id]) : null;
+      const nextCursor = last ? encodeListCursor('crm.leads', context.schoolId, { status }, LEAD_CURSOR, [last.cursorAt, last.id]) : null;
       return { leads: rows.map(({ cursorAt: _cursorAt, ...lead }) => lead), access, nextCursor, limit };
     });
   }
