@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -175,6 +175,7 @@ async function api(route) {
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
   if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
+  if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
     const request = route.request();
@@ -224,6 +225,60 @@ async function api(route) {
   return json(route, 404, { code: 'NOT_FOUND' });
 }
 
+// People (B-CRM-1a/1b): synthetic people at the one school. Edits replay by key, check the version and the consent rule.
+const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
+function resetPeople(over = {}) {
+  ppl.records = new Map([[id(301), { personId: id(301), schoolId: scope.schoolId, givenName: 'Ana', familyName: 'Rivera', email: 'ana.parent@example.invalid', phoneE164: '+15555550101',
+    version: 1, updatedAt: iso(-48), student: { birthDate: '2015-04-02', status: 'ACTIVE', version: 1 }, consents: { EMAIL: 'OPTED_IN', SMS: 'NOT_RECORDED' } }],
+  [id(302), { personId: id(302), schoolId: scope.schoolId, givenName: 'Ben', familyName: 'Okafor', email: null, phoneE164: '+15555550102',
+    version: 2, updatedAt: iso(-24), student: null, consents: { EMAIL: 'NOT_RECORDED', SMS: 'OPTED_OUT' } }]]);
+  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+}
+resetPeople();
+const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents: { ...r.consents }, canEdit: ppl.canEdit });
+async function peopleApiRoute(route, path, method, url) {
+  if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
+    const q = (url.searchParams.get('query') ?? '').toLowerCase();
+    const items = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
+      .map((r) => ({ id: r.personId, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164, version: r.version, createdAt: iso(-500) }));
+    return json(route, 200, { data: items, meta: { requestId: id(900), correlationId: id(900) } });
+  }
+  const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
+  if (read && method === 'GET') { const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
+  if (method !== 'POST' || !['/api/v1/school/people/update', '/api/v1/school/people/birth-date'].includes(path)) return null;
+  const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
+  ppl.posts.push({ path, key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
+  assert.equal(headers['x-hon-human-command'], 'school-person-record');
+  const step = ppl.replies.shift() ?? 'ok';
+  if (ppl.gate) { const gate = ppl.gate; ppl.gate = null; await gate; }
+  const prior = ppl.byKey.get(headers['idempotency-key']);
+  if (prior) return prior.body === raw ? json(route, 200, { data: prior.data }) : json(route, 409, { code: 'PERSON_IDEMPOTENCY_CONFLICT' });
+  if (step === 'lost') return route.abort('connectionreset');
+  if (step === 'busy') return json(route, 503, { code: 'PERSON_BUSY', outcome: 'NOT_SUBMITTED' });
+  if (step === 'owner') return json(route, 403, { code: 'PERSON_BIRTH_DATE_OWNER_REQUIRED' });
+  const body = JSON.parse(raw), r = ppl.records.get(body.personId);
+  if (!r) return json(route, 404, { code: 'PERSON_UNAVAILABLE' });
+  let data;
+  if (path.endsWith('/update')) {
+    if (body.expectedVersion !== r.version) return json(route, 409, { code: 'PERSON_VERSION_CONFLICT', outcome: 'NOT_SUBMITTED' });
+    const changed = ['givenName', 'familyName', 'email', 'phoneE164'].filter((f) => body[f] !== r[f]);
+    if (!changed.length) return json(route, 400, { code: 'PERSON_UNCHANGED' });
+    if (changed.includes('email') && r.consents.EMAIL === 'OPTED_IN' || changed.includes('phoneE164') && r.consents.SMS === 'OPTED_IN') return json(route, 409, { code: 'PERSON_CONTACT_CONSENT_REVIEW_REQUIRED', outcome: 'NOT_SUBMITTED' });
+    for (const f of changed) r[f] = body[f];
+    r.version += 1; r.updatedAt = iso(0);
+    data = { person: pplRead(r), changedFields: changed };
+  } else {
+    if (!r.student || body.expectedVersion !== r.student.version) return json(route, 409, { code: 'PERSON_VERSION_CONFLICT', outcome: 'NOT_SUBMITTED' });
+    if (body.birthDate === r.student.birthDate) return json(route, 400, { code: 'PERSON_UNCHANGED' });
+    r.student.birthDate = body.birthDate; r.student.version += 1;
+    data = { person: pplRead(r), changedFields: ['birthDate'], enrollmentCorrected: true };
+  }
+  ppl.byKey.set(headers['idempotency-key'], { body: raw, data });
+  // 'unknown': the change committed but the answer was lost on the way back.
+  if (step === 'unknown') return json(route, 503, { code: 'PERSON_UNAVAILABLE', outcome: 'UNKNOWN_OR_RETRY_REQUIRED' });
+  return json(route, 200, { data });
+}
+
 // ---------- server ----------
 const probe = createServer(); await new Promise((done) => probe.listen(0, '127.0.0.1', done)); const port = probe.address().port; await new Promise((done) => probe.close(done));
 const origin = `http://127.0.0.1:${port}`;
@@ -256,7 +311,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 async function axe(page, name) {
   await page.addScriptTag({ content: axeSource });
   const run = (include) => page.evaluate(async (selectors) => (await window.axe.run(selectors ? { include: selectors.map((s) => [s]) } : document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })), include);
-  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]'].filter((s) => document.querySelector(s)));
+  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]', 'section[aria-labelledby="people-title"]'].filter((s) => document.querySelector(s)));
   const result = await run(selectors);
   report.accessibility.push({ name, scope: selectors, violations: result, wholePage: await run(null) });
   const serious = result.filter((v) => v.impact === 'serious' || v.impact === 'critical');
@@ -855,6 +910,153 @@ await check('Creative Studio: leaving the tab hides the wallet', async () => {
   await section.getByTestId('creative-available').waitFor();
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await page.waitForFunction(() => !document.querySelector('[data-testid="creative-available"]') || !!document.querySelector('[data-testid="creative-available"]')?.closest('[hidden],[inert]'));
+  await ctx.close();
+});
+
+// ---------- People ----------
+async function peoplePage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    // The presentation-only language cookie, scoped exactly as the web server derives it for this synthetic session.
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/people`);
+  const section = () => page.locator('section[aria-labelledby="people-title"]');
+  await section().getByTestId('people-list').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const open = async (section, name) => { await section().getByRole('button', { name: new RegExp(name) }).click(); };
+const TITLES = { en: ['People', 'Child details', 'Save changes'], ko: ['사람', '자녀 정보', '변경 사항 저장'], es: ['Personas', 'Datos del niño', 'Guardar cambios'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'en'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'big-button', 'en'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'modern', 'ko'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'], ['phone-390', { width: 390, height: 844 }, 'classic', 'es']]) {
+  await check(`People ${nextTheme} ${language} ${name}: real reads, edit forms and child details`, async () => {
+    resetPeople();
+    const { ctx, page, section } = await peoplePage(viewport, { nextTheme, language });
+    const [title, child, save] = TITLES[language];
+    assert.ok(await section().getByRole('heading', { name: title, level: 1 }).isVisible());
+    await open(section, 'Ana Rivera');
+    await section().getByRole('heading', { name: child }).waitFor();
+    assert.ok(await section().getByRole('button', { name: save }).isVisible());
+    assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Ana');
+    assert.equal(await section().locator('input[name="birthDate"]').inputValue(), '2015-04-02');
+    await noOverflow(page, `people-${nextTheme}-${language}-${name}`);
+    await axe(page, `people-${nextTheme}-${language}-${name}`);
+    await shot(page, `people-${nextTheme}-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('People: a lost answer keeps the save locked; Try again replays the same key and body once', async () => {
+  resetPeople({ replies: ['unknown', 'ok'] });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().locator('input[name="familyName"]').fill('Rivera-Lopez');
+  await section().locator('input[name="phone"]').fill('+1 555 555 0199');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/We could not confirm whether this was saved/).waitFor();
+  assert.equal(await section().locator('input[name="familyName"]').isDisabled(), true, 'locked while the outcome is unknown');
+  assert.equal(await section().locator('textarea[name="reason"]').isDisabled(), true, 'the birth date form is locked too');
+  await shot(page, 'people-save-unknown');
+  await section().getByRole('button', { name: 'Try again' }).click();
+  await section().getByText('Saved. Changed: last name, phone.').waitFor();
+  assert.equal(ppl.posts.length, 2);
+  assert.equal(ppl.posts[0].key, ppl.posts[1].key, 'Try again reuses the idempotency key');
+  assert.equal(ppl.posts[0].body, ppl.posts[1].body, 'Try again resends the identical body');
+  assert.deepEqual(JSON.parse(ppl.posts[0].body), { schoolId: scope.schoolId, personId: id(301), expectedVersion: 1, givenName: 'Ana', familyName: 'Rivera-Lopez', email: 'ana.parent@example.invalid', phoneE164: '+15555550199' });
+  assert.equal(ppl.records.get(id(301)).version, 2, 'applied exactly once');
+  assert.equal(await section().locator('input[name="familyName"]').inputValue(), 'Rivera-Lopez');
+  assert.equal(await section().locator('input[name="familyName"]').isDisabled(), false);
+  await noOverflow(page, 'people-save'); await axe(page, 'people-save'); await shot(page, 'people-saved', true);
+  await ctx.close();
+});
+await check('People: consent, busy and version refusals say what to do; a new save uses a new key', async () => {
+  resetPeople({ replies: ['ok', 'busy', 'ok'] });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().getByText(/This person agreed to email/).waitFor();
+  await section().locator('input[name="email"]').fill('new.parent@example.invalid');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/This address has active consent/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  await shot(page, 'people-consent-refused');
+  await section().locator('input[name="email"]').fill('ana.parent@example.invalid');
+  await section().locator('input[name="givenName"]').fill('Anna');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/This record was busy and nothing was saved/).waitFor();
+  await section().getByRole('button', { name: 'Try again' }).click();
+  await section().getByText('Saved. Changed: first name.').waitFor();
+  assert.equal(ppl.posts.length, 3);
+  assert.notEqual(ppl.posts[0].key, ppl.posts[1].key, 'a refused save never lends its key to a new one');
+  assert.equal(ppl.posts[1].key, ppl.posts[2].key, 'busy keeps the key for Try again');
+  ppl.records.get(id(301)).version = 9; // someone else edits meanwhile
+  await section().locator('input[name="givenName"]').fill('Ana');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/Someone else changed this record/).waitFor();
+  await section().getByRole('button', { name: 'Reload the saved record' }).click();
+  await section().locator('input[name="givenName"]').waitFor();
+  for (let i = 0; i < 50 && await section().locator('input[name="givenName"]').inputValue() !== 'Anna'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Anna', 'reload shows the saved record');
+  await ctx.close();
+});
+await check('People: a birth date correction needs a reason, may need the owner, and carries into the enrollment', async () => {
+  resetPeople({ replies: ['owner', 'ok'] });
+  const { ctx, page, section } = await peoplePage({ width: 390, height: 844 });
+  await open(section, 'Ana Rivera');
+  await section().getByText(/only the school owner can save it/).waitFor();
+  await section().locator('input[name="birthDate"]').fill('2007-01-01');
+  await section().getByRole('button', { name: 'Save birth date' }).click();
+  await section().getByText(/give a reason/).waitFor();
+  assert.equal(ppl.posts.length, 0, 'nothing sent without a reason');
+  await section().locator('textarea[name="reason"]').fill('Birth certificate checked at the desk');
+  await section().getByRole('button', { name: 'Save birth date' }).click();
+  await section().getByText(/Only the school owner can change a birth date/).waitFor();
+  await shot(page, 'people-birth-owner-required');
+  await section().locator('input[name="birthDate"]').fill('2015-05-05');
+  await section().getByRole('button', { name: 'Save birth date' }).click();
+  await section().getByText(/enrollment record now matches/).waitFor();
+  assert.deepEqual(JSON.parse(ppl.posts[1].body), { schoolId: scope.schoolId, personId: id(301), expectedVersion: 1, birthDate: '2015-05-05', reason: 'Birth certificate checked at the desk' });
+  assert.notEqual(ppl.posts[0].key, ppl.posts[1].key);
+  assert.equal(ppl.records.get(id(301)).student.birthDate, '2015-05-05');
+  await noOverflow(page, 'people-birth'); await axe(page, 'people-birth'); await shot(page, 'people-birth-saved', true);
+  await ctx.close();
+});
+await check('People: without edit access the record is read-only, and an adult has no child section', async () => {
+  resetPeople({ canEdit: false });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().getByText(/your access does not include editing/).waitFor();
+  assert.equal(await section().getByRole('button', { name: /^Save/ }).count(), 0);
+  assert.equal(await section().locator('input[name="givenName"]').isDisabled(), true);
+  await open(section, 'Ben Okafor');
+  await section().locator('input[name="givenName"]').waitFor();
+  for (let i = 0; i < 50 && await section().locator('input[name="givenName"]').inputValue() !== 'Ben'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByRole('heading', { name: 'Child details' }).count(), 0);
+  await axe(page, 'people-read-only'); await shot(page, 'people-read-only');
+  await ctx.close();
+});
+await check('People: leaving the tab hides every name; a save in flight is never shown after re-verifying and the saved record is read again', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  resetPeople({ gate });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().locator('input[name="familyName"]').fill('Rivera-Kim');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText('Saving… keep this tab open.').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => ![...document.querySelectorAll('section[aria-labelledby="people-title"]')].some((s) => !s.closest('[hidden],[inert]') && /Rivera|Okafor|example\.invalid/.test(s.textContent ?? '')));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await section().getByTestId('people-list').waitFor({ timeout: 20000 });
+  release();
+  await section().locator('input[name="familyName"]').waitFor();
+  for (let i = 0; i < 80 && await section().locator('input[name="familyName"]').inputValue() !== 'Rivera-Kim'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().locator('input[name="familyName"]').inputValue(), 'Rivera-Kim', 'the record is read again after the hidden save');
+  assert.equal(await section().getByText(/Saved\. Changed/).count(), 0, 'the hidden answer is not shown');
+  assert.equal(await section().getByText('Saving… keep this tab open.').count(), 0);
+  assert.equal(ppl.posts.length, 1, 'no automatic retry');
   await ctx.close();
 });
 

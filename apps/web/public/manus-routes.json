@@ -109,6 +109,10 @@
       "title": "HON | Creative Studio"
     },
     {
+      "path": "/staff/people",
+      "title": "HON | People"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },
