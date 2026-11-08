@@ -131,7 +131,7 @@ it('a 401 for a retired read or decision does not end the newer session; a curre
 it('says what the latest decision allows, and states that approval is for exceptions only', () => {
   const absent = html(props({ state: 'READY', view: view() }));
   expect(absent).toContain('No decision yet'); expect(absent).toContain('Not decided');
-  expect(absent).toContain('version 1 (proposed), up to 90 days'); expect(absent).toContain('does not approve paid access terms');
+  expect(absent).toContain('version 1, up to 90 days'); expect(absent).toContain('does not approve paid access terms');
   expect(absent).toContain('Propose or approve'); expect(absent).not.toContain('Withdraw proposal');
   const active = html(props({ state: 'READY', view: view(raw([decision(2, 'APPROVED'), decision(1, 'PROPOSED')])) }));
   expect(active).toContain('Approved, in effect'); expect(active).toContain('Exceptions can be granted now.'); expect(active).toContain('Revoke approval');

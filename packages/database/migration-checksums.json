@@ -211,6 +211,6 @@
     "0217_school_person_record_update.sql": "832176d21eacbccec529030ef07cea60bfd9e39be6bed84fa67e5ee38cd58d5a",
     "0218_school_student_birth_date_and_enrollment_corrections.sql": "d2da5fe68c665924e03ac803e472d403e7bd51517132557a39ec2ee113283159",
     "0219_hq_access_overview.sql": "64392952db2bd1e0f23faeb29049cc85d6b35115c2cfbe88418065f2ad6f0154",
-    "0220_saas_exception_policy_terms_read.sql": "2d1072d004144aaf675835fda31386c667884ef0eacdf68956d09165678fc2f4"
+    "0220_saas_exception_policy_terms_read.sql": "5b094cf019bc1bb6c74587e798f93f74d0eeb444d83a3a5a1bee1fe5b451b69f"
   }
 }
