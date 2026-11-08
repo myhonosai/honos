@@ -109,6 +109,14 @@
       "title": "HON | Lead Sources & Intake Monitor"
     },
     {
+      "path": "/staff/creative-studio",
+      "title": "HON | Creative Studio"
+    },
+    {
+      "path": "/staff/people",
+      "title": "HON | People"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },

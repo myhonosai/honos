@@ -1,4 +1,5 @@
 import { syntheticExceptionPolicy } from './exception-policy-fixture.mjs';
+import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, verifyChampionsProofConnection } from './champions-proof-target.mjs';
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -10,8 +11,10 @@ import { randomUUID } from 'node:crypto';
 // an ineligible organization is refused with the matching code); the policy-not-ready state is shown; paging walks every
 // organization once in order and the summary matches; the status filter is exact; the read writes nothing and never
 // returns an invitation email.
-const owner=new URL(process.env.DATABASE_URL??''),runtime=new URL(process.env.HON_RUNTIME_DATABASE_URL??'');
-if(owner.hostname!=='localhost'||owner.port!=='5432'||owner.pathname!=='/hon_champions_validation'||owner.username!=='hon_champions_owner'||runtime.hostname!==owner.hostname||runtime.port!==owner.port||runtime.pathname!==owner.pathname||runtime.username!=='hon_champions_runtime')throw new Error('Only exact disposable localhost validation URLs permitted; never remote DB.');
+// Fail-closed disposable-target guard (socket-free negatives first, then explicit client configs, then a server-side
+// check of every connection, the API runtime pool included, before any write or cleanup).
+await import('./test-champions-proof-target.mjs');
+const targets=championsProofTargets(process.env);
 if(Object.keys(process.env).some(key=>/^(?:OPENAI|ANTHROPIC|OPENROUTER|DIRECT_LLM_API|STRIPE|SQUARE|TWILIO|SENDGRID|SUPABASE|AWS|HEYGEN|HIGGSFIELD|HON_(?:PROVIDER|AI|ACTION|EXTERNAL|PAYMENT|WORKER))(?:_|$)/i.test(key)))throw new Error('Provider credentials/execution switches are forbidden.');
 process.env.HON_PUBLIC_ORIGIN='https://hon.example';
 const {RuntimeDatabaseService}=await import('../../../apps/api/dist/foundation/runtime-database.service.js');
@@ -19,7 +22,7 @@ const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saa
 const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-billing/saas-school-billing.service.js');
 const contracts=await import('@hon/contracts');
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),access=new SaasSchoolBillingService(billing);
-const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
+const admin=new pg.Client(targets.owner),restricted=new pg.Client(targets.runtime);
 const saasTables=['saas_access_exceptions','saas_exception_policy_decisions','saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
  'saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions',
@@ -77,6 +80,9 @@ const grantInput=(k,patch={})=>({schoolId:O[k].school,purpose:'INTERNAL_TESTING'
  startsAt:iso(Date.now()),expiresAt:iso(Date.now()+30*DAY),expectedEntitlementVersion:1,...patch});
 
 await Promise.all([admin.connect(),restricted.connect()]);
+await verifyChampionsProofConnection(admin,CHAMPIONS_OWNER_ROLE);
+await verifyChampionsProofConnection(restricted,CHAMPIONS_RUNTIME_ROLE);
+await verifyChampionsProofConnection({query:(...a)=>database['getPool']().query(...a)},CHAMPIONS_RUNTIME_ROLE);
 try{
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  // ---------- 0. posture ----------

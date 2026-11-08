@@ -137,6 +137,32 @@ async function honApi(route, path, method, prefix) {
   return json(route, 200, { data: receipt });
 }
 
+// Creative Studio: the school's own wallet read (synthetic). 'denied' answers 403.
+let studio = 'ready';
+const studioByKind = (available, held) => ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'].map((kind) => ({ kind,
+  grantedCredits: kind === 'INCLUDED_MONTHLY' ? 12000 : 0, availableCredits: kind === 'INCLUDED_MONTHLY' ? available : 0, heldCredits: kind === 'INCLUDED_MONTHLY' ? held : 0,
+  consumedCredits: kind === 'INCLUDED_MONTHLY' ? 12000 - available - held : 0, expiredCredits: 0, debitedCredits: 0 }));
+const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, program: { status: 'ACTIVE', monthlyIncludedCredits: 12000 },
+  eligibility: { eligible: true, reason: null, window: { index: 1, startsAt: '2026-10-01T00:00:00.000Z', endsAt: '2026-11-01T00:00:00.000Z' } },
+  balance: { availableCredits: 11640, heldCredits: 120, byKind: studioByKind(11640, 120) },
+  lots: [], reservations: [], adjustments: [], purchases: [],
+  history: [
+    { entryId: id(301), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'GRANT', credits: 12000, reservationId: null, adjustmentId: null, occurredAt: '2026-10-01T00:00:00.000Z' },
+    { entryId: id(302), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'FINALIZE', credits: 240, reservationId: null, adjustmentId: null, occurredAt: iso(-30) },
+    { entryId: id(303), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'RESERVE', credits: 120, reservationId: null, adjustmentId: null, occurredAt: iso(-1) }],
+  rates: { rateVersionId: id(310), rateVersion: 1, termsReference: 'synthetic-terms-v1', publishedAt: iso(-200), rates: [
+    { operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 40, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL' },
+    { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' }] },
+  packages: [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({ packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' })),
+  agentConversationsDeductCredits: false, paymentsActive: false });
+// Creative Studio generations (CS1, synthetic). provider: NOT_CONNECTED unless a check connects it.
+// replies, one per POST: 'ok', 'unknown' (503, nothing stored), 'accepted' (stores a GENERATING row, then the answer is lost),
+// 'notConnected' (503 CREATIVE_PROVIDER_NOT_CONNECTED), 'denied' (403), 'transition' (409 SAAS_TRANSITION_NOT_ALLOWED).
+// gate: when set, the next POST waits for it before answering (a create still in flight).
+const creative = { provider: 'NOT_CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null };
+const creativeGeneration = (body, n) => ({ generationId: id(700 + n), schoolId: scope.schoolId, operationCode: body.operationCode, mediaKind: 'IMAGE', units: body.units,
+  format: body.format, prompt: body.prompt, status: 'SUCCEEDED', failureReason: null, reservedCredits: 40 * body.units, chargedCredits: 40 * body.units,
+  createdAt: iso(0), completedAt: iso(0), assets: Array.from({ length: body.units }, (_, i) => ({ assetId: id(720 + n * 10 + i), ordinal: i + 1, mediaType: 'image/png', width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' })) });
 function json(route, status, body, headers = {}) {
   return route.fulfill({ status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', ...headers }, body: JSON.stringify(body) });
 }
@@ -156,6 +182,37 @@ async function api(route) {
     aiUsage: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ AI usage or cost projection is available.' },
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
+  if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
+    if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
+    const request = route.request();
+    creative.posts.push({ key: request.headers()['idempotency-key'], command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = creative.replies.shift() ?? 'ok', idem = request.headers()['idempotency-key'];
+    if (creative.gate) { const gate = creative.gate; creative.gate = null; await gate; }
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (next === 'notConnected') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    if (next === 'denied') return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    if (next === 'transition') return json(route, 409, { code: 'SAAS_TRANSITION_NOT_ALLOWED' });
+    if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const body = JSON.parse(request.postData() ?? '{}'), prior = creative.byKey.get(idem);
+    if (prior) {
+      const done = { ...creativeGeneration(body, 0), generationId: prior.generationId, createdAt: prior.createdAt };
+      creative.items = creative.items.map((item) => item.generationId === prior.generationId ? done : item);
+      return json(route, 200, { data: { generation: done, balance: creativeWallet().balance, replayed: true } });
+    }
+    const g = creativeGeneration(body, creative.items.length + 1);
+    if (next === 'accepted') {
+      const held = { ...g, status: 'GENERATING', chargedCredits: null, completedAt: null, assets: [] };
+      creative.items = [held, ...creative.items]; creative.byKey.set(idem, held);
+      return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    }
+    creative.items = [g, ...creative.items];
+    return json(route, 200, { data: { generation: g, balance: creativeWallet().balance, replayed: false } });
+  }
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
+    assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
+    return studio === 'denied' ? json(route, 403, { code: 'FORBIDDEN' }) : json(route, 200, { data: creativeWallet() });
+  }
   if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot() }, meta: {} });
   if (path === `${prefix}/interface-theme`) {
     if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -279,6 +336,61 @@ async function hqAccessApi(route, path, method, url) {
   return json(route, 200, { data }, { 'Cache-Control': 'private, no-store' });
 }
 
+// People (B-CRM-1a/1b): synthetic people at the one school. Edits replay by key, check the version and the consent rule.
+const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
+function resetPeople(over = {}) {
+  ppl.records = new Map([[id(301), { personId: id(301), schoolId: scope.schoolId, givenName: 'Ana', familyName: 'Rivera', email: 'ana.parent@example.invalid', phoneE164: '+15555550101',
+    version: 1, updatedAt: iso(-48), student: { birthDate: '2015-04-02', status: 'ACTIVE', version: 1 }, consents: { EMAIL: 'OPTED_IN', SMS: 'NOT_RECORDED' } }],
+  [id(302), { personId: id(302), schoolId: scope.schoolId, givenName: 'Ben', familyName: 'Okafor', email: null, phoneE164: '+15555550102',
+    version: 2, updatedAt: iso(-24), student: null, consents: { EMAIL: 'NOT_RECORDED', SMS: 'OPTED_OUT' } }]]);
+  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+}
+resetPeople();
+const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents: { ...r.consents }, canEdit: ppl.canEdit });
+async function peopleApiRoute(route, path, method, url) {
+  if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
+    const q = (url.searchParams.get('query') ?? '').toLowerCase();
+    const items = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
+      .map((r) => ({ id: r.personId, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164, version: r.version, createdAt: iso(-500) }));
+    return json(route, 200, { data: items, meta: { requestId: id(900), correlationId: id(900) } });
+  }
+  const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
+  if (read && method === 'GET') { const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
+  if (method !== 'POST' || !['/api/v1/school/people/update', '/api/v1/school/people/birth-date'].includes(path)) return null;
+  const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
+  ppl.posts.push({ path, key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
+  assert.equal(headers['x-hon-human-command'], 'school-person-record');
+  const step = ppl.replies.shift() ?? 'ok';
+  if (ppl.gate) { const gate = ppl.gate; ppl.gate = null; await gate; }
+  const prior = ppl.byKey.get(headers['idempotency-key']);
+  if (prior) return prior.body === raw ? json(route, 200, { data: prior.data }) : json(route, 409, { code: 'PERSON_IDEMPOTENCY_CONFLICT' });
+  if (step === 'lost') return route.abort('connectionreset');
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (step === 'busy') return json(route, 503, { code: 'PERSON_BUSY', outcome: 'NOT_SUBMITTED' });
+  if (step === 'owner') return json(route, 403, { code: 'PERSON_BIRTH_DATE_OWNER_REQUIRED' });
+  const body = JSON.parse(raw), r = ppl.records.get(body.personId);
+  if (!r) return json(route, 404, { code: 'PERSON_UNAVAILABLE' });
+  let data;
+  if (path.endsWith('/update')) {
+    if (body.expectedVersion !== r.version) return json(route, 409, { code: 'PERSON_VERSION_CONFLICT', outcome: 'NOT_SUBMITTED' });
+    const changed = ['givenName', 'familyName', 'email', 'phoneE164'].filter((f) => body[f] !== r[f]);
+    if (!changed.length) return json(route, 400, { code: 'PERSON_UNCHANGED' });
+    if (changed.includes('email') && r.consents.EMAIL === 'OPTED_IN' || changed.includes('phoneE164') && r.consents.SMS === 'OPTED_IN') return json(route, 409, { code: 'PERSON_CONTACT_CONSENT_REVIEW_REQUIRED', outcome: 'NOT_SUBMITTED' });
+    for (const f of changed) r[f] = body[f];
+    r.version += 1; r.updatedAt = iso(0);
+    data = { person: pplRead(r), changedFields: changed };
+  } else {
+    if (!r.student || body.expectedVersion !== r.student.version) return json(route, 409, { code: 'PERSON_VERSION_CONFLICT', outcome: 'NOT_SUBMITTED' });
+    if (body.birthDate === r.student.birthDate) return json(route, 400, { code: 'PERSON_UNCHANGED' });
+    r.student.birthDate = body.birthDate; r.student.version += 1;
+    data = { person: pplRead(r), changedFields: ['birthDate'], enrollmentCorrected: true };
+  }
+  ppl.byKey.set(headers['idempotency-key'], { body: raw, data });
+  // 'unknown': the change committed but the answer was lost on the way back.
+  if (step === 'unknown') return json(route, 503, { code: 'PERSON_UNAVAILABLE', outcome: 'UNKNOWN_OR_RETRY_REQUIRED' });
+  return json(route, 200, { data });
+}
+
 // ---------- server ----------
 const probe = createServer(); await new Promise((done) => probe.listen(0, '127.0.0.1', done)); const port = probe.address().port; await new Promise((done) => probe.close(done));
 const origin = `http://127.0.0.1:${port}`;
@@ -311,7 +423,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 async function axe(page, name) {
   await page.addScriptTag({ content: axeSource });
   const run = (include) => page.evaluate(async (selectors) => (await window.axe.run(selectors ? { include: selectors.map((s) => [s]) } : document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })), include);
-  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="hq-access-title"]'].filter((s) => document.querySelector(s)));
+  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]', 'section[aria-labelledby="people-title"]', 'section[aria-labelledby="hq-access-title"]'].filter((s) => document.querySelector(s)));
   const result = await run(selectors);
   report.accessibility.push({ name, scope: selectors, violations: result, wholePage: await run(null) });
   const serious = result.filter((v) => v.impact === 'serious' || v.impact === 'critical');
@@ -319,13 +431,46 @@ async function axe(page, name) {
 }
 // The existing Platform View picker (not part of this change) overflows in Classic at
 // phone width; it is recorded as a pre-existing finding and excluded from this gate.
+/**
+ * Horizontal overflow, measured in the page. The document itself must fit the viewport. Only one container may
+ * hold content past the edge: the shell's section tabs ([data-shell-tabs]), and only while that nav is itself a
+ * scroll container inside the viewport and the item is laid out in its normal flow (so the nav clips it).
+ * The existing Platform View picker is reported separately as a pre-existing finding; the page-width check in
+ * noOverflow excludes only that picker.
+ */
+function overflowAudit() {
+  const width = window.innerWidth;
+  const clippedByShellTabs = (e) => {
+    const nav = e.closest('[data-shell-tabs]');
+    if (!nav || nav === e) return false;
+    const style = getComputedStyle(nav), box = nav.getBoundingClientRect();
+    if (!['auto', 'scroll', 'hidden', 'clip'].includes(style.overflowX) || box.left < -1 || box.right > width + 1) return false;
+    for (let p = e; p && p !== nav; p = p.parentElement) if (['absolute', 'fixed'].includes(getComputedStyle(p).position)) return false;
+    return true;
+  };
+  const offenders = [...document.querySelectorAll('body *')]
+    .filter((e) => e.getBoundingClientRect().right > width + 1 && getComputedStyle(e).position !== 'fixed' && !clippedByShellTabs(e))
+    .map((e) => ({ el: `${e.tagName}.${e.className}`, text: e.textContent?.slice(0, 40), parent: `${e.parentElement?.tagName}.${e.parentElement?.className}`, preExisting: !!e.closest('.view-picker') }));
+  return { offenders, viewportWidth: width };
+}
+/** Page width with only the known pre-existing Platform View picker taken out of layout; its inline styles are restored. */
+function widthWithoutPicker() {
+  const pickers = [...document.querySelectorAll('.view-picker')], saved = pickers.map((e) => e.getAttribute('style'));
+  try {
+    for (const e of pickers) e.style.setProperty('display', 'none', 'important');
+    return Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+  } finally {
+    pickers.forEach((e, i) => { if (saved[i] === null) e.removeAttribute('style'); else e.setAttribute('style', saved[i]); });
+  }
+}
 async function noOverflow(page, name) {
-  const offenders = await page.evaluate(() => [...document.querySelectorAll('body *')]
-    .filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed')
-    .map((e) => ({ el: `${e.tagName}.${e.className}`, preExisting: !!e.closest('.view-picker') })));
-  const preExisting = offenders.filter((o) => o.preExisting);
+  const { offenders, viewportWidth } = await page.evaluate(overflowAudit);
+  const preExisting = offenders.filter((o) => o.preExisting), current = offenders.filter((o) => !o.preExisting);
   if (preExisting.length) report.preExistingFindings.push(`${name ?? 'page'}: Platform View picker overflows (${preExisting.length} elements)`);
-  assert.deepEqual(offenders.filter((o) => !o.preExisting), [], 'horizontal overflow');
+  assert.deepEqual(current, [], 'horizontal overflow');
+  // The page must fit with only the known picker excluded, so any other overflow (including pseudo-elements) still fails.
+  const remaining = await page.evaluate(widthWithoutPicker);
+  assert.ok(remaining <= viewportWidth + 1, `horizontal overflow: document is ${remaining}px wide in a ${viewportWidth}px viewport without the known picker`);
 }
 async function dashboard(viewport, nextTheme) {
   theme = nextTheme; mode = 'ready';
@@ -671,6 +816,416 @@ await check('Ask HON: leaving the page mid-reply conceals it; the late result st
   await ask.getByText('Private follow-up about Sam').waitFor();
   await ctx.close();
 });
+
+await check('Overflow gate: clipped shell tabs and the known picker pass; escaping, unlisted or extra page overflow fails', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const page = await ctx.newPage();
+  const layout = (body) => page.setContent(`<!doctype html><html><body style="margin:0">${body}</body></html>`);
+  const tabs = '<nav data-shell-tabs style="display:flex;overflow-x:auto;width:390px">' + Array.from({ length: 6 }, (_, n) => `<a style="flex:none;width:120px">Tab ${n}</a>`).join('') + '</nav>';
+  await layout(tabs);
+  await noOverflow(page, 'gate-clipped-tabs');
+  await layout('<div style="width:300px;overflow-x:auto"><div style="position:absolute;left:500px;width:200px;overflow-x:auto">escape</div></div>');
+  await assert.rejects(noOverflow(page, 'gate-escaping-scroller'), /horizontal overflow/);
+  await layout('<div style="width:300px;overflow-x:auto"><div style="width:900px">wide but clipped by a non-shell scroller</div></div>');
+  await assert.rejects(noOverflow(page, 'gate-unlisted-scroller'), /horizontal overflow/);
+  await layout('<nav data-shell-tabs style="display:flex;overflow-x:auto;width:390px"><a style="position:absolute;left:600px;width:100px">escaped tab</a></nav>');
+  await assert.rejects(noOverflow(page, 'gate-escaped-tab'), /horizontal overflow/);
+  const picker = '<div class="view-picker" style="width:430px">known picker</div>';
+  await layout(picker);
+  await noOverflow(page, 'gate-picker-only');
+  await page.setContent(`<!doctype html><html><head><style>body::after{content:"";display:block;width:700px;height:1px}</style></head><body style="margin:0">${picker}</body></html>`);
+  await assert.rejects(noOverflow(page, 'gate-picker-plus-pseudo'), /horizontal overflow/);
+  assert.equal(await page.locator('.view-picker').getAttribute('style'), 'width:430px', 'picker styles restored');
+  await ctx.close();
+});
+async function creativeStudio(viewport, nextTheme = 'modern') {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport); const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/creative-studio`);
+  await page.getByRole('heading', { name: 'Creative Studio', level: 1 }).waitFor();
+  return { ctx, page };
+}
+for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['desktop-1440', { width: 1440, height: 900 }, 'classic'], ['phone-390', { width: 390, height: 844 }, 'modern']]) {
+  await check(`Creative Studio ${mode_} ${name}: real wallet, creation not connected`, async () => {
+    studio = 'ready';
+    const { ctx, page } = await creativeStudio(viewport, mode_);
+    const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+    await section.getByTestId('creative-available').waitFor();
+    assert.equal(await section.getByTestId('creative-available').innerText(), '11,640');
+    assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+    assert.ok(await section.getByText('Standard image').isVisible());
+    assert.ok(await section.getByText('Buying top-ups is not connected yet. No card is charged.').isVisible());
+    assert.equal(await section.locator('textarea, input, select, form').count(), 0, 'no inert creation controls');
+    await noOverflow(page, `creative-studio-${mode_}-${name}`);
+    await axe(page, `creative-studio-${mode_}-${name}`);
+    await shot(page, `creative-studio-${mode_}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('Creative Studio: connected provider, lost answer, Check again replays the same request once', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map(), gate: null });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section.locator('[data-create-state="OPEN"]').waitFor();
+  await section.getByLabel('What to make').selectOption('image.standard');
+  await section.getByLabel('How many').fill('2');
+  await section.getByLabel('Portrait').check();
+  await section.getByLabel('Describe what you need').fill('Kids class flyer with a bright orange belt theme');
+  assert.ok(await section.getByText('Uses 80 credits. You have 11,640 available.').isVisible());
+  await section.getByRole('button', { name: 'Create', exact: true }).click();
+  await section.getByText(/We could not confirm whether this request went through/).waitFor();
+  assert.equal(await section.getByLabel('Describe what you need').isDisabled(), true, 'form locked while the outcome is unknown');
+  await shot(page, 'creative-studio-create-unknown');
+  await section.getByRole('button', { name: 'Check again' }).click();
+  await section.getByText('Done. The result is listed below.').waitFor();
+  await section.getByText('Image 1080×1080 · preview not available yet').first().waitFor();
+  assert.equal(creative.posts.length, 2);
+  assert.equal(creative.posts[0].key, creative.posts[1].key, 'Check again reuses the idempotency key');
+  assert.equal(creative.posts[0].body, creative.posts[1].body, 'Check again resends the identical body');
+  assert.equal(creative.posts[0].command, 'saas-creative-generation-create');
+  assert.deepEqual(JSON.parse(creative.posts[0].body), { operationCode: 'image.standard', units: 2, format: 'PORTRAIT', prompt: 'Kids class flyer with a bright orange belt theme' });
+  await noOverflow(page, 'creative-studio-create');
+  await axe(page, 'creative-studio-create');
+  await shot(page, 'creative-studio-create-done', true);
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: an unknown create stays unconfirmed across a conceal and never shows its text', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map(), gate: null });
+  const { ctx, page } = await creativeStudio({ width: 390, height: 844 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Private note about the Lee family');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText(/We could not confirm/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Lee family') || !!document.querySelector('[data-shell-private][hidden], [data-shell-private][inert]'));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await section().getByText(/waiting for confirmation/).waitFor({ timeout: 20000 });
+  assert.ok(!(await section().innerText()).includes('Lee family'), 'the pending request text is not shown after re-verification');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key);
+  await noOverflow(page, 'creative-studio-phone-create');
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: an accepted-but-unknown request is redacted after re-verify and survives refused retries', async () => {
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['accepted', 'notConnected', 'denied', 'ok'], byKey: new Map(), gate: null });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  const prompt = 'Private note about the Lee family';
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill(prompt);
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText(/We could not confirm whether/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  // The re-verified list now holds the server's GENERATING row for this very request: status and credits, never its text.
+  await section().locator('li[data-status="GENERATING"] [data-prompt-hidden]').waitFor({ timeout: 20000 });
+  assert.ok(!(await section().innerText()).includes('Lee family'), 'the unconfirmed prompt is not shown in the list');
+  assert.ok((await section().innerText()).includes('credits held'));
+  await section().getByText(/waiting for confirmation/).waitFor();
+  for (const blocked of ['creating is not connected right now', 'your access was refused']) {
+    await section().getByRole('button', { name: 'Check again' }).click();
+    await section().getByText(new RegExp(blocked)).waitFor();
+    const text = await section().innerText();
+    assert.ok(text.includes('It is still unconfirmed and nothing new was started'), `${blocked}: still unconfirmed`);
+    assert.ok(!text.includes('Nothing was sent or charged'), `${blocked}: never claims nothing was charged`);
+    assert.ok(!text.includes('Lee family'), `${blocked}: text stays hidden`);
+    assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, `${blocked}: form stays locked`);
+  }
+  await shot(page, 'creative-studio-retry-blocked');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 4);
+  assert.equal(new Set(creative.posts.map((p) => p.key)).size, 1, 'every retry reuses the one idempotency key');
+  assert.equal(new Set(creative.posts.map((p) => p.body)).size, 1, 'every retry resends the identical body');
+  await section().locator('li[data-status="SUCCEEDED"]').getByText(prompt).waitFor();
+  assert.equal(creative.items.length, 1, 'one generation, never two');
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), false, 'released once known');
+  await noOverflow(page, 'creative-studio-retry-blocked');
+  await axe(page, 'creative-studio-retry-blocked');
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: re-verifying while a create is in flight keeps the form locked when its answer is unknown', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['transition', 'ok'], byKey: new Map(), gate });
+  const { ctx, page } = await creativeStudio({ width: 390, height: 844 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Belt test reminder flyer');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText('Creating… keep this tab open.').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await section().locator('[data-create-state="OPEN"]').waitFor({ timeout: 20000 });
+  await section().getByText('Creating… keep this tab open.').waitFor();
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, 'locked while the first send is still in flight');
+  release(); // the in-flight create now answers 409 SAAS_TRANSITION_NOT_ALLOWED: not a refusal, so unknown
+  await section().getByText(/waiting for confirmation/).waitFor();
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, 'still locked after the unknown answer');
+  assert.equal(await section().getByRole('button', { name: 'Create', exact: true }).isDisabled(), true);
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key);
+  await noOverflow(page, 'creative-studio-inflight-reverify');
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: a Refresh while a create is in flight still shows its unknown answer and Check again', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map(), gate });
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = () => page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section().locator('[data-create-state="OPEN"]').waitFor();
+  await section().getByLabel('What to make').selectOption('image.standard');
+  await section().getByLabel('Describe what you need').fill('Summer camp flyer');
+  await section().getByRole('button', { name: 'Create', exact: true }).click();
+  await section().getByText('Creating… keep this tab open.').waitFor();
+  const reads = () => report.apiRequests.filter((r) => r.startsWith('GET') && r.includes('creative-studio/generations')).length;
+  const before = reads();
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  for (let i = 0; i < 50 && reads() === before; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.ok(reads() > before, 'Refresh re-read the list while the create was in flight');
+  release();
+  await section().getByText(/We could not confirm whether this request went through/).waitFor();
+  assert.equal(await section().getByLabel('Describe what you need').isDisabled(), true, 'locked after the unknown answer');
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await section().getByText(/We could not confirm whether/).waitFor();
+  assert.equal(creative.posts.length, 1, 'no automatic retry');
+  await section().getByRole('button', { name: 'Check again' }).click();
+  await section().getByText('Done. The result is listed below.').waitFor();
+  assert.equal(creative.posts.length, 2); assert.equal(creative.posts[0].key, creative.posts[1].key); assert.equal(creative.posts[0].body, creative.posts[1].body);
+  creative.provider = 'NOT_CONNECTED'; creative.items = [];
+  await ctx.close();
+});
+await check('Creative Studio: a refused wallet read shows no numbers', async () => {
+  studio = 'denied';
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section.getByText(/does not include creative credits/).waitFor();
+  assert.equal(await section.getByTestId('creative-available').count(), 0);
+  assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+  await shot(page, 'creative-studio-denied');
+  studio = 'ready';
+  await ctx.close();
+});
+await check('Creative Studio: leaving the tab hides the wallet', async () => {
+  studio = 'ready';
+  const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
+  const section = page.locator('section[aria-labelledby="creative-studio-title"]');
+  await section.getByTestId('creative-available').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.querySelector('[data-testid="creative-available"]') || !!document.querySelector('[data-testid="creative-available"]')?.closest('[hidden],[inert]'));
+  await ctx.close();
+});
+
+// ---------- People ----------
+async function peoplePage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    // The presentation-only language cookie, scoped exactly as the web server derives it for this synthetic session.
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/people`);
+  const section = () => page.locator('section[aria-labelledby="people-title"]');
+  await section().getByTestId('people-list').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const open = async (section, name) => { await section().getByRole('button', { name: new RegExp(name) }).click(); };
+const TITLES = { en: ['People', 'Child details', 'Save changes'], ko: ['사람', '자녀 정보', '변경 사항 저장'], es: ['Personas', 'Datos del niño', 'Guardar cambios'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'en'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'big-button', 'en'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'modern', 'ko'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'], ['phone-390', { width: 390, height: 844 }, 'classic', 'es']]) {
+  await check(`People ${nextTheme} ${language} ${name}: real reads, edit forms and child details`, async () => {
+    resetPeople();
+    const { ctx, page, section } = await peoplePage(viewport, { nextTheme, language });
+    const [title, child, save] = TITLES[language];
+    assert.ok(await section().getByRole('heading', { name: title, level: 1 }).isVisible());
+    await open(section, 'Ana Rivera');
+    await section().getByRole('heading', { name: child }).waitFor();
+    assert.ok(await section().getByRole('button', { name: save }).isVisible());
+    assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Ana');
+    assert.equal(await section().locator('input[name="birthDate"]').inputValue(), '2015-04-02');
+    await noOverflow(page, `people-${nextTheme}-${language}-${name}`);
+    await axe(page, `people-${nextTheme}-${language}-${name}`);
+    await shot(page, `people-${nextTheme}-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('People: a lost answer keeps the save locked; Try again replays the same key and body once', async () => {
+  resetPeople({ replies: ['unknown', 'ok'] });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().locator('input[name="familyName"]').fill('Rivera-Lopez');
+  await section().locator('input[name="phone"]').fill('+1 555 555 0199');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/We could not confirm whether this was saved/).waitFor();
+  assert.equal(await section().locator('input[name="familyName"]').isDisabled(), true, 'locked while the outcome is unknown');
+  assert.equal(await section().locator('textarea[name="reason"]').isDisabled(), true, 'the birth date form is locked too');
+  await shot(page, 'people-save-unknown');
+  await section().getByRole('button', { name: 'Try again' }).click();
+  await section().getByText('Saved. Changed: last name, phone.').waitFor();
+  assert.equal(ppl.posts.length, 2);
+  assert.equal(ppl.posts[0].key, ppl.posts[1].key, 'Try again reuses the idempotency key');
+  assert.equal(ppl.posts[0].body, ppl.posts[1].body, 'Try again resends the identical body');
+  assert.deepEqual(JSON.parse(ppl.posts[0].body), { schoolId: scope.schoolId, personId: id(301), expectedVersion: 1, givenName: 'Ana', familyName: 'Rivera-Lopez', email: 'ana.parent@example.invalid', phoneE164: '+15555550199' });
+  assert.equal(ppl.records.get(id(301)).version, 2, 'applied exactly once');
+  assert.equal(await section().locator('input[name="familyName"]').inputValue(), 'Rivera-Lopez');
+  assert.equal(await section().locator('input[name="familyName"]').isDisabled(), false);
+  await noOverflow(page, 'people-save'); await axe(page, 'people-save'); await shot(page, 'people-saved', true);
+  await ctx.close();
+});
+await check('People: consent, busy and version refusals say what to do; a new save uses a new key', async () => {
+  resetPeople({ replies: ['ok', 'busy', 'ok'] });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().getByText(/This person agreed to email/).waitFor();
+  await section().locator('input[name="email"]').fill('new.parent@example.invalid');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/This address has active consent/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  await shot(page, 'people-consent-refused');
+  await section().locator('input[name="email"]').fill('ana.parent@example.invalid');
+  await section().locator('input[name="givenName"]').fill('Anna');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/This record was busy and nothing was saved/).waitFor();
+  await section().getByRole('button', { name: 'Try again' }).click();
+  await section().getByText('Saved. Changed: first name.').waitFor();
+  assert.equal(ppl.posts.length, 3);
+  assert.notEqual(ppl.posts[0].key, ppl.posts[1].key, 'a refused save never lends its key to a new one');
+  assert.equal(ppl.posts[1].key, ppl.posts[2].key, 'busy keeps the key for Try again');
+  ppl.records.get(id(301)).version = 9; // someone else edits meanwhile
+  await section().locator('input[name="givenName"]').fill('Ana');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText(/Someone else changed this record/).waitFor();
+  await section().getByRole('button', { name: 'Reload the saved record' }).click();
+  await section().locator('input[name="givenName"]').waitFor();
+  for (let i = 0; i < 50 && await section().locator('input[name="givenName"]').inputValue() !== 'Anna'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Anna', 'reload shows the saved record');
+  await ctx.close();
+});
+await check('People: a birth date correction needs a reason, may need the owner, and carries into the enrollment', async () => {
+  resetPeople({ replies: ['owner', 'ok'] });
+  const { ctx, page, section } = await peoplePage({ width: 390, height: 844 });
+  await open(section, 'Ana Rivera');
+  await section().getByText(/only the school owner can save it/).waitFor();
+  await section().locator('input[name="birthDate"]').fill('2007-01-01');
+  await section().getByRole('button', { name: 'Save birth date' }).click();
+  await section().getByText(/give a reason/).waitFor();
+  assert.equal(ppl.posts.length, 0, 'nothing sent without a reason');
+  await section().locator('textarea[name="reason"]').fill('Birth certificate checked at the desk');
+  await section().getByRole('button', { name: 'Save birth date' }).click();
+  await section().getByText(/Only the school owner can change a birth date/).waitFor();
+  await shot(page, 'people-birth-owner-required');
+  await section().locator('input[name="birthDate"]').fill('2015-05-05');
+  await section().getByRole('button', { name: 'Save birth date' }).click();
+  await section().getByText(/enrollment record now matches/).waitFor();
+  assert.deepEqual(JSON.parse(ppl.posts[1].body), { schoolId: scope.schoolId, personId: id(301), expectedVersion: 1, birthDate: '2015-05-05', reason: 'Birth certificate checked at the desk' });
+  assert.notEqual(ppl.posts[0].key, ppl.posts[1].key);
+  assert.equal(ppl.records.get(id(301)).student.birthDate, '2015-05-05');
+  await noOverflow(page, 'people-birth'); await axe(page, 'people-birth'); await shot(page, 'people-birth-saved', true);
+  await ctx.close();
+});
+await check('People: without edit access the record is read-only, and an adult has no child section', async () => {
+  resetPeople({ canEdit: false });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().getByText(/your access does not include editing/).waitFor();
+  assert.equal(await section().getByRole('button', { name: /^Save/ }).count(), 0);
+  assert.equal(await section().locator('input[name="givenName"]').isDisabled(), true);
+  await open(section, 'Ben Okafor');
+  await section().locator('input[name="givenName"]').waitFor();
+  for (let i = 0; i < 50 && await section().locator('input[name="givenName"]').inputValue() !== 'Ben'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByRole('heading', { name: 'Child details' }).count(), 0);
+  await axe(page, 'people-read-only'); await shot(page, 'people-read-only');
+  await ctx.close();
+});
+await check('People: leaving the tab hides every name; a save in flight is never shown after re-verifying and the saved record is read again', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  resetPeople({ gate });
+  const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+  await open(section, 'Ana Rivera');
+  await section().locator('input[name="familyName"]').fill('Rivera-Kim');
+  await section().getByRole('button', { name: 'Save changes' }).click();
+  await section().getByText('Saving… keep this tab open.').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => ![...document.querySelectorAll('section[aria-labelledby="people-title"]')].some((s) => !s.closest('[hidden],[inert]') && /Rivera|Okafor|example\.invalid/.test(s.textContent ?? '')));
+  await page.getByRole('button', { name: 'Show school' }).click();
+  await section().getByTestId('people-list').waitFor({ timeout: 20000 });
+  release();
+  await section().locator('input[name="familyName"]').waitFor();
+  for (let i = 0; i < 80 && await section().locator('input[name="familyName"]').inputValue() !== 'Rivera-Kim'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().locator('input[name="familyName"]').inputValue(), 'Rivera-Kim', 'the record is read again after the hidden save');
+  assert.equal(await section().getByText(/Saved\. Changed/).count(), 0, 'the hidden answer is not shown');
+  assert.equal(await section().getByText('Saving… keep this tab open.').count(), 0);
+  assert.equal(ppl.posts.length, 1, 'no automatic retry');
+  await ctx.close();
+});
+
+const retire = {
+  conceal: async (page, section) => {
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await page.getByRole('button', { name: 'Show school' }).click();
+    await section().getByTestId('people-list').waitFor({ timeout: 20000 });
+  },
+  'open another person': async (page, section) => {
+    await open(section, 'Ben Okafor');
+    await section().locator('input[name="givenName"]').waitFor();
+    assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Ben');
+  },
+  unmount: async (page, section) => {
+    // Same-document route changes (the shell's own links load a new document, which ends every request anyway).
+    assert.equal(await page.evaluate(() => typeof window.next?.router?.push), 'function');
+    await page.evaluate(() => window.next.router.push('/staff/search'));
+    await page.waitForURL(/\/staff\/search$/);
+    await section().waitFor({ state: 'detached' });
+    await page.evaluate(() => window.next.router.push('/staff/people'));
+    await section().getByTestId('people-list').waitFor({ timeout: 20000 });
+    await open(section, 'Ana Rivera');
+    await section().locator('input[name="givenName"]').waitFor();
+  },
+};
+for (const [command, field, value, button] of [['contact', 'familyName', 'Rivera-Kim', 'Save changes'], ['birth date', 'birthDate', '2015-05-05', 'Save birth date']]) {
+  const save = async (section) => {
+    await section().locator(`input[name="${field}"]`).fill(value);
+    if (command === 'birth date') await section().locator('textarea[name="reason"]').fill('Birth certificate checked at the desk');
+    await section().getByRole('button', { name: button }).click();
+  };
+  for (const [how, step] of Object.entries(retire)) {
+    await check(`People: a late sign-in answer to a ${command} save retired by ${how} does not end the session; a current one does`, async () => {
+      let release; const gate = new Promise((done) => { release = done; });
+      resetPeople({ gate, replies: ['session', 'session'] });
+      const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+      await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+      await open(section, 'Ana Rivera');
+      await save(section);
+      await section().getByText('Saving… keep this tab open.').waitFor();
+      await step(page, section);
+      release();
+      for (let i = 0; i < 40 && ppl.posts.length < 1; i++) await new Promise((done) => setTimeout(done, 50));
+      await new Promise((done) => setTimeout(done, 500));
+      assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired save did not end the session');
+      assert.ok(await section().getByTestId('people-list').isVisible(), 'the current view stays shown');
+      // A save that is still the one shown: its sign-in answer ends the session.
+      await open(section, 'Ana Rivera');
+      await section().locator('input[name="givenName"]').waitFor();
+      await save(section);
+      await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+      assert.equal(ppl.posts.length, 2);
+      await ctx.close();
+    });
+  }
+}
 
 // ---------- HQ school access ----------
 async function hqAccessPage(viewport, { view = 'Modern', language = 'en' } = {}) {
