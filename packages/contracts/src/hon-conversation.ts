@@ -45,6 +45,11 @@ export interface HonTurnRequest {
   replyMode?: HonReplyMode;
   /** Question turns only: continue this turn's cut-off answer (replyDetail.canContinue). */
   continueTurnId?: string;
+  /**
+   * Delegation turns only (C3a): the human confirms a specialist HON suggested in this HON answer (its replyDetail.suggestions
+   * names the delegated agent). The turn is an ordinary delegation; it is also grouped with the answer's other confirmations.
+   */
+  fromSuggestionTurnId?: string;
 }
 /** The conversational responder of a question turn (not one of the delegate specialists). */
 export const HON_REPLY_ROLE = 'hon' as const;
@@ -123,17 +128,19 @@ export function validateHonTurnRequest(value: unknown): HonTurnRequest {
     return { text: r.text as string, delegation: null,
       ...('replyMode' in r ? { replyMode: r.replyMode as HonReplyMode } : {}), ...('continueTurnId' in r ? { continueTurnId: r.continueTurnId as string } : {}) };
   }
-  exactKeys(r, ['text', 'delegation'], invalid);
+  exactKeys(r, ['text', 'delegation', ...('fromSuggestionTurnId' in r ? ['fromSuggestionTurnId'] : [])], invalid);
+  if ('fromSuggestionTurnId' in r && !isUuid(r.fromSuggestionTurnId)) invalid();
+  const from = 'fromSuggestionTurnId' in r ? { fromSuggestionTurnId: r.fromSuggestionTurnId as string } : {};
   const d = record(r.delegation, invalid);
   const teaching = d.agentKey === 'kai' || d.agentKey === HON_LEGACY_TEACHING_AGENT;
   if (!(isAgent(d.agentKey) || teaching) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[teaching ? 'kai' : d.agentKey as HonDelegateAgentKey])) invalid();
   const text = r.text as string;
-  if (d.agentKey === 'marcus') { exactKeys(d, ['agentKey', 'campaignId'], invalid); if (!isUuid(d.campaignId)) invalid(); return { text, delegation: { agentKey: 'marcus', campaignId: d.campaignId as string } }; }
-  if (teaching) { exactKeys(d, ['agentKey', 'curriculumId'], invalid); if (!isUuid(d.curriculumId)) invalid(); return { text, delegation: { agentKey: d.agentKey as 'kai' | typeof HON_LEGACY_TEACHING_AGENT, curriculumId: d.curriculumId as string } }; }
+  if (d.agentKey === 'marcus') { exactKeys(d, ['agentKey', 'campaignId'], invalid); if (!isUuid(d.campaignId)) invalid(); return { text, delegation: { agentKey: 'marcus', campaignId: d.campaignId as string }, ...from }; }
+  if (teaching) { exactKeys(d, ['agentKey', 'curriculumId'], invalid); if (!isUuid(d.curriculumId)) invalid(); return { text, delegation: { agentKey: d.agentKey as 'kai' | typeof HON_LEGACY_TEACHING_AGENT, curriculumId: d.curriculumId as string }, ...from }; }
   exactKeys(d, ['agentKey', 'leadId', 'expectedLeadVersion', 'purpose'], invalid);
   if (!isUuid(d.leadId) || !Number.isSafeInteger(d.expectedLeadVersion) || (d.expectedLeadVersion as number) < 1 || (d.expectedLeadVersion as number) > 999_999_999
     || !(FOLLOW_UP_DRAFT_PURPOSES as readonly unknown[]).includes(d.purpose)) invalid();
-  return { text, delegation: { agentKey: 'chad', leadId: d.leadId as string, expectedLeadVersion: d.expectedLeadVersion as number, purpose: d.purpose as FollowUpDraftPurpose } };
+  return { text, delegation: { agentKey: 'chad', leadId: d.leadId as string, expectedLeadVersion: d.expectedLeadVersion as number, purpose: d.purpose as FollowUpDraftPurpose }, ...from };
 }
 
 export function validateHonConversationSummary(value: unknown, extra: readonly string[] = []): HonConversationSummary {
@@ -195,4 +202,45 @@ export function composeHonConversationReadiness(team: {
     honReply: hon?.available === true,
     asOf: team.asOf,
   };
+}
+
+/**
+ * C3a grouped confirmation: the specialists a human confirmed from one HON answer's suggestions. The status is derived
+ * from the member turns' own recorded statuses, never set by the model:
+ * any UNKNOWN -> UNKNOWN; any still running -> PENDING; any awaiting approval -> NEEDS_REVIEW; all completed -> COMPLETED;
+ * all failed -> FAILED; otherwise (some completed, some failed) -> PARTIAL.
+ */
+export const HON_ORCHESTRATION_STATUSES = ['PENDING', 'PARTIAL', 'COMPLETED', 'NEEDS_REVIEW', 'FAILED', 'UNKNOWN'] as const;
+export type HonOrchestrationStatus = typeof HON_ORCHESTRATION_STATUSES[number];
+export interface HonOrchestrationMember { agentKey: HonDelegateAgentKey; turnId: string; status: HonTurnStatus }
+export interface HonOrchestration { sourceTurnId: string; status: HonOrchestrationStatus; members: HonOrchestrationMember[] }
+export interface HonOrchestrationList { items: HonOrchestration[] }
+
+export function deriveHonOrchestrationStatus(statuses: readonly HonTurnStatus[]): HonOrchestrationStatus {
+  if (statuses.length === 0 || statuses.includes('UNKNOWN')) return 'UNKNOWN';
+  if (statuses.some((x) => x === 'READY' || x === 'PROCESSING' || x === 'DELEGATING')) return 'PENDING';
+  if (statuses.includes('AWAITING_APPROVAL')) return 'NEEDS_REVIEW';
+  if (statuses.every((x) => x === 'COMPLETED')) return 'COMPLETED';
+  if (statuses.every((x) => x === 'FAILED')) return 'FAILED';
+  return 'PARTIAL';
+}
+
+export function validateHonOrchestrationList(value: unknown): HonOrchestrationList {
+  const r = record(value, drift); exactKeys(r, ['items'], drift);
+  if (!Array.isArray(r.items) || r.items.length > 200) drift();
+  const sources = new Set<unknown>(); const turns = new Set<unknown>();
+  for (const x of r.items as unknown[]) {
+    const o = record(x, drift); exactKeys(o, ['sourceTurnId', 'status', 'members'], drift);
+    if (!isUuid(o.sourceTurnId) || sources.has(o.sourceTurnId) || !Array.isArray(o.members) || o.members.length < 1 || o.members.length > HON_REPLY_MAX_SUGGESTIONS) drift();
+    sources.add(o.sourceTurnId);
+    const agents = new Set<unknown>();
+    for (const m of o.members as unknown[]) {
+      const k = record(m, drift); exactKeys(k, ['agentKey', 'turnId', 'status'], drift);
+      if (!isAgent(k.agentKey) || agents.has(k.agentKey) || !isUuid(k.turnId) || turns.has(k.turnId) || k.turnId === o.sourceTurnId || !isStatus(k.status)) drift();
+      agents.add(k.agentKey); turns.add(k.turnId);
+    }
+    // The server's derived status must match the members it reports.
+    if (o.status !== deriveHonOrchestrationStatus((o.members as HonOrchestrationMember[]).map((m) => m.status))) drift();
+  }
+  return r as unknown as HonOrchestrationList;
 }

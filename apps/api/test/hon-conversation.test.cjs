@@ -229,3 +229,27 @@ test('HTTP: scope from the live resolver, human-UI command headers on POST, no-s
     resolved = null; assert.equal((await send(`${base}/readiness`)).status, 403);
   } finally { await app.close(); }
 });
+
+test('C3a grouped confirmation contract: fromSuggestionTurnId on delegations only; groups carry a status derived from their members', () => {
+  const contracts = require('@hon/contracts');
+  const ID = () => require('node:crypto').randomUUID();
+  const from = ID();
+  const d = { text: 'Draft a post.', delegation: { agentKey: 'marcus', campaignId: ID() }, fromSuggestionTurnId: from };
+  assert.equal(contracts.validateHonTurnRequest(d).fromSuggestionTurnId, from);
+  assert.equal('fromSuggestionTurnId' in contracts.validateHonTurnRequest({ text: 'x', delegation: d.delegation }), false);
+  for (const bad of [{ ...d, fromSuggestionTurnId: 'nope' }, { text: 'A question', delegation: null, fromSuggestionTurnId: from }]) {
+    assert.throws(() => contracts.validateHonTurnRequest(bad), /INVALID_HON_CONVERSATION_INPUT/);
+  }
+  const derive = contracts.deriveHonOrchestrationStatus;
+  assert.deepEqual([derive(['COMPLETED', 'UNKNOWN']), derive(['COMPLETED', 'DELEGATING']), derive(['AWAITING_APPROVAL', 'COMPLETED']), derive(['COMPLETED']), derive(['FAILED', 'FAILED']), derive(['COMPLETED', 'FAILED']), derive([])],
+    ['UNKNOWN', 'PENDING', 'NEEDS_REVIEW', 'COMPLETED', 'FAILED', 'PARTIAL', 'UNKNOWN']);
+  const src = ID(), t1 = ID(), t2 = ID();
+  const group = { sourceTurnId: src, status: 'PARTIAL', members: [{ agentKey: 'marcus', turnId: t1, status: 'COMPLETED' }, { agentKey: 'kai', turnId: t2, status: 'FAILED' }] };
+  assert.equal(contracts.validateHonOrchestrationList({ items: [group] }).items[0].status, 'PARTIAL');
+  assert.deepEqual(contracts.validateHonOrchestrationList({ items: [] }), { items: [] });
+  for (const bad of [{ items: [{ ...group, status: 'COMPLETED' }] }, { items: [{ ...group, members: [] }] }, { items: [group, group] },
+    { items: [{ ...group, members: [group.members[0], { ...group.members[1], agentKey: 'marcus' }] }] }, { items: [{ ...group, members: [{ ...group.members[0], agentKey: 'claire' }] , status: 'COMPLETED' }] },
+    { items: [{ ...group, members: [{ ...group.members[0], turnId: src }], status: 'COMPLETED' }] }, { items: [{ ...group, extra: 1 }] }, { items: [group], more: 1 }]) {
+    assert.throws(() => contracts.validateHonOrchestrationList(bad), /INVALID_HON_CONVERSATION_RESPONSE/, JSON.stringify(bad).slice(0, 100));
+  }
+});
