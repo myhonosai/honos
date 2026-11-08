@@ -1,7 +1,7 @@
 /**
  * U5 class-session roster read (GET /v1/organizations/:org/schools/:school/schedule/sessions/:sessionId/roster).
  * Read-only: one row per student who is booked on, or has attendance recorded for, the exact session of the verified
- * school. Cancelled bookings stay listed with their status. Ordered by family name, given name, student profile id.
+ * school. Cancelled bookings stay listed with their status. It never reads hon.class_sessions (function-only). Ordered by family name, given name, student profile id.
  */
 export const CLASS_SESSION_ROSTER_BOOKING_STATUSES = ['BOOKED', 'WAITLISTED', 'CANCELLED', 'CHECKED_IN', 'NO_SHOW'] as const;
 export const CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES = ['PRESENT', 'LATE', 'EXCUSED_ABSENCE', 'UNEXCUSED_ABSENCE', 'MAKEUP'] as const;
@@ -34,20 +34,13 @@ export interface ClassSessionRosterEntry {
   attendance: ClassSessionRosterAttendance | null;
 }
 
-export interface ClassSessionRosterSession {
-  id: string;
-  name: string;
-  startsAt: string;
-  endsAt: string;
-  status: string;
-  capacity: number;
-}
-
-/** Response meta: { requestId, correlationId, limit, nextCursor, session }. */
+/**
+ * Response meta: { requestId, correlationId, limit, nextCursor }. Session facts (name, times, capacity) come from the
+ * class-session reads; an unknown or other-school session id returns an empty roster.
+ */
 export interface ClassSessionRosterMeta {
   requestId: string;
   correlationId: string;
   limit: number;
   nextCursor: string | null;
-  session: ClassSessionRosterSession;
 }

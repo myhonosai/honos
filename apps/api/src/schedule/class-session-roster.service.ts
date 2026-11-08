@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import type { AttendanceCommandContext, ClassSessionRosterEntry, ClassSessionRosterSession } from '@hon/contracts';
+import { Injectable } from '@nestjs/common';
+import type { AttendanceCommandContext, ClassSessionRosterEntry } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { decodeListCursor, encodeListCursor, staleListCursor } from '../foundation/list-cursor.js';
 import { markAttendanceHuman, requireAttendanceHuman } from './attendance-policy.service.js';
@@ -24,12 +24,16 @@ export class ClassSessionRosterService {
    * Read-only roster of one exact class session. Authority, the human-UI boundary, organization/school lifecycle and the
    * attendance entitlement are re-decided live inside the transaction by hon.lock_attendance_actor (the same gate the
    * exact attendance lookup uses), so a permission removed or a school suspended between pages refuses the next page.
+   *
+   * hon.class_sessions is deliberately not read: runtime has no SELECT on it (0147 makes the named projection the only
+   * session read boundary). The roster is built from bookings and attendance only, so an unknown or other-school
+   * session id is simply an empty roster; session facts come from the class-session reads.
    */
   async read(
     context: AttendanceCommandContext,
     sessionId: string,
     page: { limit?: number | undefined; cursor?: string | undefined },
-  ): Promise<{ entries: ClassSessionRosterEntry[]; session: ClassSessionRosterSession; nextCursor: string | null; limit: number }> {
+  ): Promise<{ entries: ClassSessionRosterEntry[]; nextCursor: string | null; limit: number }> {
     requireAttendanceHuman(context);
     const limit = page.limit ?? 50;
     const after = decodeListCursor(page.cursor, 'schedule.session.roster', context.schoolId, { sessionId }, ROSTER_CURSOR);
@@ -37,13 +41,6 @@ export class ClassSessionRosterService {
       return await this.database.withTenantTransaction(context, async (client) => {
         await markAttendanceHuman(client, context);
         await client.query('SELECT hon.lock_attendance_actor($1,$2)', [context.externalSubject, 'attendance.record']);
-        const sessionRow = await client.query<{ id: string; name: string; startsAt: Date; endsAt: Date; status: string; capacity: number }>(
-          `SELECT id, name, starts_at AS "startsAt", ends_at AS "endsAt", status::text AS status, capacity
-           FROM hon.class_sessions WHERE id = $1::uuid AND organization_id = $2 AND school_id = $3`,
-          [sessionId, context.organizationId, context.schoolId],
-        );
-        const found = sessionRow.rows[0];
-        if (!found) throw new NotFoundException({ code: 'CLASS_SESSION_NOT_FOUND', detail: 'The class session is not available in this school.' });
         // Every roster entry: a booking or an attendance record of this exact session (walk-ins have no booking).
         const entries = `SELECT student_profile_id FROM hon.class_bookings WHERE class_session_id = $3::uuid AND organization_id = $1 AND school_id = $2
                          UNION SELECT student_profile_id FROM hon.attendance_records WHERE class_session_id = $3::uuid AND organization_id = $1 AND school_id = $2`;
@@ -83,13 +80,12 @@ export class ClassSessionRosterService {
         const last = result.rows.length > limit ? rows[rows.length - 1] : undefined;
         return {
           entries: rows.map(toEntry),
-          session: { id: found.id, name: found.name, startsAt: iso(found.startsAt)!, endsAt: iso(found.endsAt)!, status: found.status, capacity: found.capacity },
           nextCursor: last ? encodeListCursor('schedule.session.roster', context.schoolId, { sessionId }, ROSTER_CURSOR, [last.studentProfileId, String(last.personVersion)]) : null,
           limit,
         };
       });
     } catch (error) {
-      if (error instanceof NotFoundException || (error as { getStatus?: () => number }).getStatus?.() === 400) throw error;
+      if ((error as { getStatus?: () => number }).getStatus?.() === 400) throw error;
       return attendanceDatabaseError(error);
     }
   }

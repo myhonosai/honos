@@ -211,9 +211,15 @@ const tamper = (cursor, change) => {
   return `${Buffer.from(JSON.stringify(change(JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')))), 'utf8').toString('base64url')}.${signature}`;
 };
 
+// Production ACL (0147, asserted by class-sessions-read-security.mjs): runtime has no SELECT on hon.class_sessions.
+// The disposable crm-lead-close fixture grants it, so this proof revokes it for its own run and restores it after.
+const runtimeSessionSelect = (await sql("SELECT has_table_privilege($1, 'hon.class_sessions', 'SELECT') AS granted", [CRM_CLOSE_RUNTIME_ROLE])).rows[0].granted;
 try {
   await cleanup();
   await seed();
+  if (runtimeSessionSelect) await sql(`REVOKE SELECT ON TABLE hon.class_sessions FROM ${CRM_CLOSE_RUNTIME_ROLE}`);
+  ok((await sql("SELECT has_table_privilege($1, 'hon.class_sessions', 'SELECT') AS granted", [CRM_CLOSE_RUNTIME_ROLE])).rows[0].granted === false,
+    'runtime has no SELECT on hon.class_sessions for this run (production ACL)');
   await startApp();
 
   // 1. Every roster entry exactly once in (family, given, student profile id) order at several page sizes, with the
@@ -233,7 +239,7 @@ try {
   }
   const first = await page(() => roster(ids.schoolA, ids.sessionA), 'default roster page');
   ok(first.data.length === 50 && first.meta.limit === 50 && typeof first.meta.nextCursor === 'string' && first.meta.nextCursor.length <= 512, 'default page is 50 rows with a bounded cursor');
-  ok(first.meta.session.id === ids.sessionA && first.meta.session.name === 'Little Dragons' && first.meta.session.capacity === 120, 'meta carries the exact session');
+  ok(Object.keys(first.meta).sort().join(',') === 'correlationId,limit,nextCursor,requestId', `closed meta shape ${Object.keys(first.meta)}`);
   ok(!Buffer.from(first.meta.nextCursor.split('.')[0], 'base64url').toString('utf8').match(/Same|Sam|김/), 'no names travel in a cursor');
   const cursor = first.meta.nextCursor;
 
@@ -245,8 +251,11 @@ try {
     ok(row.booking?.id === want.bookingId && row.attendance?.id === want.attendanceId && row.attendance.status === 'LATE', `session A2 row carries its own session records for ${row.studentProfileId}`);
   }
   ok(teens.data.filter((entry) => crossSession.has(entry.studentProfileId)).length === 4, 'the four students on both sessions appear on A2 too');
-  await refused(() => roster(ids.schoolA, ids.sessionB), 404, 'CLASS_SESSION_NOT_FOUND', 'school-B session read through school A');
-  await refused(() => roster(ids.schoolA, randomUUID()), 404, 'CLASS_SESSION_NOT_FOUND', 'unknown session');
+  // The roster never reads hon.class_sessions, so another school's session or an unknown id is just an empty roster.
+  for (const [label, target] of [['school-B session read through school A', ids.sessionB], ['unknown session', randomUUID()]]) {
+    const empty = await page(() => roster(ids.schoolA, target), label);
+    ok(empty.data.length === 0 && empty.meta.nextCursor === null, `${label}: empty roster`);
+  }
   await refused(() => roster(ids.schoolA, ids.sessionA2, { cursor }), 400, 'INVALID_CURSOR', 'session-A cursor on session A2');
   await refused(() => roster(ids.schoolB, ids.sessionB, { cursor }), 400, 'INVALID_CURSOR', 'school-A cursor at school B');
   await refused(() => roster(ids.schoolA, ids.sessionA, { cursor: tamper(cursor, (b) => ({ ...b, k: [order[70], b.k[1]] })) }), 400, 'INVALID_CURSOR', 'cursor retargeted to another student');
@@ -286,7 +295,9 @@ try {
       (SELECT count(*) FROM hon.class_bookings WHERE organization_id = $1)::int AS bookings`, [ids.organization])).rows[0];
   ok(effects.audit === 0 && effects.outbox === 0 && effects.idempotency === 0 && effects.attendance === 34 && effects.bookings === 84, `roster reads have no effects (${JSON.stringify(effects)})`);
 
-  console.log(`Class-session roster integrity (signed HTTP): ${checks} checks passed. 76 students (walk-ins, a cancelled booking, 30 tied names, Korean names) at 4 page sizes, exact session and school, signed cursor refusals, attendance.record required, edited anchor refused, page two refused after permission loss and school/organization/entitlement suspension, zero effects.`);
+  console.log(`Class-session roster integrity (signed HTTP): ${checks} checks passed. 76 students (walk-ins, a cancelled booking, 30 tied names, Korean names) at 4 page sizes, exact session and school with no class_sessions SELECT, signed cursor refusals, attendance.record required, edited anchor refused, page two refused after permission loss and school/organization/entitlement suspension, zero effects.`);
 } finally {
-  try { await app?.close(); } finally { try { await cleanup(); } finally { await admin.end(); } }
+  try { await app?.close(); } finally {
+    try { if (runtimeSessionSelect) await sql(`GRANT SELECT ON TABLE hon.class_sessions TO ${CRM_CLOSE_RUNTIME_ROLE}`); } finally {
+      try { await cleanup(); } finally { await admin.end(); } } }
 }
