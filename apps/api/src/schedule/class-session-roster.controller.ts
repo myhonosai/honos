@@ -41,7 +41,7 @@ export class ClassSessionRosterController {
     if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) throw new ForbiddenException('The class roster is not authorized for this school.');
     const requestId = randomUUID();
     const context: AttendanceCommandContext = { ...scope, externalSubject: identity.externalSubject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId, correlationId: requestId, idempotencyKey: '' };
-    const { entries, session, nextCursor, limit } = await this.roster.read(context, sessionId.toLowerCase(), { limit: query.limit, cursor: query.cursor });
-    return { data: entries, meta: { requestId, correlationId: requestId, limit, nextCursor, session } };
+    const { entries, nextCursor, limit } = await this.roster.read(context, sessionId.toLowerCase(), { limit: query.limit, cursor: query.cursor });
+    return { data: entries, meta: { requestId, correlationId: requestId, limit, nextCursor } };
   }
 }
