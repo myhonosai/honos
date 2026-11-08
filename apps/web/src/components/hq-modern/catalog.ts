@@ -27,6 +27,7 @@ export const HQ_GROWTH = [
 export const HQ_SCHOOLS = [
   { path: '/hq/schools', title: 'School Directory', icon: 'school' },
   { path: '/hq/schools/access', title: 'School Access', icon: 'check' },
+  { path: '/hq/schools/access/policy', title: 'Exception Policy', icon: 'settings' },
 ] as const;
 export const HQ_REVENUE = [
   { path: '/hq/revenue', title: 'Subscriptions', icon: 'chart' },

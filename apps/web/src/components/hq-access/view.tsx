@@ -74,6 +74,7 @@ function Policy({ view, t }: { view: SaasAccessOverview; t: T }) {
     <p>{view.paidAccessProgram === 'ACTIVE' ? t('paidOn') : t('paidOff')}</p>
     <p>{view.exceptionPolicy.ready && view.exceptionPolicy.maxDays !== null ? t('policyReady', { days: String(view.exceptionPolicy.maxDays) }) : t('policyMissing')}</p>
     {!view.viewer.canGrantAndRevokeExceptions ? <p data-testid="hq-access-owner-only">{t('ownerOnly')}</p> : null}
+    <p><a href="/hq/schools/access/policy">{t('policyLink')}</a></p>
   </div>;
 }
 

@@ -28,6 +28,11 @@ Lock order is existing IAM SHARE locks → idempotency request → organization/
 
 The existing exception grant input, revocation, cleanup and purchase APIs remain unchanged. New receipt metadata is a server fact, not a client selector. No policy-approval frontend or customer checkout is enabled here.
 
+
+### Read additions (0220, proposed) and the HQ screen
+
+The read also returns `terms` (`policyVersion`, `exceptionMaxDays`, `exceptionAuthority` of the latest access terms, which every new PROPOSED or APPROVED decision must cite) and `viewer.canDecide` (true only for a current HQ owner). Both are advisory: the decision command re-checks owner authority, revision, terms version and maximum length under its locks. The contract now requires `SUPERSEDED` exactly when the latest approval cites older terms. `/hq/schools/access/policy` is the HQ screen: it reads the policy, lets the HQ owner propose, approve (with an explicit exceptions-only confirmation that sends `APPROVE_ACCESS_EXCEPTION_POLICY_ONLY`), withdraw a proposal or revoke an approval, keeps only an unknown outcome for an identical retry with the same key, and reads again after every answer.
+
 ## Verification and non-effects
 
 Add disposable proof cases for absent/PROPOSED/invalid policies, explicit synthetic approval, enforced limits, immutable history/bindings, direct writes, expected-revision/idempotency races, policy/grant arrival orders, owner revocation/clock expiry while waiting and full rollback. Reuse D9 revoke/cleanup/450-row/Champions/revoke-first regressions with clearly labelled synthetic fixture decisions. Full paid-access terms stay PROPOSED in every test.

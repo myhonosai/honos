@@ -280,6 +280,7 @@ const hqAccessView = (o) => { const ent = hqEnt(o), inEffect = ent?.inEffect ===
   return { organizationId: o.id, state: o.state, source: !inEffect ? 'NONE' : o.state === 'PAYMENT_ACTIVE' ? 'PAYMENT_ACTIVATED' : 'PROVISIONED', entitlement: ent,
     capabilities: inEffect ? [...SAAS_PLAN_CAPABILITIES[ent.tier]] : [], paidAccessProgram: 'INACTIVE' }; };
 async function hqAccessApi(route, path, method, url) {
+  if (path === '/api/v1/hq/saas/access-exception-policy') return hqPolicyApi(route, method);
   if (path === '/api/v1/hq/saas/access-overview' && method === 'GET') {
     if (hqx.denyOverview) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
     const cursor = url.searchParams.get('cursor');
@@ -333,6 +334,66 @@ async function hqAccessApi(route, path, method, url) {
   if (step === 'unknown') return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' });
   // The outcome is lost, and HQ read access is withdrawn before the fresh read.
   if (step === 'unknownThenDenied') { hqx.denyOverview = true; return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' }); }
+  return json(route, 200, { data }, { 'Cache-Control': 'private, no-store' });
+}
+
+// D10 exception policy (0186, read terms + viewer 0220): synthetic decisions only. The command rules mirror the database:
+// HQ owner only, next revision, current terms version and maximum, a future window, and something to withdraw or revoke.
+const hqp = { owner: true, history: [], termsVersion: 1, maxDays: 90, posts: [], replies: [], byKey: new Map(), gate: null, deny: false, readGate: null, readSession: false };
+function resetHqp(over = {}) {
+  Object.assign(hqp, { owner: true, history: [], termsVersion: 1, maxDays: 90, posts: [], replies: [], byKey: new Map(), gate: null, deny: false, readGate: null, readSession: false }, over);
+}
+const hqpDecision = (revision, status, body, prior) => ({ approvalId: id(600 + revision), revision, status, termsVersion: body.termsVersion ?? prior.termsVersion,
+  maxDays: body.maxDays ?? prior.maxDays, validFrom: body.validFrom ?? prior.validFrom, validUntil: body.validUntil ?? prior.validUntil, reason: body.reason,
+  actorPrincipalId: id(499), recordedAt: new Date().toISOString() });
+function hqpView() {
+  const now = Date.now(), p = hqp.history[0] ?? null;
+  const effectiveStatus = !p ? 'ABSENT' : p.status !== 'APPROVED' ? p.status : p.termsVersion !== hqp.termsVersion ? 'SUPERSEDED'
+    : Date.parse(p.validFrom) > now ? 'SCHEDULED' : Date.parse(p.validUntil) <= now ? 'EXPIRED' : 'ACTIVE';
+  return { scope: 'ACCESS_EXCEPTIONS_ONLY', current: p, effectiveStatus, history: hqp.history, historyLimit: 100, asOf: new Date(now).toISOString(), termsStatus: 'PROPOSED',
+    terms: { policyVersion: hqp.termsVersion, exceptionMaxDays: hqp.maxDays, exceptionAuthority: 'HQ_OWNER' }, viewer: { canDecide: hqp.owner },
+    paidAccessProgram: 'INACTIVE', aiCreditProgram: 'INACTIVE' };
+}
+async function hqPolicyApi(route, method) {
+  if (method === 'GET') {
+    const gate = hqp.readGate; hqp.readGate = null; const session = hqp.readSession; if (gate) { hqp.readSession = false; await gate; }
+    if (session) return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+    if (hqp.deny) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    return json(route, 200, { data: hqpView() }, { 'Cache-Control': 'private, no-store' });
+  }
+  if (method !== 'POST') return null;
+  const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
+  // Taken at request entry: a gated retired request keeps its own step.
+  const step = hqp.replies.shift() ?? 'ok', gate = hqp.gate; hqp.gate = null;
+  hqp.posts.push({ key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
+  if (gate) await gate;
+  const prior = hqp.byKey.get(headers['idempotency-key']);
+  if (prior) return prior.body === raw ? json(route, 200, { data: { ...prior.data, replayed: true } }) : json(route, 409, { code: 'IDEMPOTENCY_KEY_REUSED' });
+  assert.equal(headers['x-hon-human-command'], 'saas-access-exception-policy-decision');
+  if (step === 'lost') return route.abort('connectionreset');
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (!hqp.owner) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  const body = JSON.parse(raw), latest = hqp.history[0] ?? null;
+  if (body.expectedRevision !== (latest?.revision ?? 0)) return json(route, 409, { code: 'SAAS_VERSION_CONFLICT' });
+  let made;
+  if (body.decision === 'WITHDRAWN' || body.decision === 'REVOKED') {
+    assert.deepEqual(Object.keys(body).sort(), ['decision', 'expectedRevision', 'reason']);
+    if (!latest || !['PROPOSED', 'APPROVED'].includes(latest.status)) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_REQUIRED' });
+    if (latest.termsVersion !== hqp.termsVersion) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_LIMIT' });
+    made = hqpDecision(body.expectedRevision + 1, body.decision, { reason: body.reason }, latest);
+  } else {
+    assert.deepEqual(Object.keys(body).sort(), ['decision', 'expectedRevision', 'maxDays', 'reason', 'termsVersion', 'validFrom', 'validUntil',
+      ...(body.decision === 'APPROVED' ? ['confirmation'] : [])].sort());
+    if (body.decision === 'APPROVED') assert.equal(body.confirmation, 'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY');
+    if (Date.parse(body.validUntil) <= Date.parse(body.validFrom) || Date.parse(body.validUntil) <= Date.now()) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_WINDOW_INVALID' });
+    if (body.termsVersion !== hqp.termsVersion || body.maxDays > hqp.maxDays) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_LIMIT' });
+    made = hqpDecision(body.expectedRevision + 1, body.decision, body, {});
+  }
+  hqp.history = [made, ...hqp.history];
+  const data = { policy: made, replayed: false };
+  hqp.byKey.set(headers['idempotency-key'], { body: raw, data });
+  if (step === 'unknown') return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' });
+  if (step === 'unknownThenDenied') { hqp.deny = true; return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' }); }
   return json(route, 200, { data }, { 'Cache-Control': 'private, no-store' });
 }
 
@@ -423,7 +484,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 async function axe(page, name) {
   await page.addScriptTag({ content: axeSource });
   const run = (include) => page.evaluate(async (selectors) => (await window.axe.run(selectors ? { include: selectors.map((s) => [s]) } : document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })), include);
-  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]', 'section[aria-labelledby="people-title"]', 'section[aria-labelledby="hq-access-title"]'].filter((s) => document.querySelector(s)));
+  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]', 'section[aria-labelledby="people-title"]', 'section[aria-labelledby="hq-access-title"]', 'section[aria-labelledby="hq-policy-title"]'].filter((s) => document.querySelector(s)));
   const result = await run(selectors);
   report.accessibility.push({ name, scope: selectors, violations: result, wholePage: await run(null) });
   const serious = result.filter((v) => v.impact === 'serious' || v.impact === 'critical');
@@ -1462,6 +1523,230 @@ for (const [setup, start] of [['an open grant form', null], ['a kept unknown gra
     await section().getByRole('button', { name: 'Refresh' }).click();
     await section().getByTestId('hq-access-list').waitFor();
     assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'a fresh authorized read does not bring back the retry');
+    await ctx.close();
+  });
+}
+
+// ---------- HQ exception policy ----------
+async function hqPolicyPage(viewport, { language = 'en' } = {}) {
+  mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/hq/schools/access/policy`);
+  const section = () => page.locator('section[aria-labelledby="hq-policy-title"]');
+  await section().getByTestId('hq-policy-status').waitFor({ timeout: 20000 }).catch(async (e) => { console.error('HQ policy page did not load:', await page.locator('main').innerText().catch(() => 'no main')); throw e; });
+  return { ctx, page, section };
+}
+const policyDay = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const fillDecision = async (section, { days = '30', end = policyDay(45), reason = 'Approve exceptions for the pilot season', confirm = true } = {}) => {
+  await section().getByRole('button', { name: 'Propose or approve' }).click();
+  const form = section().getByTestId('hq-policy-decide');
+  await form.getByLabel('Longest exception (days)').fill(days);
+  await form.getByLabel('Last valid day').fill(end);
+  await form.getByLabel('Reason').fill(reason);
+  if (confirm) await form.getByRole('checkbox').check();
+  return form;
+};
+const approvedRow = (revision = 1, termsVersion = 1) => ({ approvalId: id(600 + revision), revision, status: 'APPROVED', termsVersion, maxDays: 30,
+  validFrom: new Date(Date.now() - 86_400_000).toISOString(), validUntil: new Date(Date.now() + 40 * 86_400_000).toISOString(), reason: 'Synthetic approved exception policy',
+  actorPrincipalId: id(499), recordedAt: new Date(Date.now() - 86_400_000).toISOString() });
+for (const [name, viewport, language, title] of [['desktop-1440', { width: 1440, height: 900 }, 'en', 'Exception policy'], ['phone-390', { width: 390, height: 844 }, 'en', 'Exception policy'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'ko', '예외 정책'], ['phone-390', { width: 390, height: 844 }, 'es', 'Política de excepciones']]) {
+  await check(`HQ exception policy ${language} ${name}: real read, current terms, exceptions-only statement`, async () => {
+    resetHqp();
+    const { ctx, page, section } = await hqPolicyPage(viewport, { language });
+    assert.ok(await section().getByRole('heading', { name: title, level: 1 }).isVisible());
+    assert.match(await section().getByTestId('hq-policy-terms').innerText(), /90/);
+    await noOverflow(page, `hq-policy-${language}-${name}`); await axe(page, `hq-policy-${language}-${name}`);
+    await shot(page, `hq-policy-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('HQ exception policy: propose, then approve with the confirmation; each answer is followed by a fresh read', async () => {
+  resetHqp();
+  const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  let form = await fillDecision(section, { confirm: false });
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/Approving also needs the confirmation box/).waitFor();
+  assert.equal(hqp.posts.length, 0, 'nothing sent without the confirmation');
+  await form.getByRole('button', { name: 'Save as proposal' }).click();
+  await section().getByText(/Recorded: Proposed/).waitFor();
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Proposed');
+  const proposed = JSON.parse(hqp.posts[0].body);
+  assert.equal(proposed.decision, 'PROPOSED'); assert.equal(proposed.expectedRevision, 0); assert.equal(proposed.termsVersion, 1); assert.equal(proposed.maxDays, 30);
+  assert.equal('confirmation' in proposed, false);
+  await shot(page, 'hq-policy-proposed', true);
+  form = section().getByTestId('hq-policy-decide');
+  await section().getByRole('button', { name: 'Propose or approve' }).click();
+  form = section().getByTestId('hq-policy-decide');
+  assert.equal(await form.getByLabel('Longest exception (days)').inputValue(), '30', 'prefilled from the proposal');
+  await form.getByLabel('Reason').fill('Owner approves the proposed exception policy');
+  await form.getByRole('checkbox').check();
+  await shot(page, 'hq-policy-approve-form', true);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/Recorded: Approved/).waitFor();
+  for (let i = 0; i < 50 && await section().getByTestId('hq-policy-status').innerText() !== 'Approved, in effect'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Approved, in effect');
+  const approved = JSON.parse(hqp.posts[1].body);
+  assert.equal(approved.decision, 'APPROVED'); assert.equal(approved.expectedRevision, 1); assert.equal(approved.confirmation, 'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY');
+  assert.notEqual(hqp.posts[0].key, hqp.posts[1].key);
+  assert.equal(await section().getByTestId('hq-policy-history').locator('li').count(), 2);
+  await noOverflow(page, 'hq-policy-approved'); await axe(page, 'hq-policy-approved'); await shot(page, 'hq-policy-approved', true);
+  await ctx.close();
+});
+await check('HQ exception policy: a lost answer is kept; Try again replays the same key and body and records once', async () => {
+  resetHqp({ replies: ['unknown', 'ok'] });
+  const { ctx, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  const form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/We could not confirm whether this was recorded/).waitFor();
+  await section().getByRole('button', { name: 'Try again' }).click();
+  await section().getByText(/Recorded: Approved/).waitFor();
+  assert.equal(hqp.posts.length, 2); assert.equal(hqp.posts[0].key, hqp.posts[1].key); assert.equal(hqp.posts[0].body, hqp.posts[1].body);
+  assert.equal(hqp.history.length, 1, 'recorded once');
+  await ctx.close();
+});
+await check('HQ exception policy: revoke needs a reason; a changed revision and rule refusals end the attempt with nothing kept', async () => {
+  resetHqp({ history: [approvedRow()] });
+  let { ctx, page, section } = await hqPolicyPage({ width: 390, height: 844 });
+  await section().getByRole('button', { name: 'Revoke approval' }).click();
+  const end = section().getByTestId('hq-policy-end');
+  await end.getByLabel('Reason').fill('short');
+  await end.getByRole('button', { name: 'Revoke' }).click();
+  await section().getByText(/Give a reason of 10 to 500 characters/).waitFor();
+  assert.equal(hqp.posts.length, 0);
+  await end.getByLabel('Reason').fill('Pilot season is over for now');
+  await shot(page, 'hq-policy-revoke-form', true);
+  await end.getByRole('button', { name: 'Revoke' }).click();
+  await section().getByText(/Recorded: Revoked/).waitFor();
+  assert.deepEqual(JSON.parse(hqp.posts[0].body), { expectedRevision: 1, decision: 'REVOKED', reason: 'Pilot season is over for now' });
+  await noOverflow(page, 'hq-policy-revoked'); await axe(page, 'hq-policy-revoked');
+  await ctx.close();
+  // Another decision lands after the read: the stale revision is refused, nothing is kept, the fresh read shows it.
+  resetHqp();
+  ({ ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 }));
+  hqp.history = [approvedRow()];
+  let form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Save as proposal' }).click();
+  await section().getByText(/Another decision was recorded since this page was read/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Approved, in effect');
+  // The terms change after the read: the server refuses the stale terms version.
+  hqp.termsVersion = 2;
+  form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Save as proposal' }).click();
+  await section().getByText(/the access terms changed/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  for (let i = 0; i < 50 && await section().getByTestId('hq-policy-status').innerText() !== 'Approved for older terms'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByRole('button', { name: 'Revoke approval' }).count(), 0, 'nothing to revoke under older terms');
+  await ctx.close();
+});
+await check('HQ exception policy: an HQ operator reads the policy with no decision control; a denied read shows nothing', async () => {
+  resetHqp({ owner: false, history: [approvedRow()] });
+  const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  await section().getByTestId('hq-policy-owner-only').waitFor();
+  assert.equal(await section().getByRole('button', { name: /Propose or approve|Revoke approval|Withdraw proposal/ }).count(), 0);
+  await axe(page, 'hq-policy-operator'); await shot(page, 'hq-policy-operator');
+  hqp.deny = true;
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await section().getByText(/does not include the exception policy/).waitFor();
+  assert.equal(await section().getByText(/Synthetic approved exception policy/).count(), 0);
+  await ctx.close();
+});
+await check('HQ exception policy: when the fresh read after an unknown decision is denied, no decision, outcome or Try again remains', async () => {
+  resetHqp({ replies: ['unknownThenDenied'] });
+  const { ctx, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  const form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/does not include the exception policy/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.equal(await section().getByText(/We could not confirm/).count(), 0);
+  assert.equal(await section().locator('form').count(), 0);
+  hqp.deny = false;
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await section().getByTestId('hq-policy-status').waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'a fresh authorized read does not bring back the retry');
+  await ctx.close();
+});
+await check('HQ exception policy: leaving the tab hides the policy and drops a kept decision', async () => {
+  resetHqp({ replies: ['unknown'] });
+  const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  const form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/We could not confirm/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await section().getByText(/The exception policy is hidden/).waitFor();
+  assert.equal(await section().getByText(/Approve exceptions for the pilot season/).count(), 0);
+  await section().getByRole('button', { name: 'Show again' }).click();
+  await section().getByTestId('hq-policy-status').waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'the kept decision was dropped');
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Approved, in effect', 'the re-read shows what the server recorded');
+  await ctx.close();
+});
+const policyRetire = {
+  conceal: async (page, section) => {
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await section().getByText(/The exception policy is hidden/).waitFor();
+    await section().getByRole('button', { name: 'Show again' }).click();
+    await section().getByTestId('hq-policy-status').waitFor();
+  },
+  unmount: async (page, section) => {
+    await page.evaluate(() => window.next.router.push('/hq'));
+    await page.waitForURL(/\/hq$/);
+    await section().waitFor({ state: 'detached' });
+    await page.evaluate(() => window.next.router.push('/hq/schools/access/policy'));
+    await section().getByTestId('hq-policy-status').waitFor({ timeout: 20000 });
+  },
+};
+for (const [how, retire] of Object.entries(policyRetire)) {
+  await check(`HQ exception policy: a late sign-in answer to a decision retired by ${how} does not end the session; a current one does`, async () => {
+    let release; const gate = new Promise((done) => { release = done; });
+    resetHqp({ gate, replies: ['session', 'session'] });
+    const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+    await watchEnded(page);
+    let form = await fillDecision(section);
+    await form.getByRole('button', { name: 'Save as proposal' }).click();
+    await section().getByText(/Sending/).waitFor();
+    await retire(page, section);
+    release();
+    await new Promise((done) => setTimeout(done, 600));
+    assert.equal(await ended(page), 0, 'the retired decision did not end the session');
+    assert.ok(await section().getByTestId('hq-policy-status').isVisible(), 'the fresh read stays shown');
+    form = await fillDecision(section);
+    await form.getByRole('button', { name: 'Save as proposal' }).click();
+    await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    assert.equal(hqp.posts.length, 2);
+    await ctx.close();
+  });
+  await check(`HQ exception policy: a late sign-in answer to a read retired by ${how} does not end the session`, async () => {
+    resetHqp();
+    const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+    await watchEnded(page);
+    let release; hqp.readGate = new Promise((done) => { release = done; }); hqp.readSession = true;
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    await section().getByText(/Reading the exception policy/).waitFor();
+    if (how === 'conceal') {
+      await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await section().getByText(/The exception policy is hidden/).waitFor();
+      release(); await new Promise((done) => setTimeout(done, 600));
+      await section().getByRole('button', { name: 'Show again' }).click();
+    } else {
+      await page.evaluate(() => window.next.router.push('/hq'));
+      await page.waitForURL(/\/hq$/);
+      await section().waitFor({ state: 'detached' });
+      release(); await new Promise((done) => setTimeout(done, 600));
+      await page.evaluate(() => window.next.router.push('/hq/schools/access/policy'));
+    }
+    await section().getByTestId('hq-policy-status').waitFor({ timeout: 20000 });
+    assert.equal(await ended(page), 0, 'the retired read did not end the session');
+    hqp.readSession = true;
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
     await ctx.close();
   });
 }
