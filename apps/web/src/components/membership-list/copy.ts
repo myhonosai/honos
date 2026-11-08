@@ -1,0 +1,70 @@
+/** Membership list wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
+const en = {
+  title: 'Memberships', intro: 'Every membership at your school, newest first, with where it stands and its confirmed dates.',
+  readOnly: 'This page only shows records. It shows no payments, invoices, payers or agreements. Activate memberships and confirm dates in their own pages, which check your access again.',
+  refresh: 'Refresh', filterLabel: 'Which memberships',
+  f_ALL: 'All', f_ACTIVE: 'Active', f_DRAFT: 'Draft', f_FROZEN: 'Frozen', f_CANCELLATION_PENDING: 'Cancellation pending', f_CANCELLED: 'Cancelled', f_EXPIRED: 'Expired',
+  listTitle: 'Membership list', loading: 'Reading memberships…', none: 'No memberships here.', noneFiltered: 'No memberships in this state.',
+  shown: '{n} shown', schoolTime: 'Dates are school dates ({zone}). Today at the school is {today}.',
+  denied: 'Your access at this school does not include memberships. Nothing is shown.',
+  unavailable: 'Memberships could not be loaded. Nothing is shown.',
+  timezone: 'This school\'s time zone is not set correctly, so membership dates cannot be shown. Nothing is shown.',
+  restarted: 'The list changed while it was being read, so it was read again from the start.',
+  more: 'Show more', moreLoading: 'Reading more…', partial: 'Counts cover the {n} memberships shown. More exist.',
+  member: 'Member', plan: 'Plan', status: 'Status', dates: 'Dates', created: 'Created',
+  notVisible: 'Person not visible here', range: '{from} to {to}', openEnded: 'From {from}, no end date', notConfirmed: 'Not confirmed',
+  storedHint: 'Recorded start (not confirmed): {date}',
+  SCHEDULED: 'Starts later', IN_EFFECT: 'In effect', ENDED: 'Ended', UNDATED: 'Active, dates not confirmed', DRAFT: 'Draft', FROZEN: 'Frozen',
+  CANCELLATION_PENDING: 'Cancellation pending', CANCELLED: 'Cancelled', EXPIRED: 'Expired',
+  c_inEffect: 'In effect', c_scheduled: 'Starts later', c_undated: 'Dates not confirmed', c_draft: 'Draft', c_other: 'Other states',
+  nextSteps: 'Next steps', activate: 'Activate a draft membership', confirmDates: 'Confirm or change dates',
+  waiting: 'Checking your school…', noSchool: 'Choose a school to see its memberships.', concealed: 'Memberships are hidden. Come back to this tab to check your school again.',
+};
+export type MembershipListKey = keyof typeof en;
+const ko: Record<MembershipListKey, string> = {
+  title: '회원권', intro: '학교의 모든 회원권을 최신순으로, 현재 상태와 확정된 날짜와 함께 보여 줍니다.',
+  readOnly: '이 페이지는 기록을 보여 주기만 합니다. 결제, 청구서, 납부자, 계약은 표시하지 않습니다. 회원권 활성화와 날짜 확정은 각 페이지에서 하며, 그곳에서 권한을 다시 확인합니다.',
+  refresh: '새로 고침', filterLabel: '표시할 회원권',
+  f_ALL: '전체', f_ACTIVE: '활성', f_DRAFT: '초안', f_FROZEN: '일시 정지', f_CANCELLATION_PENDING: '해지 대기', f_CANCELLED: '해지됨', f_EXPIRED: '만료',
+  listTitle: '회원권 목록', loading: '회원권을 읽는 중…', none: '회원권이 없습니다.', noneFiltered: '이 상태의 회원권이 없습니다.',
+  shown: '{n}개 표시', schoolTime: '날짜는 학교 기준입니다({zone}). 학교 기준 오늘은 {today}입니다.',
+  denied: '이 학교에서 회원권을 볼 권한이 없습니다. 아무것도 표시하지 않습니다.',
+  unavailable: '회원권을 불러오지 못했습니다. 아무것도 표시하지 않습니다.',
+  timezone: '학교 시간대가 올바르게 설정되지 않아 회원권 날짜를 표시할 수 없습니다. 아무것도 표시하지 않습니다.',
+  restarted: '읽는 도중 목록이 바뀌어 처음부터 다시 읽었습니다.',
+  more: '더 보기', moreLoading: '더 읽는 중…', partial: '집계는 표시된 회원권 {n}개 기준입니다. 더 있습니다.',
+  member: '회원', plan: '요금제', status: '상태', dates: '날짜', created: '생성일',
+  notVisible: '이곳에서 볼 수 없는 사람', range: '{from} ~ {to}', openEnded: '{from}부터, 종료일 없음', notConfirmed: '확정되지 않음',
+  storedHint: '기록된 시작일(확정 아님): {date}',
+  SCHEDULED: '시작 예정', IN_EFFECT: '유효', ENDED: '종료됨', UNDATED: '활성, 날짜 미확정', DRAFT: '초안', FROZEN: '일시 정지',
+  CANCELLATION_PENDING: '해지 대기', CANCELLED: '해지됨', EXPIRED: '만료',
+  c_inEffect: '유효', c_scheduled: '시작 예정', c_undated: '날짜 미확정', c_draft: '초안', c_other: '기타 상태',
+  nextSteps: '다음 단계', activate: '초안 회원권 활성화', confirmDates: '날짜 확정 또는 변경',
+  waiting: '학교를 확인하는 중…', noSchool: '회원권을 보려면 학교를 선택하세요.', concealed: '회원권이 숨겨졌습니다. 이 탭으로 돌아오면 학교를 다시 확인합니다.',
+};
+const es: Record<MembershipListKey, string> = {
+  title: 'Membresías', intro: 'Todas las membresías de tu escuela, de la más reciente a la más antigua, con su estado y sus fechas confirmadas.',
+  readOnly: 'Esta página solo muestra registros. No muestra pagos, facturas, pagadores ni acuerdos. Activa membresías y confirma fechas en sus propias páginas, que vuelven a comprobar tu acceso.',
+  refresh: 'Actualizar', filterLabel: 'Qué membresías',
+  f_ALL: 'Todas', f_ACTIVE: 'Activas', f_DRAFT: 'Borrador', f_FROZEN: 'Congeladas', f_CANCELLATION_PENDING: 'Cancelación pendiente', f_CANCELLED: 'Canceladas', f_EXPIRED: 'Vencidas',
+  listTitle: 'Lista de membresías', loading: 'Leyendo membresías…', none: 'No hay membresías.', noneFiltered: 'No hay membresías en este estado.',
+  shown: '{n} mostradas', schoolTime: 'Las fechas son de la escuela ({zone}). Hoy en la escuela es {today}.',
+  denied: 'Tu acceso en esta escuela no incluye membresías. No se muestra nada.',
+  unavailable: 'No se pudieron cargar las membresías. No se muestra nada.',
+  timezone: 'La zona horaria de la escuela no está bien configurada, así que no se pueden mostrar las fechas. No se muestra nada.',
+  restarted: 'La lista cambió mientras se leía, así que se volvió a leer desde el principio.',
+  more: 'Mostrar más', moreLoading: 'Leyendo más…', partial: 'Los recuentos cubren las {n} membresías mostradas. Hay más.',
+  member: 'Miembro', plan: 'Plan', status: 'Estado', dates: 'Fechas', created: 'Creada',
+  notVisible: 'Persona no visible aquí', range: '{from} a {to}', openEnded: 'Desde {from}, sin fecha de fin', notConfirmed: 'Sin confirmar',
+  storedHint: 'Inicio registrado (sin confirmar): {date}',
+  SCHEDULED: 'Empieza más adelante', IN_EFFECT: 'Vigente', ENDED: 'Terminada', UNDATED: 'Activa, fechas sin confirmar', DRAFT: 'Borrador', FROZEN: 'Congelada',
+  CANCELLATION_PENDING: 'Cancelación pendiente', CANCELLED: 'Cancelada', EXPIRED: 'Vencida',
+  c_inEffect: 'Vigentes', c_scheduled: 'Empiezan más adelante', c_undated: 'Fechas sin confirmar', c_draft: 'Borrador', c_other: 'Otros estados',
+  nextSteps: 'Siguientes pasos', activate: 'Activar una membresía en borrador', confirmDates: 'Confirmar o cambiar fechas',
+  waiting: 'Comprobando tu escuela…', noSchool: 'Elige una escuela para ver sus membresías.', concealed: 'Las membresías están ocultas. Vuelve a esta pestaña para comprobar tu escuela de nuevo.',
+};
+export const MEMBERSHIP_LIST_LANGUAGES = { en, ko, es } as const;
+export function membershipListText(language: string, key: MembershipListKey, vars: Record<string, string> = {}): string {
+  const text = (language === 'ko' ? ko : language === 'es' ? es : en)[key];
+  return text.replace(/\{(\w+)\}/g, (_, name: string) => vars[name] ?? '');
+}

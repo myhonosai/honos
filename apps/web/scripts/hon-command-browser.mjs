@@ -183,6 +183,7 @@ async function api(route) {
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
@@ -386,6 +387,35 @@ async function marketingApiRoute(route, path, method, url) {
   return json(route, 200, { data: { campaign, from: url.searchParams.get('from'), to: url.searchParams.get('to'), asOf: iso(0),
     leads: first ? 12 : 0, trialLeads: first ? 5 : 0, trialAppointments: first ? 6 : 0, completedTrialAppointments: first ? 4 : 0, wonLeads: first ? 3 : 0, lostLeads: first ? 1 : 0, archivedLeads: 0,
     enrollmentLinkage: 'UNAVAILABLE', revenueLinkage: 'UNAVAILABLE' }, meta: { requestId: 'synthetic' } });
+}
+// Memberships (U6): the school's memberships, newest first, two pages, one state filter (synthetic). Read-only.
+const mbl = { denied: false, gate: null, step: null, reads: [] };
+const mblNames = ['Ahn', 'Baker', 'Choi', 'Diaz', 'Evans', 'Fischer', 'García', 'Hwang', 'Ito', 'Jones', 'Kim', 'López'];
+const mblRows = () => Array.from({ length: 60 }, (_, n) => {
+  const kind = n % 6, state = ['ACTIVE', 'ACTIVE', 'DRAFT', 'ACTIVE', 'FROZEN', 'CANCELLED'][kind];
+  const effectiveStatus = state !== 'ACTIVE' ? state : kind === 0 ? 'IN_EFFECT' : kind === 1 ? 'SCHEDULED' : 'UNDATED';
+  const dated = effectiveStatus === 'IN_EFFECT' || effectiveStatus === 'SCHEDULED';
+  return { membershipId: id(1500 + n), state, version: 1, planCode: n % 2 ? 'KIDS-MONTHLY' : 'ADULT-MONTHLY', billingAccountId: id(1600 + n),
+    participant: n === 7 ? null : { personId: id(1700 + n), givenName: `Member${String(n).padStart(2, '0')}`, familyName: mblNames[n % mblNames.length] },
+    effectiveStatus, datesConfirmed: dated,
+    currentPeriod: dated ? { periodVersion: 1, changeKind: 'INITIAL', startDate: kind === 1 ? '2026-12-01' : '2026-10-01', endDate: n % 4 === 0 ? null : '2027-01-31' } : null,
+    legacyStoredTerm: dated ? null : { termStartedAt: kind === 3 ? '2026-09-01T00:00:00.000Z' : null, termEndsAt: null },
+    createdAt: new Date(Date.parse('2026-10-20T12:00:00.000Z') - n * 3_600_000).toISOString() };
+});
+function resetMemberships(over = {}) { Object.assign(mbl, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function membershipListApiRoute(route, path, method, url, prefix) {
+  if (method !== 'GET' || path !== `${prefix}/billing/memberships`) return null;
+  const cursor = url.searchParams.get('cursor'), state = url.searchParams.get('state');
+  mbl.reads.push(`${state ?? 'ALL'}:${cursor ?? 'first'}`);
+  const step = mbl.step; mbl.step = null;
+  if (mbl.gate) { const gate = mbl.gate; mbl.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (mbl.denied) return json(route, 403, { code: 'MEMBERSHIP_LIST_FORBIDDEN' });
+  if (route.request().headers()['x-hon-source'] || url.searchParams.get('limit') !== '50') return json(route, 400, { code: 'VALIDATION_FAILED' });
+  if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
+  const all = mblRows().filter((m) => !state || m.state === state), start = cursor === `${state ?? 'ALL'}-page-2` ? 50 : 0, data = all.slice(start, start + 50);
+  return json(route, 200, { data, meta: { requestId: id(1498), correlationId: id(1498), limit: 50, nextCursor: start + 50 < all.length ? `${state ?? 'ALL'}-page-2` : null,
+    schoolTimezone: 'America/Los_Angeles', localToday: '2026-11-08' } });
 }
 const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
 function resetPeople(over = {}) {
@@ -1713,6 +1743,92 @@ for (const [what, how, start, retire] of [
     await current.ctx.close();
   });
 }
+
+// ---------- Memberships (U6) ----------
+async function membershipsPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/memberships`);
+  const section = () => page.locator('section[aria-labelledby="membership-list-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const MEMBERSHIP_TITLES = { en: ['Memberships', 'Show more', 'Draft', 'Activate a draft membership'], ko: ['회원권', '더 보기', '초안', '초안 회원권 활성화'], es: ['Membresías', 'Mostrar más', 'Borrador', 'Activar una membresía en borrador'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Memberships ${nextTheme} ${language} ${name}: newest first, two pages with counts, a state filter, and links`, async () => {
+    resetMemberships();
+    const [title, more, draft, activate] = MEMBERSHIP_TITLES[language];
+    const { ctx, page, section } = await membershipsPage(viewport, { nextTheme, language });
+    await section().getByTestId('membership-table').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    assert.equal(await section().getByTestId('membership-table').locator('tbody tr').count(), 50);
+    assert.ok((await section().getByTestId('membership-table').locator('tbody tr').first().innerText()).includes('Member00'), 'newest first');
+    await section().getByRole('button', { name: more }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="membership-table"] tbody tr').length === 60);
+    assert.equal(await section().getByRole('button', { name: more }).count(), 0, 'no more after the last page');
+    const counts = await section().getByTestId('membership-counts').innerText();
+    assert.ok(/\b10\b/.test(counts), counts);
+    assert.equal(await section().getByRole('link', { name: activate }).getAttribute('href'), '/staff/billing/memberships');
+    await noOverflow(page, `memberships-${nextTheme}-${language}-${name}`);
+    await axe(page, `memberships-${nextTheme}-${language}-${name}`);
+    await shot(page, `memberships-${nextTheme}-${language}-${name}`, true);
+    await section().getByRole('button', { name: draft, exact: true }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="membership-table"] tbody tr').length === 10);
+    assert.deepEqual(mbl.reads, ['ALL:first', 'ALL:ALL-page-2', 'DRAFT:first']);
+    assert.equal(await section().getByTestId('membership-counts').count(), 0);
+    await ctx.close();
+  });
+}
+await check('Memberships: a cursor the API refuses reads the list again from the start, once', async () => {
+  resetMemberships();
+  const { ctx, page, section } = await membershipsPage({ width: 1440, height: 900 });
+  await section().getByTestId('membership-table').waitFor();
+  mbl.step = 'cursor';
+  await section().getByRole('button', { name: 'Show more' }).click();
+  await section().getByText('The list changed while it was being read, so it was read again from the start.').waitFor();
+  assert.deepEqual(mbl.reads, ['ALL:first', 'ALL:ALL-page-2', 'ALL:first']);
+  assert.equal(await page.locator('[data-testid="membership-table"] tbody tr').count(), 50, 'nothing from the earlier pages is kept');
+  await ctx.close();
+});
+await check('Memberships: denied access says so and shows nobody; leaving the page hides names at once', async () => {
+  resetMemberships({ denied: true });
+  const denied = await membershipsPage({ width: 1440, height: 900 });
+  await denied.section().getByText(/does not include memberships/).waitFor();
+  assert.ok(!(await denied.section().innerText()).includes('Member0'));
+  assert.equal(await denied.section().locator('form').count(), 0);
+  await denied.ctx.close();
+  resetMemberships();
+  const { ctx, page, section } = await membershipsPage({ width: 1440, height: 900 });
+  await section().getByTestId('membership-table').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Member00'));
+  await ctx.close();
+});
+await check('Memberships: a late sign-in answer to a read retired by a filter change does not end the session; a current one does', async () => {
+  resetMemberships();
+  const { ctx, page, section } = await membershipsPage({ width: 1440, height: 900 });
+  await section().getByTestId('membership-table').waitFor();
+  await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+  mbl.gate = new Promise((done) => { mbl.release = done; }); mbl.step = 'session';
+  await section().getByRole('button', { name: 'Show more' }).click();
+  for (let i = 0; i < 40 && mbl.gate; i++) await new Promise((done) => setTimeout(done, 50));
+  assert.equal(mbl.gate, null, 'the gated read arrived');
+  await section().getByRole('button', { name: 'Frozen', exact: true }).click();
+  mbl.release();
+  await new Promise((done) => setTimeout(done, 800));
+  assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+  mbl.step = 'session';
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+  await ctx.close();
+});
 
 await browser.close();
 server.kill('SIGTERM');
