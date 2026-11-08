@@ -24,6 +24,10 @@ export const HQ_GROWTH = [
   { path: '/hq/growth/rewards', title: 'Reward Management', icon: 'gift' },
   { path: '/hq/growth/founder-campaigns', title: 'Founder Campaigns', icon: 'target' },
 ] as const;
+export const HQ_SCHOOLS = [
+  { path: '/hq/schools', title: 'School Directory', icon: 'school' },
+  { path: '/hq/schools/access', title: 'School Access', icon: 'check' },
+] as const;
 export const HQ_REVENUE = [
   { path: '/hq/revenue', title: 'Subscriptions', icon: 'chart' },
   { path: '/hq/revenue/invoices', title: 'Invoices', icon: 'database' },
@@ -45,9 +49,10 @@ export const HQ_NAV = [
   { path: '/hq/support', title: 'Support', icon: 'support' },
 ] as const;
 type HqNavLink = { readonly path: string; readonly title: string; readonly icon: string };
-export type HqNavGroup = { readonly key: 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };
+export type HqNavGroup = { readonly key: 'schools' | 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };
 /** Desktop rail and mobile drawer share this one structure. */
 export const HQ_NAV_GROUPS: Readonly<Record<string, HqNavGroup>> = {
+  '/hq/schools': { key: 'schools', title: 'Schools', icon: 'school', children: HQ_SCHOOLS },
   '/hq/revenue': { key: 'revenue', title: 'Revenue', icon: 'chart', children: HQ_REVENUE },
   '/hq/executives': { key: 'ai', title: 'AI', icon: 'team', children: HQ_AI },
   '/hq/growth': { key: 'growth', title: 'Growth & Referrals', icon: 'growth', overview: { path: '/hq/growth', title: 'Growth overview', icon: 'growth' }, children: HQ_GROWTH },
@@ -75,7 +80,7 @@ export function hqPageLabel(path: string): string {
   if (/^\/hq\/revenue\/invoices\/[0-9a-f-]{36}$/i.test(path)) return 'Invoice detail';
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
   if (path === '/hq/revenue') return 'Revenue';
-  const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV].find((item) => item.path === path);
+  const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
   if (fixed) return fixed.title;
   const executive = HQ_EXECUTIVES.find((entry) => path === `/hq/executives/${entry.executiveKey}`);
   return executive ? `${executive.displayName} workspace` : 'HQ workspace';

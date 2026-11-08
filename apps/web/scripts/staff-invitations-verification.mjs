@@ -178,6 +178,18 @@ try {
       await status.filter({ hasText: t(language, acceptance ? 'READY' : 'IDLE') }).waitFor();
     }
   }
+  // Before typing the school selectors: the page is in front, any stray-blur concealment is restored, and the
+  // selector inputs are rendered, unhidden and enabled. A loaded CI runner can drop window focus between steps.
+  async function scopeEntry(page, language) {
+    for (let attempt = 0; ; attempt++) {
+      await foreground(page, language);
+      try {
+        await page.waitForFunction(() => { const el = document.querySelector('[data-testid="staff-school"]');
+          return !!el && !el.closest('[hidden]') && !el.closest('fieldset')?.disabled; }, null, { timeout: 15000 });
+        return;
+      } catch (error) { if (attempt >= 1) throw error; }
+    }
+  }
   for (const language of ['en', 'ko', 'es']) for (const mode of ['modern', 'classic', 'big']) for (const width of [390, 834, 1440]) {
     const school = matrices[language], context = await browser.newContext({ viewport: { width, height: 1000 }, serviceWorkers: 'block' });
     // SSR exposes the empty selector markup before React installs its effects.
@@ -223,6 +235,7 @@ try {
       pass('mounted blur before blank or partial selectors conceals controls; explicit same-identity restoration opens only IDLE selector entry without school reads or commands');
       browserDiagnostic.case = 'matrix-selector-entry';
     }
+    await scopeEntry(page, language);
     await page.getByTestId('staff-org').fill(school.organizationId); await page.getByTestId('staff-school').fill(school.schoolId);
     await page.getByRole('button', { name: t(language, 'verify'), exact: true }).click(); await page.getByTestId('staff-account-status').filter({ hasText: t(language, 'READY') }).waitFor();
     await page.getByRole('button', { name: t(language, 'loadRoles'), exact: true }).click(); await page.getByTestId('staff-role-id').waitFor(); assert.equal(await page.getByTestId('staff-role-id').inputValue(), '');
@@ -290,7 +303,7 @@ try {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     const setActor = who => context.addCookies([{ name: HON_SESSION_COOKIE, value: cookie(who).split('=')[1], url: origin, httpOnly: true, sameSite: 'Lax' }]);
     await setActor(A.who); await context.route('**/*', async route => { const u = new URL(route.request().url()); if (u.origin === origin) return route.continue(); await route.abort(); assert(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].includes(u.origin)); });
-    const page = await context.newPage(); activeBrowserPage = page; browserDiagnostic = { case: 'silent-session-switch', language: 'en', mode: 'modern', width: 1280 }; await page.goto(origin + '/staff/team/invitations'); await foreground(page, 'en');
+    const page = await context.newPage(); activeBrowserPage = page; browserDiagnostic = { case: 'silent-session-switch', language: 'en', mode: 'modern', width: 1280 }; await page.goto(origin + '/staff/team/invitations'); await scopeEntry(page, 'en');
     await page.getByTestId('staff-org').fill(A.organizationId); await page.getByTestId('staff-school').fill(A.schoolId); await page.getByRole('button', { name: t('en', 'verify'), exact: true }).click();
     await page.getByRole('button', { name: t('en', 'loadRoles'), exact: true }).click(); await page.getByTestId('staff-role-id').waitFor(); assert.equal(await page.getByTestId('staff-role-id').inputValue(), '');
     await page.getByTestId('staff-role-id').selectOption(A.targetRole); await page.getByRole('button', { name: t('en', 'loadRole'), exact: true }).click(); await page.locator('strong').filter({ hasText: /^Front desk$/ }).waitFor();
@@ -321,7 +334,9 @@ try {
 } catch (error) {
   if (activeBrowserPage && browserDiagnostic) {
     const status = await activeBrowserPage.getByTestId('staff-account-status').textContent().catch(() => null);
-    const evidence = { ...browserDiagnostic, status: typeof status === 'string' ? status.slice(0, 400) : 'UNAVAILABLE' };
+    const dom = await activeBrowserPage.evaluate(() => { const area = document.querySelector('[data-testid="staff-account-private"]'), el = document.querySelector('[data-testid="staff-school"]');
+      return { privateHidden: area ? area.hidden : null, selectorPresent: !!el, selectorDisabled: el ? !!el.closest('fieldset')?.disabled : null, hasFocus: document.hasFocus(), visibility: document.visibilityState }; }).catch(() => null);
+    const evidence = { ...browserDiagnostic, status: typeof status === 'string' ? status.slice(0, 400) : 'UNAVAILABLE', dom };
     console.error('STAFF FRONTEND BROWSER FAILURE ' + JSON.stringify(evidence));
     await writeFile(join(results, 'staff-browser-failure.json'), JSON.stringify(evidence, null, 2) + '\n').catch(() => {});
   }
