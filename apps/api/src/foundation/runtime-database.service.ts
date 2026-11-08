@@ -148,6 +148,11 @@ const SAAS_BILLING_CALLS = {
   reserveCreativeCredits: { sql: 'SELECT hon.reserve_saas_creative_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   settleCreativeCredits: { sql: 'SELECT hon.settle_saas_creative_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   createCreativeTopupPurchase: { sql: 'SELECT hon.create_saas_creative_topup_purchase($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // CS1 (0216, proposed): Creative Studio generations on the school's creative wallet (no provider is called by the database).
+  createCreativeGeneration: { sql: 'SELECT hon.create_creative_generation($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  recordCreativeGenerationResult: { sql: 'SELECT hon.record_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  readCreativeGenerations: { sql: 'SELECT hon.read_creative_generations($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeGeneration: { sql: 'SELECT hon.read_creative_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
@@ -1231,6 +1236,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  /** B-CRM-1a person record: the subject is the verified session subject; the database decides school authority. */
+  async callSchoolPersonRecord(operation: 'read'|'update'|'birthDate', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_school_person($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      update: {sql: 'SELECT hon.update_school_person($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      birthDate: {sql: 'SELECT hon.update_school_student_birth_date($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

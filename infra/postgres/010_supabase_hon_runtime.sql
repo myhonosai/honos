@@ -2148,6 +2148,25 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
   END IF;
 END $$;
 
+-- CS1 0216 (proposed) Creative Studio generations on the CW1 school wallet: private deny-all tables, internal helpers stay
+-- private (the CW1 block above revokes every creative function), four fixed runtime entry points.
+DO $$ DECLARE t text; r text; c text; BEGIN
+  IF to_regprocedure('hon.create_creative_generation(text,uuid,jsonb,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply CS1 migration 0216 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['creative_generations','creative_generation_assets'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_creative_generation(text,uuid,jsonb,jsonb,uuid,uuid,uuid), hon.record_creative_generation_result(text,uuid,jsonb),
+      hon.read_creative_generations(text,uuid), hon.read_creative_generation(text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0204 (provisional) school staff invitations: private custody tables, internal helpers, three fixed runtime entry points.
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_staff_invitations','school_staff_account_events'] LOOP
@@ -2236,7 +2255,36 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
--- B-HQ-1 0219 HQ access overview: the HQ read is the only runtime boundary; its two helpers stay internal.
+-- B-CRM-1a 0217 (proposed) person record update: one read and one command are the only runtime entry points;
+-- the runtime role still has no UPDATE on hon.people.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['school_person_actor(text,uuid,boolean)','school_person_json(uuid,text)','read_school_person(text,uuid,uuid)','update_school_person(text,jsonb,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_person(text,uuid,uuid),hon.update_school_person(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
+-- B-CRM-1b 0218 (proposed) student birth date + CRM enrollment identity corrections: the birth date command is the
+-- only new runtime entry point; helpers, the corrections table and the person command receipts stay private.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['crm_guardian_child_current_identity(uuid,uuid,uuid)','record_crm_guardian_child_identity_correction(uuid,uuid,uuid,uuid,uuid,text,text,date)',
+    'guard_school_person_command_receipt()','school_person_is_owner(uuid,uuid)','update_school_student_birth_date(text,jsonb,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.crm_guardian_child_identity_corrections FROM '||quote_ident(r);
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_person_command_receipts FROM '||quote_ident(r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.update_school_student_birth_date(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
+-- B-HQ-1 0219 (proposed) HQ access overview: the HQ read is the only runtime boundary; its three helpers stay internal.
 DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['saas_exception_policy_ready()','saas_access_overview_facts(uuid,timestamptz)','saas_access_overview_row(uuid,boolean,timestamptz)',
     'read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer)'] LOOP
