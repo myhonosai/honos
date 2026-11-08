@@ -33,6 +33,10 @@
       "title": "HON HQ | School access"
     },
     {
+      "path": "/hq/schools/access/policy",
+      "title": "HON HQ | Exception policy"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },

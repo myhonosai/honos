@@ -7,7 +7,7 @@ const en = {
   ownerOnly: 'You can view access. Only the HQ owner can grant or revoke an exception.',
   paidOn: 'Paid access program: on.', paidOff: 'Paid access program: off. No school pays through HON OS yet.',
   policyReady: 'Exception policy approved: up to {days} days per exception, starting within 30 days.',
-  policyMissing: 'The exception policy is not approved yet, so no exception can be granted. Approving it is not on this screen yet.',
+  policyMissing: 'The exception policy is not approved yet, so no exception can be granted. The HQ owner decides it on the Exception policy page.',
   AWAITING_FIRST_PAYMENT: 'Awaiting first payment', EXCEPTION_IN_EFFECT: 'Exception in effect', EXCEPTION_SCHEDULED: 'Exception scheduled',
   PAID_ACCESS: 'Paid access', PROVISIONED_ACCESS: 'Provisioned access', NO_ACCESS: 'No access',
   schools: 'Schools ({n})', moreSchools: 'and {n} more', plan: 'Plan', planNone: 'No entitlement', until: 'until {date}', noEnd: 'no end date',
@@ -31,7 +31,7 @@ const en = {
   refused: 'This was refused: {reason}. Nothing was granted or revoked.', windowInvalid: 'the start must be within 30 days and the end after it',
   tooLong: 'the window is longer than the policy allows', policyRefused: 'no approved access exception policy is in effect', notAllowed: 'Only the HQ owner can do this. Nothing was granted or revoked.',
   invalid: 'This was not accepted. Check the details and try again.', localInvalid: 'Choose a school, a purpose, a start, a number of days and a reason of 10 to 500 characters.',
-  localInvalidRevoke: 'Give a reason of 10 to 500 characters.', summary: 'Organizations by access', total: '{n} organizations',
+  localInvalidRevoke: 'Give a reason of 10 to 500 characters.', policyLink: 'Exception policy', summary: 'Organizations by access', total: '{n} organizations',
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
@@ -42,7 +42,7 @@ const ko: Record<Key, string> = {
   ownerOnly: '접근 현황은 볼 수 있습니다. 예외 부여와 취소는 HQ 소유자만 할 수 있습니다.',
   paidOn: '유료 접근 프로그램: 켜짐.', paidOff: '유료 접근 프로그램: 꺼짐. 아직 HON OS로 결제하는 도장은 없습니다.',
   policyReady: '예외 정책 승인됨: 예외당 최대 {days}일, 30일 이내 시작.',
-  policyMissing: '예외 정책이 아직 승인되지 않아 예외를 부여할 수 없습니다. 정책 승인은 아직 이 화면에 없습니다.',
+  policyMissing: '예외 정책이 아직 승인되지 않아 예외를 부여할 수 없습니다. HQ 소유자가 예외 정책 페이지에서 결정합니다.',
   AWAITING_FIRST_PAYMENT: '첫 결제 대기', EXCEPTION_IN_EFFECT: '예외 적용 중', EXCEPTION_SCHEDULED: '예외 예정',
   PAID_ACCESS: '유료 접근', PROVISIONED_ACCESS: '제공된 접근', NO_ACCESS: '접근 없음',
   schools: '도장 {n}곳', moreSchools: '외 {n}곳', plan: '플랜', planNone: '이용 권한 없음', until: '{date}까지', noEnd: '종료일 없음',
@@ -66,7 +66,7 @@ const ko: Record<Key, string> = {
   refused: '거부됨: {reason}. 부여하거나 취소된 것은 없습니다.', windowInvalid: '시작은 30일 이내, 종료는 시작 이후여야 함',
   tooLong: '기간이 정책 한도보다 김', policyRefused: '승인된 접근 예외 정책이 시행 중이 아님', notAllowed: 'HQ 소유자만 할 수 있습니다. 부여하거나 취소된 것은 없습니다.',
   invalid: '받아들여지지 않았습니다. 세부 정보를 확인하고 다시 시도하세요.', localInvalid: '도장, 목적, 시작, 일수, 10~500자의 사유를 입력하세요.',
-  localInvalidRevoke: '10~500자의 사유를 입력하세요.', summary: '접근 상태별 조직', total: '조직 {n}곳',
+  localInvalidRevoke: '10~500자의 사유를 입력하세요.', policyLink: '예외 정책', summary: '접근 상태별 조직', total: '조직 {n}곳',
 };
 const es: Record<Key, string> = {
   title: 'Acceso de escuelas', intro: 'Cada organización cliente y si sus escuelas pueden usar HON OS ahora mismo. Las excepciones dan a una escuela acceso gratuito y limitado en el tiempo para pruebas, una demostración o un piloto aprobado. Nunca incluyen créditos de IA ni cobran a nadie.',
@@ -76,7 +76,7 @@ const es: Record<Key, string> = {
   ownerOnly: 'Puedes ver el acceso. Solo el dueño de HQ puede otorgar o revocar una excepción.',
   paidOn: 'Programa de acceso pagado: activo.', paidOff: 'Programa de acceso pagado: inactivo. Ninguna escuela paga todavía a través de HON OS.',
   policyReady: 'Política de excepciones aprobada: hasta {days} días por excepción, con inicio en 30 días como máximo.',
-  policyMissing: 'La política de excepciones aún no está aprobada, así que no se puede otorgar ninguna. Aprobarla aún no está en esta pantalla.',
+  policyMissing: 'La política de excepciones aún no está aprobada, así que no se puede otorgar ninguna. El propietario de HQ la decide en la página Política de excepciones.',
   AWAITING_FIRST_PAYMENT: 'Esperando el primer pago', EXCEPTION_IN_EFFECT: 'Excepción vigente', EXCEPTION_SCHEDULED: 'Excepción programada',
   PAID_ACCESS: 'Acceso pagado', PROVISIONED_ACCESS: 'Acceso asignado', NO_ACCESS: 'Sin acceso',
   schools: 'Escuelas ({n})', moreSchools: 'y {n} más', plan: 'Plan', planNone: 'Sin derecho de uso', until: 'hasta {date}', noEnd: 'sin fecha de fin',
@@ -100,7 +100,7 @@ const es: Record<Key, string> = {
   refused: 'Se rechazó: {reason}. No se otorgó ni revocó nada.', windowInvalid: 'el inicio debe ser en 30 días como máximo y el fin posterior',
   tooLong: 'el periodo supera lo que permite la política', policyRefused: 'no hay una política de excepciones de acceso aprobada vigente', notAllowed: 'Solo el dueño de HQ puede hacer esto. No se otorgó ni revocó nada.',
   invalid: 'No se aceptó. Revisa los datos e inténtalo de nuevo.', localInvalid: 'Elige una escuela, un propósito, un inicio, un número de días y un motivo de 10 a 500 caracteres.',
-  localInvalidRevoke: 'Indica un motivo de 10 a 500 caracteres.', summary: 'Organizaciones por acceso', total: '{n} organizaciones',
+  localInvalidRevoke: 'Indica un motivo de 10 a 500 caracteres.', policyLink: 'Política de excepciones', summary: 'Organizaciones por acceso', total: '{n} organizaciones',
 };
 export type AccessKey = Key;
 export function accessText(language: string, key: Key, vars: Record<string, string> = {}): string {

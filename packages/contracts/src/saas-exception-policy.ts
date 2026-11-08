@@ -17,6 +17,10 @@ export interface SaasExceptionPolicyView {
   scope: 'ACCESS_EXCEPTIONS_ONLY'; current: SaasExceptionPolicyDecision | null;
   effectiveStatus: 'ABSENT' | 'PROPOSED' | 'ACTIVE' | 'SCHEDULED' | 'EXPIRED' | 'WITHDRAWN' | 'REVOKED' | 'SUPERSEDED';
   history: SaasExceptionPolicyDecision[]; historyLimit: 100; asOf: string; termsStatus: 'PROPOSED';
+  /** The current access terms (0222): a new PROPOSED or APPROVED decision must cite this version and stay within its maximum. */
+  terms: { policyVersion: number; exceptionMaxDays: number; exceptionAuthority: 'HQ_OWNER' };
+  /** Whether this reader is the HQ owner (0222). Advisory only: the decision command checks the owner again. */
+  viewer: { canDecide: boolean };
   paidAccessProgram: 'INACTIVE' | 'ACTIVE'; aiCreditProgram: 'INACTIVE' | 'ACTIVE';
 }
 const reason = (v: unknown) => typeof v === 'string' && v === v.trim() && v.length >= 10 && v.length <= 500;
@@ -45,7 +49,11 @@ export function validateSaasExceptionPolicyReceipt(value: unknown): SaasExceptio
 }
 export function validateSaasExceptionPolicyView(value: unknown): SaasExceptionPolicyView {
   const r = record(value, drift);
-  keys(r, ['scope','current','effectiveStatus','history','historyLimit','asOf','termsStatus','paidAccessProgram','aiCreditProgram'], drift);
+  keys(r, ['scope','current','effectiveStatus','history','historyLimit','asOf','termsStatus','terms','viewer','paidAccessProgram','aiCreditProgram'], drift);
+  const terms = record(r.terms, drift), viewer = record(r.viewer, drift);
+  keys(terms, ['policyVersion','exceptionMaxDays','exceptionAuthority'], drift); keys(viewer, ['canDecide'], drift);
+  if (!int(terms.policyVersion, 1, 999_999) || !int(terms.exceptionMaxDays, 1, 90) || terms.exceptionAuthority !== 'HQ_OWNER'
+    || typeof viewer.canDecide !== 'boolean') drift();
   if (r.scope !== 'ACCESS_EXCEPTIONS_ONLY' || r.termsStatus !== 'PROPOSED' || r.historyLimit !== 100 || !timestamp(r.asOf)
     || !['INACTIVE','ACTIVE'].includes(r.paidAccessProgram as string) || !['INACTIVE','ACTIVE'].includes(r.aiCreditProgram as string)
     || !Array.isArray(r.history) || r.history.length > 100) drift();
@@ -55,9 +63,11 @@ export function validateSaasExceptionPolicyView(value: unknown): SaasExceptionPo
   else {
     const p = validateSaasExceptionPolicyDecision(r.current);
     if (!rows.length || Object.keys(p).some(k => p[k as keyof SaasExceptionPolicyDecision] !== rows[0]![k as keyof SaasExceptionPolicyDecision])) drift();
-    const expected = p.status !== 'APPROVED' ? p.status : Date.parse(p.validFrom) > Date.parse(r.asOf as string) ? 'SCHEDULED'
+    if (rows.some(x => x.termsVersion > (terms.policyVersion as number))) drift();
+    const expected = p.status !== 'APPROVED' ? p.status : p.termsVersion !== terms.policyVersion ? 'SUPERSEDED'
+      : Date.parse(p.validFrom) > Date.parse(r.asOf as string) ? 'SCHEDULED'
       : Date.parse(p.validUntil) <= Date.parse(r.asOf as string) ? 'EXPIRED' : 'ACTIVE';
-    if (r.effectiveStatus !== expected && !(p.status === 'APPROVED' && r.effectiveStatus === 'SUPERSEDED')) drift();
+    if (r.effectiveStatus !== expected) drift();
   }
   return r as unknown as SaasExceptionPolicyView;
 }
