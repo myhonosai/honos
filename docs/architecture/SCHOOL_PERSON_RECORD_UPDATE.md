@@ -188,8 +188,19 @@ editors. Clearing a birth date is not offered. Authority (and OWNER, when
 crossing) is decided again after the last write.
 
 Lock order: `hon.people` then `hon.student_profiles` in ROW EXCLUSIVE before the
-idempotency insert, so it serializes with CRM flows (SHARE ROW EXCLUSIVE) and
-activation (SHARE). Audit `people.student.birth_date.update` holds prior/next
+receipt reservation, so it serializes with CRM flows (SHARE ROW EXCLUSIVE) and
+activation (SHARE).
+
+Exact-key receipts (both person commands, Manus P2-165-3) live in
+`hon.school_person_command_receipts` (uuid key, per command; private, forced RLS,
+complete-once, never changed or deleted). No other command writes that table, so
+a free-text key that another command (for example activation, which reserves in
+`hon.idempotency_records` before its SHARE locks) holds uncommitted can never
+make a person command wait while it holds the people/student locks. A completed
+0217 edit receipt (`hon.idempotency_records`, `people.update:<key>`) is still
+replayed exactly as saved by a plain read of committed rows (Manus P2-165-2); its
+`student` object has no `version`, and the update-result validator accepts that
+shape only for replays (a fresh read or result always carries the version). Audit `people.student.birth_date.update` holds prior/next
 date, reason, `minorToAdult` and `enrollmentCorrected`; outbox
 `people.student.updated` holds ids, version and `changedFields` only, no date.
 
@@ -199,8 +210,12 @@ date, reason, `minorToAdult` and `enrollmentCorrected`; outbox
   truncate refused), forced RLS, no runtime access. One row per correction:
   version, corrected names and birth date, prior values, actor, request id.
 - Both governed commands (`update_school_person`, `update_school_student_birth_date`)
-  record a correction after their write when the person is an enrolled child
-  and the live identity differs from the held one. The corrected name must pass
+  record a correction after their write when the person is an enrolled child.
+  Field mask (Manus P1-165-1): the correction is the held identity with exactly
+  the fields that command changed (name fields, or the birth date) replaced. A
+  difference made outside the commands is never adopted, so it keeps the
+  enrollment in `NEEDS_STAFF_REVIEW` (for example a name-only edit never stamps
+  an out-of-band adult birth date into the enrollment). The corrected name must pass
   the 0176 snapshot rules, else 400 `PERSON_INPUT_INVALID` and nothing commits.
 - `crm_guardian_child_child_relation` compares live identity with the latest
   correction (else the snapshot); the family read shows the held display name.
@@ -219,10 +234,16 @@ date, reason, `minorToAdult` and `enrollmentCorrected`; outbox
 
 ### Tests (0218)
 
-- Person proof groups 12–14: posture, delegated correction with audit/outbox/
-  replay/refusals, minor-to-adult OWNER rule incl. an OWNER grant revoked while
-  the command waits on the student lock (nothing commits).
-- Guardian/child proof group 13: ungoverned drift still staff review, invalid
+- Person proof groups 12–17: posture; delegated correction with audit/outbox/
+  replay/refusals; minor-to-adult OWNER rule decided again after the update (a
+  fixture barrier at the audit insert, OWNER revoked or expired while an
+  independent editor grant stays: nothing commits; an ablation without the final
+  predicate commits); a 0217 receipt replays with HTTP 200 and no effects; an
+  uncommitted activation-style reservation of the old key texts never blocks
+  either command; receipts immutable.
+- Guardian/child proof group 13: both drift compositions (out-of-band adult
+  birth date then a name edit; out-of-band name then a birth date edit) adopt
+  only the commanded field and stay in review; ungoverned drift still staff review, invalid
   corrected name refused, governed name and birth date corrections recorded
   (snapshot unchanged), display name follows the correction, DRAFT created
   against the corrected identity, corrections immutable and private. Posture

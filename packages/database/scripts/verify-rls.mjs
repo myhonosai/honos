@@ -135,6 +135,7 @@ const expectedRlsTables = [
   'crm_guardian_child_payer_designations',
   'crm_guardian_child_membership_draft_sources',
   'crm_guardian_child_identity_corrections',
+  'school_person_command_receipts',
   'membership_activation_decisions',
   'membership_effective_periods',
   'membership_activation_follow_ups',

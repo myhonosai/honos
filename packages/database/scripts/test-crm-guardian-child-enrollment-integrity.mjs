@@ -507,13 +507,57 @@ try {
   const correctedDraft = await services.gc.draftMembershipFromPlan(D.context(), drafter(corrected.student, monthly2));
   assert.equal(correctedDraft.receipt.state, 'DRAFT');
   assert.equal((await childOf(corrected.lead)).workflowState, 'CURRENT_DRAFT');
+  // Manus P1-165-1: a governed command adopts only the fields it changed. Drift made outside the commands (here a
+  // minor-to-adult birth date, then a name) is never stamped into a correction and keeps the enrollment in review.
+  const childRow = async (student) => (await sql('SELECT p.id,p.version,p.given_name,p.family_name,p.email::text email,p.phone_e164,s.version sv,s.birth_date::text b FROM hon.people p JOIN hon.student_profiles s ON s.person_id=p.id WHERE s.id=$1', [student]))[0];
+  const effectsOf = async (personId, student) => (await sql(`SELECT
+      (SELECT count(*)::int FROM hon.crm_guardian_child_identity_corrections WHERE student_profile_id=$2) corrections,
+      (SELECT count(*)::int FROM hon.audit_events WHERE entity_id IN ($1,$2)) audits,
+      (SELECT count(*)::int FROM hon.outbox_events WHERE aggregate_id IN ($1,$2)) outbox,
+      (SELECT count(*)::int FROM hon.school_person_command_receipts WHERE principal_id=$3) receipts`, [personId, student, E.principal]))[0];
+  {
+    const fam = await gcFamily({ designate: true });
+    const before = await childRow(fam.student), held = (await sql('SELECT * FROM hon.crm_guardian_child_enrolled_children WHERE student_profile_id=$1', [fam.student]))[0];
+    const adult = `${new Date().getUTCFullYear() - 30}-01-15`;
+    await sql('UPDATE hon.student_profiles SET birth_date=$1 WHERE id=$2', [adult, fam.student]);
+    assert.equal((await childOf(fam.lead)).workflowState, 'NEEDS_STAFF_REVIEW');
+    const e0 = await effectsOf(before.id, fam.student), given = `Ren${tag()}`;
+    const r = (await restricted.query('SELECT hon.update_school_person($1,$2::jsonb,$3::uuid) data', [E.subject,
+      JSON.stringify({ schoolId: ids.school, personId: before.id, expectedVersion: before.version, givenName: given, familyName: before.family_name, email: before.email, phoneE164: before.phone_e164 }), randomUUID()])).rows[0].data;
+    assert.deepEqual(r.changedFields, ['givenName']);
+    const rows = await sql('SELECT version,given_name,family_name,birth_date::text b,prior_birth_date::text pb FROM hon.crm_guardian_child_identity_corrections WHERE student_profile_id=$1', [fam.student]);
+    assert.deepEqual(rows, [{ version: 1, given_name: given, family_name: held.family_name, b: before.b, pb: before.b }]);
+    assert.equal(rows[0].b, rows[0].pb, 'the out-of-band adult birth date was not adopted');
+    assert.notEqual(rows[0].b, adult);
+    assert.deepEqual(await effectsOf(before.id, fam.student), { corrections: e0.corrections + 1, audits: e0.audits + 1, outbox: e0.outbox + 1, receipts: e0.receipts + 1 });
+    assert.equal((await childOf(fam.lead)).workflowState, 'NEEDS_STAFF_REVIEW', 'unrelated birth date drift stays review-required');
+    await sql('UPDATE hon.student_profiles SET birth_date=$1 WHERE id=$2', [before.b, fam.student]);
+    assert.deepEqual(await childOf(fam.lead), { studentProfileId: fam.student, displayName: `${given} ${held.family_name}`, origin: 'CRM_REGISTRATION', workflowState: 'READY_FOR_DRAFT' });
+  }
+  {
+    const fam = await gcFamily({ designate: true });
+    const before = await childRow(fam.student), held = (await sql('SELECT * FROM hon.crm_guardian_child_enrolled_children WHERE student_profile_id=$1', [fam.student]))[0];
+    await sql('UPDATE hon.people SET given_name=$1 WHERE id=$2', [`${held.given_name}z`, before.id]);
+    assert.equal((await childOf(fam.lead)).workflowState, 'NEEDS_STAFF_REVIEW');
+    const e0 = await effectsOf(before.id, fam.student);
+    const r = (await restricted.query('SELECT hon.update_school_student_birth_date($1,$2::jsonb,$3::uuid) data', [E.subject,
+      JSON.stringify({ schoolId: ids.school, personId: before.id, expectedVersion: before.sv, birthDate: '2016-06-06', reason: 'Clinic record' }), randomUUID()])).rows[0].data;
+    assert.equal(r.enrollmentCorrected, true);
+    const rows = await sql('SELECT version,given_name,family_name,birth_date::text b FROM hon.crm_guardian_child_identity_corrections WHERE student_profile_id=$1', [fam.student]);
+    assert.deepEqual(rows, [{ version: 1, given_name: held.given_name, family_name: held.family_name, b: '2016-06-06' }], 'the out-of-band name was not adopted');
+    assert.deepEqual(await effectsOf(before.id, fam.student), { corrections: e0.corrections + 1, audits: e0.audits + 1, outbox: e0.outbox + 1, receipts: e0.receipts + 1 });
+    assert.equal((await childOf(fam.lead)).workflowState, 'NEEDS_STAFF_REVIEW', 'unrelated name drift stays review-required');
+    await sql('UPDATE hon.people SET given_name=$1 WHERE id=$2', [held.given_name, before.id]);
+    assert.equal((await childOf(fam.lead)).workflowState, 'READY_FOR_DRAFT');
+  }
   // Corrections are append-only below the functions, and private to the runtime.
   for (const statement of ['UPDATE hon.crm_guardian_child_identity_corrections SET given_name=given_name', 'DELETE FROM hon.crm_guardian_child_identity_corrections'])
     await assert.rejects(admin.query(statement), (e) => e.code === '42501', statement);
   await assert.rejects(restricted.query('SELECT 1 FROM hon.crm_guardian_child_identity_corrections LIMIT 1'), (e) => e.code === '42501');
-  // A non-enrolled person's edit records nothing.
-  assert.equal((await sql('SELECT count(*)::int n FROM hon.crm_guardian_child_identity_corrections WHERE student_profile_id<>$1', [corrected.student]))[0].n, preCorrections);
-  assertions += 16;
+  // Only the three enrolled children corrected above have corrections (none existed before this group).
+  assert.equal(preCorrections, 0);
+  assert.equal((await sql('SELECT count(DISTINCT student_profile_id)::int n FROM hon.crm_guardian_child_identity_corrections'))[0].n, 3);
+  assertions += 30;
 
   console.log(`PASS: Guardian/child CRM enrollment (${assertions} assertions): exact 0176 posture with four runtime entry points and private immutable tables; registration child snapshot (adult path untouched, no backfill); family recovery through every family and child state with creator vs other-staff DRAFT visibility; explicit payer designation only through the guardian's existing canonical account (ADDITIONAL accounts never selected, nothing inferred from lead contact); additional children with lead attribution, twin/duplicate/guardian review outcomes and a ten-child limit; one plan-bound DRAFT per child billed to the designated guardian with exact version binding; payer, plan, currency, school and adult refusals; permission, role, school, organization, identity, entitlement and forged-context refusals; drift and ambiguity as staff review; immutability; same-key, distinct-key, twin and per-child DRAFT races; zero schedule, invoice or payment effect; family-proof ablation detected; 0218 audited name and birth date corrections carried into the enrollment (snapshot unchanged, invalid names refused, ungoverned drift still staff review, DRAFT against the corrected identity, corrections immutable and private).`);
 } finally {

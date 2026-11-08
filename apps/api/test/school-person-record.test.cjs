@@ -22,6 +22,15 @@ test('closed person record and update result responses',()=>{
  assert.deepEqual(c.validatePersonRecord({...record,email:'Mia.Chen@Example.invalid',givenName:' legacy '}).email,'Mia.Chen@Example.invalid');
  assert.deepEqual(c.validatePersonRecordUpdateResult({person:record,changedFields:['familyName']}),{person:record,changedFields:['familyName']});
  for(const changedFields of [[],['birthDate'],['email','email'],'email'])assert.throws(()=>c.validatePersonRecordUpdateResult({person:record,changedFields}));
+ // A receipt saved by 0217 (student without version) is accepted as saved on an exact-key replay, nothing invented;
+ // a fresh read still requires the version, and a historical student object stays closed.
+ const legacy={...record,student:{birthDate:'2015-04-02',status:'ACTIVE'}};
+ const replayed=c.validatePersonRecordUpdateResult({person:legacy,changedFields:['givenName']});
+ assert.deepEqual(replayed,{person:legacy,changedFields:['givenName']});assert.equal(Object.hasOwn(replayed.person.student,'version'),false);
+ assert.throws(()=>c.validatePersonRecord(legacy),/PERSON_RESPONSE_INVALID/);
+ for(const student of [{birthDate:'2015-04-02',status:'ACTIVE',extra:1},{birthDate:'2015-04-02',status:'ACTIVE',version:0},{status:'ACTIVE'}])
+  assert.throws(()=>c.validatePersonRecordUpdateResult({person:{...record,student},changedFields:['givenName']}),/PERSON_RESPONSE_INVALID/);
+ assert.throws(()=>c.validateStudentBirthDateUpdateResult({person:legacy,changedFields:['birthDate'],enrollmentCorrected:false}),/PERSON_RESPONSE_INVALID/);
 });
 test('subject only from the session; body re-validated before SQL; response validated',async()=>{
  const calls=[];const svc=new SchoolPersonRecordService({callSchoolPersonRecord:async(op,args)=>{calls.push([op,args]);return op==='read'?record:{person:record,changedFields:['givenName']};}});

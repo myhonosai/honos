@@ -52,6 +52,47 @@ CREATE TRIGGER crm_guardian_child_identity_corrections_immutable BEFORE UPDATE O
 CREATE TRIGGER crm_guardian_child_identity_corrections_no_truncate BEFORE TRUNCATE ON hon.crm_guardian_child_identity_corrections
   FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_crm_guardian_child_enrollment_history();
 
+-- Exact-key receipts of the two person commands (Manus P2-165-3). Their own table and uuid keys, so no other
+-- command's free-text Idempotency-Key (for example activation, 0177, which reserves its key in hon.idempotency_records
+-- before taking the people/student SHARE locks) can ever occupy a person command's reservation while that command
+-- holds the people/student write locks. Only the two definers below write it, always after those locks. A receipt
+-- is reserved IN_PROGRESS and completed once with its response; it is never deleted or changed afterwards.
+CREATE TABLE hon.school_person_command_receipts (
+  organization_id uuid NOT NULL,
+  school_id uuid NOT NULL,
+  principal_id uuid NOT NULL REFERENCES hon.principals(id) ON DELETE RESTRICT,
+  command text NOT NULL CHECK (command IN ('people.update','people.birth_date')),
+  idempotency_key uuid NOT NULL,
+  request_fingerprint text NOT NULL CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'),
+  status text NOT NULL DEFAULT 'IN_PROGRESS' CHECK (status IN ('IN_PROGRESS','COMPLETED')),
+  response_body jsonb,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  completed_at timestamptz,
+  PRIMARY KEY (organization_id,school_id,principal_id,command,idempotency_key),
+  CHECK ((status='COMPLETED')=(response_body IS NOT NULL AND completed_at IS NOT NULL))
+);
+ALTER TABLE hon.school_person_command_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hon.school_person_command_receipts FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE hon.school_person_command_receipts FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.school_person_command_receipts FROM %I',r);
+  END LOOP;
+END $$;
+CREATE FUNCTION hon.guard_school_person_command_receipt() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
+BEGIN
+  IF TG_OP='UPDATE' AND OLD.status='IN_PROGRESS' AND NEW.status='COMPLETED'
+    AND (NEW.organization_id,NEW.school_id,NEW.principal_id,NEW.command,NEW.idempotency_key,NEW.request_fingerprint,NEW.created_at)
+      IS NOT DISTINCT FROM (OLD.organization_id,OLD.school_id,OLD.principal_id,OLD.command,OLD.idempotency_key,OLD.request_fingerprint,OLD.created_at) THEN
+    RETURN NEW; END IF;
+  RAISE EXCEPTION 'SCHOOL_PERSON_COMMAND_RECEIPT_IMMUTABLE' USING ERRCODE='42501';
+END $$;
+CREATE TRIGGER school_person_command_receipts_complete_once BEFORE UPDATE OR DELETE ON hon.school_person_command_receipts
+  FOR EACH ROW EXECUTE FUNCTION hon.guard_school_person_command_receipt();
+CREATE TRIGGER school_person_command_receipts_no_truncate BEFORE TRUNCATE ON hon.school_person_command_receipts
+  FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_school_person_command_receipt();
+
 -- The identity an enrolled child is held to: the latest correction, else the immutable 0176 snapshot.
 CREATE FUNCTION hon.crm_guardian_child_current_identity(p_student uuid,p_org uuid,p_school uuid)
 RETURNS TABLE(given_name text,family_name text,birth_date date)
@@ -67,30 +108,33 @@ $$;
 
 -- Called by the two governed edit commands after their write, inside their transaction (they hold the hon.people
 -- write lock, which every CRM guardian/child command and activation takes in SHARE or SHARE ROW EXCLUSIVE before
--- reading the child relation, so a correction and an enrollment step never interleave). When the live identity of an
--- enrolled child now differs from the identity it is held to, append the next correction. Returns whether one was made.
-CREATE FUNCTION hon.record_crm_guardian_child_identity_correction(p_person uuid,p_org uuid,p_school uuid,p_actor uuid,p_request uuid)
+-- reading the child relation, so a correction and an enrollment step never interleave).
+-- Field mask (Manus P1-165-1): the caller passes only the values it was authorized to change and did change
+-- (NULL = not changed by this command). The next correction is the held identity with exactly those fields replaced.
+-- Any other difference between the live record and the held identity (a change made outside these commands) is never
+-- adopted: it stays visible to the child relation, so the enrollment stays in staff review. Returns whether a
+-- correction was appended.
+CREATE FUNCTION hon.record_crm_guardian_child_identity_correction(p_person uuid,p_org uuid,p_school uuid,p_actor uuid,p_request uuid,
+  p_given text,p_family text,p_birth date)
 RETURNS boolean
 LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
-DECLARE e hon.crm_guardian_child_enrolled_children%ROWTYPE; held record; live record; n integer;
+DECLARE e hon.crm_guardian_child_enrolled_children%ROWTYPE; held record; v_given text; v_family text; v_birth date; n integer;
 BEGIN
+  IF p_given IS NULL AND p_family IS NULL AND p_birth IS NULL THEN RETURN false; END IF;
   SELECT * INTO e FROM hon.crm_guardian_child_enrolled_children x WHERE x.child_person_id=p_person AND x.organization_id=p_org AND x.school_id=p_school;
   IF NOT FOUND THEN RETURN false; END IF;
   SELECT * INTO held FROM hon.crm_guardian_child_current_identity(e.student_profile_id,p_org,p_school);
-  SELECT p.given_name,p.family_name,s.birth_date INTO live FROM hon.people p
-    JOIN hon.student_profiles s ON s.id=e.student_profile_id AND s.person_id=p.id AND s.organization_id=p_org AND s.school_id=p_school
-    WHERE p.id=p_person AND p.organization_id=p_org AND p.school_id=p_school;
-  IF NOT FOUND THEN RETURN false; END IF;
-  IF live.given_name=held.given_name AND live.family_name=held.family_name AND live.birth_date IS NOT DISTINCT FROM held.birth_date THEN RETURN false; END IF;
-  -- An enrolled child's identity keeps the 0176 rules (refused as invalid input rather than a generic constraint error).
-  IF live.birth_date IS NULL OR live.birth_date<date '1900-01-01'
-    OR length(live.given_name) NOT BETWEEN 1 AND 100 OR live.given_name ~ '[[:cntrl:]<>]' OR regexp_replace(live.given_name,'[^[:alnum:]]','','g')=''
-    OR length(live.family_name) NOT BETWEEN 1 AND 100 OR live.family_name ~ '[[:cntrl:]<>]' OR regexp_replace(live.family_name,'[^[:alnum:]]','','g')='' THEN
+  v_given:=coalesce(p_given,held.given_name); v_family:=coalesce(p_family,held.family_name); v_birth:=coalesce(p_birth,held.birth_date);
+  IF v_given=held.given_name AND v_family=held.family_name AND v_birth=held.birth_date THEN RETURN false; END IF;
+  -- A corrected name keeps the 0176 rules (refused as invalid input rather than a generic constraint error).
+  IF v_birth<date '1900-01-01'
+    OR length(v_given) NOT BETWEEN 1 AND 100 OR v_given ~ '[[:cntrl:]<>]' OR regexp_replace(v_given,'[^[:alnum:]]','','g')=''
+    OR length(v_family) NOT BETWEEN 1 AND 100 OR v_family ~ '[[:cntrl:]<>]' OR regexp_replace(v_family,'[^[:alnum:]]','','g')='' THEN
     RAISE EXCEPTION 'PERSON_INPUT_INVALID' USING ERRCODE='22023'; END IF;
   SELECT coalesce(max(c.version),0)+1 INTO n FROM hon.crm_guardian_child_identity_corrections c WHERE c.student_profile_id=e.student_profile_id;
   INSERT INTO hon.crm_guardian_child_identity_corrections(organization_id,school_id,student_profile_id,version,given_name,family_name,birth_date,
       prior_given_name,prior_family_name,prior_birth_date,actor_principal_id,request_id)
-    VALUES(p_org,p_school,e.student_profile_id,n,live.given_name,live.family_name,live.birth_date,
+    VALUES(p_org,p_school,e.student_profile_id,n,v_given,v_family,v_birth,
       held.given_name,held.family_name,held.birth_date,p_actor,p_request);
   RETURN true;
 END $$;
@@ -225,11 +269,15 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   FROM hon.people x WHERE x.id=p_person
 $$;
 
--- 0217 command, unchanged except: after a name change, carry it into an enrolled CRM child's enrollment (audited).
+-- 0217 command, unchanged except:
+--  * after a name change, carry exactly the changed name fields into an enrolled CRM child's enrollment (audited);
+--  * exact-key receipts live in hon.school_person_command_receipts (Manus P2-165-3). A receipt saved by 0217 under
+--    hon.idempotency_records 'people.update:<key>' is still replayed exactly as saved (Manus P2-165-2); that lookup is
+--    a plain read of committed rows, so it never waits on another transaction's reservation.
 CREATE OR REPLACE FUNCTION hon.update_school_person(p_subject text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; v_school uuid; v_org uuid; v_person uuid; v_version integer; fp text; prior hon.idempotency_records%ROWTYPE;
-  cur hon.people%ROWTYPE; nxt hon.people%ROWTYPE; v_given text; v_family text; v_email text; v_phone text;
+  rec hon.school_person_command_receipts%ROWTYPE; cur hon.people%ROWTYPE; nxt hon.people%ROWTYPE; v_given text; v_family text; v_email text; v_phone text;
   changed text[]:=ARRAY[]::text[]; v_consent text; before jsonb; result jsonb; v_request uuid:=gen_random_uuid(); corrected boolean:=false;
   uuid_re constant text:='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 BEGIN
@@ -253,21 +301,31 @@ BEGIN
   actor:=hon.school_person_actor(p_subject,v_school,true);
   IF actor IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
   -- Same table order as the CRM registration/DRAFT flows (0160-0176 lock hon.people before hon.idempotency_records in
-  -- SHARE ROW EXCLUSIVE): take the people write lock before the idempotency insert so the two can never deadlock.
+  -- SHARE ROW EXCLUSIVE): take the people write lock first. The receipt reservation that follows is in this command's
+  -- own table, which no other command touches.
   LOCK TABLE hon.people IN ROW EXCLUSIVE MODE;
   SELECT organization_id INTO v_org FROM hon.schools WHERE id=v_school;
   fp:=encode(sha256(convert_to('PERSON_UPDATE:'||jsonb_build_object('schoolId',v_school,'personId',v_person,'expectedVersion',v_version,
     'givenName',v_given,'familyName',v_family,'email',v_email,'phoneE164',v_phone)::text,'UTF8')),'hex');
-  INSERT INTO hon.idempotency_records(organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,expires_at)
-    VALUES(v_org,v_school,actor,'people.update:'||p_key::text,fp,'IN_PROGRESS',now()+interval '24 hours')
-    ON CONFLICT (organization_id,school_id,principal_id,idempotency_key) DO NOTHING;
-  IF NOT FOUND THEN
-    SELECT * INTO prior FROM hon.idempotency_records WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
-      AND idempotency_key='people.update:'||p_key::text FOR UPDATE;
+  -- A completed 0217 receipt for this key (same fingerprint formula) replays as saved.
+  SELECT * INTO prior FROM hon.idempotency_records WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
+    AND idempotency_key='people.update:'||p_key::text;
+  IF FOUND THEN
     IF prior.request_fingerprint<>fp THEN RAISE EXCEPTION 'PERSON_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
     IF prior.status<>'COMPLETED' OR prior.response_body IS NULL THEN RAISE EXCEPTION 'PERSON_BUSY' USING ERRCODE='55P03'; END IF;
     IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
     RETURN prior.response_body;
+  END IF;
+  INSERT INTO hon.school_person_command_receipts(organization_id,school_id,principal_id,command,idempotency_key,request_fingerprint)
+    VALUES(v_org,v_school,actor,'people.update',p_key,fp)
+    ON CONFLICT (organization_id,school_id,principal_id,command,idempotency_key) DO NOTHING;
+  IF NOT FOUND THEN
+    SELECT * INTO rec FROM hon.school_person_command_receipts WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
+      AND command='people.update' AND idempotency_key=p_key FOR UPDATE;
+    IF rec.request_fingerprint<>fp THEN RAISE EXCEPTION 'PERSON_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+    IF rec.status<>'COMPLETED' THEN RAISE EXCEPTION 'PERSON_BUSY' USING ERRCODE='55P03'; END IF;
+    IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
+    RETURN rec.response_body;
   END IF;
 
   -- Exact school only. NO KEY UPDATE: does not block family/student/consent inserts that hold KEY SHARE on the person.
@@ -304,7 +362,8 @@ BEGIN
   UPDATE hon.people SET given_name=v_given,family_name=v_family,email=CASE WHEN 'email'=ANY(changed) THEN v_email ELSE cur.email END,phone_e164=v_phone,version=cur.version+1,updated_at=clock_timestamp()
     WHERE id=v_person RETURNING * INTO nxt;
   IF 'givenName'=ANY(changed) OR 'familyName'=ANY(changed) THEN
-    corrected:=hon.record_crm_guardian_child_identity_correction(v_person,v_org,v_school,actor,v_request);
+    corrected:=hon.record_crm_guardian_child_identity_correction(v_person,v_org,v_school,actor,v_request,
+      CASE WHEN 'givenName'=ANY(changed) THEN nxt.given_name END,CASE WHEN 'familyName'=ANY(changed) THEN nxt.family_name END,NULL);
   END IF;
   INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id,occurred_at)
     VALUES(v_org,v_school,actor,'HUMAN_UI','people.update','PERSON',v_person,before,
@@ -316,8 +375,8 @@ BEGIN
     VALUES(gen_random_uuid(),v_org,v_school,'people.person.updated',1,'PERSON',v_person,nxt.version,v_request,v_request,
       jsonb_build_object('personId',v_person,'version',nxt.version,'changedFields',to_jsonb(changed)));
   result:=jsonb_build_object('person',hon.school_person_json(v_person,p_subject),'changedFields',to_jsonb(changed));
-  UPDATE hon.idempotency_records SET status='COMPLETED',response_status=200,response_body=result
-    WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor AND idempotency_key='people.update:'||p_key::text;
+  UPDATE hon.school_person_command_receipts SET status='COMPLETED',response_body=result,completed_at=clock_timestamp()
+    WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor AND command='people.update' AND idempotency_key=p_key;
   -- Decide authority after the last write: a grant revoked or expired, or paid access ended, while this command
   -- waited on a lock commits nothing.
   IF hon.school_person_actor(p_subject,v_school,true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -325,13 +384,13 @@ BEGIN
 END $$;
 
 -- Input: exactly schoolId, personId, expectedVersion (the student profile's version), birthDate (YYYY-MM-DD), reason.
--- Order: authority -> people then student_profiles write locks (CRM/activation order) -> idempotency reservation ->
+-- Order: authority -> people then student_profiles write locks (CRM/activation order) -> receipt reservation (own table) ->
 -- student row lock -> version -> unchanged -> date range -> minor-to-adult owner rule -> update -> enrollment correction ->
 -- audit -> outbox -> completion -> authority (and the owner rule) decided again.
 CREATE FUNCTION hon.update_school_student_birth_date(p_subject text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; v_school uuid; v_org uuid; v_person uuid; v_version integer; v_birth date; v_reason text; fp text;
-  prior hon.idempotency_records%ROWTYPE; sp hon.student_profiles%ROWTYPE; today date; tz text; crossing boolean:=false;
+  rec hon.school_person_command_receipts%ROWTYPE; sp hon.student_profiles%ROWTYPE; today date; tz text; crossing boolean:=false;
   corrected boolean; result jsonb; v_request uuid:=gen_random_uuid(); nxt_version integer;
   uuid_re constant text:='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 BEGIN
@@ -352,23 +411,24 @@ BEGIN
 
   actor:=hon.school_person_actor(p_subject,v_school,true);
   IF actor IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
-  -- people then student_profiles, before the idempotency insert: the CRM flows (0160-0176) and activation (0177) take
-  -- these two in this order before any later table.
+  -- people then student_profiles first: the CRM flows (0160-0176) and activation (0177) take these two in this order
+  -- before any later table. The receipt is reserved in this command's own table, never in hon.idempotency_records, so
+  -- an activation holding a reservation there can never make this command wait while it holds these locks.
   LOCK TABLE hon.people IN ROW EXCLUSIVE MODE;
   LOCK TABLE hon.student_profiles IN ROW EXCLUSIVE MODE;
   SELECT organization_id,timezone INTO v_org,tz FROM hon.schools WHERE id=v_school;
   fp:=encode(sha256(convert_to('STUDENT_BIRTH_DATE_UPDATE:'||jsonb_build_object('schoolId',v_school,'personId',v_person,'expectedVersion',v_version,
     'birthDate',to_char(v_birth,'YYYY-MM-DD'),'reason',v_reason)::text,'UTF8')),'hex');
-  INSERT INTO hon.idempotency_records(organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,expires_at)
-    VALUES(v_org,v_school,actor,'people.birth_date:'||p_key::text,fp,'IN_PROGRESS',now()+interval '24 hours')
-    ON CONFLICT (organization_id,school_id,principal_id,idempotency_key) DO NOTHING;
+  INSERT INTO hon.school_person_command_receipts(organization_id,school_id,principal_id,command,idempotency_key,request_fingerprint)
+    VALUES(v_org,v_school,actor,'people.birth_date',p_key,fp)
+    ON CONFLICT (organization_id,school_id,principal_id,command,idempotency_key) DO NOTHING;
   IF NOT FOUND THEN
-    SELECT * INTO prior FROM hon.idempotency_records WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
-      AND idempotency_key='people.birth_date:'||p_key::text FOR UPDATE;
-    IF prior.request_fingerprint<>fp THEN RAISE EXCEPTION 'PERSON_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
-    IF prior.status<>'COMPLETED' OR prior.response_body IS NULL THEN RAISE EXCEPTION 'PERSON_BUSY' USING ERRCODE='55P03'; END IF;
+    SELECT * INTO rec FROM hon.school_person_command_receipts WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
+      AND command='people.birth_date' AND idempotency_key=p_key FOR UPDATE;
+    IF rec.request_fingerprint<>fp THEN RAISE EXCEPTION 'PERSON_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+    IF rec.status<>'COMPLETED' THEN RAISE EXCEPTION 'PERSON_BUSY' USING ERRCODE='55P03'; END IF;
     IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
-    RETURN prior.response_body;
+    RETURN rec.response_body;
   END IF;
 
   -- Exact school; a person without a student profile here is unavailable for this command.
@@ -386,7 +446,7 @@ BEGIN
 
   UPDATE hon.student_profiles SET birth_date=v_birth,version=sp.version+1,updated_at=clock_timestamp() WHERE id=sp.id
     RETURNING version INTO nxt_version;
-  corrected:=hon.record_crm_guardian_child_identity_correction(v_person,v_org,v_school,actor,v_request);
+  corrected:=hon.record_crm_guardian_child_identity_correction(v_person,v_org,v_school,actor,v_request,NULL,NULL,v_birth);
   INSERT INTO hon.audit_events(organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id,occurred_at)
     VALUES(v_org,v_school,actor,'HUMAN_UI','people.student.birth_date.update','STUDENT_PROFILE',sp.id,
       jsonb_build_object('personId',v_person,'birthDate',to_char(sp.birth_date,'YYYY-MM-DD'),'version',sp.version),
@@ -398,8 +458,8 @@ BEGIN
     VALUES(gen_random_uuid(),v_org,v_school,'people.student.updated',1,'STUDENT_PROFILE',sp.id,nxt_version,v_request,v_request,
       jsonb_build_object('personId',v_person,'studentProfileId',sp.id,'version',nxt_version,'changedFields',jsonb_build_array('birthDate')));
   result:=jsonb_build_object('person',hon.school_person_json(v_person,p_subject),'changedFields',jsonb_build_array('birthDate'),'enrollmentCorrected',corrected);
-  UPDATE hon.idempotency_records SET status='COMPLETED',response_status=200,response_body=result
-    WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor AND idempotency_key='people.birth_date:'||p_key::text;
+  UPDATE hon.school_person_command_receipts SET status='COMPLETED',response_body=result,completed_at=clock_timestamp()
+    WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor AND command='people.birth_date' AND idempotency_key=p_key;
   -- Decide authority (and the owner rule) after the last write.
   IF hon.school_person_actor(p_subject,v_school,true) IS DISTINCT FROM actor
     OR (crossing AND NOT hon.school_person_is_owner(actor,v_school)) THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -408,7 +468,8 @@ END $$;
 
 -- Deny first, then exactly the entry points for the runtime role (0217's two plus the birth date command).
 DO $$ DECLARE f regprocedure; r text; BEGIN
-  FOREACH f IN ARRAY ARRAY['hon.crm_guardian_child_current_identity(uuid,uuid,uuid)','hon.record_crm_guardian_child_identity_correction(uuid,uuid,uuid,uuid,uuid)',
+  FOREACH f IN ARRAY ARRAY['hon.crm_guardian_child_current_identity(uuid,uuid,uuid)','hon.record_crm_guardian_child_identity_correction(uuid,uuid,uuid,uuid,uuid,text,text,date)',
+    'hon.guard_school_person_command_receipt()',
     'hon.school_person_is_owner(uuid,uuid)','hon.update_school_student_birth_date(text,jsonb,uuid)']::regprocedure[] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
