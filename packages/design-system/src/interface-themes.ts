@@ -21,3 +21,5 @@ export const HON_INTERFACE_THEMES = [
 
 export type HonInterfaceTheme = (typeof HON_INTERFACE_THEMES)[number]['id'];
 export const DEFAULT_HON_INTERFACE_THEME: HonInterfaceTheme = 'modern';
+/** Family pages start in Big-Button / Phone (U8); a family member can still switch. Presentation only: it never changes access, data or actions. */
+export const FAMILY_DEFAULT_HON_INTERFACE_THEME: HonInterfaceTheme = 'big-button';

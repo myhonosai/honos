@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { HON_INTERFACE_THEMES, DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
+import { HON_INTERFACE_THEMES, FAMILY_DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import type { ParentJourneyView, JourneyChild, JourneyList } from '@hon/contracts';
 import { loadParentJourney, ParentJourneyAccessError } from './parent-journey-http';
 import s from './parent-journey.module.css';
@@ -30,7 +30,7 @@ export function JourneyChildDetails({ child, from, to }: { child: JourneyChild; 
   </div>;
 }
 export function ParentJourney() {
-  const [theme, setTheme] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
+  const [theme, setTheme] = useState<HonInterfaceTheme>(FAMILY_DEFAULT_HON_INTERFACE_THEME);
   const [view, setView] = useState<ParentJourneyView | null>(null), [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(true), [error, setError] = useState(''), [accessLost, setAccessLost] = useState(false);
   const generation = useRef(0), pending = useRef<AbortController | null>(null);
