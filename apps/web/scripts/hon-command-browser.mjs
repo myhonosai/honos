@@ -5,13 +5,14 @@
  */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { issueSession, HON_SESSION_COOKIE } from '@hon/auth';
+import { SAAS_PLAN_CAPABILITIES } from '@hon/contracts';
 
 if (process.env.HON_COMMAND_BROWSER_LOCAL !== '1') throw new Error('Explicitly opt into disposable local browser verification with HON_COMMAND_BROWSER_LOCAL=1.');
 for (const key of ['DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'STRIPE_SECRET_KEY']) {
@@ -149,6 +150,12 @@ async function api(route) {
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
   if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
+  if (path === '/api/v1/hq/overview') return json(route, 200, { data: { overview: { asOf: '2026-10-24T15:00:00.000Z', callerHqRole: hqx.owner ? 'OWNER' : 'OPERATOR', organizationCount: 3, schoolCount: 3,
+    onboarding: { availability: 'AVAILABLE', requestCount: 0, inProgressRequestCount: 0, completedRequestCount: 0 }, configuredProviderStates: { disabled: 0, configured: 0, healthy: 0, degraded: 0, unavailable: 0 }, taskProfileCount: 0,
+    financialMetrics: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ financial MRR, ARR, cash, or gross-margin projection is available.' },
+    aiUsage: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ AI usage or cost projection is available.' },
+    durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
+  if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot() }, meta: {} });
   if (path === `${prefix}/interface-theme`) {
     if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -166,6 +173,89 @@ async function api(route) {
     return json(route, 200, { data: { organizationId: scope.organizationId, schoolId: scope.schoolId, reviewerPrincipalId: id(61), reviewerPermission: 'action.approve', status: 'AWAITING_APPROVAL', items, nextAfter: null, executionTriggered: false } });
   }
   return json(route, 404, { code: 'NOT_FOUND' });
+}
+
+// HQ school access (B-HQ-1 + D9): three synthetic organizations. Grant/revoke replay by key and re-derive the rows.
+const hqx = { owner: true, ready: true, orgs: [], posts: [], replies: [], byKey: new Map(), gate: null };
+const HQX_T = '2026-10-01T00:00:00.000Z';
+const hqEnt = (o) => o.ent && { ...o.ent, inEffect: o.ent.status === 'ACTIVE' && Date.parse(o.ent.effectiveFrom) <= Date.now() && (!o.ent.effectiveUntil || Date.parse(o.ent.effectiveUntil) > Date.now()) };
+function resetHqx(over = {}) {
+  hqx.orgs = [
+    { id: id(401), name: 'Synthetic Dojo North', created: '2026-09-01T00:00:00.000Z', schools: [[id(411), 'North Academy', 'ACTIVE']], state: 'PROVISIONED', ent: { tier: 'COMPLETE', status: 'SUSPENDED', effectiveFrom: HQX_T, effectiveUntil: null, version: 2 }, exception: null, subscription: null, owner: 'PENDING' },
+    { id: id(402), name: 'Synthetic Dojo South', created: '2026-09-02T00:00:00.000Z', schools: [[id(412), 'South Academy', 'ACTIVE']], state: 'PROVISIONED', ent: { tier: 'COMPLETE', status: 'ACTIVE', effectiveFrom: HQX_T, effectiveUntil: '2026-12-30T00:00:00.000Z', version: 3 },
+      exception: { exceptionId: id(452), schoolId: id(412), purpose: 'APPROVED_PILOT', scopeTier: 'COMPLETE', startsAt: HQX_T, expiresAt: '2026-12-30T00:00:00.000Z', reason: 'Approved pilot for a fixture partner' }, subscription: null, owner: 'ACCEPTED' },
+    { id: id(403), name: 'Synthetic Dojo East', created: '2026-09-03T00:00:00.000Z', schools: [[id(413), 'East Academy', 'ACTIVE']], state: 'PAYMENT_ACTIVE', ent: { tier: 'COMPLETE', status: 'ACTIVE', effectiveFrom: HQX_T, effectiveUntil: null, version: 5 }, exception: null,
+      subscription: { subscriptionId: id(463), status: 'ACTIVE', planCode: 'COMPLETE', billingInterval: 'MONTH' }, owner: 'ACCEPTED' }];
+  Object.assign(hqx, { owner: true, ready: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+}
+resetHqx();
+function hqRow(o) {
+  const ent = hqEnt(o), inEffect = ent?.inEffect === true, x = o.exception;
+  const lifecycle = x && (Date.now() < Date.parse(x.startsAt) ? 'SCHEDULED' : Date.now() >= Date.parse(x.expiresAt) ? 'EXPIRED' : 'IN_EFFECT');
+  const revocable = lifecycle === 'IN_EFFECT' || lifecycle === 'SCHEDULED';
+  const status = o.state === 'AWAITING_FIRST_PAYMENT' ? 'AWAITING_FIRST_PAYMENT' : lifecycle === 'IN_EFFECT' && inEffect ? 'EXCEPTION_IN_EFFECT' : lifecycle === 'SCHEDULED' ? 'EXCEPTION_SCHEDULED'
+    : inEffect && o.state === 'PAYMENT_ACTIVE' ? 'PAID_ACCESS' : inEffect ? 'PROVISIONED_ACCESS' : 'NO_ACCESS';
+  const blockers = [!hqx.ready && 'EXCEPTION_POLICY_REQUIRED', revocable && 'ACCESS_EXCEPTION_ACTIVE', inEffect && 'ENTITLEMENT_IN_EFFECT',
+    ['AWAITING_FIRST_PAYMENT', 'PAYMENT_ACTIVE'].includes(o.state) && 'ACCESS_STATE_EXISTS', o.subscription && 'SUBSCRIPTION_EXISTS'].filter(Boolean);
+  return { organizationId: o.id, organizationDisplayName: o.name, organizationStatus: 'ACTIVE', createdAt: o.created,
+    schools: o.schools.map(([schoolId, schoolDisplayName, schoolStatus]) => ({ schoolId, schoolDisplayName, schoolStatus })), schoolCount: o.schools.length,
+    entitlement: ent, accessState: o.state, accessStatus: status,
+    currentException: x && { exceptionId: x.exceptionId, schoolId: x.schoolId, purpose: x.purpose, scopeTier: x.scopeTier, startsAt: x.startsAt, expiresAt: x.expiresAt, lifecycle, revocable },
+    subscription: o.subscription, openCheckout: false,
+    ownerOnboarding: { status: o.owner, invitedAt: HQX_T, expiresAt: '2026-10-08T00:00:00.000Z', acceptedAt: o.owner === 'ACCEPTED' ? HQX_T : null },
+    exceptionGrant: { eligible: blockers.length === 0, blockers, expectedEntitlementVersion: ent?.version ?? null } };
+}
+function hqOverview(statusFilter) {
+  const rows = hqx.orgs.map(hqRow);
+  const summary = Object.fromEntries(['AWAITING_FIRST_PAYMENT', 'EXCEPTION_IN_EFFECT', 'EXCEPTION_SCHEDULED', 'PAID_ACCESS', 'PROVISIONED_ACCESS', 'NO_ACCESS'].map((k) => [k, rows.filter((r) => r.accessStatus === k).length]));
+  return { viewer: { canGrantAndRevokeExceptions: hqx.owner }, paidAccessProgram: 'INACTIVE',
+    exceptionPolicy: hqx.ready ? { ready: true, maxDays: 90, validUntil: '2027-10-01T00:00:00.000Z', maxScheduleAheadDays: 30 } : { ready: false, maxDays: null, validUntil: null, maxScheduleAheadDays: 30 },
+    summary: { ...summary, total: rows.length }, organizations: rows.filter((r) => !statusFilter || r.accessStatus === statusFilter), limit: 25, nextCursor: null, asOf: new Date().toISOString() };
+}
+const hqAccessView = (o) => { const ent = hqEnt(o), inEffect = ent?.inEffect === true;
+  return { organizationId: o.id, state: o.state, source: !inEffect ? 'NONE' : o.state === 'PAYMENT_ACTIVE' ? 'PAYMENT_ACTIVATED' : 'PROVISIONED', entitlement: ent,
+    capabilities: inEffect ? [...SAAS_PLAN_CAPABILITIES[ent.tier]] : [], paidAccessProgram: 'INACTIVE' }; };
+async function hqAccessApi(route, path, method, url) {
+  if (path === '/api/v1/hq/saas/access-overview' && method === 'GET') return json(route, 200, { data: hqOverview(url.searchParams.get('status')) }, { 'Cache-Control': 'private, no-store' });
+  const grant = path.match(/^\/api\/v1\/hq\/saas\/organizations\/([0-9a-f-]{36})\/access-exceptions$/), revoke = path.match(/^\/api\/v1\/hq\/saas\/access-exceptions\/([0-9a-f-]{36})\/revoke$/);
+  if (method !== 'POST' || (!grant && !revoke)) return null;
+  const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
+  hqx.posts.push({ path, key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
+  const step = hqx.replies.shift() ?? 'ok';
+  if (hqx.gate) { const gate = hqx.gate; hqx.gate = null; await gate; }
+  const prior = hqx.byKey.get(headers['idempotency-key']);
+  if (prior) return prior.body === raw ? json(route, 200, { data: { ...prior.data, replayed: true } }) : json(route, 409, { code: 'IDEMPOTENCY_KEY_REUSED' });
+  if (!hqx.owner) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  if (step === 'lost') return route.abort('connectionreset');
+  const body = JSON.parse(raw), now = new Date().toISOString();
+  let data;
+  if (grant) {
+    assert.equal(headers['x-hon-human-command'], 'saas-access-exception-grant');
+    const o = hqx.orgs.find((x) => x.id === grant[1]), row = o && hqRow(o);
+    if (!row) return json(route, 404, { code: 'SAAS_UNAVAILABLE' });
+    if (body.expectedEntitlementVersion !== row.entitlement?.version) return json(route, 409, { code: 'SAAS_VERSION_CONFLICT' });
+    if (!row.exceptionGrant.eligible) return json(route, 422, { code: 'SAAS_ACCESS_EXCEPTION_ACTIVE' });
+    const prior = hqEnt(o);
+    o.ent = { tier: body.scopeTier, status: 'ACTIVE', effectiveFrom: body.startsAt, effectiveUntil: body.expiresAt, version: o.ent.version + 1 };
+    o.exception = { exceptionId: id(470 + hqx.posts.length), schoolId: body.schoolId, purpose: body.purpose, scopeTier: body.scopeTier, startsAt: body.startsAt, expiresAt: body.expiresAt, reason: body.reason };
+    data = { exception: { exceptionId: o.exception.exceptionId, organizationId: o.id, schoolId: body.schoolId, purpose: body.purpose, reason: body.reason, scopeTier: body.scopeTier,
+      capabilities: [...SAAS_PLAN_CAPABILITIES[body.scopeTier]], aiCredits: 'NONE', startsAt: body.startsAt, expiresAt: body.expiresAt, policyVersion: 1, maxDays: 90, status: 'GRANTED',
+      lifecycle: hqRow(o).currentException.lifecycle, grantedByPrincipalId: id(499), grantedAt: now, priorEntitlement: prior, grantedEntitlement: hqEnt(o),
+      endReason: null, endNote: null, endEntitlement: null, endedByPrincipalId: null, endedAt: null }, access: hqAccessView(o), replayed: false };
+  } else {
+    assert.equal(headers['x-hon-human-command'], 'saas-access-exception-revoke');
+    const o = hqx.orgs.find((x) => x.exception?.exceptionId === revoke[1]);
+    if (!o) return json(route, 422, { code: 'SAAS_EXCEPTION_ENDED' });
+    const x = o.exception, granted = { ...hqEnt(o) };
+    o.ent = { ...o.ent, status: 'SUSPENDED', version: o.ent.version + 1 }; o.exception = null;
+    data = { exception: { exceptionId: x.exceptionId, organizationId: o.id, schoolId: x.schoolId, purpose: x.purpose, reason: x.reason, scopeTier: x.scopeTier,
+      capabilities: [...SAAS_PLAN_CAPABILITIES[x.scopeTier]], aiCredits: 'NONE', startsAt: x.startsAt, expiresAt: x.expiresAt, policyVersion: 1, maxDays: 90, status: 'ENDED',
+      lifecycle: 'REVOKED', grantedByPrincipalId: id(499), grantedAt: x.startsAt, priorEntitlement: null, grantedEntitlement: { ...granted, effectiveFrom: x.startsAt, effectiveUntil: x.expiresAt, status: 'ACTIVE' },
+      endReason: 'REVOKED', endNote: body.reason, endEntitlement: hqEnt(o), endedByPrincipalId: id(499), endedAt: now }, entitlementSuspended: true, access: hqAccessView(o), replayed: false };
+  }
+  hqx.byKey.set(headers['idempotency-key'], { body: raw, data });
+  if (step === 'unknown') return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' });
+  return json(route, 200, { data }, { 'Cache-Control': 'private, no-store' });
 }
 
 // ---------- server ----------
@@ -200,7 +290,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 async function axe(page, name) {
   await page.addScriptTag({ content: axeSource });
   const run = (include) => page.evaluate(async (selectors) => (await window.axe.run(selectors ? { include: selectors.map((s) => [s]) } : document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })), include);
-  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]'].filter((s) => document.querySelector(s)));
+  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="hq-access-title"]'].filter((s) => document.querySelector(s)));
   const result = await run(selectors);
   report.accessibility.push({ name, scope: selectors, violations: result, wholePage: await run(null) });
   const serious = result.filter((v) => v.impact === 'serious' || v.impact === 'critical');
@@ -558,6 +648,118 @@ await check('Ask HON: leaving the page mid-reply conceals it; the late result st
   await shot(page, 'ask-hon-concealed');
   await pageRefresh(ask).click();
   await ask.getByText('Private follow-up about Sam').waitFor();
+  await ctx.close();
+});
+
+// ---------- HQ school access ----------
+async function hqAccessPage(viewport, { view = 'Modern', language = 'en' } = {}) {
+  mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/hq/schools/access`);
+  const section = () => page.locator('section[aria-labelledby="hq-access-title"]');
+  await section().getByTestId('hq-access-list').waitFor({ timeout: 20000 }).catch(async (e) => { console.error('HQ access page did not load:', await page.locator('main').innerText().catch(() => 'no main'), report.apiRequests.slice(-6)); throw e; });
+  if (view !== 'Modern') await page.locator('[role="group"] button', { hasText: new RegExp(`^${view}$`) }).first().click();
+  return { ctx, page, section };
+}
+const card = (section, name) => section().locator('article', { has: section().page().getByRole('heading', { name }) });
+for (const [name, viewport, view, language, title] of [['desktop-1440', { width: 1440, height: 900 }, 'Modern', 'en', 'School access'], ['desktop-1440', { width: 1440, height: 900 }, 'Classic', 'en', 'School access'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'Big Button', 'en', 'School access'], ['phone-390', { width: 390, height: 844 }, 'Modern', 'en', 'School access'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'Modern', 'ko', '도장 접근'], ['phone-390', { width: 390, height: 844 }, 'Modern', 'es', 'Acceso de escuelas']]) {
+  await check(`HQ school access ${view} ${language} ${name}: real overview, owner controls only where allowed`, async () => {
+    resetHqx();
+    const { ctx, page, section } = await hqAccessPage(viewport, { view, language });
+    assert.ok(await section().getByRole('heading', { name: title, level: 1 }).isVisible());
+    assert.equal(await section().getByTestId('hq-access-count-NO_ACCESS').innerText(), '1');
+    assert.equal(await section().locator('article').count(), 3);
+    assert.equal(await card(section, 'Synthetic Dojo East').getByRole('button').count(), 0, 'a paid organization offers no exception control');
+    await noOverflow(page, `hq-access-${view}-${language}-${name}`);
+    await axe(page, `hq-access-${view}-${language}-${name}`);
+    await shot(page, `hq-access-${view.replace(' ', '-').toLowerCase()}-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('HQ school access: a lost grant answer is kept; Try again replays the same key and body; the list is read again', async () => {
+  resetHqx({ replies: ['unknown', 'ok'] });
+  const { ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 });
+  const north = () => card(section, 'Synthetic Dojo North');
+  await north().getByRole('button', { name: 'Grant an exception' }).click();
+  await north().getByLabel('Purpose').selectOption('PRODUCT_DEMONSTRATION');
+  await north().getByLabel('Days').fill('14');
+  await north().getByLabel('Reason').fill('short');
+  await north().getByRole('button', { name: 'Grant exception' }).click();
+  await section().getByText(/a reason of 10 to 500 characters/).waitFor();
+  assert.equal(hqx.posts.length, 0, 'nothing sent for an invalid form');
+  await north().getByLabel('Reason').fill('Demonstration for an approved prospect');
+  await north().getByRole('button', { name: 'Grant exception' }).click();
+  await section().getByText(/We could not confirm whether this went through/).waitFor();
+  // The answer was lost after the server recorded the grant: the fresh read already shows it, so no grant control is offered again.
+  for (let i = 0; i < 50 && await section().getByTestId('hq-access-count-NO_ACCESS').innerText() !== '0'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await north().getByRole('button', { name: /Grant/ }).count(), 0, 'no second grant offered');
+  await shot(page, 'hq-access-grant-unknown');
+  await section().getByRole('button', { name: 'Try again' }).click();
+  await section().getByText(/Exception granted\. The list was read again\./).waitFor();
+  assert.equal(hqx.posts.length, 2);
+  assert.equal(hqx.posts[0].key, hqx.posts[1].key); assert.equal(hqx.posts[0].body, hqx.posts[1].body);
+  const sent = JSON.parse(hqx.posts[0].body);
+  assert.deepEqual(Object.keys(sent).sort(), ['expectedEntitlementVersion', 'expiresAt', 'purpose', 'reason', 'schoolId', 'scopeTier', 'startsAt']);
+  assert.equal(sent.expectedEntitlementVersion, 2); assert.equal(sent.schoolId, id(411));
+  assert.equal(Date.parse(sent.expiresAt) - Date.parse(sent.startsAt), 14 * 86_400_000);
+  for (let i = 0; i < 50 && await section().getByTestId('hq-access-count-NO_ACCESS').innerText() !== '0'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByTestId('hq-access-count-NO_ACCESS').innerText(), '0', 'the re-read shows the grant');
+  await noOverflow(page, 'hq-access-grant'); await axe(page, 'hq-access-grant'); await shot(page, 'hq-access-granted', true);
+  await ctx.close();
+});
+await check('HQ school access: revoke needs a reason and the list is read again', async () => {
+  resetHqx();
+  const { ctx, page, section } = await hqAccessPage({ width: 390, height: 844 });
+  const south = () => card(section, 'Synthetic Dojo South');
+  await south().getByRole('button', { name: 'Revoke' }).click();
+  await south().getByLabel('Reason').fill('Pilot ended early by agreement');
+  await shot(page, 'hq-access-revoke-form');
+  await south().getByRole('button', { name: 'Revoke exception' }).click();
+  await section().getByText(/Exception revoked\./).waitFor();
+  assert.equal(hqx.posts[0].command, 'saas-access-exception-revoke');
+  assert.deepEqual(JSON.parse(hqx.posts[0].body), { reason: 'Pilot ended early by agreement' });
+  for (let i = 0; i < 50 && await section().getByTestId('hq-access-count-NO_ACCESS').innerText() !== '2'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByTestId('hq-access-count-NO_ACCESS').innerText(), '2');
+  await noOverflow(page, 'hq-access-revoke'); await axe(page, 'hq-access-revoke');
+  await ctx.close();
+});
+await check('HQ school access: an operator sees facts without controls; no approved policy means no grant', async () => {
+  resetHqx({ owner: false });
+  let { ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 });
+  await section().getByTestId('hq-access-owner-only').waitFor();
+  assert.equal(await section().getByRole('button', { name: /Grant an exception|^Revoke$/ }).count(), 0);
+  await axe(page, 'hq-access-operator'); await shot(page, 'hq-access-operator');
+  await ctx.close();
+  resetHqx({ ready: false });
+  ({ ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 }));
+  await section().getByText(/The exception policy is not approved yet/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Grant an exception' }).count(), 0);
+  assert.ok(await card(section, 'Synthetic Dojo North').getByText(/the exception policy is not approved/).isVisible());
+  await ctx.close();
+});
+await check('HQ school access: leaving the tab hides every customer and drops a kept command', async () => {
+  resetHqx({ replies: ['unknown'] });
+  const { ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 });
+  const south = () => card(section, 'Synthetic Dojo South');
+  await south().getByRole('button', { name: 'Revoke' }).click();
+  await south().getByLabel('Reason').fill('Pilot ended early by agreement');
+  await south().getByRole('button', { name: 'Revoke exception' }).click();
+  await section().getByText(/We could not confirm/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await section().getByText(/Customer access is hidden/).waitFor();
+  assert.equal(await section().getByText(/Synthetic Dojo/).count(), 0);
+  await section().getByRole('button', { name: 'Show again' }).click();
+  await section().getByTestId('hq-access-list').waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'the kept command was dropped');
+  assert.equal(await section().getByTestId('hq-access-count-NO_ACCESS').innerText(), '2', 'the re-read shows what the server recorded');
   await ctx.close();
 });
 
