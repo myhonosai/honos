@@ -48,6 +48,20 @@ export class SaasAccessReadinessHqController {
   }
 }
 
+/**
+ * B-HQ-1 HQ access overview: every organization's entitlement, access state, open exception, subscription, open checkout,
+ * owner-invitation status and advisory exception-grant eligibility. Read only; no grant, revoke or payment effect.
+ */
+@Controller('hq/saas/access-overview')
+@UseGuards(HonIdentityGuard)
+export class SaasAccessOverviewHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get() @UseGuards(SaasReadGuard) @SaasReadQuery(['status','cursor','limit'])
+  async overview(@Req() req: HonRequest, @Query() query: Record<string, unknown>) {
+    return { data: await this.reads.readAccessOverview(subject(req), query) };
+  }
+}
+
 /** Independent exception-only decision; never a payment, entitlement or credit activation. */
 @Controller('hq/saas/access-exception-policy')
 @UseGuards(HonIdentityGuard)

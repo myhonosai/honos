@@ -29,6 +29,10 @@
       "title": "HON HQ | School Directory"
     },
     {
+      "path": "/hq/schools/access",
+      "title": "HON HQ | School access"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },
@@ -107,6 +111,10 @@
     {
       "path": "/staff/creative-studio",
       "title": "HON | Creative Studio"
+    },
+    {
+      "path": "/staff/people",
+      "title": "HON | People"
     },
     {
       "path": "/forms/:publicId",

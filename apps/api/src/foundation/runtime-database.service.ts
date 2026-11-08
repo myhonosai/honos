@@ -205,6 +205,8 @@ const SAAS_BILLING_CALLS = {
   publishTrialCampaign: { sql: 'SELECT hon.publish_saas_trial_campaign($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   withdrawTrialCampaign: { sql: 'SELECT hon.withdraw_saas_trial_campaign($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readExceptionPolicy: { sql: 'SELECT hon.read_saas_exception_policy($1) AS data', arity: 1, readOnly: true },
+  // B-HQ-1 (0219): read-only HQ overview of every organization's access standing; writes nothing.
+  readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   decideExceptionPolicy: { sql: 'SELECT hon.decide_saas_exception_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
   readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },
@@ -1234,6 +1236,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  /** B-CRM-1a person record: the subject is the verified session subject; the database decides school authority. */
+  async callSchoolPersonRecord(operation: 'read'|'update'|'birthDate', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_school_person($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      update: {sql: 'SELECT hon.update_school_person($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      birthDate: {sql: 'SELECT hon.update_school_student_birth_date($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {
