@@ -360,7 +360,10 @@ try{
   const c=await counts();
   const replay=ok(await update(editor3,legacyRequest,key));
   assert.deepEqual(replay,legacyBody);assert.equal(Object.hasOwn(replay.person.student,'version'),false,'no version invented');
-  assert.deepEqual(await counts(),c);assert.deepEqual(await snapshot(student),row);
+  // No repeat effect: only this command's own receipt is completed with the saved body (so later retries read it first).
+  assert.deepEqual(await counts(),{...c,school_person_command_receipts:String(Number(c.school_person_command_receipts)+1)});assert.deepEqual(await snapshot(student),row);
+  assert.deepEqual((await q("SELECT status,response_body FROM hon.school_person_command_receipts WHERE command='people.update' AND idempotency_key=$1",[key]))[0],{status:'COMPLETED',response_body:legacyBody});
+  {const c2=await counts();assert.deepEqual(ok(await update(editor3,legacyRequest,key)),legacyBody);assert.deepEqual(await counts(),c2);}
   await denied(()=>update(editor3,{...legacyRequest,givenName:'Other'},key),409,'PERSON_IDEMPOTENCY_CONFLICT',student);
   // A fresh result without student.version is still refused (only the replayed historical receipt is accepted).
   const {validatePersonRecord,validateStudentBirthDateUpdateResult}=require('@hon/contracts');
@@ -391,6 +394,21 @@ try{
  for(const st of ["UPDATE hon.school_person_command_receipts SET response_body='{}'::jsonb","DELETE FROM hon.school_person_command_receipts","TRUNCATE hon.school_person_command_receipts"])
   await assert.rejects(()=>admin.query(st),e=>e.code==='42501',st);
  pass('person command receipts are complete-once and immutable even for the table owner');
+ // 18. Manus P2-165-4: a committed row of another command under the old key text 'people.update:<k>' (activation
+ // accepts that free text) neither shadows this command's own receipt nor blocks a first use of the key.
+ {const pid=(await q('SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1',[editor3.externalSubject]))[0].id;
+  const foreign=k=>q("INSERT INTO hon.idempotency_records(organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,response_status,response_body,expires_at) VALUES($1,$2,$3,$4,repeat('b',64),'COMPLETED',200,'{\"receipt\":{}}'::jsonb,now()+interval '24 hours')",[A.organizationId,A.schoolId,pid,'people.update:'+k]);
+  // (a) own receipt committed first, foreign row after: the exact retry returns the own receipt, nothing written.
+  const p1=await addPerson(A,'Ivy','Lane'),k1=K(),b1=body(A.schoolId,p1,1,{givenName:'Ivy',familyName:'Lane-Ortiz',email:null,phoneE164:null});
+  const first=ok(await update(editor3,b1,k1));await foreign(k1);
+  const c=await counts();assert.deepEqual(ok(await update(editor3,b1,k1)),first);assert.deepEqual(await counts(),c);
+  // (b) foreign row committed before the first use: the edit runs normally with its own receipt.
+  const p2=await addPerson(A,'Ivy','Lane'),k2=K();await foreign(k2);
+  const c2=await counts(),second=ok(await update(editor3,body(A.schoolId,p2,1,{givenName:'Ivy',familyName:'Lane-Ruiz',email:null,phoneE164:null}),k2));
+  assert.deepEqual(second.changedFields,['familyName']);
+  const after=await counts();for(const t of ['audit_events','outbox_events','school_person_command_receipts'])assert.equal(Number(after[t]),Number(c2[t])+1,t);
+  assert.equal(after.idempotency_records,c2.idempotency_records);}
+ pass('a committed foreign row under the old key text never shadows the own receipt (exact retry replays, no effects) and never blocks a first use');
  console.log('B-CRM-1a/1b person record proof: '+groups+' groups passed');
 }finally{
  await app?.close();

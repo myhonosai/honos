@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
-import { activateWithPreview } from './membership-activation-test-support.mjs';
+import { activateWithPreview, confirmationFor } from './membership-activation-test-support.mjs';
 
 // Disposable-localhost proof for 0176 guardian/child CRM enrollment. Every step runs through the real services:
 // guardian/child registration (0160/0169, unchanged), the guardian's canonical billing account (0159 command),
@@ -507,6 +507,27 @@ try {
   const correctedDraft = await services.gc.draftMembershipFromPlan(D.context(), drafter(corrected.student, monthly2));
   assert.equal(correctedDraft.receipt.state, 'DRAFT');
   assert.equal((await childOf(corrected.lead)).workflowState, 'CURRENT_DRAFT');
+  // Manus P2-165-4, end to end: the real activation command accepts the free-text key 'people.update:<K>'. A person
+  // edit with K commits first; the same staff member then activates an unrelated DRAFT with that exact text key; the
+  // unchanged edit retry still returns its own saved result with zero new effects, and a changed body is still 409.
+  {
+    const X = await staff(ids.role, ids.org, ids.school, ids.editRole), K = randomUUID();
+    const pid = (await sql("INSERT INTO hon.people(organization_id,school_id,given_name,family_name) VALUES($1,$2,'Ari','Stone') RETURNING id", [ids.org, ids.school]))[0].id;
+    const editBody = { schoolId: ids.school, personId: pid, expectedVersion: 1, givenName: 'Ari', familyName: 'Stone-Vale', email: null, phoneE164: null };
+    const edit = (b) => restricted.query('SELECT hon.update_school_person($1,$2::jsonb,$3::uuid) data', [X.subject, JSON.stringify(b), K]);
+    const saved = (await edit(editBody)).rows[0].data;
+    const membershipId = correctedDraft.receipt.membershipId;
+    const p = await services.memberships.previewActivation(X.read(), membershipId, {});
+    const activated = await services.memberships.activate(X.context({ idempotencyKey: `people.update:${K}` }), membershipId, confirmationFor(p));
+    assert.equal(activated.replayed, false);
+    assert.equal((await sql("SELECT status FROM hon.idempotency_records WHERE principal_id=$1 AND idempotency_key=$2", [X.principal, `people.update:${K}`]))[0].status, 'COMPLETED');
+    const fx = async () => (await sql(`SELECT (SELECT count(*)::int FROM hon.audit_events WHERE entity_id=$1) a,(SELECT count(*)::int FROM hon.outbox_events WHERE aggregate_id=$1) o,
+      (SELECT count(*)::int FROM hon.school_person_command_receipts WHERE principal_id=$2) r,(SELECT version FROM hon.people WHERE id=$1) v`, [pid, X.principal]))[0];
+    const before = await fx();
+    assert.deepEqual((await edit(editBody)).rows[0].data, saved, 'exact retry returns the own saved receipt');
+    assert.deepEqual(await fx(), before, 'zero new effects');
+    await assert.rejects(edit({ ...editBody, familyName: 'Other' }), (e) => e.code === '23505' && e.message === 'PERSON_IDEMPOTENCY_CONFLICT');
+  }
   // Manus P1-165-1: a governed command adopts only the fields it changed. Drift made outside the commands (here a
   // minor-to-adult birth date, then a name) is never stamped into a correction and keeps the enrollment in review.
   const childRow = async (student) => (await sql('SELECT p.id,p.version,p.given_name,p.family_name,p.email::text email,p.phone_e164,s.version sv,s.birth_date::text b FROM hon.people p JOIN hon.student_profiles s ON s.person_id=p.id WHERE s.id=$1', [student]))[0];
@@ -557,7 +578,7 @@ try {
   // Only the three enrolled children corrected above have corrections (none existed before this group).
   assert.equal(preCorrections, 0);
   assert.equal((await sql('SELECT count(DISTINCT student_profile_id)::int n FROM hon.crm_guardian_child_identity_corrections'))[0].n, 3);
-  assertions += 30;
+  assertions += 37;
 
   console.log(`PASS: Guardian/child CRM enrollment (${assertions} assertions): exact 0176 posture with four runtime entry points and private immutable tables; registration child snapshot (adult path untouched, no backfill); family recovery through every family and child state with creator vs other-staff DRAFT visibility; explicit payer designation only through the guardian's existing canonical account (ADDITIONAL accounts never selected, nothing inferred from lead contact); additional children with lead attribution, twin/duplicate/guardian review outcomes and a ten-child limit; one plan-bound DRAFT per child billed to the designated guardian with exact version binding; payer, plan, currency, school and adult refusals; permission, role, school, organization, identity, entitlement and forged-context refusals; drift and ambiguity as staff review; immutability; same-key, distinct-key, twin and per-child DRAFT races; zero schedule, invoice or payment effect; family-proof ablation detected; 0218 audited name and birth date corrections carried into the enrollment (snapshot unchanged, invalid names refused, ungoverned drift still staff review, DRAFT against the corrected identity, corrections immutable and private).`);
 } finally {

@@ -197,8 +197,13 @@ complete-once, never changed or deleted). No other command writes that table, so
 a free-text key that another command (for example activation, which reserves in
 `hon.idempotency_records` before its SHARE locks) holds uncommitted can never
 make a person command wait while it holds the people/student locks. A completed
-0217 edit receipt (`hon.idempotency_records`, `people.update:<key>`) is still
-replayed exactly as saved by a plain read of committed rows (Manus P2-165-2); its
+0217 edit receipt (`hon.idempotency_records`, `people.update:<key>`) for the exact
+same request is still replayed exactly as saved by a plain read of committed rows
+(Manus P2-165-2). The command's own receipt is always checked first, and a row
+under that old key text with another fingerprint (for example an activation that
+used the free-text key `people.update:<key>`) is not this command's and is ignored
+(Manus P2-165-4). The replayed legacy body also completes the command's own
+receipt, so later retries read it first. Its
 `student` object has no `version`, and the update-result validator accepts that
 shape only for replays (a fresh read or result always carries the version). Audit `people.student.birth_date.update` holds prior/next
 date, reason, `minorToAdult` and `enrollmentCorrected`; outbox
@@ -240,7 +245,9 @@ date, reason, `minorToAdult` and `enrollmentCorrected`; outbox
   independent editor grant stays: nothing commits; an ablation without the final
   predicate commits); a 0217 receipt replays with HTTP 200 and no effects; an
   uncommitted activation-style reservation of the old key texts never blocks
-  either command; receipts immutable.
+  either command; receipts immutable; a committed foreign row under the old key
+  text neither shadows the own receipt nor blocks a first use. Guardian/child
+  group 13 repeats that end to end with the real activation command.
 - Guardian/child proof group 13: both drift compositions (out-of-band adult
   birth date then a name edit; out-of-band name then a birth date edit) adopt
   only the commanded field and stay in review; ungoverned drift still staff review, invalid

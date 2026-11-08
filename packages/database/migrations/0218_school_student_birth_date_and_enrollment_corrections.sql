@@ -271,9 +271,10 @@ $$;
 
 -- 0217 command, unchanged except:
 --  * after a name change, carry exactly the changed name fields into an enrolled CRM child's enrollment (audited);
---  * exact-key receipts live in hon.school_person_command_receipts (Manus P2-165-3). A receipt saved by 0217 under
---    hon.idempotency_records 'people.update:<key>' is still replayed exactly as saved (Manus P2-165-2); that lookup is
---    a plain read of committed rows, so it never waits on another transaction's reservation.
+--  * exact-key receipts live in hon.school_person_command_receipts (Manus P2-165-3) and are checked first (P2-165-4).
+--    A completed receipt saved by 0217 under hon.idempotency_records 'people.update:<key>' for the exact same request
+--    is still replayed exactly as saved (Manus P2-165-2); that lookup is a plain read of committed rows, so it never
+--    waits on another transaction's reservation, and a row there with another fingerprint is not this command's.
 CREATE OR REPLACE FUNCTION hon.update_school_person(p_subject text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; v_school uuid; v_org uuid; v_person uuid; v_version integer; fp text; prior hon.idempotency_records%ROWTYPE;
@@ -307,15 +308,7 @@ BEGIN
   SELECT organization_id INTO v_org FROM hon.schools WHERE id=v_school;
   fp:=encode(sha256(convert_to('PERSON_UPDATE:'||jsonb_build_object('schoolId',v_school,'personId',v_person,'expectedVersion',v_version,
     'givenName',v_given,'familyName',v_family,'email',v_email,'phoneE164',v_phone)::text,'UTF8')),'hex');
-  -- A completed 0217 receipt for this key (same fingerprint formula) replays as saved.
-  SELECT * INTO prior FROM hon.idempotency_records WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
-    AND idempotency_key='people.update:'||p_key::text;
-  IF FOUND THEN
-    IF prior.request_fingerprint<>fp THEN RAISE EXCEPTION 'PERSON_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
-    IF prior.status<>'COMPLETED' OR prior.response_body IS NULL THEN RAISE EXCEPTION 'PERSON_BUSY' USING ERRCODE='55P03'; END IF;
-    IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
-    RETURN prior.response_body;
-  END IF;
+  -- Own receipt first (Manus P2-165-4): an existing receipt for this key in this command's table always decides.
   INSERT INTO hon.school_person_command_receipts(organization_id,school_id,principal_id,command,idempotency_key,request_fingerprint)
     VALUES(v_org,v_school,actor,'people.update',p_key,fp)
     ON CONFLICT (organization_id,school_id,principal_id,command,idempotency_key) DO NOTHING;
@@ -326,6 +319,18 @@ BEGIN
     IF rec.status<>'COMPLETED' THEN RAISE EXCEPTION 'PERSON_BUSY' USING ERRCODE='55P03'; END IF;
     IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
     RETURN rec.response_body;
+  END IF;
+  -- Newly reserved. A completed 0217 receipt for this key with this exact request (same fingerprint formula) is the
+  -- saved outcome: it completes this reservation with that saved body and is returned unchanged. Any other row under
+  -- the old key text (a different fingerprint, or another command's free-text key such as an activation's) is not this
+  -- command's receipt and is ignored. Plain read of committed rows: never waits on another transaction.
+  SELECT * INTO prior FROM hon.idempotency_records WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
+    AND idempotency_key='people.update:'||p_key::text;
+  IF FOUND AND prior.request_fingerprint=fp AND prior.status='COMPLETED' AND prior.response_body IS NOT NULL THEN
+    UPDATE hon.school_person_command_receipts SET status='COMPLETED',response_body=prior.response_body,completed_at=clock_timestamp()
+      WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor AND command='people.update' AND idempotency_key=p_key;
+    IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
+    RETURN prior.response_body;
   END IF;
 
   -- Exact school only. NO KEY UPDATE: does not block family/student/consent inserts that hold KEY SHARE on the person.
