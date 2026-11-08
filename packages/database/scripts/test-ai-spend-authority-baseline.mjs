@@ -2347,6 +2347,144 @@ try {
   pass('INV-28', 'C3a: HON suggestions are a closed list (marcus, kai, chad; unique; at most three) stored with the reply only for agents the requester holds the capability for, shown only on a whole, visible COMPLETED answer and only for agents still held now (concealed and cut-off answers show none; the table refuses others), malformed suggestions are refused before any write, and a suggestion runs no specialist, invocation or Action Center request');
   }
 
+  // ---- INV-29 (C3a, 0215): confirming HON's suggestions is an ordinary delegation, grouped with a derived status ----
+  {
+  const { deriveHonOrchestrationStatus, HON_TURN_STATUSES } = await import('@hon/contracts');
+  const o = await makeOrg('inv-29');
+  const other = await makeOrg('inv-29-other');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const otherScope = { organizationId: other.id, schoolId: other.school, principalId: other.principal, externalSubject: other.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? 'OK'; };
+  const turnsOf = async (id) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [id])).n;
+  const conv = await hon.create(scope, { title: 'Improve enrollment' }, K());
+  const ask = async (suggestions, text = 'Help me improve enrollment.', extra = {}) => { fakes.hon.suggestions = suggestions; try { return await hon.sendTurn(scope, conv.id, { text, delegation: null, ...extra }, K()); } finally { fakes.hon.suggestions = []; } };
+  const marcus = (from, key = K()) => hon.sendTurn(scope, conv.id, { text: 'Draft a friendly trial-week post. Use placeholders for unprovided facts.', delegation: { agentKey: 'marcus', campaignId: o.campaign }, fromSuggestionTurnId: from }, key);
+  const kai = (from) => hon.sendTurn(scope, conv.id, { text: 'Outline a first-class welcome practice.', delegation: { agentKey: 'kai', curriculumId: o.curriculum }, fromSuggestionTurnId: from }, K());
+  const chad = (from) => hon.sendTurn(scope, conv.id, { text: 'Check in kindly about a trial class.', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, fromSuggestionTurnId: from }, K());
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY';
+  const src = await ask(['marcus', 'kai', 'chad']);
+  assert.deepEqual(src.replyDetail.suggestions, ['marcus', 'kai', 'chad']);
+  assert.deepEqual(await hon.orchestrations(scope, conv.id), { items: [] }, 'nothing grouped before a human confirms');
+  // 1. Confirming Marcus is an ordinary delegation (Action Center proposal) grouped under the answer; a resend replays.
+  const km = K();
+  const m1 = await marcus(src.turnId, km);
+  assert.deepEqual([m1.status, m1.delegatedAgentKeys, m1.actionRequestIds.length], ['AWAITING_APPROVAL', ['marcus'], 1], JSON.stringify(m1));
+  assert.deepEqual(await marcus(src.turnId, km), m1, 'resend replays');
+  assert.deepEqual(await hon.orchestrations(scope, conv.id), { items: [{ sourceTurnId: src.turnId, status: 'NEEDS_REVIEW', members: [{ agentKey: 'marcus', turnId: m1.turnId, status: 'AWAITING_APPROVAL' }] }] });
+  // 2. Each suggestion is confirmed at most once; a refusal records no turn.
+  const n = await turnsOf(conv.id);
+  assert.equal(await code(marcus(src.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE');
+  assert.equal(await turnsOf(conv.id), n, 'a refused confirmation records nothing');
+  // 3. Kai and Chad join the same group; an UNKNOWN member makes the group UNKNOWN (never success).
+  const k1 = await kai(src.turnId);
+  fakes.chad.mode = 'UNKNOWN';
+  const c1 = await chad(src.turnId);
+  fakes.chad.mode = 'RESULT';
+  assert.deepEqual([k1.status, c1.status], ['AWAITING_APPROVAL', 'UNKNOWN']);
+  const g = (await hon.orchestrations(scope, conv.id)).items;
+  assert.deepEqual(g.map((x) => [x.sourceTurnId, x.status, x.members.map((m) => [m.agentKey, m.turnId, m.status])]),
+    [[src.turnId, 'UNKNOWN', [['marcus', m1.turnId, 'AWAITING_APPROVAL'], ['kai', k1.turnId, 'AWAITING_APPROVAL'], ['chad', c1.turnId, 'UNKNOWN']]]]);
+  // 4. Only an agent the answer suggested, from a whole, visible COMPLETED answer of this human in this conversation.
+  const onlyKai = await ask(['kai'], 'What should my instructors prepare?');
+  assert.equal(await code(marcus(onlyKai.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'not suggested');
+  await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.assistant.use'", [o.role]);
+  const fresh = await ask(['marcus'], 'Any marketing ideas?');
+  assert.deepEqual(fresh.replyDetail.suggestions, [], 'not stored without the capability');
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'marketing.assistant.use')", [o.role, o.id]);
+  const later = await ask(['marcus'], 'Marketing ideas again?');
+  await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.assistant.use'", [o.role]);
+  assert.equal(await code(marcus(later.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'capability lapsed since the answer');
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'marketing.assistant.use')", [o.role, o.id]);
+  await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  assert.equal(await code(marcus(later.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'a concealed answer cannot be confirmed');
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  await admin.query("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [o.id]);
+  assert.notEqual(await code(marcus(later.turnId)), 'OK', 'no confirmation without AI access');
+  await restoreEntitlement(o);
+  fakes.hon.mode = 'TRUNCATED';
+  const cut = await ask(['marcus'], 'Write the whole plan.', { replyMode: 'DETAILED' });
+  fakes.hon.mode = 'RESULT';
+  assert.equal(await code(marcus(cut.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'a cut-off answer suggests nothing');
+  const elsewhere = await hon.create(scope, { title: 'Elsewhere' }, K());
+  assert.equal(await code(hon.sendTurn(scope, elsewhere.id, { text: 'Draft a post.', delegation: { agentKey: 'marcus', campaignId: o.campaign }, fromSuggestionTurnId: later.turnId }, K())), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'another conversation');
+  assert.equal(await code(marcus(m1.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'a delegation turn is not a HON answer');
+  assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'A question', delegation: null, fromSuggestionTurnId: later.turnId }, K())), 'INVALID_HON_TURN', 'questions cannot confirm');
+  assert.equal((await settle(tenant(context(o), (client) => client.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify({ text: 'q', delegation: null, fromSuggestionTurnId: later.turnId }), K()])))).error?.message, 'INVALID_HON_TURN');
+  assert.equal(await code(marcus(later.turnId)), 'OK', 'confirmable once access returns');
+  // 4b. P2-158-1: eligibility lapses while the new group or member write waits on a lock. A blocker holds a SHARE lock on
+  // one of the two tables (the duplicate read still works, the INSERT waits); the reporting grant behind a
+  // reporting-derived answer, or the Marcus capability, goes during the wait. The confirmation is refused after the wait
+  // with nothing persisted (no turn, count, group or member) and no specialist call.
+  const groupsOf = async (from) => (await row('SELECT count(*)::int g, (SELECT count(*)::int FROM hon.hon_orchestration_members m JOIN hon.hon_orchestrations o ON o.id=m.orchestration_id WHERE o.source_turn_id=$1) m FROM hon.hon_orchestrations WHERE source_turn_id=$1', [from]));
+  const lateWait = async (label, table, from, change, restore) => {
+    const before = { turns: await turnsOf(conv.id), count: (await row('SELECT turn_count n FROM hon.hon_conversations WHERE id=$1', [conv.id])).n, groups: await groupsOf(from), calls: fakes.marcus.calls };
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    let out;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query(`LOCK TABLE hon.${table} IN SHARE MODE`);
+      const bpid = (await blocker.query('SELECT pg_backend_pid() p')).rows[0].p;
+      let done = false;
+      const pending = code(marcus(from)).then((r) => { done = true; return r; });
+      for (const end = Date.now() + 5000; !(await row('SELECT count(*)::int n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [bpid])).n; await sleep(20)) {
+        assert.ok(!done && Date.now() < end, `${label}: the confirmation never waited on ${table}`);
+      }
+      await change();
+      await blocker.query('COMMIT');
+      out = await pending;
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await blocker.end();
+      await restore();
+    }
+    assert.equal(out, 'HON_SUGGESTION_NOT_CONFIRMABLE', `${label}: refused after the wait`);
+    assert.deepEqual({ turns: await turnsOf(conv.id), count: (await row('SELECT turn_count n FROM hon.hon_conversations WHERE id=$1', [conv.id])).n, groups: await groupsOf(from), calls: fakes.marcus.calls }, before, `${label}: nothing persisted, no specialist call`);
+  };
+  const dropCap = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.assistant.use'", [o.role]);
+  const addCap = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'marketing.assistant.use')", [o.role, o.id]);
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  // Wait at the group table (first confirmation from this answer): the answer stops being visible.
+  const w1 = await ask(['marcus', 'kai'], 'How are enrollments trending?');
+  assert.equal((await row('SELECT used_reporting u FROM hon.hon_reply_invocations WHERE turn_id=$1', [w1.turnId])).u, true, 'reporting-derived answer');
+  await lateWait('visibility at group', 'hon_orchestrations', w1.turnId, dropRep, addRep);
+  await lateWait('capability at group', 'hon_orchestrations', w1.turnId, dropCap, addCap);
+  // Wait at the member table (the group already exists from a Kai confirmation).
+  await kai(w1.turnId);
+  assert.deepEqual(await groupsOf(w1.turnId), { g: 1, m: 1 });
+  await lateWait('visibility at member', 'hon_orchestration_members', w1.turnId, dropRep, addRep);
+  await lateWait('capability at member', 'hon_orchestration_members', w1.turnId, dropCap, addCap);
+  // Controls: with nothing lapsing, the same answer confirms; two concurrent fresh-key confirmations of one agent admit
+  // exactly one; two concurrent sends of one key replay one turn.
+  const w2 = await ask(['marcus'], 'Any quick marketing wins?');
+  const racing = await Promise.all([settle(marcus(w2.turnId)), settle(marcus(w2.turnId))]);
+  assert.deepEqual(racing.map((r) => (r.error ? (r.error.getResponse?.().code ?? r.error.code) : 'OK')).sort(), ['HON_SUGGESTION_NOT_CONFIRMABLE', 'OK'], 'fresh keys: one confirmation');
+  assert.deepEqual(await groupsOf(w2.turnId), { g: 1, m: 1 });
+  const w3 = await ask(['marcus'], 'One more marketing idea?');
+  const kr = K();
+  const replayed = await Promise.all([marcus(w3.turnId, kr), marcus(w3.turnId, kr)]);
+  assert.equal(replayed[0].turnId, replayed[1].turnId, 'same key: one turn');
+  assert.deepEqual(await groupsOf(w3.turnId), { g: 1, m: 1 });
+  assert.equal(await code(marcus(w1.turnId)), 'OK', 'the lapsed answer confirms once access is back');
+  // 5. Another school's human cannot read or confirm from this conversation.
+  assert.equal(await code(hon.orchestrations(otherScope, conv.id)), 'HON_CONVERSATION_NOT_FOUND');
+  assert.equal(await code(hon.sendTurn(otherScope, conv.id, { text: 'Draft.', delegation: { agentKey: 'marcus', campaignId: other.campaign }, fromSuggestionTurnId: src.turnId }, K())), 'HON_CONVERSATION_NOT_FOUND');
+  // 6. Groups are append-only; the derived status in SQL equals the contract's for every member combination.
+  for (const sql of ['UPDATE hon.hon_orchestrations SET created_at=created_at WHERE source_turn_id=$1', 'DELETE FROM hon.hon_orchestration_members WHERE turn_id=$1']) {
+    assert.equal((await settle(admin.query(sql, [sql.startsWith('UPDATE') ? src.turnId : m1.turnId]))).error?.code, '55000', sql);
+  }
+  const combos = [];
+  for (const a of HON_TURN_STATUSES) { combos.push([a]); for (const b of HON_TURN_STATUSES) { combos.push([a, b]); for (const c of HON_TURN_STATUSES) combos.push([a, b, c]); } }
+  const sqlStatus = (await row('SELECT jsonb_agg(hon.hon_orchestration_status(ARRAY(SELECT jsonb_array_elements_text(x)))) r FROM jsonb_array_elements($1::jsonb) x', [JSON.stringify(combos)])).r;
+  assert.deepEqual(sqlStatus, combos.map((x) => deriveHonOrchestrationStatus(x)), 'SQL and contract derivations agree');
+  for (const t of ['hon_orchestrations', 'hon_orchestration_members']) assert.equal((await row(`SELECT has_table_privilege($1,'hon.${t}','SELECT') s`, [runtimeRole])).s, false, `${t}: functions only`);
+  for (const f of ['hon_orchestration_status(text[])', 'hon_orchestration_immutable()']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal`);
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.read_hon_orchestrations(text,uuid)','EXECUTE') s", [runtimeRole])).s, true);
+  pass('INV-29', `C3a: a human confirms a HON suggestion as an ordinary delegation turn (own capability, plan and Action Center path; resend replays), grouped per answer with a status derived from the members' recorded statuses (${combos.length} combinations equal in SQL and contract; UNKNOWN never success); each suggestion confirms once; only suggested, capability-held agents from this human's own whole, visible COMPLETED answer in the same conversation with AI access, re-checked after the group and member writes wait (a lapse during either wait is refused with nothing persisted and no specialist call; concurrent fresh keys admit one, one key replays one turn); refusals record no turn; groups are append-only and readable only by their owner`);
+  }
+
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
   // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter
