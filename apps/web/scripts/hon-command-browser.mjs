@@ -90,8 +90,26 @@ const draftWork = {
 const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AWAITING_APPROVAL', requestedByPrincipalId: id(60), effectiveAuthorityMode: 'CONFIRM', policyVersion: 1, approvalExpiresAt: iso(hours + 48), createdAt: iso(hours) });
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
-const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0 };
-const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'claire', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
+const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0, groups: new Map(), targets: { step: null, gate: null, reads: [] } };
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
+// C3a: each specialist's own target list (synthetic), and the grouped confirmations by HON answer.
+const honCampaigns = () => [['Spring trial week', 'ACTIVE'], ['Summer camp', 'DRAFT'], ['Old open house', 'ARCHIVED']].map(([name, status], n) => ({ id: id(720 + n), code: `C${n}`, name, goal: 'More trials', offerLabel: '',
+  channel: 'EMAIL', startsAt: iso(-100), endsAt: iso(100), plannedBudgetMinor: 0, currency: 'USD', version: 3, status, createdAt: iso(-200), updatedAt: iso(-10), planningOnly: true }));
+const honCurricula = () => ({ items: [{ id: id(730), name: 'Little Dragons', version: 2 }, { id: id(731), name: 'Teen Kickboxing', version: 1 }] });
+const honLeads = () => [['Riley', 'Park', 'OPEN'], ['Jordan', 'Kim', 'OPEN'], ['Casey', 'Lee', 'WON']].map(([givenName, familyName, status], n) => ({ id: id(740 + n), status, pipelineStageId: id(749),
+  primaryPersonId: id(750 + n), version: 5 + n, createdAt: iso(-48), givenName, familyName }));
+const groupStatus = (statuses) => statuses.includes('UNKNOWN') ? 'UNKNOWN' : statuses.some((x) => ['READY', 'PROCESSING', 'DELEGATING'].includes(x)) ? 'PENDING'
+  : statuses.includes('AWAITING_APPROVAL') ? 'NEEDS_REVIEW' : statuses.every((x) => x === 'COMPLETED') ? 'COMPLETED' : statuses.every((x) => x === 'FAILED') ? 'FAILED' : 'PARTIAL';
+async function honTargets(route, kind) {
+  hon.targets.reads.push(kind);
+  if (hon.targets.gate) await hon.targets.gate;
+  const step = hon.targets.step;
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (step === 'denied') return json(route, 403, { code: 'FORBIDDEN' });
+  if (kind === 'marcus') return json(route, 200, { data: honCampaigns(), meta: { requestId: 'synthetic' } });
+  if (kind === 'kai') return json(route, 200, { data: honCurricula() });
+  return json(route, 200, { data: honLeads(), meta: { requestId: 'synthetic' } });
+}
 const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], ...over });
 let honSeq = 700;
 async function honApi(route, path, method, prefix) {
@@ -100,6 +118,11 @@ async function honApi(route, path, method, prefix) {
   if (path === `${base}/conversations` && method === 'GET') return json(route, 200, { data: { items: hon.conversations.map(({ turns, ...rest }) => rest), nextCursor: null } });
   const read = path.match(new RegExp(`^${base}/conversations/([0-9a-f-]{36})$`));
   if (read && method === 'GET') { const c = hon.conversations.find((x) => x.id === read[1]); return c ? json(route, 200, { data: c }) : json(route, 404, { code: 'HON_CONVERSATION_NOT_FOUND' }); }
+  const grouped = path.match(new RegExp(`^${base}/conversations/([0-9a-f-]{36})/orchestrations$`));
+  if (grouped && method === 'GET') {
+    const items = [...(hon.groups.get(grouped[1]) ?? new Map()).values()].map((g) => ({ sourceTurnId: g.sourceTurnId, status: groupStatus(g.members.map((m) => m.status)), members: g.members }));
+    return json(route, 200, { data: { items } });
+  }
   if (method !== 'POST') return json(route, 404, { code: 'NOT_FOUND' });
   const request = route.request();
   const headers = request.headers();
@@ -110,6 +133,8 @@ async function honApi(route, path, method, prefix) {
   if (step === 'lost') return route.abort('connectionreset');
   if (step === 'timeout') return json(route, 503, { code: 'HON_CONVERSATION_TIMEOUT' });
   if (step === 'paused') return json(route, 403, { code: 'HON_AI_SPEND_REFUSED', reason: 'AI_SPEND_PAUSED' });
+  if (step === 'notConfirmable') return json(route, 400, { code: 'HON_SUGGESTION_NOT_CONFIRMABLE' });
+  if (step === 'holdSession') { await new Promise((done) => { hon.held = done; }); return json(route, 401, { code: 'SIGN_IN_REQUIRED' }); }
   if (step === 'hold') await new Promise((done) => { hon.held = done; });
   // Idempotent replay: the same key returns the first result.
   const prior = hon.turns.get(headers['idempotency-key']);
@@ -124,10 +149,26 @@ async function honApi(route, path, method, prefix) {
   const c = turn && hon.conversations.find((x) => x.id === turn[1]);
   if (!c) return json(route, 404, { code: 'HON_CONVERSATION_NOT_FOUND' });
   const ask = JSON.parse(body); const turnId = id(honSeq += 1);
+  if (ask.delegation) {
+    // A confirmed suggestion: the specialist records a draft that waits for approval. Nothing is sent or published.
+    const agent = ask.delegation.agentKey; const actionRequestId = id(honSeq += 1); const workItemId = id(honSeq += 1); const invocationId = id(honSeq += 1);
+    c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
+    c.turns.push({ turnId, role: agent, text: null, createdAt: iso(0), status: 'AWAITING_APPROVAL', reason: null, references: { workItemId, actionRequestId, invocationId }, replyDetail: null });
+    c.turnCount += 1; c.status = 'AWAITING_APPROVAL';
+    if (ask.fromSuggestionTurnId) {
+      const byConversation = hon.groups.get(c.id) ?? new Map(); hon.groups.set(c.id, byConversation);
+      const g = byConversation.get(ask.fromSuggestionTurnId) ?? { sourceTurnId: ask.fromSuggestionTurnId, members: [] }; byConversation.set(ask.fromSuggestionTurnId, g);
+      g.members.push({ agentKey: agent, turnId, status: 'AWAITING_APPROVAL' });
+    }
+    const receipt = { turnId, conversationId: c.id, status: 'AWAITING_APPROVAL', reason: null, delegatedAgentKeys: [agent], actionRequestIds: [actionRequestId], workItemIds: [workItemId], invocationId, reply: null, replyDetail: null };
+    hon.turns.set(headers['idempotency-key'], receipt);
+    return json(route, 200, { data: receipt });
+  }
   const long = /long/i.test(ask.text);
+  const suggest = /saturday/i.test(ask.text) ? ['marcus', 'chad', 'kai'] : [];
   const text = ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
     : long ? 'Here is a detailed plan for this week. First, follow up the three new leads from the weekend…' : 'You have 3 new leads in the last 24 hours and 2 trial appointments tomorrow. I suggest following up the leads first.';
-  const detail = ask.continueTurnId ? replyDetail('DETAILED', { step: 2, continuesTurnId: ask.continueTurnId }) : replyDetail(ask.replyMode ?? 'STANDARD', long ? { truncated: true, canContinue: true } : {});
+  const detail = ask.continueTurnId ? replyDetail('DETAILED', { step: 2, continuesTurnId: ask.continueTurnId }) : replyDetail(ask.replyMode ?? 'STANDARD', long ? { truncated: true, canContinue: true } : { suggestions: suggest });
   c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
   c.turns.push({ turnId, role: 'hon', text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: id(honSeq += 1), actionRequestId: null, invocationId: id(honSeq += 1) }, replyDetail: detail });
   c.turnCount += 1; c.status = 'COMPLETED';
@@ -167,6 +208,9 @@ async function api(route) {
   if (path === '/api/v1/staff/current-reporting-school') return json(route, 200, { data: mode === 'multi' ? { state: 'MANUAL_ENTRY_REQUIRED' } : { state: 'RESOLVED', ...scope } });
   if (path === '/api/v1/staff/reporting-schools') return json(route, 200, { data: { state: 'SELECTION_REQUIRED', schools: [{ organizationId: scope.organizationId, organizationName: 'Synthetic Dojo Group', schoolId: scope.schoolId, schoolName: 'Synthetic Martial Arts Academy' }] } });
   if (path.startsWith(`${prefix}/hon/`)) return honApi(route, path, method, prefix);
+  if (path === '/api/v1/marketing/campaigns' && method === 'GET') return honTargets(route, 'marcus');
+  if (path === '/api/v1/staff/teaching-assistant/curricula' && method === 'GET') return honTargets(route, 'kai');
+  if (path === `${prefix}/crm/leads` && method === 'GET' && url.searchParams.get('status') === 'OPEN') return honTargets(route, 'chad');
   if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
     assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
     return studio === 'denied' ? json(route, 403, { code: 'FORBIDDEN' }) : json(route, 200, { data: creativeWallet() });
@@ -490,7 +534,7 @@ await check('no unsupported capability presented as operational', async () => {
 });
 
 // ---------- Ask HON conversation ----------
-function resetHon(reply) { hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; }
+function resetHon(reply) { hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; hon.groups = new Map(); hon.targets = { step: null, gate: null, reads: [] }; }
 async function fullHon(viewport, nextTheme = 'modern') {
   theme = nextTheme; mode = 'ready';
   const ctx = await context(viewport); const page = await ctx.newPage();
@@ -615,6 +659,175 @@ await check('Ask HON: leaving the page mid-reply conceals it; the late result st
   await ask.getByText('Private follow-up about Sam').waitFor();
   await ctx.close();
 });
+
+// ---------- Ask HON suggestion cards (C3a) ----------
+async function suggestedAnswer(viewport, mode_ = 'modern') {
+  resetHon(true);
+  const opened = await fullHon(viewport, mode_);
+  await askBox(opened.ask).fill('How do I fill Saturday trials?');
+  await opened.ask.getByRole('button', { name: 'Send' }).click();
+  await opened.ask.getByRole('button', { name: 'Ask Marcus' }).waitFor();
+  return opened;
+}
+const lastBody = () => JSON.parse(hon.posts.at(-1).body);
+const sourceTurn = () => hon.conversations[0].turns.find((t) => t.role === 'hon').turnId;
+const honEnded = (page) => page.evaluate(() => window.__honEnded);
+const watchHonEnded = (page) => page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+
+for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['phone-390', { width: 390, height: 844 }, 'big-button']]) {
+  await check(`Ask HON suggestions ${mode_} ${name}: confirm Marcus and Chad from the cards; grouped status; exact bodies`, async () => {
+    const { ctx, page, ask } = await suggestedAnswer(viewport, mode_);
+    assert.ok(await ask.getByText(/Nothing runs until you choose what they work on and confirm/).isVisible());
+    assert.equal(hon.targets.reads.length, 0, 'no target list is read until a card is opened');
+    const posts = hon.posts.length;
+    await ask.getByRole('button', { name: 'Ask Marcus' }).click();
+    const form = ask.getByRole('form', { name: 'Ask Marcus' });
+    await form.getByLabel('Campaign').waitFor();
+    const options = await form.getByLabel('Campaign').locator('option').allInnerTexts();
+    assert.deepEqual(options, ['Choose a campaign', 'Spring trial week (active)', 'Summer camp (draft)'], 'archived campaigns are not offered');
+    assert.equal(await ask.getByRole('button', { name: 'Ask Chad' }).isDisabled(), true, 'one confirmation at a time');
+    assert.equal(await form.getByRole('button', { name: 'Send to Marcus' }).isDisabled(), true);
+    await form.getByLabel('Campaign').selectOption({ label: 'Spring trial week (active)' });
+    await form.getByLabel('What should Marcus draft?').fill('A Saturday trial post for parents');
+    await noOverflow(page, `ask-hon-suggest-${mode_}-${name}`);
+    await axe(page, `ask-hon-suggest-${mode_}-${name}`);
+    await shot(page, `ask-hon-suggest-${mode_}-${name}-confirm`);
+    assert.equal(hon.posts.length, posts, 'nothing is sent before Send');
+    await form.getByRole('button', { name: 'Send to Marcus' }).click();
+    await ask.getByText('Specialists you asked').waitFor();
+    assert.deepEqual(lastBody(), { text: 'A Saturday trial post for parents', delegation: { agentKey: 'marcus', campaignId: id(720) }, fromSuggestionTurnId: sourceTurn() });
+    assert.ok(await ask.getByText('Needs your review').isVisible());
+    assert.ok(await ask.getByRole('link', { name: 'Review drafts in Action Center →' }).isVisible());
+    assert.equal(await ask.getByRole('button', { name: 'Ask Marcus' }).count(), 0, 'an asked specialist is not offered again');
+    await ask.getByRole('button', { name: 'Ask Chad' }).click();
+    const chad = ask.getByRole('form', { name: 'Ask Chad' });
+    await chad.getByLabel('Lead').waitFor();
+    assert.deepEqual(await chad.getByLabel('Lead').locator('option').allInnerTexts(), ['Choose a lead', 'Riley Park', 'Jordan Kim'], 'only open leads');
+    await chad.getByLabel('Lead').selectOption({ label: 'Jordan Kim' });
+    assert.equal(await chad.getByRole('button', { name: 'Send to Chad' }).isDisabled(), true, 'a follow-up type is required');
+    await chad.getByText('Trial reminder', { exact: true }).click();
+    await chad.getByLabel('What should Chad draft?').fill('Remind them about Saturday at 10');
+    await chad.getByRole('button', { name: 'Send to Chad' }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-hon-suggestions] [data-asked]').length === 2);
+    assert.deepEqual(lastBody(), { text: 'Remind them about Saturday at 10', delegation: { agentKey: 'chad', leadId: id(741), expectedLeadVersion: 6, purpose: 'TRIAL_REMINDER' }, fromSuggestionTurnId: sourceTurn() });
+    assert.equal(hon.groups.get(hon.conversations[0].id).get(sourceTurn()).members.length, 2, 'both confirmations are grouped under the one answer');
+    assert.ok(await ask.getByRole('button', { name: 'Ask Kai' }).isEnabled());
+    await noOverflow(page, `ask-hon-suggest-${mode_}-${name}-grouped`);
+    await shot(page, `ask-hon-suggest-${mode_}-${name}-grouped`, true);
+    await ctx.close();
+  });
+}
+
+await check('Ask HON suggestions: a refused confirmation reopens the form with what was chosen; nothing is retried', async () => {
+  const { ctx, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+  await ask.getByRole('button', { name: 'Ask Kai' }).click();
+  const form = ask.getByRole('form', { name: 'Ask Kai' });
+  await form.getByLabel('Curriculum').selectOption({ label: 'Little Dragons (version 2)' });
+  await form.getByLabel('What should Kai draft?').fill('Week 1 warm-up plan');
+  hon.queue = ['notConfirmable'];
+  const reads = hon.targets.reads.length;
+  await form.getByRole('button', { name: 'Send to Kai' }).click();
+  await ask.getByText(/can no longer be confirmed/).waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Retry the same request' }).count(), 0);
+  await form.getByLabel('Curriculum').waitFor();
+  assert.equal(await form.getByLabel('What should Kai draft?').inputValue(), 'Week 1 warm-up plan');
+  assert.equal(await form.getByLabel('Curriculum').inputValue(), id(730));
+  assert.equal(hon.targets.reads.length, reads + 1, 'the target list is read again, not kept');
+  await ctx.close();
+});
+
+await check('Ask HON suggestions: an unknown outcome keeps one exact retry and locks the other cards', async () => {
+  const { ctx, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+  await ask.getByRole('button', { name: 'Ask Marcus' }).click();
+  const form = ask.getByRole('form', { name: 'Ask Marcus' });
+  await form.getByLabel('Campaign').selectOption({ label: 'Summer camp (draft)' });
+  await form.getByLabel('What should Marcus draft?').fill('Camp teaser');
+  hon.queue = ['lost'];
+  await form.getByRole('button', { name: 'Send to Marcus' }).click();
+  await ask.getByRole('button', { name: 'Retry the same request' }).waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Ask Chad' }).isDisabled(), true, 'no second request while the first is unknown');
+  await ask.getByRole('button', { name: 'Retry the same request' }).click();
+  await ask.getByText('Specialists you asked').waitFor();
+  const sends = hon.posts.filter((p) => JSON.parse(p.body).delegation);
+  assert.equal(sends.length, 2); assert.equal(new Set(sends.map((p) => p.key)).size, 1); assert.equal(new Set(sends.map((p) => p.body)).size, 1);
+  assert.equal(hon.groups.get(hon.conversations[0].id).get(sourceTurn()).members.length, 1, 'exactly one Marcus request exists');
+  await ctx.close();
+});
+
+await check('Ask HON suggestions: a denied target list says so and sends nothing', async () => {
+  const { ctx, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+  hon.targets.step = 'denied';
+  await ask.getByRole('button', { name: 'Ask Chad' }).click();
+  await ask.getByText(/Your role cannot see this specialist’s list/).waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Send to Chad' }).count(), 0);
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  assert.ok(await ask.getByRole('button', { name: 'Ask Chad' }).isEnabled());
+  await ctx.close();
+});
+
+await check('Ask HON suggestions: leaving the page hides lead names and the open form; Refresh shows the answer, not the form', async () => {
+  const { ctx, page, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+  await ask.getByRole('button', { name: 'Ask Chad' }).click();
+  await ask.getByRole('form', { name: 'Ask Chad' }).getByLabel('Lead').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => document.querySelector('section[data-hon-conversation]')?.getAttribute('data-hon-conversation') === 'CONCEALED');
+  const hidden = await ask.innerText();
+  for (const secret of ['Riley', 'Jordan', 'Saturday']) assert.ok(!hidden.includes(secret), `concealed view shows ${secret}`);
+  await pageRefresh(ask).click();
+  await ask.getByRole('button', { name: 'Ask Chad' }).waitFor();
+  assert.equal(await ask.getByRole('form', { name: 'Ask Chad' }).count(), 0);
+  await ctx.close();
+});
+
+for (const [how, retire] of [['Cancel', (page, ask) => ask.getByRole('button', { name: 'Cancel' }).click()],
+  ['leaving the page', (page) => page.evaluate(() => window.dispatchEvent(new Event('blur')))],
+  ['closing the view', (page) => page.evaluate(() => window.next.router.push('/staff/crm/follow-ups'))]]) {
+  await check(`Ask HON suggestions: a late sign-in answer to a target list retired by ${how} does not end the session`, async () => {
+    const { ctx, page, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+    await watchHonEnded(page);
+    let release; hon.targets.gate = new Promise((done) => { release = done; }); hon.targets.step = 'session';
+    await ask.getByRole('button', { name: 'Ask Marcus' }).click();
+    await ask.getByText(/Loading campaign choices/).waitFor();
+    await retire(page, ask);
+    release();
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await honEnded(page), 0, 'the retired read did not end the session');
+    await ctx.close();
+  });
+}
+for (const [how, retire] of [['leaving the page', (page) => page.evaluate(() => window.dispatchEvent(new Event('blur')))],
+  ['closing the view', (page) => page.evaluate(() => window.next.router.push('/staff/crm/follow-ups'))]]) {
+  await check(`Ask HON suggestions: a late sign-in answer to a confirmation retired by ${how} does not end the session; a current one does`, async () => {
+    const { ctx, page, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+    await watchHonEnded(page);
+    await ask.getByRole('button', { name: 'Ask Marcus' }).click();
+    const form = ask.getByRole('form', { name: 'Ask Marcus' });
+    await form.getByLabel('Campaign').selectOption({ label: 'Spring trial week (active)' });
+    await form.getByLabel('What should Marcus draft?').fill('Spring post');
+    hon.queue = ['holdSession'];
+    await form.getByRole('button', { name: 'Send to Marcus' }).click();
+    await ask.getByText('HON is working on it…').waitFor();
+    await retire(page, ask);
+    for (let i = 0; i < 40 && !hon.held; i++) await new Promise((done) => setTimeout(done, 50));
+    hon.held(); hon.held = null;
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await honEnded(page), 0, 'the retired confirmation did not end the session');
+    await ctx.close();
+    // The same answer for a confirmation still shown ends the session.
+    const current = await suggestedAnswer({ width: 1440, height: 900 });
+    await watchHonEnded(current.page);
+    await current.ask.getByRole('button', { name: 'Ask Marcus' }).click();
+    const again = current.ask.getByRole('form', { name: 'Ask Marcus' });
+    await again.getByLabel('Campaign').selectOption({ label: 'Spring trial week (active)' });
+    await again.getByLabel('What should Marcus draft?').fill('Spring post');
+    hon.queue = ['holdSession'];
+    await again.getByRole('button', { name: 'Send to Marcus' }).click();
+    for (let i = 0; i < 40 && !hon.held; i++) await new Promise((done) => setTimeout(done, 50));
+    hon.held(); hon.held = null;
+    await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await current.ctx.close();
+  });
+}
 
 await check('Overflow gate: clipped shell tabs and the known picker pass; escaping, unlisted or extra page overflow fails', async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const page = await ctx.newPage();
