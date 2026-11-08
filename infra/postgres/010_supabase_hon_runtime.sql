@@ -2266,3 +2266,20 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_person(text,uuid,uuid),hon.update_school_person(text,jsonb,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-CRM-1b 0218 (proposed) student birth date + CRM enrollment identity corrections: the birth date command is the
+-- only new runtime entry point; helpers, the corrections table and the person command receipts stay private.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['crm_guardian_child_current_identity(uuid,uuid,uuid)','record_crm_guardian_child_identity_correction(uuid,uuid,uuid,uuid,uuid,text,text,date)',
+    'guard_school_person_command_receipt()','school_person_is_owner(uuid,uuid)','update_school_student_birth_date(text,jsonb,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON TABLE hon.crm_guardian_child_identity_corrections FROM '||quote_ident(r);
+    EXECUTE 'REVOKE ALL ON TABLE hon.school_person_command_receipts FROM '||quote_ident(r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.update_school_student_birth_date(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;

@@ -28,7 +28,7 @@ async function send(path,{identity,body,key=K(),method='POST',headers={}}={}){
  return new Promise((resolve,reject)=>{const req=request(origin+'/v1/'+path,{method,headers:{...(cookie?{cookie}:{}),origin,'sec-fetch-site':'same-origin','sec-fetch-mode':'same-origin','sec-fetch-dest':'empty',...(method==='POST'?{'content-type':'application/json','x-hon-human-command':PERSON_RECORD_HUMAN_COMMAND,'idempotency-key':key}:{}),...headers}},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(text||'{}'),headers:res.headers}));});req.on('error',reject);req.end(body===undefined?undefined:JSON.stringify(body));});
 }
 const ok=r=>{assert.equal(r.status,200,JSON.stringify(r.body));return r.body.data;};
-const tables=['people','audit_events','outbox_events','idempotency_records','communication_consents','student_profiles','family_members'];
+const tables=['people','audit_events','outbox_events','idempotency_records','school_person_command_receipts','communication_consents','student_profiles','family_members','crm_guardian_child_identity_corrections'];
 const counts=async()=>Object.fromEntries(await Promise.all(tables.map(async t=>[t,(await q('SELECT count(*) n FROM hon.'+t))[0].n])));
 const snapshot=async id=>(await q('SELECT given_name,family_name,email::text email,phone_e164,version,updated_at FROM hon.people WHERE id=$1',[id]))[0];
 async function denied(work,status,code,personId){
@@ -105,7 +105,7 @@ try{
  // 2. Read: exact shape, student profile, consent defaults, canEdit from live authority.
  const r1=ok(await read(editor,A.schoolId,student));
  assert.deepEqual({...r1,updatedAt:undefined},{personId:student,schoolId:A.schoolId,givenName:'Ana',familyName:'Rivera',email:'ana@example.invalid',phoneE164:'+15555550100',version:1,updatedAt:undefined,
-  student:{birthDate:'2015-04-02',status:'ACTIVE'},consents:{EMAIL:'NOT_RECORDED',SMS:'NOT_RECORDED'},canEdit:true});
+  student:{birthDate:'2015-04-02',status:'ACTIVE',version:1},consents:{EMAIL:'NOT_RECORDED',SMS:'NOT_RECORDED'},canEdit:true});
  assert.equal(ok(await read(reader,A.schoolId,student)).canEdit,false);
  assert.equal(ok(await read(editor,A.schoolId,guardian)).student,null);
  pass('read returns the closed record with student profile, consent states and canEdit from live authority');
@@ -139,7 +139,8 @@ try{
  assert.equal(done.person.version,2);assert.equal(done.person.familyName,'Rivera-Lopez');assert.equal(done.person.email,'ana.r@example.invalid');assert.equal(done.person.phoneE164,null);
  assert.deepEqual(await snapshot(student).then(s=>({...s,updated_at:undefined})),{given_name:'Ana',family_name:'Rivera-Lopez',email:'ana.r@example.invalid',phone_e164:null,version:2,updated_at:undefined});
  const after=await counts();
- for(const t of ['audit_events','outbox_events','idempotency_records'])assert.equal(Number(after[t]),Number(before[t])+1,t);
+ for(const t of ['audit_events','outbox_events','school_person_command_receipts'])assert.equal(Number(after[t]),Number(before[t])+1,t);
+ assert.equal(after.idempotency_records,before.idempotency_records,'0218 receipts never use hon.idempotency_records');
  const audit=(await q("SELECT actor_principal_id,source,prior_state,next_state,result FROM hon.audit_events WHERE action_code='people.update' AND entity_id=$1",[student]))[0];
  assert.equal(audit.actor_principal_id,editorPrincipal);assert.equal(audit.source,'HUMAN_UI');assert.equal(audit.result,'SUCCEEDED');
  assert.deepEqual(audit.prior_state,{givenName:'Ana',familyName:'Rivera',email:'ana@example.invalid',phoneE164:'+15555550100',version:1});
@@ -196,9 +197,9 @@ try{
   await blocker.query('LOCK TABLE hon.idempotency_records IN SHARE ROW EXCLUSIVE MODE');
   await blocker.query('COMMIT');
   const r=ok(await pending);assert.equal(r.person.version,row.version+1);assert.deepEqual(r.changedFields,['givenName']);}
- pass('the edit takes the people lock before the idempotency insert, so a CRM-style SHARE ROW EXCLUSIVE holder never deadlocks with it');
+ pass('the edit takes the people lock before its receipt reservation, so a CRM-style SHARE ROW EXCLUSIVE holder of people and idempotency records never deadlocks with it');
  // 10. Contact edits serialize with consent capture through the canonical person/channel advisory lock.
- const effects=async()=>Object.fromEntries(await Promise.all(['audit_events','outbox_events','idempotency_records'].map(async t=>[t,(await q('SELECT count(*) n FROM hon.'+t))[0].n])));
+ const effects=async()=>Object.fromEntries(await Promise.all(['audit_events','outbox_events','idempotency_records','school_person_command_receipts'].map(async t=>[t,(await q('SELECT count(*) n FROM hon.'+t))[0].n])));
  const consentRow=(o,id,channel,status)=>q("INSERT INTO hon.communication_consents(organization_id,school_id,person_id,channel,status,source,captured_at,updated_by_principal_id) VALUES($1,$2,$3,$4,$5,'STAFF',clock_timestamp(),$6)",[o.organizationId,o.schoolId,id,channel,status,editorPrincipal]);
  const raceEdit=(id,patch)=>update(editor3,body(A.schoolId,id,1,{givenName:'Race',familyName:'Case',email:'race-a@example.invalid',phoneE164:'+15555550200',...patch}));
  for(const [label,channel,patch,prepare,capture] of [
@@ -233,7 +234,7 @@ try{
  // same canonical lock: its first opt-in, held open after the insert, makes the contact edit wait and then refuse.
  {const consents=new CommunicationConsentService(database);
   const id=await addPerson(A,'Race','Case','race-a@example.invalid','+15555550200'),row=await snapshot(id);
-  const editEffects=async()=>(await q("SELECT (SELECT count(*) FROM hon.audit_events WHERE action_code='people.update' AND entity_id=$1) a,(SELECT count(*) FROM hon.outbox_events WHERE event_type='people.person.updated' AND payload->>'personId'=$1::text) o,(SELECT count(*) FROM hon.idempotency_records WHERE idempotency_key LIKE 'people.update:%') k",[id]))[0];
+  const editEffects=async()=>(await q("SELECT (SELECT count(*) FROM hon.audit_events WHERE action_code='people.update' AND entity_id=$1) a,(SELECT count(*) FROM hon.outbox_events WHERE event_type='people.person.updated' AND payload->>'personId'=$1::text) o,(SELECT count(*) FROM hon.school_person_command_receipts WHERE command='people.update') k",[id]))[0];
   const before=await editEffects();
   await blocker.query('BEGIN');await blocker.query('LOCK TABLE hon.audit_events IN SHARE MODE');
   const writer=consents.record({organizationId:A.organizationId,schoolId:A.schoolId,principalId:editorPrincipal,principalType:'HUMAN_USER',requestId:K(),correlationId:K(),idempotencyKey:'upper-'+K(),source:'HUMAN_UI'},
@@ -247,7 +248,177 @@ try{
   assert.deepEqual(await snapshot(id),row);assert.deepEqual(await editEffects(),before);
   assert.deepEqual(ok(await read(editor3,A.schoolId,id)).consents,{EMAIL:'OPTED_IN',SMS:'NOT_RECORDED'});}
  pass('the real consent writer with an uppercase person selector shares the canonical lock: its in-flight first opt-in makes the edit refuse with no contact, audit, outbox or key effects');
- console.log('B-CRM-1a person record proof: '+groups+' groups passed');
+ // 12. B-CRM-1b birth date: posture. One new definer entry point; helpers and the corrections table private.
+ {const fn=(await q("SELECT p.oid,p.prosecdef,p.proconfig FROM pg_proc p WHERE p.oid='hon.update_school_student_birth_date(text,jsonb,uuid)'::regprocedure"))[0];
+  assert.equal(fn.prosecdef,true);assert.deepEqual(fn.proconfig,['search_path=pg_catalog, hon']);
+  assert.equal((await q("SELECT has_function_privilege($1,$2::oid,'EXECUTE') ok",[runtime.username,fn.oid]))[0].ok,true);
+  for(const h of ['hon.crm_guardian_child_current_identity(uuid,uuid,uuid)','hon.record_crm_guardian_child_identity_correction(uuid,uuid,uuid,uuid,uuid,text,text,date)','hon.guard_school_person_command_receipt()','hon.school_person_is_owner(uuid,uuid)','hon.crm_guardian_child_child_relation(uuid)'])
+   for(const who of [runtime.username,'public'])assert.equal((await q("SELECT has_function_privilege($1,$2::regprocedure,'EXECUTE') ok",[who,h]))[0].ok,false,h+' '+who);
+  for(const t of ['hon.crm_guardian_child_identity_corrections','hon.school_person_command_receipts']){
+   assert.deepEqual((await q("SELECT relrowsecurity r,relforcerowsecurity f,(SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)::int policies FROM pg_class c WHERE oid=$1::regclass",[t]))[0],{r:true,f:true,policies:0},t);
+   for(const pr of ['SELECT','INSERT','UPDATE','DELETE'])assert.equal((await q("SELECT has_table_privilege($1,$2,$3) ok",[runtime.username,t,pr]))[0].ok,false,t+' '+pr);}
+  for(const pr of ['UPDATE','DELETE'])assert.equal((await q("SELECT has_table_privilege($1,'hon.student_profiles',$2) ok",[runtime.username,pr]))[0].ok,false,pr);}
+ pass('birth date: one definer entry point for the runtime; the corrections and receipt tables, helpers and the child relation stay private; no UPDATE on student_profiles');
+
+ // 13. Birth date correction by delegated staff: version, reason audited, outbox without the date, replay, conflicts, refusals.
+ const ownerRole=(await q("SELECT id FROM hon.roles WHERE organization_id=$1 AND code='OWNER' AND is_system_role",[A.organizationId]))[0].id;
+ const owner=person('owner'),ownerPrincipal=await human(owner,'Owner');const ownerGrant=await grant(A,ownerPrincipal,ownerRole);
+ const bd=(personId,expectedVersion,birthDate,reason='Parent supplied the passport date')=>({schoolId:A.schoolId,personId,expectedVersion,birthDate,reason});
+ const setBirth=(identity,b,key=K())=>send('school/people/birth-date',{identity,body:b,key});
+ const profile=async id=>(await q('SELECT birth_date::text birth_date,version,updated_at FROM hon.student_profiles WHERE person_id=$1',[id]))[0];
+ const kid=await addPerson(A,'Kai','Moreno');
+ await q('INSERT INTO hon.student_profiles(organization_id,school_id,person_id,primary_family_id,birth_date) VALUES($1,$2,$3,$4,$5)',[A.organizationId,A.schoolId,kid,fam,'2016-03-01']);
+ const bdDenied=async(work,status,code,id)=>{const row=id?await profile(id):null,c=await counts();const r=await work();
+  assert.equal(r.status,status,JSON.stringify(r.body));assert.equal(r.body.code,code);if(id)assert.deepEqual(await profile(id),row);assert.deepEqual(await counts(),c);};
+ {const c=await counts(),key=K(),b=bd(kid,1,'2016-04-01',' Parent supplied the passport date ');
+  const r=ok(await setBirth(editor3,b,key));
+  assert.deepEqual(r.changedFields,['birthDate']);assert.equal(r.enrollmentCorrected,false);
+  assert.deepEqual(r.person.student,{birthDate:'2016-04-01',status:'ACTIVE',version:2});assert.equal(r.person.version,1);
+  const after=await counts();for(const t of ['audit_events','outbox_events','school_person_command_receipts'])assert.equal(Number(after[t]),Number(c[t])+1,t);
+  assert.equal(after.idempotency_records,c.idempotency_records);
+  const audit=(await q("SELECT prior_state,next_state,entity_type FROM hon.audit_events WHERE action_code='people.student.birth_date.update' AND next_state->>'personId'=$1",[kid]))[0];
+  assert.equal(audit.entity_type,'STUDENT_PROFILE');assert.deepEqual(audit.prior_state,{personId:kid,birthDate:'2016-03-01',version:1});
+  assert.deepEqual(audit.next_state,{personId:kid,birthDate:'2016-04-01',version:2,reason:'Parent supplied the passport date',minorToAdult:false,enrollmentCorrected:false});
+  const ob=(await q("SELECT payload FROM hon.outbox_events WHERE event_type='people.student.updated' AND payload->>'personId'=$1",[kid]))[0].payload;
+  assert.deepEqual(Object.keys(ob).sort(),['changedFields','personId','studentProfileId','version']);assert(!JSON.stringify(ob).includes('2016'));
+  assert.deepEqual(ok(await setBirth(editor3,b,key)),r);assert.deepEqual(await counts(),after);
+  await bdDenied(()=>setBirth(editor3,{...b,birthDate:'2016-05-01'},key),409,'PERSON_IDEMPOTENCY_CONFLICT',kid);}
+ await bdDenied(()=>setBirth(editor3,bd(kid,1,'2016-05-01')),409,'PERSON_VERSION_CONFLICT',kid);
+ await bdDenied(()=>setBirth(editor3,bd(kid,2,'2016-04-01')),400,'PERSON_UNCHANGED',kid);
+ const tomorrow=new Date(Date.now()+2*864e5).toISOString().slice(0,10);
+ for(const b of [bd(kid,2,tomorrow),bd(kid,2,'1899-12-31'),bd(kid,2,'2016-02-30'),bd(kid,2,'2016-05-01',''),{...bd(kid,2,'2016-05-01'),organizationId:A.organizationId},{...bd(kid,2,'2016-05-01'),birthDate:null}])
+  await bdDenied(()=>setBirth(editor3,b),400,'PERSON_INPUT_INVALID',kid);
+ await bdDenied(()=>setBirth(editor3,bd(guardian,1,'1980-01-01')),404,'PERSON_UNAVAILABLE');
+ await bdDenied(()=>setBirth(editorB,{...bd(kid,2,'2016-05-01'),schoolId:B.schoolId}),404,'PERSON_UNAVAILABLE',kid);
+ for(const who of [reader,updateOnly,parent,outsider,inactive])await bdDenied(()=>setBirth(who,bd(kid,2,'2016-05-01')),403,'PERSON_FORBIDDEN',kid);
+ await assert.rejects(()=>restricted.query('UPDATE hon.student_profiles SET birth_date=$1 WHERE person_id=$2',['2000-01-01',kid]),e=>e.code==='42501');
+ pass('a delegated editor corrects a birth date with a reason: version, audit with the reason, outbox without the date, replay, key reuse, stale and unchanged edits, future and invalid dates, no profile, other school and no authority refused with nothing written');
+
+ // 14. Minor to adult needs a school OWNER (it removes the 0177 guardian-of-record requirement); stricter or first-time dates do not.
+ const adultDate=(new Date().getUTCFullYear()-30)+'-01-15';
+ await bdDenied(()=>setBirth(editor3,bd(kid,2,adultDate)),403,'PERSON_BIRTH_DATE_OWNER_REQUIRED',kid);
+ {const r=ok(await setBirth(owner,bd(kid,2,adultDate,'Registered under the wrong date; adult member')));assert.equal(r.person.student.birthDate,adultDate);
+  assert.equal((await q("SELECT next_state->>'minorToAdult' m FROM hon.audit_events WHERE action_code='people.student.birth_date.update' AND next_state->>'personId'=$1 AND next_state->>'version'='3'",[kid]))[0].m,'true');}
+ assert.equal(ok(await setBirth(editor3,bd(kid,3,'2017-06-01'))).person.student.birthDate,'2017-06-01');
+ const unknown=await addPerson(A,'Noa','Moreno');
+ await q('INSERT INTO hon.student_profiles(organization_id,school_id,person_id,primary_family_id) VALUES($1,$2,$3,$4)',[A.organizationId,A.schoolId,unknown,fam]);
+ assert.equal(ok(await setBirth(editor3,bd(unknown,1,adultDate))).person.student.birthDate,adultDate);
+ // The owner rule is decided again after the last write (Manus evidence gate). The OWNER also holds an independent
+ // delegated editor grant, so revoking only OWNER leaves edit authority intact. A fixture barrier pauses the command at
+ // its audit insert, i.e. after the initial OWNER check and the student UPDATE; OWNER is then revoked (and, second run,
+ // ended by the clock) and the command must refuse with nothing written. An ablation without the final OWNER
+ // predicate commits, so this test detects its removal.
+ await grant(A,ownerPrincipal,editRole);
+ const barrierKey=7218014;
+ await q(`CREATE FUNCTION hon.fixture_birth_date_audit_barrier() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN
+   IF NEW.action_code='people.student.birth_date.update' THEN PERFORM pg_advisory_xact_lock(${barrierKey}); END IF; RETURN NEW; END $f$`);
+ await q('CREATE TRIGGER fixture_birth_date_audit_barrier BEFORE INSERT ON hon.audit_events FOR EACH ROW EXECUTE FUNCTION hon.fixture_birth_date_audit_barrier()');
+ const minorDate='2017-06-01';
+ const ownerGrantFresh=async()=>grant(A,ownerPrincipal,ownerRole);
+ const pausedCrossing=async(end,ownerGrantId)=>{
+  const row=await profile(kid),c=await counts();assert.equal(row.birth_date,minorDate);
+  await blocker.query('SELECT pg_advisory_lock($1)',[barrierKey]);
+  const pending=setBirth(owner,bd(kid,row.version,adultDate,'Registered under the wrong date; adult member'));
+  await waitFor("SELECT count(*) n FROM pg_locks WHERE locktype='advisory' AND NOT granted",'never reached the audit barrier');
+  // Paused after the UPDATE: the row lock is held by the waiting command.
+  assert.equal((await q("SELECT count(*) n FROM hon.student_profiles WHERE person_id=$1 AND birth_date=$2",[kid,minorDate]))[0].n,'1');
+  if(end)await q('UPDATE hon.principal_role_grants SET '+end+' WHERE id=$1',[ownerGrantId]);
+  await blocker.query('SELECT pg_advisory_unlock($1)',[barrierKey]);
+  return {r:await pending,row,c};};
+ for(const [label,end] of [['revoked',"revoked_at=clock_timestamp(),revoked_by_principal_id=granted_by_principal_id"],['expired',"effective_until=clock_timestamp()"]]){
+  const {r,row,c}=await pausedCrossing(end,label==='revoked'?ownerGrant:await ownerGrantFresh());
+  assert.equal(r.status,403,label+':'+JSON.stringify(r.body));assert.equal(r.body.code,'PERSON_FORBIDDEN',label);
+  assert.deepEqual(await profile(kid),row,label);assert.deepEqual(await counts(),c,label);
+  // The independent editor authority is intact: a non-crossing correction by the same person still works.
+  assert.equal(ok(await setBirth(owner,bd(kid,row.version,'2017-07-01'))).person.student.birthDate,'2017-07-01');
+  const back=await profile(kid);assert.equal(ok(await setBirth(owner,bd(kid,back.version,minorDate))).person.student.birthDate,minorDate);
+ }
+ // Ablation: the same paused crossing against a copy without the final OWNER predicate commits.
+ {const migration=await (await import('node:fs/promises')).readFile(new URL('../migrations/0218_school_student_birth_date_and_enrollment_corrections.sql',import.meta.url),'utf8');
+  const def=migration.match(/CREATE FUNCTION hon\.update_school_student_birth_date\([\s\S]*?\$\$;/)[0];
+  const finalOwner=`\n    OR (crossing AND NOT hon.school_person_is_owner(actor,v_school))`;
+  assert.equal(def.split(finalOwner).length,2,'exactly one final OWNER predicate');
+  const live=(await q("SELECT prosrc FROM pg_proc WHERE oid='hon.update_school_student_birth_date(text,jsonb,uuid)'::regprocedure"))[0].prosrc;
+  assert(def.includes(live),'live body is the migration body');
+  await q(def.replace('CREATE FUNCTION','CREATE OR REPLACE FUNCTION').replace(finalOwner,''));
+  try{const g=await ownerGrantFresh();const {r}=await pausedCrossing("revoked_at=clock_timestamp(),revoked_by_principal_id=granted_by_principal_id",g);
+   assert.equal(r.status,200,'ablation must commit: '+JSON.stringify(r.body));}
+  finally{await q(def.replace('CREATE FUNCTION','CREATE OR REPLACE FUNCTION'));}
+  assert.equal((await q("SELECT prosrc FROM pg_proc WHERE oid='hon.update_school_student_birth_date(text,jsonb,uuid)'::regprocedure"))[0].prosrc,live,'restored');}
+ await q('DROP TRIGGER fixture_birth_date_audit_barrier ON hon.audit_events');await q('DROP FUNCTION hon.fixture_birth_date_audit_barrier()');
+ pass('making a known minor an adult needs a live school OWNER grant, decided again after the update: OWNER revoked or expired at the audit barrier commits nothing while editor authority stays intact; an ablation without the final predicate commits; staff may make a date stricter or set a first one');
+ // 15. Manus P2-165-2: a completed 0217 edit receipt (hon.idempotency_records 'people.update:<key>', student without
+ // version) replays through the real API after 0218: HTTP 200, the saved result byte-for-byte, zero repeat effects.
+ {const row=await snapshot(student),key=K(),editorP=(await q('SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1',[editor3.externalSubject]))[0].id;
+  const legacyRequest=body(A.schoolId,student,row.version,{givenName:'Legacy',familyName:'Rivera-Lopez',email:'ana.r@example.invalid',phoneE164:null});
+  const saved=ok(await read(editor3,A.schoolId,student));delete saved.student.version;
+  const legacyBody={person:{...saved,givenName:'Legacy',version:row.version+1},changedFields:['givenName']};
+  await q(`INSERT INTO hon.idempotency_records(organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,response_status,response_body,expires_at)
+    VALUES($1,$2,$3,'people.update:'||$4,encode(sha256(convert_to('PERSON_UPDATE:'||jsonb_build_object('schoolId',$2::uuid,'personId',$5::uuid,'expectedVersion',$6::integer,
+      'givenName',$7::text,'familyName',$8::text,'email',$9::text,'phoneE164',NULL::text)::text,'UTF8')),'hex'),'COMPLETED',200,$10::jsonb,now()+interval '24 hours')`,
+   [A.organizationId,A.schoolId,editorP,key,student,row.version,'Legacy','Rivera-Lopez','ana.r@example.invalid',JSON.stringify(legacyBody)]);
+  // Manus P2-165-5: the genuine 0217 receipt has consumed the key. A changed FIRST request after 0218, with the
+  // current version (same person, or another person), is refused as key reuse with zero effects of any kind.
+  const c=await counts();
+  await denied(()=>update(editor3,body(A.schoolId,student,row.version,{givenName:'Changed',familyName:'Rivera-Lopez',email:'ana.r@example.invalid',phoneE164:null}),key),409,'PERSON_IDEMPOTENCY_CONFLICT',student);
+  {const other=await addPerson(A,'Uma','Reyes'),before=await snapshot(other),c1=await counts();
+   await denied(()=>update(editor3,body(A.schoolId,other,1,{givenName:'Uma',familyName:'Reyes-Diaz',email:null,phoneE164:null}),key),409,'PERSON_IDEMPOTENCY_CONFLICT',other);
+   assert.deepEqual(await snapshot(other),before);assert.deepEqual(await counts(),c1);}
+  assert.equal((await q("SELECT count(*) n FROM hon.school_person_command_receipts WHERE idempotency_key=$1",[key]))[0].n,'0');
+  const c0=await counts();
+  // The original exact request still returns its saved historical response.
+  const replay=ok(await update(editor3,legacyRequest,key));
+  assert.deepEqual(replay,legacyBody);assert.equal(Object.hasOwn(replay.person.student,'version'),false,'no version invented');
+  // No repeat effect: only this command's own receipt is completed with the saved body (so later retries read it first).
+  assert.deepEqual(await counts(),{...c0,school_person_command_receipts:String(Number(c0.school_person_command_receipts)+1)});assert.deepEqual(await snapshot(student),row);
+  assert.deepEqual((await q("SELECT status,response_body FROM hon.school_person_command_receipts WHERE command='people.update' AND idempotency_key=$1",[key]))[0],{status:'COMPLETED',response_body:legacyBody});
+  {const c2=await counts();assert.deepEqual(ok(await update(editor3,legacyRequest,key)),legacyBody);assert.deepEqual(await counts(),c2);}
+  await denied(()=>update(editor3,{...legacyRequest,givenName:'Other'},key),409,'PERSON_IDEMPOTENCY_CONFLICT',student);
+  // A fresh result without student.version is still refused (only the replayed historical receipt is accepted).
+  const {validatePersonRecord,validateStudentBirthDateUpdateResult}=require('@hon/contracts');
+  assert.throws(()=>validatePersonRecord(saved));
+  assert.throws(()=>validateStudentBirthDateUpdateResult({person:saved,changedFields:['birthDate'],enrollmentCorrected:false}));}
+ pass('a genuine completed 0217 edit receipt consumes its key after 0218: a changed first request (same or another person, current version) is refused with zero effects; the exact request replays with HTTP 200, the saved result unchanged (no invented version) and no repeat effects');
+
+ // 16. Manus P2-165-3: an activation-style reservation of the exact old key texts ('people.update:<k>',
+ // 'people.birth_date:<k>' and the bare key) held uncommitted in hon.idempotency_records, followed by that holder's
+ // request for the people/student SHARE locks, never makes either person command wait: both complete with their own
+ // receipts while the holder is open, then the holder takes its SHARE locks.
+ {const key=K(),pid=(await q('SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1',[editor3.externalSubject]))[0].id;
+  const kid2=await addPerson(A,'Lio','Moreno');
+  await q('INSERT INTO hon.student_profiles(organization_id,school_id,person_id,primary_family_id,birth_date) VALUES($1,$2,$3,$4,$5)',[A.organizationId,A.schoolId,kid2,fam,'2016-03-01']);
+  await blocker.query('BEGIN');
+  for(const k of ['people.update:'+key,'people.birth_date:'+key,key])
+   await blocker.query("INSERT INTO hon.idempotency_records(organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'IN_PROGRESS',now()+interval '24 hours')",[A.organizationId,A.schoolId,pid,k]);
+  await blocker.query("SET LOCAL lock_timeout='20s'");
+  const timed=(p,label)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error(label+' waited on the colliding reservation')),8000))]);
+  const b1=ok(await timed(setBirth(editor3,bd(kid2,1,'2016-04-01'),key),'birth date'));assert.equal(b1.person.student.birthDate,'2016-04-01');
+  const u1=ok(await timed(update(editor3,body(A.schoolId,kid2,1,{givenName:'Lio',familyName:'Moreno-Ruiz',email:null,phoneE164:null}),key),'update'));assert.deepEqual(u1.changedFields,['familyName']);
+  await blocker.query('LOCK TABLE hon.people,hon.student_profiles IN SHARE MODE');
+  await blocker.query('ROLLBACK');
+  assert.equal((await q("SELECT count(*) n FROM hon.school_person_command_receipts WHERE principal_id=$1 AND idempotency_key=$2 AND status='COMPLETED'",[pid,key]))[0].n,'2');}
+ pass('an uncommitted activation-style reservation of the colliding key texts never blocks the birth date or edit command (own receipt table); the holder then takes its SHARE locks without a cycle');
+
+ // 17. Receipts are completed once and never changed or deleted below the functions.
+ for(const st of ["UPDATE hon.school_person_command_receipts SET response_body='{}'::jsonb","DELETE FROM hon.school_person_command_receipts","TRUNCATE hon.school_person_command_receipts"])
+  await assert.rejects(()=>admin.query(st),e=>e.code==='42501',st);
+ pass('person command receipts are complete-once and immutable even for the table owner');
+ // 18. Manus P2-165-4: a committed row of another command under the old key text 'people.update:<k>' (activation
+ // accepts that free text) neither shadows this command's own receipt nor blocks a first use of the key.
+ {const pid=(await q('SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1',[editor3.externalSubject]))[0].id;
+  const foreign=k=>q("INSERT INTO hon.idempotency_records(organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,response_status,response_body,expires_at) VALUES($1,$2,$3,$4,repeat('b',64),'COMPLETED',200,'{\"receipt\":{}}'::jsonb,now()+interval '24 hours')",[A.organizationId,A.schoolId,pid,'people.update:'+k]);
+  // (a) own receipt committed first, foreign row after: the exact retry returns the own receipt, nothing written.
+  const p1=await addPerson(A,'Ivy','Lane'),k1=K(),b1=body(A.schoolId,p1,1,{givenName:'Ivy',familyName:'Lane-Ortiz',email:null,phoneE164:null});
+  const first=ok(await update(editor3,b1,k1));await foreign(k1);
+  const c=await counts();assert.deepEqual(ok(await update(editor3,b1,k1)),first);assert.deepEqual(await counts(),c);
+  // (b) foreign row committed before the first use: the edit runs normally with its own receipt.
+  const p2=await addPerson(A,'Ivy','Lane'),k2=K();await foreign(k2);
+  const c2=await counts(),second=ok(await update(editor3,body(A.schoolId,p2,1,{givenName:'Ivy',familyName:'Lane-Ruiz',email:null,phoneE164:null}),k2));
+  assert.deepEqual(second.changedFields,['familyName']);
+  const after=await counts();for(const t of ['audit_events','outbox_events','school_person_command_receipts'])assert.equal(Number(after[t]),Number(c2[t])+1,t);
+  assert.equal(after.idempotency_records,c2.idempotency_records);}
+ pass('a committed foreign row under the old key text never shadows the own receipt (exact retry replays, no effects) and never blocks a first use');
+ console.log('B-CRM-1a/1b person record proof: '+groups+' groups passed');
 }finally{
  await app?.close();
  await Promise.allSettled([admin.end(),restricted.end(),blocker.end(),blocker2.end()]);
