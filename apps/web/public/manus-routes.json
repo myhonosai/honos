@@ -121,6 +121,10 @@
       "title": "HON | Leads"
     },
     {
+      "path": "/staff/schedule",
+      "title": "HON | Class rosters"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },
