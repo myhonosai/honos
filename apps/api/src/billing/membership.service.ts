@@ -60,7 +60,7 @@ const LIFECYCLE_ERRORS: Record<string, (code: string) => HttpException> = {
   MEMBERSHIP_CANCELLATION_FORBIDDEN: code => new ForbiddenException({ code }),
   BILLING_MEMBERSHIP_NOT_FOUND: code => new NotFoundException({ code, detail: 'The membership is not available in this school.' }),
   MEMBERSHIP_NOT_DRAFT: code => new ConflictException({ code, detail: 'Only a DRAFT membership can be activated.' }),
-  MEMBERSHIP_NOT_ACTIVE: code => new ConflictException({ code, detail: 'Only an ACTIVE membership can be directly cancelled.' }),
+  MEMBERSHIP_NOT_ACTIVE: code => new ConflictException({ code, detail: 'Only an ACTIVE or paused membership can be directly cancelled.' }),
   VERSION_CONFLICT: code => new ConflictException({ code, detail: 'The membership has changed. Refresh it and retry with its current version and a new Idempotency-Key.' }),
   ACTIVATION_PREVIEW_STALE: code => new ConflictException({ code, detail: 'The membership, its records or the school date changed after the preview. Preview again and review the result.' }),
   IDEMPOTENCY_KEY_REUSED: code => new ConflictException({ code, detail: 'The idempotency key was already used for a different command.' }),

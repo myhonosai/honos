@@ -103,6 +103,8 @@ import { CrmLeadMembershipsController } from './billing/crm-lead-memberships.con
 import { CrmLeadMembershipsService } from './billing/crm-lead-memberships.service.js';
 import { MembershipDateRevisionController } from './billing/membership-date-revision.controller.js';
 import { MembershipDateRevisionService } from './billing/membership-date-revision.service.js';
+import { MembershipPauseController } from './billing/membership-pause.controller.js';
+import { MembershipPauseService } from './billing/membership-pause.service.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
 import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
@@ -373,6 +375,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipController,
     CrmLeadMembershipsController,
     MembershipDateRevisionController,
+    MembershipPauseController,
     SchoolMembershipListController,
     MembershipStatusReportController,
     CrmAdultMembershipDraftController,
@@ -504,6 +507,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipService,
     CrmLeadMembershipsService,
     MembershipDateRevisionService,
+    MembershipPauseService,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,

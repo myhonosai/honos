@@ -2594,18 +2594,18 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_membership_activation_evidence()',false,false,'search_path=pg_catalog, hon','c60a35d8df72884601abcd51d9f032a18f10f626662601d9d609e6aab56b06af'),
-('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','fa56ec9b289b8cdba2d8700db672666afacb2d9a0a5294c60474384dbdaa06f2'),
+('hon.guard_membership_state_transition()',false,false,'search_path=pg_catalog, hon','1e860ef88864ffe8e61ebe064cba7cf4458df30ef6189cef96e859239dbbd28e'),
 ('hon.membership_local_date(timestamptz,text)',false,false,'search_path=pg_catalog','60fb21bff4757c407e3acddc061c304629f0f035145d633924461e75090ad465'),
 ('hon.membership_local_day_start(date,text)',false,false,'search_path=pg_catalog, hon','7d311eb5b3ec550b13b360c747cc628fc8d13369e2984c01a12cbd2c3794e4ec'),
 ('hon.membership_effective_status_at(hon.membership_state,timestamptz,timestamptz,timestamptz)',false,false,'search_path=pg_catalog, hon','1430f67da4c27d157e9d520ac4b50e04c750391b22680ca21553fb7dfc33d613'),
 ('hon.membership_activation_text_ok(text,integer)',false,false,'search_path=pg_catalog','da4065773ea5ed7bf34267f0ff311863463c5d168d8ec8c0ad97a506677dbfe3'),
 ('hon.membership_activation_date(jsonb)',false,false,'search_path=pg_catalog','70dfaa487da94917b5204642ac4dd5685870f65062c9026e979e5919289b4963'),
-('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','877c7aac877d73b1efa3aecb9f11c102042c1daa6f065cf62a204055d0029704'),
-('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','8d7b4d4019d4fa4679148f0f9a53af9ed347d08f545c60fb8761240c3e3cf4a2'),
+('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','1aaff531834840168bff93e5786e9956669fdb636b74c7d0c4f43dc245586f7f'),
+('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','dfe50a97f63ecbd589b550e6d532febcdd19e14c599e26c318ce439a245c1d6f'),
 ('hon.evaluate_membership_activation(uuid,boolean,date,date)',true,false,'search_path=pg_catalog, hon','9b2679af3efeb30175e068eeec49fa05e36190e6ad82eefa94f642f506601462'),
 ('hon.preview_school_membership_activation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','19a4444b60c5c644f49be3da77ca2b5bbe52ff4d8aba4d8c94ce402b1bb7e271'),
 ('hon.activate_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','81781b22ed586bfd90813c494446cfe7c61ac1631713829c63b443e7809323b0'),
-('hon.cancel_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','084582d01a38c7f8f5a9876bc338230eb07958c64342aa6d426a5b8b47861629')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.cancel_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','e7b9e588cf9afec657245a8ea94a1b59b5356341e6d5403c53edeeb8796d0f36')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -2805,3 +2805,55 @@ DO $$ DECLARE safe boolean; BEGIN
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe class-session page function'; END IF;
 END $$;
 -- End class-session pages exact verification.
+-- Membership pause, cancellation and refund records exact verification (0224): private forced-RLS tables, settings-free
+-- guards, private helpers, six new runtime entry points (cancel is pinned in the 0177 block) and the three permissions.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['school_membership_pause_policies','membership_pauses','membership_refund_records'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Membership pause table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_school_membership_pause_policy_insert()',false,false,'search_path=pg_catalog, hon','6884542f50ced5ca9f6c210d41ee558ad2523f4117524a39c10b4ae98f52f90a'),
+('hon.guard_membership_pause()',false,false,'search_path=pg_catalog, hon','a7f0a4bba001e88edcafcd45c4d9bddb8c819f1fdb129c6051838e1feb4d5b83'),
+('hon.membership_pause_text_ok(jsonb,boolean)',false,false,'search_path=pg_catalog','cec6ad5989b89bd1334049aad74188cef12547a18b024ce0b90345be6a73d491'),
+('hon.membership_pause_date(jsonb)',false,false,'search_path=pg_catalog','10de318f76aee1cedb89411a3d35a68168c0f4d197558d35d8a26425ff1b8545'),
+('hon.membership_school_today()',true,false,'search_path=pg_catalog, hon','66d5930b96db5a24a31d7129eaf855890200ca58b8d4ab037ef5f7e628f57d00'),
+('hon.membership_pause_policy_json(uuid,uuid)',true,false,'search_path=pg_catalog, hon','ab0f64a44ba278f4f340fbd77648ba68537bae0dc9d96f8328ab50f2d5c9bb5d'),
+('hon.membership_pause_json(hon.membership_pauses)',false,false,'search_path=pg_catalog, hon','beea1f004bb8ad0a04c7f197065b300d5e1896c5c9159406cb10c87656004b30'),
+('hon.membership_refund_json(hon.membership_refund_records)',false,false,'search_path=pg_catalog, hon','14d25298028d089c3b0f0e8a4ecc2cc6c4d17d98efcd8dd0313793b242cf8910'),
+('hon.membership_pause_begin(text,text,text,text)',true,false,'search_path=pg_catalog, hon','b74d7a8edb72bbb6e955896b3f6a5909fdda1701ca24c5d96cd20b022c283e73'),
+('hon.membership_pause_finish(text,text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,text,uuid,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','742c785b1395ccd25a5f60f4dfcad1d5aabe482936df672f270b9b2905e1ff17'),
+('hon.membership_command_args_ok(text,text,uuid,uuid)',false,false,'search_path=pg_catalog','7afb3caf93863cd51c5da2fed002341221cb8628e15285689470f394ee94f042'),
+('hon.read_school_membership_pause_policy(text)',true,true,'search_path=pg_catalog, hon','8a4ccf67894ced208e7bdd88f38b95da2d0dea40dfb2969d1f511997133eb76b'),
+('hon.set_school_membership_pause_policy(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','8a5de833ffd79e01bfae58768b5a5d4d15a6a269ed3775cd9e41dd48364a733c'),
+('hon.pause_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','03bfdfa4c08fc0d72cfbfa3732987982cbb8c29da0e076d06ec46c70c25081d2'),
+('hon.resume_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','674b318b8920bbce7b05faf8cdb59e883e3a5c9b8b7a275fc875fb9d4d0fa172'),
+('hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','56e4abbfa70311bf8272b35716223d6c877b43171e1b119b9099343a756dbc23'),
+('hon.read_membership_pauses_and_refunds(text,uuid)',true,true,'search_path=pg_catalog, hon','3f15ad85d31109214ba9b5cfd3df6f227a21ef7b75d022b312c30ff18aab20dc')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe membership pause function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('school_membership_pause_policies','school_membership_pause_policies_immutable','hon.guard_membership_activation_evidence()'),
+    ('school_membership_pause_policies','school_membership_pause_policies_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('school_membership_pause_policies','school_membership_pause_policy_insert_guard','hon.guard_school_membership_pause_policy_insert()'),
+    ('membership_pauses','membership_pause_guard','hon.guard_membership_pause()'),
+    ('membership_pauses','membership_pauses_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('membership_refund_records','membership_refund_records_immutable','hon.guard_membership_activation_evidence()'),
+    ('membership_refund_records','membership_refund_records_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing membership pause guard: %',expected.name; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('billing.membership.pause','billing.membership.pause_policy.manage','billing.membership.refund.record')
+      AND is_sensitive AND is_staff_assignable)<>3 THEN
+    RAISE EXCEPTION 'Membership pause permissions must exist as sensitive staff-assignable permissions'; END IF;
+END $$;
+-- End membership pause exact verification.

@@ -2339,3 +2339,39 @@ DO $$ DECLARE r text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_class_session_page(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0224 membership pause, cancellation and manual refund records: private policy/pause/refund tables, private helpers,
+-- seven runtime entry points. The runtime gains no privilege on hon.memberships or on the new tables.
+DO $$ DECLARE r text; col text; t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['school_membership_pause_policies','membership_pauses','membership_refund_records'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_school_membership_pause_policy_insert()','hon.guard_membership_pause()',
+    'hon.membership_pause_text_ok(jsonb,boolean)','hon.membership_pause_date(jsonb)','hon.membership_school_today()',
+    'hon.membership_pause_policy_json(uuid,uuid)','hon.membership_pause_json(hon.membership_pauses)','hon.membership_refund_json(hon.membership_refund_records)',
+    'hon.membership_pause_begin(text,text,text,text)',
+    'hon.membership_pause_finish(text,text,text,uuid,jsonb,text,text,uuid,jsonb,jsonb,text,text,uuid,integer,uuid,uuid)',
+    'hon.membership_command_args_ok(text,text,uuid,uuid)','hon.read_school_membership_pause_policy(text)',
+    'hon.set_school_membership_pause_policy(text,jsonb,text,uuid,uuid)','hon.pause_school_membership(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.resume_school_membership(text,uuid,jsonb,text,uuid,uuid)','hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.read_membership_pauses_and_refunds(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_membership_pause_policy(text),hon.set_school_membership_pause_policy(text,jsonb,text,uuid,uuid),
+      hon.pause_school_membership(text,uuid,jsonb,text,uuid,uuid),hon.resume_school_membership(text,uuid,jsonb,text,uuid,uuid),
+      hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid),hon.read_membership_pauses_and_refunds(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
