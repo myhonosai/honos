@@ -7,6 +7,9 @@ import { AccessOverviewError, accessApi, commandErrorFor } from '../src/componen
 import { commandOutcome, grantInput, revokeReason } from '../src/components/hq-access/model';
 import { HqAccessView, outcomeText, type AccessViewProps } from '../src/components/hq-access/view';
 import { HQ_NAV_GROUPS, hqPageLabel } from '../src/components/hq-modern/catalog';
+import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
+
+const yes = () => true;
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -62,16 +65,16 @@ it('maps only exact command answers; anything else keeps the request for Try aga
 
 it('reads one bounded page with only the declared query keys, and refuses rows outside the filter', async () => {
   const fetch = stub(json({ data: overview() }));
-  await accessApi.overview({ status: null, cursor: { createdAt: T, organizationId: id(9) } }, new AbortController().signal);
+  await accessApi.overview({ status: null, cursor: { createdAt: T, organizationId: id(9) } }, new AbortController().signal, yes);
   const [path, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe(`/api/v1/hq/saas/access-overview?${new URLSearchParams({ cursor: `${T}~${id(9)}`, limit: '25' })}`);
   expect(init).toMatchObject({ method: 'GET', credentials: 'same-origin', mode: 'same-origin', redirect: 'error', cache: 'no-store' });
   stub(json({ data: overview() }));
-  await expect(accessApi.overview({ status: 'NO_ACCESS', cursor: null }, new AbortController().signal)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(accessApi.overview({ status: 'NO_ACCESS', cursor: null }, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   stub(json({ code: 'SAAS_FORBIDDEN' }, 403));
-  await expect(accessApi.overview({ status: null, cursor: null }, new AbortController().signal)).rejects.toMatchObject({ kind: 'DENIED' });
+  await expect(accessApi.overview({ status: null, cursor: null }, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'DENIED' });
   stub(json({ data: { ...overview(), viewer: { canGrantAndRevokeExceptions: true, role: 'OWNER' } } }));
-  await expect(accessApi.overview({ status: null, cursor: null }, new AbortController().signal)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(accessApi.overview({ status: null, cursor: null }, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
 });
 
 it('builds a grant only for an active school inside the policy window', () => {
@@ -102,18 +105,51 @@ it('sends a grant with the SaaS command header and key, and only a matching rece
   const access = { organizationId: org.organizationId, state: 'PROVISIONED', source: 'PROVISIONED', entitlement: ent, capabilities: [...SAAS_PLAN_CAPABILITIES.COMPLETE], paidAccessProgram: 'INACTIVE' };
   const key = id(900);
   const fetch = stub(json({ data: { exception, access, replayed: false } }));
-  expect((await accessApi.grant(org.organizationId, input, key, new AbortController().signal)).exception.exceptionId).toBe(id(700));
+  expect((await accessApi.grant(org.organizationId, input, key, new AbortController().signal, yes)).exception.exceptionId).toBe(id(700));
   const [path, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe(`/api/v1/hq/saas/organizations/${org.organizationId}/access-exceptions`);
   expect(init).toMatchObject({ method: 'POST', mode: 'same-origin', credentials: 'same-origin', redirect: 'error' });
   expect(init.headers).toMatchObject({ 'X-HON-Human-Command': SAAS_COMMANDS.grantAccessException, 'Idempotency-Key': key, 'Content-Type': 'application/json' });
   expect(JSON.parse(String(init.body))).toEqual(input);
   stub(json({ data: { exception: { ...exception, schoolId: id(111) }, access, replayed: false } }));
-  await expect(accessApi.grant(org.organizationId, input, key, new AbortController().signal)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(accessApi.grant(org.organizationId, input, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   stub(new TypeError('network'));
-  await expect(accessApi.grant(org.organizationId, input, key, new AbortController().signal)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(accessApi.grant(org.organizationId, input, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   stub(json({ code: 'SAAS_ACCESS_EXCEPTION_ACTIVE' }, 422));
-  await expect(accessApi.grant(org.organizationId, input, key, new AbortController().signal)).rejects.toMatchObject({ kind: 'CHANGED' });
+  await expect(accessApi.grant(org.organizationId, input, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'CHANGED' });
+});
+
+it('ends the attempt on definite pre-write refusals: policy missing or withdrawn, an access state or an open checkout', () => {
+  for (const code of ['SAAS_EXCEPTION_POLICY_REQUIRED', 'SAAS_POLICY_UNDECIDED']) {
+    const error = commandErrorFor(422, code);
+    expect(error.kind).toBe('REFUSED');
+    const { outcome, keep } = commandOutcome(error, 'grant', 'Dojo');
+    expect(keep).toBe(false);
+    expect(outcomeText('en', outcome)?.text).toContain('no approved access exception policy is in effect');
+    expect(outcomeText('ko', outcome)?.text).toContain('승인된 접근 예외 정책');
+    expect(outcomeText('es', outcome)?.text).toContain('no hay una política de excepciones de acceso aprobada');
+  }
+  for (const code of ['SAAS_ACCESS_STATE_EXISTS', 'SAAS_CHECKOUT_OPEN']) {
+    expect(commandErrorFor(422, code).kind).toBe('CHANGED');
+    expect(commandOutcome(commandErrorFor(422, code), 'grant', 'Dojo').keep).toBe(false);
+  }
+  // Still unknown: an answer that is not one of the documented refusals.
+  expect(commandErrorFor(422, 'SAAS_SOMETHING_NEW').kind).toBe('UNKNOWN');
+  expect(commandErrorFor(409, 'SAAS_OUTCOME_UNKNOWN').kind).toBe('UNKNOWN');
+});
+
+it('a 401 for a retired read or command does not end the newer session; a current one does', async () => {
+  const seen = vi.fn(); (window as unknown as EventTarget).addEventListener(HON_SESSION_INVALIDATED_EVENT, seen);
+  const org = view().organizations[0]!, retired = () => false;
+  const input = grantInput(org, 90, { schoolId: id(110), purpose: 'APPROVED_PILOT', scopeTier: 'COMPLETE', startDate: '', days: '30', reason: 'Pilot for a partner academy' })!;
+  const calls = [
+    (owned: () => boolean) => accessApi.overview({ status: null, cursor: { createdAt: T, organizationId: id(9) } }, new AbortController().signal, owned),
+    (owned: () => boolean) => accessApi.grant(org.organizationId, input, id(900), new AbortController().signal, owned),
+    (owned: () => boolean) => accessApi.revoke(id(511), 'Pilot ended early by agreement', id(901), new AbortController().signal, owned)];
+  for (const call of calls) { stub(json({ code: 'SIGN_IN_REQUIRED' }, 401)); await expect(call(retired)).rejects.toMatchObject({ kind: 'SESSION' }); }
+  expect(seen).not.toHaveBeenCalled();
+  for (const call of calls) { stub(json({ code: 'SIGN_IN_REQUIRED' }, 401)); await expect(call(yes)).rejects.toMatchObject({ kind: 'SESSION' }); }
+  expect(seen).toHaveBeenCalledTimes(3);
 });
 
 const base = (v: SaasAccessOverview = view()): AccessViewProps => ({ language: 'en', concealed: false, state: { state: 'READY', view: v, organizations: v.organizations, loadingMore: false, moreFailed: false },

@@ -176,7 +176,9 @@ async function api(route) {
 }
 
 // HQ school access (B-HQ-1 + D9): three synthetic organizations. Grant/revoke replay by key and re-derive the rows.
-const hqx = { owner: true, ready: true, orgs: [], posts: [], replies: [], byKey: new Map(), gate: null };
+// pageSize: first page size (then a cursor page); denyOverview: overview answers 403; pageGate/pageSession: the cursor read
+// waits for the gate, then answers 401.
+const hqx = { owner: true, ready: true, orgs: [], posts: [], replies: [], byKey: new Map(), gate: null, pageSize: null, denyOverview: false, pageGate: null, pageSession: false };
 const HQX_T = '2026-10-01T00:00:00.000Z';
 const hqEnt = (o) => o.ent && { ...o.ent, inEffect: o.ent.status === 'ACTIVE' && Date.parse(o.ent.effectiveFrom) <= Date.now() && (!o.ent.effectiveUntil || Date.parse(o.ent.effectiveUntil) > Date.now()) };
 function resetHqx(over = {}) {
@@ -186,7 +188,7 @@ function resetHqx(over = {}) {
       exception: { exceptionId: id(452), schoolId: id(412), purpose: 'APPROVED_PILOT', scopeTier: 'COMPLETE', startsAt: HQX_T, expiresAt: '2026-12-30T00:00:00.000Z', reason: 'Approved pilot for a fixture partner' }, subscription: null, owner: 'ACCEPTED' },
     { id: id(403), name: 'Synthetic Dojo East', created: '2026-09-03T00:00:00.000Z', schools: [[id(413), 'East Academy', 'ACTIVE']], state: 'PAYMENT_ACTIVE', ent: { tier: 'COMPLETE', status: 'ACTIVE', effectiveFrom: HQX_T, effectiveUntil: null, version: 5 }, exception: null,
       subscription: { subscriptionId: id(463), status: 'ACTIVE', planCode: 'COMPLETE', billingInterval: 'MONTH' }, owner: 'ACCEPTED' }];
-  Object.assign(hqx, { owner: true, ready: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+  Object.assign(hqx, { owner: true, ready: true, posts: [], replies: [], byKey: new Map(), gate: null, pageSize: null, denyOverview: false, pageGate: null, pageSession: false }, over);
 }
 resetHqx();
 function hqRow(o) {
@@ -205,18 +207,29 @@ function hqRow(o) {
     ownerOnboarding: { status: o.owner, invitedAt: HQX_T, expiresAt: '2026-10-08T00:00:00.000Z', acceptedAt: o.owner === 'ACCEPTED' ? HQX_T : null },
     exceptionGrant: { eligible: blockers.length === 0, blockers, expectedEntitlementVersion: ent?.version ?? null } };
 }
-function hqOverview(statusFilter) {
+function hqOverview(statusFilter, cursor) {
   const rows = hqx.orgs.map(hqRow);
   const summary = Object.fromEntries(['AWAITING_FIRST_PAYMENT', 'EXCEPTION_IN_EFFECT', 'EXCEPTION_SCHEDULED', 'PAID_ACCESS', 'PROVISIONED_ACCESS', 'NO_ACCESS'].map((k) => [k, rows.filter((r) => r.accessStatus === k).length]));
   return { viewer: { canGrantAndRevokeExceptions: hqx.owner }, paidAccessProgram: 'INACTIVE',
     exceptionPolicy: hqx.ready ? { ready: true, maxDays: 90, validUntil: '2027-10-01T00:00:00.000Z', maxScheduleAheadDays: 30 } : { ready: false, maxDays: null, validUntil: null, maxScheduleAheadDays: 30 },
-    summary: { ...summary, total: rows.length }, organizations: rows.filter((r) => !statusFilter || r.accessStatus === statusFilter), limit: 25, nextCursor: null, asOf: new Date().toISOString() };
+    summary: { ...summary, total: rows.length }, ...hqPage(rows.filter((r) => !statusFilter || r.accessStatus === statusFilter), cursor), asOf: new Date().toISOString() };
+}
+function hqPage(rows, cursor) {
+  if (!hqx.pageSize) return { organizations: rows, limit: 25, nextCursor: null };
+  const after = cursor ? rows.filter((r) => r.createdAt > cursor.split('~')[0]) : rows, page = after.slice(0, hqx.pageSize), last = page.at(-1);
+  return { organizations: page, limit: hqx.pageSize, nextCursor: after.length > hqx.pageSize ? { createdAt: last.createdAt, organizationId: last.organizationId } : null };
 }
 const hqAccessView = (o) => { const ent = hqEnt(o), inEffect = ent?.inEffect === true;
   return { organizationId: o.id, state: o.state, source: !inEffect ? 'NONE' : o.state === 'PAYMENT_ACTIVE' ? 'PAYMENT_ACTIVATED' : 'PROVISIONED', entitlement: ent,
     capabilities: inEffect ? [...SAAS_PLAN_CAPABILITIES[ent.tier]] : [], paidAccessProgram: 'INACTIVE' }; };
 async function hqAccessApi(route, path, method, url) {
-  if (path === '/api/v1/hq/saas/access-overview' && method === 'GET') return json(route, 200, { data: hqOverview(url.searchParams.get('status')) }, { 'Cache-Control': 'private, no-store' });
+  if (path === '/api/v1/hq/saas/access-overview' && method === 'GET') {
+    if (hqx.denyOverview) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    const cursor = url.searchParams.get('cursor');
+    if (cursor && hqx.pageGate) { const gate = hqx.pageGate; hqx.pageGate = null; await gate; }
+    if (cursor && hqx.pageSession) return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+    return json(route, 200, { data: hqOverview(url.searchParams.get('status'), cursor) }, { 'Cache-Control': 'private, no-store' });
+  }
   const grant = path.match(/^\/api\/v1\/hq\/saas\/organizations\/([0-9a-f-]{36})\/access-exceptions$/), revoke = path.match(/^\/api\/v1\/hq\/saas\/access-exceptions\/([0-9a-f-]{36})\/revoke$/);
   if (method !== 'POST' || (!grant && !revoke)) return null;
   const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
@@ -227,6 +240,11 @@ async function hqAccessApi(route, path, method, url) {
   if (prior) return prior.body === raw ? json(route, 200, { data: { ...prior.data, replayed: true } }) : json(route, 409, { code: 'IDEMPOTENCY_KEY_REUSED' });
   if (!hqx.owner) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
   if (step === 'lost') return route.abort('connectionreset');
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  // Definite refusals raised before any write (0186): nothing is recorded under the key.
+  if (step === 'policy') return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_REQUIRED' });
+  if (step === 'accessState') return json(route, 422, { code: 'SAAS_ACCESS_STATE_EXISTS' });
+  if (step === 'checkout') return json(route, 422, { code: 'SAAS_CHECKOUT_OPEN' });
   const body = JSON.parse(raw), now = new Date().toISOString();
   let data;
   if (grant) {
@@ -255,6 +273,8 @@ async function hqAccessApi(route, path, method, url) {
   }
   hqx.byKey.set(headers['idempotency-key'], { body: raw, data });
   if (step === 'unknown') return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' });
+  // The outcome is lost, and HQ read access is withdrawn before the fresh read.
+  if (step === 'unknownThenDenied') { hqx.denyOverview = true; return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' }); }
   return json(route, 200, { data }, { 'Cache-Control': 'private, no-store' });
 }
 
@@ -761,6 +781,107 @@ await check('HQ school access: leaving the tab hides every customer and drops a 
   assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'the kept command was dropped');
   assert.equal(await section().getByTestId('hq-access-count-NO_ACCESS').innerText(), '2', 'the re-read shows what the server recorded');
   await ctx.close();
+});
+
+const ended = (page) => page.evaluate(() => window.__honEnded);
+const watchEnded = (page) => page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+const startGrant = async (section) => {
+  const north = card(section, 'Synthetic Dojo North');
+  await north.getByRole('button', { name: 'Grant an exception' }).click();
+  await north.getByLabel('Purpose').selectOption('PRODUCT_DEMONSTRATION');
+  await north.getByLabel('Days').fill('14');
+  await north.getByLabel('Reason').fill('Demonstration for an approved prospect');
+  await north.getByRole('button', { name: 'Grant exception' }).click();
+};
+const startRevoke = async (section) => {
+  const south = card(section, 'Synthetic Dojo South');
+  await south.getByRole('button', { name: 'Revoke' }).click();
+  await south.getByLabel('Reason').fill('Pilot ended early by agreement');
+  await south.getByRole('button', { name: 'Revoke exception' }).click();
+};
+const hqRetire = {
+  conceal: async (page, section) => {
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await section().getByText(/Customer access is hidden/).waitFor();
+    await section().getByRole('button', { name: 'Show again' }).click();
+    await section().getByTestId('hq-access-list').waitFor();
+  },
+  unmount: async (page, section) => {
+    // Same-document route change (the shell's links load a new document, which ends every request anyway).
+    await page.evaluate(() => window.next.router.push('/hq'));
+    await page.waitForURL(/\/hq$/);
+    await section().waitFor({ state: 'detached' });
+    await page.evaluate(() => window.next.router.push('/hq/schools/access'));
+    await section().getByTestId('hq-access-list').waitFor({ timeout: 20000 });
+  },
+};
+for (const [command, start] of [['grant', startGrant], ['revoke', startRevoke]]) {
+  for (const [how, retire] of Object.entries(hqRetire)) {
+    await check(`HQ school access: a late sign-in answer to a ${command} retired by ${how} does not end the session; a current one does`, async () => {
+      let release; const gate = new Promise((done) => { release = done; });
+      resetHqx({ gate, replies: ['session', 'session'] });
+      const { ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 });
+      await watchEnded(page);
+      await start(section);
+      await section().getByText(/Sending/).waitFor();
+      await retire(page, section);
+      release();
+      for (let i = 0; i < 40 && hqx.posts.length < 1; i++) await new Promise((done) => setTimeout(done, 50));
+      await new Promise((done) => setTimeout(done, 500));
+      assert.equal(await ended(page), 0, 'the retired command did not end the session');
+      assert.ok(await section().getByTestId('hq-access-list').isVisible(), 'the fresh list stays shown');
+      await start(section);
+      await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+      assert.equal(hqx.posts.length, 2);
+      await ctx.close();
+    });
+  }
+}
+await check('HQ school access: a late sign-in answer to a retired Show more read does not end the session', async () => {
+  let release; const gate = new Promise((done) => { release = done; });
+  resetHqx({ pageSize: 2, pageGate: gate, pageSession: true });
+  const { ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 });
+  await watchEnded(page);
+  assert.equal(await section().locator('article').count(), 2);
+  await section().getByRole('button', { name: 'Show more' }).click();
+  await hqRetire.conceal(page, section);
+  release();
+  await new Promise((done) => setTimeout(done, 800));
+  assert.equal(await ended(page), 0, 'the retired page read did not end the session');
+  assert.ok(await section().getByTestId('hq-access-list').isVisible());
+  hqx.pageSession = true;
+  await section().getByRole('button', { name: 'Show more' }).click();
+  await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+  await ctx.close();
+});
+for (const [command, start] of [['grant', startGrant], ['revoke', startRevoke]]) {
+  await check(`HQ school access: when the fresh read after an unknown ${command} is denied, no organization, outcome or Try again remains`, async () => {
+    resetHqx({ replies: ['unknownThenDenied'] });
+    const { ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 });
+    await start(section);
+    await section().getByText(/Your HQ access does not include the access overview/).waitFor();
+    assert.equal(await section().getByText(/Synthetic Dojo/).count(), 0, 'no organization name remains');
+    assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'no retry remains');
+    assert.equal(await section().getByText(/We could not confirm/).count(), 0);
+    assert.equal(await section().locator('form').count(), 0);
+    hqx.denyOverview = false;
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    await section().getByTestId('hq-access-list').waitFor();
+    assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'a fresh authorized read does not bring back the retry');
+    assert.equal(hqx.posts.length, 1);
+    await ctx.close();
+  });
+}
+await check('HQ school access: policy, access-state and checkout refusals end the attempt; nothing is kept for Try again', async () => {
+  for (const [reply, text] of [['policy', /no approved access exception policy is in effect/], ['accessState', /changed since it was read/], ['checkout', /changed since it was read/]]) {
+    resetHqx({ replies: [reply] });
+    const { ctx, section } = await hqAccessPage({ width: 1440, height: 900 });
+    await startGrant(section);
+    await section().getByText(text).waitFor();
+    assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, `${reply}: no retry`);
+    assert.equal(hqx.posts.length, 1);
+    await ctx.close();
+  }
 });
 
 await browser.close();

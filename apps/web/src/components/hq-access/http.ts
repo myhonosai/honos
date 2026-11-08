@@ -22,16 +22,24 @@ const RESPONSE_MAX = 2_000_000;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 /** Answers that mean the row is no longer what was read. Nothing was changed by this request. */
 const CHANGED = new Set(['SAAS_VERSION_CONFLICT', 'SAAS_TRANSITION_NOT_ALLOWED', 'SAAS_ACCESS_EXCEPTION_ACTIVE', 'SAAS_ENTITLEMENT_IN_EFFECT',
-  'SAAS_EXCEPTION_ENDED', 'SAAS_SUBSCRIPTION_EXISTS', 'SAAS_ENTITLEMENT_NOT_ACTIVE', 'SAAS_ENTITLEMENT_MISMATCH']);
-const REFUSED = new Set(['SAAS_EXCEPTION_WINDOW_INVALID', 'SAAS_EXCEPTION_TOO_LONG']);
+  'SAAS_EXCEPTION_ENDED', 'SAAS_SUBSCRIPTION_EXISTS', 'SAAS_ENTITLEMENT_NOT_ACTIVE', 'SAAS_ENTITLEMENT_MISMATCH',
+  /** 0186 grant: the school already has an access state, or a checkout is open. */ 'SAAS_ACCESS_STATE_EXISTS', 'SAAS_CHECKOUT_OPEN']);
+/** Rule refusals raised before any write (0185/0186). The policy ones can change later, but this attempt is over. */
+export const POLICY_REFUSALS = new Set(['SAAS_EXCEPTION_POLICY_REQUIRED', 'SAAS_POLICY_UNDECIDED']);
+const REFUSED = new Set(['SAAS_EXCEPTION_WINDOW_INVALID', 'SAAS_EXCEPTION_TOO_LONG', ...POLICY_REFUSALS]);
 
-async function exchange(path: string, signal: AbortSignal, command?: Readonly<{ marker: string; body: string; key: string }>): Promise<{ status: number; value: unknown }> {
+/**
+ * Whether the caller still stands behind this request (the same mounted view, not concealed since, and for a command the
+ * same kept request). A 401 for a request that was retired must not end the newer session that replaced it.
+ */
+export type Owned = () => boolean;
+async function exchange(path: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ marker: string; body: string; key: string }>): Promise<{ status: number; value: unknown }> {
   const r = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
     referrerPolicy: 'no-referrer', signal,
     headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': command.marker, 'Idempotency-Key': command.key } : {}) },
     ...(command ? { body: command.body } : {}) });
   signal.throwIfAborted();
-  if (r.status === 401) { reportConfirmedSessionInvalidation(); throw new AccessOverviewError('SESSION'); }
+  if (r.status === 401) { if (owned()) reportConfirmedSessionInvalidation(); throw new AccessOverviewError('SESSION'); }
   if (r.redirected || !JSON_TYPE.test(r.headers.get('content-type') ?? '')) return { status: r.status, value: null };
   const text = await r.text();
   if (text.length > RESPONSE_MAX) throw new AccessOverviewError('UNKNOWN');
@@ -55,12 +63,12 @@ export function commandErrorFor(status: number, code: string | null): AccessOver
 
 export type OverviewPageRequest = Readonly<{ status: SaasAccessOverviewStatus | null; cursor: SaasAccessOverviewCursor | null }>;
 export const accessApi = {
-  async overview(request: OverviewPageRequest, signal: AbortSignal): Promise<SaasAccessOverview> {
+  async overview(request: OverviewPageRequest, signal: AbortSignal, owned: Owned): Promise<SaasAccessOverview> {
     const q = new URLSearchParams();
     if (request.status) q.set('status', request.status);
     if (request.cursor) q.set('cursor', encodeSaasAccessOverviewCursor(request.cursor));
     q.set('limit', '25');
-    const { status, value } = await exchange(`/api/v1/hq/saas/access-overview?${q}`, signal);
+    const { status, value } = await exchange(`/api/v1/hq/saas/access-overview?${q}`, signal, owned);
     if (status === 403) throw new AccessOverviewError('DENIED', codeOf(value));
     if (status !== 200) throw new AccessOverviewError('UNKNOWN', codeOf(value));
     let view: SaasAccessOverview;
@@ -69,9 +77,9 @@ export const accessApi = {
     return view;
   },
   /** One grant attempt. The same key and body replay the saved answer; a second grant is refused by the database. */
-  async grant(organizationId: string, input: SaasAccessExceptionGrantInput, key: string, signal: AbortSignal): Promise<SaasAccessExceptionGrantReceipt> {
+  async grant(organizationId: string, input: SaasAccessExceptionGrantInput, key: string, signal: AbortSignal, owned: Owned): Promise<SaasAccessExceptionGrantReceipt> {
     const org = saasUuid(organizationId), body = validateSaasAccessExceptionGrantInput(input);
-    const answer = await command(`/api/v1/hq/saas/organizations/${org}/access-exceptions`, SAAS_COMMANDS.grantAccessException, body, key, signal);
+    const answer = await command(`/api/v1/hq/saas/organizations/${org}/access-exceptions`, SAAS_COMMANDS.grantAccessException, body, key, signal, owned);
     try {
       const receipt = validateSaasAccessExceptionGrantReceipt(answer), x = receipt.exception;
       if (x.organizationId.toLowerCase() !== org.toLowerCase() || x.schoolId.toLowerCase() !== body.schoolId.toLowerCase() || x.purpose !== body.purpose
@@ -80,9 +88,9 @@ export const accessApi = {
       return receipt;
     } catch { throw new AccessOverviewError('UNKNOWN'); }
   },
-  async revoke(exceptionId: string, reason: string, key: string, signal: AbortSignal): Promise<SaasAccessExceptionRevokeReceipt> {
+  async revoke(exceptionId: string, reason: string, key: string, signal: AbortSignal, owned: Owned): Promise<SaasAccessExceptionRevokeReceipt> {
     const id = saasUuid(exceptionId), body = validateSaasAccessExceptionRevokeInput({ reason });
-    const answer = await command(`/api/v1/hq/saas/access-exceptions/${id}/revoke`, SAAS_COMMANDS.revokeAccessException, body, key, signal);
+    const answer = await command(`/api/v1/hq/saas/access-exceptions/${id}/revoke`, SAAS_COMMANDS.revokeAccessException, body, key, signal, owned);
     try {
       const receipt = validateSaasAccessExceptionRevokeReceipt(answer);
       if (receipt.exception.exceptionId.toLowerCase() !== id.toLowerCase() || receipt.exception.endNote !== body.reason) throw new Error('mismatch');
@@ -90,10 +98,10 @@ export const accessApi = {
     } catch { throw new AccessOverviewError('UNKNOWN'); }
   },
 };
-async function command(path: string, marker: string, body: object, key: string, signal: AbortSignal): Promise<unknown> {
+async function command(path: string, marker: string, body: object, key: string, signal: AbortSignal, owned: Owned): Promise<unknown> {
   const k = saasUuid(key);
   let answer: { status: number; value: unknown };
-  try { answer = await exchange(path, signal, { marker, body: JSON.stringify(body), key: k }); }
+  try { answer = await exchange(path, signal, owned, { marker, body: JSON.stringify(body), key: k }); }
   catch (error) { if (error instanceof AccessOverviewError) throw error; throw new AccessOverviewError('UNKNOWN'); }
   if (answer.status !== 200) throw commandErrorFor(answer.status, codeOf(answer.value));
   try { return data(answer.value); } catch { throw new AccessOverviewError('UNKNOWN'); }

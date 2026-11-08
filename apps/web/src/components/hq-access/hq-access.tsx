@@ -32,6 +32,11 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
   const [form, setForm] = useState<OpenForm>(null);
   const generation = useRef(0), privacy = useRef(0);
   const pending = useRef<Pending | null>(null), sending = useRef(false);
+  // Cleared on unmount: nothing this view sent speaks for a later one.
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; privacy.current++; pending.current = null; }; }, []);
+  /** A read is owned while it is the latest read of this mounted, unconcealed view. */
+  const ownsRead = (current: number, shown: number) => () => mounted.current && current === generation.current && shown === privacy.current;
 
   useEffect(() => {
     const conceal = () => {
@@ -47,23 +52,31 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
 
   useEffect(() => {
     if (concealed) return;
-    const current = ++generation.current;
+    const current = ++generation.current, owned = ownsRead(current, privacy.current);
     setState({ state: 'LOADING' });
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
-    api.overview({ status: filter, cursor: null }, signal).then(
-      view => { if (current === generation.current) setState({ state: 'READY', view, organizations: view.organizations, loadingMore: false, moreFailed: false }); },
-      error => { if (current === generation.current) setState({ state: error instanceof AccessOverviewError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+    api.overview({ status: filter, cursor: null }, signal, owned).then(
+      view => { if (owned()) setState({ state: 'READY', view, organizations: view.organizations, loadingMore: false, moreFailed: false }); },
+      error => {
+        if (!owned()) return;
+        if (error instanceof AccessOverviewError && error.kind === 'DENIED') {
+          // No longer allowed to read: nothing private stays, including a command's outcome, form or retry. The outcome
+          // of a command still in doubt is not shown as undone; it is simply no longer this view's to show.
+          privacy.current++; pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setForm(null);
+          setState({ state: 'DENIED' });
+        } else setState({ state: 'UNAVAILABLE' });
+      });
     return () => { abort.abort(); };
   }, [api, filter, refresh, concealed]);
 
   const onMore = useCallback(() => {
     if (state.state !== 'READY' || !state.view.nextCursor || state.loadingMore) return;
-    const current = generation.current, cursor = state.view.nextCursor;
+    const current = generation.current, cursor = state.view.nextCursor, owned = ownsRead(current, privacy.current);
     setState({ ...state, loadingMore: true, moreFailed: false });
-    api.overview({ status: filter, cursor }, AbortSignal.timeout(15000)).then(
-      view => { if (current === generation.current) setState(prior => prior.state !== 'READY' ? prior : { state: 'READY', view: { ...view, organizations: [] },
+    api.overview({ status: filter, cursor }, AbortSignal.timeout(15000), owned).then(
+      view => { if (owned()) setState(prior => prior.state !== 'READY' ? prior : { state: 'READY', view: { ...view, organizations: [] },
         organizations: [...prior.organizations, ...view.organizations.filter(o => !prior.organizations.some(p => p.organizationId === o.organizationId))], loadingMore: false, moreFailed: false }); },
-      () => { if (current === generation.current) setState(prior => prior.state !== 'READY' ? prior : { ...prior, loadingMore: false, moreFailed: true }); });
+      () => { if (owned()) setState(prior => prior.state !== 'READY' ? prior : { ...prior, loadingMore: false, moreFailed: true }); });
   }, [api, filter, state]);
 
   const send = useCallback(async () => {
@@ -73,15 +86,15 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
     setLock('SENDING'); setOutcome({ kind: 'SENDING', command: request.command, organization: request.organization });
     let next: AccessOutcome, keep: boolean;
     try {
-      const signal = AbortSignal.timeout(30000);
-      if (request.command === 'grant') await api.grant(request.organizationId, request.input, request.key, signal);
-      else await api.revoke(request.exceptionId, request.reason, request.key, signal);
+      const signal = AbortSignal.timeout(30000), owned = () => mounted.current && shown === privacy.current && pending.current?.key === request.key;
+      if (request.command === 'grant') await api.grant(request.organizationId, request.input, request.key, signal, owned);
+      else await api.revoke(request.exceptionId, request.reason, request.key, signal, owned);
       next = { kind: 'DONE', command: request.command, organization: request.organization }; keep = false;
     } catch (error) { ({ outcome: next, keep } = commandOutcome(error, request.command, request.organization)); }
     finally { sending.current = false; }
     if (pending.current?.key === request.key) pending.current = keep ? request : null;
     setLock(pending.current ? 'KEPT' : 'NONE');
-    if (shown !== privacy.current) { setOutcome(prior => prior?.kind === 'SENDING' ? null : prior); return; }
+    if (shown !== privacy.current || !mounted.current) { setOutcome(prior => prior?.kind === 'SENDING' ? null : prior); return; }
     setOutcome(next); setForm(next?.kind === 'DONE' || next?.kind === 'CHANGED' ? null : form => form);
     // Every answer is followed by a fresh read: the list, not this tab, says what is true now.
     setRefresh(value => value + 1);

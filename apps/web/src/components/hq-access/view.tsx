@@ -2,6 +2,7 @@ import React, { useId } from 'react';
 import { SAAS_ACCESS_EXCEPTION_PURPOSES, SAAS_ACCESS_OVERVIEW_STATUSES, type SaasAccessOverview, type SaasAccessOverviewOrganization,
   type SaasAccessOverviewStatus } from '@hon/contracts';
 import { accessText, type AccessKey } from './copy';
+import { POLICY_REFUSALS } from './http';
 import { localDay, type AccessCommand, type AccessOutcome, type GrantDraft, type OverviewState } from './model';
 import styles from './hq-access.module.css';
 
@@ -31,7 +32,7 @@ export function outcomeText(language: string, outcome: AccessOutcome): Readonly<
     case 'DENIED': return { tone: 'blocked', text: prefix + t('notAllowed') };
     case 'INVALID': return { tone: 'blocked', text: prefix + t('invalid') };
     case 'LOCAL_INVALID': return { tone: 'blocked', text: prefix + t(outcome.command === 'grant' ? 'localInvalid' : 'localInvalidRevoke') };
-    case 'REFUSED': return { tone: 'blocked', text: prefix + t('refused', { reason: t(outcome.code === 'SAAS_EXCEPTION_TOO_LONG' ? 'tooLong' : 'windowInvalid') }) };
+    case 'REFUSED': return { tone: 'blocked', text: prefix + t('refused', { reason: t(outcome.code === 'SAAS_EXCEPTION_TOO_LONG' ? 'tooLong' : outcome.code !== null && POLICY_REFUSALS.has(outcome.code) ? 'policyRefused' : 'windowInvalid') }) };
   }
 }
 

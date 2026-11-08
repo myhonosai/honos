@@ -29,7 +29,7 @@ const en = {
   unknown: 'We could not confirm whether this went through. Try again sends the same request; it never grants or revokes twice. The list was read again.',
   tryAgain: 'Try again', changed: 'This organization changed since it was read, so nothing was done. The list was read again.',
   refused: 'This was refused: {reason}. Nothing was granted or revoked.', windowInvalid: 'the start must be within 30 days and the end after it',
-  tooLong: 'the window is longer than the policy allows', notAllowed: 'Only the HQ owner can do this. Nothing was granted or revoked.',
+  tooLong: 'the window is longer than the policy allows', policyRefused: 'no approved access exception policy is in effect', notAllowed: 'Only the HQ owner can do this. Nothing was granted or revoked.',
   invalid: 'This was not accepted. Check the details and try again.', localInvalid: 'Choose a school, a purpose, a start, a number of days and a reason of 10 to 500 characters.',
   localInvalidRevoke: 'Give a reason of 10 to 500 characters.', summary: 'Organizations by access', total: '{n} organizations',
 };
@@ -64,7 +64,7 @@ const ko: Record<Key, string> = {
   unknown: '처리되었는지 확인할 수 없습니다. 다시 시도하면 같은 요청을 보내며 두 번 부여하거나 취소하지 않습니다. 목록을 다시 읽었습니다.',
   tryAgain: '다시 시도', changed: '읽은 뒤 이 조직이 바뀌어 아무것도 하지 않았습니다. 목록을 다시 읽었습니다.',
   refused: '거부됨: {reason}. 부여하거나 취소된 것은 없습니다.', windowInvalid: '시작은 30일 이내, 종료는 시작 이후여야 함',
-  tooLong: '기간이 정책 한도보다 김', notAllowed: 'HQ 소유자만 할 수 있습니다. 부여하거나 취소된 것은 없습니다.',
+  tooLong: '기간이 정책 한도보다 김', policyRefused: '승인된 접근 예외 정책이 시행 중이 아님', notAllowed: 'HQ 소유자만 할 수 있습니다. 부여하거나 취소된 것은 없습니다.',
   invalid: '받아들여지지 않았습니다. 세부 정보를 확인하고 다시 시도하세요.', localInvalid: '도장, 목적, 시작, 일수, 10~500자의 사유를 입력하세요.',
   localInvalidRevoke: '10~500자의 사유를 입력하세요.', summary: '접근 상태별 조직', total: '조직 {n}곳',
 };
@@ -98,7 +98,7 @@ const es: Record<Key, string> = {
   unknown: 'No pudimos confirmar si se realizó. Reintentar envía la misma solicitud; nunca otorga ni revoca dos veces. La lista se volvió a leer.',
   tryAgain: 'Reintentar', changed: 'Esta organización cambió desde que se leyó, así que no se hizo nada. La lista se volvió a leer.',
   refused: 'Se rechazó: {reason}. No se otorgó ni revocó nada.', windowInvalid: 'el inicio debe ser en 30 días como máximo y el fin posterior',
-  tooLong: 'el periodo supera lo que permite la política', notAllowed: 'Solo el dueño de HQ puede hacer esto. No se otorgó ni revocó nada.',
+  tooLong: 'el periodo supera lo que permite la política', policyRefused: 'no hay una política de excepciones de acceso aprobada vigente', notAllowed: 'Solo el dueño de HQ puede hacer esto. No se otorgó ni revocó nada.',
   invalid: 'No se aceptó. Revisa los datos e inténtalo de nuevo.', localInvalid: 'Elige una escuela, un propósito, un inicio, un número de días y un motivo de 10 a 500 caracteres.',
   localInvalidRevoke: 'Indica un motivo de 10 a 500 caracteres.', summary: 'Organizaciones por acceso', total: '{n} organizaciones',
 };
