@@ -119,8 +119,9 @@ BEGIN
     designated_by = EXCLUDED.designated_by, designated_at = EXCLUDED.designated_at, version = hon.school_primary_owners.version + 1;
 END $$;
 
--- End every HQ-held OWNER grant at one school (live or not yet started). A grant that has not started yet is closed one
--- microsecond after its start (the table requires effective_until > effective_from), so it is never usable. Writes one
+-- End every HQ-held OWNER grant at one school (live or not yet started), the way 0059 revokes a staff grant: revoked_at and
+-- revoked_by are set, so every resolver that honours revocation refuses it at once. A grant that has not started yet is also
+-- closed one microsecond after its start (the table requires effective_until > effective_from). Writes one
 -- audit row per ended grant. Returns the ended grant ids in id order. Caller holds the school-account lock.
 CREATE FUNCTION hon.school_end_hq_owner_grants(p_school uuid, p_at timestamptz, p_actor uuid, p_source text, p_request uuid) RETURNS uuid[]
 LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
@@ -130,6 +131,7 @@ BEGIN
   FOR g IN
     UPDATE hon.principal_role_grants t
        SET effective_until = CASE WHEN t.effective_from < p_at THEN p_at ELSE t.effective_from + interval '1 microsecond' END,
+           revoked_at = p_at, revoked_by_principal_id = p_actor,
            version = t.version + 1
      WHERE t.id IN (SELECT w.o_grant FROM hon.school_owner_grant_rows(p_school, p_at) w WHERE w.o_hq)
     RETURNING t.id, t.organization_id, t.school_id, t.principal_id, t.effective_until
@@ -173,7 +175,9 @@ $$;
 -- runs several READ COMMITTED statements, so it can read the invitation as PENDING and then see the user row that a
 -- concurrent acceptance of the same invitation just committed, and wrongly answer ACCOUNT_REVIEW_REQUIRED. Before that
 -- answer, re-read the invitation: if it is no longer PENDING the facts moved underneath, so answer the recoverable
--- ACCOUNT_BUSY (an explicit same-key retry then replays). check_school_owner_acceptance is otherwise identical to 0191.
+-- ACCOUNT_BUSY (an explicit same-key retry then replays). It and the acceptance also refuse an accepting identity with ANY
+-- hq_operator_grants row (0191 refused only a current one): H-2 would otherwise end that new owner's grant in the same
+-- statement, consume the invitation and leave the school without an owner. Otherwise identical to 0191.
 -- ---------------------------------------------------------------------------------------------------------------------
 CREATE FUNCTION hon.school_owner_review_or_busy(p_invitation uuid) RETURNS void
 LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,hon AS $$
@@ -215,7 +219,7 @@ BEGIN
     IF actor IS NULL OR (SELECT count(*) FROM hon.principals WHERE user_id=v_user AND is_active)<>1
       OR NOT EXISTS(SELECT 1 FROM hon.users WHERE id=v_user AND lower(email::text)=p_verified_email) THEN
       PERFORM hon.school_owner_review_or_busy(i.id); END IF;
-    IF EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp()))
+    IF EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id=actor) -- 0223: any HQ row, timed or not (staff_member_eligible rule)
       OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp()))
       OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp())
         AND (organization_id<>i.organization_id OR school_id=i.school_id)) THEN
@@ -435,7 +439,7 @@ BEGIN
       OR NOT EXISTS(SELECT 1 FROM hon.users WHERE id=v_user AND lower(email::text)=p_verified_email) THEN
       RAISE EXCEPTION 'ACCOUNT_REVIEW_REQUIRED' USING ERRCODE='23514'; END IF;
   END IF;
-  IF EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp()))
+  IF EXISTS(SELECT 1 FROM hon.hq_operator_grants WHERE principal_id=actor) -- 0223: any HQ row, timed or not (staff_member_eligible rule)
     OR EXISTS(SELECT 1 FROM hon.family_access_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp()))
     OR EXISTS(SELECT 1 FROM hon.principal_role_grants WHERE principal_id=actor AND effective_from<=clock_timestamp() AND (effective_until IS NULL OR effective_until>clock_timestamp())
       AND (organization_id<>i.organization_id OR school_id=i.school_id)) THEN
@@ -591,6 +595,7 @@ BEGIN
     -- The command ends exactly the set the dry run showed; anything else changed since the read.
     IF hq_ids IS DISTINCT FROM expected THEN RAISE EXCEPTION 'OWNERSHIP_PLAN_CHANGED' USING ERRCODE='40001'; END IF;
     ended:=hon.school_end_hq_owner_grants(v_school,at,actor,'HON_HQ',p_key);
+    IF ended IS DISTINCT FROM expected THEN RAISE EXCEPTION 'OWNERSHIP_PLAN_CHANGED' USING ERRCODE='40001'; END IF;
     INSERT INTO hon.school_ownership_notices(organization_id,school_id,kind,ended_grant_count,occurred_at)
       VALUES(v_org,v_school,'HQ_OWNER_ACCESS_ENDED',cardinality(ended),at);
     result:=jsonb_build_object('operation','END_HQ_OWNER_GRANTS','schoolId',v_school,'organizationId',v_org,
@@ -626,6 +631,10 @@ BEGIN
     'primaryOwnerGrantId',prim,
     'notices',hon.school_ownership_notices_json(p_school),
     'asOf',hon.saas_ts(at));
+  -- The caller must still be a live non-HQ owner of this school after the read.
+  IF NOT EXISTS(SELECT 1 FROM hon.school_owner_grant_rows(p_school,clock_timestamp()) w JOIN hon.principals p ON p.id=w.o_principal
+      JOIN hon.users u ON u.id=p.user_id WHERE w.o_grant=me AND u.external_subject=p_subject AND w.o_live AND NOT w.o_hq) THEN
+    RAISE EXCEPTION 'ACCOUNT_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN result;
 END $$;
 

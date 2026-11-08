@@ -23,7 +23,7 @@ let groups=0;const pass=n=>console.log(`PASS B-ID-4 ${++groups}: ${n}`);
 
 const tag=K().slice(0,8);
 const hq={subject:`bid4-hq-${tag}`,user:K(),principal:K()},op={subject:`bid4-op-${tag}`,user:K(),principal:K()};
-const owners=Object.fromEntries(['a1','a2','l1','m1','x'].map(k=>[k,{subject:`oidc:bid4:${k}:${K()}`,email:`bid4-${k}-${tag}@example.invalid`}]));
+const owners=Object.fromEntries(['a1','a2','l1','m1','x','exhq'].map(k=>[k,{subject:`oidc:bid4:${k}:${K()}`,email:`bid4-${k}-${tag}@example.invalid`}]));
 async function inviteWith(school,email){const tokenHash=hex();const r=await call("SELECT hon.manage_school_owner_invitation($1,'INVITE',$2::jsonb,$3) r",[hq.subject,JSON.stringify({schoolId:school,email,tokenHash,ttlHours:24}),K()]);return {...r,tokenHash};}
 const accept=(who,inv,key=K())=>call('SELECT hon.accept_school_owner_invitation($1,$2,$3::jsonb,$4) r',[owners[who].subject,owners[who].email,JSON.stringify({invitationId:inv.invitationId,tokenHash:inv.tokenHash,confirmation:'ACCEPT_SCHOOL_OWNER_INVITATION'}),key]);
 const ownership=(school,who=hq.subject)=>call('SELECT hon.read_school_ownership_from_hq($1,$2) r',[who,school]);
@@ -96,7 +96,23 @@ try{
  assert.deepEqual(await notices(L.schoolId),[{kind:'HQ_OWNER_ACCESS_ENDED',invited_email:null,ended_grant_count:1}]);
  const lAudit=await q("SELECT source,action_code,actor_principal_id FROM hon.audit_events WHERE entity_id=$1 AND action_code='school.owner.hq_grant.end'",[lGrant]);
  assert.equal(lAudit.length,1);assert.equal(lAudit[0].source,'HUMAN_UI');
+ assert.deepEqual((await q('SELECT revoked_at IS NOT NULL r,revoked_by_principal_id IS NOT NULL b FROM hon.principal_role_grants WHERE id=$1',[lGrant]))[0],{r:true,b:true});
  pass('H-2: acceptance ends the HQ-held OWNER grant in the same statement (audited, noticed); the first owner becomes primary (H-4)');
+
+ // P2-184-1: a former (or future) HQ person must not be able to accept: their grant would be ended at once and leave no owner.
+ const ex={user:K(),principal:K()};
+ await q("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'B-ID-4 former HQ')",[ex.user,owners.exhq.subject,owners.exhq.email]);
+ await q("INSERT INTO hon.principals(id,user_id,principal_type,display_name) VALUES($1,$2,'HUMAN_USER','B-ID-4 former HQ')",[ex.principal,ex.user]);
+ await q("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,'HON_HQ_OPERATOR','{}',clock_timestamp()-interval '3 days',clock_timestamp()-interval '2 days')",[ex.principal]);
+ const invEx=await inviteWith(L.schoolId,owners.exhq.email);
+ await deny(accept('exhq',invEx),'23514',/ACCOUNT_REVIEW_REQUIRED/);
+ assert.equal((await q('SELECT status FROM hon.school_owner_invitations WHERE id=$1',[invEx.invitationId]))[0].status,'PENDING');
+ assert.equal((await q('SELECT count(*)::int n FROM hon.principal_role_grants WHERE principal_id=$1',[ex.principal]))[0].n,0);
+ assert.deepEqual((await ownership(L.schoolId)).owners.map(o=>o.email),[owners.l1.email]);
+ // A future-dated HQ row is refused the same way.
+ await q("UPDATE hon.hq_operator_grants SET effective_from=clock_timestamp()+interval '1 day',effective_until=NULL WHERE principal_id=$1",[ex.principal]);
+ await deny(accept('exhq',invEx),'23514',/ACCOUNT_REVIEW_REQUIRED/);
+ pass('a person with an expired or future HQ row cannot accept an owner invitation (refused before any write; the school keeps its owner)');
 
  // ---------- H-3 at M ----------
  const invM=await inviteWith(M.schoolId,owners.m1.email);await accept('m1',invM);

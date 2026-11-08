@@ -214,6 +214,6 @@
     "0220_school_membership_list.sql": "5a6238ddd9944a8edeae04552d1aafe6296ab924e09ded7534be95305302654f",
     "0221_school_class_session_pages.sql": "0c3abd19116998a0213194c6913af49ce19c61f554de8e1ff25214b8d282e83b",
     "0222_saas_exception_policy_terms_read.sql": "9f6799e60e87147a706218e53a8539bf00f2808e0f28fd679c019b9d946e48ce",
-    "0223_school_ownership_handoff.sql": "53aaa1e4667d4fa7c24b836930eda109de6295fc85e34df486df655bae1047b2"
+    "0223_school_ownership_handoff.sql": "4488553d3f7ed2d3c1518ee9fe192dbfba5df1c8a68b128511302e7af4dad7d3"
   }
 }

@@ -19,7 +19,7 @@ the handoff.
 | Decision | What happens |
 | --- | --- |
 | H-1 | Provisioning still creates the system `OWNER` role with every permission, but grants it to nobody. The first school owner is bound by an HQ-owner invitation (0191). |
-| H-2 | When a school owner accepts an invitation, every `OWNER` grant at that school held by an HQ principal ends in the same statement. An HQ principal is one with any `hq_operator_grants` row, timed or not, the same rule as `staff_member_eligible`. Each ended grant gets an audit row. Existing owners get a `HQ_OWNER_ACCESS_ENDED` notice. |
+| H-2 | When a school owner accepts an invitation, every `OWNER` grant at that school held by an HQ principal ends in the same statement. An HQ principal is one with any `hq_operator_grants` row, timed or not, the same rule as `staff_member_eligible`. Each ended grant is revoked the way 0059 revokes a staff grant (`effective_until`, `revoked_at`, `revoked_by`) and gets an audit row. Existing owners get a `HQ_OWNER_ACCESS_ENDED` notice. A person with any HQ row (current, expired or future) cannot accept an owner invitation at all (`ACCOUNT_REVIEW_REQUIRED`), so an accepted owner is never ended by the same statement. |
 | H-3 | For schools provisioned earlier, an HQ owner reads the list of schools with HQ-held `OWNER` grants (the dry run), then ends them one school at a time. The command refuses a school without a live non-HQ owner (`OWNERSHIP_SCHOOL_OWNER_REQUIRED`) and any plan that differs from the current set (`OWNERSHIP_PLAN_CHANGED`). Nothing ends automatically. |
 | H-4 | A school can have several owners and one primary owner (billing contact and recovery). The first owner to accept becomes primary when there is no live primary. An HQ owner can make another live owner primary. If the primary owner's grant ends, the school shows `primaryNeeded`. |
 | H-5 | HQ can invite or add an owner where one exists. Existing owners get an `OWNER_INVITED` notice when the invitation is created and an `OWNER_ADDED` notice when it is accepted. There is no consent step and nothing is emailed or sent. |
@@ -60,7 +60,7 @@ The lock-free acceptance preflight (`check_school_owner_acceptance`, 0191) runs 
 second, concurrent acceptance of the same invitation could read it as `PENDING` and then see the user row the first one
 had just committed, and answer `ACCOUNT_REVIEW_REQUIRED` (409) instead of the recoverable busy (503) the contract
 promises. The existing 0191 proof caught this once acceptance did more work. The preflight now re-reads the invitation
-before that answer and returns `ACCOUNT_BUSY` when it has moved.
+before that answer and returns `ACCOUNT_BUSY` when it has moved. The preflight and the acceptance also refuse any HQ row, timed or not (review finding P2-184-1).
 
 ## For the UI
 
