@@ -10,6 +10,9 @@ const AUTHORITY_HEADERS = new Set([
   'x-delegated-by-principal-id', 'x-action-request-id', 'idempotency-key',
 ]);
 
+/** Room for the longest valid selector set (a 512-character cursor, a date and a limit) and nothing more. */
+const MAX_RAW_QUERY_LENGTH = 600;
+
 /** Browser transport is strict, but database function authorization remains authoritative. */
 @Injectable()
 export class ClassSessionsReadHumanUiGuard implements CanActivate {
@@ -31,7 +34,7 @@ export class ClassSessionsReadHumanUiGuard implements CanActivate {
     const query = (request.query ?? {}) as Record<string, unknown>;
     const hasSelector = this.allowedQuery.size === 0
       ? Object.keys(query).length > 0 || request.originalUrl?.includes('?')
-      : Object.entries(query).some(([key, value]) => !this.allowedQuery.has(key) || typeof value !== 'string');
+      : !this.rawQueryAccepted(request.originalUrl ?? request.url ?? '', query);
     const unexpectedHonHeader = Object.keys(headers).some((header) => {
       const name = header.toLowerCase();
       return name.startsWith('x-hon-') && name !== 'x-hon-human-read';
@@ -54,5 +57,31 @@ export class ClassSessionsReadHumanUiGuard implements CanActivate {
       throw new ForbiddenException({ code: 'HUMAN_UI_REQUIRED' });
     }
     return true;
+  }
+
+  /**
+   * The parsed query alone is not enough: Express's parser stops after 1,000 pairs, so padding could hide an extra,
+   * repeated or malformed selector from it. The complete raw query must be a short list of distinct allowed keys, each
+   * once with a value, no empty pairs, decoding cleanly, and exactly matching the parsed query.
+   */
+  private rawQueryAccepted(url: string, parsed: Record<string, unknown>): boolean {
+    const mark = url.indexOf('?');
+    if (mark < 0) return Object.keys(parsed).length === 0;
+    const raw = url.slice(mark + 1);
+    if (raw.length > MAX_RAW_QUERY_LENGTH || raw.includes('#')) return false;
+    const seen = new Map<string, string>();
+    for (const pair of raw.split('&')) {
+      const equals = pair.indexOf('=');
+      if (equals <= 0) return false;
+      let key: string, value: string;
+      try {
+        key = decodeURIComponent(pair.slice(0, equals).replaceAll('+', ' '));
+        value = decodeURIComponent(pair.slice(equals + 1).replaceAll('+', ' '));
+      } catch { return false; }
+      if (!this.allowedQuery.has(key) || seen.has(key)) return false;
+      seen.set(key, value);
+    }
+    const keys = Object.keys(parsed);
+    return keys.length === seen.size && keys.every((key) => parsed[key] === seen.get(key));
   }
 }

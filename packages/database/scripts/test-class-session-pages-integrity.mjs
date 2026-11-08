@@ -316,6 +316,14 @@ try {
   await refused(() => get('/list', READER, '?other=x'), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', 'unknown query key');
   await refused(() => get('/list', READER, `?from=${localToday}&from=${localToday}`), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', 'repeated from');
   await refused(() => get('', READER, '?limit=5'), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', 'the bounded read still accepts no query');
+  // Express's parser stops after 1,000 pairs: the guard reads the complete raw query, so padding cannot hide an extra,
+  // repeated or malformed selector (the guard refuses before the controller or the database is reached).
+  for (const [raw, label] of [[`?from=${localToday}${'&'.repeat(1000)}other=x`, 'padded unknown key'], [`?from=${localToday}${'&'.repeat(1000)}from=${localToday}`, 'padded repeated from'],
+    [`?from=${localToday}${'&'.repeat(1000)}cursor=tampered`, 'padded malformed cursor'], [`?limit=5&&from=${localToday}`, 'empty pair'], ['?limit', 'key without a value'],
+    [`?limit=5&cursor=${cursor}${'&limit=5'.repeat(1)}`, 'repeated limit after a cursor'], ['?from=%E0%A4%A', 'malformed percent-encoding'], [`?from=${localToday}&${'x'.repeat(600)}=1`, 'over-long raw query']]) {
+    await refused(() => get('/list', READER, raw), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', label);
+  }
+  ok((await page(() => get('/list', READER, `?%66rom=${localToday}&limit=5`), 'percent-encoded key')).meta.fromDate === localToday, 'a percent-encoded allowed key is the same selector');
 
   // 6. Authority: schedule.session.read live at the school; the definer function decides independently.
   await refused(() => list(NONE), 403, 'CLASS_SESSIONS_READ_FORBIDDEN', 'staff without schedule.session.read');
