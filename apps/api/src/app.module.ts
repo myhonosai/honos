@@ -172,6 +172,8 @@ import { ClassSessionsReadHumanUiGuard } from './schedule/class-sessions-read-hu
 import { ClassSessionsReadService } from './schedule/class-sessions-read.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
+import { ClassSessionRosterController } from './schedule/class-session-roster.controller.js';
+import { ClassSessionRosterService } from './schedule/class-session-roster.service.js';
 import { AttendancePolicyService } from './schedule/attendance-policy.service.js';
 import { AttendancePolicyController } from './schedule/attendance-policy.controller.js';
 import { AttendanceHumanUiGuard } from './schedule/attendance-human-ui.guard.js';
@@ -334,6 +336,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionController,
     ClassSessionsReadController,
     AttendanceController,
+    ClassSessionRosterController,
     AttendancePolicyController,
     ClassBookingController,
     PlannedAbsenceReviewController,
@@ -456,6 +459,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionsReadService,
     ClassSessionsReadHumanUiGuard,
     AttendanceService,
+    ClassSessionRosterService,
     AttendancePolicyService,
     AttendanceHumanUiGuard,
     ClassBookingHumanUiGuard,
