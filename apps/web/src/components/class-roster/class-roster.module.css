@@ -57,3 +57,5 @@
   .table td { padding: 2px 0; border: 0; }
   .table td[data-label]::before { content: attr(data-label) ': '; color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 700; }
 }
+.fromRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fromRow input { width: auto; max-width: 220px; }

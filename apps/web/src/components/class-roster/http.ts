@@ -1,24 +1,33 @@
-import { CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES, CLASS_SESSION_ROSTER_BOOKING_STATUSES, type ClassSessionRosterEntry, type CurrentSchoolClassSession } from '@hon/contracts';
-import { classSessionsReadPath, parseClassSessionsRead } from '../class-sessions-read-http';
+import { CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES, CLASS_SESSION_ROSTER_BOOKING_STATUSES, verifyCurrentSchoolClassSessionItems, type ClassSessionRosterEntry, type CurrentSchoolClassSession } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * U5 class rosters: read-only. The session list is the existing current-school read (schedule.session.read); a roster is
- * the U5 read (attendance.record), re-decided live on every page. The browser names only the verified school and one
+ * U5 class rosters: read-only. The class list is the forward-paging session list (0221, schedule.session.read) from a
+ * school-local date; a roster is the U5 read (attendance.record). Both are re-decided live on every page. The browser names only the verified school and one
  * session; nothing here books, records attendance or changes a session.
  */
-export type RosterErrorKind = 'SESSION' | 'DENIED' | 'CURSOR' | 'UNAVAILABLE';
+export type RosterErrorKind = 'SESSION' | 'DENIED' | 'CURSOR' | 'TIMEZONE' | 'UNAVAILABLE';
 export class RosterError extends Error { constructor(readonly kind: RosterErrorKind) { super(kind); } }
 export type Owned = () => boolean;
 export type RosterScope = Readonly<{ organizationId: string; schoolId: string }>;
 export type RosterPage = Readonly<{ entries: readonly ClassSessionRosterEntry[]; nextCursor: string | null }>;
 export const ROSTER_PAGE = 50;
+export const SESSION_PAGE = 50;
+export type SessionPage = Readonly<{ items: readonly CurrentSchoolClassSession[]; nextCursor: string | null; schoolTimezone: string; localToday: string; fromDate: string }>;
 const CURSOR_MAX = 512;
 const RESPONSE_MAX = 262_144;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KINDS = ['REGULAR', 'TRIAL', 'MAKEUP', 'PRIVATE_LESSON', 'EVENT', 'CLASS_PASS'];
 const SOURCES = ['STAFF', 'PARENT_APP', 'AUTOMATION', 'INTEGRATION'];
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A school-local calendar date the list accepts (2000-2100, a real day). */
+export function validFromDate(value: string): boolean {
+  if (!DATE.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number) as [number, number, number];
+  const at = new Date(Date.UTC(y, m - 1, d));
+  return y >= 2000 && y <= 2100 && at.getUTCFullYear() === y && at.getUTCMonth() === m - 1 && at.getUTCDate() === d;
+}
 
 const fail = (): never => { throw new Error('shape'); };
 function closed(value: unknown, keys: readonly string[]): Record<string, unknown> {
@@ -63,6 +72,19 @@ export function verifyRosterPage(value: unknown): RosterPage {
   return { entries, nextCursor: meta.nextCursor as string | null };
 }
 
+/** One class-list page, closed: rows in start order (the 0147 row rules), a full page when a cursor is given, and the
+ * requested start date echoed back. */
+export function verifySessionPage(value: unknown, from: string | null): SessionPage {
+  const body = closed(value, ['data', 'meta']), meta = closed(body.meta, ['requestId', 'correlationId', 'limit', 'nextCursor', 'schoolTimezone', 'localToday', 'fromDate']);
+  if (!uuid(meta.requestId) || meta.correlationId !== meta.requestId || meta.limit !== SESSION_PAGE || !text(meta.schoolTimezone, 64)
+    || typeof meta.localToday !== 'string' || !validFromDate(meta.localToday) || typeof meta.fromDate !== 'string' || !validFromDate(meta.fromDate)
+    || meta.fromDate !== (from ?? meta.localToday)
+    || (meta.nextCursor !== null && (typeof meta.nextCursor !== 'string' || meta.nextCursor.length < 1 || meta.nextCursor.length > CURSOR_MAX))) fail();
+  if (!Array.isArray(body.data) || (meta.nextCursor !== null && body.data.length !== SESSION_PAGE)) fail();
+  const items = verifyCurrentSchoolClassSessionItems(body.data, SESSION_PAGE);
+  return { items, nextCursor: meta.nextCursor as string | null, schoolTimezone: meta.schoolTimezone as string, localToday: meta.localToday as string, fromDate: meta.fromDate as string };
+}
+
 async function read(path: string, signal: AbortSignal, owned: Owned, headers: Record<string, string> = {}): Promise<{ status: number; value: unknown }> {
   let response: Response;
   try {
@@ -83,16 +105,19 @@ async function read(path: string, signal: AbortSignal, owned: Owned, headers: Re
 const codeOf = (v: unknown) => v && typeof v === 'object' && !Array.isArray(v) && typeof (v as { code?: unknown }).code === 'string' ? (v as { code: string }).code : null;
 
 export interface RosterApi {
-  sessions(scope: RosterScope, signal: AbortSignal, owned: Owned): Promise<CurrentSchoolClassSession[]>;
+  sessions(scope: RosterScope, from: string | null, cursor: string | null, signal: AbortSignal, owned: Owned): Promise<SessionPage>;
   roster(scope: RosterScope, sessionId: string, cursor: string | null, signal: AbortSignal, owned: Owned): Promise<RosterPage>;
 }
 export const rosterApi: RosterApi = {
-  async sessions(scope, signal, owned) {
-    let path: string;
-    try { path = classSessionsReadPath(scope.organizationId, scope.schoolId); } catch { throw new RosterError('UNAVAILABLE'); }
+  async sessions(scope, from, cursor, signal, owned) {
+    if (!uuid(scope.organizationId) || !uuid(scope.schoolId) || (from !== null && !validFromDate(from)) || (cursor !== null && (cursor.length < 1 || cursor.length > CURSOR_MAX))) throw new RosterError('UNAVAILABLE');
+    const query = new URLSearchParams({ ...(from === null ? {} : { from }), limit: String(SESSION_PAGE), ...(cursor === null ? {} : { cursor }) });
+    const path = `/api/v1/organizations/${scope.organizationId.toLowerCase()}/schools/${scope.schoolId.toLowerCase()}/schedule/sessions/list?${query}`;
     const { status, value } = await read(path, signal, owned, { 'X-HON-Human-Read': 'class-sessions' });
+    if (status === 400 && codeOf(value) === 'INVALID_CURSOR') throw new RosterError('CURSOR');
+    if (status === 409 && codeOf(value) === 'SCHOOL_TIMEZONE_INVALID') throw new RosterError('TIMEZONE');
     if (status !== 200) throw new RosterError('UNAVAILABLE');
-    try { return parseClassSessionsRead(value); } catch { throw new RosterError('UNAVAILABLE'); }
+    try { return verifySessionPage(value, from); } catch { throw new RosterError('UNAVAILABLE'); }
   },
   async roster(scope, sessionId, cursor, signal, owned) {
     if (!uuid(sessionId) || !uuid(scope.organizationId) || !uuid(scope.schoolId) || (cursor !== null && (cursor.length < 1 || cursor.length > CURSOR_MAX))) throw new RosterError('UNAVAILABLE');
