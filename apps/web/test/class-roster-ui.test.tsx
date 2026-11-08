@@ -63,6 +63,9 @@ it('verifies a class-list page strictly; drift is unavailable', async () => {
     expect(() => verifySessionPage(bad, null)).toThrow();
   }
   expect(() => verifySessionPage({ data: [], meta: listMeta() }, '2026-10-01')).toThrow();
+  expect(() => verifySessionPage({ data: [], meta: listMeta({ schoolTimezone: 'Not/AZone' }) }, null)).toThrow(RosterError);
+  stub(json({ data: [], meta: listMeta({ schoolTimezone: 'Not/AZone' }) }));
+  await expect(rosterApi.sessions(scope, null, null, signal(), () => true)).rejects.toMatchObject({ kind: 'TIMEZONE' });
   expect(verifySessionPage({ data: [session(1, 1)], meta: listMeta({ fromDate: '2026-10-01' }) }, '2026-10-01').items).toHaveLength(1);
   for (const [response, kind] of [[json({ code: 'CLASS_SESSIONS_READ_FORBIDDEN' }, 403), 'DENIED'], [json({ code: 'INVALID_CURSOR' }, 400), 'CURSOR'],
     [json({ code: 'SCHOOL_TIMEZONE_INVALID' }, 409), 'TIMEZONE'], [json({ code: 'VALIDATION_FAILED' }, 400), 'UNAVAILABLE'], [json({ code: 'CLASS_SESSIONS_READ_TIMEOUT' }, 503), 'UNAVAILABLE']] as const) {

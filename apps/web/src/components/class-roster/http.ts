@@ -82,6 +82,8 @@ export function verifySessionPage(value: unknown, from: string | null): SessionP
     || (meta.nextCursor !== null && (typeof meta.nextCursor !== 'string' || meta.nextCursor.length < 1 || meta.nextCursor.length > CURSOR_MAX))) fail();
   if (!Array.isArray(body.data) || (meta.nextCursor !== null && body.data.length !== SESSION_PAGE)) fail();
   const items = verifyCurrentSchoolClassSessionItems(body.data, SESSION_PAGE);
+  // A zone the database accepts but this browser cannot format would fail at render: say so instead.
+  try { new Intl.DateTimeFormat('en', { timeZone: meta.schoolTimezone as string }); } catch { throw new RosterError('TIMEZONE'); }
   return { items, nextCursor: meta.nextCursor as string | null, schoolTimezone: meta.schoolTimezone as string, localToday: meta.localToday as string, fromDate: meta.fromDate as string };
 }
 
@@ -117,7 +119,7 @@ export const rosterApi: RosterApi = {
     if (status === 400 && codeOf(value) === 'INVALID_CURSOR') throw new RosterError('CURSOR');
     if (status === 409 && codeOf(value) === 'SCHOOL_TIMEZONE_INVALID') throw new RosterError('TIMEZONE');
     if (status !== 200) throw new RosterError('UNAVAILABLE');
-    try { return verifySessionPage(value, from); } catch { throw new RosterError('UNAVAILABLE'); }
+    try { return verifySessionPage(value, from); } catch (error) { throw error instanceof RosterError ? error : new RosterError('UNAVAILABLE'); }
   },
   async roster(scope, sessionId, cursor, signal, owned) {
     if (!uuid(sessionId) || !uuid(scope.organizationId) || !uuid(scope.schoolId) || (cursor !== null && (cursor.length < 1 || cursor.length > CURSOR_MAX))) throw new RosterError('UNAVAILABLE');
