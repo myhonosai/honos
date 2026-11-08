@@ -23,6 +23,17 @@ export async function verifyClassSessionsReadSecurity(client, runtime = 'hon_run
         AND privilege.grantee = 0 AND privilege.privilege_type = 'EXECUTE') AS public_execute`, [runtime]);
   const privileges = acl.rows[0];
   if (privileges?.table_select || !privileges?.read_execute || privileges?.helper_execute || privileges?.public_execute) throw new Error('Class Sessions function-only ACL weakened.');
+  // 0221 forward pages: the same private helper before and after the read, read-only, no other table, runtime EXECUTE only.
+  const pages = (await client.query(`SELECT p.prosecdef, p.provolatile, p.prosrc, has_function_privilege($1, p.oid, 'EXECUTE') AS runtime_execute,
+      EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS privilege WHERE privilege.grantee = 0) AS public_any
+    FROM pg_proc p WHERE p.oid = to_regprocedure('hon.read_school_class_session_page(text,jsonb)')`, [runtime])).rows[0];
+  if (!pages || !pages.prosecdef || pages.provolatile !== 'v' || !pages.runtime_execute || pages.public_any) throw new Error('Class-session page function posture weakened.');
+  const pageBody = pages.prosrc.replace(/--[^\n]*/g, '');
+  if ((pageBody.match(/require_current_school_class_sessions_read_actor/g) ?? []).length !== 2
+    || /\b(?:INSERT|UPDATE|DELETE|TRUNCATE|EXECUTE)\b/i.test(pageBody) || /\bFOR\s+(?:UPDATE|SHARE|KEY\s+SHARE|NO\s+KEY)\b/i.test(pageBody)
+    || [...pageBody.matchAll(/\bhon\.([a-z_]+)/g)].some(([, name]) => !['require_current_school_class_sessions_read_actor', 'current_organization_id', 'current_school_id', 'schools', 'class_sessions'].includes(name))) {
+    throw new Error('Class-session page read must re-authorize twice, never mutate or lock, and read only schools and class_sessions.');
+  }
   const permission = (await client.query("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='schedule.session.read'" )).rows[0];
   if (!permission || permission.is_sensitive || !permission.is_staff_assignable) throw new Error('Class Sessions exact permission is invalid.');
 }

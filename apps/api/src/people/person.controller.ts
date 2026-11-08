@@ -20,7 +20,8 @@ export class PersonController {
     if (!scope || scope.organizationId !== organizationId) throw new ForbiddenException('HON people directory access is not authorized for this school.');
     const requestId = randomUUID();
     const context: CommandContext = { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey: `read:${requestId}`, source: 'HUMAN_UI' };
-    return { data: await this.people.list(context, query.query), meta: { requestId, correlationId: requestId } };
+    const { people, nextCursor, limit } = await this.people.list(context, query.query, { limit: query.limit, cursor: query.cursor });
+    return { data: people, meta: { requestId, correlationId: requestId, limit, nextCursor } };
   }
 
   @Post()

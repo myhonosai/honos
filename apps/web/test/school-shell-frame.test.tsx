@@ -35,7 +35,7 @@ describe('school shell frame', () => {
   it('adds the verified prefill to scoped links only when READY', () => {
     const ready = render();
     expect(ready).toContain(`href="/staff/dashboard?organizationId=${A}&amp;schoolId=${B}"`);
-    expect(ready).toContain('href="/staff/billing/memberships"');
+    expect(ready).toContain('href="/staff/memberships"');
     for (const phase of ['IDLE', 'LOADING', 'CHOICE', 'CONCEALED', 'SESSION', 'DENIED', 'UNAVAILABLE', 'IDENTITY'] as const) {
       const html = render({ phase, selection: phase === 'CONCEALED' ? null : base.selection });
       expect(html, phase).not.toContain('organizationId=');

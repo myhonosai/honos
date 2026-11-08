@@ -103,6 +103,8 @@ import { CrmLeadMembershipsController } from './billing/crm-lead-memberships.con
 import { CrmLeadMembershipsService } from './billing/crm-lead-memberships.service.js';
 import { MembershipDateRevisionController } from './billing/membership-date-revision.controller.js';
 import { MembershipDateRevisionService } from './billing/membership-date-revision.service.js';
+import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
+import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -170,8 +172,12 @@ import { ClassSessionService } from './schedule/class-session.service.js';
 import { ClassSessionsReadController } from './schedule/class-sessions-read.controller.js';
 import { ClassSessionsReadHumanUiGuard } from './schedule/class-sessions-read-human-ui.guard.js';
 import { ClassSessionsReadService } from './schedule/class-sessions-read.service.js';
+import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
+import { ClassSessionPagesService } from './schedule/class-session-pages.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
+import { ClassSessionRosterController } from './schedule/class-session-roster.controller.js';
+import { ClassSessionRosterService } from './schedule/class-session-roster.service.js';
 import { AttendancePolicyService } from './schedule/attendance-policy.service.js';
 import { AttendancePolicyController } from './schedule/attendance-policy.controller.js';
 import { AttendanceHumanUiGuard } from './schedule/attendance-human-ui.guard.js';
@@ -333,7 +339,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ProgramController,
     ClassSessionController,
     ClassSessionsReadController,
+    ClassSessionPagesController,
     AttendanceController,
+    ClassSessionRosterController,
     AttendancePolicyController,
     ClassBookingController,
     PlannedAbsenceReviewController,
@@ -365,6 +373,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipController,
     CrmLeadMembershipsController,
     MembershipDateRevisionController,
+    SchoolMembershipListController,
     MembershipStatusReportController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
@@ -455,7 +464,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionHumanUiGuard,
     ClassSessionsReadService,
     ClassSessionsReadHumanUiGuard,
+    ClassSessionPagesService,
+    ClassSessionPagesHumanUiGuard,
     AttendanceService,
+    ClassSessionRosterService,
     AttendancePolicyService,
     AttendanceHumanUiGuard,
     ClassBookingHumanUiGuard,
@@ -492,6 +504,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipService,
     CrmLeadMembershipsService,
     MembershipDateRevisionService,
+    SchoolMembershipListService,
+    SchoolMembershipListHumanUiGuard,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,

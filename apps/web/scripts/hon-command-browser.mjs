@@ -226,6 +226,10 @@ async function api(route) {
     aiUsage: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ AI usage or cost projection is available.' },
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
+  if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
+  if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
+  if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
@@ -324,6 +328,7 @@ const hqAccessView = (o) => { const ent = hqEnt(o), inEffect = ent?.inEffect ===
   return { organizationId: o.id, state: o.state, source: !inEffect ? 'NONE' : o.state === 'PAYMENT_ACTIVE' ? 'PAYMENT_ACTIVATED' : 'PROVISIONED', entitlement: ent,
     capabilities: inEffect ? [...SAAS_PLAN_CAPABILITIES[ent.tier]] : [], paidAccessProgram: 'INACTIVE' }; };
 async function hqAccessApi(route, path, method, url) {
+  if (path === '/api/v1/hq/saas/access-exception-policy') return hqPolicyApi(route, method);
   if (path === '/api/v1/hq/saas/access-overview' && method === 'GET') {
     if (hqx.denyOverview) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
     const cursor = url.searchParams.get('cursor');
@@ -380,7 +385,185 @@ async function hqAccessApi(route, path, method, url) {
   return json(route, 200, { data }, { 'Cache-Control': 'private, no-store' });
 }
 
+// D10 exception policy (0186, read terms + viewer 0222): synthetic decisions only. The command rules mirror the database:
+// HQ owner only, next revision, current terms version and maximum, a future window, and something to withdraw or revoke.
+const hqp = { owner: true, history: [], termsVersion: 1, maxDays: 90, posts: [], replies: [], byKey: new Map(), gate: null, deny: false, readGate: null, readSession: false };
+function resetHqp(over = {}) {
+  Object.assign(hqp, { owner: true, history: [], termsVersion: 1, maxDays: 90, posts: [], replies: [], byKey: new Map(), gate: null, deny: false, readGate: null, readSession: false }, over);
+}
+const hqpDecision = (revision, status, body, prior) => ({ approvalId: id(600 + revision), revision, status, termsVersion: body.termsVersion ?? prior.termsVersion,
+  maxDays: body.maxDays ?? prior.maxDays, validFrom: body.validFrom ?? prior.validFrom, validUntil: body.validUntil ?? prior.validUntil, reason: body.reason,
+  actorPrincipalId: id(499), recordedAt: new Date().toISOString() });
+function hqpView() {
+  const now = Date.now(), p = hqp.history[0] ?? null;
+  const effectiveStatus = !p ? 'ABSENT' : p.status !== 'APPROVED' ? p.status : p.termsVersion !== hqp.termsVersion ? 'SUPERSEDED'
+    : Date.parse(p.validFrom) > now ? 'SCHEDULED' : Date.parse(p.validUntil) <= now ? 'EXPIRED' : 'ACTIVE';
+  return { scope: 'ACCESS_EXCEPTIONS_ONLY', current: p, effectiveStatus, history: hqp.history, historyLimit: 100, asOf: new Date(now).toISOString(), termsStatus: 'PROPOSED',
+    terms: { policyVersion: hqp.termsVersion, exceptionMaxDays: hqp.maxDays, exceptionAuthority: 'HQ_OWNER' }, viewer: { canDecide: hqp.owner },
+    paidAccessProgram: 'INACTIVE', aiCreditProgram: 'INACTIVE' };
+}
+async function hqPolicyApi(route, method) {
+  if (method === 'GET') {
+    const gate = hqp.readGate; hqp.readGate = null; const session = hqp.readSession; if (gate) { hqp.readSession = false; await gate; }
+    if (session) return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+    if (hqp.deny) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    return json(route, 200, { data: hqpView() }, { 'Cache-Control': 'private, no-store' });
+  }
+  if (method !== 'POST') return null;
+  const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
+  // Taken at request entry: a gated retired request keeps its own step.
+  const step = hqp.replies.shift() ?? 'ok', gate = hqp.gate; hqp.gate = null;
+  hqp.posts.push({ key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
+  if (gate) await gate;
+  const prior = hqp.byKey.get(headers['idempotency-key']);
+  if (prior) return prior.body === raw ? json(route, 200, { data: { ...prior.data, replayed: true } }) : json(route, 409, { code: 'IDEMPOTENCY_KEY_REUSED' });
+  assert.equal(headers['x-hon-human-command'], 'saas-access-exception-policy-decision');
+  if (step === 'lost') return route.abort('connectionreset');
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (!hqp.owner) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  const body = JSON.parse(raw), latest = hqp.history[0] ?? null;
+  if (body.expectedRevision !== (latest?.revision ?? 0)) return json(route, 409, { code: 'SAAS_VERSION_CONFLICT' });
+  let made;
+  if (body.decision === 'WITHDRAWN' || body.decision === 'REVOKED') {
+    assert.deepEqual(Object.keys(body).sort(), ['decision', 'expectedRevision', 'reason']);
+    if (!latest || !['PROPOSED', 'APPROVED'].includes(latest.status)) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_REQUIRED' });
+    if (latest.termsVersion !== hqp.termsVersion) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_LIMIT' });
+    made = hqpDecision(body.expectedRevision + 1, body.decision, { reason: body.reason }, latest);
+  } else {
+    assert.deepEqual(Object.keys(body).sort(), ['decision', 'expectedRevision', 'maxDays', 'reason', 'termsVersion', 'validFrom', 'validUntil',
+      ...(body.decision === 'APPROVED' ? ['confirmation'] : [])].sort());
+    if (body.decision === 'APPROVED') assert.equal(body.confirmation, 'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY');
+    if (Date.parse(body.validUntil) <= Date.parse(body.validFrom) || Date.parse(body.validUntil) <= Date.now()) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_WINDOW_INVALID' });
+    if (body.termsVersion !== hqp.termsVersion || body.maxDays > hqp.maxDays) return json(route, 422, { code: 'SAAS_EXCEPTION_POLICY_LIMIT' });
+    made = hqpDecision(body.expectedRevision + 1, body.decision, body, {});
+  }
+  hqp.history = [made, ...hqp.history];
+  const data = { policy: made, replayed: false };
+  hqp.byKey.set(headers['idempotency-key'], { body: raw, data });
+  if (step === 'unknown') return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' });
+  if (step === 'unknownThenDenied') { hqp.deny = true; return json(route, 409, { code: 'SAAS_OUTCOME_UNKNOWN' }); }
+  return json(route, 200, { data }, { 'Cache-Control': 'private, no-store' });
+}
+
 // People (B-CRM-1a/1b): synthetic people at the one school. Edits replay by key, check the version and the consent rule.
+// Leads (U4): the school's CRM lead list and each lead's trials (synthetic). Read-only.
+const lds = { denied: false, gate: null, step: null, reads: [] };
+const ldsLeads = () => [['Riley', 'Park', 'OPEN', 2], ['Jordan', 'Kim', 'OPEN', null], ['Casey', 'Lee', 'WON', null], ['Morgan', 'Diaz', 'LOST', null]].map(([givenName, familyName, status, follow], n) => ({
+  id: id(800 + n), status, pipelineStageId: id(799), primaryPersonId: id(810 + n), version: 2 + n, createdAt: iso(-72 - n), givenName, familyName,
+  email: `${String(givenName).toLowerCase()}@example.invalid`, phoneE164: '+15555550100', ...(follow === null ? {} : { nextFollowUpAt: iso(follow) }) }));
+const ldsTrial = (n, status, hours) => ({ id: id(830 + n), crmLeadId: id(800), appointmentType: 'TRIAL', status, startsAt: iso(hours), endsAt: iso(hours + 1), createdByPrincipalId: id(61), version: 1,
+  createdAt: iso(-10 - n), updatedAt: iso(-10 - n), location: 'Main mat' });
+function resetLeads(over = {}) { Object.assign(lds, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function leadsApiRoute(route, path, method, url, prefix) {
+  if (method !== 'GET') return null;
+  const trials = path.match(new RegExp(`^${prefix}/crm/leads/([0-9a-f-]{36})/trials$`));
+  if (path !== `${prefix}/crm/leads` && !trials) return null;
+  lds.reads.push(trials ? 'trials' : `list:${url.searchParams.get('status') ?? 'ALL'}`);
+  // The step belongs to the request that arrives first, even while it waits at the gate.
+  const step = lds.step; lds.step = null;
+  if (lds.gate) { const gate = lds.gate; lds.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (lds.denied) return json(route, 403, { code: 'FORBIDDEN' });
+  if (trials) {
+    const rows = trials[1] === id(800) ? [ldsTrial(1, 'SCHEDULED', 26), ldsTrial(2, 'NO_SHOW', -48)] : [];
+    return json(route, 200, { data: { activeTrial: rows[0] ?? null, trials: rows }, meta: { requestId: id(898), correlationId: id(898) } });
+  }
+  const status = url.searchParams.get('status');
+  return json(route, 200, { data: ldsLeads().filter((lead) => !status || lead.status === status), meta: { requestId: 'synthetic' } });
+}
+// Marketing home (U7): the one school's campaign plans and a campaign's last-30-day counts (synthetic). Read-only.
+const mkt = { denied: false, gate: null, step: null, reads: [] };
+const mktCampaigns = () => [['Spring open house', 'ACTIVE', 'EVENT'], ['Summer camp plan', 'DRAFT', 'SOCIAL'], ['Old flyer', 'ARCHIVED', 'PRINT']].map(([name, status, channel], n) => ({
+  id: id(900 + n), version: 2, code: `CAMP-${n}`, name, goal: 'Fill the Saturday kids class', offerLabel: n === 0 ? 'Free first week' : '', channel, status,
+  startsAt: '2026-11-01T00:00:00.000Z', endsAt: '2026-11-30T00:00:00.000Z', plannedBudgetMinor: 25000, currency: 'USD', createdAt: iso(-200), updatedAt: iso(-100), planningOnly: true }));
+function resetMarketing(over = {}) { Object.assign(mkt, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function marketingApiRoute(route, path, method, url) {
+  if (method !== 'GET') return null;
+  const funnel = path.match(/^\/api\/v1\/marketing\/campaigns\/([0-9a-f-]{36})\/funnel$/);
+  if (path !== '/api/v1/marketing/campaigns' && !funnel) return null;
+  mkt.reads.push(funnel ? `funnel:${funnel[1]}` : 'list');
+  const step = mkt.step; mkt.step = null;
+  if (mkt.gate) { const gate = mkt.gate; mkt.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (mkt.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  if (!funnel) return json(route, 200, { data: mktCampaigns(), meta: { requestId: 'synthetic' } });
+  const campaign = mktCampaigns().find((c) => c.id === funnel[1]);
+  if (!campaign) return json(route, 404, { code: 'CAMPAIGN_NOT_FOUND' });
+  const first = campaign.id === id(900);
+  return json(route, 200, { data: { campaign, from: url.searchParams.get('from'), to: url.searchParams.get('to'), asOf: iso(0),
+    leads: first ? 12 : 0, trialLeads: first ? 5 : 0, trialAppointments: first ? 6 : 0, completedTrialAppointments: first ? 4 : 0, wonLeads: first ? 3 : 0, lostLeads: first ? 1 : 0, archivedLeads: 0,
+    enrollmentLinkage: 'UNAVAILABLE', revenueLinkage: 'UNAVAILABLE' }, meta: { requestId: 'synthetic' } });
+}
+// Class rosters (U5): the school's classes and one class's roster, two pages (synthetic). Read-only.
+const rst = { denied: false, gate: null, step: null, reads: [] };
+// The class list starts at the school's local today (UTC here), so these times follow the wall clock.
+const wall = (hours) => new Date(Math.floor(Date.now() / 1000) * 1000 + hours * 3_600_000).toISOString();
+const rstSessions = () => [['Kids Taekwondo', 2, 'SCHEDULED', 'Main mat'], ['Adult sparring', 28, 'SCHEDULED', null], ['Saturday open mat', -50, 'COMPLETED', 'Main mat'],
+  ...Array.from({ length: 50 }, (_, n) => [`Open mat ${String(n + 1).padStart(2, '0')}`, 72 + n * 24, 'SCHEDULED', 'Side mat'])].map(([name, hours, status, roomName], n) => ({
+  sessionId: id(950 + n), name, startsAt: wall(hours), endsAt: wall(hours + 1), roomName, capacity: 24, bookingPolicy: 'OPTIONAL_BOOKING', status, createdAt: iso(-400) })).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+const rstFamilies = ['Ahn', 'Baker', 'Choi', 'Diaz', 'Evans', 'Fischer', 'García', 'Hwang', 'Ito', 'Jones', 'Kim', 'López'];
+const rstStudents = (sessionId) => sessionId !== id(950) ? [] : Array.from({ length: 60 }, (_, n) => ({ studentProfileId: id(1000 + n), personId: id(1100 + n),
+  givenName: `Student${String(n).padStart(2, '0')}`, familyName: rstFamilies[n % rstFamilies.length], studentStatus: 'ACTIVE',
+  booking: n % 10 === 9 ? null : { id: id(1200 + n), kind: n % 7 === 3 ? 'TRIAL' : 'REGULAR', status: n % 11 === 5 ? 'CANCELLED' : n % 13 === 6 ? 'WAITLISTED' : 'BOOKED', source: 'STAFF',
+    bookedAt: iso(-30), cancelledAt: n % 11 === 5 ? iso(-5) : null, version: 1 },
+  attendance: n % 10 === 9 || n % 4 === 0 ? { id: id(1300 + n), status: n % 8 === 0 ? 'LATE' : 'PRESENT', category: 'REGULAR_PARTICIPANT', recordedAt: iso(-1), version: 1 } : null }))
+  .sort((a, b) => a.familyName.localeCompare(b.familyName) || a.givenName.localeCompare(b.givenName) || a.studentProfileId.localeCompare(b.studentProfileId));
+function resetRoster(over = {}) { Object.assign(rst, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function rosterApiRoute(route, path, method, url, prefix) {
+  if (method !== 'GET') return null;
+  const roster = path.match(new RegExp(`^${prefix}/schedule/sessions/([0-9a-f-]{36})/roster$`));
+  if (path !== `${prefix}/schedule/sessions/list` && !roster) return null;
+  const cursor = url.searchParams.get('cursor'), from = url.searchParams.get('from');
+  rst.reads.push(roster ? `roster:${roster[1]}:${cursor ?? 'first'}` : `list:${from ?? 'today'}:${cursor ?? 'first'}`);
+  const step = rst.step; rst.step = null;
+  if (rst.gate) { const gate = rst.gate; rst.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (!roster) {
+    if (route.request().headers()['x-hon-human-read'] !== 'class-sessions') return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+    if ([...url.searchParams.keys()].some((k) => !['from', 'limit', 'cursor'].includes(k)) || url.searchParams.get('limit') !== '50') return json(route, 400, { code: 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED' });
+    if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
+    const realToday = new Date().toISOString().slice(0, 10), listFrom = from ?? realToday;
+    const all = rstSessions().filter((s) => s.startsAt >= `${listFrom}T00:00:00.000Z`), start = cursor === `list-p2:${listFrom}` ? 50 : 0;
+    // 'midnight': a later page read after the school's local midnight reports the new day (paging itself continues).
+    const localToday = step === 'midnight' && cursor ? new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) : realToday, fromDate = from ?? localToday;
+    return json(route, 200, { data: all.slice(start, start + 50), meta: { requestId: id(949), correlationId: id(949), limit: 50,
+      nextCursor: start + 50 < all.length ? `list-p2:${listFrom}` : null, schoolTimezone: 'UTC', localToday, fromDate } });
+  }
+  if (rst.denied) return json(route, 403, { code: 'ATTENDANCE_FORBIDDEN' });
+  if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
+  // An unknown or other-school session reads as an empty roster (the roster never reads hon.class_sessions).
+  const all = rstStudents(roster[1]), start = cursor === 'page-2' ? 50 : 0, data = all.slice(start, start + 50);
+  return json(route, 200, { data, meta: { requestId: id(948), correlationId: id(948), limit: 50, nextCursor: start + 50 < all.length ? 'page-2' : null } });
+}
+// Memberships (U6): the school's memberships, newest first, two pages, one state filter (synthetic). Read-only.
+const mbl = { denied: false, gate: null, step: null, reads: [] };
+const mblNames = ['Ahn', 'Baker', 'Choi', 'Diaz', 'Evans', 'Fischer', 'García', 'Hwang', 'Ito', 'Jones', 'Kim', 'López'];
+const mblRows = () => Array.from({ length: 60 }, (_, n) => {
+  const kind = n % 6, state = ['ACTIVE', 'ACTIVE', 'DRAFT', 'ACTIVE', 'FROZEN', 'CANCELLED'][kind];
+  const effectiveStatus = state !== 'ACTIVE' ? state : kind === 0 ? 'IN_EFFECT' : kind === 1 ? 'SCHEDULED' : 'UNDATED';
+  const dated = effectiveStatus === 'IN_EFFECT' || effectiveStatus === 'SCHEDULED';
+  return { membershipId: id(1500 + n), state, version: 1, planCode: n % 2 ? 'KIDS-MONTHLY' : 'ADULT-MONTHLY', billingAccountId: id(1600 + n),
+    participant: n === 7 ? null : { personId: id(1700 + n), givenName: `Member${String(n).padStart(2, '0')}`, familyName: mblNames[n % mblNames.length] },
+    effectiveStatus, datesConfirmed: dated,
+    currentPeriod: dated ? { periodVersion: 1, changeKind: 'INITIAL', startDate: kind === 1 ? '2026-12-01' : '2026-10-01', endDate: n % 4 === 0 ? null : '2027-01-31' } : null,
+    legacyStoredTerm: dated ? null : { termStartedAt: kind === 3 ? '2026-09-01T00:00:00.000Z' : null, termEndsAt: null },
+    createdAt: new Date(Date.parse('2026-10-20T12:00:00.000Z') - n * 3_600_000).toISOString() };
+});
+function resetMemberships(over = {}) { Object.assign(mbl, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function membershipListApiRoute(route, path, method, url, prefix) {
+  if (method !== 'GET' || path !== `${prefix}/billing/memberships`) return null;
+  const cursor = url.searchParams.get('cursor'), state = url.searchParams.get('state');
+  mbl.reads.push(`${state ?? 'ALL'}:${cursor ?? 'first'}`);
+  const step = mbl.step; mbl.step = null;
+  if (mbl.gate) { const gate = mbl.gate; mbl.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (mbl.denied) return json(route, 403, { code: 'MEMBERSHIP_LIST_FORBIDDEN' });
+  if (route.request().headers()['x-hon-source'] || url.searchParams.get('limit') !== '50') return json(route, 400, { code: 'VALIDATION_FAILED' });
+  if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
+  const all = mblRows().filter((m) => !state || m.state === state), start = cursor === `${state ?? 'ALL'}-page-2` ? 50 : 0, data = all.slice(start, start + 50);
+  return json(route, 200, { data, meta: { requestId: id(1498), correlationId: id(1498), limit: 50, nextCursor: start + 50 < all.length ? `${state ?? 'ALL'}-page-2` : null,
+    schoolTimezone: 'America/Los_Angeles', localToday: '2026-11-08' } });
+}
 const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
 function resetPeople(over = {}) {
   ppl.records = new Map([[id(301), { personId: id(301), schoolId: scope.schoolId, givenName: 'Ana', familyName: 'Rivera', email: 'ana.parent@example.invalid', phoneE164: '+15555550101',
@@ -467,7 +650,7 @@ async function shot(page, name, fullPage = false) { await page.screenshot({ path
 async function axe(page, name) {
   await page.addScriptTag({ content: axeSource });
   const run = (include) => page.evaluate(async (selectors) => (await window.axe.run(selectors ? { include: selectors.map((s) => [s]) } : document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0]?.target })), include);
-  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]', 'section[aria-labelledby="people-title"]', 'section[aria-labelledby="hq-access-title"]'].filter((s) => document.querySelector(s)));
+  const selectors = await page.evaluate(() => ['[role="dialog"]', 'section[aria-labelledby="hon-band-title"]', 'main[data-variant]', 'section[aria-labelledby="creative-studio-title"]', 'section[aria-labelledby="people-title"]', 'section[aria-labelledby="hq-access-title"]', 'section[aria-labelledby="hq-policy-title"]'].filter((s) => document.querySelector(s)));
   const result = await run(selectors);
   report.accessibility.push({ name, scope: selectors, violations: result, wholePage: await run(null) });
   const serious = result.filter((v) => v.impact === 'serious' || v.impact === 'critical');
@@ -1680,6 +1863,652 @@ for (const [setup, start] of [['an open grant form', null], ['a kept unknown gra
     await ctx.close();
   });
 }
+
+// ---------- HQ exception policy ----------
+async function hqPolicyPage(viewport, { language = 'en' } = {}) {
+  mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/hq/schools/access/policy`);
+  const section = () => page.locator('section[aria-labelledby="hq-policy-title"]');
+  await section().getByTestId('hq-policy-status').waitFor({ timeout: 20000 }).catch(async (e) => { console.error('HQ policy page did not load:', await page.locator('main').innerText().catch(() => 'no main')); throw e; });
+  return { ctx, page, section };
+}
+const policyDay = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const fillDecision = async (section, { days = '30', end = policyDay(45), reason = 'Approve exceptions for the pilot season', confirm = true } = {}) => {
+  await section().getByRole('button', { name: 'Propose or approve' }).click();
+  const form = section().getByTestId('hq-policy-decide');
+  await form.getByLabel('Longest exception (days)').fill(days);
+  await form.getByLabel('Last valid day').fill(end);
+  await form.getByLabel('Reason').fill(reason);
+  if (confirm) await form.getByRole('checkbox').check();
+  return form;
+};
+const approvedRow = (revision = 1, termsVersion = 1) => ({ approvalId: id(600 + revision), revision, status: 'APPROVED', termsVersion, maxDays: 30,
+  validFrom: new Date(Date.now() - 86_400_000).toISOString(), validUntil: new Date(Date.now() + 40 * 86_400_000).toISOString(), reason: 'Synthetic approved exception policy',
+  actorPrincipalId: id(499), recordedAt: new Date(Date.now() - 86_400_000).toISOString() });
+for (const [name, viewport, language, title] of [['desktop-1440', { width: 1440, height: 900 }, 'en', 'Exception policy'], ['phone-390', { width: 390, height: 844 }, 'en', 'Exception policy'],
+  ['desktop-1440', { width: 1440, height: 900 }, 'ko', '예외 정책'], ['phone-390', { width: 390, height: 844 }, 'es', 'Política de excepciones']]) {
+  await check(`HQ exception policy ${language} ${name}: real read, current terms, exceptions-only statement`, async () => {
+    resetHqp();
+    const { ctx, page, section } = await hqPolicyPage(viewport, { language });
+    assert.ok(await section().getByRole('heading', { name: title, level: 1 }).isVisible());
+    assert.match(await section().getByTestId('hq-policy-terms').innerText(), /90/);
+    await noOverflow(page, `hq-policy-${language}-${name}`); await axe(page, `hq-policy-${language}-${name}`);
+    await shot(page, `hq-policy-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('HQ exception policy: propose, then approve with the confirmation; each answer is followed by a fresh read', async () => {
+  resetHqp();
+  const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  let form = await fillDecision(section, { confirm: false });
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/Approving also needs the confirmation box/).waitFor();
+  assert.equal(hqp.posts.length, 0, 'nothing sent without the confirmation');
+  await form.getByRole('button', { name: 'Save as proposal' }).click();
+  await section().getByText(/Recorded: Proposed/).waitFor();
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Proposed');
+  const proposed = JSON.parse(hqp.posts[0].body);
+  assert.equal(proposed.decision, 'PROPOSED'); assert.equal(proposed.expectedRevision, 0); assert.equal(proposed.termsVersion, 1); assert.equal(proposed.maxDays, 30);
+  assert.equal('confirmation' in proposed, false);
+  await shot(page, 'hq-policy-proposed', true);
+  form = section().getByTestId('hq-policy-decide');
+  await section().getByRole('button', { name: 'Propose or approve' }).click();
+  form = section().getByTestId('hq-policy-decide');
+  assert.equal(await form.getByLabel('Longest exception (days)').inputValue(), '30', 'prefilled from the proposal');
+  await form.getByLabel('Reason').fill('Owner approves the proposed exception policy');
+  await form.getByRole('checkbox').check();
+  await shot(page, 'hq-policy-approve-form', true);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/Recorded: Approved/).waitFor();
+  for (let i = 0; i < 50 && await section().getByTestId('hq-policy-status').innerText() !== 'Approved, in effect'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Approved, in effect');
+  const approved = JSON.parse(hqp.posts[1].body);
+  assert.equal(approved.decision, 'APPROVED'); assert.equal(approved.expectedRevision, 1); assert.equal(approved.confirmation, 'APPROVE_ACCESS_EXCEPTION_POLICY_ONLY');
+  assert.notEqual(hqp.posts[0].key, hqp.posts[1].key);
+  assert.equal(await section().getByTestId('hq-policy-history').locator('li').count(), 2);
+  await noOverflow(page, 'hq-policy-approved'); await axe(page, 'hq-policy-approved'); await shot(page, 'hq-policy-approved', true);
+  await ctx.close();
+});
+await check('HQ exception policy: a lost answer is kept; Try again replays the same key and body and records once', async () => {
+  resetHqp({ replies: ['unknown', 'ok'] });
+  const { ctx, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  const form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/We could not confirm whether this was recorded/).waitFor();
+  await section().getByRole('button', { name: 'Try again' }).click();
+  await section().getByText(/Recorded: Approved/).waitFor();
+  assert.equal(hqp.posts.length, 2); assert.equal(hqp.posts[0].key, hqp.posts[1].key); assert.equal(hqp.posts[0].body, hqp.posts[1].body);
+  assert.equal(hqp.history.length, 1, 'recorded once');
+  await ctx.close();
+});
+await check('HQ exception policy: revoke needs a reason; a changed revision and rule refusals end the attempt with nothing kept', async () => {
+  resetHqp({ history: [approvedRow()] });
+  let { ctx, page, section } = await hqPolicyPage({ width: 390, height: 844 });
+  await section().getByRole('button', { name: 'Revoke approval' }).click();
+  const end = section().getByTestId('hq-policy-end');
+  await end.getByLabel('Reason').fill('short');
+  await end.getByRole('button', { name: 'Revoke' }).click();
+  await section().getByText(/Give a reason of 10 to 500 characters/).waitFor();
+  assert.equal(hqp.posts.length, 0);
+  await end.getByLabel('Reason').fill('Pilot season is over for now');
+  await shot(page, 'hq-policy-revoke-form', true);
+  await end.getByRole('button', { name: 'Revoke' }).click();
+  await section().getByText(/Recorded: Revoked/).waitFor();
+  assert.deepEqual(JSON.parse(hqp.posts[0].body), { expectedRevision: 1, decision: 'REVOKED', reason: 'Pilot season is over for now' });
+  await noOverflow(page, 'hq-policy-revoked'); await axe(page, 'hq-policy-revoked');
+  await ctx.close();
+  // Another decision lands after the read: the stale revision is refused, nothing is kept, the fresh read shows it.
+  resetHqp();
+  ({ ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 }));
+  hqp.history = [approvedRow()];
+  let form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Save as proposal' }).click();
+  await section().getByText(/Another decision was recorded since this page was read/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Approved, in effect');
+  // The terms change after the read: the server refuses the stale terms version.
+  hqp.termsVersion = 2;
+  form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Save as proposal' }).click();
+  await section().getByText(/the access terms changed/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  for (let i = 0; i < 50 && await section().getByTestId('hq-policy-status').innerText() !== 'Approved for older terms'; i++) await new Promise((done) => setTimeout(done, 100));
+  assert.equal(await section().getByRole('button', { name: 'Revoke approval' }).count(), 0, 'nothing to revoke under older terms');
+  await ctx.close();
+});
+await check('HQ exception policy: an HQ operator reads the policy with no decision control; a denied read shows nothing', async () => {
+  resetHqp({ owner: false, history: [approvedRow()] });
+  const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  await section().getByTestId('hq-policy-owner-only').waitFor();
+  assert.equal(await section().getByRole('button', { name: /Propose or approve|Revoke approval|Withdraw proposal/ }).count(), 0);
+  await axe(page, 'hq-policy-operator'); await shot(page, 'hq-policy-operator');
+  hqp.deny = true;
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await section().getByText(/does not include the exception policy/).waitFor();
+  assert.equal(await section().getByText(/Synthetic approved exception policy/).count(), 0);
+  await ctx.close();
+});
+await check('HQ exception policy: when the fresh read after an unknown decision is denied, no decision, outcome or Try again remains', async () => {
+  resetHqp({ replies: ['unknownThenDenied'] });
+  const { ctx, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  const form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/does not include the exception policy/).waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.equal(await section().getByText(/We could not confirm/).count(), 0);
+  assert.equal(await section().locator('form').count(), 0);
+  hqp.deny = false;
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await section().getByTestId('hq-policy-status').waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'a fresh authorized read does not bring back the retry');
+  await ctx.close();
+});
+await check('HQ exception policy: leaving the tab hides the policy and drops a kept decision', async () => {
+  resetHqp({ replies: ['unknown'] });
+  const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+  const form = await fillDecision(section);
+  await form.getByRole('button', { name: 'Approve policy' }).click();
+  await section().getByText(/We could not confirm/).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await section().getByText(/The exception policy is hidden/).waitFor();
+  assert.equal(await section().getByText(/Approve exceptions for the pilot season/).count(), 0);
+  await section().getByRole('button', { name: 'Show again' }).click();
+  await section().getByTestId('hq-policy-status').waitFor();
+  assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'the kept decision was dropped');
+  assert.equal(await section().getByTestId('hq-policy-status').innerText(), 'Approved, in effect', 'the re-read shows what the server recorded');
+  await ctx.close();
+});
+const policyRetire = {
+  conceal: async (page, section) => {
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await section().getByText(/The exception policy is hidden/).waitFor();
+    await section().getByRole('button', { name: 'Show again' }).click();
+    await section().getByTestId('hq-policy-status').waitFor();
+  },
+  unmount: async (page, section) => {
+    await page.evaluate(() => window.next.router.push('/hq'));
+    await page.waitForURL(/\/hq$/);
+    await section().waitFor({ state: 'detached' });
+    await page.evaluate(() => window.next.router.push('/hq/schools/access/policy'));
+    await section().getByTestId('hq-policy-status').waitFor({ timeout: 20000 });
+  },
+};
+for (const [how, retire] of Object.entries(policyRetire)) {
+  await check(`HQ exception policy: a late sign-in answer to a decision retired by ${how} does not end the session; a current one does`, async () => {
+    let release; const gate = new Promise((done) => { release = done; });
+    resetHqp({ gate, replies: ['session', 'session'] });
+    const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+    await watchEnded(page);
+    let form = await fillDecision(section);
+    await form.getByRole('button', { name: 'Save as proposal' }).click();
+    await section().getByText(/Sending/).waitFor();
+    await retire(page, section);
+    release();
+    await new Promise((done) => setTimeout(done, 600));
+    assert.equal(await ended(page), 0, 'the retired decision did not end the session');
+    assert.ok(await section().getByTestId('hq-policy-status').isVisible(), 'the fresh read stays shown');
+    form = await fillDecision(section);
+    await form.getByRole('button', { name: 'Save as proposal' }).click();
+    await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    assert.equal(hqp.posts.length, 2);
+    await ctx.close();
+  });
+  await check(`HQ exception policy: a late sign-in answer to a read retired by ${how} does not end the session`, async () => {
+    resetHqp();
+    const { ctx, page, section } = await hqPolicyPage({ width: 1440, height: 900 });
+    await watchEnded(page);
+    let release; hqp.readGate = new Promise((done) => { release = done; }); hqp.readSession = true;
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    await section().getByText(/Reading the exception policy/).waitFor();
+    if (how === 'conceal') {
+      await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await section().getByText(/The exception policy is hidden/).waitFor();
+      release(); await new Promise((done) => setTimeout(done, 600));
+      await section().getByRole('button', { name: 'Show again' }).click();
+    } else {
+      await page.evaluate(() => window.next.router.push('/hq'));
+      await page.waitForURL(/\/hq$/);
+      await section().waitFor({ state: 'detached' });
+      release(); await new Promise((done) => setTimeout(done, 600));
+      await page.evaluate(() => window.next.router.push('/hq/schools/access/policy'));
+    }
+    await section().getByTestId('hq-policy-status').waitFor({ timeout: 20000 });
+    assert.equal(await ended(page), 0, 'the retired read did not end the session');
+    hqp.readSession = true;
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await ctx.close();
+  });
+}
+// ---------- Leads (U4) ----------
+async function leadsPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/crm`);
+  const section = () => page.locator('section[aria-labelledby="leads-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const LEADS_TITLES = { en: ['Leads', 'Won', 'Upcoming trial', 'Open in the CRM journey'], ko: ['문의', '등록', '예정된 체험 수업', 'CRM 여정에서 열기'], es: ['Prospectos', 'Ganados', 'Próxima clase de prueba', 'Abrir en el recorrido de CRM'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Leads ${nextTheme} ${language} ${name}: open leads, a lead with trials, status tabs and links`, async () => {
+    resetLeads();
+    const [title, won, upcoming, journey] = LEADS_TITLES[language];
+    const { ctx, page, section } = await leadsPage(viewport, { nextTheme, language });
+    await section().getByTestId('leads-list').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    assert.equal(lds.reads[0], 'list:OPEN', 'opens on Open leads');
+    const listText = await section().getByTestId('leads-list').innerText();
+    assert.ok(listText.includes('Riley Park') && listText.includes('Jordan Kim') && !listText.includes('Casey Lee'));
+    await section().getByRole('button', { name: /Riley Park/ }).click();
+    await section().getByTestId('upcoming-trial').waitFor();
+    const detail = await section().getByTestId('lead-detail').innerText();
+    assert.ok(detail.includes('riley@example.invalid'));
+    assert.ok((await section().getByTestId('upcoming-trial').innerText()).includes(upcoming));
+    const href = await section().getByRole('link', { name: journey }).getAttribute('href');
+    assert.equal(href, `/staff/crm/journey?organizationId=${scope.organizationId}&schoolId=${scope.schoolId}&leadId=${id(800)}`);
+    await noOverflow(page, `leads-${nextTheme}-${language}-${name}`);
+    await axe(page, `leads-${nextTheme}-${language}-${name}`);
+    await shot(page, `leads-${nextTheme}-${language}-${name}`, true);
+    await section().getByRole('button', { name: won, exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="leads-list"]')?.textContent?.includes('Casey Lee'));
+    assert.equal(lds.reads.at(-1), 'list:WON');
+    assert.equal(await section().getByTestId('lead-detail').count(), 0, 'the selected open lead is not shown under Won');
+    await ctx.close();
+  });
+}
+await check('Leads: the filter narrows only what was read; no extra read', async () => {
+  resetLeads();
+  const { ctx, section } = await leadsPage({ width: 1440, height: 900 });
+  await section().getByTestId('leads-list').waitFor();
+  const reads = lds.reads.length;
+  await section().getByLabel('Filter the shown leads by name or email').fill('jordan');
+  await section().getByText('1 shown').waitFor();
+  assert.equal(lds.reads.length, reads);
+  await section().getByLabel('Filter the shown leads by name or email').fill('nobody');
+  await section().getByText('No shown lead matches this filter.').waitFor();
+  await ctx.close();
+});
+await check('Leads: denied access says so and shows nothing', async () => {
+  resetLeads({ denied: true });
+  const { ctx, section } = await leadsPage({ width: 1440, height: 900 });
+  await section().getByText(/does not include CRM leads/).waitFor();
+  assert.ok(!(await section().innerText()).includes('Riley'));
+  await ctx.close();
+});
+await check('Leads: leaving the page hides names at once; the list is read again on return', async () => {
+  resetLeads();
+  const { ctx, page, section } = await leadsPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Riley Park/ }).click();
+  await section().getByTestId('upcoming-trial').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Riley'));
+  await ctx.close();
+});
+for (const [how, retire] of [['changing the status tab', (page, section) => section().getByRole('button', { name: 'Won', exact: true }).click()],
+  ['closing the view', async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[aria-labelledby="leads-title"]')); }]]) {
+  await check(`Leads: a late sign-in answer to a list read retired by ${how} does not end the session; a current one does`, async () => {
+    resetLeads();
+    const { ctx, page, section } = await leadsPage({ width: 1440, height: 900 });
+    await section().getByTestId('leads-list').waitFor();
+    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    let release; lds.gate = new Promise((done) => { release = done; }); lds.step = 'session';
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    for (let i = 0; i < 40 && lds.gate; i++) await new Promise((done) => setTimeout(done, 50));
+    await retire(page, section);
+    release();
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+    await ctx.close();
+    const current = await leadsPage({ width: 1440, height: 900 });
+    await current.section().getByTestId('leads-list').waitFor();
+    await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    lds.step = 'session';
+    await current.section().getByRole('button', { name: 'Refresh' }).click();
+    await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await current.ctx.close();
+  });
+}
+
+// ---------- Marketing home (U7) ----------
+async function marketingPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/marketing`);
+  const section = () => page.locator('section[aria-labelledby="marketing-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const MARKETING_TITLES = { en: ['Marketing', 'Draft', 'Leads', 'Edit in the campaign planner'], ko: ['마케팅', '초안', '문의', '캠페인 플래너에서 수정'], es: ['Marketing', 'Borradores', 'Prospectos', 'Editar en el planificador de campañas'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Marketing ${nextTheme} ${language} ${name}: active campaigns, one campaign's plan and counts, status tabs and links`, async () => {
+    resetMarketing();
+    const [title, draft, leads, edit] = MARKETING_TITLES[language];
+    const { ctx, page, section } = await marketingPage(viewport, { nextTheme, language });
+    await section().getByTestId('campaign-list').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    const listText = await section().getByTestId('campaign-list').innerText();
+    assert.ok(listText.includes('Spring open house') && !listText.includes('Summer camp plan') && !listText.includes('Old flyer'), 'opens on Active');
+    await section().getByRole('button', { name: /Spring open house/ }).click();
+    await section().getByTestId('campaign-funnel').waitFor();
+    const counts = await section().getByTestId('campaign-funnel').innerText();
+    assert.ok(counts.includes(leads) && counts.includes('12'), counts);
+    const funnelRead = report.apiRequests.findLast((r) => r.includes('/funnel?'));
+    const q = new URL(`http://x${funnelRead.split(' ')[1]}`).searchParams;
+    assert.equal(Date.parse(q.get('to')) - Date.parse(q.get('from')), 30 * 86_400_000, 'a 30-day window');
+    assert.ok(Date.parse(q.get('to')) < Date.now(), 'the window ends in the past');
+    assert.equal(await section().getByRole('link', { name: edit }).getAttribute('href'), '/staff/marketing/campaigns');
+    await noOverflow(page, `marketing-${nextTheme}-${language}-${name}`);
+    await axe(page, `marketing-${nextTheme}-${language}-${name}`);
+    await shot(page, `marketing-${nextTheme}-${language}-${name}`, true);
+    const reads = mkt.reads.length;
+    await section().getByRole('button', { name: draft, exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="campaign-list"]')?.textContent?.includes('Summer camp plan'));
+    assert.equal(mkt.reads.length, reads, 'status tabs narrow only what was read');
+    await ctx.close();
+  });
+}
+await check('Marketing: an archived campaign offers no Marcus draft; a campaign with no leads shows zeros it read', async () => {
+  resetMarketing();
+  const { ctx, section } = await marketingPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: 'All', exact: true }).click();
+  await section().getByRole('button', { name: /Old flyer/ }).click();
+  await section().getByTestId('campaign-funnel').waitFor();
+  assert.equal(await section().getByRole('link', { name: 'Ask Marcus for a draft' }).count(), 0);
+  assert.ok((await section().getByTestId('campaign-funnel').innerText()).includes('0'));
+  assert.equal(await section().locator('form').count(), 0);
+  await ctx.close();
+});
+await check('Marketing: denied access says so and shows nothing', async () => {
+  resetMarketing({ denied: true });
+  const { ctx, section } = await marketingPage({ width: 1440, height: 900 });
+  await section().getByText(/exactly one school/).waitFor();
+  assert.ok(!(await section().innerText()).includes('Spring open house'));
+  await ctx.close();
+});
+await check('Marketing: leaving the page hides plans at once', async () => {
+  resetMarketing();
+  const { ctx, page, section } = await marketingPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Spring open house/ }).click();
+  await section().getByTestId('campaign-funnel').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Spring open house') && !document.body.innerText.includes('Fill the Saturday'));
+  await ctx.close();
+});
+for (const [what, how, start, retire] of [
+  ['count read', 'opening another campaign', async (page, section) => { await section().getByRole('button', { name: /Spring open house/ }).click(); },
+    async (page, section) => { await section().getByRole('button', { name: 'All', exact: true }).click(); await section().getByRole('button', { name: /Summer camp plan/ }).click(); }],
+  ['list read', 'closing the view', async (page, section) => { await section().getByRole('button', { name: 'Refresh' }).click(); },
+    async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[aria-labelledby="marketing-title"]')); }]]) {
+  await check(`Marketing: a late sign-in answer to a ${what} retired by ${how} does not end the session; a current one does`, async () => {
+    resetMarketing();
+    const { ctx, page, section } = await marketingPage({ width: 1440, height: 900 });
+    await section().getByTestId('campaign-list').waitFor();
+    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    let release; mkt.gate = new Promise((done) => { release = done; }); mkt.step = 'session';
+    await start(page, section);
+    for (let i = 0; i < 40 && mkt.gate; i++) await new Promise((done) => setTimeout(done, 50));
+    assert.equal(mkt.gate, null, 'the gated read arrived');
+    await retire(page, section);
+    release();
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+    await ctx.close();
+    const current = await marketingPage({ width: 1440, height: 900 });
+    await current.section().getByTestId('campaign-list').waitFor();
+    await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    mkt.step = 'session';
+    await current.section().getByRole('button', { name: 'Refresh' }).click();
+    await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await current.ctx.close();
+  });
+}
+
+// ---------- Class rosters (U5) ----------
+async function rosterPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/schedule`);
+  const section = () => page.locator('section[aria-labelledby="roster-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const ROSTER_TITLES = { en: ['Class rosters', 'Show more classes', 'Show more', 'Record attendance'], ko: ['수업 명단', '수업 더 보기', '더 보기', '출석 기록'], es: ['Listas de clase', 'Mostrar más clases', 'Mostrar más', 'Registrar asistencia'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Class rosters ${nextTheme} ${language} ${name}: classes from today, two class pages, a two-page roster with counts, links, and an earlier start date`, async () => {
+    resetRoster();
+    const [title, moreClasses, more, record] = ROSTER_TITLES[language];
+    const { ctx, page, section } = await rosterPage(viewport, { nextTheme, language });
+    await section().getByTestId('session-list').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    const listText = await section().getByTestId('session-list').innerText();
+    assert.ok(listText.includes('Kids Taekwondo') && listText.includes('Adult sparring') && !listText.includes('Saturday open mat'), 'opens on the school today');
+    assert.equal(await section().getByTestId('session-list').locator('li').count(), 50);
+    await section().getByRole('button', { name: moreClasses }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="session-list"] li').length === 52);
+    assert.equal(await section().getByRole('button', { name: moreClasses }).count(), 0, 'no more classes after the last page');
+    await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+    await section().getByTestId('roster-table').waitFor();
+    assert.equal(await section().getByTestId('roster-table').locator('tbody tr').count(), 50);
+    await section().getByRole('button', { name: more, exact: true }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="roster-table"] tbody tr').length === 60);
+    assert.deepEqual(rst.reads.filter((r) => r.startsWith('roster')), [`roster:${id(950)}:first`, `roster:${id(950)}:page-2`]);
+    assert.deepEqual(rst.reads.filter((r) => r.startsWith('list')), ['list:today:first', `list:today:list-p2:${new Date().toISOString().slice(0, 10)}`]);
+    assert.equal(await section().getByRole('button', { name: more, exact: true }).count(), 0, 'no more after the last page');
+    const counts = await section().getByTestId('roster-counts').innerText();
+    assert.ok(/\b6\b/.test(counts), counts);
+    assert.equal(await section().getByRole('link', { name: record }).getAttribute('href'), `/staff/attendance?organizationId=${scope.organizationId}&schoolId=${scope.schoolId}`);
+    await noOverflow(page, `roster-${nextTheme}-${language}-${name}`);
+    await axe(page, `roster-${nextTheme}-${language}-${name}`);
+    await shot(page, `roster-${nextTheme}-${language}-${name}`, true);
+    const earlier = new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10);
+    await section().locator('input[type="date"]').fill(earlier);
+    await page.waitForFunction(() => document.querySelector('[data-testid="session-list"]')?.textContent?.includes('Saturday open mat'));
+    assert.equal(rst.reads.at(-1), `list:${earlier}:first`);
+    await ctx.close();
+  });
+}
+await check('Class rosters: a roster that changed between pages is read again from the start, once', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+  await section().getByTestId('roster-table').waitFor();
+  rst.step = 'cursor';
+  await section().getByRole('button', { name: 'Show more', exact: true }).click();
+  await section().getByText('The roster changed while it was being read, so it was read again from the start.').waitFor();
+  assert.deepEqual(rst.reads.filter((r) => r.startsWith('roster')), [`roster:${id(950)}:first`, `roster:${id(950)}:page-2`, `roster:${id(950)}:first`]);
+  assert.equal(await page.locator('[data-testid="roster-table"] tbody tr').count(), 50, 'nothing from the earlier pages is kept');
+  await ctx.close();
+});
+await check('Class rosters: a later class page read after the school midnight keeps paging without a restart', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByTestId('session-list').waitFor();
+  rst.step = 'midnight';
+  await section().getByRole('button', { name: 'Show more classes' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="session-list"] li').length === 52);
+  assert.equal(await section().getByText(/class list changed/).count(), 0, 'no restart');
+  assert.equal(rst.reads.filter((r) => r.startsWith('list')).length, 2);
+  await ctx.close();
+});
+await check('Class rosters: a class-list cursor the API refuses reads the list again from the start, once', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByTestId('session-list').waitFor();
+  rst.step = 'cursor';
+  await section().getByRole('button', { name: 'Show more classes' }).click();
+  await section().getByText('The class list changed while it was being read, so it was read again from the start.').waitFor();
+  assert.equal(await page.locator('[data-testid="session-list"] li').count(), 50, 'nothing from the earlier pages is kept');
+  await ctx.close();
+});
+await check('Class rosters: an empty roster says so; denied access says so and shows nobody', async () => {
+  resetRoster();
+  const { ctx, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Adult sparring/ }).click();
+  await section().getByText('Nobody is booked on this class and no attendance is recorded.').waitFor();
+  assert.equal(await section().locator('form').count(), 0);
+  await ctx.close();
+  resetRoster({ denied: true });
+  const denied = await rosterPage({ width: 1440, height: 900 });
+  await denied.section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+  await denied.section().getByText(/who can record attendance/).waitFor();
+  assert.ok(!(await denied.section().innerText()).includes('Student0'));
+  await denied.ctx.close();
+});
+await check('Class rosters: leaving the page hides names at once', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+  await section().getByTestId('roster-table').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Student0') && !document.body.innerText.includes('Kids Taekwondo'));
+  await ctx.close();
+});
+for (const [what, how, start, retire] of [
+  ['roster read', 'opening another class', async (page, section) => { await section().getByRole('button', { name: /Kids Taekwondo/ }).click(); },
+    async (page, section) => { await section().getByRole('button', { name: /Adult sparring/ }).click(); }],
+  ['next-page read', 'opening another class', async (page, section) => { await section().getByRole('button', { name: /Kids Taekwondo/ }).click(); await section().getByTestId('roster-table').waitFor();
+    rst.gate = new Promise((done) => { rst.release = done; }); rst.step = 'session'; await section().getByRole('button', { name: 'Show more', exact: true }).click(); },
+    async (page, section) => { await section().getByRole('button', { name: /Adult sparring/ }).click(); }],
+  ['class list read', 'closing the view', async (page, section) => { await section().getByRole('button', { name: 'Refresh' }).click(); },
+    async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[aria-labelledby="roster-title"]')); }]]) {
+  await check(`Class rosters: a late sign-in answer to a ${what} retired by ${how} does not end the session; a current one does`, async () => {
+    resetRoster();
+    const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+    await section().getByTestId('session-list').waitFor();
+    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    if (what !== 'next-page read') { rst.gate = new Promise((done) => { rst.release = done; }); rst.step = 'session'; }
+    await start(page, section);
+    for (let i = 0; i < 40 && rst.gate; i++) await new Promise((done) => setTimeout(done, 50));
+    assert.equal(rst.gate, null, 'the gated read arrived');
+    await retire(page, section);
+    rst.release();
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+    await ctx.close();
+    const current = await rosterPage({ width: 1440, height: 900 });
+    await current.section().getByTestId('session-list').waitFor();
+    await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    rst.step = 'session';
+    await current.section().getByRole('button', { name: 'Refresh' }).click();
+    await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await current.ctx.close();
+  });
+}
+
+// ---------- Memberships (U6) ----------
+async function membershipsPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/memberships`);
+  const section = () => page.locator('section[aria-labelledby="membership-list-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const MEMBERSHIP_TITLES = { en: ['Memberships', 'Show more', 'Draft', 'Activate a draft membership'], ko: ['회원권', '더 보기', '초안', '초안 회원권 활성화'], es: ['Membresías', 'Mostrar más', 'Borrador', 'Activar una membresía en borrador'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Memberships ${nextTheme} ${language} ${name}: newest first, two pages with counts, a state filter, and links`, async () => {
+    resetMemberships();
+    const [title, more, draft, activate] = MEMBERSHIP_TITLES[language];
+    const { ctx, page, section } = await membershipsPage(viewport, { nextTheme, language });
+    await section().getByTestId('membership-table').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    assert.equal(await section().getByTestId('membership-table').locator('tbody tr').count(), 50);
+    assert.ok((await section().getByTestId('membership-table').locator('tbody tr').first().innerText()).includes('Member00'), 'newest first');
+    await section().getByRole('button', { name: more }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="membership-table"] tbody tr').length === 60);
+    assert.equal(await section().getByRole('button', { name: more }).count(), 0, 'no more after the last page');
+    const counts = await section().getByTestId('membership-counts').innerText();
+    assert.ok(/\b10\b/.test(counts), counts);
+    assert.equal(await section().getByRole('link', { name: activate }).getAttribute('href'), '/staff/billing/memberships');
+    await noOverflow(page, `memberships-${nextTheme}-${language}-${name}`);
+    await axe(page, `memberships-${nextTheme}-${language}-${name}`);
+    await shot(page, `memberships-${nextTheme}-${language}-${name}`, true);
+    await section().getByRole('button', { name: draft, exact: true }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="membership-table"] tbody tr').length === 10);
+    assert.deepEqual(mbl.reads, ['ALL:first', 'ALL:ALL-page-2', 'DRAFT:first']);
+    assert.equal(await section().getByTestId('membership-counts').count(), 0);
+    await ctx.close();
+  });
+}
+await check('Memberships: a cursor the API refuses reads the list again from the start, once', async () => {
+  resetMemberships();
+  const { ctx, page, section } = await membershipsPage({ width: 1440, height: 900 });
+  await section().getByTestId('membership-table').waitFor();
+  mbl.step = 'cursor';
+  await section().getByRole('button', { name: 'Show more' }).click();
+  await section().getByText('The list changed while it was being read, so it was read again from the start.').waitFor();
+  assert.deepEqual(mbl.reads, ['ALL:first', 'ALL:ALL-page-2', 'ALL:first']);
+  assert.equal(await page.locator('[data-testid="membership-table"] tbody tr').count(), 50, 'nothing from the earlier pages is kept');
+  await ctx.close();
+});
+await check('Memberships: denied access says so and shows nobody; leaving the page hides names at once', async () => {
+  resetMemberships({ denied: true });
+  const denied = await membershipsPage({ width: 1440, height: 900 });
+  await denied.section().getByText(/does not include memberships/).waitFor();
+  assert.ok(!(await denied.section().innerText()).includes('Member0'));
+  assert.equal(await denied.section().locator('form').count(), 0);
+  await denied.ctx.close();
+  resetMemberships();
+  const { ctx, page, section } = await membershipsPage({ width: 1440, height: 900 });
+  await section().getByTestId('membership-table').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Member00'));
+  await ctx.close();
+});
+await check('Memberships: a late sign-in answer to a read retired by a filter change does not end the session; a current one does', async () => {
+  resetMemberships();
+  const { ctx, page, section } = await membershipsPage({ width: 1440, height: 900 });
+  await section().getByTestId('membership-table').waitFor();
+  await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+  mbl.gate = new Promise((done) => { mbl.release = done; }); mbl.step = 'session';
+  await section().getByRole('button', { name: 'Show more' }).click();
+  for (let i = 0; i < 40 && mbl.gate; i++) await new Promise((done) => setTimeout(done, 50));
+  assert.equal(mbl.gate, null, 'the gated read arrived');
+  await section().getByRole('button', { name: 'Frozen', exact: true }).click();
+  mbl.release();
+  await new Promise((done) => setTimeout(done, 800));
+  assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+  mbl.step = 'session';
+  await section().getByRole('button', { name: 'Refresh' }).click();
+  await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+  await ctx.close();
+});
 
 await browser.close();
 server.kill('SIGTERM');
