@@ -103,6 +103,8 @@ import { CrmLeadMembershipsController } from './billing/crm-lead-memberships.con
 import { CrmLeadMembershipsService } from './billing/crm-lead-memberships.service.js';
 import { MembershipDateRevisionController } from './billing/membership-date-revision.controller.js';
 import { MembershipDateRevisionService } from './billing/membership-date-revision.service.js';
+import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
+import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -368,6 +370,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipController,
     CrmLeadMembershipsController,
     MembershipDateRevisionController,
+    SchoolMembershipListController,
     MembershipStatusReportController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
@@ -496,6 +499,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipService,
     CrmLeadMembershipsService,
     MembershipDateRevisionService,
+    SchoolMembershipListService,
+    SchoolMembershipListHumanUiGuard,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,

@@ -24,6 +24,7 @@ export * from './planned-absence-review.js';
 export * from './parent-message-history.js';
 export * from './attendance-policy.js';
 export * from './class-session-roster.js';
+export * from './school-membership-list.js';
 export * from './crm-lead-close.js';
 export * from './crm-lead-create.js';
 export * from './crm-lead-registration.js';

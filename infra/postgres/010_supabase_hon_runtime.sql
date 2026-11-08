@@ -2306,3 +2306,12 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_saas_access_overview_from_hq(text,text,timestamptz,uuid,integer) TO hon_runtime;
   END IF;
 END $$;
+
+-- U6 0220 school-wide membership list: the one read-only definer projection is the only runtime boundary.
+DO $$ DECLARE r text; BEGIN
+  EXECUTE 'REVOKE ALL ON FUNCTION hon.read_school_membership_list(text,jsonb) FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.read_school_membership_list(text,jsonb) FROM '||quote_ident(r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_membership_list(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
