@@ -67,6 +67,9 @@ export function People({ api = peopleApi }: { api?: PeopleApi }): React.ReactEle
   const selected = useRef<string | null>(null);
   const lastSchool = useRef<string | null>(null);
   const drop = useCallback(() => { pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE'); }, []);
+  // Cleared on unmount: a save started by this People view never speaks for a later one.
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; pending.current = null; }; }, []);
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); listGeneration.current++; recordGeneration.current++; privacy.current++;
@@ -115,7 +118,8 @@ export function People({ api = peopleApi }: { api?: PeopleApi }): React.ReactEle
     setLock('SENDING'); setOutcome({ kind: 'SENDING', command: request.command });
     let next: SaveOutcome, keep: boolean, saved: PersonRecord | null = null;
     try {
-      const signal = AbortSignal.timeout(30000), owned = () => shown === privacy.current;
+      const signal = AbortSignal.timeout(30000), owned = () => mounted.current && shown === privacy.current
+        && pending.current?.key === request.key && selected.current === request.personId && lastSchool.current === request.schoolId;
       if (request.command === 'contact') {
         const result = await api.update(request.input, request.key, signal, owned);
         saved = result.person; next = { kind: 'SAVED', command: 'contact', fields: result.changedFields };

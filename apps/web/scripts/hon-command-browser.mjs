@@ -1061,34 +1061,59 @@ await check('People: leaving the tab hides every name; a save in flight is never
   await ctx.close();
 });
 
-for (const [command, field, value, button] of [['contact', 'familyName', 'Rivera-Kim', 'Save changes'], ['birth date', 'birthDate', '2015-05-05', 'Save birth date']]) {
-  await check(`People: a late sign-in answer to a hidden ${command} save does not end the re-verified session; a current one does`, async () => {
-    let release; const gate = new Promise((done) => { release = done; });
-    resetPeople({ gate, replies: ['session', 'session'] });
-    const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
-    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
-    await open(section, 'Ana Rivera');
-    await section().locator(`input[name="${field}"]`).fill(value);
-    if (command === 'birth date') await section().locator('textarea[name="reason"], input[name="reason"]').fill('Birth certificate checked at the desk');
-    await section().getByRole('button', { name: button }).click();
-    await section().getByText('Saving… keep this tab open.').waitFor();
+const retire = {
+  conceal: async (page, section) => {
     await page.evaluate(() => window.dispatchEvent(new Event('blur')));
     await page.getByRole('button', { name: 'Show school' }).click();
     await section().getByTestId('people-list').waitFor({ timeout: 20000 });
-    release();
-    for (let i = 0; i < 40 && ppl.posts.length < 1; i++) await new Promise((done) => setTimeout(done, 50));
-    await new Promise((done) => setTimeout(done, 500));
-    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired save did not end the new session');
-    assert.ok(await section().getByTestId('people-list').isVisible(), 'the re-verified view stays shown');
-    // A save that is still the one shown: its sign-in answer ends the session.
+  },
+  'open another person': async (page, section) => {
+    await open(section, 'Ben Okafor');
+    await section().locator('input[name="givenName"]').waitFor();
+    assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Ben');
+  },
+  unmount: async (page, section) => {
+    // Same-document route changes (the shell's own links load a new document, which ends every request anyway).
+    assert.equal(await page.evaluate(() => typeof window.next?.router?.push), 'function');
+    await page.evaluate(() => window.next.router.push('/staff/search'));
+    await page.waitForURL(/\/staff\/search$/);
+    await section().waitFor({ state: 'detached' });
+    await page.evaluate(() => window.next.router.push('/staff/people'));
+    await section().getByTestId('people-list').waitFor({ timeout: 20000 });
     await open(section, 'Ana Rivera');
+    await section().locator('input[name="givenName"]').waitFor();
+  },
+};
+for (const [command, field, value, button] of [['contact', 'familyName', 'Rivera-Kim', 'Save changes'], ['birth date', 'birthDate', '2015-05-05', 'Save birth date']]) {
+  const save = async (section) => {
     await section().locator(`input[name="${field}"]`).fill(value);
-    if (command === 'birth date') await section().locator('textarea[name="reason"], input[name="reason"]').fill('Birth certificate checked at the desk');
+    if (command === 'birth date') await section().locator('textarea[name="reason"]').fill('Birth certificate checked at the desk');
     await section().getByRole('button', { name: button }).click();
-    await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
-    assert.equal(ppl.posts.length, 2);
-    await ctx.close();
-  });
+  };
+  for (const [how, step] of Object.entries(retire)) {
+    await check(`People: a late sign-in answer to a ${command} save retired by ${how} does not end the session; a current one does`, async () => {
+      let release; const gate = new Promise((done) => { release = done; });
+      resetPeople({ gate, replies: ['session', 'session'] });
+      const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+      await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+      await open(section, 'Ana Rivera');
+      await save(section);
+      await section().getByText('Saving… keep this tab open.').waitFor();
+      await step(page, section);
+      release();
+      for (let i = 0; i < 40 && ppl.posts.length < 1; i++) await new Promise((done) => setTimeout(done, 50));
+      await new Promise((done) => setTimeout(done, 500));
+      assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired save did not end the session');
+      assert.ok(await section().getByTestId('people-list').isVisible(), 'the current view stays shown');
+      // A save that is still the one shown: its sign-in answer ends the session.
+      await open(section, 'Ana Rivera');
+      await section().locator('input[name="givenName"]').waitFor();
+      await save(section);
+      await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+      assert.equal(ppl.posts.length, 2);
+      await ctx.close();
+    });
+  }
 }
 
 await browser.close();
