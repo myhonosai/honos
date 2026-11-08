@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "c9134352bc05266244dbef8e4bf77872af5f6dcc6a2e6fe5379f139f89ff669a",
+  "chainSha256": "784319a6def636794b521e8d8d8432434339d76b61b3cb031b29748be0616011",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -165,6 +165,10 @@
     {
       "file": "0222_saas_exception_policy_terms_read.sql",
       "sha256": "9f6799e60e87147a706218e53a8539bf00f2808e0f28fd679c019b9d946e48ce"
+    },
+    {
+      "file": "0223_school_ownership_handoff.sql",
+      "sha256": "53aaa1e4667d4fa7c24b836930eda109de6295fc85e34df486df655bae1047b2"
     }
   ]
 }

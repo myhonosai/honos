@@ -169,13 +169,13 @@ try {
   await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='iam.staff_role.grant'",[ids.weakRole]);
   await denied(()=>service.grant(context('weak'),input(ids.strong)));
   await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'iam.staff_role.grant')",[ids.weakRole,ids.org]);
-  // Actual HQ provisioning retains one OWNER grant and all five new permissions.
+  // Actual HQ provisioning creates an OWNER role with all five new permissions and grants it to nobody (0223, H-1).
   // It is tested under an admin rollback so no extra tenant or HQ evidence remains.
   await admin.query('BEGIN');
   await admin.query("UPDATE hon.hq_operator_grants SET permission_codes=ARRAY['hq.onboarding.manage'] WHERE principal_id=$1",[humans.hq.id]);
   const provision=(await admin.query("SELECT * FROM hon.provision_school_from_hq($1,'Fixture','Fixture','Fixture',$2,'UTC','ESSENTIAL'::hon.plan_tier,$3,$4,$5,$6)",[humans.hq.subject,`fixture-${randomUUID()}`,randomUUID(),randomUUID(),randomUUID(),randomUUID()])).rows[0];
   assert.equal((await admin.query("SELECT count(*) n FROM hon.role_permissions WHERE role_id=$1 AND permission_code LIKE 'iam.%'",[provision.owner_role_id])).rows[0].n,'5');
-  assert.equal((await admin.query('SELECT count(*) n FROM hon.principal_role_grants WHERE organization_id=$1',[provision.organization_id])).rows[0].n,'1');
+  assert.equal((await admin.query('SELECT count(*) n FROM hon.principal_role_grants WHERE organization_id=$1',[provision.organization_id])).rows[0].n,'0');
   await admin.query('ROLLBACK');
   // Runtime source/context gates cannot be bypassed by calling the fixed SQL API.
   await runtime.query('BEGIN');

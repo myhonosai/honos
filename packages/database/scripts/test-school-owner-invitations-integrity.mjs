@@ -62,8 +62,9 @@ try{
  const provision=async()=>{const id=K();return (await q("SELECT organization_id AS \"organizationId\",school_id AS \"schoolId\" FROM hon.provision_school_from_hq($1,'P0 synthetic','P0 synthetic','P0 school',$2,'UTC','COMPLETE',$3,$3,$4,$4)",[actor.hq.subject,'p0-'+id,K(),K()]))[0];};
  const orgA=await provision(),orgB=await provision();
  const bootstrapGrants=()=>q('SELECT to_jsonb(g) value FROM hon.principal_role_grants g WHERE principal_id=$1 AND school_id=ANY($2::uuid[]) ORDER BY id',[actor.hq.principal,[orgA.schoolId,orgB.schoolId]]);
- const originalBootstrapGrants=await bootstrapGrants();assert.equal(originalBootstrapGrants.length,2);
- const excluded=['users','principals','principal_role_grants','school_owner_invitations','school_account_requests','school_account_events'];
+ const originalBootstrapGrants=await bootstrapGrants();assert.equal(originalBootstrapGrants.length,0); // 0223 H-1: provisioning grants OWNER to nobody
+ const excluded=['users','principals','principal_role_grants','school_owner_invitations','school_account_requests','school_account_events',
+  'school_primary_owners','school_ownership_notices','school_ownership_requests']; // 0223: owner-identity evidence
  const tables=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' AND NOT(tablename=ANY($1)) ORDER BY tablename",[excluded])).map(r=>r.tablename);
  const snapshot=async()=>{const out={};for(const t of tables){assert.match(t,/^[a-z_]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};const baseline=await snapshot();
  const module=await Test.createTestingModule({controllers:[SchoolOwnerInvitationController,HqController],providers:[SchoolOwnerInvitationService,SchoolAccountHumanGuard,HonIdentityService,HqOverviewService,HqSchoolDirectoryService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
@@ -267,7 +268,7 @@ try{
  assert(acceptThrottle);assert.equal(acceptThrottle.body.outcome,'NOT_SUBMITTED');assert(+acceptThrottle.headers['retry-after']>=1&&+acceptThrottle.headers['retry-after']<=60);assert.deepEqual(await counts(),beforeThrottle);
  pass('bounded authenticated HQ and acceptance HTTP throttling return 429 before SQL with no account, audit, outbox or business effects');
  // Restore the intentional IAM revocation test before comparing all unrelated business records.
- assert.deepEqual(await bootstrapGrants(),originalBootstrapGrants);assert.deepEqual(await snapshot(),baseline);pass('D9 HQ bootstrap grants and all unrelated business rows unchanged: zero entitlement, SaaS, payment, AI credit, CRM, delivery or provider effects');
+ assert.deepEqual(await bootstrapGrants(),originalBootstrapGrants);assert.deepEqual(await snapshot(),baseline);pass('no HQ bootstrap grants (0223 H-1) and all unrelated business rows unchanged: zero entitlement, SaaS, payment, AI credit, CRM, delivery or provider effects');
  console.log('PASS P0-1: '+groups+' real signed-session/PostgreSQL scenario groups; no live accounts/providers.');
 }finally{
  try{await blocker.query('ROLLBACK');}catch{}
