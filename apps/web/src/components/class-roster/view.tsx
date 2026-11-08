@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ClassSessionRosterEntry, ClassSessionRosterSession, CurrentSchoolClassSession } from '@hon/contracts';
+import type { ClassSessionRosterEntry, CurrentSchoolClassSession } from '@hon/contracts';
 import { classBookingHandoffHref } from '../class-sessions-read';
 import { rosterText, type RosterKey } from './copy';
 import { rosterCounts, type RosterScope } from './http';
@@ -9,8 +9,8 @@ type T = (key: RosterKey, vars?: Record<string, string>) => string;
 export const SESSION_TABS = ['UPCOMING', 'PAST'] as const;
 export type SessionTab = typeof SESSION_TABS[number];
 export type SessionListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; items: readonly CurrentSchoolClassSession[] };
-export type RosterState = { state: 'NONE' | 'LOADING' | 'DENIED' | 'MISSING' | 'UNAVAILABLE' }
-  | { state: 'READY'; sessionId: string; session: ClassSessionRosterSession; entries: readonly ClassSessionRosterEntry[]; nextCursor: string | null; more: 'IDLE' | 'LOADING' | 'FAILED'; restarted: boolean };
+export type RosterState = { state: 'NONE' | 'LOADING' | 'DENIED' | 'UNAVAILABLE' }
+  | { state: 'READY'; sessionId: string; entries: readonly ClassSessionRosterEntry[]; nextCursor: string | null; more: 'IDLE' | 'LOADING' | 'FAILED'; restarted: boolean };
 export type RosterViewProps = Readonly<{
   language: string; timeZone: string; waiting: boolean; concealed: boolean; scope: RosterScope | null; now: number;
   tab: SessionTab; list: SessionListState; selectedId: string | null; roster: RosterState;
@@ -89,7 +89,6 @@ function RosterDetail({ list, selectedId, roster, scope, language, timeZone, onM
       <h2 id="roster-list-title">{t('rosterTitle')}</h2>
       {roster.state === 'LOADING' || roster.state === 'NONE' || (roster.state === 'READY' && !ready) ? <p className={styles.meta} role="status">{t('rosterLoading')}</p> : null}
       {roster.state === 'DENIED' ? <p className={styles.meta} role="status">{t('rosterDenied')}</p> : null}
-      {roster.state === 'MISSING' ? <p className={styles.meta} role="status">{t('rosterMissing')}</p> : null}
       {roster.state === 'UNAVAILABLE' ? <div className={styles.notice} role="status"><p>{t('rosterUnavailable')}</p>
         {onReloadRoster ? <button type="button" className={styles.secondary} onClick={onReloadRoster}>{t('refresh')}</button> : null}</div> : null}
       {ready && counts ? <>

@@ -393,11 +393,9 @@ async function rosterApiRoute(route, path, method, url, prefix) {
   }
   if (rst.denied) return json(route, 403, { code: 'ATTENDANCE_FORBIDDEN' });
   if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
-  const session = rstSessions().find((s) => s.sessionId === roster[1]);
-  if (!session) return json(route, 404, { code: 'CLASS_SESSION_NOT_FOUND' });
-  const all = rstStudents(session.sessionId), start = cursor === 'page-2' ? 50 : 0, data = all.slice(start, start + 50);
-  return json(route, 200, { data, meta: { requestId: id(948), correlationId: id(948), limit: 50, nextCursor: start + 50 < all.length ? 'page-2' : null,
-    session: { id: session.sessionId, name: session.name, startsAt: session.startsAt, endsAt: session.endsAt, status: session.status, capacity: session.capacity } } });
+  // An unknown or other-school session reads as an empty roster (the roster never reads hon.class_sessions).
+  const all = rstStudents(roster[1]), start = cursor === 'page-2' ? 50 : 0, data = all.slice(start, start + 50);
+  return json(route, 200, { data, meta: { requestId: id(948), correlationId: id(948), limit: 50, nextCursor: start + 50 < all.length ? 'page-2' : null } });
 }
 const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
 function resetPeople(over = {}) {

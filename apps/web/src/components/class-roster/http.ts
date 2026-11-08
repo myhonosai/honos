@@ -1,5 +1,4 @@
-import { CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES, CLASS_SESSION_ROSTER_BOOKING_STATUSES, type ClassSessionRosterEntry, type ClassSessionRosterSession,
-  type CurrentSchoolClassSession } from '@hon/contracts';
+import { CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES, CLASS_SESSION_ROSTER_BOOKING_STATUSES, type ClassSessionRosterEntry, type CurrentSchoolClassSession } from '@hon/contracts';
 import { classSessionsReadPath, parseClassSessionsRead } from '../class-sessions-read-http';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -8,11 +7,11 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
  * the U5 read (attendance.record), re-decided live on every page. The browser names only the verified school and one
  * session; nothing here books, records attendance or changes a session.
  */
-export type RosterErrorKind = 'SESSION' | 'DENIED' | 'MISSING' | 'CURSOR' | 'UNAVAILABLE';
+export type RosterErrorKind = 'SESSION' | 'DENIED' | 'CURSOR' | 'UNAVAILABLE';
 export class RosterError extends Error { constructor(readonly kind: RosterErrorKind) { super(kind); } }
 export type Owned = () => boolean;
 export type RosterScope = Readonly<{ organizationId: string; schoolId: string }>;
-export type RosterPage = Readonly<{ entries: readonly ClassSessionRosterEntry[]; nextCursor: string | null; session: ClassSessionRosterSession }>;
+export type RosterPage = Readonly<{ entries: readonly ClassSessionRosterEntry[]; nextCursor: string | null }>;
 export const ROSTER_PAGE = 50;
 const CURSOR_MAX = 512;
 const RESPONSE_MAX = 262_144;
@@ -43,14 +42,15 @@ function attendance(value: unknown): void {
   const a = closed(value, ['id', 'status', 'category', 'recordedAt', 'version']);
   if (!uuid(a.id) || !(CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES as readonly unknown[]).includes(a.status) || !text(a.category, 64) || !instant(a.recordedAt) || !version(a.version)) fail();
 }
-/** One roster page, closed: it must name the session asked for, hold at most one page of distinct students, each booked on or recorded for it. */
-export function verifyRosterPage(value: unknown, sessionId: string): RosterPage {
-  const body = closed(value, ['data', 'meta']), meta = closed(body.meta, ['requestId', 'correlationId', 'limit', 'nextCursor', 'session']);
-  const session = closed(meta.session, ['id', 'name', 'startsAt', 'endsAt', 'status', 'capacity']);
+/**
+ * One roster page, closed: at most one page of distinct students, each booked on or recorded for the session. The roster
+ * does not name its session (an unknown or other-school session reads as an empty roster); the session facts shown come
+ * from the verified session list.
+ */
+export function verifyRosterPage(value: unknown): RosterPage {
+  const body = closed(value, ['data', 'meta']), meta = closed(body.meta, ['requestId', 'correlationId', 'limit', 'nextCursor']);
   if (!uuid(meta.requestId) || meta.correlationId !== meta.requestId || meta.limit !== ROSTER_PAGE
-    || (meta.nextCursor !== null && (typeof meta.nextCursor !== 'string' || meta.nextCursor.length < 1 || meta.nextCursor.length > CURSOR_MAX))
-    || typeof session.id !== 'string' || session.id.toLowerCase() !== sessionId.toLowerCase() || !text(session.name, 160) || !instant(session.startsAt) || !instant(session.endsAt)
-    || !text(session.status, 32) || !Number.isSafeInteger(session.capacity) || (session.capacity as number) < 0) fail();
+    || (meta.nextCursor !== null && (typeof meta.nextCursor !== 'string' || meta.nextCursor.length < 1 || meta.nextCursor.length > CURSOR_MAX))) fail();
   if (!Array.isArray(body.data) || body.data.length > ROSTER_PAGE || (meta.nextCursor !== null && body.data.length === 0)) fail();
   const entries = (body.data as unknown[]).map((item) => {
     const e = closed(item, ['studentProfileId', 'personId', 'givenName', 'familyName', 'studentStatus', 'booking', 'attendance']);
@@ -60,7 +60,7 @@ export function verifyRosterPage(value: unknown, sessionId: string): RosterPage 
     return e as unknown as ClassSessionRosterEntry;
   });
   if (new Set(entries.map((e) => e.studentProfileId.toLowerCase())).size !== entries.length) fail();
-  return { entries, nextCursor: meta.nextCursor as string | null, session: session as unknown as ClassSessionRosterSession };
+  return { entries, nextCursor: meta.nextCursor as string | null };
 }
 
 async function read(path: string, signal: AbortSignal, owned: Owned, headers: Record<string, string> = {}): Promise<{ status: number; value: unknown }> {
@@ -99,10 +99,9 @@ export const rosterApi: RosterApi = {
     const query = new URLSearchParams({ limit: String(ROSTER_PAGE), ...(cursor === null ? {} : { cursor }) });
     const path = `/api/v1/organizations/${scope.organizationId.toLowerCase()}/schools/${scope.schoolId.toLowerCase()}/schedule/sessions/${sessionId.toLowerCase()}/roster?${query}`;
     const { status, value } = await read(path, signal, owned);
-    if (status === 404 && codeOf(value) === 'CLASS_SESSION_NOT_FOUND') throw new RosterError('MISSING');
     if (status === 400 && codeOf(value) === 'INVALID_CURSOR') throw new RosterError('CURSOR');
     if (status !== 200) throw new RosterError('UNAVAILABLE');
-    try { return verifyRosterPage(value, sessionId); } catch { throw new RosterError('UNAVAILABLE'); }
+    try { return verifyRosterPage(value); } catch { throw new RosterError('UNAVAILABLE'); }
   },
 };
 

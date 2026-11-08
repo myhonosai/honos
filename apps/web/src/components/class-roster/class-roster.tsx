@@ -64,11 +64,11 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     const owned = () => mounted.current && current === rosterGeneration.current && shown === privacy.current;
     api.roster(scope, sessionId, null, signal, owned).then(
-      (page) => { if (owned()) setRoster({ state: 'READY', sessionId, session: page.session, entries: page.entries, nextCursor: page.nextCursor, more: 'IDLE', restarted }); },
+      (page) => { if (owned()) setRoster({ state: 'READY', sessionId, entries: page.entries, nextCursor: page.nextCursor, more: 'IDLE', restarted }); },
       (error) => {
         if (!owned() || abort.signal.aborted) return;
         const kind = kindOf(error);
-        setRoster({ state: kind === 'DENIED' ? 'DENIED' : kind === 'MISSING' ? 'MISSING' : 'UNAVAILABLE' });
+        setRoster({ state: kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' });
       });
     return () => { abort.abort(); };
   }, [api, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -95,14 +95,14 @@ export function ClassRoster({ api = rosterApi }: { api?: RosterApi }): React.Rea
         const seen = new Set(prior.entries.map((e) => e.studentProfileId.toLowerCase()));
         // A student already shown on an earlier page means the roster moved under the cursor: start again.
         if (page.entries.some((e) => seen.has(e.studentProfileId.toLowerCase()))) { changed(); return; }
-        setRoster({ ...prior, session: page.session, entries: [...prior.entries, ...page.entries], nextCursor: page.nextCursor, more: 'IDLE' });
+        setRoster({ ...prior, entries: [...prior.entries, ...page.entries], nextCursor: page.nextCursor, more: 'IDLE' });
       },
       (error) => {
         if (!owned() || abort.signal.aborted) return;
         moreAbort.current = null;
         const kind = kindOf(error);
         if (kind === 'CURSOR') { changed(); return; }
-        setRoster(kind === 'DENIED' ? { state: 'DENIED' } : kind === 'MISSING' ? { state: 'MISSING' } : { ...prior, more: 'FAILED' });
+        setRoster(kind === 'DENIED' ? { state: 'DENIED' } : { ...prior, more: 'FAILED' });
       });
   }, [api, roster, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 

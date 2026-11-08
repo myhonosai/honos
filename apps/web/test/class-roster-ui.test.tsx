@@ -22,8 +22,7 @@ const booking = (status = 'BOOKED', kind = 'REGULAR') => ({ id: id(90), kind, st
 const recorded = (status = 'PRESENT') => ({ id: id(95), status, category: 'REGULAR_PARTICIPANT', recordedAt: '2026-11-08T12:10:00.000Z', version: 1 });
 const entry = (n: number, over: Record<string, unknown> = {}): ClassSessionRosterEntry => ({ studentProfileId: id(100 + n), personId: id(200 + n), givenName: `Ana${n}`, familyName: 'Rivera',
   studentStatus: 'ACTIVE', booking: booking(), attendance: null, ...over } as ClassSessionRosterEntry);
-const meta = (over: Record<string, unknown> = {}) => ({ requestId: id(5), correlationId: id(5), limit: 50, nextCursor: null,
-  session: { id: id(71), name: 'Kids class 1', startsAt: session(1, 1).startsAt, endsAt: session(1, 1).endsAt, status: 'SCHEDULED', capacity: 20 }, ...over });
+const meta = (over: Record<string, unknown> = {}) => ({ requestId: id(5), correlationId: id(5), limit: 50, nextCursor: null, ...over });
 const page = (data: unknown[], over: Record<string, unknown> = {}) => ({ data, meta: meta(over) });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const stub = (response: Response) => { const f = vi.fn(async () => response); vi.stubGlobal('fetch', f); return f; };
@@ -31,7 +30,7 @@ const signal = () => new AbortController().signal;
 const sessions = [session(1, 1), session(2, 26, { name: 'Adult class', roomName: null }), session(3, -48, { name: 'Past class', status: 'COMPLETED' })];
 const props = (over: Partial<RosterViewProps> = {}): RosterViewProps => ({ language: 'en', timeZone: 'UTC', waiting: false, concealed: false, scope, now: NOW, tab: 'UPCOMING',
   list: { state: 'READY', items: sessions }, selectedId: null, roster: { state: 'NONE' }, ...over });
-const ready = (entries: ClassSessionRosterEntry[], over: Record<string, unknown> = {}) => ({ state: 'READY', sessionId: id(71), session: meta().session, entries, nextCursor: null,
+const ready = (entries: ClassSessionRosterEntry[], over: Record<string, unknown> = {}) => ({ state: 'READY', sessionId: id(71), entries, nextCursor: null,
   more: 'IDLE', restarted: false, ...over }) as RosterViewProps['roster'];
 const render = (over: Partial<RosterViewProps> = {}) => renderToStaticMarkup(<RosterView {...props(over)}/>);
 
@@ -50,17 +49,19 @@ it('reads the session list with the human-read header and no query, and a roster
 });
 
 it('maps refusals exactly; drift is unavailable, never an empty roster', async () => {
-  for (const [response, kind] of [[json({ code: 'ATTENDANCE_FORBIDDEN' }, 403), 'DENIED'], [json({ code: 'CLASS_SESSION_NOT_FOUND' }, 404), 'MISSING'],
+  for (const [response, kind] of [[json({ code: 'ATTENDANCE_FORBIDDEN' }, 403), 'DENIED'], [json({ code: 'CLASS_SESSION_NOT_FOUND' }, 404), 'UNAVAILABLE'],
     [json({ code: 'INVALID_CURSOR' }, 400), 'CURSOR'], [json({ code: 'OTHER' }, 400), 'UNAVAILABLE'], [json({}, 500), 'UNAVAILABLE'], [json({ data: [] }), 'UNAVAILABLE']] as const) {
     stub(response);
     await expect(rosterApi.roster(scope, id(71), null, signal(), () => true)).rejects.toMatchObject({ kind });
   }
-  for (const bad of [page([entry(1)], { session: { ...meta().session, id: id(72) } }), page([entry(1), entry(1)]), page([entry(1, { extra: 1 })]),
+  for (const bad of [page([entry(1)], { session: { id: id(71) } }), page([entry(1), entry(1)]), page([entry(1, { extra: 1 })]),
     page([entry(1, { booking: null, attendance: null })]), page([entry(1, { booking: { ...booking('CANCELLED'), cancelledAt: null } })]), page([entry(1, { booking: booking('BOOKED', 'GIFT') })]),
     page([entry(1, { attendance: { ...recorded(), status: 'MAYBE' } })]), page([], { nextCursor: 'x' }), page([entry(1)], { limit: 100 }), page(Array.from({ length: 51 }, (_, n) => entry(n)))]) {
-    expect(() => verifyRosterPage(bad, id(71))).toThrow();
+    expect(() => verifyRosterPage(bad)).toThrow();
   }
-  expect(verifyRosterPage(page([entry(1, { booking: null, attendance: recorded() }), entry(2, { booking: booking('BOOKED', 'CLASS_PASS') })]), id(71)).entries).toHaveLength(2);
+  expect(verifyRosterPage(page([entry(1, { booking: null, attendance: recorded() }), entry(2, { booking: booking('BOOKED', 'CLASS_PASS') })])).entries).toHaveLength(2);
+  // An unknown or other-school session is an empty roster, not an error.
+  expect(verifyRosterPage(page([])).entries).toEqual([]);
   stub(json({}, 403));
   await expect(rosterApi.sessions(scope, signal(), () => true)).rejects.toMatchObject({ kind: 'DENIED' });
 });
@@ -113,7 +114,6 @@ it('a selected class shows its own roster, counts, a partial note, and links tha
   expect(render({ selectedId: id(71), roster: ready([]) })).toContain('Nobody is booked');
   expect(render({ selectedId: id(71), roster: ready([entry(1)], { restarted: true }) })).toContain('read again from the start');
   expect(render({ selectedId: id(71), roster: { state: 'DENIED' } })).toContain('who can record attendance');
-  expect(render({ selectedId: id(71), roster: { state: 'MISSING' } })).toContain('not available at this school');
 });
 
 it('has every phrase in Korean and Spanish; the page is first in the Classes group and in the route manifest', () => {
