@@ -21,7 +21,7 @@ const signal = () => new AbortController().signal;
 const trial = (n: number, status = 'COMPLETED') => ({ id: id(70 + n), crmLeadId: id(41), appointmentType: 'TRIAL', status, startsAt: at, endsAt: '2026-11-05T13:00:00.000Z',
   createdByPrincipalId: id(9), version: 1, createdAt: at, updatedAt: at, location: 'Main mat' });
 const props = (over: Partial<LeadsViewProps> = {}): LeadsViewProps => ({ language: 'en', waiting: false, concealed: false, scope, tab: 'OPEN',
-  list: { state: 'READY', tab: 'OPEN', items: [lead(1), lead(2, { givenName: 'Jordan', familyName: 'Kim', email: null, nextFollowUpAt: undefined } as Partial<LeadListItem>)] },
+  list: { state: 'READY', tab: 'OPEN', items: [lead(1), lead(2, { givenName: 'Jordan', familyName: 'Kim', email: undefined, nextFollowUpAt: undefined })] },
   filter: '', selectedId: null, trials: { state: 'NONE' }, ...over });
 const render = (over: Partial<LeadsViewProps> = {}) => renderToStaticMarkup(<LeadsView {...props(over)}/>);
 
@@ -73,7 +73,7 @@ it('lists leads with status, follow-up and a status tab bar; the filter only nar
   const html = render();
   expect(html).toContain('Riley1 Park'); expect(html).toContain('Jordan Kim'); expect(html).toContain('No follow-up scheduled'); expect(html).toContain('2 shown');
   expect(html).toMatch(/aria-pressed="true"[^>]*>Open</); expect(html).toContain('>Archived<');
-  expect(filterLeads(props().list.state === 'READY' ? (props().list as { items: LeadListItem[] }).items : [], 'jordan').map((l) => l.givenName)).toEqual(['Jordan']);
+  expect(filterLeads([lead(1), lead(2, { givenName: 'Jordan', email: undefined })], 'jordan').map((l) => l.givenName)).toEqual(['Jordan']);
   expect(filterLeads([lead(1)], 'RILEY1@')).toHaveLength(1);
   expect(render({ filter: 'nobody' })).toContain('No shown lead matches this filter');
   expect(render({ list: { state: 'READY', tab: 'OPEN', items: Array.from({ length: 50 }, (_, n) => lead(n)) } })).toContain('Showing up to 50 leads');
