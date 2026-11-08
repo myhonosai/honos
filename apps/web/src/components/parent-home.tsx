@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { DEFAULT_HON_INTERFACE_THEME, HON_INTERFACE_THEMES, type HonInterfaceTheme } from '@hon/design-system';
+import { FAMILY_DEFAULT_HON_INTERFACE_THEME, HON_INTERFACE_THEMES, type HonInterfaceTheme } from '@hon/design-system';
 import { loadParentBilling, ParentBillingAccessError } from './parent-billing-http';
 import { loadParentJourney, ParentJourneyAccessError } from './parent-journey-http';
 import { loadParentTestingStatus, ParentTestingStatusAccessError } from './parent-testing-status-http';
@@ -58,7 +58,7 @@ export function ParentHomeCards({ journey, testing, billing, plannedAbsences, cu
 }
 
 export function ParentHome(): React.ReactElement {
-  const [theme, setTheme] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
+  const [theme, setTheme] = useState<HonInterfaceTheme>(FAMILY_DEFAULT_HON_INTERFACE_THEME);
   const [journey, setJourney] = useState<ParentHomeReadState>(loading);
   const [testing, setTesting] = useState<ParentHomeReadState>(loading);
   const [billing, setBilling] = useState<ParentHomeReadState>(loading);
