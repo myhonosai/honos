@@ -121,6 +121,10 @@
       "title": "HON | Leads"
     },
     {
+      "path": "/staff/schedule",
+      "title": "HON | Class rosters"
+    },
+    {
       "path": "/staff/marketing",
       "title": "HON | Marketing"
     },
