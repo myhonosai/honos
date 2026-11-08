@@ -4,6 +4,11 @@ import {
   type HonTurnRequest,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
+import { crmLeadListPath } from '../crm-leads-http';
+import {
+  HonTargetDrift, verifyCampaignTargets, verifyCurriculumTargets, verifyLeadTargets, verifyOrchestrations, type HonDelegateTarget,
+} from './hon-suggestions';
+import type { HonDelegateAgentKey, HonOrchestrationList } from '@hon/contracts';
 
 /**
  * C1/C2 HON conversation transport. Fixed same-origin paths for exactly one verified school; the ids are selectors only and
@@ -16,6 +21,12 @@ export class HonConversationError extends Error {
   constructor(readonly kind: HonConversationFailure, readonly code: string | null = null) { super('The HON conversation could not be verified.'); }
 }
 export const HON_CONVERSATION_COMMAND = 'hon-conversation';
+/**
+ * True only while the caller still owns the request (mounted, same privacy epoch, still the pending command or current read).
+ * A 401 for a retired request is never reported as this session's end: it may belong to a session that was already replaced.
+ */
+export type Owned = () => boolean;
+const always: Owned = () => true;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -61,12 +72,12 @@ async function errorCode(response: Response): Promise<string | null> {
   } catch { return null; }
 }
 
-async function read<T>(path: string, verify: (value: unknown) => T, signal: AbortSignal): Promise<T> {
+async function read<T>(path: string, verify: (value: unknown) => T, signal: AbortSignal, owned: Owned = always): Promise<T> {
   let response: Response;
   try { response = await fetch(path, { ...READ, headers: { Accept: 'application/json' }, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) }); }
   catch (error) { if (signal.aborted) throw error; throw new HonConversationError('UNAVAILABLE'); }
   signal.throwIfAborted();
-  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new HonConversationError('SESSION'); }
+  if (response.status === 401) { if (owned()) reportConfirmedSessionInvalidation(); throw new HonConversationError('SESSION'); }
   if (response.status === 403) throw new HonConversationError('FORBIDDEN');
   if (response.status !== 200) throw new HonConversationError('UNAVAILABLE');
   let body: unknown;
@@ -90,14 +101,14 @@ export function prepareTurn(school: HonSchool, conversationId: string, request: 
   return Object.freeze({ path: `${honConversationBase(school)}/conversations/${conversationId.toLowerCase()}/turns`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
 }
 
-async function send<T>(prepared: PreparedHonCommand, verify: (value: unknown) => T): Promise<T> {
+async function send<T>(prepared: PreparedHonCommand, verify: (value: unknown) => T, owned: Owned = always): Promise<T> {
   let response: Response;
   try {
     response = await fetch(prepared.path, { method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': HON_CONVERSATION_COMMAND, 'Idempotency-Key': prepared.key },
       body: prepared.body, signal: AbortSignal.timeout(90000) });
   } catch { throw new HonConversationError('UNKNOWN'); }
-  if (response.status === 401) { reportConfirmedSessionInvalidation(); throw new HonConversationError('SESSION'); }
+  if (response.status === 401) { if (owned()) reportConfirmedSessionInvalidation(); throw new HonConversationError('SESSION'); }
   if (response.status === 403) throw new HonConversationError('FORBIDDEN', await errorCode(response));
   if (response.status === 400 || response.status === 404) throw new HonConversationError('INVALID', await errorCode(response));
   if (response.status === 409) {
@@ -113,22 +124,44 @@ async function send<T>(prepared: PreparedHonCommand, verify: (value: unknown) =>
 }
 
 export interface HonConversationApi {
-  readiness(school: HonSchool, signal: AbortSignal): Promise<HonConversationReadiness>;
-  list(school: HonSchool, signal: AbortSignal, cursor?: string | null): Promise<HonConversationPage>;
-  thread(school: HonSchool, conversationId: string, signal: AbortSignal): Promise<HonConversationThread>;
-  create(prepared: PreparedHonCommand): Promise<HonConversationSummary>;
-  sendTurn(prepared: PreparedHonCommand): Promise<HonTurnReceipt>;
+  readiness(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<HonConversationReadiness>;
+  list(school: HonSchool, signal: AbortSignal, cursor?: string | null, owned?: Owned): Promise<HonConversationPage>;
+  thread(school: HonSchool, conversationId: string, signal: AbortSignal, owned?: Owned): Promise<HonConversationThread>;
+  create(prepared: PreparedHonCommand, owned?: Owned): Promise<HonConversationSummary>;
+  sendTurn(prepared: PreparedHonCommand, owned?: Owned): Promise<HonTurnReceipt>;
+  /** C3a: the grouped confirmations of this conversation's HON answers. */
+  orchestrations(school: HonSchool, conversationId: string, signal: AbortSignal, owned?: Owned): Promise<HonOrchestrationList>;
+  /** C3a: the targets one specialist accepts, from that specialist's own list API for this signed-in human. */
+  targets(agent: HonDelegateAgentKey, school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<HonDelegateTarget[]>;
+}
+
+const verifyTargets = (verify: (value: unknown) => HonDelegateTarget[]) => (body: unknown) => {
+  try { return verify(body); } catch (error) { if (error instanceof HonTargetDrift) return drift(); throw error; }
+};
+export function honTargetPath(agent: HonDelegateAgentKey, school: HonSchool): string {
+  honConversationBase(school);
+  if (agent === 'marcus') return '/api/v1/marketing/campaigns';
+  if (agent === 'kai') return '/api/v1/staff/teaching-assistant/curricula';
+  try { return crmLeadListPath(school.organizationId.trim(), school.schoolId.trim(), 'OPEN'); } catch { throw new HonConversationError('INVALID'); }
 }
 
 export const HON_CONVERSATION_API: HonConversationApi = {
-  readiness: (school, signal) => read(`${honConversationBase(school)}/readiness`, verifyHonReadiness, signal),
-  list: (school, signal, cursor = null) => read(`${honConversationBase(school)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, verifyHonPage, signal),
-  thread: (school, conversationId, signal) => {
+  readiness: (school, signal, owned) => read(`${honConversationBase(school)}/readiness`, verifyHonReadiness, signal, owned),
+  list: (school, signal, cursor = null, owned) => read(`${honConversationBase(school)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, verifyHonPage, signal, owned),
+  thread: (school, conversationId, signal, owned) => {
     if (!UUID.test(conversationId)) throw new HonConversationError('INVALID');
     return read(`${honConversationBase(school)}/conversations/${conversationId.toLowerCase()}`, (body) => {
       try { return validateHonConversationThread(closed(body, ['data']).data); } catch { return drift(); }
-    }, signal);
+    }, signal, owned);
   },
-  create: (prepared) => send(prepared, (value) => validateHonConversationSummary(value)),
-  sendTurn: (prepared) => send(prepared, validateHonTurnReceipt),
+  create: (prepared, owned) => send(prepared, (value) => validateHonConversationSummary(value), owned),
+  sendTurn: (prepared, owned) => send(prepared, validateHonTurnReceipt, owned),
+  orchestrations: (school, conversationId, signal, owned) => {
+    if (!UUID.test(conversationId)) throw new HonConversationError('INVALID');
+    return read(`${honConversationBase(school)}/conversations/${conversationId.toLowerCase()}/orchestrations`, (body) => {
+      try { return verifyOrchestrations(body); } catch { return drift(); }
+    }, signal, owned);
+  },
+  targets: (agent, school, signal, owned) => read(honTargetPath(agent, school),
+    verifyTargets(agent === 'marcus' ? verifyCampaignTargets : agent === 'kai' ? verifyCurriculumTargets : verifyLeadTargets), signal, owned),
 };
