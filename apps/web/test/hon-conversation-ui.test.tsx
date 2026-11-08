@@ -1,13 +1,19 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HonConversationThread, HonConversationTurn } from '@hon/contracts';
+import type { HonConversationThread, HonConversationTurn, HonOrchestration } from '@hon/contracts';
 import {
   HON_CONVERSATION_API, HON_CONVERSATION_COMMAND, HonConversationError, honConversationBase, prepareConversation, prepareTurn, verifyHonPage, verifyHonReadiness,
 } from '../src/components/hon-command/hon-conversation-http';
 import { HonConversationView, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
+import { honTargetPath } from '../src/components/hon-command/hon-conversation-http';
+import {
+  HonTargetDrift, orchestrationsBySource, suggestionDelegation, verifyCampaignTargets, verifyCurriculumTargets, verifyLeadTargets,
+} from '../src/components/hon-command/hon-suggestions';
+import type { SuggestionConfirm } from '../src/components/hon-command/hon-conversation-panel';
+import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 
 const id = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
 const AT = '2026-11-06T18:00:00.000Z';
@@ -25,6 +31,7 @@ const thread = (turns: HonConversationTurn[]): HonConversationThread => ({ ...su
 const noop = () => {};
 const props = (over: Partial<HonConversationViewProps> = {}): HonConversationViewProps => ({
   presentation: 'full', phase: 'READY', readiness: readiness(), conversations: [summary(5)], thread: null, threadPhase: 'NONE', pending: null, draft: '', mode: 'STANDARD',
+  groups: new Map(), groupPhase: 'READY', confirm: null, onSuggest: noop, onConfirmChange: noop, onConfirmSend: noop, onConfirmCancel: noop,
   onDraft: noop, onMode: noop, onSend: noop, onOpen: noop, onNew: noop, onContinue: noop, onRetry: noop, onDismiss: noop, onRefresh: noop, ...over });
 const render = (over: Partial<HonConversationViewProps> = {}) => renderToStaticMarkup(<HonConversationView {...props(over)} />);
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -168,5 +175,120 @@ describe('HON workspace wiring', () => {
     expect(renderToStaticMarkup(<HonWorkspaceView {...base} />)).toContain('Not connected');
     const live = renderToStaticMarkup(<HonWorkspaceView {...base} conversation={<HonConversationView {...props()} />} />);
     expect(live).toContain('data-hon-conversation="READY"'); expect(live).not.toContain('Conversation is not connected yet');
+  });
+});
+
+const campaign = (n: number, status = 'ACTIVE', over: Record<string, unknown> = {}) => ({ id: id(n), code: `C${n}`, name: `Spring trial ${n}`, goal: 'More trials', offerLabel: '',
+  channel: 'EMAIL', startsAt: AT, endsAt: AT, plannedBudgetMinor: 0, currency: 'USD', version: 2, status, createdAt: AT, updatedAt: AT, planningOnly: true, ...over });
+const lead = (n: number, status = 'OPEN') => ({ id: id(n), status, pipelineStageId: id(1), primaryPersonId: id(2), version: 4, createdAt: AT, givenName: 'Sam', familyName: `Lee${n}` });
+const group = (status: HonOrchestration['status'], members: HonOrchestration['members']): HonOrchestration => ({ sourceTurnId: id(6), status, members });
+
+describe('Ask HON suggestion targets (C3a)', () => {
+  it('reads each specialist’s own list API, and only the targets that specialist accepts', () => {
+    expect(honTargetPath('marcus', SCHOOL)).toBe('/api/v1/marketing/campaigns');
+    expect(honTargetPath('kai', SCHOOL)).toBe('/api/v1/staff/teaching-assistant/curricula');
+    expect(honTargetPath('chad', SCHOOL)).toBe(`/api/v1/organizations/${id(1)}/schools/${id(2)}/crm/leads?limit=50&status=OPEN`);
+    expect(() => honTargetPath('chad', { organizationId: 'x', schoolId: id(2) })).toThrow(HonConversationError);
+    expect(verifyCampaignTargets({ data: [campaign(3), campaign(4, 'ARCHIVED'), campaign(5, 'DRAFT')], meta: {} }).map((t) => [t.id, t.detail])).toEqual([[id(3), 'active'], [id(5), 'draft']]);
+    expect(verifyCurriculumTargets({ data: { items: [{ id: id(3), name: 'Little Dragons', version: 2 }] } })).toEqual([{ id: id(3), label: 'Little Dragons', detail: 'version 2', version: null }]);
+    expect(verifyLeadTargets({ data: [lead(3), lead(4, 'WON')], meta: {} })).toEqual([{ id: id(3), label: 'Sam Lee3', detail: null, version: 4 }]);
+  });
+  it('treats a drifted list as unverified, never as an empty one', () => {
+    for (const bad of [{ data: [campaign(3)] }, { data: [campaign(3, 'GONE')], meta: {} }, { data: [campaign(3, 'ACTIVE', { planningOnly: false })], meta: {} },
+      { data: [campaign(3), campaign(3)], meta: {} }, { data: {}, meta: {} }]) expect(() => verifyCampaignTargets(bad)).toThrow(HonTargetDrift);
+    for (const bad of [{ data: { items: [{ id: id(3), name: 'X', version: 0 }] } }, { data: { items: [] }, meta: {} }, { data: { items: [{ id: id(3), name: 'X', version: 1, extra: 1 }] } }])
+      expect(() => verifyCurriculumTargets(bad)).toThrow(HonTargetDrift);
+    for (const bad of [{ data: [{ ...lead(3), version: 0 }], meta: {} }, { data: [lead(3)] }]) expect(() => verifyLeadTargets(bad)).toThrow(HonTargetDrift);
+  });
+  it('builds the confirmed delegation naming the answer it came from; a lead needs its version and a purpose', () => {
+    const target = { id: id(3), label: 'Sam Lee', detail: null, version: 4 };
+    expect(() => suggestionDelegation('chad', target, null)).toThrow(HonTargetDrift);
+    expect(() => suggestionDelegation('chad', { ...target, version: null }, 'CHECK_IN')).toThrow(HonTargetDrift);
+    const prepared = prepareTurn(SCHOOL, id(5), { text: 'Friendly check-in', delegation: suggestionDelegation('chad', target, 'CHECK_IN'), fromSuggestionTurnId: id(6) });
+    expect(JSON.parse(prepared.body)).toEqual({ text: 'Friendly check-in', delegation: { agentKey: 'chad', leadId: id(3), expectedLeadVersion: 4, purpose: 'CHECK_IN' }, fromSuggestionTurnId: id(6) });
+    expect(JSON.parse(prepareTurn(SCHOOL, id(5), { text: 'Spring post', delegation: suggestionDelegation('marcus', target, null), fromSuggestionTurnId: id(6) }).body).delegation).toEqual({ agentKey: 'marcus', campaignId: id(3) });
+    expect(JSON.parse(prepareTurn(SCHOOL, id(5), { text: 'Week 1 plan', delegation: suggestionDelegation('kai', target, null), fromSuggestionTurnId: id(6) }).body).delegation).toEqual({ agentKey: 'kai', curriculumId: id(3) });
+    expect(() => prepareTurn(SCHOOL, id(5), { text: 'x'.repeat(1201), delegation: suggestionDelegation('kai', target, null), fromSuggestionTurnId: id(6) })).toThrow(HonConversationError);
+  });
+  it('reads grouped status from the fixed orchestrations path and refuses a status that does not match its members', async () => {
+    const ok = { items: [group('NEEDS_REVIEW', [{ agentKey: 'marcus', turnId: id(7), status: 'AWAITING_APPROVAL' }])] };
+    const fetchMock = vi.fn(async () => json(200, { data: ok }));
+    vi.stubGlobal('fetch', fetchMock);
+    const list = await HON_CONVERSATION_API.orchestrations(SCHOOL, id(5), new AbortController().signal);
+    expect(orchestrationsBySource(list).get(id(6))?.status).toBe('NEEDS_REVIEW');
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe(`${BASE}/conversations/${id(5)}/orchestrations`);
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, { data: { items: [{ ...ok.items[0], status: 'COMPLETED' }] } })));
+    expect(((await HON_CONVERSATION_API.orchestrations(SCHOOL, id(5), new AbortController().signal).catch((e: unknown) => e)) as HonConversationError).kind).toBe('UNAVAILABLE');
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, { data: [campaign(3)], meta: {}, extra: 1 })));
+    expect(((await HON_CONVERSATION_API.targets('marcus', SCHOOL, new AbortController().signal).catch((e: unknown) => e)) as HonConversationError).kind).toBe('UNAVAILABLE');
+  });
+  it('a 401 for a retired read or command never ends the session; an owned one does', async () => {
+    vi.stubGlobal('window', new EventTarget());
+    const seen = vi.fn(); (window as unknown as EventTarget).addEventListener(HON_SESSION_INVALIDATED_EVENT, seen);
+    vi.stubGlobal('fetch', vi.fn(async () => json(401, { code: 'SIGN_IN_REQUIRED' })));
+    const retired = () => false, owned = () => true;
+    const prepared = prepareTurn(SCHOOL, id(5), { text: 'Hi', delegation: suggestionDelegation('marcus', { id: id(3), label: 'C', detail: null, version: null }, null), fromSuggestionTurnId: id(6) });
+    for (const call of [() => HON_CONVERSATION_API.sendTurn(prepared, retired), () => HON_CONVERSATION_API.targets('chad', SCHOOL, new AbortController().signal, retired),
+      () => HON_CONVERSATION_API.orchestrations(SCHOOL, id(5), new AbortController().signal, retired), () => HON_CONVERSATION_API.thread(SCHOOL, id(5), new AbortController().signal, retired)])
+      await expect(call()).rejects.toMatchObject({ kind: 'SESSION' });
+    expect(seen).not.toHaveBeenCalled();
+    await expect(HON_CONVERSATION_API.sendTurn(prepared, owned)).rejects.toMatchObject({ kind: 'SESSION' });
+    await expect(HON_CONVERSATION_API.targets('kai', SCHOOL, new AbortController().signal, owned)).rejects.toMatchObject({ kind: 'SESSION' });
+    expect(seen).toHaveBeenCalledTimes(2);
+  });
+  it('a refused confirmation is definitive and named; an unknown one keeps the exact retry', async () => {
+    const prepared = prepareTurn(SCHOOL, id(5), { text: 'Hi', delegation: suggestionDelegation('kai', { id: id(3), label: 'C', detail: null, version: null }, null), fromSuggestionTurnId: id(6) });
+    vi.stubGlobal('fetch', vi.fn(async () => json(400, { code: 'HON_SUGGESTION_NOT_CONFIRMABLE' })));
+    expect(await HON_CONVERSATION_API.sendTurn(prepared).catch((e: unknown) => e)).toMatchObject({ kind: 'INVALID', code: 'HON_SUGGESTION_NOT_CONFIRMABLE' });
+    const html = render({ pending: { prepared, kind: 'turn', label: 'Your request to Kai', state: 'INVALID', conversationId: id(5), code: 'HON_SUGGESTION_NOT_CONFIRMABLE' } });
+    expect(html).toContain('can no longer be confirmed'); expect(html).not.toContain('Retry the same request');
+  });
+});
+
+describe('Ask HON suggestion cards (C3a)', () => {
+  const answer = (suggestions: Array<'marcus' | 'kai' | 'chad'>, over: Partial<HonConversationTurn> = {}) => thread([human(6, 'How do I fill Saturday trials?'), reply(6, over, { suggestions })]);
+  const all = { ...readiness(), availableAgentKeys: ['marcus' as const, 'kai' as const, 'chad' as const] };
+  it('offers one card per suggested specialist that only opens a confirmation; nothing runs from the card', () => {
+    const html = render({ readiness: all, thread: answer(['marcus', 'chad']), threadPhase: 'READY' });
+    expect(html).toContain('HON suggests asking these specialists'); expect(html).toContain('Nothing runs until you choose what they work on and confirm');
+    expect(html).toContain('>Ask Marcus</button>'); expect(html).toContain('>Ask Chad</button>'); expect(html).not.toContain('Ask Kai');
+    expect(html).toContain('Nothing is sent to the family'); expect(html).not.toMatch(/credits? (left|remaining)|purchased credit/i);
+    expect(html).toMatch(/data-hon-private=""[\s\S]*data-hon-suggestions/);
+  });
+  it('shows no card for a concealed, failed or cut-off answer even if suggestions were present', () => {
+    for (const over of [{ reason: 'RESULT_CONCEALED', text: null }, { status: 'FAILED' as const }]) expect(render({ readiness: all, thread: answer(['marcus'], over), threadPhase: 'READY' })).not.toContain('Ask Marcus');
+  });
+  it('says a specialist is unavailable instead of offering it, and locks every card while a request is in flight or unknown', () => {
+    expect(render({ readiness: readiness(), thread: answer(['kai']), threadPhase: 'READY' })).toContain('Kai isn’t available for your role');
+    const prepared = { path: `${BASE}/conversations/${id(5)}/turns`, key: id(7), body: '{}' };
+    for (const state of ['SENDING', 'UNKNOWN'] as const)
+      expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', pending: { prepared, kind: 'turn', label: 'Your request to Chad', state, conversationId: id(5) } })).toMatch(/disabled=""[^>]*>Ask Marcus/);
+    expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groupPhase: 'UNAVAILABLE' })).toMatch(/could not be verified, so they can’t be asked[\s\S]*disabled=""[^>]*>Ask Marcus/);
+  });
+  it('shows grouped status with each member and points a draft to Action Center; an asked specialist is not offered again', () => {
+    const g = group('PARTIAL', [{ agentKey: 'marcus', turnId: id(7), status: 'COMPLETED' }, { agentKey: 'chad', turnId: id(8), status: 'FAILED' }]);
+    const html = render({ readiness: all, thread: answer(['marcus', 'chad', 'kai']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [g] }) });
+    expect(html).toContain('Specialists you asked'); expect(html).toContain('Partly done'); expect(html).toContain('data-orchestration="PARTIAL"');
+    expect(html).toContain('href="/staff/action-center/approvals"'); expect(html).not.toContain('>Ask Marcus</button>'); expect(html).not.toContain('>Ask Chad</button>');
+    expect(html).toContain('>Ask Kai</button>'); expect(html.match(/Asked from this answer/g)).toHaveLength(2);
+  });
+  it('the confirmation names the specialist’s own target, the follow-up type for Chad, and the specialist’s text limit', () => {
+    const base: SuggestionConfirm = { seq: 1, sourceTurnId: id(6), agent: 'chad', targetId: '', purpose: null, text: '', targets: [{ id: id(3), label: 'Sam Lee', detail: null, version: 4 }] };
+    const html = render({ readiness: all, thread: answer(['chad']), threadPhase: 'READY', confirm: base });
+    expect(html).toContain('aria-label="Ask Chad"'); expect(html).toContain('Choose a lead'); expect(html).toContain('Sam Lee'); expect(html).toContain('Follow-up type');
+    expect(html).toContain('Trial reminder'); expect(html).toContain('2,000 characters left'); expect(html).toMatch(/<button type="submit" disabled="">Send to Chad/);
+    const ready = render({ readiness: all, thread: answer(['chad']), threadPhase: 'READY', confirm: { ...base, targetId: id(3), purpose: 'CHECK_IN', text: 'Ask about Saturday' } });
+    expect(ready).toMatch(/<button type="submit">Send to Chad/);
+    const kai = render({ readiness: all, thread: answer(['kai']), threadPhase: 'READY', confirm: { ...base, agent: 'kai', targets: [] } });
+    expect(kai).toContain('No published curricula'); expect(kai).not.toContain('Send to Kai');
+    expect(render({ readiness: all, thread: answer(['kai']), threadPhase: 'READY', confirm: { ...base, agent: 'kai', targets: [{ id: id(3), label: 'Little Dragons', detail: 'version 2', version: null }] } })).toContain('1,200 characters left');
+    expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', confirm: { ...base, agent: 'marcus', targets: 'LOADING' } })).toContain('Loading campaign choices for Marcus');
+    const failed = render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', confirm: { ...base, agent: 'marcus', targets: 'UNAVAILABLE' } });
+    expect(failed).toContain('could not be verified right now'); expect(failed).not.toContain('Send to Marcus');
+  });
+  it('explains a specialist’s recorded refusal without inventing a draft', () => {
+    const chad: HonConversationTurn = { turnId: id(7), role: 'chad', text: null, createdAt: AT, status: 'FAILED', reason: 'AGENT_TARGET_NOT_FOUND',
+      references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null };
+    expect(render({ thread: thread([human(7, 'Follow up'), chad]), threadPhase: 'READY' })).toContain('no longer available to this specialist');
   });
 });
