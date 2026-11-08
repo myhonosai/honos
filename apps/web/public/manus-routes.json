@@ -121,6 +121,10 @@
       "title": "HON | People"
     },
     {
+      "path": "/staff/crm",
+      "title": "HON | Leads"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },

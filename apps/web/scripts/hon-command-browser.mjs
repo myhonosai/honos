@@ -182,6 +182,7 @@ async function api(route) {
     aiUsage: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ AI usage or cost projection is available.' },
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
+  if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
@@ -398,6 +399,31 @@ async function hqPolicyApi(route, method) {
 }
 
 // People (B-CRM-1a/1b): synthetic people at the one school. Edits replay by key, check the version and the consent rule.
+// Leads (U4): the school's CRM lead list and each lead's trials (synthetic). Read-only.
+const lds = { denied: false, gate: null, step: null, reads: [] };
+const ldsLeads = () => [['Riley', 'Park', 'OPEN', 2], ['Jordan', 'Kim', 'OPEN', null], ['Casey', 'Lee', 'WON', null], ['Morgan', 'Diaz', 'LOST', null]].map(([givenName, familyName, status, follow], n) => ({
+  id: id(800 + n), status, pipelineStageId: id(799), primaryPersonId: id(810 + n), version: 2 + n, createdAt: iso(-72 - n), givenName, familyName,
+  email: `${String(givenName).toLowerCase()}@example.invalid`, phoneE164: '+15555550100', ...(follow === null ? {} : { nextFollowUpAt: iso(follow) }) }));
+const ldsTrial = (n, status, hours) => ({ id: id(830 + n), crmLeadId: id(800), appointmentType: 'TRIAL', status, startsAt: iso(hours), endsAt: iso(hours + 1), createdByPrincipalId: id(61), version: 1,
+  createdAt: iso(-10 - n), updatedAt: iso(-10 - n), location: 'Main mat' });
+function resetLeads(over = {}) { Object.assign(lds, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function leadsApiRoute(route, path, method, url, prefix) {
+  if (method !== 'GET') return null;
+  const trials = path.match(new RegExp(`^${prefix}/crm/leads/([0-9a-f-]{36})/trials$`));
+  if (path !== `${prefix}/crm/leads` && !trials) return null;
+  lds.reads.push(trials ? 'trials' : `list:${url.searchParams.get('status') ?? 'ALL'}`);
+  // The step belongs to the request that arrives first, even while it waits at the gate.
+  const step = lds.step; lds.step = null;
+  if (lds.gate) { const gate = lds.gate; lds.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (lds.denied) return json(route, 403, { code: 'FORBIDDEN' });
+  if (trials) {
+    const rows = trials[1] === id(800) ? [ldsTrial(1, 'SCHEDULED', 26), ldsTrial(2, 'NO_SHOW', -48)] : [];
+    return json(route, 200, { data: { activeTrial: rows[0] ?? null, trials: rows }, meta: { requestId: id(898), correlationId: id(898) } });
+  }
+  const status = url.searchParams.get('status');
+  return json(route, 200, { data: ldsLeads().filter((lead) => !status || lead.status === status), meta: { requestId: 'synthetic' } });
+}
 const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
 function resetPeople(over = {}) {
   ppl.records = new Map([[id(301), { personId: id(301), schoolId: scope.schoolId, givenName: 'Ana', familyName: 'Rivera', email: 'ana.parent@example.invalid', phoneE164: '+15555550101',
@@ -1748,6 +1774,102 @@ for (const [how, retire] of Object.entries(policyRetire)) {
     await section().getByRole('button', { name: 'Refresh' }).click();
     await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
     await ctx.close();
+  });
+}
+// ---------- Leads (U4) ----------
+async function leadsPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/crm`);
+  const section = () => page.locator('section[aria-labelledby="leads-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const LEADS_TITLES = { en: ['Leads', 'Won', 'Upcoming trial', 'Open in the CRM journey'], ko: ['문의', '등록', '예정된 체험 수업', 'CRM 여정에서 열기'], es: ['Prospectos', 'Ganados', 'Próxima clase de prueba', 'Abrir en el recorrido de CRM'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Leads ${nextTheme} ${language} ${name}: open leads, a lead with trials, status tabs and links`, async () => {
+    resetLeads();
+    const [title, won, upcoming, journey] = LEADS_TITLES[language];
+    const { ctx, page, section } = await leadsPage(viewport, { nextTheme, language });
+    await section().getByTestId('leads-list').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    assert.equal(lds.reads[0], 'list:OPEN', 'opens on Open leads');
+    const listText = await section().getByTestId('leads-list').innerText();
+    assert.ok(listText.includes('Riley Park') && listText.includes('Jordan Kim') && !listText.includes('Casey Lee'));
+    await section().getByRole('button', { name: /Riley Park/ }).click();
+    await section().getByTestId('upcoming-trial').waitFor();
+    const detail = await section().getByTestId('lead-detail').innerText();
+    assert.ok(detail.includes('riley@example.invalid'));
+    assert.ok((await section().getByTestId('upcoming-trial').innerText()).includes(upcoming));
+    const href = await section().getByRole('link', { name: journey }).getAttribute('href');
+    assert.equal(href, `/staff/crm/journey?organizationId=${scope.organizationId}&schoolId=${scope.schoolId}&leadId=${id(800)}`);
+    await noOverflow(page, `leads-${nextTheme}-${language}-${name}`);
+    await axe(page, `leads-${nextTheme}-${language}-${name}`);
+    await shot(page, `leads-${nextTheme}-${language}-${name}`, true);
+    await section().getByRole('button', { name: won, exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="leads-list"]')?.textContent?.includes('Casey Lee'));
+    assert.equal(lds.reads.at(-1), 'list:WON');
+    assert.equal(await section().getByTestId('lead-detail').count(), 0, 'the selected open lead is not shown under Won');
+    await ctx.close();
+  });
+}
+await check('Leads: the filter narrows only what was read; no extra read', async () => {
+  resetLeads();
+  const { ctx, section } = await leadsPage({ width: 1440, height: 900 });
+  await section().getByTestId('leads-list').waitFor();
+  const reads = lds.reads.length;
+  await section().getByLabel('Filter the shown leads by name or email').fill('jordan');
+  await section().getByText('1 shown').waitFor();
+  assert.equal(lds.reads.length, reads);
+  await section().getByLabel('Filter the shown leads by name or email').fill('nobody');
+  await section().getByText('No shown lead matches this filter.').waitFor();
+  await ctx.close();
+});
+await check('Leads: denied access says so and shows nothing', async () => {
+  resetLeads({ denied: true });
+  const { ctx, section } = await leadsPage({ width: 1440, height: 900 });
+  await section().getByText(/does not include CRM leads/).waitFor();
+  assert.ok(!(await section().innerText()).includes('Riley'));
+  await ctx.close();
+});
+await check('Leads: leaving the page hides names at once; the list is read again on return', async () => {
+  resetLeads();
+  const { ctx, page, section } = await leadsPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Riley Park/ }).click();
+  await section().getByTestId('upcoming-trial').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Riley'));
+  await ctx.close();
+});
+for (const [how, retire] of [['changing the status tab', (page, section) => section().getByRole('button', { name: 'Won', exact: true }).click()],
+  ['closing the view', async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[aria-labelledby="leads-title"]')); }]]) {
+  await check(`Leads: a late sign-in answer to a list read retired by ${how} does not end the session; a current one does`, async () => {
+    resetLeads();
+    const { ctx, page, section } = await leadsPage({ width: 1440, height: 900 });
+    await section().getByTestId('leads-list').waitFor();
+    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    let release; lds.gate = new Promise((done) => { release = done; }); lds.step = 'session';
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    for (let i = 0; i < 40 && lds.gate; i++) await new Promise((done) => setTimeout(done, 50));
+    await retire(page, section);
+    release();
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+    await ctx.close();
+    const current = await leadsPage({ width: 1440, height: 900 });
+    await current.section().getByTestId('leads-list').waitFor();
+    await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    lds.step = 'session';
+    await current.section().getByRole('button', { name: 'Refresh' }).click();
+    await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await current.ctx.close();
   });
 }
 
