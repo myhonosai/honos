@@ -29,6 +29,10 @@
       "title": "HON HQ | School Directory"
     },
     {
+      "path": "/hq/schools/access",
+      "title": "HON HQ | School access"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },
