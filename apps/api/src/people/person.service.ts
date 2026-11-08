@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { tierIncludesFeature } from '@hon/config';
 import type { CommandContext, CreatePersonInput, HonTier, PersonSummary } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { cursorInstantSql, decodeListCursor, encodeListCursor } from '../foundation/list-cursor.js';
 
 function fingerprint(input: CreatePersonInput): string {
   return createHash('sha256').update(JSON.stringify({
@@ -15,20 +16,32 @@ function fingerprint(input: CreatePersonInput): string {
 export class PersonService {
   constructor(private readonly database: RuntimeDatabaseService) {}
 
-  async list(context: CommandContext, query?: string): Promise<PersonSummary[]> {
+  async list(context: CommandContext, query?: string, page: { limit?: number | undefined; cursor?: string | undefined } = {}): Promise<{ people: PersonSummary[]; nextCursor: string | null; limit: number }> {
     const needle = query?.trim() || null;
+    const limit = page.limit ?? 50;
+    // Bound to the exact school and search text; decoded before any database work.
+    const after = decodeListCursor(page.cursor, 'people.directory', context.schoolId, { query: needle }, ['text', 'text', 'instant', 'uuid']);
     return this.database.withTenantTransaction(context, async (client) => {
-      const result = await client.query<PersonSummary>(
+      // Keyset page in directory order with the id as a unique tiebreaker. The row comparison uses the same collation
+      // as the ORDER BY, so no row is repeated or skipped between pages.
+      const result = await client.query<PersonSummary & { cursorAt: string; sortFamily: string; sortGiven: string }>(
         `SELECT id, given_name AS "givenName", family_name AS "familyName", email::text AS email,
-                phone_e164 AS "phoneE164", version, created_at AS "createdAt"
+                phone_e164 AS "phoneE164", version, created_at AS "createdAt",
+                family_name AS "sortFamily", given_name AS "sortGiven", ${cursorInstantSql('created_at')} AS "cursorAt"
          FROM hon.people
          WHERE organization_id = $1 AND school_id = $2
            AND ($3::text IS NULL OR concat_ws(' ', given_name, family_name, email::text, phone_e164) ILIKE '%' || $3 || '%')
-         ORDER BY family_name ASC, given_name ASC, created_at ASC
-         LIMIT 50`,
-        [context.organizationId, context.schoolId, needle],
+           AND ($5::text IS NULL OR (family_name, given_name, created_at, id) > ($5::text, $6::text, $7::timestamptz, $8::uuid))
+         ORDER BY family_name ASC, given_name ASC, created_at ASC, id ASC
+         LIMIT $4`,
+        [context.organizationId, context.schoolId, needle, limit + 1, after?.[0] ?? null, after?.[1] ?? null, after?.[2] ?? null, after?.[3] ?? null],
       );
-      return result.rows;
+      const rows = result.rows.slice(0, limit);
+      const last = result.rows.length > limit ? rows[rows.length - 1] : undefined;
+      const nextCursor = last
+        ? encodeListCursor('people.directory', context.schoolId, { query: needle }, [last.sortFamily, last.sortGiven, last.cursorAt, last.id])
+        : null;
+      return { people: rows.map(({ cursorAt: _c, sortFamily: _f, sortGiven: _g, ...person }) => person), nextCursor, limit };
     });
   }
 

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class ListLeadsDto {
   @IsOptional()
@@ -12,4 +12,10 @@ export class ListLeadsDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  /** Opaque keyset cursor from the previous page's meta.nextCursor. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1024)
+  cursor?: string;
 }
