@@ -152,6 +152,7 @@
     "db:test-crm-list-pagination": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-crm-list-pagination-integrity.mjs",
     "db:test-class-session-roster": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-session-roster-integrity.mjs",
     "db:test-school-membership-list": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-membership-list-integrity.mjs",
+    "db:test-class-session-pages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-session-pages-integrity.mjs",
     "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs"
   },
   "dependencies": {

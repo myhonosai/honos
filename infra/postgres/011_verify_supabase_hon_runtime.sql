@@ -2792,3 +2792,16 @@ DO $$ DECLARE safe boolean; BEGIN
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school membership list function'; END IF;
 END $$;
 -- End school membership list exact verification.
+
+-- Class-session pages exact verification (0221): one read-only definer projection, runtime EXECUTE only.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+    AND (o.rolsuper OR o.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='78863ed832e05044be3c1a8d1fe2beede748bd7648173f6ea30f6ef2ab8637f5'
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO safe FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_school_class_session_page(text,jsonb)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe class-session page function'; END IF;
+END $$;
+-- End class-session pages exact verification.
