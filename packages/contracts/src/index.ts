@@ -1016,6 +1016,7 @@ export * from './saas-refunds-rewards.js';
 export * from './saas-payments.js';
 export * from './saas-school-billing.js';
 export * from './saas-paid-access.js';
+export * from './saas-access-overview.js';
 export * from './saas-exception-policy.js';
 export * from './saas-offers.js';
 export * from './saas-introductory-pricing.js';
