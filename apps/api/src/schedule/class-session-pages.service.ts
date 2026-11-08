@@ -53,7 +53,8 @@ export class ClassSessionPagesService {
         const last = data.hasMore ? data.items[data.items.length - 1] : undefined;
         return {
           items: data.items.map(({ cursorStartsAt: _cursorStartsAt, ...item }) => item),
-          // Later pages need no date bound: every row after the position is on or after the first page's start.
+          // The function applies the date bound to the first page only: every row after the position is on or after that
+          // page's start, so a list keeps paging across the school's local midnight.
           nextCursor: last ? encodeListCursor('schedule.session.list', context.schoolId, { from }, CLASS_SESSION_PAGE_CURSOR, [last.cursorStartsAt, last.sessionId]) : null,
           limit,
           schoolTimezone: data.schoolTimezone,

@@ -31,6 +31,7 @@ const { HonIdentityService } = await load('foundation/hon-identity.service.js');
 const { HonExceptionFilter } = await load('observability/http-telemetry.js');
 const { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } = await load('schedule/class-session-pages.controller.js');
 const { ClassSessionPagesService } = await load('schedule/class-session-pages.service.js');
+const { encodeListCursor } = await load('foundation/list-cursor.js');
 const { ClassSessionsReadController } = await load('schedule/class-sessions-read.controller.js');
 const { ClassSessionsReadHumanUiGuard } = await load('schedule/class-sessions-read-human-ui.guard.js');
 const { ClassSessionsReadService } = await load('schedule/class-sessions-read.service.js');
@@ -277,6 +278,20 @@ try {
     ok(JSON.stringify(rows) === JSON.stringify(want) && meta.fromDate === date.d && meta.localToday === localToday, `from ${date.d}: exactly ${want.length} sessions from that local midnight`);
   }
   ok((await pageAll(READER, { from: localToday }, 'explicit today')).rows.length === fromToday.length, 'from=today equals the default');
+  // A default-date list whose first page was read before the school's local midnight keeps paging from its position:
+  // later pages carry no date bound, so yesterday's sessions after the position are not dropped. The cursor is minted
+  // here exactly as the API mints it, at a session from yesterday.
+  const everything = await expectedRows(ids.schoolA, '0000');
+  const yesterday = everything.findIndex((row) => row.name === 'Past -1 day');
+  const rolledCursor = encodeListCursor('schedule.session.list', ids.schoolA, { from: null }, ['instant', 'uuid'], [`${everything[yesterday].startsAt.slice(0, -1)}000Z`, everything[yesterday].sessionId]);
+  const rolled = [];
+  for (let next = rolledCursor, pages = 0; next; pages += 1) {
+    assert.ok(pages < 100, 'rolled pagination did not terminate');
+    const body = await page(() => list(READER, { limit: 4, cursor: next }), `rolled page ${pages + 1}`);
+    rolled.push(...body.data); next = body.meta.nextCursor;
+  }
+  ok(JSON.stringify(rolled) === JSON.stringify(everything.slice(yesterday + 1)) && rolled.some((row) => row.name === 'Just before midnight'),
+    `a page after local midnight continues from its position (${rolled.length} rows, including yesterday's later sessions)`);
 
   // 4. Exact school and organization only.
   const schoolB = await pageAll(OTHER_SCHOOL, {}, 'school B');
@@ -301,6 +316,14 @@ try {
   await refused(() => get('/list', READER, '?other=x'), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', 'unknown query key');
   await refused(() => get('/list', READER, `?from=${localToday}&from=${localToday}`), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', 'repeated from');
   await refused(() => get('', READER, '?limit=5'), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', 'the bounded read still accepts no query');
+  // Express's parser stops after 1,000 pairs: the guard reads the complete raw query, so padding cannot hide an extra,
+  // repeated or malformed selector (the guard refuses before the controller or the database is reached).
+  for (const [raw, label] of [[`?from=${localToday}${'&'.repeat(1000)}other=x`, 'padded unknown key'], [`?from=${localToday}${'&'.repeat(1000)}from=${localToday}`, 'padded repeated from'],
+    [`?from=${localToday}${'&'.repeat(1000)}cursor=tampered`, 'padded malformed cursor'], [`?limit=5&&from=${localToday}`, 'empty pair'], ['?limit', 'key without a value'],
+    [`?limit=5&cursor=${cursor}${'&limit=5'.repeat(1)}`, 'repeated limit after a cursor'], ['?from=%E0%A4%A', 'malformed percent-encoding'], [`?from=${localToday}&${'x'.repeat(600)}=1`, 'over-long raw query']]) {
+    await refused(() => get('/list', READER, raw), 400, 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED', label);
+  }
+  ok((await page(() => get('/list', READER, `?%66rom=${localToday}&limit=5`), 'percent-encoded key')).meta.fromDate === localToday, 'a percent-encoded allowed key is the same selector');
 
   // 6. Authority: schedule.session.read live at the school; the definer function decides independently.
   await refused(() => list(NONE), 403, 'CLASS_SESSIONS_READ_FORBIDDEN', 'staff without schedule.session.read');

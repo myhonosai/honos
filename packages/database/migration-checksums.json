@@ -212,6 +212,7 @@
     "0218_school_student_birth_date_and_enrollment_corrections.sql": "d2da5fe68c665924e03ac803e472d403e7bd51517132557a39ec2ee113283159",
     "0219_hq_access_overview.sql": "64392952db2bd1e0f23faeb29049cc85d6b35115c2cfbe88418065f2ad6f0154",
     "0220_school_membership_list.sql": "5a6238ddd9944a8edeae04552d1aafe6296ab924e09ded7534be95305302654f",
-    "0221_school_class_session_pages.sql": "60b36172213a9a34da2529db2d4a9b4e26e70d761bd223e662aeeb67b5536d37"
+    "0221_school_class_session_pages.sql": "0c3abd19116998a0213194c6913af49ce19c61f554de8e1ff25214b8d282e83b",
+    "0222_saas_exception_policy_terms_read.sql": "9f6799e60e87147a706218e53a8539bf00f2808e0f28fd679c019b9d946e48ce"
   }
 }

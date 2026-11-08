@@ -57,6 +57,9 @@ it('maps refusals exactly; drift is unavailable, never an empty list', async () 
     expect(() => verifyMembershipListPage(bad, null)).toThrow();
   }
   expect(() => verifyMembershipListPage(page([member(1)]), 'DRAFT')).toThrow();
+  expect(() => verifyMembershipListPage(page([], { schoolTimezone: 'Not/AZone' }), null)).toThrow(MembershipListError);
+  stub(json(page([], { schoolTimezone: 'Not/AZone' })));
+  await expect(membershipListApi.page(scope, null, null, signal(), () => true)).rejects.toMatchObject({ kind: 'TIMEZONE' });
   expect(verifyMembershipListPage(page([member(1), member(2, { effectiveStatus: 'UNDATED', ...undated('2026-10-01T00:00:00.000Z') }), draft(3), member(4, { participant: null })]), null).items).toHaveLength(4);
   expect(verifyMembershipListPage(page([]), 'EXPIRED').items).toEqual([]);
 });
