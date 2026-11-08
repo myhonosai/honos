@@ -1,21 +1,17 @@
 BEGIN;
 
 -- B-ID-4 school ownership handoff (proposed number 0223; the owner allocates the final number).
--- Owner decisions 2026-11-08 (H-1..H-5, approved as recommended):
---   H-1 HQ provisioning no longer grants the school OWNER role to the HQ person who provisions the school. The system
---       OWNER role is still created so the first school owner can be bound by invitation (0191).
---   H-2 When a school owner accepts an invitation, every OWNER grant at that school held by an HQ principal (any
---       hq_operator_grants row, timed or not, the same exclusion as staff_member_eligible) ends in the same statement.
---   H-3 Schools provisioned earlier: an HQ-owner command ends those HQ-held OWNER grants one school at a time, only where
---       the school already has a live non-HQ owner, and only for the exact grant set the HQ-owner read showed (dry run).
---   H-4 A school may have several owners; one is the primary owner (billing contact and recovery). The first owner to
---       accept becomes primary when no live primary exists; an HQ owner may designate another live owner.
+-- Owner decisions 2026-11-08: H-4 and H-5 approved; H-1..H-3 were approved at 21:39Z and then replaced at 22:59Z by
+-- "Keep HQ owner seats" (HQ needs access to every school and organization to fix or change things):
+--   HQ seats kept: provisioning still grants the school OWNER role to the HQ person who provisions it (0208, unchanged
+--       here), and accepting an owner invitation leaves every HQ-held OWNER grant alone. There is no HQ cleanup command.
+--   H-4 A school may have several owners; one is the primary owner (billing contact and recovery). The first non-HQ owner
+--       to accept becomes primary when no live primary exists; an HQ owner may designate another live non-HQ owner.
 --   H-5 HQ may invite or add an owner where one already exists; the existing owners get an in-app notice (no consent
 --       step, no email or other delivery).
--- Why it matters now: resolve_authorized_scope (0059) does not exclude HQ principals, so a provisioner's OWNER grant is
--- usable by paths built on it (for example the staff-invitation manager, 0204) once the school's entitlement is ACTIVE.
+-- HQ seats are shown to HQ (hqOwnerGrantIds) but are not listed as school owners and can never be primary.
 -- Unchanged: invitation tables, tokens, TTLs, replay and fingerprint rules, receipts, NOWAIT authority envelope, D9
--- SUSPENDED placeholder entitlement, audit/outbox shapes of provisioning. No entitlement, billing, payment, AI credit or
+-- SUSPENDED placeholder entitlement, provisioning (0208) as a whole. No entitlement, billing, payment, AI credit or
 -- provider effect. Nothing here is deployed.
 
 DO $$ BEGIN
@@ -43,23 +39,21 @@ CREATE TABLE hon.school_ownership_notices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES hon.organizations(id),
   school_id uuid NOT NULL,
-  kind text NOT NULL CHECK (kind IN ('OWNER_INVITED','OWNER_ADDED','PRIMARY_OWNER_CHANGED','HQ_OWNER_ACCESS_ENDED')),
+  kind text NOT NULL CHECK (kind IN ('OWNER_INVITED','OWNER_ADDED','PRIMARY_OWNER_CHANGED')),
   invitation_id uuid REFERENCES hon.school_owner_invitations(id),
   invited_email text,
   owner_grant_id uuid REFERENCES hon.principal_role_grants(id),
-  ended_grant_count integer,
   occurred_at timestamptz NOT NULL,
   FOREIGN KEY (school_id, organization_id) REFERENCES hon.schools(id, organization_id),
-  CHECK ((kind = 'OWNER_INVITED' AND invitation_id IS NOT NULL AND invited_email IS NOT NULL AND owner_grant_id IS NULL AND ended_grant_count IS NULL)
-    OR (kind = 'OWNER_ADDED' AND invitation_id IS NOT NULL AND invited_email IS NOT NULL AND owner_grant_id IS NOT NULL AND ended_grant_count IS NULL)
-    OR (kind = 'PRIMARY_OWNER_CHANGED' AND invitation_id IS NULL AND invited_email IS NULL AND owner_grant_id IS NOT NULL AND ended_grant_count IS NULL)
-    OR (kind = 'HQ_OWNER_ACCESS_ENDED' AND invitation_id IS NULL AND invited_email IS NULL AND owner_grant_id IS NULL AND ended_grant_count > 0))
+  CHECK ((kind = 'OWNER_INVITED' AND invitation_id IS NOT NULL AND invited_email IS NOT NULL AND owner_grant_id IS NULL)
+    OR (kind = 'OWNER_ADDED' AND invitation_id IS NOT NULL AND invited_email IS NOT NULL AND owner_grant_id IS NOT NULL)
+    OR (kind = 'PRIMARY_OWNER_CHANGED' AND invitation_id IS NULL AND invited_email IS NULL AND owner_grant_id IS NOT NULL))
 );
 CREATE INDEX school_ownership_notices_school_idx ON hon.school_ownership_notices (school_id, occurred_at DESC, id);
 CREATE TABLE hon.school_ownership_requests (
   subject text NOT NULL,
   idempotency_key uuid NOT NULL,
-  operation text NOT NULL CHECK (operation IN ('SET_PRIMARY','END_HQ_OWNER_GRANTS')),
+  operation text NOT NULL CHECK (operation IN ('SET_PRIMARY')),
   fingerprint text NOT NULL,
   response jsonb NOT NULL,
   occurred_at timestamptz NOT NULL,
@@ -119,35 +113,6 @@ BEGIN
     designated_by = EXCLUDED.designated_by, designated_at = EXCLUDED.designated_at, version = hon.school_primary_owners.version + 1;
 END $$;
 
--- End every HQ-held OWNER grant at one school (live or not yet started), the way 0059 revokes a staff grant: revoked_at and
--- revoked_by are set, so every resolver that honours revocation refuses it at once. A grant that has not started yet is also
--- closed one microsecond after its start (the table requires effective_until > effective_from). Writes one
--- audit row per ended grant. Returns the ended grant ids in id order. Caller holds the school-account lock.
-CREATE FUNCTION hon.school_end_hq_owner_grants(p_school uuid, p_at timestamptz, p_actor uuid, p_source text, p_request uuid) RETURNS uuid[]
-LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
-DECLARE ended uuid[]; g record;
-BEGIN
-  ended := ARRAY[]::uuid[];
-  FOR g IN
-    UPDATE hon.principal_role_grants t
-       SET effective_until = CASE WHEN t.effective_from < p_at THEN p_at ELSE t.effective_from + interval '1 microsecond' END,
-           revoked_at = p_at, revoked_by_principal_id = p_actor,
-           version = t.version + 1
-     WHERE t.id IN (SELECT w.o_grant FROM hon.school_owner_grant_rows(p_school, p_at) w WHERE w.o_hq)
-    RETURNING t.id, t.organization_id, t.school_id, t.principal_id, t.effective_until
-  LOOP
-    ended := array_append(ended, g.id);
-    INSERT INTO hon.audit_events (organization_id, school_id, actor_principal_id, source, action_code, entity_type, entity_id,
-      prior_state, next_state, result, request_id, correlation_id, occurred_at)
-    VALUES (g.organization_id, g.school_id, p_actor, p_source, 'school.owner.hq_grant.end', 'PRINCIPAL_ROLE_GRANT', g.id,
-      jsonb_build_object('holder', 'HQ_PRINCIPAL', 'role', 'OWNER', 'effectiveUntil', NULL),
-      jsonb_build_object('holder', 'HQ_PRINCIPAL', 'role', 'OWNER', 'effectiveUntil', hon.saas_ts(g.effective_until)),
-      'SUCCEEDED', p_request, p_request, p_at);
-  END LOOP;
-  SELECT coalesce(array_agg(x ORDER BY x), ARRAY[]::uuid[]) INTO ended FROM unnest(ended) x;
-  RETURN ended;
-END $$;
-
 CREATE FUNCTION hon.school_ownership_owner_json(p_school uuid, p_at timestamptz, p_primary uuid) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   SELECT coalesce(jsonb_agg(jsonb_build_object(
@@ -166,7 +131,7 @@ $$;
 CREATE FUNCTION hon.school_ownership_notices_json(p_school uuid) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   SELECT coalesce(jsonb_agg(jsonb_build_object('noticeId', n.id, 'kind', n.kind, 'occurredAt', hon.saas_ts(n.occurred_at),
-      'invitedEmail', n.invited_email, 'endedGrantCount', n.ended_grant_count) ORDER BY n.occurred_at DESC, n.id), '[]'::jsonb)
+      'invitedEmail', n.invited_email) ORDER BY n.occurred_at DESC, n.id), '[]'::jsonb)
   FROM (SELECT * FROM hon.school_ownership_notices WHERE school_id = p_school ORDER BY occurred_at DESC, id LIMIT 50) n
 $$;
 
@@ -176,8 +141,8 @@ $$;
 -- concurrent acceptance of the same invitation just committed, and wrongly answer ACCOUNT_REVIEW_REQUIRED. Before that
 -- answer, re-read the invitation: if it is no longer PENDING the facts moved underneath, so answer the recoverable
 -- ACCOUNT_BUSY (an explicit same-key retry then replays). It and the acceptance also refuse an accepting identity with ANY
--- hq_operator_grants row (0191 refused only a current one): H-2 would otherwise end that new owner's grant in the same
--- statement, consume the invitation and leave the school without an owner. Otherwise identical to 0191.
+-- hq_operator_grants row (0191 refused only a current one), the staff_member_eligible rule: HQ people reach a school
+-- through their HQ seat, never as an invited school owner. Otherwise identical to 0191.
 -- ---------------------------------------------------------------------------------------------------------------------
 CREATE FUNCTION hon.school_owner_review_or_busy(p_invitation uuid) RETURNS void
 LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,hon AS $$
@@ -229,106 +194,6 @@ BEGIN
     RAISE EXCEPTION 'ACCOUNT_INVITATION_UNAVAILABLE' USING ERRCODE='42501'; END IF;
 END $$;
 
-
--- ---------------------------------------------------------------------------------------------------------------------
--- H-1: provisioning creates the OWNER role but grants it to nobody. Otherwise identical to 0208.
--- ---------------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION hon.provision_school_from_hq(
-  p_external_subject text,
-  p_legal_name text,
-  p_display_name text,
-  p_school_name text,
-  p_school_slug text,
-  p_timezone text,
-  p_initial_tier hon.plan_tier,
-  p_idempotency_key text,
-  p_request_fingerprint text,
-  p_request_id uuid,
-  p_correlation_id uuid
-)
-RETURNS TABLE (
-  organization_id uuid,
-  school_id uuid,
-  owner_role_id uuid,
-  replayed boolean
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, hon
-AS $$
-DECLARE
-  v_actor_principal_id uuid;
-  v_request_id uuid;
-  v_prior_fingerprint text;
-  v_prior_status text;
-  v_prior_response jsonb;
-  v_organization_id uuid;
-  v_school_id uuid;
-  v_owner_role_id uuid;
-  v_response jsonb;
-BEGIN
-  IF btrim(p_legal_name) = '' OR btrim(p_display_name) = '' OR btrim(p_school_name) = ''
-    OR btrim(p_school_slug) = '' OR btrim(p_timezone) = '' OR btrim(p_idempotency_key) = '' THEN
-    RAISE EXCEPTION 'HON HQ tenant provisioning requires non-blank organization, school, timezone, and idempotency fields.' USING ERRCODE = 'P0001';
-  END IF;
-
-  v_actor_principal_id := hon.hq_provisioning_actor(p_external_subject);
-  IF v_actor_principal_id IS NULL THEN
-    RAISE EXCEPTION 'HON HQ tenant provisioning is not authorized for this account.' USING ERRCODE = '42501';
-  END IF;
-
-  INSERT INTO hon.hq_onboarding_requests (actor_principal_id, idempotency_key, request_fingerprint, status)
-  VALUES (v_actor_principal_id, p_idempotency_key, p_request_fingerprint, 'IN_PROGRESS')
-  ON CONFLICT (actor_principal_id, idempotency_key) DO NOTHING
-  RETURNING id INTO v_request_id;
-  IF v_request_id IS NULL THEN
-    SELECT request_fingerprint, status, response_body INTO v_prior_fingerprint, v_prior_status, v_prior_response
-    FROM hon.hq_onboarding_requests
-    WHERE actor_principal_id = v_actor_principal_id AND idempotency_key = p_idempotency_key
-    FOR UPDATE;
-    IF v_prior_fingerprint <> p_request_fingerprint THEN
-      RAISE EXCEPTION 'HON HQ idempotency key was already used for a different tenant-provisioning request.' USING ERRCODE = '23505';
-    END IF;
-    IF v_prior_status = 'COMPLETED' AND v_prior_response IS NOT NULL THEN
-      IF hon.hq_provisioning_actor(p_external_subject) IS DISTINCT FROM v_actor_principal_id THEN
-        RAISE EXCEPTION 'HON HQ tenant provisioning is not authorized for this account.' USING ERRCODE = '42501';
-      END IF;
-      RETURN QUERY SELECT (v_prior_response->>'organizationId')::uuid, (v_prior_response->>'schoolId')::uuid, (v_prior_response->>'ownerRoleId')::uuid, true;
-      RETURN;
-    END IF;
-    RAISE EXCEPTION 'Matching HON HQ tenant-provisioning request is still in progress.' USING ERRCODE = '55P03';
-  END IF;
-
-  INSERT INTO hon.organizations (legal_name, display_name)
-  VALUES (btrim(p_legal_name), btrim(p_display_name))
-  RETURNING id INTO v_organization_id;
-  -- D9: provisioning grants no operating access (SUSPENDED placeholder entitlement), unchanged from 0185.
-  INSERT INTO hon.organization_entitlements (organization_id, tier, status)
-  VALUES (v_organization_id, p_initial_tier, 'SUSPENDED');
-  INSERT INTO hon.schools (organization_id, name, slug, timezone)
-  VALUES (v_organization_id, btrim(p_school_name), lower(btrim(p_school_slug)), btrim(p_timezone))
-  RETURNING id INTO v_school_id;
-  INSERT INTO hon.roles (organization_id, code, name, is_system_role)
-  VALUES (v_organization_id, 'OWNER', 'School Owner', true)
-  RETURNING id INTO v_owner_role_id;
-  INSERT INTO hon.role_permissions (role_id, organization_id, permission_code)
-  SELECT v_owner_role_id, v_organization_id, permission.code FROM hon.permissions AS permission;
-  -- H-1: no principal_role_grants row. The first school owner is bound by an HQ-owner invitation (0191).
-
-  v_response := jsonb_build_object('organizationId', v_organization_id, 'schoolId', v_school_id, 'ownerRoleId', v_owner_role_id, 'tier', p_initial_tier::text,
-    'entitlementStatus', 'SUSPENDED', 'access', 'NONE');
-  INSERT INTO hon.audit_events (organization_id, school_id, actor_principal_id, source, action_code, entity_type, entity_id, prior_state, next_state, result, request_id, correlation_id, occurred_at)
-  VALUES (v_organization_id, v_school_id, v_actor_principal_id, 'HON_HQ', 'hq.organization.provision', 'ORGANIZATION', v_organization_id, NULL, v_response, 'SUCCEEDED', p_request_id, p_correlation_id, now());
-  INSERT INTO hon.outbox_events (organization_id, school_id, event_type, schema_version, aggregate_type, aggregate_id, aggregate_version, correlation_id, causation_id, payload)
-  VALUES (v_organization_id, v_school_id, 'organization.provisioned', 1, 'ORGANIZATION', v_organization_id, 1, p_correlation_id, p_request_id, v_response);
-  UPDATE hon.hq_onboarding_requests SET status = 'COMPLETED', response_body = v_response, completed_at = now() WHERE id = v_request_id;
-
-  IF hon.hq_provisioning_actor(p_external_subject) IS DISTINCT FROM v_actor_principal_id THEN
-    RAISE EXCEPTION 'HON HQ tenant provisioning is not authorized for this account.' USING ERRCODE = '42501';
-  END IF;
-  RETURN QUERY SELECT v_organization_id, v_school_id, v_owner_role_id, false;
-END;
-$$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- H-5: an invitation to a school that already has a live non-HQ owner leaves a notice for those owners.
@@ -393,13 +258,13 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
--- H-2, H-4, H-5 at acceptance. Otherwise identical to 0206 (same receipt).
+-- H-4, H-5 at acceptance; HQ seats at the school are left alone. Otherwise identical to 0206 (same receipt).
 -- ---------------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION hon.accept_school_owner_invitation(p_subject text,p_verified_email text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE i hon.school_owner_invitations%ROWTYPE; prior hon.school_account_requests%ROWTYPE; fp text; at timestamptz;
   v_user uuid; actor uuid; v_role uuid; v_grant uuid; issuer_subject text; result jsonb;
-  had_owner boolean; ended uuid[];
+  had_owner boolean;
 BEGIN
   IF p_key IS NULL OR p_subject IS NULL OR length(p_subject)>2048 OR p_subject NOT LIKE 'oidc:%'
     OR p_verified_email IS NULL OR p_verified_email<>lower(btrim(p_verified_email))
@@ -461,12 +326,6 @@ BEGIN
   IF hon.school_live_primary_grant(i.school_id,at) IS NULL THEN
     PERFORM hon.school_set_primary_owner(i.organization_id,i.school_id,v_grant,'FIRST_OWNER',actor,at);
   END IF;
-  -- H-2: HQ-held OWNER grants at this school end now that the school has a real owner.
-  ended:=hon.school_end_hq_owner_grants(i.school_id,at,actor,'HUMAN_UI',p_key);
-  IF cardinality(ended)>0 THEN
-    INSERT INTO hon.school_ownership_notices(organization_id,school_id,kind,ended_grant_count,occurred_at)
-      VALUES(i.organization_id,i.school_id,'HQ_OWNER_ACCESS_ENDED',cardinality(ended),at);
-  END IF;
   result:=hon.school_account_record(p_subject,p_key,fp,i.id,'ACCEPT',hon.school_account_result(i));
   IF i.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'ACCOUNT_INVITATION_UNAVAILABLE' USING ERRCODE='42501'; END IF;
   PERFORM hon.require_saas_hq_actor(issuer_subject,true);
@@ -474,9 +333,9 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
--- HQ-owner reads and commands (H-3, H-4). HQ owner only, the same authority as owner invitations.
+-- HQ-owner read and command (H-4). HQ owner only, the same authority as owner invitations.
 -- ---------------------------------------------------------------------------------------------------------------------
--- One school's ownership: live non-HQ owners, primary, HQ-held OWNER grants and the exact cleanup plan, recent notices.
+-- One school's ownership: live non-HQ owners, primary, HQ-held OWNER grants (HQ seats, kept), recent notices.
 CREATE FUNCTION hon.read_school_ownership_from_hq(p_subject text, p_school uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE at timestamptz; v_org uuid; prim uuid; hq_ids uuid[]; owners integer; result jsonb;
@@ -494,65 +353,23 @@ BEGIN
     'primaryOwnerGrantId',prim,
     'primaryNeeded',owners>0 AND prim IS NULL,
     'hqOwnerGrantIds',to_jsonb(hq_ids),
-    'hqOwnerCleanup',jsonb_build_object('eligible',owners>0 AND cardinality(hq_ids)>0,
-      'blocker',CASE WHEN cardinality(hq_ids)=0 THEN 'NONE_TO_END' WHEN owners=0 THEN 'SCHOOL_OWNER_REQUIRED' END,
-      'expectedGrantIds',to_jsonb(hq_ids)),
     'notices',hon.school_ownership_notices_json(p_school),
     'asOf',hon.saas_ts(at));
   PERFORM hon.require_saas_hq_actor(p_subject,true);
   RETURN result;
 END $$;
 
--- H-3 dry run: every school where an HQ principal still holds an OWNER grant, with whether it can be ended now.
-CREATE FUNCTION hon.read_hq_owner_grant_cleanup(p_subject text) RETURNS jsonb
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
-DECLARE at timestamptz; rows jsonb; total integer; result jsonb;
-BEGIN
-  PERFORM hon.require_saas_hq_actor(p_subject,true);
-  at:=clock_timestamp();
-  WITH affected AS MATERIALIZED (
-    SELECT DISTINCT g.school_id FROM hon.principal_role_grants g
-    JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id AND r.code='OWNER' AND r.is_system_role
-    WHERE g.revoked_at IS NULL AND (g.effective_until IS NULL OR g.effective_until>at)
-      AND EXISTS(SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id=g.principal_id)
-  ), plan AS MATERIALIZED (
-    SELECT s.id school_id, s.organization_id, s.created_at,
-      left(s.name,300) school_name, left(o.display_name,300) organization_name,
-      (SELECT coalesce(array_agg(w.o_grant ORDER BY w.o_grant),ARRAY[]::uuid[]) FROM hon.school_owner_grant_rows(s.id,at) w WHERE w.o_hq) hq_ids,
-      (SELECT count(*) FROM hon.school_owner_grant_rows(s.id,at) w WHERE w.o_live AND NOT w.o_hq)::integer owners
-    FROM affected a JOIN hon.schools s ON s.id=a.school_id JOIN hon.organizations o ON o.id=s.organization_id
-  )
-  SELECT count(*)::integer, coalesce(jsonb_agg(jsonb_build_object('schoolId',p.school_id,'organizationId',p.organization_id,
-      'schoolDisplayName',p.school_name,'organizationDisplayName',p.organization_name,'schoolOwnerCount',p.owners,
-      'hqOwnerGrantIds',to_jsonb(p.hq_ids),'eligible',p.owners>0,
-      'blocker',CASE WHEN p.owners=0 THEN 'SCHOOL_OWNER_REQUIRED' END) ORDER BY p.created_at,p.school_id)
-      FILTER (WHERE p.rn<=200),'[]'::jsonb)
-  INTO total, rows
-  FROM (SELECT plan.*, row_number() OVER (ORDER BY plan.created_at,plan.school_id) rn FROM plan) p;
-  result:=jsonb_build_object('schools',rows,'total',total,'truncated',total>200,
-    'summary',jsonb_build_object('eligible',(SELECT count(*) FROM jsonb_array_elements(rows) e WHERE (e->>'eligible')::boolean),
-      'needsOwner',(SELECT count(*) FROM jsonb_array_elements(rows) e WHERE NOT (e->>'eligible')::boolean)),
-    'asOf',hon.saas_ts(at));
-  PERFORM hon.require_saas_hq_actor(p_subject,true);
-  RETURN result;
-END $$;
-
--- SET_PRIMARY {schoolId, ownerGrantId} and END_HQ_OWNER_GRANTS {schoolId, expectedGrantIds}.
+-- SET_PRIMARY {schoolId, ownerGrantId}.
 CREATE FUNCTION hon.manage_school_ownership(p_subject text,p_operation text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; prior hon.school_ownership_requests%ROWTYPE; fp text; at timestamptz; v_school uuid; v_org uuid;
-  v_grant uuid; prim uuid; hq_ids uuid[]; expected uuid[]; owners integer; ended uuid[]; result jsonb; changed boolean;
+  v_grant uuid; prim uuid; result jsonb; changed boolean;
 BEGIN
   IF p_key IS NULL OR p_input IS NULL OR jsonb_typeof(p_input)<>'object' OR p_operation IS NULL
-    OR p_operation NOT IN ('SET_PRIMARY','END_HQ_OWNER_GRANTS') THEN
+    OR p_operation NOT IN ('SET_PRIMARY') THEN
     RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
   IF p_operation='SET_PRIMARY' AND ((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) IS DISTINCT FROM ARRAY['ownerGrantId','schoolId']
       OR jsonb_typeof(p_input->'ownerGrantId') IS DISTINCT FROM 'string' OR jsonb_typeof(p_input->'schoolId') IS DISTINCT FROM 'string') THEN
-    RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
-  IF p_operation='END_HQ_OWNER_GRANTS' AND ((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p_input) k) IS DISTINCT FROM ARRAY['expectedGrantIds','schoolId']
-      OR jsonb_typeof(p_input->'schoolId') IS DISTINCT FROM 'string' OR jsonb_typeof(p_input->'expectedGrantIds') IS DISTINCT FROM 'array'
-      OR jsonb_array_length(p_input->'expectedGrantIds') NOT BETWEEN 1 AND 50
-      OR EXISTS(SELECT 1 FROM jsonb_array_elements(p_input->'expectedGrantIds') e WHERE jsonb_typeof(e)<>'string')) THEN
     RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
   v_school:=(p_input->>'schoolId')::uuid;
   PERFORM hon.require_saas_hq_actor(p_subject,true);
@@ -585,21 +402,7 @@ BEGIN
         jsonb_build_object('primaryOwnerGrantId', prim), jsonb_build_object('primaryOwnerGrantId', v_grant), 'SUCCEEDED', p_key, p_key, at);
     END IF;
     result:=jsonb_build_object('operation','SET_PRIMARY','schoolId',v_school,'organizationId',v_org,
-      'primaryOwnerGrantId',v_grant,'changed',changed,'endedGrantIds','[]'::jsonb);
-  ELSE
-    SELECT coalesce(array_agg(DISTINCT e::uuid ORDER BY e::uuid),ARRAY[]::uuid[]) INTO expected FROM jsonb_array_elements_text(p_input->'expectedGrantIds') e;
-    IF cardinality(expected)<>jsonb_array_length(p_input->'expectedGrantIds') THEN RAISE EXCEPTION 'ACCOUNT_INPUT_INVALID' USING ERRCODE='22023'; END IF;
-    SELECT coalesce(array_agg(w.o_grant ORDER BY w.o_grant),ARRAY[]::uuid[]) INTO hq_ids FROM hon.school_owner_grant_rows(v_school,at) w WHERE w.o_hq;
-    SELECT count(*) INTO owners FROM hon.school_owner_grant_rows(v_school,at) w WHERE w.o_live AND NOT w.o_hq;
-    IF owners=0 THEN RAISE EXCEPTION 'OWNERSHIP_SCHOOL_OWNER_REQUIRED' USING ERRCODE='23514'; END IF;
-    -- The command ends exactly the set the dry run showed; anything else changed since the read.
-    IF hq_ids IS DISTINCT FROM expected THEN RAISE EXCEPTION 'OWNERSHIP_PLAN_CHANGED' USING ERRCODE='40001'; END IF;
-    ended:=hon.school_end_hq_owner_grants(v_school,at,actor,'HON_HQ',p_key);
-    IF ended IS DISTINCT FROM expected THEN RAISE EXCEPTION 'OWNERSHIP_PLAN_CHANGED' USING ERRCODE='40001'; END IF;
-    INSERT INTO hon.school_ownership_notices(organization_id,school_id,kind,ended_grant_count,occurred_at)
-      VALUES(v_org,v_school,'HQ_OWNER_ACCESS_ENDED',cardinality(ended),at);
-    result:=jsonb_build_object('operation','END_HQ_OWNER_GRANTS','schoolId',v_school,'organizationId',v_org,
-      'primaryOwnerGrantId',hon.school_live_primary_grant(v_school,at),'changed',true,'endedGrantIds',to_jsonb(ended));
+      'primaryOwnerGrantId',v_grant,'changed',changed);
   END IF;
   INSERT INTO hon.school_ownership_requests(subject,idempotency_key,operation,fingerprint,response,occurred_at)
     VALUES(p_subject,p_key,p_operation,fp,result,at);
@@ -639,7 +442,7 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------------------------------------------------
--- Deny-first grants: only the four entry points reach hon_runtime.
+-- Deny-first grants: only the three entry points reach hon_runtime.
 -- ---------------------------------------------------------------------------------------------------------------------
 DO $$ DECLARE t text; r text; f text; c text; BEGIN
   FOREACH t IN ARRAY ARRAY['school_primary_owners','school_ownership_notices','school_ownership_requests'] LOOP
@@ -652,15 +455,15 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
     END LOOP;
   END LOOP;
   FOREACH f IN ARRAY ARRAY['school_owner_review_or_busy(uuid)','guard_school_primary_owner()','school_owner_grant_rows(uuid,timestamptz)','school_live_primary_grant(uuid,timestamptz)',
-    'school_set_primary_owner(uuid,uuid,uuid,text,uuid,timestamptz)','school_end_hq_owner_grants(uuid,timestamptz,uuid,text,uuid)',
+    'school_set_primary_owner(uuid,uuid,uuid,text,uuid,timestamptz)',
     'school_ownership_owner_json(uuid,timestamptz,uuid)','school_ownership_notices_json(uuid)',
-    'read_school_ownership_from_hq(text,uuid)','read_hq_owner_grant_cleanup(text)','manage_school_ownership(text,text,jsonb,uuid)',
+    'read_school_ownership_from_hq(text,uuid)','manage_school_ownership(text,text,jsonb,uuid)',
     'read_school_ownership(text,uuid)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.read_school_ownership_from_hq(text,uuid),hon.read_hq_owner_grant_cleanup(text),
+    GRANT EXECUTE ON FUNCTION hon.read_school_ownership_from_hq(text,uuid),
       hon.manage_school_ownership(text,text,jsonb,uuid),hon.read_school_ownership(text,uuid) TO hon_runtime;
   END IF;
 END $$;

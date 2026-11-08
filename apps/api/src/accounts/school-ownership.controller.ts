@@ -10,12 +10,8 @@ export class SchoolOwnershipController {
   constructor(private readonly ownership: SchoolOwnershipService) {}
   @Get('hq/schools/:schoolId/ownership')
   hqSchool(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.ownership.hqSchool(r, s).then(data => ({ data })); }
-  @Get('hq/school-ownership/hq-owner-grants')
-  cleanup(@Req() r: HonRequest) { return this.ownership.cleanup(r).then(data => ({ data })); }
   @Post('hq/school-ownership/primary-owner') @HttpCode(200)
-  setPrimary(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.ownership.command(r, 'SET_PRIMARY', b, k).then(data => ({ data })); }
-  @Post('hq/school-ownership/end-hq-owner-grants') @HttpCode(200)
-  endHqGrants(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.ownership.command(r, 'END_HQ_OWNER_GRANTS', b, k).then(data => ({ data })); }
+  setPrimary(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.ownership.setPrimary(r, b, k).then(data => ({ data })); }
   @Get('account/schools/:schoolId/ownership')
   ownerView(@Req() r: HonRequest, @Param('schoolId') s: string) { return this.ownership.ownerView(r, s).then(data => ({ data })); }
 }

@@ -229,7 +229,7 @@ const LANGUAGE_CALLS = {
 } as const;
 export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
-export type SchoolOwnershipOperation = 'hqRead'|'cleanupRead'|'setPrimary'|'endHqGrants'|'ownerRead';
+export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1218,9 +1218,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   async callSchoolOwnership(operation: SchoolOwnershipOperation, params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       hqRead: {sql: 'SELECT hon.read_school_ownership_from_hq($1,$2::uuid) data',arity:2},
-      cleanupRead: {sql: 'SELECT hon.read_hq_owner_grant_cleanup($1) data',arity:1},
       setPrimary: {sql: "SELECT hon.manage_school_ownership($1,'SET_PRIMARY',$2::jsonb,$3::uuid) data",arity:3},
-      endHqGrants: {sql: "SELECT hon.manage_school_ownership($1,'END_HQ_OWNER_GRANTS',$2::jsonb,$3::uuid) data",arity:3},
       ownerRead: {sql: 'SELECT hon.read_school_ownership($1,$2::uuid) data',arity:2},
     } as const;
     const call=calls[operation];
