@@ -35,6 +35,14 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
   // Cleared on unmount: nothing this view sent speaks for a later one.
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; privacy.current++; pending.current = null; }; }, []);
+  /**
+   * No longer allowed to read (first page or Show more): nothing private stays, including a command's outcome, form or
+   * retry. A command still in doubt is not shown as undone; it is simply no longer this view's to show.
+   */
+  const denied = useCallback(() => {
+    generation.current++; privacy.current++; pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setForm(null);
+    setState({ state: 'DENIED' });
+  }, []);
   /** A read is owned while it is the latest read of this mounted, unconcealed view. */
   const ownsRead = (current: number, shown: number) => () => mounted.current && current === generation.current && shown === privacy.current;
 
@@ -59,15 +67,10 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
       view => { if (owned()) setState({ state: 'READY', view, organizations: view.organizations, loadingMore: false, moreFailed: false }); },
       error => {
         if (!owned()) return;
-        if (error instanceof AccessOverviewError && error.kind === 'DENIED') {
-          // No longer allowed to read: nothing private stays, including a command's outcome, form or retry. The outcome
-          // of a command still in doubt is not shown as undone; it is simply no longer this view's to show.
-          privacy.current++; pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setForm(null);
-          setState({ state: 'DENIED' });
-        } else setState({ state: 'UNAVAILABLE' });
+        if (error instanceof AccessOverviewError && error.kind === 'DENIED') denied(); else setState({ state: 'UNAVAILABLE' });
       });
     return () => { abort.abort(); };
-  }, [api, filter, refresh, concealed]);
+  }, [api, filter, refresh, concealed, denied]);
 
   const onMore = useCallback(() => {
     if (state.state !== 'READY' || !state.view.nextCursor || state.loadingMore) return;
@@ -76,8 +79,12 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
     api.overview({ status: filter, cursor }, AbortSignal.timeout(15000), owned).then(
       view => { if (owned()) setState(prior => prior.state !== 'READY' ? prior : { state: 'READY', view: { ...view, organizations: [] },
         organizations: [...prior.organizations, ...view.organizations.filter(o => !prior.organizations.some(p => p.organizationId === o.organizationId))], loadingMore: false, moreFailed: false }); },
-      () => { if (owned()) setState(prior => prior.state !== 'READY' ? prior : { ...prior, loadingMore: false, moreFailed: true }); });
-  }, [api, filter, state]);
+      error => {
+        if (!owned()) return;
+        if (error instanceof AccessOverviewError && error.kind === 'DENIED') denied();
+        else setState(prior => prior.state !== 'READY' ? prior : { ...prior, loadingMore: false, moreFailed: true });
+      });
+  }, [api, filter, state, denied]);
 
   const send = useCallback(async () => {
     const request = pending.current;

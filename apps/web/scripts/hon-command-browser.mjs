@@ -178,7 +178,7 @@ async function api(route) {
 // HQ school access (B-HQ-1 + D9): three synthetic organizations. Grant/revoke replay by key and re-derive the rows.
 // pageSize: first page size (then a cursor page); denyOverview: overview answers 403; pageGate/pageSession: the cursor read
 // waits for the gate, then answers 401.
-const hqx = { owner: true, ready: true, orgs: [], posts: [], replies: [], byKey: new Map(), gate: null, pageSize: null, denyOverview: false, pageGate: null, pageSession: false };
+const hqx = { owner: true, ready: true, orgs: [], posts: [], replies: [], byKey: new Map(), gate: null, pageSize: null, denyOverview: false, pageGate: null, pageSession: false, pageDenied: false };
 const HQX_T = '2026-10-01T00:00:00.000Z';
 const hqEnt = (o) => o.ent && { ...o.ent, inEffect: o.ent.status === 'ACTIVE' && Date.parse(o.ent.effectiveFrom) <= Date.now() && (!o.ent.effectiveUntil || Date.parse(o.ent.effectiveUntil) > Date.now()) };
 function resetHqx(over = {}) {
@@ -188,7 +188,7 @@ function resetHqx(over = {}) {
       exception: { exceptionId: id(452), schoolId: id(412), purpose: 'APPROVED_PILOT', scopeTier: 'COMPLETE', startsAt: HQX_T, expiresAt: '2026-12-30T00:00:00.000Z', reason: 'Approved pilot for a fixture partner' }, subscription: null, owner: 'ACCEPTED' },
     { id: id(403), name: 'Synthetic Dojo East', created: '2026-09-03T00:00:00.000Z', schools: [[id(413), 'East Academy', 'ACTIVE']], state: 'PAYMENT_ACTIVE', ent: { tier: 'COMPLETE', status: 'ACTIVE', effectiveFrom: HQX_T, effectiveUntil: null, version: 5 }, exception: null,
       subscription: { subscriptionId: id(463), status: 'ACTIVE', planCode: 'COMPLETE', billingInterval: 'MONTH' }, owner: 'ACCEPTED' }];
-  Object.assign(hqx, { owner: true, ready: true, posts: [], replies: [], byKey: new Map(), gate: null, pageSize: null, denyOverview: false, pageGate: null, pageSession: false }, over);
+  Object.assign(hqx, { owner: true, ready: true, posts: [], replies: [], byKey: new Map(), gate: null, pageSize: null, denyOverview: false, pageGate: null, pageSession: false, pageDenied: false }, over);
 }
 resetHqx();
 function hqRow(o) {
@@ -228,6 +228,7 @@ async function hqAccessApi(route, path, method, url) {
     const cursor = url.searchParams.get('cursor');
     if (cursor && hqx.pageGate) { const gate = hqx.pageGate; hqx.pageGate = null; await gate; }
     if (cursor && hqx.pageSession) return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+    if (cursor && hqx.pageDenied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
     return json(route, 200, { data: hqOverview(url.searchParams.get('status'), cursor) }, { 'Cache-Control': 'private, no-store' });
   }
   const grant = path.match(/^\/api\/v1\/hq\/saas\/organizations\/([0-9a-f-]{36})\/access-exceptions$/), revoke = path.match(/^\/api\/v1\/hq\/saas\/access-exceptions\/([0-9a-f-]{36})\/revoke$/);
@@ -883,6 +884,32 @@ await check('HQ school access: policy, access-state and checkout refusals end th
     await ctx.close();
   }
 });
+
+for (const [setup, start] of [['an open grant form', null], ['a kept unknown grant', startGrant], ['a kept unknown revoke', startRevoke]]) {
+  await check(`HQ school access: a denied Show more read with ${setup} leaves no organization, form, outcome or Try again`, async () => {
+    resetHqx({ pageSize: 2, pageDenied: true, replies: ['unknown'] });
+    const { ctx, page, section } = await hqAccessPage({ width: 1440, height: 900 });
+    if (start) {
+      // Revoke is on South (row 2); grant is on North (row 1): both are on the first page of two.
+      await start(section);
+      await section().getByRole('button', { name: 'Try again' }).waitFor();
+    } else {
+      await card(section, 'Synthetic Dojo North').getByRole('button', { name: 'Grant an exception' }).click();
+      await section().locator('form').first().waitFor();
+    }
+    await section().getByRole('button', { name: 'Show more' }).click();
+    await section().getByText(/Your HQ access does not include the access overview/).waitFor();
+    assert.equal(await section().getByText(/Synthetic Dojo/).count(), 0, 'no organization name remains');
+    assert.equal(await section().locator('form').count(), 0, 'no form remains');
+    assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'no retry remains');
+    assert.equal(await section().getByText(/We could not confirm/).count(), 0, 'no outcome remains');
+    hqx.pageDenied = false;
+    await section().getByRole('button', { name: 'Refresh' }).click();
+    await section().getByTestId('hq-access-list').waitFor();
+    assert.equal(await section().getByRole('button', { name: 'Try again' }).count(), 0, 'a fresh authorized read does not bring back the retry');
+    await ctx.close();
+  });
+}
 
 await browser.close();
 server.kill('SIGTERM');
