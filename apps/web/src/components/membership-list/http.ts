@@ -65,6 +65,8 @@ export function verifyMembershipListPage(value: unknown, filter: MembershipListF
   const items = (body.data as unknown[]).map((v) => item(v, filter));
   if (new Set(items.map((m) => m.membershipId.toLowerCase())).size !== items.length) fail();
   for (let n = 1; n < items.length; n++) if (items[n - 1]!.createdAt < items[n]!.createdAt) fail();
+  // A zone the database accepts but this browser cannot format would fail at render: say so instead.
+  try { new Intl.DateTimeFormat('en', { timeZone: meta.schoolTimezone as string }); } catch { throw new MembershipListError('TIMEZONE'); }
   return { items, nextCursor: meta.nextCursor as string | null, schoolTimezone: meta.schoolTimezone as string, localToday: meta.localToday as string };
 }
 
@@ -96,7 +98,7 @@ export const membershipListApi: MembershipListApi = {
     if (response.status === 400 && codeOf(value) === 'INVALID_CURSOR') throw new MembershipListError('CURSOR');
     if (response.status === 409 && codeOf(value) === 'SCHOOL_TIMEZONE_INVALID') throw new MembershipListError('TIMEZONE');
     if (response.status !== 200) throw new MembershipListError('UNAVAILABLE');
-    try { return verifyMembershipListPage(value, filter); } catch { throw new MembershipListError('UNAVAILABLE'); }
+    try { return verifyMembershipListPage(value, filter); } catch (error) { throw error instanceof MembershipListError ? error : new MembershipListError('UNAVAILABLE'); }
   },
 };
 
