@@ -94,6 +94,8 @@ it('shows rows, school dates, counts, a partial note and links; dates are school
   expect(html).toContain('href="/staff/billing/memberships"'); expect(html).toContain('href="/staff/billing/membership-dates"');
   expect(html).toContain('It shows no payments, invoices, payers or agreements');
   expect(html).not.toMatch(/<form|method="post"|\$\d/i);
+  // Instants fall on the school's day (America/Los_Angeles), not the viewer's: 2026-11-28T05:00Z is Nov 27 at the school.
+  expect(render({ timeZone: 'Pacific/Kiritimati', list: ready([member(1, { createdAt: '2026-11-28T05:00:00.000Z' })]) })).toContain('Nov 27, 2026');
 });
 
 it('the filter tabs mark the current filter; a page for another filter is never shown; list states are honest', () => {

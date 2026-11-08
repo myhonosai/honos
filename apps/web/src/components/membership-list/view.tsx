@@ -13,7 +13,7 @@ export type MembershipListViewProps = Readonly<{
   language: string; timeZone: string; waiting: boolean; concealed: boolean; scope: MembershipListScope | null; filter: MembershipListFilter; list: MembershipListState;
   onFilter?: ((filter: MembershipListFilter) => void) | undefined; onRefresh?: (() => void) | undefined; onMore?: (() => void) | undefined;
 }>;
-// School-local calendar dates are shown as dates, never shifted by the viewer's time zone.
+// School-local calendar dates are shown as dates, never shifted by the viewer's time zone; instants are shown on the school's day.
 const day = (language: string, value: string) => new Date(`${value}T00:00:00Z`).toLocaleDateString(language, { dateStyle: 'medium', timeZone: 'UTC' });
 const instantDay = (language: string, timeZone: string, value: string) => new Date(value).toLocaleDateString(language, { dateStyle: 'medium', timeZone });
 const filterKey = (filter: MembershipListFilter) => `f_${filter ?? 'ALL'}` as MembershipListKey;
@@ -29,7 +29,7 @@ function Dates({ m, language, timeZone, t }: { m: SchoolMembershipListItem; lang
 
 /** Pure view. Every row comes from the school's membership read; nothing shows before the shell verifies the school. */
 export function MembershipListView(props: MembershipListViewProps): React.ReactElement {
-  const { language, timeZone, waiting, concealed, scope, filter, list, onFilter, onRefresh, onMore } = props;
+  const { language, waiting, concealed, scope, filter, list, onFilter, onRefresh, onMore } = props;
   const t: T = (key, vars) => membershipListText(language, key, vars);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !scope ? t('noSchool') : null;
   const ready = list.state === 'READY' && list.filter === filter ? list : null;
@@ -67,8 +67,8 @@ export function MembershipListView(props: MembershipListViewProps): React.ReactE
                 <th scope="row">{m.participant ? `${m.participant.givenName} ${m.participant.familyName}`.trim() || t('notVisible') : t('notVisible')}</th>
                 <td data-label={t('plan')}>{m.planCode}</td>
                 <td data-label={t('status')}><span className={styles.chip} data-status={m.effectiveStatus}>{t(m.effectiveStatus)}</span></td>
-                <td data-label={t('dates')}><Dates m={m} language={language} timeZone={timeZone} t={t}/></td>
-                <td data-label={t('created')}>{instantDay(language, timeZone, m.createdAt)}</td>
+                <td data-label={t('dates')}><Dates m={m} language={language} timeZone={ready.schoolTimezone} t={t}/></td>
+                <td data-label={t('created')}>{instantDay(language, ready.schoolTimezone, m.createdAt)}</td>
               </tr>)}</tbody>
             </table></div>}
           {ready.nextCursor ? <button type="button" className={styles.secondary} onClick={onMore} disabled={ready.more === 'LOADING'}>{ready.more === 'LOADING' ? t('moreLoading') : t('more')}</button> : null}
