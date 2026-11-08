@@ -31,7 +31,9 @@ This read lists the verified school's class sessions that start on or after a sc
 - **Order:** the 0203 rule. Rows are ordered by published UTC millisecond `startsAt`, then `sessionId`. Sessions that share a published millisecond are ordered by id alone.
 - **`from`:** a school-local date, `YYYY-MM-DD`, from 2000 to 2100. The list starts at that date's local midnight in the school timezone. A missing `from` means the school's local today. An impossible date such as 2026-02-30 returns 400 VALIDATION_FAILED.
 - **Cursor:** the signed list cursor (`CRM_LIST_PAGINATION.md`), with list `schedule.session.list`. It is bound to the school and the requested `{ from }`. Its key is the last row's published millisecond as a microsecond instant, plus its id.
-  - Later pages need no date bound, because every row after the position starts on or after the first page's start. A default-date list therefore keeps paging correctly across a local midnight.
+  - Only the first page applies the date bound. Every row after a position already starts on or after the first page's start, so a default-date list keeps paging correctly across the school's local midnight, and yesterday's sessions after the position are not dropped.
+  - `meta.localToday` and `meta.fromDate` are computed on each request. Keep the first page's values for headings, because after local midnight a later page reports the new day.
+- **Index:** the order is on the published millisecond, so the starts_at index helps only through the `starts_at >= after` pre-filter. That is fine at current scale; an expression index can follow if session counts grow.
   - A cursor from another school or another `from` is refused with 400 INVALID_CURSOR. So is a tampered or truncated cursor.
 - **Status:** every status is listed (DRAFT, SCHEDULED, CANCELLED, COMPLETED), as in the bounded read.
 
@@ -66,6 +68,7 @@ This read lists the verified school's class sessions that start on or after a sc
 - Every session from local midnight appears once, in order, at limits 100, 50, 7 and 1. Exact facts are computed independently in JavaScript.
 - The rows equal the bounded read wherever both list a session.
 - `from` dates from 41 days back to 301 days ahead return the right rows.
+- A page read after local midnight continues from a position set the day before, without dropping that day's later sessions.
 - The read is limited to the exact school and organization.
 - Cursors are bound to the school and the `from` date. Tampered, truncated and over-long cursors are refused.
 - Impossible dates, bad limits, and unknown or repeated query keys are refused.
@@ -76,5 +79,5 @@ This read lists the verified school's class sessions that start on or after a sc
 - The runtime ACL holds: EXECUTE on the function only, no helper, no table SELECT and no PUBLIC. Reads have zero effects.
 
 **Ablations the proof catches:**
-- On the function: the school filter, the keyset comparison, the `from` bound, the id tiebreak, school-local midnight replaced by UTC midnight, the `lim+1` look-ahead, and raw microsecond order instead of the published millisecond.
+- On the function: the school filter, the keyset comparison, the `from` bound, the id tiebreak, school-local midnight replaced by UTC midnight, the `lim+1` look-ahead, raw microsecond order instead of the published millisecond, and a date bound applied on every page.
 - On the compiled API: the from-bound cursor, the human-context check, and the guard's single-value query rule.

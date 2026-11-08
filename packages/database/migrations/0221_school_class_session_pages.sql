@@ -53,7 +53,9 @@ BEGIN
     SELECT session.*,date_trunc('milliseconds',session.starts_at AT TIME ZONE 'UTC') AS published
     FROM hon.class_sessions session
     WHERE session.organization_id=org AND session.school_id=school
-      AND session.starts_at>=from_at
+      -- The date bound applies to the first page only: every row after a position is already on or after that page's
+      -- start, so a default-date list keeps paging correctly after the school's local midnight passes.
+      AND (after_id IS NOT NULL OR session.starts_at>=from_at)
       -- A later position: published millisecond then id (0203's rule). starts_at>=after_at is implied and lets the
       -- range use the starts_at index.
       AND (after_id IS NULL OR (session.starts_at>=after_at

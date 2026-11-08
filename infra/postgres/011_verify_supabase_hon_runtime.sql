@@ -2797,7 +2797,7 @@ END $$;
 DO $$ DECLARE safe boolean; BEGIN
   SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
     AND (o.rolsuper OR o.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
-    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='950527265578bfeae6890c8ec3f548cd178998ce264d046843fdc6f0bcb51a37'
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='78863ed832e05044be3c1a8d1fe2beede748bd7648173f6ea30f6ef2ab8637f5'
     AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
     AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
       WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))

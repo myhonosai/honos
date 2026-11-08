@@ -31,6 +31,7 @@ const { HonIdentityService } = await load('foundation/hon-identity.service.js');
 const { HonExceptionFilter } = await load('observability/http-telemetry.js');
 const { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } = await load('schedule/class-session-pages.controller.js');
 const { ClassSessionPagesService } = await load('schedule/class-session-pages.service.js');
+const { encodeListCursor } = await load('foundation/list-cursor.js');
 const { ClassSessionsReadController } = await load('schedule/class-sessions-read.controller.js');
 const { ClassSessionsReadHumanUiGuard } = await load('schedule/class-sessions-read-human-ui.guard.js');
 const { ClassSessionsReadService } = await load('schedule/class-sessions-read.service.js');
@@ -277,6 +278,20 @@ try {
     ok(JSON.stringify(rows) === JSON.stringify(want) && meta.fromDate === date.d && meta.localToday === localToday, `from ${date.d}: exactly ${want.length} sessions from that local midnight`);
   }
   ok((await pageAll(READER, { from: localToday }, 'explicit today')).rows.length === fromToday.length, 'from=today equals the default');
+  // A default-date list whose first page was read before the school's local midnight keeps paging from its position:
+  // later pages carry no date bound, so yesterday's sessions after the position are not dropped. The cursor is minted
+  // here exactly as the API mints it, at a session from yesterday.
+  const everything = await expectedRows(ids.schoolA, '0000');
+  const yesterday = everything.findIndex((row) => row.name === 'Past -1 day');
+  const rolledCursor = encodeListCursor('schedule.session.list', ids.schoolA, { from: null }, ['instant', 'uuid'], [`${everything[yesterday].startsAt.slice(0, -1)}000Z`, everything[yesterday].sessionId]);
+  const rolled = [];
+  for (let next = rolledCursor, pages = 0; next; pages += 1) {
+    assert.ok(pages < 100, 'rolled pagination did not terminate');
+    const body = await page(() => list(READER, { limit: 4, cursor: next }), `rolled page ${pages + 1}`);
+    rolled.push(...body.data); next = body.meta.nextCursor;
+  }
+  ok(JSON.stringify(rolled) === JSON.stringify(everything.slice(yesterday + 1)) && rolled.some((row) => row.name === 'Just before midnight'),
+    `a page after local midnight continues from its position (${rolled.length} rows, including yesterday's later sessions)`);
 
   // 4. Exact school and organization only.
   const schoolB = await pageAll(OTHER_SCHOOL, {}, 'school B');
