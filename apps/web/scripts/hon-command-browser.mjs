@@ -873,6 +873,8 @@ async function suggestedAnswer(viewport, mode_ = 'modern') {
 const lastBody = () => JSON.parse(hon.posts.at(-1).body);
 const sourceTurn = () => hon.conversations[0].turns.find((t) => t.role === 'hon').turnId;
 const honEnded = (page) => page.evaluate(() => window.__honEnded);
+// Same-document navigation away from Ask HON; waits until the conversation is unmounted.
+const closeHonView = async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[data-hon-conversation]')); };
 const watchHonEnded = (page) => page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
 
 for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['phone-390', { width: 390, height: 844 }, 'big-button']]) {
@@ -982,7 +984,7 @@ await check('Ask HON suggestions: leaving the page hides lead names and the open
 
 for (const [how, retire] of [['Cancel', (page, ask) => ask.getByRole('button', { name: 'Cancel' }).click()],
   ['leaving the page', (page) => page.evaluate(() => window.dispatchEvent(new Event('blur')))],
-  ['closing the view', (page) => page.evaluate(() => window.next.router.push('/staff/crm/follow-ups'))]]) {
+  ['closing the view', closeHonView]]) {
   await check(`Ask HON suggestions: a late sign-in answer to a target list retired by ${how} does not end the session`, async () => {
     const { ctx, page, ask } = await suggestedAnswer({ width: 1440, height: 900 });
     await watchHonEnded(page);
@@ -997,7 +999,7 @@ for (const [how, retire] of [['Cancel', (page, ask) => ask.getByRole('button', {
   });
 }
 for (const [how, retire] of [['leaving the page', (page) => page.evaluate(() => window.dispatchEvent(new Event('blur')))],
-  ['closing the view', (page) => page.evaluate(() => window.next.router.push('/staff/crm/follow-ups'))]]) {
+  ['closing the view', closeHonView]]) {
   await check(`Ask HON suggestions: a late sign-in answer to a confirmation retired by ${how} does not end the session; a current one does`, async () => {
     const { ctx, page, ask } = await suggestedAnswer({ width: 1440, height: 900 });
     await watchHonEnded(page);
