@@ -125,6 +125,10 @@
       "title": "HON | Class rosters"
     },
     {
+      "path": "/staff/marketing",
+      "title": "HON | Marketing"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },

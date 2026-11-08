@@ -182,6 +182,7 @@ async function api(route) {
     aiUsage: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ AI usage or cost projection is available.' },
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
+  if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
@@ -363,6 +364,29 @@ async function leadsApiRoute(route, path, method, url, prefix) {
   }
   const status = url.searchParams.get('status');
   return json(route, 200, { data: ldsLeads().filter((lead) => !status || lead.status === status), meta: { requestId: 'synthetic' } });
+}
+// Marketing home (U7): the one school's campaign plans and a campaign's last-30-day counts (synthetic). Read-only.
+const mkt = { denied: false, gate: null, step: null, reads: [] };
+const mktCampaigns = () => [['Spring open house', 'ACTIVE', 'EVENT'], ['Summer camp plan', 'DRAFT', 'SOCIAL'], ['Old flyer', 'ARCHIVED', 'PRINT']].map(([name, status, channel], n) => ({
+  id: id(900 + n), version: 2, code: `CAMP-${n}`, name, goal: 'Fill the Saturday kids class', offerLabel: n === 0 ? 'Free first week' : '', channel, status,
+  startsAt: '2026-11-01T00:00:00.000Z', endsAt: '2026-11-30T00:00:00.000Z', plannedBudgetMinor: 25000, currency: 'USD', createdAt: iso(-200), updatedAt: iso(-100), planningOnly: true }));
+function resetMarketing(over = {}) { Object.assign(mkt, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function marketingApiRoute(route, path, method, url) {
+  if (method !== 'GET') return null;
+  const funnel = path.match(/^\/api\/v1\/marketing\/campaigns\/([0-9a-f-]{36})\/funnel$/);
+  if (path !== '/api/v1/marketing/campaigns' && !funnel) return null;
+  mkt.reads.push(funnel ? `funnel:${funnel[1]}` : 'list');
+  const step = mkt.step; mkt.step = null;
+  if (mkt.gate) { const gate = mkt.gate; mkt.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (mkt.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  if (!funnel) return json(route, 200, { data: mktCampaigns(), meta: { requestId: 'synthetic' } });
+  const campaign = mktCampaigns().find((c) => c.id === funnel[1]);
+  if (!campaign) return json(route, 404, { code: 'CAMPAIGN_NOT_FOUND' });
+  const first = campaign.id === id(900);
+  return json(route, 200, { data: { campaign, from: url.searchParams.get('from'), to: url.searchParams.get('to'), asOf: iso(0),
+    leads: first ? 12 : 0, trialLeads: first ? 5 : 0, trialAppointments: first ? 6 : 0, completedTrialAppointments: first ? 4 : 0, wonLeads: first ? 3 : 0, lostLeads: first ? 1 : 0, archivedLeads: 0,
+    enrollmentLinkage: 'UNAVAILABLE', revenueLinkage: 'UNAVAILABLE' }, meta: { requestId: 'synthetic' } });
 }
 // Class rosters (U5): the school's classes and one class's roster, two pages (synthetic). Read-only.
 const rst = { denied: false, gate: null, step: null, reads: [] };
@@ -1617,6 +1641,107 @@ for (const [how, retire] of [['changing the status tab', (page, section) => sect
     await current.section().getByTestId('leads-list').waitFor();
     await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
     lds.step = 'session';
+    await current.section().getByRole('button', { name: 'Refresh' }).click();
+    await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await current.ctx.close();
+  });
+}
+
+// ---------- Marketing home (U7) ----------
+async function marketingPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/marketing`);
+  const section = () => page.locator('section[aria-labelledby="marketing-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const MARKETING_TITLES = { en: ['Marketing', 'Draft', 'Leads', 'Edit in the campaign planner'], ko: ['마케팅', '초안', '문의', '캠페인 플래너에서 수정'], es: ['Marketing', 'Borradores', 'Prospectos', 'Editar en el planificador de campañas'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Marketing ${nextTheme} ${language} ${name}: active campaigns, one campaign's plan and counts, status tabs and links`, async () => {
+    resetMarketing();
+    const [title, draft, leads, edit] = MARKETING_TITLES[language];
+    const { ctx, page, section } = await marketingPage(viewport, { nextTheme, language });
+    await section().getByTestId('campaign-list').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    const listText = await section().getByTestId('campaign-list').innerText();
+    assert.ok(listText.includes('Spring open house') && !listText.includes('Summer camp plan') && !listText.includes('Old flyer'), 'opens on Active');
+    await section().getByRole('button', { name: /Spring open house/ }).click();
+    await section().getByTestId('campaign-funnel').waitFor();
+    const counts = await section().getByTestId('campaign-funnel').innerText();
+    assert.ok(counts.includes(leads) && counts.includes('12'), counts);
+    const funnelRead = report.apiRequests.findLast((r) => r.includes('/funnel?'));
+    const q = new URL(`http://x${funnelRead.split(' ')[1]}`).searchParams;
+    assert.equal(Date.parse(q.get('to')) - Date.parse(q.get('from')), 30 * 86_400_000, 'a 30-day window');
+    assert.ok(Date.parse(q.get('to')) < Date.now(), 'the window ends in the past');
+    assert.equal(await section().getByRole('link', { name: edit }).getAttribute('href'), '/staff/marketing/campaigns');
+    await noOverflow(page, `marketing-${nextTheme}-${language}-${name}`);
+    await axe(page, `marketing-${nextTheme}-${language}-${name}`);
+    await shot(page, `marketing-${nextTheme}-${language}-${name}`, true);
+    const reads = mkt.reads.length;
+    await section().getByRole('button', { name: draft, exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="campaign-list"]')?.textContent?.includes('Summer camp plan'));
+    assert.equal(mkt.reads.length, reads, 'status tabs narrow only what was read');
+    await ctx.close();
+  });
+}
+await check('Marketing: an archived campaign offers no Marcus draft; a campaign with no leads shows zeros it read', async () => {
+  resetMarketing();
+  const { ctx, section } = await marketingPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: 'All', exact: true }).click();
+  await section().getByRole('button', { name: /Old flyer/ }).click();
+  await section().getByTestId('campaign-funnel').waitFor();
+  assert.equal(await section().getByRole('link', { name: 'Ask Marcus for a draft' }).count(), 0);
+  assert.ok((await section().getByTestId('campaign-funnel').innerText()).includes('0'));
+  assert.equal(await section().locator('form').count(), 0);
+  await ctx.close();
+});
+await check('Marketing: denied access says so and shows nothing', async () => {
+  resetMarketing({ denied: true });
+  const { ctx, section } = await marketingPage({ width: 1440, height: 900 });
+  await section().getByText(/exactly one school/).waitFor();
+  assert.ok(!(await section().innerText()).includes('Spring open house'));
+  await ctx.close();
+});
+await check('Marketing: leaving the page hides plans at once', async () => {
+  resetMarketing();
+  const { ctx, page, section } = await marketingPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Spring open house/ }).click();
+  await section().getByTestId('campaign-funnel').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Spring open house') && !document.body.innerText.includes('Fill the Saturday'));
+  await ctx.close();
+});
+for (const [what, how, start, retire] of [
+  ['count read', 'opening another campaign', async (page, section) => { await section().getByRole('button', { name: /Spring open house/ }).click(); },
+    async (page, section) => { await section().getByRole('button', { name: 'All', exact: true }).click(); await section().getByRole('button', { name: /Summer camp plan/ }).click(); }],
+  ['list read', 'closing the view', async (page, section) => { await section().getByRole('button', { name: 'Refresh' }).click(); },
+    async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[aria-labelledby="marketing-title"]')); }]]) {
+  await check(`Marketing: a late sign-in answer to a ${what} retired by ${how} does not end the session; a current one does`, async () => {
+    resetMarketing();
+    const { ctx, page, section } = await marketingPage({ width: 1440, height: 900 });
+    await section().getByTestId('campaign-list').waitFor();
+    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    let release; mkt.gate = new Promise((done) => { release = done; }); mkt.step = 'session';
+    await start(page, section);
+    for (let i = 0; i < 40 && mkt.gate; i++) await new Promise((done) => setTimeout(done, 50));
+    assert.equal(mkt.gate, null, 'the gated read arrived');
+    await retire(page, section);
+    release();
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+    await ctx.close();
+    const current = await marketingPage({ width: 1440, height: 900 });
+    await current.section().getByTestId('campaign-list').waitFor();
+    await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    mkt.step = 'session';
     await current.section().getByRole('button', { name: 'Refresh' }).click();
     await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
     await current.ctx.close();
