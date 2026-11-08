@@ -2779,3 +2779,16 @@ DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
   END LOOP;
 END $$;
 -- End Creative Studio generations exact verification.
+
+-- School membership list exact verification (0220, U6): one read-only definer projection, runtime EXECUTE only.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+    AND (o.rolsuper OR o.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='6dee6e1cea18c217f9a24013333fb8718f49a05573596de7c693c06958ab3617'
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO safe FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_school_membership_list(text,jsonb)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe school membership list function'; END IF;
+END $$;
+-- End school membership list exact verification.

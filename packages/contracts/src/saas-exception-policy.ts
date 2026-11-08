@@ -17,9 +17,9 @@ export interface SaasExceptionPolicyView {
   scope: 'ACCESS_EXCEPTIONS_ONLY'; current: SaasExceptionPolicyDecision | null;
   effectiveStatus: 'ABSENT' | 'PROPOSED' | 'ACTIVE' | 'SCHEDULED' | 'EXPIRED' | 'WITHDRAWN' | 'REVOKED' | 'SUPERSEDED';
   history: SaasExceptionPolicyDecision[]; historyLimit: 100; asOf: string; termsStatus: 'PROPOSED';
-  /** The current access terms (0220): a new PROPOSED or APPROVED decision must cite this version and stay within its maximum. */
+  /** The current access terms (0222): a new PROPOSED or APPROVED decision must cite this version and stay within its maximum. */
   terms: { policyVersion: number; exceptionMaxDays: number; exceptionAuthority: 'HQ_OWNER' };
-  /** Whether this reader is the HQ owner (0220). Advisory only: the decision command checks the owner again. */
+  /** Whether this reader is the HQ owner (0222). Advisory only: the decision command checks the owner again. */
   viewer: { canDecide: boolean };
   paidAccessProgram: 'INACTIVE' | 'ACTIVE'; aiCreditProgram: 'INACTIVE' | 'ACTIVE';
 }

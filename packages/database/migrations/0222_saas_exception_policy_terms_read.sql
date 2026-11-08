@@ -1,6 +1,6 @@
 BEGIN;
 
--- D10-UI (proposed 0220): the HQ exception-policy read also names the current access terms the next decision must cite
+-- D10-UI (0222, owner-allocated): the HQ exception-policy read also names the current access terms the next decision must cite
 -- and whether this reader may decide. Read-only: no table, grant, trigger or decision rule changes. The decision command
 -- (0186) still re-checks the HQ owner, revision, terms version and maximum length on every write.
 DO $$ BEGIN

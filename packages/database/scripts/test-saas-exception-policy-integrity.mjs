@@ -88,7 +88,7 @@ try{
   const operatorView=await service.readExceptionPolicy(H('operator'));
   assert.deepEqual(ownerView.terms,{policyVersion:Number(t.v),exceptionMaxDays:Number(t.d),exceptionAuthority:'HQ_OWNER'});
   assert.deepEqual(operatorView.terms,ownerView.terms);assert.equal(ownerView.viewer.canDecide,true);assert.equal(operatorView.viewer.canDecide,false);
-  passed('0220 read names the current terms the next decision must cite; only the HQ owner is told it may decide');}
+  passed('0222 read names the current terms the next decision must cite; only the HQ owner is told it may decide');}
  for(const who of ['operator','school','expired','ai','delegated']){
   const n=await footprint();
   await deny(approvalAttempt(who),403,'SAAS_FORBIDDEN');assert.deepEqual(await footprint(),n);

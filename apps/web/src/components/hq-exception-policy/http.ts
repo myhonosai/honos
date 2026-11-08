@@ -3,7 +3,7 @@ import { SAAS_COMMANDS, saasUuid, validateSaasExceptionPolicyDecisionInput, vali
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * D10 exception-only policy (0186, read terms and viewer 0220). The read is advisory; the database decides every decision
+ * D10 exception-only policy (0186, read terms and viewer 0222). The read is advisory; the database decides every decision
  * again (HQ owner only, next revision, current terms version, maximum length, window) and never approves paid access or credits.
  */
 export type PolicyErrorKind =
