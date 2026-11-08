@@ -183,6 +183,7 @@ async function api(route) {
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
@@ -386,6 +387,39 @@ async function marketingApiRoute(route, path, method, url) {
   return json(route, 200, { data: { campaign, from: url.searchParams.get('from'), to: url.searchParams.get('to'), asOf: iso(0),
     leads: first ? 12 : 0, trialLeads: first ? 5 : 0, trialAppointments: first ? 6 : 0, completedTrialAppointments: first ? 4 : 0, wonLeads: first ? 3 : 0, lostLeads: first ? 1 : 0, archivedLeads: 0,
     enrollmentLinkage: 'UNAVAILABLE', revenueLinkage: 'UNAVAILABLE' }, meta: { requestId: 'synthetic' } });
+}
+// Class rosters (U5): the school's classes and one class's roster, two pages (synthetic). Read-only.
+const rst = { denied: false, gate: null, step: null, reads: [] };
+// The browser splits upcoming and past by its own clock, so these times follow the wall clock.
+const wall = (hours) => new Date(Math.floor(Date.now() / 1000) * 1000 + hours * 3_600_000).toISOString();
+const rstSessions = () => [['Kids Taekwondo', 2, 'SCHEDULED', 'Main mat'], ['Adult sparring', 28, 'SCHEDULED', null], ['Saturday open mat', -50, 'COMPLETED', 'Main mat']].map(([name, hours, status, roomName], n) => ({
+  sessionId: id(950 + n), name, startsAt: wall(hours), endsAt: wall(hours + 1), roomName, capacity: 24, bookingPolicy: 'OPTIONAL_BOOKING', status, createdAt: iso(-400) })).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+const rstFamilies = ['Ahn', 'Baker', 'Choi', 'Diaz', 'Evans', 'Fischer', 'García', 'Hwang', 'Ito', 'Jones', 'Kim', 'López'];
+const rstStudents = (sessionId) => sessionId !== id(950) ? [] : Array.from({ length: 60 }, (_, n) => ({ studentProfileId: id(1000 + n), personId: id(1100 + n),
+  givenName: `Student${String(n).padStart(2, '0')}`, familyName: rstFamilies[n % rstFamilies.length], studentStatus: 'ACTIVE',
+  booking: n % 10 === 9 ? null : { id: id(1200 + n), kind: n % 7 === 3 ? 'TRIAL' : 'REGULAR', status: n % 11 === 5 ? 'CANCELLED' : n % 13 === 6 ? 'WAITLISTED' : 'BOOKED', source: 'STAFF',
+    bookedAt: iso(-30), cancelledAt: n % 11 === 5 ? iso(-5) : null, version: 1 },
+  attendance: n % 10 === 9 || n % 4 === 0 ? { id: id(1300 + n), status: n % 8 === 0 ? 'LATE' : 'PRESENT', category: 'REGULAR_PARTICIPANT', recordedAt: iso(-1), version: 1 } : null }))
+  .sort((a, b) => a.familyName.localeCompare(b.familyName) || a.givenName.localeCompare(b.givenName) || a.studentProfileId.localeCompare(b.studentProfileId));
+function resetRoster(over = {}) { Object.assign(rst, { denied: false, gate: null, step: null, reads: [] }, over); }
+async function rosterApiRoute(route, path, method, url, prefix) {
+  if (method !== 'GET') return null;
+  const roster = path.match(new RegExp(`^${prefix}/schedule/sessions/([0-9a-f-]{36})/roster$`));
+  if (path !== `${prefix}/schedule/sessions` && !roster) return null;
+  const cursor = url.searchParams.get('cursor');
+  rst.reads.push(roster ? `roster:${roster[1]}:${cursor ?? 'first'}` : 'sessions');
+  const step = rst.step; rst.step = null;
+  if (rst.gate) { const gate = rst.gate; rst.gate = null; await gate; }
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
+  if (!roster) {
+    if (route.request().headers()['x-hon-human-read'] !== 'class-sessions' || url.search) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+    return json(route, 200, { data: rstSessions(), meta: { requestId: id(949), correlationId: id(949) } });
+  }
+  if (rst.denied) return json(route, 403, { code: 'ATTENDANCE_FORBIDDEN' });
+  if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
+  // An unknown or other-school session reads as an empty roster (the roster never reads hon.class_sessions).
+  const all = rstStudents(roster[1]), start = cursor === 'page-2' ? 50 : 0, data = all.slice(start, start + 50);
+  return json(route, 200, { data, meta: { requestId: id(948), correlationId: id(948), limit: 50, nextCursor: start + 50 < all.length ? 'page-2' : null } });
 }
 const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
 function resetPeople(over = {}) {
@@ -1708,6 +1742,119 @@ for (const [what, how, start, retire] of [
     await current.section().getByTestId('campaign-list').waitFor();
     await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
     mkt.step = 'session';
+    await current.section().getByRole('button', { name: 'Refresh' }).click();
+    await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    await current.ctx.close();
+  });
+}
+
+// ---------- Class rosters (U5) ----------
+async function rosterPage(viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}/staff/schedule`);
+  const section = () => page.locator('section[aria-labelledby="roster-title"]');
+  await section().locator('h1').waitFor({ timeout: 20000 });
+  return { ctx, page, section };
+}
+const ROSTER_TITLES = { en: ['Class rosters', 'Past', 'Show more', 'Record attendance'], ko: ['수업 명단', '지난 수업', '더 보기', '출석 기록'], es: ['Listas de clase', 'Pasadas', 'Mostrar más', 'Registrar asistencia'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
+  ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
+  await check(`Class rosters ${nextTheme} ${language} ${name}: upcoming classes, a two-page roster with counts, and links`, async () => {
+    resetRoster();
+    const [title, past, more, record] = ROSTER_TITLES[language];
+    const { ctx, page, section } = await rosterPage(viewport, { nextTheme, language });
+    await section().getByTestId('session-list').waitFor();
+    assert.equal(await section().locator('h1').innerText(), title);
+    const listText = await section().getByTestId('session-list').innerText();
+    assert.ok(listText.includes('Kids Taekwondo') && listText.includes('Adult sparring') && !listText.includes('Saturday open mat'), 'opens on upcoming');
+    await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+    await section().getByTestId('roster-table').waitFor();
+    assert.equal(await section().getByTestId('roster-table').locator('tbody tr').count(), 50);
+    await section().getByRole('button', { name: more }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="roster-table"] tbody tr').length === 60);
+    assert.deepEqual(rst.reads.filter((r) => r.startsWith('roster')), [`roster:${id(950)}:first`, `roster:${id(950)}:page-2`]);
+    assert.equal(await section().getByRole('button', { name: more }).count(), 0, 'no more after the last page');
+    const counts = await section().getByTestId('roster-counts').innerText();
+    assert.ok(/\b6\b/.test(counts), counts);
+    assert.equal(await section().getByRole('link', { name: record }).getAttribute('href'), `/staff/attendance?organizationId=${scope.organizationId}&schoolId=${scope.schoolId}`);
+    await noOverflow(page, `roster-${nextTheme}-${language}-${name}`);
+    await axe(page, `roster-${nextTheme}-${language}-${name}`);
+    await shot(page, `roster-${nextTheme}-${language}-${name}`, true);
+    const reads = rst.reads.length;
+    await section().getByRole('button', { name: past, exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="session-list"]')?.textContent?.includes('Saturday open mat'));
+    assert.equal(rst.reads.length, reads, 'upcoming and past split only what was read');
+    await ctx.close();
+  });
+}
+await check('Class rosters: a roster that changed between pages is read again from the start, once', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+  await section().getByTestId('roster-table').waitFor();
+  rst.step = 'cursor';
+  await section().getByRole('button', { name: 'Show more' }).click();
+  await section().getByText('The roster changed while it was being read, so it was read again from the start.').waitFor();
+  assert.deepEqual(rst.reads.filter((r) => r.startsWith('roster')), [`roster:${id(950)}:first`, `roster:${id(950)}:page-2`, `roster:${id(950)}:first`]);
+  assert.equal(await page.locator('[data-testid="roster-table"] tbody tr').count(), 50, 'nothing from the earlier pages is kept');
+  await ctx.close();
+});
+await check('Class rosters: an empty roster says so; denied access says so and shows nobody', async () => {
+  resetRoster();
+  const { ctx, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Adult sparring/ }).click();
+  await section().getByText('Nobody is booked on this class and no attendance is recorded.').waitFor();
+  assert.equal(await section().locator('form').count(), 0);
+  await ctx.close();
+  resetRoster({ denied: true });
+  const denied = await rosterPage({ width: 1440, height: 900 });
+  await denied.section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+  await denied.section().getByText(/who can record attendance/).waitFor();
+  assert.ok(!(await denied.section().innerText()).includes('Student0'));
+  await denied.ctx.close();
+});
+await check('Class rosters: leaving the page hides names at once', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
+  await section().getByTestId('roster-table').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Student0') && !document.body.innerText.includes('Kids Taekwondo'));
+  await ctx.close();
+});
+for (const [what, how, start, retire] of [
+  ['roster read', 'opening another class', async (page, section) => { await section().getByRole('button', { name: /Kids Taekwondo/ }).click(); },
+    async (page, section) => { await section().getByRole('button', { name: /Adult sparring/ }).click(); }],
+  ['next-page read', 'opening another class', async (page, section) => { await section().getByRole('button', { name: /Kids Taekwondo/ }).click(); await section().getByTestId('roster-table').waitFor();
+    rst.gate = new Promise((done) => { rst.release = done; }); rst.step = 'session'; await section().getByRole('button', { name: 'Show more' }).click(); },
+    async (page, section) => { await section().getByRole('button', { name: /Adult sparring/ }).click(); }],
+  ['class list read', 'closing the view', async (page, section) => { await section().getByRole('button', { name: 'Refresh' }).click(); },
+    async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[aria-labelledby="roster-title"]')); }]]) {
+  await check(`Class rosters: a late sign-in answer to a ${what} retired by ${how} does not end the session; a current one does`, async () => {
+    resetRoster();
+    const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+    await section().getByTestId('session-list').waitFor();
+    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    if (what !== 'next-page read') { rst.gate = new Promise((done) => { rst.release = done; }); rst.step = 'session'; }
+    await start(page, section);
+    for (let i = 0; i < 40 && rst.gate; i++) await new Promise((done) => setTimeout(done, 50));
+    assert.equal(rst.gate, null, 'the gated read arrived');
+    await retire(page, section);
+    rst.release();
+    await new Promise((done) => setTimeout(done, 800));
+    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired read did not end the session');
+    await ctx.close();
+    const current = await rosterPage({ width: 1440, height: 900 });
+    await current.section().getByTestId('session-list').waitFor();
+    await current.page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    rst.step = 'session';
     await current.section().getByRole('button', { name: 'Refresh' }).click();
     await current.page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
     await current.ctx.close();
