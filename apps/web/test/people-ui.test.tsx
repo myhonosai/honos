@@ -24,7 +24,7 @@ const stub = (...answers: (Response | Error)[]) => {
   const fetch = vi.fn(async () => { const a = answers.shift(); if (!a || a instanceof Error) throw a ?? new Error('none'); return a; });
   vi.stubGlobal('fetch', fetch); return fetch;
 };
-const signal = () => new AbortController().signal;
+const signal = () => new AbortController().signal, yes = () => true;
 
 it('maps only the exact documented refusals; anything else is unknown', () => {
   const rows: [number, string | null, string][] = [
@@ -84,7 +84,7 @@ it('sends the closed edit body with the command header and key, and checks the a
   expect(input).toEqual({ schoolId: scope.schoolId, personId: person, expectedVersion: 3, givenName: 'Ana', familyName: 'Rivera-Lopez', email: 'ana@example.invalid', phoneE164: '+15555550100' });
   const saved = raw({ familyName: 'Rivera-Lopez', version: 4 });
   const fetch = stub(json({ data: { person: saved, changedFields: ['familyName'] } }));
-  const result = await peopleApi.update(input, key, signal());
+  const result = await peopleApi.update(input, key, signal(), yes);
   expect(result.changedFields).toEqual(['familyName']);
   const [path, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe('/api/v1/school/people/update');
@@ -94,14 +94,57 @@ it('sends the closed edit body with the command header and key, and checks the a
   // An answer that does not echo what was sent is not a confirmation.
   for (const wrong of [raw({ familyName: 'Other', version: 4 }), raw({ familyName: 'Rivera-Lopez', version: 3 }), raw({ familyName: 'Rivera-Lopez', version: 4, schoolId: id(3) })]) {
     stub(json({ data: { person: wrong, changedFields: ['familyName'] } }));
-    await expect(peopleApi.update(input, key, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
+    await expect(peopleApi.update(input, key, signal(), yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   }
   stub(new TypeError('network'));
-  await expect(peopleApi.update(input, key, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(peopleApi.update(input, key, signal(), yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   stub(json({ code: 'PERSON_VERSION_CONFLICT', outcome: 'NOT_SUBMITTED' }, 409));
-  await expect(peopleApi.update(input, key, signal())).rejects.toMatchObject({ kind: 'CONFLICT' });
+  await expect(peopleApi.update(input, key, signal(), yes)).rejects.toMatchObject({ kind: 'CONFLICT' });
   stub(new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } }));
-  await expect(peopleApi.update(input, key, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(peopleApi.update(input, key, signal(), yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+});
+
+it('a 401 for a save that is no longer shown does not end the newer session; a current one does', async () => {
+  const seen = vi.fn(); (window as unknown as EventTarget).addEventListener(HON_SESSION_INVALIDATED_EVENT, seen);
+  const contact = contactInput(scope.schoolId, rec(), { givenName: 'Ana', familyName: 'Rivera-Lopez', email: 'ana@example.invalid', phone: '+15555550100' });
+  const birth = birthDateInput(scope.schoolId, rec(), { birthDate: '2015-05-05', reason: 'Birth certificate' });
+  if (typeof contact === 'string' || birth === null || typeof birth === 'string') throw new Error('input');
+  const retired = () => false;
+  stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
+  await expect(peopleApi.update(contact, key, signal(), retired)).rejects.toMatchObject({ kind: 'SESSION' });
+  stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
+  await expect(peopleApi.updateBirthDate(birth, key, signal(), retired)).rejects.toMatchObject({ kind: 'SESSION' });
+  expect(seen).not.toHaveBeenCalled();
+  stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
+  await expect(peopleApi.update(contact, key, signal(), yes)).rejects.toMatchObject({ kind: 'SESSION' });
+  expect(seen).toHaveBeenCalledTimes(1);
+  stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
+  await expect(peopleApi.updateBirthDate(birth, key, signal(), yes)).rejects.toMatchObject({ kind: 'SESSION' });
+  expect(seen).toHaveBeenCalledTimes(2);
+});
+
+it('accepts a receipt that keeps the stored spelling of an address that differs only in case', async () => {
+  const stored = rec({ email: 'ANA@Example.invalid' });
+  // A case-only change of the address is not a change.
+  expect(contactInput(scope.schoolId, stored, { givenName: 'Ana', familyName: 'Rivera', email: 'ana@example.invalid', phone: '+15555550100' })).toBe('UNCHANGED');
+  const input = contactInput(scope.schoolId, stored, { givenName: 'Ana', familyName: 'Rivera', email: 'ANA@Example.invalid', phone: '+15555550199' });
+  if (typeof input === 'string') throw new Error(input);
+  expect(input.email).toBe('ana@example.invalid');
+  for (const student of [{ birthDate: '2015-04-02', status: 'ACTIVE', version: 1 }, { birthDate: '2015-04-02', status: 'ACTIVE' }]) {
+    stub(json({ data: { person: raw({ email: 'ANA@Example.invalid', phoneE164: '+15555550199', version: 4, student }), changedFields: ['phoneE164'] } }));
+    const result = await peopleApi.update(input, key, signal(), yes);
+    expect(result.person.email).toBe('ANA@Example.invalid');
+  }
+  for (const email of ['other@example.invalid', null]) {
+    stub(json({ data: { person: raw({ email, phoneE164: '+15555550199', version: 4 }), changedFields: ['phoneE164'] } }));
+    await expect(peopleApi.update(input, key, signal(), yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  }
+  const cleared = contactInput(scope.schoolId, stored, { givenName: 'Ana', familyName: 'Rivera', email: '', phone: '+15555550100' });
+  if (typeof cleared === 'string') throw new Error(cleared);
+  stub(json({ data: { person: raw({ email: 'ANA@Example.invalid', version: 4 }), changedFields: ['email'] } }));
+  await expect(peopleApi.update(cleared, key, signal(), yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  stub(json({ data: { person: raw({ email: null, version: 4 }), changedFields: ['email'] } }));
+  expect((await peopleApi.update(cleared, key, signal(), yes)).person.email).toBeNull();
 });
 
 it('builds edit bodies only from valid, changed values', () => {
@@ -123,12 +166,12 @@ it('sends a birth date correction and requires the saved date and a newer studen
   const input = birthDateInput(scope.schoolId, rec(), { birthDate: '2015-05-05', reason: 'Birth certificate' });
   if (input === null || typeof input === 'string') throw new Error(String(input));
   const fetch = stub(json({ data: { person: raw({ student: { birthDate: '2015-05-05', status: 'ACTIVE', version: 2 } }), changedFields: ['birthDate'], enrollmentCorrected: true } }));
-  expect((await peopleApi.updateBirthDate(input, key, signal())).enrollmentCorrected).toBe(true);
+  expect((await peopleApi.updateBirthDate(input, key, signal(), yes)).enrollmentCorrected).toBe(true);
   expect((fetch.mock.calls[0] as unknown as [string])[0]).toBe('/api/v1/school/people/birth-date');
   stub(json({ data: { person: raw({ student: { birthDate: '2015-04-02', status: 'ACTIVE', version: 2 } }), changedFields: ['birthDate'], enrollmentCorrected: false } }));
-  await expect(peopleApi.updateBirthDate(input, key, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(peopleApi.updateBirthDate(input, key, signal(), yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   stub(json({ code: 'PERSON_BIRTH_DATE_OWNER_REQUIRED' }, 403));
-  await expect(peopleApi.updateBirthDate(input, key, signal())).rejects.toMatchObject({ kind: 'OWNER_REQUIRED' });
+  await expect(peopleApi.updateBirthDate(input, key, signal(), yes)).rejects.toMatchObject({ kind: 'OWNER_REQUIRED' });
 });
 
 const base: PeopleViewProps = { language: 'en', waiting: false, concealed: false, hasSchool: true,

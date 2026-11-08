@@ -6,7 +6,7 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { PersonRecordError, peopleApi, type PeopleApi } from './http';
+import { PersonRecordError, peopleApi, sameEmail, type PeopleApi } from './http';
 import { attemptOutcome, type ListState, type RecordState, type SaveOutcome } from './model';
 import { PeopleView, type BirthDraft, type ContactDraft } from './view';
 
@@ -30,7 +30,7 @@ export function contactInput(schoolId: string, record: PersonRecord, draft: Cont
     input = validatePersonRecordUpdateInput({ schoolId, personId: record.personId, expectedVersion: record.version, givenName: draft.givenName,
       familyName: draft.familyName, email: email === '' ? null : email, phoneE164: phone === '' ? null : phone });
   } catch { return 'INVALID'; }
-  return input.givenName === record.givenName && input.familyName === record.familyName && input.email === record.email && input.phoneE164 === record.phoneE164
+  return input.givenName === record.givenName && input.familyName === record.familyName && sameEmail(input.email, record.email) && input.phoneE164 === record.phoneE164
     ? 'UNCHANGED' : input;
 }
 export function birthDateInput(schoolId: string, record: PersonRecord, draft: BirthDraft): StudentBirthDateUpdateInput | 'INVALID' | 'UNCHANGED' | null {
@@ -115,12 +115,12 @@ export function People({ api = peopleApi }: { api?: PeopleApi }): React.ReactEle
     setLock('SENDING'); setOutcome({ kind: 'SENDING', command: request.command });
     let next: SaveOutcome, keep: boolean, saved: PersonRecord | null = null;
     try {
-      const signal = AbortSignal.timeout(30000);
+      const signal = AbortSignal.timeout(30000), owned = () => shown === privacy.current;
       if (request.command === 'contact') {
-        const result = await api.update(request.input, request.key, signal);
+        const result = await api.update(request.input, request.key, signal, owned);
         saved = result.person; next = { kind: 'SAVED', command: 'contact', fields: result.changedFields };
       } else {
-        const result = await api.updateBirthDate(request.input, request.key, signal);
+        const result = await api.updateBirthDate(request.input, request.key, signal, owned);
         saved = result.person; next = { kind: 'SAVED', command: 'birthDate', enrollmentCorrected: result.enrollmentCorrected };
       }
       keep = false;

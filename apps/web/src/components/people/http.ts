@@ -28,7 +28,7 @@ export const PEOPLE_QUERY_MAX = 160;
 const RESPONSE_MAX_BYTES = 131072;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 
-type Sent = Readonly<{ path: string; body: string; key: string }>;
+type Sent = Readonly<{ path: string; body: string; key: string; owned: () => boolean }>;
 /** A bounded, same-origin, no-redirect JSON exchange. Returns the status and the parsed body (null when not JSON). */
 async function exchange(path: string, signal: AbortSignal, command?: Sent): Promise<{ status: number; value: unknown }> {
   signal.throwIfAborted();
@@ -36,9 +36,10 @@ async function exchange(path: string, signal: AbortSignal, command?: Sent): Prom
     referrerPolicy: 'no-referrer', signal,
     headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': PERSON_RECORD_HUMAN_COMMAND, 'Idempotency-Key': command.key } : {}) },
     ...(command ? { body: command.body } : {}) });
-  // A retired read must not invalidate the newer session that replaced it.
+  // A retired read or command must not invalidate the newer session that replaced it. A command has no abort signal of its
+  // own (cancelling it would not prove it was not saved), so its caller says whether it is still the one being shown.
   signal.throwIfAborted();
-  if (r.status === 401) { reportConfirmedSessionInvalidation(); throw new PersonRecordError('SESSION'); }
+  if (r.status === 401) { if (!command || command.owned()) reportConfirmedSessionInvalidation(); throw new PersonRecordError('SESSION'); }
   if (r.redirected || r.url && (typeof location === 'undefined' || r.url !== new URL(path, location.origin).href)) throw new PersonRecordError('UNKNOWN');
   if (!JSON_TYPE.test(r.headers.get('content-type') ?? '') || !r.body) return { status: r.status, value: null };
   const reader = r.body.getReader(), decoder = new TextDecoder('utf-8', { fatal: true });
@@ -54,6 +55,11 @@ async function exchange(path: string, signal: AbortSignal, command?: Sent): Prom
   } finally { signal.removeEventListener('abort', cancel); cancel(); reader.releaseLock(); }
 }
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+/**
+ * Email addresses compare without case: the request is sent lowercase, and the server keeps the stored spelling when the
+ * address is unchanged apart from case. A clear (null) matches only null.
+ */
+export const sameEmail = (a: string | null, b: string | null) => a === null || b === null ? a === b : same(a, b);
 const codeOf = (value: unknown): string | null =>
   value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { code?: unknown }).code === 'string' ? (value as { code: string }).code : null;
 
@@ -102,20 +108,20 @@ export const peopleApi = {
     return record;
   },
   /** One edit attempt. The same key and body replay the saved answer; nothing is ever applied twice. */
-  async update(input: PersonRecordUpdateInput, key: string, signal: AbortSignal): Promise<PersonRecordUpdateResult> {
+  async update(input: PersonRecordUpdateInput, key: string, signal: AbortSignal, owned: () => boolean): Promise<PersonRecordUpdateResult> {
     const body = validatePersonRecordUpdateInput(input);
-    const { status, value } = await send('/api/v1/school/people/update', body, key, signal);
+    const { status, value } = await send('/api/v1/school/people/update', body, key, signal, owned);
     if (status !== 200) throw personErrorFor(status, codeOf(value));
     try {
       const result = validatePersonRecordUpdateResult(accountClosed(value, ['data']).data), p = result.person;
       if (!same(p.schoolId, body.schoolId) || !same(p.personId, body.personId) || p.version <= body.expectedVersion || p.givenName !== body.givenName
-        || p.familyName !== body.familyName || p.email !== body.email || p.phoneE164 !== body.phoneE164) throw new Error('mismatch');
+        || p.familyName !== body.familyName || !sameEmail(p.email, body.email) || p.phoneE164 !== body.phoneE164) throw new Error('mismatch');
       return result;
     } catch { throw new PersonRecordError('UNKNOWN'); }
   },
-  async updateBirthDate(input: StudentBirthDateUpdateInput, key: string, signal: AbortSignal): Promise<StudentBirthDateUpdateResult> {
+  async updateBirthDate(input: StudentBirthDateUpdateInput, key: string, signal: AbortSignal, owned: () => boolean): Promise<StudentBirthDateUpdateResult> {
     const body = validateStudentBirthDateUpdateInput(input);
-    const { status, value } = await send('/api/v1/school/people/birth-date', body, key, signal);
+    const { status, value } = await send('/api/v1/school/people/birth-date', body, key, signal, owned);
     if (status !== 200) throw personErrorFor(status, codeOf(value));
     try {
       const result = validateStudentBirthDateUpdateResult(accountClosed(value, ['data']).data), p = result.person;
@@ -125,9 +131,9 @@ export const peopleApi = {
     } catch { throw new PersonRecordError('UNKNOWN'); }
   },
 };
-async function send(path: string, body: object, key: string, signal: AbortSignal) {
+async function send(path: string, body: object, key: string, signal: AbortSignal, owned: () => boolean) {
   const k = accountUuid(key);
-  try { return await exchange(path, signal, { path, body: JSON.stringify(body), key: k }); }
+  try { return await exchange(path, signal, { path, body: JSON.stringify(body), key: k, owned }); }
   catch (error) { if (error instanceof PersonRecordError) throw error; throw new PersonRecordError('UNKNOWN'); }
 }
 export type PeopleApi = typeof peopleApi;

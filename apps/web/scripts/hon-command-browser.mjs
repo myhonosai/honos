@@ -254,6 +254,7 @@ async function peopleApiRoute(route, path, method, url) {
   const prior = ppl.byKey.get(headers['idempotency-key']);
   if (prior) return prior.body === raw ? json(route, 200, { data: prior.data }) : json(route, 409, { code: 'PERSON_IDEMPOTENCY_CONFLICT' });
   if (step === 'lost') return route.abort('connectionreset');
+  if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
   if (step === 'busy') return json(route, 503, { code: 'PERSON_BUSY', outcome: 'NOT_SUBMITTED' });
   if (step === 'owner') return json(route, 403, { code: 'PERSON_BIRTH_DATE_OWNER_REQUIRED' });
   const body = JSON.parse(raw), r = ppl.records.get(body.personId);
@@ -1059,6 +1060,36 @@ await check('People: leaving the tab hides every name; a save in flight is never
   assert.equal(ppl.posts.length, 1, 'no automatic retry');
   await ctx.close();
 });
+
+for (const [command, field, value, button] of [['contact', 'familyName', 'Rivera-Kim', 'Save changes'], ['birth date', 'birthDate', '2015-05-05', 'Save birth date']]) {
+  await check(`People: a late sign-in answer to a hidden ${command} save does not end the re-verified session; a current one does`, async () => {
+    let release; const gate = new Promise((done) => { release = done; });
+    resetPeople({ gate, replies: ['session', 'session'] });
+    const { ctx, page, section } = await peoplePage({ width: 1440, height: 900 });
+    await page.evaluate(() => { window.__honEnded = 0; window.addEventListener('hon:session-invalidated', () => { window.__honEnded++; }); });
+    await open(section, 'Ana Rivera');
+    await section().locator(`input[name="${field}"]`).fill(value);
+    if (command === 'birth date') await section().locator('textarea[name="reason"], input[name="reason"]').fill('Birth certificate checked at the desk');
+    await section().getByRole('button', { name: button }).click();
+    await section().getByText('Saving… keep this tab open.').waitFor();
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await page.getByRole('button', { name: 'Show school' }).click();
+    await section().getByTestId('people-list').waitFor({ timeout: 20000 });
+    release();
+    for (let i = 0; i < 40 && ppl.posts.length < 1; i++) await new Promise((done) => setTimeout(done, 50));
+    await new Promise((done) => setTimeout(done, 500));
+    assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired save did not end the new session');
+    assert.ok(await section().getByTestId('people-list').isVisible(), 'the re-verified view stays shown');
+    // A save that is still the one shown: its sign-in answer ends the session.
+    await open(section, 'Ana Rivera');
+    await section().locator(`input[name="${field}"]`).fill(value);
+    if (command === 'birth date') await section().locator('textarea[name="reason"], input[name="reason"]').fill('Birth certificate checked at the desk');
+    await section().getByRole('button', { name: button }).click();
+    await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+    assert.equal(ppl.posts.length, 2);
+    await ctx.close();
+  });
+}
 
 await browser.close();
 server.kill('SIGTERM');
