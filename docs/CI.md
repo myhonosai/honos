@@ -54,7 +54,7 @@ CI is verification only. It never deploys, never uses repository secrets, never 
 
 ## Safety controls
 
-- **Triggers:** pull requests targeting `main` (opened, updated, reopened, marked ready) and manual **Run workflow**. Draft PRs are skipped. A PR whose **entire** diff is docs (`docs/**`, `*.md`) is skipped. GitHub evaluates the filter against the whole PR, so a docs-only push to a PR that also changes code still runs CI. **No schedule. No push-to-main trigger** until the owner approves the minutes (see below).
+- **Triggers:** pull requests targeting `main` (opened, updated, reopened, marked ready) and manual **Run workflow**. Draft PRs are skipped. A PR whose **entire** diff is docs (`docs/**`, `*.md`) is skipped. Exception: markdown under paths the gated feature workflows trigger on still runs CI (see duplicate suite gating below). GitHub evaluates the filter against the whole PR, so a docs-only push to a PR that also changes code still runs CI. **No schedule. No push-to-main trigger** until the owner approves the minutes (see below).
 - **Permissions:** `contents: read` only; checkout does not persist the token.
 - **Patched Node.js only:** every workflow pins `node-version` to an exact patched release (currently `22.23.4`, the 22.x line of the [2026-10-21 Node.js security releases](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)). The step right after `actions/setup-node` runs [`.github/scripts/verify-node-runtime.mjs`](../.github/scripts/verify-node-runtime.mjs) `--expect 22.23.4`, which fails the job if the runtime that actually executes differs from the pin, is not a supported line (22.x, 24.x, 26.x), or predates that line's latest security release. On a new Node.js security release, raise `MINIMUM_PATCHED` and every workflow pin in the same PR. Locally: `pnpm verify:node-runtime`.
 - **Concurrency:** a newer push to the same PR cancels the older run.
@@ -92,3 +92,32 @@ These are **estimates**, not billing data. Check **GitHub → Settings → Billi
 - CI does not run browser end-to-end tests, and it does not deploy or smoke-test a deployed environment (there is no deployment pipeline).
 - Actions are referenced by major version tag (`@v4`). Pinning to commit SHAs is a recommended hardening follow-up.
 - Making CI a **required** status check (branch protection) is an owner decision. It would block Manus's direct pushes to `main`, so coordinate first.
+
+## Duplicate suite gating (2026-11-07)
+
+Several feature workflows repeated regular CI's full test/build job and complete disposable proof suite on every push,
+and three `apps/web/**` workflows each repeated the same commercial rehearsal. On 2026-11-07 that duplication was about
+two thirds of Actions minutes. Pure duplicates (identical commands, no extra steps or environment) now run only when
+regular CI does not:
+
+- Full test/build (`checks`) and complete proofs (`database`/`regressions`) in `owner-experience-integration`,
+  `connected-student-operations-validation`, `crm-membership-recovery-integration`, `membership-dates-validation`,
+  `hq-school-create-validation` and `commercial-staging-validation`: skipped for a ready PR to `main` (CI runs them);
+  still run for drafts and stacked bases.
+- Commercial rehearsal in `connected-student-operations-validation`, `crm-membership-recovery-integration` and
+  `membership-dates-validation`: skipped for PRs to `main`, where `owner-experience-integration` runs the same rehearsal
+  on the same trigger; still run for stacked bases.
+
+Jobs with their own extra steps, environment or fixtures (browser, mounted application, focused proofs) are unchanged.
+
+Trigger coverage: regular CI re-includes every glob or markdown path that triggers a gated feature workflow (for example
+`apps/web/**`, `apps/api/src/saas-pricing/**` and `docs/architecture/CRM_LEAD_MEMBERSHIP_RECOVERY_FRONTEND.md`), so a
+markdown-only change there still runs regular CI. `.github/scripts/ci-trigger-matrix.test.mjs` (run in CI) checks this
+for every gated workflow and fails if a trigger path is added without the matching coverage.
+`owner-experience-integration` also triggers on the three workflow files whose commercial rehearsal it replaces.
+
+Equivalence: the gated jobs and regular CI use the same entry points (`pnpm test`, `pnpm check`, `pnpm build`,
+`pnpm db:check`, `run-db-proofs.sh`, the commercial staging rehearsal). They are not byte-identical: regular CI tests the
+pull request's merge ref with main (the feature jobs checked out the PR head only), adds a Node runtime self-test and
+PostgreSQL diagnostics, and its proof job has a 35-minute limit (the feature copies had 45). For a ready PR to main the
+evidence is therefore the combined-with-main tree under CI's limits; drafts and stacked bases keep the head-only runs.
