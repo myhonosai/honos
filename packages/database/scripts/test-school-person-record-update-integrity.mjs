@@ -357,11 +357,20 @@ try{
     VALUES($1,$2,$3,'people.update:'||$4,encode(sha256(convert_to('PERSON_UPDATE:'||jsonb_build_object('schoolId',$2::uuid,'personId',$5::uuid,'expectedVersion',$6::integer,
       'givenName',$7::text,'familyName',$8::text,'email',$9::text,'phoneE164',NULL::text)::text,'UTF8')),'hex'),'COMPLETED',200,$10::jsonb,now()+interval '24 hours')`,
    [A.organizationId,A.schoolId,editorP,key,student,row.version,'Legacy','Rivera-Lopez','ana.r@example.invalid',JSON.stringify(legacyBody)]);
+  // Manus P2-165-5: the genuine 0217 receipt has consumed the key. A changed FIRST request after 0218, with the
+  // current version (same person, or another person), is refused as key reuse with zero effects of any kind.
   const c=await counts();
+  await denied(()=>update(editor3,body(A.schoolId,student,row.version,{givenName:'Changed',familyName:'Rivera-Lopez',email:'ana.r@example.invalid',phoneE164:null}),key),409,'PERSON_IDEMPOTENCY_CONFLICT',student);
+  {const other=await addPerson(A,'Uma','Reyes'),before=await snapshot(other),c1=await counts();
+   await denied(()=>update(editor3,body(A.schoolId,other,1,{givenName:'Uma',familyName:'Reyes-Diaz',email:null,phoneE164:null}),key),409,'PERSON_IDEMPOTENCY_CONFLICT',other);
+   assert.deepEqual(await snapshot(other),before);assert.deepEqual(await counts(),c1);}
+  assert.equal((await q("SELECT count(*) n FROM hon.school_person_command_receipts WHERE idempotency_key=$1",[key]))[0].n,'0');
+  const c0=await counts();
+  // The original exact request still returns its saved historical response.
   const replay=ok(await update(editor3,legacyRequest,key));
   assert.deepEqual(replay,legacyBody);assert.equal(Object.hasOwn(replay.person.student,'version'),false,'no version invented');
   // No repeat effect: only this command's own receipt is completed with the saved body (so later retries read it first).
-  assert.deepEqual(await counts(),{...c,school_person_command_receipts:String(Number(c.school_person_command_receipts)+1)});assert.deepEqual(await snapshot(student),row);
+  assert.deepEqual(await counts(),{...c0,school_person_command_receipts:String(Number(c0.school_person_command_receipts)+1)});assert.deepEqual(await snapshot(student),row);
   assert.deepEqual((await q("SELECT status,response_body FROM hon.school_person_command_receipts WHERE command='people.update' AND idempotency_key=$1",[key]))[0],{status:'COMPLETED',response_body:legacyBody});
   {const c2=await counts();assert.deepEqual(ok(await update(editor3,legacyRequest,key)),legacyBody);assert.deepEqual(await counts(),c2);}
   await denied(()=>update(editor3,{...legacyRequest,givenName:'Other'},key),409,'PERSON_IDEMPOTENCY_CONFLICT',student);
@@ -369,7 +378,7 @@ try{
   const {validatePersonRecord,validateStudentBirthDateUpdateResult}=require('@hon/contracts');
   assert.throws(()=>validatePersonRecord(saved));
   assert.throws(()=>validateStudentBirthDateUpdateResult({person:saved,changedFields:['birthDate'],enrollmentCorrected:false}));}
- pass('a completed 0217 edit receipt replays after 0218 with HTTP 200, the saved result unchanged (no invented version) and no repeat effects; key reuse still refused');
+ pass('a genuine completed 0217 edit receipt consumes its key after 0218: a changed first request (same or another person, current version) is refused with zero effects; the exact request replays with HTTP 200, the saved result unchanged (no invented version) and no repeat effects');
 
  // 16. Manus P2-165-3: an activation-style reservation of the exact old key texts ('people.update:<k>',
  // 'people.birth_date:<k>' and the bare key) held uncommitted in hon.idempotency_records, followed by that holder's

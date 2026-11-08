@@ -272,9 +272,9 @@ $$;
 -- 0217 command, unchanged except:
 --  * after a name change, carry exactly the changed name fields into an enrolled CRM child's enrollment (audited);
 --  * exact-key receipts live in hon.school_person_command_receipts (Manus P2-165-3) and are checked first (P2-165-4).
---    A completed receipt saved by 0217 under hon.idempotency_records 'people.update:<key>' for the exact same request
---    is still replayed exactly as saved (Manus P2-165-2); that lookup is a plain read of committed rows, so it never
---    waits on another transaction's reservation, and a row there with another fingerprint is not this command's.
+--    A genuine completed 0217 receipt under hon.idempotency_records 'people.update:<key>' (identified by its
+--    person-edit result shape) still replays exactly as saved for the same request and refuses any other request
+--    (Manus P2-165-2, P2-165-5); a row there without that provenance is another command's key and is ignored.
 CREATE OR REPLACE FUNCTION hon.update_school_person(p_subject text,p_input jsonb,p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid; v_school uuid; v_org uuid; v_person uuid; v_version integer; fp text; prior hon.idempotency_records%ROWTYPE;
@@ -320,13 +320,19 @@ BEGIN
     IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
     RETURN rec.response_body;
   END IF;
-  -- Newly reserved. A completed 0217 receipt for this key with this exact request (same fingerprint formula) is the
-  -- saved outcome: it completes this reservation with that saved body and is returned unchanged. Any other row under
-  -- the old key text (a different fingerprint, or another command's free-text key such as an activation's) is not this
-  -- command's receipt and is ignored. Plain read of committed rows: never waits on another transaction.
+  -- Newly reserved. A row under the old 0217 key text 'people.update:<key>' is a genuine 0217 person-edit receipt
+  -- only by its provenance (Manus P2-165-5): COMPLETED, HTTP 200 and a response that is exactly a person-edit result
+  -- ({person, changedFields}, which only this command ever builds; activation and every other command store their
+  -- own server-built shapes). A genuine receipt has consumed the key: the exact request replays its saved body (and
+  -- completes this reservation with it, so later retries read it first); any other request is a key reuse and is
+  -- refused before any version or change check, as 0217 did. A row without that provenance is another command's
+  -- free-text key and is ignored (Manus P2-165-4). Plain read of committed rows: never waits on another transaction.
   SELECT * INTO prior FROM hon.idempotency_records WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor
     AND idempotency_key='people.update:'||p_key::text;
-  IF FOUND AND prior.request_fingerprint=fp AND prior.status='COMPLETED' AND prior.response_body IS NOT NULL THEN
+  IF FOUND AND prior.status='COMPLETED' AND prior.response_status=200 AND jsonb_typeof(prior.response_body)='object'
+    AND (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(prior.response_body) k)=ARRAY['changedFields','person']
+    AND jsonb_typeof(prior.response_body->'person')='object' AND jsonb_typeof(prior.response_body->'changedFields')='array' THEN
+    IF prior.request_fingerprint<>fp THEN RAISE EXCEPTION 'PERSON_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
     UPDATE hon.school_person_command_receipts SET status='COMPLETED',response_body=prior.response_body,completed_at=clock_timestamp()
       WHERE organization_id=v_org AND school_id=v_school AND principal_id=actor AND command='people.update' AND idempotency_key=p_key;
     IF hon.school_person_actor(p_subject,v_school,true) IS NULL THEN RAISE EXCEPTION 'PERSON_FORBIDDEN' USING ERRCODE='42501'; END IF;
