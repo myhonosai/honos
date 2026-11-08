@@ -20,7 +20,7 @@ const human = (turn: number, text: string): HonConversationTurn => ({ turnId: id
 const reply = (turn: number, over: Partial<HonConversationTurn> = {}, detail: Partial<NonNullable<HonConversationTurn['replyDetail']>> = {}): HonConversationTurn => ({
   turnId: id(turn), role: 'hon', text: 'You have 3 trial leads waiting for follow-up.', createdAt: AT, status: 'COMPLETED', reason: null,
   references: { workItemId: id(8), actionRequestId: null, invocationId: id(9) },
-  replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, ...detail }, ...over });
+  replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], ...detail }, ...over });
 const thread = (turns: HonConversationTurn[]): HonConversationThread => ({ ...summary(5, turns.length / 2), turns });
 const noop = () => {};
 const props = (over: Partial<HonConversationViewProps> = {}): HonConversationViewProps => ({
@@ -60,7 +60,7 @@ describe('HON conversation transport', () => {
   });
   it('sends the human-command header, idempotency key and exact body, and verifies the receipt', async () => {
     const receipt = { turnId: id(6), conversationId: id(5), status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [id(8)], invocationId: id(9),
-      reply: 'Three trials.', replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null } };
+      reply: 'Three trials.', replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] } };
     const fetchMock = vi.fn(async () => json(200, { data: receipt }));
     vi.stubGlobal('fetch', fetchMock);
     const prepared = prepareTurn(SCHOOL, id(5), { text: 'How many trials?', delegation: null });

@@ -37,7 +37,7 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
   assert.equal(contracts.validateHonTurnReceipt(receipt).status, 'AWAITING_APPROVAL');
   for (const bad of [{ ...receipt, actionRequestIds: [] }, { ...receipt, status: 'READY' }, { ...receipt, status: 'DONE' }, { ...receipt, delegatedAgentKeys: ['marcus', 'chad'] }, { ...receipt, extra: 1 },
     { ...receipt, reply: 'A specialist draft never rides on the receipt' }, (({ reply, ...rest }) => rest)(receipt),
-    { ...receipt, replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null } }]) {
+    { ...receipt, replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] } }]) {
     assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/);
   }
   const turnId = ID();
@@ -72,7 +72,7 @@ test('C2 contracts: a question is delegation null with safe text; HON reply text
     assert.equal(m.reservedCredits, Math.ceil((m.inputTokens + m.outputTokens) / 1000), mode);
   }
   assert.deepEqual([contracts.HON_REPLY_MODES.STANDARD.taskClass, contracts.HON_REPLY_MODES.STANDARD.outputTokens, contracts.HON_REPLY_MODES.DETAILED.taskClass, contracts.HON_REPLY_MODES.DETAILED.outputTokens, contracts.HON_REPLY_MAX_STEPS], ['SUMMARIZE', 1500, 'ANALYZE', 4000, 3]);
-  const detail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null };
+  const detail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] };
   const q = { turnId: ID(), conversationId: ID(), status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [ID()], invocationId: ID(), reply: 'You have two trials tomorrow.', replyDetail: detail };
   assert.equal(contracts.validateHonTurnReceipt({ ...q, replyDetail: { ...detail, mode: 'DETAILED', step: 2, truncated: true, canContinue: true, continuesTurnId: ID() } }).replyDetail.canContinue, true);
   // A completed answer whose source authority lapsed is concealed: no text and never continuable.
@@ -81,11 +81,18 @@ test('C2 contracts: a question is delegation null with safe text; HON reply text
     assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/, JSON.stringify(bad).slice(0, 120));
   }
   assert.equal(contracts.validateHonTurnReceipt(q).reply, 'You have two trials tomorrow.');
+  assert.deepEqual(contracts.validateHonTurnReceipt({ ...q, replyDetail: { ...detail, suggestions: ['marcus', 'kai', 'chad'] } }).replyDetail.suggestions, ['marcus', 'kai', 'chad']);
+  assert.equal(contracts.HON_REPLY_MAX_SUGGESTIONS, 3);
   assert.equal(contracts.validateHonTurnReceipt({ ...q, status: 'PROCESSING', reply: null }).reply, null);
   for (const bad of [{ ...q, reply: null }, { ...q, reply: '' }, { ...q, status: 'FAILED' }, { ...q, actionRequestIds: [ID()] }, { ...q, status: 'AWAITING_APPROVAL', actionRequestIds: [ID()] }, { ...q, reply: 'x'.repeat(24001) },
     { ...q, replyDetail: null }, { ...q, replyDetail: { ...detail, step: 4 } }, { ...q, replyDetail: { ...detail, step: 3, truncated: true, canContinue: true, continuesTurnId: ID() } },
     { ...q, replyDetail: { ...detail, step: 2 } }, { ...q, replyDetail: { ...detail, canContinue: true } }, { ...q, replyDetail: { ...detail, mode: 'MAX' } },
-    { ...q, status: 'PROCESSING', reply: null, replyDetail: { ...detail, truncated: true } }, { ...q, replyDetail: { ...detail, extra: 1 } }]) {
+    { ...q, status: 'PROCESSING', reply: null, replyDetail: { ...detail, truncated: true } }, { ...q, replyDetail: { ...detail, extra: 1 } },
+    // C3a suggestions: closed delegate set, unique, at most three, only on a whole COMPLETED answer, never when concealed.
+    { ...q, replyDetail: { ...detail, suggestions: undefined } }, { ...q, replyDetail: { ...detail, suggestions: ['claire'] } }, { ...q, replyDetail: { ...detail, suggestions: ['hon'] } },
+    { ...q, replyDetail: { ...detail, suggestions: ['kai', 'kai'] } }, { ...q, replyDetail: { ...detail, suggestions: ['kai', 'chad', 'marcus', 'kai'] } }, { ...q, replyDetail: { ...detail, suggestions: 'kai' } },
+    { ...q, status: 'PROCESSING', reply: null, replyDetail: { ...detail, suggestions: ['kai'] } }, { ...q, replyDetail: { ...detail, mode: 'DETAILED', truncated: true, canContinue: true, suggestions: ['kai'] } },
+    { ...q, reason: 'RESULT_CONCEALED', reply: null, replyDetail: { ...detail, suggestions: ['marcus'] } }]) {
     assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/, JSON.stringify(bad).slice(0, 120));
   }
   const turnId = ID(), refs = { workItemId: ID(), actionRequestId: null, invocationId: ID() };
@@ -107,7 +114,7 @@ function harness({ begun, agentScope = { organizationId: ORG, schoolId: SCHOOL, 
   const turnId = begun?.turnId ?? ID();
   const receipt = { turnId, conversationId: ID(), status: 'DELEGATING', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [], workItemIds: [], invocationId: null, reply: null, replyDetail: null,
     ...(begun?.agentKey === 'hon' ? { status: 'COMPLETED', delegatedAgentKeys: [], workItemIds: [ID()], invocationId: ID(), reply: 'Two trials are booked tomorrow.',
-      replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null } } : {}) };
+      replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] } } : {}) };
   const database = {
     async resolveCampaignScope(subject, permission) { calls.push(['scope:marcus', subject, permission]); return agentScope; },
     async resolveTeachingAssistantScope(subject) { calls.push(['scope:claire', subject]); return agentScope; },

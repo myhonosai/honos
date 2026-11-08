@@ -161,7 +161,9 @@ const fakes = {
 /** C2 HON reply fake: plain-text reply; records each input so the proof can inspect the server-built context. */
 function fakeHonProvider() {
   const provider = { calls: 0, mode: 'RESULT', held: [], inputs: [], ready: 'READY', reply: 'Focus on the two trials booked for tomorrow and review new leads.' };
-  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false });
+  // suggestions (C3a): what the model's closing SUGGEST line named, already parsed to the closed delegate set.
+  provider.suggestions = [];
+  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions] });
   provider.readiness = () => provider.ready;
   provider.generate = async (input) => {
     provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
@@ -170,7 +172,7 @@ function fakeHonProvider() {
     if (provider.mode === 'FAILED') throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_REJECTED');
     if (provider.mode === 'OVER') return { ...result(), outputTokens: 5000 };
     // Stopped at the plan's output limit with verified usage (finish_reason 'length').
-    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true };
+    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true, suggestions: [] };
     return result();
   };
   provider.complete = () => { for (const h of provider.held.splice(0)) h.resolve(result()); };
@@ -1802,7 +1804,7 @@ try {
   // STANDARD (default): SUMMARIZE route, 8000/1500 tokens, the owner's $0.08 ceiling; 10 credits reserved, settled to 1.
   assert.deepEqual([i1.status, i1.reserved_credits, i1.agent_key, i1.task_class, i1.work_type, i1.input_budget, i1.output_budget, Number(i1.max_provider_cost_microunits), i1.customer_credit_estimate, i1.reply_mode, i1.step, i1.truncated],
     ['COMPLETED', 0, 'hon', 'SUMMARIZE', 'AI_SUMMARIZE', 8000, 1500, 80000, 10, 'STANDARD', 1, false]);
-  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null });
+  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] });
   assert.match(i1.context_digest, /^[a-f0-9]{64}$/);
   const l1 = await row('SELECT customer_credits::int c, provider_cost_microunits::int cost, spend_class, school_id FROM hon.ai_usage_ledger WHERE id=$1 AND source_invocation_id=$2', [i1.usage_id, i1.id]);
   assert.deepEqual([l1.c, l1.cost, l1.spend_class, l1.school_id], [1, 900, 'AGENT_INFERENCE', o.school], 'one AGENT_INFERENCE ledger row at the provider-reported cost; a short answer settles to 1 credit, not the 10 reserved');
@@ -1900,7 +1902,7 @@ try {
   const di1 = await reply(d1.turnId);
   assert.deepEqual([d1.status, di1.task_class, di1.work_type, di1.input_budget, di1.output_budget, Number(di1.max_provider_cost_microunits), di1.customer_credit_estimate, di1.reserved_credits],
     ['COMPLETED', 'ANALYZE', 'AI_ANALYZE', 11000, 4000, 80000, 15, 0], JSON.stringify(d1));
-  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null });
+  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null, suggestions: [] });
   assert.equal((await row('SELECT customer_credits::int c FROM hon.ai_usage_ledger WHERE id=$1', [di1.usage_id])).c, 5, 'settled to ceil((300+4000)/1000), not the 15 reserved');
   assert.deepEqual([fakes.hon.inputs.at(-1).replyMode, fakes.hon.inputs.at(-1).outputBudget], ['DETAILED', 4000]);
   // Mode and continuation belong to questions only; a continuation keeps its answer's mode; a full answer is not continued.
@@ -1909,13 +1911,13 @@ try {
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Draft it', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }, K())), 'INVALID_HON_TURN');
   assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify({ text: 'x', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }), K()])))).error?.code, '22023', 'the database refuses a reply mode on a delegation too');
   const d2 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d1.turnId }, K());
-  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId });
+  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId, suggestions: [] });
   const cont = JSON.parse(fakes.hon.inputs.at(-1).facts).continuation;
   assert.deepEqual([cont.step, cont.maxSteps, cont.originalQuestion, cont.previousAnswerEnd, fakes.hon.inputs.at(-1).step], [2, 3, 'Give me a detailed enrollment growth analysis.', d1.reply.slice(-2500), 2]);
   assert.equal((await hon.receipt(scope, d1.turnId)).replyDetail.canContinue, false, 'an answer is continued once');
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue again', delegation: null, continueTurnId: d1.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   const d3 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d2.turnId }, K());
-  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId }, 'still cut off at the last step: shown as incomplete, no further step');
+  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId, suggestions: [] }, 'still cut off at the last step: shown as incomplete, no further step');
   const n4c = fakes.hon.calls;
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d3.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   assert.deepEqual([fakes.hon.calls - n4c, fakes.hon.calls - n4b.calls, (await ledgerRows(o)) - n4b.ledger], [0, 3, 3], 'three bounded steps, three calls, three ledger rows');
@@ -2281,6 +2283,68 @@ try {
   }
   for (const f of ['ai_agent_capability_permission(text)', 'require_ai_agent_capability(text)', 'hold_and_recheck_ai_planning_authority(text)']) assert.equal((await row(`SELECT has_function_privilege($1,'hon.${f}','EXECUTE') s`, [runtimeRole])).s, false, `${f}: internal helper`);
   pass('INV-27', `0212: the planner requires each agent's own capability (hon ai.invocation.plan, kai teaching.assistant.use, marcus marketing.assistant.use, chad crm.assistant.follow_up_draft); profile-only agents (alex, maya, jordan, lena, eian, claire) are never planned; the reviewed teaching-staff preset (CUSTOM_TEACHING_STAFF) is staff-assignable, excludes CRM/people/billing/reporting/marketing/approval, and is created through StaffRoleService and granted to a separate instructor; the instructor plans and uses Kai, is refused for Marcus, Chad and profile-only agents before any provider call, and gets HON answers without school business facts; authority is re-held and re-checked after the planner waits (pg_locks-observed ${raceEvidence.join(', ')}: refused, no plan/audit/outbox/idempotency effect)`);
+  }
+
+  // ---- INV-28 (C3a, 0214): HON suggests specialists; suggestions are data, filtered by live capability, and run nothing ----
+  {
+  const o = await makeOrg('inv-28');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const conv = await hon.create(scope, { title: 'Grow enrollment' }, K());
+  const ask = (text, key = K()) => hon.sendTurn(scope, conv.id, { text, delegation: null }, key);
+  const stored = async (turnId) => (await row('SELECT suggested_agents FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId])).suggested_agents;
+  const drop = (code) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, code]);
+  const add = (code) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [o.role, o.id, code]);
+  const effects = async () => (await row(`SELECT (SELECT count(*) FROM hon.marketing_ai_invocations WHERE organization_id=$1)::int m, (SELECT count(*) FROM hon.teaching_ai_invocations WHERE organization_id=$1)::int t,
+    (SELECT count(*) FROM hon.chad_follow_up_invocations WHERE organization_id=$1)::int c, (SELECT count(*) FROM hon.action_requests WHERE organization_id=$1)::int a`, [o.id]));
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY';
+  const quiet = { calls: { m: fakes.marcus.calls, t: fakes.claire.calls, c: fakes.chad.calls }, effects: await effects() };
+  // 1. All three suggested for an owner (every capability): stored, on the receipt and the thread after reload, in order.
+  fakes.hon.suggestions = ['marcus', 'kai', 'chad'];
+  const r1 = await ask('Help me improve enrollment.');
+  assert.deepEqual([r1.status, r1.replyDetail.suggestions, await stored(r1.turnId)], ['COMPLETED', ['marcus', 'kai', 'chad'], ['marcus', 'kai', 'chad']], JSON.stringify(r1));
+  assert.deepEqual((await hon.read(scope, conv.id)).turns.at(-1).replyDetail.suggestions, ['marcus', 'kai', 'chad'], 'persisted after reload');
+  // A suggestion runs nothing: no specialist call, invocation or Action Center request.
+  assert.deepEqual([{ m: fakes.marcus.calls, t: fakes.claire.calls, c: fakes.chad.calls }, await effects()], [quiet.calls, quiet.effects], 'suggestions are data only');
+  // 2. Shown only for agents the requester may use now: the stored row is unchanged evidence.
+  await drop('marketing.assistant.use');
+  assert.deepEqual((await hon.receipt(scope, r1.turnId)).replyDetail.suggestions, ['kai', 'chad'], 'marcus hidden without marketing.assistant.use');
+  // 3. Stored only for agents the requester may use when recorded: marcus is never stored here, even after the grant returns.
+  const r2 = await ask('What else could help?');
+  assert.deepEqual([r2.replyDetail.suggestions, await stored(r2.turnId)], [['kai', 'chad'], ['kai', 'chad']]);
+  await add('marketing.assistant.use');
+  assert.deepEqual([(await hon.receipt(scope, r1.turnId)).replyDetail.suggestions, (await hon.receipt(scope, r2.turnId)).replyDetail.suggestions], [['marcus', 'kai', 'chad'], ['kai', 'chad']]);
+  // 4. A concealed answer shows no suggestions (no reporting.view for a reporting-derived answer).
+  await drop('reporting.view');
+  const hidden = await hon.receipt(scope, r1.turnId);
+  assert.deepEqual([hidden.reason, hidden.reply, hidden.replyDetail.suggestions], ['RESULT_CONCEALED', null, []]);
+  await add('reporting.view');
+  // 5. A cut-off answer never carries suggestions, and the table refuses any on it.
+  fakes.hon.mode = 'TRUNCATED';
+  const r3 = await hon.sendTurn(scope, conv.id, { text: 'Write the full plan.', delegation: null, replyMode: 'DETAILED' }, K());
+  fakes.hon.mode = 'RESULT';
+  assert.deepEqual([r3.status, r3.replyDetail.truncated, r3.replyDetail.suggestions, await stored(r3.turnId)], ['COMPLETED', true, [], []]);
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{kai}' WHERE turn_id=$1", [r3.turnId]))).error?.code, '23514', 'no suggestions on a cut-off answer');
+  for (const bad of ['{claire}', '{hon}', '{kai,chad,marcus,kai}']) {
+    assert.equal((await settle(admin.query('UPDATE hon.hon_reply_invocations SET suggested_agents=$2::text[] WHERE turn_id=$1', [r1.turnId, bad]))).error?.code, '23514', `${bad} refused`);
+  }
+  // 6. The database refuses malformed suggestions from the API (closed set, unique, at most three) before any write.
+  fakes.hon.mode = 'HOLD';
+  const pending = settle(ask('Hold for a malformed record.'));
+  for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
+  const sending = (await row("SELECT turn_id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).turn_id;
+  const base = { reply: 'x', inputTokens: 1, outputTokens: 1, providerCostMicrounits: 0 };
+  for (const suggestions of [['claire'], ['kai', 'kai'], ['kai', 'chad', 'marcus', 'kai'], 'kai', [1], [null]]) {
+    const r = await settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, suggestions })])));
+    assert.equal(r.error?.code, '22023', `${JSON.stringify(suggestions)} refused`);
+  }
+  fakes.hon.suggestions = ['chad'];
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  const r4 = (await pending).value;
+  assert.deepEqual([r4?.status, r4?.replyDetail?.suggestions, await stored(sending)], ['COMPLETED', ['chad'], ['chad']], JSON.stringify(r4 ?? (await pending).error));
+  fakes.hon.suggestions = [];
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])','EXECUTE') s", [runtimeRole])).s, false, 'internal helper');
+  pass('INV-28', 'C3a: HON suggestions are a closed list (marcus, kai, chad; unique; at most three) stored with the reply only for agents the requester holds the capability for, shown only on a whole, visible COMPLETED answer and only for agents still held now (concealed and cut-off answers show none; the table refuses others), malformed suggestions are refused before any write, and a suggestion runs no specialist, invocation or Action Center request');
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
