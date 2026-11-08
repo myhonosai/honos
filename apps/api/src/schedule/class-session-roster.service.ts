@@ -47,15 +47,20 @@ export class ClassSessionRosterService {
         // Every roster entry: a booking or an attendance record of this exact session (walk-ins have no booking).
         const entries = `SELECT student_profile_id FROM hon.class_bookings WHERE class_session_id = $3::uuid AND organization_id = $1 AND school_id = $2
                          UNION SELECT student_profile_id FROM hon.attendance_records WHERE class_session_id = $3::uuid AND organization_id = $1 AND school_id = $2`;
+        let position: { familyName: string; givenName: string } | undefined;
         if (after) {
-          // The anchor must still be on this roster with the same person version; otherwise the position moved.
-          const anchor = await client.query(
-            `SELECT 1 FROM (${entries}) AS e JOIN hon.student_profiles AS sp ON sp.id = e.student_profile_id
+          // The anchor must still be on this roster with the same person version; otherwise the position moved. The
+          // names read here, at that verified version, are the keyset position: a concurrent name edit after this
+          // statement cannot move it (READ COMMITTED takes a new snapshot per statement).
+          const anchor = await client.query<{ familyName: string; givenName: string }>(
+            `SELECT p.family_name AS "familyName", p.given_name AS "givenName"
+             FROM (${entries}) AS e JOIN hon.student_profiles AS sp ON sp.id = e.student_profile_id
              JOIN hon.people AS p ON p.id = sp.person_id AND p.organization_id = $1 AND p.school_id = $2
              WHERE sp.id = $4::uuid AND p.version = $5::bigint`,
             [context.organizationId, context.schoolId, sessionId, after[0], after[1]],
           );
           if (anchor.rowCount !== 1) staleListCursor();
+          position = anchor.rows[0];
         }
         const result = await client.query<RosterRow>(
           `SELECT sp.id AS "studentProfileId", sp.person_id AS "personId", p.given_name AS "givenName", p.family_name AS "familyName",
@@ -69,13 +74,10 @@ export class ClassSessionRosterService {
            JOIN hon.people AS p ON p.id = sp.person_id AND p.organization_id = $1 AND p.school_id = $2
            LEFT JOIN hon.class_bookings AS b ON b.class_session_id = $3::uuid AND b.student_profile_id = sp.id AND b.organization_id = $1 AND b.school_id = $2
            LEFT JOIN hon.attendance_records AS a ON a.class_session_id = $3::uuid AND a.student_profile_id = sp.id AND a.organization_id = $1 AND a.school_id = $2
-           WHERE $5::uuid IS NULL OR (p.family_name, p.given_name, sp.id) > (
-             SELECT ap.family_name, ap.given_name, asp.id FROM hon.student_profiles AS asp
-             JOIN hon.people AS ap ON ap.id = asp.person_id AND ap.organization_id = $1 AND ap.school_id = $2
-             WHERE asp.id = $5::uuid AND asp.organization_id = $1 AND asp.school_id = $2)
+           WHERE $5::uuid IS NULL OR (p.family_name, p.given_name, sp.id) > ($6::text, $7::text, $5::uuid)
            ORDER BY p.family_name ASC, p.given_name ASC, sp.id ASC
            LIMIT $4`,
-          [context.organizationId, context.schoolId, sessionId, limit + 1, after?.[0] ?? null],
+          [context.organizationId, context.schoolId, sessionId, limit + 1, after?.[0] ?? null, position?.familyName ?? null, position?.givenName ?? null],
         );
         const rows = result.rows.slice(0, limit);
         const last = result.rows.length > limit ? rows[rows.length - 1] : undefined;

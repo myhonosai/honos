@@ -8,7 +8,7 @@ export const CLASS_SESSION_ROSTER_ATTENDANCE_STATUSES = ['PRESENT', 'LATE', 'EXC
 
 export interface ClassSessionRosterBooking {
   id: string;
-  kind: 'REGULAR' | 'TRIAL' | 'MAKEUP' | 'PRIVATE_LESSON' | 'EVENT';
+  kind: 'REGULAR' | 'TRIAL' | 'MAKEUP' | 'PRIVATE_LESSON' | 'EVENT' | 'CLASS_PASS';
   status: (typeof CLASS_SESSION_ROSTER_BOOKING_STATUSES)[number];
   source: 'STAFF' | 'PARENT_APP' | 'AUTOMATION' | 'INTEGRATION';
   bookedAt: string;
