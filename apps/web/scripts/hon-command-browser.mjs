@@ -452,9 +452,10 @@ async function marketingApiRoute(route, path, method, url) {
 }
 // Class rosters (U5): the school's classes and one class's roster, two pages (synthetic). Read-only.
 const rst = { denied: false, gate: null, step: null, reads: [] };
-// The browser splits upcoming and past by its own clock, so these times follow the wall clock.
+// The class list starts at the school's local today (UTC here), so these times follow the wall clock.
 const wall = (hours) => new Date(Math.floor(Date.now() / 1000) * 1000 + hours * 3_600_000).toISOString();
-const rstSessions = () => [['Kids Taekwondo', 2, 'SCHEDULED', 'Main mat'], ['Adult sparring', 28, 'SCHEDULED', null], ['Saturday open mat', -50, 'COMPLETED', 'Main mat']].map(([name, hours, status, roomName], n) => ({
+const rstSessions = () => [['Kids Taekwondo', 2, 'SCHEDULED', 'Main mat'], ['Adult sparring', 28, 'SCHEDULED', null], ['Saturday open mat', -50, 'COMPLETED', 'Main mat'],
+  ...Array.from({ length: 50 }, (_, n) => [`Open mat ${String(n + 1).padStart(2, '0')}`, 72 + n * 24, 'SCHEDULED', 'Side mat'])].map(([name, hours, status, roomName], n) => ({
   sessionId: id(950 + n), name, startsAt: wall(hours), endsAt: wall(hours + 1), roomName, capacity: 24, bookingPolicy: 'OPTIONAL_BOOKING', status, createdAt: iso(-400) })).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 const rstFamilies = ['Ahn', 'Baker', 'Choi', 'Diaz', 'Evans', 'Fischer', 'García', 'Hwang', 'Ito', 'Jones', 'Kim', 'López'];
 const rstStudents = (sessionId) => sessionId !== id(950) ? [] : Array.from({ length: 60 }, (_, n) => ({ studentProfileId: id(1000 + n), personId: id(1100 + n),
@@ -467,15 +468,22 @@ function resetRoster(over = {}) { Object.assign(rst, { denied: false, gate: null
 async function rosterApiRoute(route, path, method, url, prefix) {
   if (method !== 'GET') return null;
   const roster = path.match(new RegExp(`^${prefix}/schedule/sessions/([0-9a-f-]{36})/roster$`));
-  if (path !== `${prefix}/schedule/sessions` && !roster) return null;
-  const cursor = url.searchParams.get('cursor');
-  rst.reads.push(roster ? `roster:${roster[1]}:${cursor ?? 'first'}` : 'sessions');
+  if (path !== `${prefix}/schedule/sessions/list` && !roster) return null;
+  const cursor = url.searchParams.get('cursor'), from = url.searchParams.get('from');
+  rst.reads.push(roster ? `roster:${roster[1]}:${cursor ?? 'first'}` : `list:${from ?? 'today'}:${cursor ?? 'first'}`);
   const step = rst.step; rst.step = null;
   if (rst.gate) { const gate = rst.gate; rst.gate = null; await gate; }
   if (step === 'session') return json(route, 401, { code: 'SIGN_IN_REQUIRED' });
   if (!roster) {
-    if (route.request().headers()['x-hon-human-read'] !== 'class-sessions' || url.search) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
-    return json(route, 200, { data: rstSessions(), meta: { requestId: id(949), correlationId: id(949) } });
+    if (route.request().headers()['x-hon-human-read'] !== 'class-sessions') return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+    if ([...url.searchParams.keys()].some((k) => !['from', 'limit', 'cursor'].includes(k)) || url.searchParams.get('limit') !== '50') return json(route, 400, { code: 'CLASS_SESSIONS_READ_SELECTORS_NOT_ACCEPTED' });
+    if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
+    const realToday = new Date().toISOString().slice(0, 10), listFrom = from ?? realToday;
+    const all = rstSessions().filter((s) => s.startsAt >= `${listFrom}T00:00:00.000Z`), start = cursor === `list-p2:${listFrom}` ? 50 : 0;
+    // 'midnight': a later page read after the school's local midnight reports the new day (paging itself continues).
+    const localToday = step === 'midnight' && cursor ? new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) : realToday, fromDate = from ?? localToday;
+    return json(route, 200, { data: all.slice(start, start + 50), meta: { requestId: id(949), correlationId: id(949), limit: 50,
+      nextCursor: start + 50 < all.length ? `list-p2:${listFrom}` : null, schoolTimezone: 'UTC', localToday, fromDate } });
   }
   if (rst.denied) return json(route, 403, { code: 'ATTENDANCE_FORBIDDEN' });
   if (step === 'cursor' && cursor) return json(route, 400, { code: 'INVALID_CURSOR' });
@@ -2077,34 +2085,39 @@ async function rosterPage(viewport, { nextTheme = 'modern', language = 'en' } = 
   await section().locator('h1').waitFor({ timeout: 20000 });
   return { ctx, page, section };
 }
-const ROSTER_TITLES = { en: ['Class rosters', 'Past', 'Show more', 'Record attendance'], ko: ['수업 명단', '지난 수업', '더 보기', '출석 기록'], es: ['Listas de clase', 'Pasadas', 'Mostrar más', 'Registrar asistencia'] };
+const ROSTER_TITLES = { en: ['Class rosters', 'Show more classes', 'Show more', 'Record attendance'], ko: ['수업 명단', '수업 더 보기', '더 보기', '출석 기록'], es: ['Listas de clase', 'Mostrar más clases', 'Mostrar más', 'Registrar asistencia'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'es'],
   ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en']]) {
-  await check(`Class rosters ${nextTheme} ${language} ${name}: upcoming classes, a two-page roster with counts, and links`, async () => {
+  await check(`Class rosters ${nextTheme} ${language} ${name}: classes from today, two class pages, a two-page roster with counts, links, and an earlier start date`, async () => {
     resetRoster();
-    const [title, past, more, record] = ROSTER_TITLES[language];
+    const [title, moreClasses, more, record] = ROSTER_TITLES[language];
     const { ctx, page, section } = await rosterPage(viewport, { nextTheme, language });
     await section().getByTestId('session-list').waitFor();
     assert.equal(await section().locator('h1').innerText(), title);
     const listText = await section().getByTestId('session-list').innerText();
-    assert.ok(listText.includes('Kids Taekwondo') && listText.includes('Adult sparring') && !listText.includes('Saturday open mat'), 'opens on upcoming');
+    assert.ok(listText.includes('Kids Taekwondo') && listText.includes('Adult sparring') && !listText.includes('Saturday open mat'), 'opens on the school today');
+    assert.equal(await section().getByTestId('session-list').locator('li').count(), 50);
+    await section().getByRole('button', { name: moreClasses }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="session-list"] li').length === 52);
+    assert.equal(await section().getByRole('button', { name: moreClasses }).count(), 0, 'no more classes after the last page');
     await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
     await section().getByTestId('roster-table').waitFor();
     assert.equal(await section().getByTestId('roster-table').locator('tbody tr').count(), 50);
-    await section().getByRole('button', { name: more }).click();
+    await section().getByRole('button', { name: more, exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('[data-testid="roster-table"] tbody tr').length === 60);
     assert.deepEqual(rst.reads.filter((r) => r.startsWith('roster')), [`roster:${id(950)}:first`, `roster:${id(950)}:page-2`]);
-    assert.equal(await section().getByRole('button', { name: more }).count(), 0, 'no more after the last page');
+    assert.deepEqual(rst.reads.filter((r) => r.startsWith('list')), ['list:today:first', `list:today:list-p2:${new Date().toISOString().slice(0, 10)}`]);
+    assert.equal(await section().getByRole('button', { name: more, exact: true }).count(), 0, 'no more after the last page');
     const counts = await section().getByTestId('roster-counts').innerText();
     assert.ok(/\b6\b/.test(counts), counts);
     assert.equal(await section().getByRole('link', { name: record }).getAttribute('href'), `/staff/attendance?organizationId=${scope.organizationId}&schoolId=${scope.schoolId}`);
     await noOverflow(page, `roster-${nextTheme}-${language}-${name}`);
     await axe(page, `roster-${nextTheme}-${language}-${name}`);
     await shot(page, `roster-${nextTheme}-${language}-${name}`, true);
-    const reads = rst.reads.length;
-    await section().getByRole('button', { name: past, exact: true }).click();
+    const earlier = new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10);
+    await section().locator('input[type="date"]').fill(earlier);
     await page.waitForFunction(() => document.querySelector('[data-testid="session-list"]')?.textContent?.includes('Saturday open mat'));
-    assert.equal(rst.reads.length, reads, 'upcoming and past split only what was read');
+    assert.equal(rst.reads.at(-1), `list:${earlier}:first`);
     await ctx.close();
   });
 }
@@ -2114,10 +2127,31 @@ await check('Class rosters: a roster that changed between pages is read again fr
   await section().getByRole('button', { name: /Kids Taekwondo/ }).click();
   await section().getByTestId('roster-table').waitFor();
   rst.step = 'cursor';
-  await section().getByRole('button', { name: 'Show more' }).click();
+  await section().getByRole('button', { name: 'Show more', exact: true }).click();
   await section().getByText('The roster changed while it was being read, so it was read again from the start.').waitFor();
   assert.deepEqual(rst.reads.filter((r) => r.startsWith('roster')), [`roster:${id(950)}:first`, `roster:${id(950)}:page-2`, `roster:${id(950)}:first`]);
   assert.equal(await page.locator('[data-testid="roster-table"] tbody tr').count(), 50, 'nothing from the earlier pages is kept');
+  await ctx.close();
+});
+await check('Class rosters: a later class page read after the school midnight keeps paging without a restart', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByTestId('session-list').waitFor();
+  rst.step = 'midnight';
+  await section().getByRole('button', { name: 'Show more classes' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="session-list"] li').length === 52);
+  assert.equal(await section().getByText(/class list changed/).count(), 0, 'no restart');
+  assert.equal(rst.reads.filter((r) => r.startsWith('list')).length, 2);
+  await ctx.close();
+});
+await check('Class rosters: a class-list cursor the API refuses reads the list again from the start, once', async () => {
+  resetRoster();
+  const { ctx, page, section } = await rosterPage({ width: 1440, height: 900 });
+  await section().getByTestId('session-list').waitFor();
+  rst.step = 'cursor';
+  await section().getByRole('button', { name: 'Show more classes' }).click();
+  await section().getByText('The class list changed while it was being read, so it was read again from the start.').waitFor();
+  assert.equal(await page.locator('[data-testid="session-list"] li').count(), 50, 'nothing from the earlier pages is kept');
   await ctx.close();
 });
 await check('Class rosters: an empty roster says so; denied access says so and shows nobody', async () => {
@@ -2147,7 +2181,7 @@ for (const [what, how, start, retire] of [
   ['roster read', 'opening another class', async (page, section) => { await section().getByRole('button', { name: /Kids Taekwondo/ }).click(); },
     async (page, section) => { await section().getByRole('button', { name: /Adult sparring/ }).click(); }],
   ['next-page read', 'opening another class', async (page, section) => { await section().getByRole('button', { name: /Kids Taekwondo/ }).click(); await section().getByTestId('roster-table').waitFor();
-    rst.gate = new Promise((done) => { rst.release = done; }); rst.step = 'session'; await section().getByRole('button', { name: 'Show more' }).click(); },
+    rst.gate = new Promise((done) => { rst.release = done; }); rst.step = 'session'; await section().getByRole('button', { name: 'Show more', exact: true }).click(); },
     async (page, section) => { await section().getByRole('button', { name: /Adult sparring/ }).click(); }],
   ['class list read', 'closing the view', async (page, section) => { await section().getByRole('button', { name: 'Refresh' }).click(); },
     async (page) => { await page.evaluate(() => window.next.router.push('/staff/search')); await page.waitForFunction(() => !document.querySelector('section[aria-labelledby="roster-title"]')); }]]) {

@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ClassSessionRosterEntry, CurrentSchoolClassSession } from '@hon/contracts';
 import { ROSTER_LANGUAGES, rosterText } from '../src/components/class-roster/copy';
-import { RosterError, rosterApi, rosterCounts, verifyRosterPage } from '../src/components/class-roster/http';
-import { RosterView, sessionsFor, type RosterViewProps } from '../src/components/class-roster/view';
+import { RosterError, rosterApi, rosterCounts, validFromDate, verifyRosterPage, verifySessionPage } from '../src/components/class-roster/http';
+import { RosterView, type RosterViewProps } from '../src/components/class-roster/view';
 import { SCHOOL_SHELL_NAV, schoolShellActiveRoute } from '../src/components/school-shell/catalog';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { id, scope } from './account-status-fixtures';
@@ -27,25 +27,51 @@ const page = (data: unknown[], over: Record<string, unknown> = {}) => ({ data, m
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const stub = (response: Response) => { const f = vi.fn(async () => response); vi.stubGlobal('fetch', f); return f; };
 const signal = () => new AbortController().signal;
-const sessions = [session(1, 1), session(2, 26, { name: 'Adult class', roomName: null }), session(3, -48, { name: 'Past class', status: 'COMPLETED' })];
-const props = (over: Partial<RosterViewProps> = {}): RosterViewProps => ({ language: 'en', timeZone: 'UTC', waiting: false, concealed: false, scope, now: NOW, tab: 'UPCOMING',
-  list: { state: 'READY', items: sessions }, selectedId: null, roster: { state: 'NONE' }, ...over });
+const sessions = [session(3, -48, { name: 'Past class', status: 'COMPLETED' }), session(1, 1), session(2, 26, { name: 'Adult class', roomName: null })];
+const listMeta = (over: Record<string, unknown> = {}) => ({ requestId: id(6), correlationId: id(6), limit: 50, nextCursor: null, schoolTimezone: 'America/Los_Angeles', localToday: '2026-11-08', fromDate: '2026-11-08', ...over });
+const listReady = (items: CurrentSchoolClassSession[], over: Record<string, unknown> = {}) => ({ state: 'READY', from: null, items, nextCursor: null, schoolTimezone: 'UTC',
+  localToday: '2026-11-08', fromDate: '2026-11-08', more: 'IDLE', restarted: false, ...over }) as RosterViewProps['list'];
+const props = (over: Partial<RosterViewProps> = {}): RosterViewProps => ({ language: 'en', waiting: false, concealed: false, scope, from: null,
+  list: listReady(sessions.slice(1)), selectedId: null, roster: { state: 'NONE' }, ...over });
 const ready = (entries: ClassSessionRosterEntry[], over: Record<string, unknown> = {}) => ({ state: 'READY', sessionId: id(71), entries, nextCursor: null,
   more: 'IDLE', restarted: false, ...over }) as RosterViewProps['roster'];
 const render = (over: Partial<RosterViewProps> = {}) => renderToStaticMarkup(<RosterView {...props(over)}/>);
 
-it('reads the session list with the human-read header and no query, and a roster page with only limit and cursor', async () => {
-  const f = stub(json({ data: [], meta: { requestId: id(5), correlationId: id(5) } }));
-  await expect(rosterApi.sessions(scope, signal(), () => true)).resolves.toEqual([]);
+it('reads the class list from a date with the human-read header, and a roster page with only limit and cursor', async () => {
+  const f = stub(json({ data: [], meta: listMeta() }));
+  await expect(rosterApi.sessions(scope, null, null, signal(), () => true)).resolves.toMatchObject({ items: [], fromDate: '2026-11-08', schoolTimezone: 'America/Los_Angeles' });
   const [path, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-  expect(path).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions`);
+  expect(path).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions/list?limit=50`);
   expect(init).toMatchObject({ method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', headers: { 'X-HON-Human-Read': 'class-sessions' } });
-  const g = stub(json(page([entry(1)], { nextCursor: 'abc.def' })));
+  const full = Array.from({ length: 50 }, (_, n) => session(10 + n, n));
+  const g = stub(json({ data: full, meta: listMeta({ fromDate: '2026-10-01', nextCursor: 'p2' }) }));
+  await expect(rosterApi.sessions(scope, '2026-10-01', 'c1', signal(), () => true)).resolves.toMatchObject({ nextCursor: 'p2' });
+  expect((g.mock.calls[0] as unknown as [string])[0]).toMatch(/\/schedule\/sessions\/list\?from=2026-10-01&limit=50&cursor=c1$/);
+  await expect(rosterApi.sessions(scope, '2026-02-30', null, signal(), () => true)).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
+  expect(validFromDate('2026-02-28')).toBe(true); expect(validFromDate('2026-02-30')).toBe(false); expect(validFromDate('1999-12-31')).toBe(false);
+  const h = stub(json(page([entry(1)], { nextCursor: 'abc.def' })));
   await expect(rosterApi.roster(scope, id(71).toUpperCase(), null, signal(), () => true)).resolves.toMatchObject({ nextCursor: 'abc.def' });
-  expect((g.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions/${id(71)}/roster?limit=50`);
-  const h = stub(json(page([entry(2)])));
+  expect((h.mock.calls[0] as unknown as [string])[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/schedule/sessions/${id(71)}/roster?limit=50`);
+  const k = stub(json(page([entry(2)])));
   await rosterApi.roster(scope, id(71), 'abc.def', signal(), () => true);
-  expect((h.mock.calls[0] as unknown as [string])[0]).toMatch(/\/roster\?limit=50&cursor=abc.def$/);
+  expect((k.mock.calls[0] as unknown as [string])[0]).toMatch(/\/roster\?limit=50&cursor=abc.def$/);
+});
+
+it('verifies a class-list page strictly; drift is unavailable', async () => {
+  for (const bad of [{ data: [], meta: listMeta({ extra: 1 }) }, { data: [], meta: listMeta({ fromDate: '2026-11-09' }) }, { data: [session(1, 1)], meta: listMeta({ nextCursor: 'x' }) },
+    { data: [session(2, 26), session(1, 1)], meta: listMeta() }, { data: [], meta: listMeta({ limit: 100 }) }, { data: [], meta: listMeta({ localToday: '2026-13-01' }) }]) {
+    expect(() => verifySessionPage(bad, null)).toThrow();
+  }
+  expect(() => verifySessionPage({ data: [], meta: listMeta() }, '2026-10-01')).toThrow();
+  expect(() => verifySessionPage({ data: [], meta: listMeta({ schoolTimezone: 'Not/AZone' }) }, null)).toThrow(RosterError);
+  stub(json({ data: [], meta: listMeta({ schoolTimezone: 'Not/AZone' }) }));
+  await expect(rosterApi.sessions(scope, null, null, signal(), () => true)).rejects.toMatchObject({ kind: 'TIMEZONE' });
+  expect(verifySessionPage({ data: [session(1, 1)], meta: listMeta({ fromDate: '2026-10-01' }) }, '2026-10-01').items).toHaveLength(1);
+  for (const [response, kind] of [[json({ code: 'CLASS_SESSIONS_READ_FORBIDDEN' }, 403), 'DENIED'], [json({ code: 'INVALID_CURSOR' }, 400), 'CURSOR'],
+    [json({ code: 'SCHOOL_TIMEZONE_INVALID' }, 409), 'TIMEZONE'], [json({ code: 'VALIDATION_FAILED' }, 400), 'UNAVAILABLE'], [json({ code: 'CLASS_SESSIONS_READ_TIMEOUT' }, 503), 'UNAVAILABLE']] as const) {
+    stub(response);
+    await expect(rosterApi.sessions(scope, null, 'c', signal(), () => true)).rejects.toMatchObject({ kind });
+  }
 });
 
 it('maps refusals exactly; drift is unavailable, never an empty roster', async () => {
@@ -62,8 +88,7 @@ it('maps refusals exactly; drift is unavailable, never an empty roster', async (
   expect(verifyRosterPage(page([entry(1, { booking: null, attendance: recorded() }), entry(2, { booking: booking('BOOKED', 'CLASS_PASS') })])).entries).toHaveLength(2);
   // An unknown or other-school session is an empty roster, not an error.
   expect(verifyRosterPage(page([])).entries).toEqual([]);
-  stub(json({}, 403));
-  await expect(rosterApi.sessions(scope, signal(), () => true)).rejects.toMatchObject({ kind: 'DENIED' });
+
 });
 
 it('a 401 for a retired read never ends the session; a current one does', async () => {
@@ -71,7 +96,7 @@ it('a 401 for a retired read never ends the session; a current one does', async 
   stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
   await expect(rosterApi.roster(scope, id(71), null, signal(), () => false)).rejects.toBeInstanceOf(RosterError);
   stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
-  await expect(rosterApi.sessions(scope, signal(), () => false)).rejects.toMatchObject({ kind: 'SESSION' });
+  await expect(rosterApi.sessions(scope, null, null, signal(), () => false)).rejects.toMatchObject({ kind: 'SESSION' });
   expect(seen).not.toHaveBeenCalled();
   stub(json({ code: 'SIGN_IN_REQUIRED' }, 401));
   await expect(rosterApi.roster(scope, id(71), null, signal(), () => true)).rejects.toMatchObject({ kind: 'SESSION' });
@@ -91,15 +116,17 @@ it('shows nothing private before the shell verifies the school, while concealed,
   expect(render({ concealed: true })).toContain('Rosters are hidden');
 });
 
-it('splits classes into upcoming and past locally, and shows list states', () => {
-  expect(sessionsFor(sessions, 'UPCOMING', NOW).map((s) => s.name)).toEqual(['Kids class 1', 'Adult class']);
-  expect(sessionsFor(sessions, 'PAST', NOW).map((s) => s.name)).toEqual(['Past class']);
-  const html = render();
-  expect(html).toContain('Kids class 1'); expect(html).not.toContain('Past class'); expect(html).toContain('2 shown'); expect(html).toContain('No room');
-  expect(html).toContain('up to 50 classes starting from 30 days ago');
+it('shows the classes from the chosen date in school time, more classes, and honest list states', () => {
+  const html = render({ list: listReady(sessions, { schoolTimezone: 'America/Los_Angeles', nextCursor: 'p2' }) });
+  expect(html).toContain('Past class'); expect(html).toContain('Kids class 1'); expect(html).toContain('3 shown'); expect(html).toContain('No room');
+  expect(html).toContain('Classes from Nov 8, 2026 on, in start order. Times are school time (America/Los_Angeles).');
+  expect(html).toContain('>Show more classes</button>'); expect(html).toContain('type="date"'); expect(html).toMatch(/aria-pressed="true"[^>]*>Today</);
+  expect(render({ from: '2026-10-01', list: listReady(sessions) })).not.toContain('Kids class 1');
+  expect(render({ list: listReady(sessions, { restarted: true }) })).toContain('class list changed while it was being read');
   expect(render({ list: { state: 'DENIED' } })).toContain('does not include the class schedule');
+  expect(render({ list: { state: 'TIMEZONE' } })).toContain('time zone is not set correctly');
   expect(render({ list: { state: 'UNAVAILABLE' } })).toContain('Nothing is shown');
-  expect(render({ list: { state: 'READY', items: [] } })).toContain('No classes here');
+  expect(render({ list: listReady([]) })).toContain('No classes here');
 });
 
 it('a selected class shows its own roster, counts, a partial note, and links that carry only verified selectors; no form', () => {
@@ -110,7 +137,7 @@ it('a selected class shows its own roster, counts, a partial note, and links tha
   expect(html).toContain(`href="/staff/schedule/bookings?organizationId=${scope.organizationId}&amp;schoolId=${scope.schoolId}&amp;sessionId=${id(71)}"`);
   expect(html).not.toMatch(/<form|method="post"/i);
   expect(render({ selectedId: id(72), roster: ready([entry(1)]) })).not.toContain('Ana1');
-  expect(render({ selectedId: id(73), tab: 'PAST' })).not.toContain('/staff/schedule/bookings');
+  expect(render({ selectedId: id(73), list: listReady(sessions) })).not.toContain('/staff/schedule/bookings');
   expect(render({ selectedId: id(71), roster: ready([]) })).toContain('Nobody is booked');
   expect(render({ selectedId: id(71), roster: ready([entry(1)], { restarted: true }) })).toContain('read again from the start');
   expect(render({ selectedId: id(71), roster: { state: 'DENIED' } })).toContain('who can record attendance');
