@@ -2414,3 +2414,27 @@ DO $$ DECLARE r text; BEGIN
     EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM '||quote_ident(r);
   END LOOP;
 END $$;
+
+-- B-ID-5 0241 HON OS public sign-up: three private forced-RLS tables; the sign-up and its read are the only runtime
+-- entry points. The program row has no runtime write path (TEST_MODE only by the migration owner of a test database).
+DO $$ DECLARE t text; r text; f text; c text; BEGIN
+  IF to_regprocedure('hon.register_hon_os_school(text,text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply public sign-up migration 0241 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon_os_signup_program','hon_os_signup_terms_versions','hon_os_school_registrations'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['guard_hon_os_signup_program()','hon_os_signup_open()','hon_os_signup_terms_json(hon.hon_os_signup_terms_versions)',
+    'hon_os_registration_json(hon.hon_os_school_registrations)','hon_os_signup_name_valid(jsonb)','hon_os_signup_slug(text)',
+    'register_hon_os_school(text,text,jsonb,uuid)','read_hon_os_registration(text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.register_hon_os_school(text,text,jsonb,uuid),hon.read_hon_os_registration(text) TO hon_runtime;
+  END IF;
+END $$;

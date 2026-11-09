@@ -1241,6 +1241,16 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
   }
 
+  async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ACCOUNT_UNAVAILABLE');
+  }
+
   async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       invite: {sql: "SELECT hon.manage_school_family_access_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},
