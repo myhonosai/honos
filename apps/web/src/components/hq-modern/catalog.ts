@@ -68,7 +68,6 @@ export function hqGroupContains(group: HqNavGroup, path: string): boolean {
 export const HQ_PLANNED: Readonly<Record<string, { title: string; description: string; areas: readonly string[] }>> = {
   '/hq/revenue': { title: 'Revenue', description: 'Company revenue reporting requires an authoritative HQ financial projection.', areas: ['MRR & ARR', 'Cash & refunds', 'Gross margin'] },
   '/hq/approvals': { title: 'Approvals', description: 'An HQ approval queue is not available. School approval authority is separate and is not reused here.', areas: ['Pending decisions', 'Approval history', 'Policy evidence'] },
-  '/hq/support': { title: 'Support', description: 'HQ support cases and escalations are not available. This interface does not grant school access or impersonation.', areas: ['Cases & escalations', 'Failed operations', 'Owner decisions'] },
   '/hq/growth': { title: 'Growth & Referrals', description: 'HON company growth operations, governed by the owner. No campaign, contest or reward is active from this interface.', areas: ['Champions Club', 'Referral competitions', 'Founder campaigns'] },
   '/hq/growth/champions-club': { title: 'Champions Club', description: 'The permanent school referral program. Qualification, attribution and reward accounting require approved services before activation.', areas: ['Referral invitations', 'Qualified milestones', 'Member progress'] },
   '/hq/growth/contests': { title: 'Referral Contests', description: 'Owner-controlled competitions. Publishing, changing live rules and awarding prizes require independently authorized workflows.', areas: ['Draft & schedule', 'Launch & pause', 'End & review winners'] },
@@ -82,6 +81,7 @@ export function hqPageLabel(path: string): string {
   if (/^\/hq\/revenue\/invoices\/[0-9a-f-]{36}$/i.test(path)) return 'Invoice detail';
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
   if (/^\/hq\/schools\/[0-9a-f-]{36}$/i.test(path)) return 'School detail';
+  if (/^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)) return 'Support case';
   if (path === '/hq/revenue') return 'Revenue';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
   if (fixed) return fixed.title;

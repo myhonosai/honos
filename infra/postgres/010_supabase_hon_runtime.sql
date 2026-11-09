@@ -2404,3 +2404,31 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hq_school_detail_from_hq(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-HQ-2 0232 (proposed) HQ support records: no table privileges; three commands and three reads are the only runtime boundary.
+DO $$ DECLARE r text; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['hq_support_cases','hq_support_case_events','hq_support_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r); END LOOP;
+  END LOOP;
+END $$;
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['guard_hq_support_case()','guard_hq_support_evidence()','hq_support_principal_eligible(uuid)','require_hq_support_actor(text)',
+    'hq_support_person_json(uuid)','hq_support_case_json(hon.hq_support_cases)','hq_support_event_json(hon.hq_support_case_events)','hq_support_assignees_json()',
+    'hq_support_claim(uuid,uuid,text,text)','hq_support_text(jsonb,text,integer,integer)','hq_support_lock_case(uuid,integer)','hq_support_expected(jsonb)',
+    'open_hq_support_case(text,jsonb,uuid)','add_hq_support_note(text,uuid,jsonb,uuid)','change_hq_support_case(text,uuid,jsonb,uuid)',
+    'read_hq_support_cases(text,text,uuid,timestamptz,uuid,integer)','read_hq_support_case(text,uuid)','read_hq_support_schools(text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.open_hq_support_case(text,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.add_hq_support_note(text,uuid,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.change_hq_support_case(text,uuid,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_support_cases(text,text,uuid,timestamptz,uuid,integer) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_support_case(text,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_support_schools(text) TO hon_runtime;
+  END IF;
+END $$;
