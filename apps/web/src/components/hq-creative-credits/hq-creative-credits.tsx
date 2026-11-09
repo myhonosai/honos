@@ -9,8 +9,8 @@ import { CreditsView, type DetailState, type ReadState } from './view';
 const failed = (error: unknown): 'DENIED' | 'UNAVAILABLE' => error instanceof CreditsError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE';
 
 /**
- * HQ Creative Credits: the program state, rates, packages and every school wallet, read only. A session end hides
- * everything and retires every read; "Show again" reads fresh. Opening a school reads that school's wallet only.
+ * HQ Creative Credits: the program state, rates, packages and every school wallet, read only. Leaving the window or
+ * tab, or a session end, hides everything and retires every read; "Show again" reads fresh. Opening a school reads that school's wallet only.
  */
 export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): React.ReactElement {
   const { preferences } = useLocale();
@@ -21,9 +21,13 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
   const generation = useRef(0), mounted = useRef(false), open = useRef<AbortController | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; open.current?.abort(); }; }, []);
   useEffect(() => {
-    const end = () => { generation.current++; open.current?.abort(); setConcealed(true); setWallets({ state: 'LOADING' }); setDetail(null); };
-    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, end);
-    return () => window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, end);
+    // Per-school billing data: leaving the window or tab, or a session end, hides everything and retires every read.
+    const conceal = () => { generation.current++; open.current?.abort(); setConcealed(true); setWallets({ state: 'LOADING' }); setDetail(null); };
+    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
+    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
+    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
+    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
+      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   useEffect(() => {
