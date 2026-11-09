@@ -18,7 +18,7 @@ const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-2
 describe('school shell navigation catalog', () => {
   it('follows the owner blueprint areas, in order, with unique keys and no duplicated route', () => {
     expect(SCHOOL_SHELL_NAV.map(item => item.key)).toEqual(['home', 'hon', 'aiTeam', 'crm', 'students', 'billing', 'classes', 'attendance',
-      'marketing', 'community', 'analytics', 'staff', 'settings']);
+      'marketing', 'referrals', 'community', 'analytics', 'staff', 'settings']);
     const hrefs = SCHOOL_SHELL_NAV.flatMap(item => item.routes.map(route => route.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
