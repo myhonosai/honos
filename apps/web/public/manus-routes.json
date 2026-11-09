@@ -165,6 +165,10 @@
       "title": "HON | Bounded Class Sessions"
     },
     {
+      "path": "/staff/schedule/timetable",
+      "title": "HON | Weekly timetable"
+    },
+    {
       "path": "/staff/schedule/sessions/create",
       "title": "HON | Human Class-session Creation"
     },
