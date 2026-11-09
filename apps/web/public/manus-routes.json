@@ -37,6 +37,10 @@
       "title": "HON HQ | Exception policy"
     },
     {
+      "path": "/hq/schools/:schoolId",
+      "title": "HON HQ | School detail"
+    },
+    {
       "path": "/hq/schools/owners",
       "title": "HON HQ | School owners"
     },
@@ -363,6 +367,10 @@
     {
       "path": "/hq/ai-costs",
       "title": "HON HQ | Ai Costs"
+    },
+    {
+      "path": "/hq/ai-safety",
+      "title": "HON HQ | Ai Safety"
     },
     {
       "path": "/hq/approvals",
