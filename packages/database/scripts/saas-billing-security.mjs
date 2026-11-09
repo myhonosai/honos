@@ -42,6 +42,7 @@ export const saasBillingFunctions = [
  ['hon.saas_schedule_binding_json(hon.saas_schedule_bindings)',false,false],
  ['hon.saas_org_billing_conflict(uuid)',false,false],
  ['hon.saas_schedule_binding_available(uuid)',false,false],
+ ['hon.saas_schedule_period_matches(text,timestamp with time zone,timestamp with time zone)',false,false],
  ['hon.saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)',false,false],
  ['hon.saas_schedule_after_binding_terminal(uuid,timestamp with time zone)',false,false],
  ['hon.saas_schedule_binding_transition(hon.saas_schedule_bindings,text,text,text,uuid,timestamp with time zone)',false,false],
@@ -357,6 +358,7 @@ export const saasUtcCalendarFunctions = Object.freeze([
 // which is already independent of the session TimeZone.
 export const saasUtcExplicitCalendarFunctions = Object.freeze([
   'saas_allowance_period(hon.saas_subscriptions,timestamp with time zone)',
+  'saas_schedule_period_matches(text,timestamp with time zone,timestamp with time zone)',
   'read_saas_organization_credits_from_hq(text,uuid)',
 ]);
 const crossTriggers = [

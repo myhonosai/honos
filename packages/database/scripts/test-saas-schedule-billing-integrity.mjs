@@ -25,7 +25,7 @@ const {DeterministicScheduleProvider}=apiRequire('./test/fixtures/subscription-s
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),pricing=new SaasPriceAcceptanceService(billing),generations=new SaasSubscriptionGenerationService(billing),access=new SaasSchoolBillingService(billing),onboarding=new HqOnboardingService(database);
 const provider=new DeterministicScheduleProvider(),schedules=new SaasScheduleBillingService(billing,provider),payments=new SaasPaymentsService(billing,database,{});
 const client=u=>new pg.Client({connectionString:u.toString(),ssl:false}),admin=client(owner),restricted=client(runtime);
-const humans=Object.fromEntries(['hq','school','other','staff','ai','d7','d9','race','cancel'].map(k=>[k,{id:K(),user:K(),subject:'b2-'+K()}]));
+const humans=Object.fromEntries(['hq','school','other','staff','ai','d7','d9','race','cancel','iv'].map(k=>[k,{id:K(),user:K(),subject:'b2-'+K()}]));
 const H=k=>humans[k].subject,org={id:K(),school:K(),second:K(),role:K()},foreign={id:K(),school:K(),role:K()};
 // The shipped OD-4 policy row is migration data: never deleted by fixture cleanup.
 const tables=['saas_schedule_reconciliations','saas_schedule_paid_periods','saas_schedule_provider_events','saas_schedule_bindings','saas_access_transitions','saas_access_states','saas_subscription_generations','saas_price_acceptances','saas_price_schedules'];
@@ -296,7 +296,23 @@ try {
   // Refunds and disputes on a collecting binding park it too.
   const refundOnRace={...baseEvent(evt(),price,undefined,undefined,raceStart.value.binding),eventType:'charge.dispute.created',invoiceReference:null,relatedInvoiceReference:'fake_invoice_unknown',coveredPeriod:null};
   const raceReceipt=await ingest(refundOnRace);assert.deepEqual([raceReceipt.outcome,raceReceipt.reason,raceReceipt.billingStatus],['NEEDS_REVIEW','UNLINKED_REVERSAL','NEEDS_REVIEW']);
-  passed('locked-price evidence: billing ACTIVE on the first verified payment with access reported separately; replay, digest conflict, concurrent duplicate, late earlier period, failed attempts, wrong amounts, reversals and payments to parked bindings are stored and fail closed');
+  // One payment covers exactly one billing interval of the locked terms (calendar month or year, within one day).
+  const matches=async(i,st,en)=>(await row('SELECT hon.saas_schedule_period_matches($1,$2,$3) m',[i,st,en])).m;
+  for(const [i,st,en,ok] of [['MONTHLY','2031-01-31T00:00:00Z','2031-02-28T00:00:00Z',true],['MONTHLY','2031-01-01T00:00:00Z','2031-02-02T00:00:00Z',true],
+    ['MONTHLY','2031-01-01T00:00:00Z','2031-02-02T00:00:01Z',false],['MONTHLY','2031-01-01T00:00:00Z','2036-01-01T00:00:00Z',false],['MONTHLY','2031-01-01T00:00:00Z','2031-01-15T00:00:00Z',false],
+    ['ANNUAL','2031-01-01T00:00:00Z','2032-01-01T00:00:00Z',true],['ANNUAL','2031-01-01T00:00:00Z','2031-12-31T00:00:00Z',true],['ANNUAL','2031-01-01T00:00:00Z','2031-02-01T00:00:00Z',false],
+    ['ANNUAL','2031-01-01T00:00:00Z','2036-01-01T00:00:00Z',false],['WEEKLY','2031-01-01T00:00:00Z','2031-01-08T00:00:00Z',false]]) assert.equal(await matches(i,st,en),ok,[i,st,en].join(' '));
+  const ivOrg=await onboarding.provisionInitialSchool({externalSubject:H('hq')},{legalName:'B2 Interval Fixture LLC',displayName:'B2 Interval Fixture',schoolName:'B2 Interval Main',schoolSlug:'b2-iv-'+K().slice(0,8),timezone:'UTC',initialTier:'COMPLETE',idempotencyKey:K(),expectedPrincipalId:humans.hq.id});
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')",
+    [ivOrg.organizationId,ivOrg.schoolId,humans.iv.id,ivOrg.ownerRoleId,humans.hq.id]);
+  const ivGeneration=await prepareGeneration('iv',ivOrg.schoolId);
+  const ivBinding=(await schedules.start(H('iv'),ivOrg.schoolId,{generationId:ivGeneration.generationId,generationDigest:ivGeneration.generationDigest,confirmation:contracts.SAAS_SCHEDULE_BINDING_CONFIRMATION},K())).binding;
+  assert.equal(ivBinding.requirements.billingInterval,'MONTHLY');
+  const fiveYears=await ingest(baseEvent(evt(),price,'2031-01-01T00:00:00.000Z','2036-01-01T00:00:00.000Z',ivBinding));
+  assert.deepEqual([fiveYears.outcome,fiveYears.reason,fiveYears.billingStatus,fiveYears.qualifyingPaidPeriodCount],['NEEDS_REVIEW','PERIOD_INTERVAL_MISMATCH','NEEDS_REVIEW',0],'one monthly payment never covers five years');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.saas_schedule_paid_periods WHERE binding_id=$1',[ivBinding.bindingId])).n,0);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.saas_schedule_reconciliations WHERE binding_id=$1 AND reason='PERIOD_INTERVAL_MISMATCH'",[ivBinding.bindingId])).n,1);
+  passed('locked-price evidence: billing ACTIVE on the first verified payment with access reported separately; replay, digest conflict, concurrent duplicate, late earlier period, failed attempts, wrong amounts, periods that are not exactly one billing interval, reversals and payments to parked bindings are stored and fail closed');
 
   // An access hook that fails (or breaks its contract) never undoes the payment: the period, event and ACTIVE billing stay.
   const d7Binding=d7Receipt.binding,d7Paid=baseEvent(evt(),price,undefined,undefined,d7Binding);
@@ -336,10 +352,10 @@ try {
   await deny(()=>schedules.expireUnpaid(d9Binding),422,'SAAS_SCHEDULE_BINDING_NOT_EXPIRABLE');
   provider.collected.add(d9Binding.bindingId);
   await deny(()=>schedules.expireUnpaid(d9Binding),503,'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED');provider.collected.delete(d9Binding.bindingId);
-  // One minute short of seven days is still open; seven days elapsed expires.
-  await withUserTriggersDisabled(['saas_schedule_bindings'],()=>admin.query("UPDATE hon.saas_schedule_bindings SET bound_at=bound_at-interval '10079 minutes' WHERE id=$1",[d9Binding.bindingId]));
+  // The window runs from sign-up (binding creation): one minute short of seven days is still open; seven days elapsed expires.
+  await withUserTriggersDisabled(['saas_schedule_bindings'],()=>admin.query("UPDATE hon.saas_schedule_bindings SET created_at=clock_timestamp()-interval '10079 minutes' WHERE id=$1",[d9Binding.bindingId]));
   await deny(()=>schedules.expireUnpaid(d9Binding),422,'SAAS_SCHEDULE_BINDING_NOT_EXPIRABLE');
-  await withUserTriggersDisabled(['saas_schedule_bindings'],()=>admin.query("UPDATE hon.saas_schedule_bindings SET bound_at=bound_at-interval '2 minutes' WHERE id=$1",[d9Binding.bindingId]));
+  await withUserTriggersDisabled(['saas_schedule_bindings'],()=>admin.query("UPDATE hon.saas_schedule_bindings SET created_at=clock_timestamp()-interval '10081 minutes' WHERE id=$1",[d9Binding.bindingId]));
   const expired=await schedules.expireUnpaid(d9Binding);
   assert.deepEqual([expired.binding.status,expired.binding.statusReason,expired.binding.version,expired.replayed],['EXPIRED_UNPAID','UNPAID_WINDOW_ELAPSED',3,false]);
   assert.equal((await row('SELECT policy_version v FROM hon.saas_schedule_bindings WHERE id=$1',[d9Binding.bindingId])).v,1);
@@ -347,6 +363,10 @@ try {
   await admin.query('SELECT hon.saas_schedule_binding_available($1)',[d9.organizationId]);
   const latePaid=baseEvent(evt(),price,undefined,undefined,d9Binding),lateReceipt2=await ingest(latePaid);
   assert.deepEqual([lateReceipt2.outcome,lateReceipt2.reason,lateReceipt2.billingStatus,lateReceipt2.qualifyingPaidPeriodCount],['NEEDS_REVIEW','PAID_AFTER_TERMINAL','EXPIRED_UNPAID',0]);
+  // Late money on an ended binding blocks a new lifecycle (no second charge) until HQ resolves it.
+  await sqlRuleDeny(admin.query('SELECT hon.saas_schedule_binding_available($1)',[d9.organizationId]),'SAAS_BILLING_REVIEW_PENDING');
+  assert.equal((await row('SELECT hon.saas_org_billing_conflict($1) c',[d9.organizationId])).c,'PAID_NEEDS_REVIEW');
+  await deny(()=>schedules.start(H('d9'),d9.schoolId,d9Input,K()),422,'SAAS_BILLING_REVIEW_PENDING');
   // Money evidence blocks expiry: the race binding has a stored dispute (and is parked), so it can never expire.
   await sqlRuleDeny(restricted.query('SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb)',[raceStart.value.binding.bindingId,{identity:'DETERMINISTIC_FAKE',mode:'TEST',outcome:'CANCELLED_NOTHING_COLLECTED',bindingId:raceStart.value.binding.bindingId,accountReference:raceStart.value.binding.providerAccountReference,subscriptionReference:raceStart.value.binding.providerSubscriptionReference,scheduleReference:raceStart.value.binding.providerScheduleReference}]),'SAAS_SCHEDULE_BINDING_NOT_EXPIRABLE');
 
@@ -374,6 +394,7 @@ try {
   await admin.query('SELECT hon.saas_schedule_binding_available($1)',[cancelOrg.organizationId]);
   const cancelLate=await ingest(baseEvent(evt(),price,undefined,undefined,cancelBound));
   assert.deepEqual([cancelLate.outcome,cancelLate.reason,cancelLate.billingStatus],['NEEDS_REVIEW','PAID_AFTER_TERMINAL','CANCELLED_BEFORE_PAYMENT']);
+  await sqlRuleDeny(admin.query('SELECT hon.saas_schedule_binding_available($1)',[cancelOrg.organizationId]),'SAAS_BILLING_REVIEW_PENDING');
   const d7Now=await schedules.read(H('d7'),d7.schoolId,d7Binding.bindingId);
   await deny(()=>schedules.cancelBeforePayment(H('d7'),d7.schoolId,d7Binding.bindingId,K()),422,'SAAS_SCHEDULE_BINDING_NOT_CANCELLABLE');
   await sqlRuleDeny(restricted.query('SELECT hon.cancel_saas_schedule_binding($1,$2,$3,$4::jsonb,$5,$6,$7)',[H('d7'),d7.schoolId,d7Binding.bindingId,{...cancelObservation,bindingId:d7Binding.bindingId,accountReference:d7Now.providerAccountReference,subscriptionReference:d7Now.providerSubscriptionReference,scheduleReference:d7Now.providerScheduleReference},K(),K(),K()]),'SAAS_SCHEDULE_BINDING_NOT_CANCELLABLE');
@@ -391,7 +412,7 @@ try {
   assert.equal((await row('SELECT status FROM hon.saas_schedule_bindings WHERE id=$1',[d7Binding.bindingId])).status,'ACTIVE');
   assert.equal((await row('SELECT status FROM hon.saas_access_program')).status,'INACTIVE');
   assert.equal((await row("SELECT count(*)::int n FROM hon.saas_access_transitions WHERE kind='FIRST_PAYMENT_ACTIVATION'")).n,0);
-  passed('lifecycle: provider-confirmed void, 7-day owner-window unpaid expiry and no-cost purchaser cancel before first payment are terminal and release the organization; late money after terminal is stored for review; money evidence blocks expiry; transitions are closed and audited');
+  passed('lifecycle: provider-confirmed void, 7-day owner-window unpaid expiry and no-cost purchaser cancel before first payment are terminal and release the organization; late money after terminal is stored for review and blocks a new lifecycle; money evidence blocks expiry; transitions are closed and audited');
   for(const q of ['SELECT * FROM hon.saas_schedule_bindings','UPDATE hon.saas_schedule_bindings SET id=id','DELETE FROM hon.saas_schedule_provider_events','INSERT INTO hon.saas_schedule_paid_periods SELECT * FROM hon.saas_schedule_paid_periods LIMIT 1'])await sqlDeny(restricted.query(q),'42501');
   await verifySaasBillingSecurity(admin,'hon_champions_runtime');
   passed('forced RLS/private tables/functions and immutable evidence remain enforced for the restricted runtime');
