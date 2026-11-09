@@ -429,6 +429,10 @@
       "title": "HON HQ | Invoice detail"
     },
     {
+      "path": "/hq/revenue/trials",
+      "title": "HON HQ | Free Trials"
+    },
+    {
       "path": "/staff/subscription",
       "title": "HON OS | School subscription"
     },
@@ -483,6 +487,14 @@
     {
       "path": "/account/family-invitation",
       "title": "HON OS | Family invitation"
+    },
+    {
+      "path": "/staff/founder-setup",
+      "title": "HON OS | Founder Setup"
+    },
+    {
+      "path": "/hq/founder-setup",
+      "title": "HON HQ | Founder Setup"
     }
   ]
 }

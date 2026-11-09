@@ -20,7 +20,7 @@ import { HonReplyService } from './hon-reply.service.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Scope = ResolvedPrincipalScope & { externalSubject: string };
-type Begun = { turnId: string; agentKey: HonDelegateAgentKey | 'hon'; delegation: Record<string, unknown> | null; handOff: boolean };
+type Begun = { turnId: string; agentKey: HonDelegateAgentKey | 'hon' | 'claire'; delegation: Record<string, unknown> | null; handOff: boolean };
 type Failure = 'AGENT_NOT_AUTHORIZED' | 'AGENT_REQUEST_INVALID' | 'AGENT_TARGET_NOT_FOUND' | 'AGENT_REQUEST_CONFLICT';
 
 function boundaryError(error: unknown): never {
@@ -132,9 +132,10 @@ export class HonConversationService {
   async sendTurn(scope: Scope, conversationId: string, input: unknown, key: string | undefined): Promise<HonTurnReceipt> {
     if (typeof key !== 'string' || !UUID.test(key)) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
     let normalized;
-    try { normalized = validateHonTurnRequest(input); } catch { throw new BadRequestException({ code: 'INVALID_HON_TURN', detail: 'Ask HON (delegation null) or name one specialist (marcus, claire or chad) with its own target, with a safe message; never credentials or personal records.' }); }
+    try { normalized = validateHonTurnRequest(input); } catch { throw new BadRequestException({ code: 'INVALID_HON_TURN', detail: 'Ask HON (delegation null) or name one specialist (marcus, kai or chad with its own target, or claire for a business performance question), with a safe message; never credentials or personal records.' }); }
     const begun = await this.transaction(scope, async (client) => (await client.query<{ data: Begun }>('SELECT hon.begin_hon_turn($1,$2::uuid,$3::jsonb,$4::uuid) data', [scope.externalSubject, conversationId, JSON.stringify(normalized), key])).rows[0]!.data);
-    if (begun.agentKey === 'hon') {
+    // HON's own answer, or Claire's business performance analysis (K2): both are answered by the reply service.
+    if (begun.agentKey === 'hon' || begun.agentKey === 'claire') {
       try {
         if (begun.handOff) await this.reply.run(scope, begun.turnId);
         else await this.reply.releaseHeld(scope, begun.turnId);
