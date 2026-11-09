@@ -101,6 +101,10 @@
       "title": "HON | Lead Migration Center"
     },
     {
+      "path": "/staff/migration/students",
+      "title": "HON | Import students"
+    },
+    {
       "path": "/staff/planning/revenue",
       "title": "HON | Human Revenue Planning"
     },
