@@ -1,13 +1,18 @@
 # HON OS continuous integration.
-# Runs on pull requests to main and on manual dispatch only: no schedule, no deployment, no secrets.
-# Pushes directly to main are intentionally NOT a trigger until the owner approves the expected
-# Actions minutes (see docs/CI.md).
+# Runs on pull requests to main, on every push to main (merged PRs) and on manual dispatch:
+# no schedule, no deployment, no secrets. Push-to-main runs prove the accepted main itself, not just
+# each PR's test merge; a newer push to main cancels the older run (see docs/CI.md for minutes).
 name: CI
 
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  push:
+    branches: [main]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -27,7 +32,7 @@ env:
 jobs:
   verify:
     name: Test, typecheck, build, migrations
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -43,6 +48,7 @@ jobs:
         run: |
           node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
           node --test .github/scripts/verify-node-runtime.test.mjs
+          node --test .github/scripts/ci-triggers.test.mjs
       - name: Install dependencies (lockfile only)
         run: pnpm install --frozen-lockfile
       - name: pnpm test
@@ -58,7 +64,7 @@ jobs:
 
   database:
     name: Disposable PostgreSQL security proofs
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     # Full canonical suite includes the exhaustive lock-order audit plus B1.
     timeout-minutes: 35
