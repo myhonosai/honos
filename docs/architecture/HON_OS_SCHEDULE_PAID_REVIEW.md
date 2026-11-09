@@ -18,7 +18,11 @@ deployed. Nothing here contacts a payment provider or executes a refund.
 - **Schedule binding** `NEEDS_REVIEW`, or an ended binding (`EXPIRED_UNPAID`, `VOIDED_PROVIDER_FAILED`,
   `CANCELLED_BEFORE_PAYMENT`) with review records: each stored `invoice.paid` event that was not counted (wrong amount, wrong
   period length, overlap, paid while parked, paid after the end). Matched to `charge.refunded` events by `relatedInvoiceReference`.
-- Refund amounts are cumulative provider reports: the largest report per payment must equal the held amount exactly.
+- Refund amounts are cumulative provider reports (v1 `amountRefunded` and schedule `charge.refunded` `amountMinor` alike): the
+  largest report per payment must equal the held amount exactly.
+- A verified subject reopens when any later provider report arrives for it: a v1 checkout counts its held payments plus every
+  matched refund and dispute (a subscription-mode dispute, which has no invoice, is matched through the charge of a matched
+  refund); a schedule binding counts its reconciliations. A later dispute shows `DISPUTE_POLICY_REQUIRED` and restores the hold.
 
 ## Blockers (listed, no decision offered; need an owner policy or provider follow-up)
 

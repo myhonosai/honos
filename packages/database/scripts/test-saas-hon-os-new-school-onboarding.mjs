@@ -441,6 +441,19 @@ try{
   await admin.query('BEGIN');await sqlDeny(admin.query(q),'42501');await admin.query('ROLLBACK');}
  await sqlDeny(restricted.query('SELECT * FROM hon.saas_paid_review_resolutions'),'42501');
  await sqlDeny(restricted.query('SELECT hon.saas_paid_review_items($1,$2)',['V1_CHECKOUT',coNU.checkout.checkoutId]),'42501');
+ // A dispute after a verified refund reopens the subject: listed again with the dispute blocker, and the org hold returns.
+ // One-time payment: matched by payment intent. Subscription mode: the dispute has no invoice, so it is matched through
+ // the charge of the matched refund.
+ assert.ok((await deliver(sim.dispute(paidNS.paymentIntent,950000))).event);
+ const chargeNU=(await row("SELECT normalized->'object'->>'chargeRef' AS c FROM hon.saas_provider_events WHERE event_type='charge.refunded' AND normalized->'object'->>'invoiceRef'=$1 LIMIT 1",[paidNU.invoice])).c;
+ assert.ok(chargeNU);
+ assert.ok((await deliver(sim.dispute(null,18300,chargeNU))).event);
+ for(const[k,co]of [['NS',coNS],['NU',coNU]]){
+  const again=await itemOf(co.checkout.checkoutId);
+  assert.deepEqual([again?.blocker,again?.allowedDecisions,again?.openResolution],['DISPUTE_POLICY_REQUIRED',[],null],`${k}: a later dispute lists the checkout again`);
+  assert.equal(await conflict(k),'PAID_NEEDS_REVIEW',`${k}: a later dispute restores the billing hold`);
+ }
+ await deny(reviews.resolve(H('owner'),resolveBody(coNS.checkout.checkoutId,(await itemOf(coNS.checkout.checkoutId)).subjectVersion),K()),422,'SAAS_REVIEW_NOT_RESOLVABLE');
 
  // ---------- 8. an existing provisioned COMPLETE school still buys through the 0182 path, unchanged ----------
  const coP=await payments.startSchoolHonOsCheckout(H('taken'),P.school,{offerId:V.OS_MONTHLY},K());

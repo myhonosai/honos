@@ -149,18 +149,27 @@ BEGIN
     held AS (SELECT ref, min(amount) AS amount, max(amount) AS amount_hi, min(received_at) AS received_at,
       (SELECT array_agg(DISTINCT x) FROM held_events h2, unnest(h2.refs) x WHERE h2.ref IS NOT DISTINCT FROM h.ref) AS refs
       FROM held_events h GROUP BY ref),
-    reversals AS (
-      SELECT e.provider_event_id, e.event_type, h.ref,
+    direct_reversals AS (
+      SELECT e.provider_event_id, e.event_type, h.ref, e.normalized->'object'->>'chargeRef' AS charge_ref,
         CASE WHEN e.event_type='charge.refunded' THEN (e.normalized->'object'->>'amountRefunded')::bigint END AS amount
       FROM hon.saas_provider_events e JOIN c ON e.provider=c.provider JOIN held h ON h.ref IS NOT NULL
         AND (e.normalized->'object'->>'paymentIntentRef'=ANY(h.refs) OR e.normalized->'object'->>'invoiceRef'=ANY(h.refs))
       WHERE e.event_type IN ('charge.refunded','charge.dispute.created')),
+    -- A dispute carries no invoice; in subscription mode it is matched through the charge of a matched refund.
+    reversals AS (
+      SELECT provider_event_id, event_type, ref, amount FROM direct_reversals
+      UNION
+      SELECT e.provider_event_id, e.event_type, d.ref, NULL::bigint
+      FROM hon.saas_provider_events e JOIN c ON e.provider=c.provider
+        JOIN direct_reversals d ON d.event_type='charge.refunded' AND d.charge_ref IS NOT NULL AND e.normalized->'object'->>'chargeRef'=d.charge_ref
+      WHERE e.event_type='charge.dispute.created'),
     per_ref AS (
       SELECT h.ref, h.amount, h.amount_hi, h.received_at,
         (SELECT max(r.amount) FROM reversals r WHERE r.event_type='charge.refunded' AND r.ref=h.ref) AS refunded
       FROM held h)
     SELECT jsonb_build_object(
-      'itemCount',(SELECT count(*)::integer FROM held_events),
+      -- Held payments plus every matched refund or dispute: any later provider report reopens a verified subject.
+      'itemCount',(SELECT count(*)::integer FROM held_events)+(SELECT count(DISTINCT provider_event_id)::integer FROM reversals),
       'heldItemCount',(SELECT count(*)::integer FROM per_ref),
       'heldAmountMinor',(SELECT coalesce(sum(amount),0) FROM per_ref),
       'refundedAmountMinor',(SELECT coalesce(sum(least(refunded,amount)),0) FROM per_ref),
