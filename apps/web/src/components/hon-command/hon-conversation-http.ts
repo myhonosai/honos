@@ -51,9 +51,9 @@ function closed(value: unknown, keys: readonly string[]): Record<string, unknown
 /** Readiness is composed server-side from AI-R1; any drift means the composer stays closed. */
 export function verifyHonReadiness(envelope: unknown): HonConversationReadiness {
   const root = closed(envelope, ['data', 'meta']);
-  const r = closed(root.data, ['contract', 'providerRoute', 'entitlement', 'authorization', 'availableAgentKeys', 'honReply', 'asOf']);
+  const r = closed(root.data, ['contract', 'providerRoute', 'entitlement', 'authorization', 'availableAgentKeys', 'honReply', 'businessPerformance', 'asOf']);
   if (r.contract !== true || typeof r.providerRoute !== 'boolean' || typeof r.entitlement !== 'boolean' || typeof r.authorization !== 'boolean'
-    || typeof r.honReply !== 'boolean' || typeof r.asOf !== 'string' || !TIME.test(r.asOf) || !Array.isArray(r.availableAgentKeys)
+    || typeof r.honReply !== 'boolean' || typeof r.businessPerformance !== 'boolean' || typeof r.asOf !== 'string' || !TIME.test(r.asOf) || !Array.isArray(r.availableAgentKeys)
     || r.availableAgentKeys.some((key) => !(HON_DELEGATE_AGENTS as readonly unknown[]).includes(key)) || new Set(r.availableAgentKeys).size !== r.availableAgentKeys.length) drift();
   return r as unknown as HonConversationReadiness;
 }

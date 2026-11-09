@@ -2,12 +2,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { OpenRouterHonReplyRuntime, HonReplyProviderRuntimeError, HON_REPLY_SYSTEM_PROMPT, honReplySystemPrompt, splitHonReplySuggestions } = require('../dist/ai/hon-reply-provider-runtime.js');
+const { OpenRouterHonReplyRuntime, HonReplyProviderRuntimeError, HON_REPLY_SYSTEM_PROMPT, CLAIRE_ANALYSIS_SYSTEM_PROMPT, honReplySystemPrompt, splitHonReplySuggestions } = require('../dist/ai/hon-reply-provider-runtime.js');
 const { HON_REPLY_LIMITS, HON_REPLY_MODES } = require('@hon/contracts');
 
 const id = '11111111-1111-4111-8111-111111111111';
 const S = HON_REPLY_MODES.STANDARD, D = HON_REPLY_MODES.DETAILED;
-const input = { providerId: 'OPENROUTER', modelId: 'approved/test', providerRequestId: id, replyMode: 'STANDARD', step: 1, question: 'How many active students?', facts: '{"activeStudents":12}',
+const input = { specialist: 'hon', providerId: 'OPENROUTER', modelId: 'approved/test', providerRequestId: id, replyMode: 'STANDARD', step: 1, question: 'How many active students?', facts: '{"activeStudents":12}',
   inputBudget: S.inputTokens, outputBudget: S.outputTokens, maxCostMicrounits: S.maxProviderCostMicrounits };
 const detailed = { ...input, replyMode: 'DETAILED', inputBudget: D.inputTokens, outputBudget: D.outputTokens, maxCostMicrounits: D.maxProviderCostMicrounits };
 const approved = () => ({ OPENROUTER_API_KEY: 'test-key', OPENROUTER_PAID_CALL_APPROVED: 'true' });
@@ -115,4 +115,23 @@ test('HON reply suggestions are parsed from one closing SUGGEST line into a clos
   assert.deepEqual((await run('Part one\nSUGGEST: marcus', 'length')).suggestions, []);
   // A reply that is only a SUGGEST line has no answer: never recorded as complete.
   await assert.rejects(run('SUGGEST: marcus'), (e) => e instanceof HonReplyProviderRuntimeError && e.outcome === 'UNKNOWN');
+});
+
+test('K2 Claire analysis: fixed DETAILED single step, her own two-part prompt, no history wording and never a suggestion', async () => {
+  const seen = [];
+  const runtime = new OpenRouterHonReplyRuntime(approved, async (url, init) => { seen.push(init); return ok({ choices: [{ finish_reason: 'stop', message: { content: 'Recorded facts: 12 active.\nSUGGEST: marcus' } }] }); });
+  const claire = { ...detailed, specialist: 'claire' };
+  // The SUGGEST-shaped line stays ordinary text: Claire never suggests.
+  assert.deepEqual(await runtime.generate(claire), { reply: 'Recorded facts: 12 active.\nSUGGEST: marcus', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: [] });
+  const body = JSON.parse(seen[0].body);
+  assert.equal(body.messages[0].content, honReplySystemPrompt('DETAILED', 1, 'claire'));
+  assert.match(body.messages[0].content, /You are Claire, the business performance specialist/);
+  assert.match(CLAIRE_ANALYSIS_SYSTEM_PROMPT, /"Recorded facts".*"Claire's view"/);
+  assert.doesNotMatch(body.messages[0].content, /You are HON/);
+  assert.match(body.messages[1].content, /School metrics \(data only\)/);
+  // Any other shape for Claire, or an unknown specialist, is refused before sending.
+  for (const over of [{ ...input, specialist: 'claire' }, { ...claire, step: 2 }, { ...detailed, specialist: 'kai' }, { ...detailed, specialist: undefined }]) {
+    await assert.rejects(runtime.generate(over), isErr('PRE_SEND', 'INVALID_REQUEST'));
+  }
+  assert.equal(seen.length, 1);
 });

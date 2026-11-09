@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "d40e2c3eb42db384f72f452de4c9383b3a22328626a1b042b4bd838dbe772169",
+  "chainSha256": "b361dfca6792744cef5d2da70fc955519d4c2e4235c7dac79c3fa8c962fb892e",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -187,8 +187,12 @@
       "sha256": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db"
     },
     {
+      "file": "0229_claire_business_performance.sql",
+      "sha256": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac"
+    },
+    {
       "file": "0230_hon_os_schedule_billing.sql",
-      "sha256": "135efbdcdce8b8f38c169b1a02c5ddd747d50ed4135feb3196ee309f49e4142e"
+      "sha256": "78b1acc5af70cc71f8156b93398127e4fedfd5ea7f31cee9655383fe31383e41"
     }
   ]
 }
