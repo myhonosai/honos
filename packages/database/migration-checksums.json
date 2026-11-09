@@ -234,6 +234,7 @@
     "0243_communication_delivery_receipts.sql": "0a94b2a8b94a1caf2622215318474e142eeb0faeb3ebbbc5fb2a771974c14a9f",
     "0246_hon_os_trial_runtime.sql": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07",
     "0248_school_text_senders_and_keywords.sql": "0dec705df1cbdf169b5dbdf52b97cdf7933159bfffac3d95d368a0dd1b2149de",
+    "0249_missed_call_text_back.sql": "01d6e5f3422c5dc0f56987514c447f7647cff35c48c8da9b4f2506d50a1d7aa9",
     "0251_class_series_ongoing.sql": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8",
     "0252_hq_marketing_campaigns.sql": "91e2b7833e4e0c040468fd2c94e375b559631d82951beb95772f95e3817d86a7",
     "0253_hq_creative_studio.sql": "9836f75224774349ac271864a3a9f83ebbb099cb90ab13d7a746c1684ff34d90",

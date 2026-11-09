@@ -15,6 +15,14 @@ const SERVICE_SID = /^MG[0-9a-f]{32}$/;
 const E164 = /^\+[1-9][0-9]{7,14}$/;
 export const TWILIO_STATUS_PATH = '/v1/communications/webhooks/twilio/status';
 export const TWILIO_INBOUND_PATH = '/v1/communications/webhooks/twilio/inbound';
+export const TWILIO_VOICE_PATH = '/v1/communications/webhooks/twilio/voice';
+export const TWILIO_VOICE_RESULT_PATH = '/v1/communications/webhooks/twilio/voice-result';
+const CALL_SID = /^CA[0-9a-f]{32}$/;
+const MISSED_DIAL_STATUSES = new Set(['no-answer', 'busy', 'failed', 'canceled']);
+
+export function twilioPublicOrigin(env: Env): string | undefined {
+  return origin(env);
+}
 
 function origin(env: Env): string | undefined {
   const value = env.HON_PUBLIC_API_ORIGIN?.trim();
@@ -54,8 +62,8 @@ export class TwilioTextProvider implements CommunicationProviderAdapter {
     if (pieces.tooLong || pieces.pieces === 0) throw new CommunicationProviderError('FAILED', 'PROVIDER_REJECTED');
     const form = new URLSearchParams({
       To: request.recipientAddress, MessagingServiceSid: request.senderServiceId!, Body: smartEncodeText(request.content),
-      StatusCallback: `${base}${TWILIO_STATUS_PATH}`,
     });
+    if (request.statusCallback !== false) form.set('StatusCallback', `${base}${TWILIO_STATUS_PATH}`);
     let response: Response;
     try {
       response = await this.transport(`https://api.twilio.com/2010-04-01/Accounts/${account}/Messages.json`, {
@@ -98,6 +106,9 @@ const KEYWORDS: Readonly<Record<string, 'STOP' | 'START' | 'HELP'>> = {
   STOP: 'STOP', STOPALL: 'STOP', UNSUBSCRIBE: 'STOP', CANCEL: 'STOP', END: 'STOP', QUIT: 'STOP', OPTOUT: 'STOP', REVOKE: 'STOP',
   START: 'START', UNSTOP: 'START', YES: 'START', HELP: 'HELP', INFO: 'HELP',
 };
+
+export interface IncomingCall { callSid: string; from: string | null; to: string }
+export interface MissedCallReport { callSid: string; from: string; to: string; dialStatus: 'no-answer' | 'busy' | 'failed' | 'canceled'; receivedAt: string }
 
 export interface InboundTextKeyword { to: string; from: string; keyword: 'STOP' | 'START' | 'HELP'; providerMessageId: string; receivedAt: string }
 
@@ -148,5 +159,27 @@ export class TwilioWebhookVerifier {
     const word = (params.get('Body') ?? '').trim().replace(/[.!]+$/, '').toUpperCase();
     const keyword = KEYWORDS[word];
     return keyword ? { to, from, keyword, providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() } : null;
+  }
+
+  /** 0249: an incoming call to a school number. A withheld caller ID is null (it is forwarded, never texted). */
+  voice(rawBody: Buffer, signature: string | undefined): IncomingCall {
+    const params = this.params(rawBody, TWILIO_VOICE_PATH, signature);
+    const callSid = params.get('CallSid') ?? '';
+    const from = params.get('From') ?? '';
+    const to = params.get('To') ?? '';
+    if (!CALL_SID.test(callSid) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
+    return { callSid, from: E164.test(from) ? from : null, to };
+  }
+
+  /** 0249: the forwarded leg's outcome. Only an unanswered, busy, failed or canceled call is a missed call; anything else is null. */
+  voiceResult(rawBody: Buffer, signature: string | undefined): MissedCallReport | null {
+    const params = this.params(rawBody, TWILIO_VOICE_RESULT_PATH, signature);
+    const callSid = params.get('CallSid') ?? '';
+    const from = params.get('From') ?? '';
+    const to = params.get('To') ?? '';
+    const dialStatus = params.get('DialCallStatus') ?? '';
+    if (!CALL_SID.test(callSid) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
+    if (!MISSED_DIAL_STATUSES.has(dialStatus) || !E164.test(from)) return null;
+    return { callSid, from, to, dialStatus: dialStatus as MissedCallReport['dialStatus'], receivedAt: new Date(this.now()).toISOString() };
   }
 }

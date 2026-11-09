@@ -130,6 +130,24 @@ receipt timeline. No address, no provider IDs, no cost.
   stored (`hon.inbound_text_keywords`, without the sender's number). START re-opens only an opt-out the person
   made themselves (source RECIPIENT). Replies come from Twilio Advanced Opt-Out; HON answers empty TwiML.
 
+## 5b. Missed-call text-back as built (0249)
+
+- The HQ owner sets, per school sender, a forwarding phone (the school's own line) and a text-back switch
+  (`POST /v1/hq/saas/schools/:schoolId/missed-call-settings`, human-command guard, version-checked, audited). Off by default.
+- `POST /v1/communications/webhooks/twilio/voice` (signed like the other Twilio webhooks): a call to an ACTIVE school
+  number rings the forwarding phone for 20 seconds with a fixed `voice-result` action URL; with no forwarding phone the
+  call is recorded as missed and HON hangs up; any other number is rejected. A withheld caller ID is never texted.
+- `POST /v1/communications/webhooks/twilio/voice-result`: `no-answer`, `busy`, `failed` or `canceled` records one row in
+  `hon.missed_calls` (unique Twilio CallSid, so a redelivered callback is a replay).
+- Text-back: at most one per caller per school per 24 hours (an UNKNOWN reply counts as sent), never to a number the
+  school holds as SMS `OPTED_OUT` (checked when recorded and again before sending), only while the switch and sender are
+  ACTIVE and the school and organization are ACTIVE, and only 08:00-21:00 school time. Leases, three attempts with
+  backoff, and expired leases as UNKNOWN follow the 0243 rules. The reply is one fixed message in the school's default
+  language (en/ko/es) naming the school and ending with STOP wording; it goes through the same Twilio adapter and
+  `HON_SMS_SEND_APPROVED` switch as other texts, without a status callback.
+- School staff read their recent missed calls to call back with `communication.message.read`
+  (`GET /v1/organizations/:org/schools/:school/communications/missed-calls`): caller, dial outcome, text-back state, time.
+
 ## 6. Who pays for texting (open, Decision 4)
 
 Nothing here charges anyone. Every delivery records provider, pieces, sent-as and measured provider cost
