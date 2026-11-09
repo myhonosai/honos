@@ -41,7 +41,8 @@ export class AiTeamReadinessService {
     let validated;
     try { validated = validateAiTeamReadinessRow(row); } catch { throw new ServiceUnavailableException({ code: 'AI_TEAM_READINESS_UNAVAILABLE' }); }
     if (validated.organizationId !== context.organizationId || validated.schoolId !== context.schoolId) throw new ServiceUnavailableException({ code: 'AI_TEAM_READINESS_UNAVAILABLE' });
-    const runtimes: Record<AiTeamReadyAgentKey, Readiness> = { marcus: this.marcus, kai: this.claire, chad: this.chad, hon: this.hon };
+    // Claire's business performance analysis runs on the HON reply runtime (K2).
+    const runtimes: Record<AiTeamReadyAgentKey, Readiness> = { marcus: this.marcus, kai: this.claire, chad: this.chad, hon: this.hon, claire: this.hon };
     return { data: composeAiTeamReadiness(validated, (key) => (runtimes[key].readiness('OPENROUTER') === 'READY' ? 'READY' : 'CONFIGURATION_REQUIRED')), meta: { requestId, correlationId: requestId } };
   }
 }

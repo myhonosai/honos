@@ -37,6 +37,10 @@
       "title": "HON HQ | Exception policy"
     },
     {
+      "path": "/hq/schools/:schoolId",
+      "title": "HON HQ | School detail"
+    },
+    {
       "path": "/hq/schools/owners",
       "title": "HON HQ | School owners"
     },
@@ -211,6 +215,10 @@
     {
       "path": "/staff/billing/membership-changes",
       "title": "HON | Pause, cancel & refunds"
+    },
+    {
+      "path": "/staff/champions-club",
+      "title": "HON | Champions Club"
     },
     {
       "path": "/staff/billing/invoices",
@@ -471,6 +479,14 @@
     {
       "path": "/account/family-invitation",
       "title": "HON OS | Family invitation"
+    },
+    {
+      "path": "/staff/founder-setup",
+      "title": "HON OS | Founder Setup"
+    },
+    {
+      "path": "/hq/founder-setup",
+      "title": "HON HQ | Founder Setup"
     }
   ]
 }

@@ -2392,3 +2392,25 @@ DO $$ DECLARE r text; col text; t text; f text; BEGIN
       hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid),hon.read_membership_pauses_and_refunds(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- C-HQ-3 0225 (proposed) HQ school detail: the HQ read is the only runtime boundary; its counts helper stays internal.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hq_school_invitation_counts(text,uuid,timestamptz)','read_hq_school_detail_from_hq(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_hq_school_detail_from_hq(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
+-- C3b 0228 HON group summary: the group-facts helper is internal; summaries use the existing turn and reply
+-- entry points (begin_hon_turn, prepare_hon_reply), whose grants are unchanged.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply C3b migration 0228 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM '||quote_ident(r);
+  END LOOP;
+END $$;

@@ -19,7 +19,7 @@ const id = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${Stri
 const AT = '2026-11-06T18:00:00.000Z';
 const SCHOOL = { organizationId: id(1), schoolId: id(2) };
 const BASE = `/api/v1/organizations/${id(1)}/schools/${id(2)}/hon`;
-const readiness = (honReply = true) => ({ contract: true as const, providerRoute: honReply, entitlement: true, authorization: true, availableAgentKeys: ['marcus' as const], honReply, asOf: AT });
+const readiness = (honReply = true) => ({ contract: true as const, providerRoute: honReply, entitlement: true, authorization: true, availableAgentKeys: ['marcus' as const], honReply, businessPerformance: false, asOf: AT });
 const summary = (n: number, turnCount = 1) => ({ id: id(n), title: `Question ${n}`, createdAt: AT, updatedAt: AT, turnCount, status: 'COMPLETED' as const });
 const human = (turn: number, text: string): HonConversationTurn => ({ turnId: id(turn), role: 'HUMAN', text, createdAt: AT, status: 'COMPLETED', reason: null,
   references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
@@ -290,5 +290,26 @@ describe('Ask HON suggestion cards (C3a)', () => {
     const chad: HonConversationTurn = { turnId: id(7), role: 'chad', text: null, createdAt: AT, status: 'FAILED', reason: 'AGENT_TARGET_NOT_FOUND',
       references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null };
     expect(render({ thread: thread([human(7, 'Follow up'), chad]), threadPhase: 'READY' })).toContain('no longer available to this specialist');
+  });
+  it('offers Summarize with HON only on a finished, verified group, and sends it as a question naming that group', () => {
+    const members: HonOrchestration['members'] = [{ agentKey: 'marcus', turnId: id(7), status: 'COMPLETED' }];
+    const asked: string[] = [];
+    for (const status of ['COMPLETED', 'FAILED', 'PARTIAL'] as const) {
+      const html = render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: (t) => asked.push(t) });
+      expect(html).toMatch(/<button type="button" class="[^"]*">Summarize with HON<\/button>/); expect(html).toContain('It changes nothing.');
+    }
+    for (const status of ['PENDING', 'NEEDS_REVIEW', 'UNKNOWN'] as const)
+      expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: noop })).not.toContain('Summarize with HON');
+    const done = { readiness: all, thread: answer(['marcus']), threadPhase: 'READY' as const, groups: orchestrationsBySource({ items: [group('COMPLETED', members)] }), onSummarize: noop };
+    expect(render({ ...done, groupPhase: 'UNAVAILABLE' })).not.toContain('Summarize with HON');
+    expect(render({ ...done, readiness: { ...all, honReply: false } })).toMatch(/disabled=""[^>]*>Summarize with HON/);
+    const prepared = { path: `${BASE}/conversations/${id(5)}/turns`, key: id(7), body: '{}' };
+    expect(render({ ...done, pending: { prepared, kind: 'turn', label: 'Summarize with HON', state: 'UNKNOWN', conversationId: id(5) } })).toMatch(/disabled=""[^>]*>Summarize with HON/);
+    const body = JSON.parse(prepareTurn(SCHOOL, id(5), { text: 'Summarize', delegation: null, summarizeTurnId: id(6) }).body);
+    expect(body).toEqual({ text: 'Summarize', delegation: null, summarizeTurnId: id(6) });
+    expect(() => prepareTurn(SCHOOL, id(5), { text: 'Summarize', delegation: null, summarizeTurnId: id(6), continueTurnId: id(6) })).toThrow(HonConversationError);
+    expect(render({ thread: answer(['marcus']), threadPhase: 'READY', pending: { prepared, kind: 'turn', label: 'Summarize with HON', state: 'INVALID', conversationId: id(5), code: 'HON_GROUP_NOT_SUMMARIZABLE' } }))
+      .toContain('HON can’t summarize those specialists yet');
+    expect(render({ thread: thread([human(4, 'Summarize'), reply(6, { text: null, status: 'FAILED', reason: 'GROUP_NOT_SUMMARIZABLE' })]), threadPhase: 'READY' })).toContain('HON did not summarize');
   });
 });

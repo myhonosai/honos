@@ -62,6 +62,17 @@ export class SaasAccessOverviewHqController {
   }
 }
 
+/** C-HQ-3 HQ school detail: one school's access standing, ownership summary and counts. Read only; names no people. */
+@Controller('hq/saas/schools')
+@UseGuards(HonIdentityGuard)
+export class HqSchoolDetailController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get(':schoolId') @UseGuards(SaasReadGuard)
+  async detail(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.reads.readHqSchoolDetail(subject(req), schoolId) };
+  }
+}
+
 /** Independent exception-only decision; never a payment, entitlement or credit activation. */
 @Controller('hq/saas/access-exception-policy')
 @UseGuards(HonIdentityGuard)

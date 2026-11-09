@@ -81,6 +81,7 @@ export function hqPageLabel(path: string): string {
   if (path === '/hq/revenue/invoices') return 'Invoices';
   if (/^\/hq\/revenue\/invoices\/[0-9a-f-]{36}$/i.test(path)) return 'Invoice detail';
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
+  if (/^\/hq\/schools\/[0-9a-f-]{36}$/i.test(path)) return 'School detail';
   if (path === '/hq/revenue') return 'Revenue';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
   if (fixed) return fixed.title;

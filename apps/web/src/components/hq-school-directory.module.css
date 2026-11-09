@@ -11,7 +11,7 @@
 .section { margin-top: 30px; }
 .section header { max-width: 900px; }
 .section h2 { margin: 7px 0; font-size: 25px; }
-.tableWrap { overflow-x: auto; margin-top: 18px; border: 1px solid #34566d; border-radius: 13px; background: #0d2235; }
+.tableWrap { position: relative; overflow-x: auto; margin-top: 18px; border: 1px solid #34566d; border-radius: 13px; background: #0d2235; }
 .tableWrap:focus-visible { outline: 3px solid #f5dd9a; outline-offset: 3px; }
 .tableWrap table { width: 100%; min-width: 770px; border-collapse: collapse; text-align: left; }
 .tableWrap th, .tableWrap td { padding: 15px 18px; border-bottom: 1px solid #29465c; vertical-align: top; }
