@@ -2857,3 +2857,46 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'Membership pause permissions must exist as sensitive staff-assignable permissions'; END IF;
 END $$;
 -- End membership pause exact verification.
+-- Recurring class series exact verification (B-SCH-1 0239): private forced-RLS series and occurrence tables, the series guard,
+-- private helpers, six runtime entry points; the runtime still has no UPDATE on hon.class_sessions.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['class_series','class_series_occurrences'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Class series table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_class_series()',true,false,'search_path=pg_catalog, hon','25279023919d330ac968de1abea2faed15b8d1241c3fe6bc8ca0497f37f1d9e2'),
+('hon.require_class_series_actor(text)',true,false,'search_path=pg_catalog, hon','a91ef014ce4bb04d732d405ba53b5a0ec1be10267fe2efac6b5f504cdafec2bf'),
+('hon.class_series_json(hon.class_series)',true,false,'search_path=pg_catalog, hon','e884a7c10d007dc49c61648d36fc1299804e6aae680d37486662626fd1e20dee'),
+('hon.class_series_pattern(jsonb,boolean)',false,false,'search_path=pg_catalog, hon','30abf7a726b2fb7c8c970b56b50a25be4239743474107f8954977279d0193bf5'),
+('hon.class_series_command_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','7119e94378413589f6e0fc87777f10405147e5556cd4b047b0d38ce6e0b45944'),
+('hon.class_series_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','3fba076d7585bdac91002f2dc9ecf156debb50a5680d5899571361a1e99f902d'),
+('hon.class_series_apply_future(hon.class_series,text)',true,false,'search_path=pg_catalog, hon','8db2ec7b42d6f4b45fb129a0c0e4b3704351f46649165c036d7ff42f57d2c950'),
+('hon.create_class_series(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','789071319d0903f962db946b683d9ee520d88739a0cc3e4f1742f0d0c44ddeab'),
+('hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','25f291e00be4a866c10d5c867b9e30227fe50bbdfe8be7a5f47f73d7ccfad3b9'),
+('hon.end_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','874b8ab2922b59f0bca68e24a7dd87bb1955d023c790f1a8ec6ae5e4f9d6422c'),
+('hon.fill_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','e06f110fa778c3c253a5a3e2b9451c5f70d4b114149cd74f252fb9d8a1935194'),
+('hon.read_school_class_series(text)',true,true,'search_path=pg_catalog, hon','a05c7180c5a3a1db1b605582efd6406af2f9efe3b83f1aaf423228e6f977a261'),
+('hon.read_school_weekly_timetable(text,jsonb)',true,true,'search_path=pg_catalog, hon','2ff7caf2c9a791b2d6a037be4a01c75016b564c197935add272f296fba936351')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe class series function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('class_series','class_series_guard','hon.guard_class_series()'),
+    ('class_series','class_series_no_truncate','hon.guard_membership_activation_evidence()'),
+    ('class_series_occurrences','class_series_occurrences_immutable','hon.guard_membership_activation_evidence()'),
+    ('class_series_occurrences','class_series_occurrences_no_truncate','hon.guard_membership_activation_evidence()')) e(tbl,name,fn) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid=expected.fn::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing class series guard: %',expected.name; END IF;
+  END LOOP;
+  IF has_any_column_privilege('hon_runtime','hon.class_sessions','UPDATE') THEN RAISE EXCEPTION 'Runtime must not update class sessions'; END IF;
+END $$;
+-- End recurring class series exact verification.
