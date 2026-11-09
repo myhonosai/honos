@@ -2438,3 +2438,29 @@ DO $$ DECLARE t text; r text; f text; c text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.register_hon_os_school(text,text,jsonb,uuid),hon.read_hon_os_registration(text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0226 school student CSV import: three private evidence tables, private helpers, five runtime entry points.
+-- The runtime gains no privilege on the new tables or on people, families, family members or student profiles.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['student_import_batches','student_import_rows','student_import_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_student_import()','hon.require_student_import_actor(text)','hon.student_import_fields()',
+    'hon.student_import_check_row(jsonb,jsonb,jsonb,date)','hon.student_import_guardian(jsonb)','hon.student_import_summary(uuid)',
+    'hon.student_import_detail(uuid)','hon.student_import_begin(text,text,jsonb,text,uuid,uuid)',
+    'hon.student_import_finish(text,uuid,text,uuid,text,uuid,uuid,jsonb)','hon.stage_student_import(text,jsonb,text,uuid,uuid)',
+    'hon.decide_student_import(text,jsonb,text,uuid,uuid)','hon.apply_student_import_row(uuid,integer,uuid,uuid,uuid)',
+    'hon.finalize_student_import(text,jsonb,text,uuid,uuid)','hon.read_student_imports(text)','hon.read_student_import(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.stage_student_import(text,jsonb,text,uuid,uuid),hon.decide_student_import(text,jsonb,text,uuid,uuid),
+      hon.finalize_student_import(text,jsonb,text,uuid,uuid),hon.read_student_imports(text),hon.read_student_import(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
