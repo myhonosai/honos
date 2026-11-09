@@ -103,12 +103,16 @@ test('HON prompt keeps the owner identities: Kai teaches, Claire is business per
 
 test('HON reply suggestions are parsed from one closing SUGGEST line into a closed, unique list of at most three delegates', async () => {
   assert.deepEqual(splitHonReplySuggestions('Enrollment is flat.\nSUGGEST: marcus, chad'), { reply: 'Enrollment is flat.', suggestions: ['marcus', 'chad'] });
-  assert.deepEqual(splitHonReplySuggestions('Plan below.\nsuggest:  Kai ,kai, claire, hon, chad, marcus'), { reply: 'Plan below.', suggestions: ['kai', 'chad', 'marcus'] });
+  assert.deepEqual(splitHonReplySuggestions('Plan below.\nsuggest:  Kai ,kai, maya, hon, chad, marcus'), { reply: 'Plan below.', suggestions: ['kai', 'chad', 'marcus'] });
+  assert.deepEqual(splitHonReplySuggestions('Plan below.\nSUGGEST: claire, kai, chad, marcus'), { reply: 'Plan below.', suggestions: ['claire', 'kai', 'chad'] }, 'at most three, in order');
   // The line is always removed, even when it names nothing usable; a SUGGEST line elsewhere is ordinary text.
-  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: claire, lena'), { reply: 'Answer.', suggestions: [] });
+  // K2c: Claire joins the closed set; any other name is dropped.
+  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: claire, lena'), { reply: 'Answer.', suggestions: ['claire'] });
+  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: maya, hon'), { reply: 'Answer.', suggestions: [] });
   assert.deepEqual(splitHonReplySuggestions('SUGGEST: kai\nBut more text follows.'), { reply: 'SUGGEST: kai\nBut more text follows.', suggestions: [] });
   assert.deepEqual(splitHonReplySuggestions('Plain answer.'), { reply: 'Plain answer.', suggestions: [] });
-  assert.match(HON_REPLY_SYSTEM_PROMPT, /SUGGEST: marcus, kai/);
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /SUGGEST: marcus, claire/);
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /naming up to three of marcus, chad, kai and claire/);
   const run = (content, finish = 'stop') => new OpenRouterHonReplyRuntime(approved, async () => ok({ choices: [{ finish_reason: finish, message: { content } }] })).generate(input);
   assert.deepEqual(await run('Try a trial-week campaign.\nSUGGEST: marcus'), { reply: 'Try a trial-week campaign.', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: ['marcus'] });
   // A cut-off answer never carries suggestions (the line may itself be cut off).

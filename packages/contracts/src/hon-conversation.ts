@@ -22,6 +22,9 @@ export type HonDelegateAgentKey = typeof HON_DELEGATE_AGENTS[number];
  */
 export const HON_ANALYST_AGENT = 'claire' as const;
 export type HonAnalystAgentKey = typeof HON_ANALYST_AGENT;
+/** K2c: who a HON answer may suggest (closed set; capability-filtered by the server): the delegates, and Claire. */
+export const HON_SUGGESTED_AGENTS = ['marcus', 'kai', 'chad', HON_ANALYST_AGENT] as const;
+export type HonSuggestedAgentKey = typeof HON_SUGGESTED_AGENTS[number];
 /** At most this many specialists HON may suggest for one answer. A suggestion is never run without the human confirming it. */
 export const HON_REPLY_MAX_SUGGESTIONS = 3;
 export const HON_TURN_TEXT_LIMITS: Readonly<Record<HonDelegateAgentKey, number>> = { marcus: 2000, kai: 1200, chad: 2000 };
@@ -68,7 +71,7 @@ export const HON_REPLY_ROLE = 'hon' as const;
 /** How a HON reply was produced. truncated: cut off at the output limit (shown as incomplete, never as complete). */
 export interface HonReplyDetail { mode: HonReplyMode; step: number; maxSteps: number; truncated: boolean; canContinue: boolean; continuesTurnId: string | null;
   /** Specialists HON suggests for this answer: only READY delegates this reader may use, never for a cut-off or concealed answer. Suggestions do nothing until confirmed as a delegation turn. */
-  suggestions: HonDelegateAgentKey[] }
+  suggestions: HonSuggestedAgentKey[] }
 export interface HonConversationCreate { title: string }
 
 export interface HonConversationSummary { id: string; title: string; createdAt: string; updatedAt: string; turnCount: number; status: HonTurnStatus }
@@ -101,6 +104,7 @@ const fail = (code: string) => (): never => { throw new Error(code); };
 const invalid = fail('INVALID_HON_CONVERSATION_INPUT');
 const drift = fail('INVALID_HON_CONVERSATION_RESPONSE');
 const isAgent = (v: unknown): v is HonDelegateAgentKey => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(v);
+const isSuggested = (v: unknown): v is HonSuggestedAgentKey => (HON_SUGGESTED_AGENTS as readonly unknown[]).includes(v);
 const isReply = (v: unknown): v is string => typeof v === 'string' && v.trim().length >= 1 && v.length <= HON_REPLY_LIMITS.replyCharacters;
 const isReplyDetail = (v: unknown, completed: boolean): boolean => {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
@@ -108,7 +112,7 @@ const isReplyDetail = (v: unknown, completed: boolean): boolean => {
   const keys = Object.keys(d).sort().join(',');
   const sug = d.suggestions;
   return keys === 'canContinue,continuesTurnId,maxSteps,mode,step,suggestions,truncated'
-    && Array.isArray(sug) && sug.length <= HON_REPLY_MAX_SUGGESTIONS && sug.every(isAgent) && new Set(sug).size === sug.length
+    && Array.isArray(sug) && sug.length <= HON_REPLY_MAX_SUGGESTIONS && sug.every(isSuggested) && new Set(sug).size === sug.length
     // Only a completed, whole answer can carry suggestions.
     && (sug.length === 0 || (completed && d.truncated === false))
     && (HON_REPLY_MODE_KEYS as readonly unknown[]).includes(d.mode) && d.maxSteps === HON_REPLY_MAX_STEPS
@@ -153,10 +157,10 @@ export function validateHonTurnRequest(value: unknown): HonTurnRequest {
   const from = 'fromSuggestionTurnId' in r ? { fromSuggestionTurnId: r.fromSuggestionTurnId as string } : {};
   const d = record(r.delegation, invalid);
   if (d.agentKey === HON_ANALYST_AGENT) {
-    // Claire is never confirmed from a HON suggestion in this slice, and her question needs text.
+    // Claire's question needs text. K2c: it may confirm HON's suggestion of Claire (fromSuggestionTurnId).
     exactKeys(d, ['agentKey'], invalid);
-    if ('fromSuggestionTurnId' in r || !marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
-    return { text: r.text as string, delegation: { agentKey: HON_ANALYST_AGENT } };
+    if (!marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
+    return { text: r.text as string, delegation: { agentKey: HON_ANALYST_AGENT }, ...from };
   }
   if (!isAgent(d.agentKey) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[d.agentKey])) invalid();
   const text = r.text as string;
@@ -243,7 +247,7 @@ export function composeHonConversationReadiness(team: {
  */
 export const HON_ORCHESTRATION_STATUSES = ['PENDING', 'PARTIAL', 'COMPLETED', 'NEEDS_REVIEW', 'FAILED', 'UNKNOWN'] as const;
 export type HonOrchestrationStatus = typeof HON_ORCHESTRATION_STATUSES[number];
-export interface HonOrchestrationMember { agentKey: HonDelegateAgentKey; turnId: string; status: HonTurnStatus }
+export interface HonOrchestrationMember { agentKey: HonSuggestedAgentKey; turnId: string; status: HonTurnStatus }
 export interface HonOrchestration { sourceTurnId: string; status: HonOrchestrationStatus; members: HonOrchestrationMember[] }
 export interface HonOrchestrationList { items: HonOrchestration[] }
 
@@ -267,7 +271,7 @@ export function validateHonOrchestrationList(value: unknown): HonOrchestrationLi
     const agents = new Set<unknown>();
     for (const m of o.members as unknown[]) {
       const k = record(m, drift); exactKeys(k, ['agentKey', 'turnId', 'status'], drift);
-      if (!isAgent(k.agentKey) || agents.has(k.agentKey) || !isUuid(k.turnId) || turns.has(k.turnId) || k.turnId === o.sourceTurnId || !isStatus(k.status)) drift();
+      if (!isSuggested(k.agentKey) || agents.has(k.agentKey) || !isUuid(k.turnId) || turns.has(k.turnId) || k.turnId === o.sourceTurnId || !isStatus(k.status)) drift();
       agents.add(k.agentKey); turns.add(k.turnId);
     }
     // The server's derived status must match the members it reports.

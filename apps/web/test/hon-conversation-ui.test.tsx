@@ -246,7 +246,7 @@ describe('Ask HON suggestion targets (C3a)', () => {
 });
 
 describe('Ask HON suggestion cards (C3a)', () => {
-  const answer = (suggestions: Array<'marcus' | 'kai' | 'chad'>, over: Partial<HonConversationTurn> = {}) => thread([human(6, 'How do I fill Saturday trials?'), reply(6, over, { suggestions })]);
+  const answer = (suggestions: Array<'marcus' | 'kai' | 'chad' | 'claire'>, over: Partial<HonConversationTurn> = {}) => thread([human(6, 'How do I fill Saturday trials?'), reply(6, over, { suggestions })]);
   const all = { ...readiness(), availableAgentKeys: ['marcus' as const, 'kai' as const, 'chad' as const] };
   it('offers one card per suggested specialist that only opens a confirmation; nothing runs from the card', () => {
     const html = render({ readiness: all, thread: answer(['marcus', 'chad']), threadPhase: 'READY' });
@@ -285,6 +285,23 @@ describe('Ask HON suggestion cards (C3a)', () => {
     expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', confirm: { ...base, agent: 'marcus', targets: 'LOADING' } })).toContain('Loading campaign choices for Marcus');
     const failed = render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', confirm: { ...base, agent: 'marcus', targets: 'UNAVAILABLE' } });
     expect(failed).toContain('could not be verified right now'); expect(failed).not.toContain('Send to Marcus');
+  });
+  it('K2c: offers Claire when HON suggests her and readiness allows; her confirmation is a question only, never a draft', () => {
+    const withClaire = { ...all, businessPerformance: true };
+    const t = thread([human(6, 'How are we doing?'), reply(6, {}, { suggestions: ['claire', 'marcus'] })]);
+    const card = render({ readiness: withClaire, thread: t, threadPhase: 'READY' });
+    expect(card).toContain('>Ask Claire</button>'); expect(card).toContain('Business Performance'); expect(card).toContain('She never drafts, sends or changes anything');
+    expect(render({ readiness: all, thread: t, threadPhase: 'READY' })).toContain('Claire isn’t available for your role');
+    const base: SuggestionConfirm = { seq: 1, sourceTurnId: id(6), agent: 'claire', targetId: '', purpose: null, text: '', targets: [] };
+    const open = render({ readiness: withClaire, thread: t, threadPhase: 'READY', confirm: base });
+    expect(open).toContain('aria-label="Ask Claire"'); expect(open).toContain('What should Claire look at?'); expect(open).not.toContain('Choose a');
+    expect(open).toContain('2,000 characters left'); expect(open).toMatch(/<button type="submit" disabled="">Send to Claire/);
+    expect(open.slice(open.indexOf('data-confirm="claire"'), open.indexOf('</form>', open.indexOf('data-confirm="claire"')))).not.toMatch(/Action Center|draft for/);
+    expect(render({ readiness: withClaire, thread: t, threadPhase: 'READY', confirm: { ...base, text: 'Trial conversion?' } })).toMatch(/<button type="submit">Send to Claire/);
+    expect(suggestionDelegation('claire', null, null)).toEqual({ agentKey: 'claire' });
+    const g = group('COMPLETED', [{ agentKey: 'claire', turnId: id(7), status: 'COMPLETED' }]);
+    const done = render({ readiness: withClaire, thread: t, threadPhase: 'READY', groups: orchestrationsBySource({ items: [g] }) });
+    expect(done).toMatch(/<span>Claire<\/span>/); expect(done).not.toContain('>Ask Claire</button>'); expect(done).toContain('>Ask Marcus</button>');
   });
   it('explains a specialist’s recorded refusal without inventing a draft', () => {
     const chad: HonConversationTurn = { turnId: id(7), role: 'chad', text: null, createdAt: AT, status: 'FAILED', reason: 'AGENT_TARGET_NOT_FOUND',

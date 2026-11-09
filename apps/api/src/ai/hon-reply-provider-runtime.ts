@@ -1,4 +1,4 @@
-import { HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_STEPS, HON_REPLY_MODES, HON_REPLY_MAX_SUGGESTIONS, type HonDelegateAgentKey, type HonReplyMode } from '@hon/contracts';
+import { HON_REPLY_LIMITS, HON_REPLY_MAX_STEPS, HON_REPLY_MODES, HON_REPLY_MAX_SUGGESTIONS, HON_SUGGESTED_AGENTS, type HonReplyMode, type HonSuggestedAgentKey } from '@hon/contracts';
 
 export const HON_REPLY_PROVIDER_RUNTIME = Symbol('HON_REPLY_PROVIDER_RUNTIME');
 
@@ -14,7 +14,7 @@ export interface HonReplyInvocation {
  * suggestions (C3a): specialists the answer proposes the human could ask, from the closed delegate set only. A suggestion
  * never runs anything: the database keeps only agents the requester may use, and each one needs a human-confirmed turn.
  */
-export interface HonReplyResult { reply: string; inputTokens: number; outputTokens: number; providerCostMicrounits: number; truncated: boolean; suggestions: HonDelegateAgentKey[] }
+export interface HonReplyResult { reply: string; inputTokens: number; outputTokens: number; providerCostMicrounits: number; truncated: boolean; suggestions: HonSuggestedAgentKey[] }
 
 /** Provider-neutral boundary. The model gets no tools, HTTP, SQL, tenant, authority or credential access. */
 export interface HonReplyProviderRuntime {
@@ -35,9 +35,10 @@ export const HON_REPLY_SYSTEM_PROMPT = [
   'You cannot take any action. Never claim that anything was sent, scheduled, saved, charged, enrolled or changed.',
   'When work is needed, suggest asking Marcus (marketing drafts), Chad (lead follow-up drafts) or Kai, the teaching and curriculum',
   'assistant (class preparation from published curriculum), in this conversation; their drafts always wait for a human review.',
-  'Claire is the business performance specialist; never call Claire a teaching assistant.',
-  'Only when one or more of Marcus, Chad or Kai could do work for this request, end the answer with one last line exactly',
-  'in the form "SUGGEST: marcus, kai" naming up to three of marcus, chad and kai; otherwise never write a SUGGEST line.',
+  'Claire is the business performance specialist (a read-only analysis of the school\'s performance numbers, such as revenue,',
+  'trial conversion, attendance and unanswered inquiries); never call Claire a teaching assistant.',
+  'Only when one or more of Marcus, Chad, Kai or Claire could help with this request, end the answer with one last line exactly',
+  'in the form "SUGGEST: marcus, claire" naming up to three of marcus, chad, kai and claire; otherwise never write a SUGGEST line.',
   'When the facts include a group, the person asked you to summarize the recorded outcomes of specialist work they confirmed:',
   'first list each recorded outcome under "Recorded facts" exactly as the facts give it, then give your view under "HON\'s view";',
   'never claim a draft, result or status the facts do not show.',
@@ -72,18 +73,18 @@ export function honReplySystemPrompt(mode: HonReplyMode, step: number, specialis
 const SUGGEST_LINE = /^SUGGEST:(.*)$/i;
 /**
  * Splits an optional final "SUGGEST: a, b" line from the model's answer. The line is always removed from the shown text;
- * only names from the closed delegate set are kept (deduplicated, at most HON_REPLY_MAX_SUGGESTIONS, in order). Anything
+ * only names from the closed suggestion set (the delegates and Claire) are kept (deduplicated, at most HON_REPLY_MAX_SUGGESTIONS, in order). Anything
  * else on the line is dropped. A SUGGEST line anywhere but last is ordinary text and suggests nothing.
  */
-export function splitHonReplySuggestions(text: string): { reply: string; suggestions: HonDelegateAgentKey[] } {
+export function splitHonReplySuggestions(text: string): { reply: string; suggestions: HonSuggestedAgentKey[] } {
   const lines = text.trimEnd().split('\n');
   const last = lines[lines.length - 1]?.trim() ?? '';
   const match = SUGGEST_LINE.exec(last);
   if (!match) return { reply: text.trim(), suggestions: [] };
-  const suggestions: HonDelegateAgentKey[] = [];
+  const suggestions: HonSuggestedAgentKey[] = [];
   for (const raw of match[1]!.split(',')) {
     const key = raw.trim().toLowerCase();
-    if ((HON_DELEGATE_AGENTS as readonly string[]).includes(key) && !suggestions.includes(key as HonDelegateAgentKey) && suggestions.length < HON_REPLY_MAX_SUGGESTIONS) suggestions.push(key as HonDelegateAgentKey);
+    if ((HON_SUGGESTED_AGENTS as readonly string[]).includes(key) && !suggestions.includes(key as HonSuggestedAgentKey) && suggestions.length < HON_REPLY_MAX_SUGGESTIONS) suggestions.push(key as HonSuggestedAgentKey);
   }
   return { reply: lines.slice(0, -1).join('\n').trim(), suggestions };
 }
@@ -142,7 +143,7 @@ export class OpenRouterHonReplyRuntime implements HonReplyProviderRuntime {
         || typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0 || cost > 1000) throw new Error('UNVERIFIED');
       // A cut-off answer never carries suggestions (its last line may be incomplete); an answer that was only a SUGGEST line is unverified.
       // Claire never suggests: her text is kept whole (a SUGGEST-shaped line is ordinary text and suggests nothing).
-      const split = finish === 'length' || claire ? { reply, suggestions: [] as HonDelegateAgentKey[] } : splitHonReplySuggestions(reply);
+      const split = finish === 'length' || claire ? { reply, suggestions: [] as HonSuggestedAgentKey[] } : splitHonReplySuggestions(reply);
       if (split.reply.length < 1) throw new Error('UNVERIFIED');
       return { reply: split.reply, inputTokens: prompt, outputTokens: completion, providerCostMicrounits: Math.ceil(Number((cost * 1_000_000).toFixed(6))), truncated: finish === 'length', suggestions: split.suggestions };
     } catch (error) {

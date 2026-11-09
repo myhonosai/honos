@@ -2340,7 +2340,7 @@ try {
   fakes.hon.mode = 'RESULT';
   assert.deepEqual([r3.status, r3.replyDetail.truncated, r3.replyDetail.suggestions, await stored(r3.turnId)], ['COMPLETED', true, [], []]);
   assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{kai}' WHERE turn_id=$1", [r3.turnId]))).error?.code, '23514', 'no suggestions on a cut-off answer');
-  for (const bad of ['{claire}', '{hon}', '{kai,chad,marcus,kai}']) {
+  for (const bad of ['{maya}', '{hon}', '{kai,chad,marcus,kai}']) {
     assert.equal((await settle(admin.query('UPDATE hon.hon_reply_invocations SET suggested_agents=$2::text[] WHERE turn_id=$1', [r1.turnId, bad]))).error?.code, '23514', `${bad} refused`);
   }
   // 6. The database refuses malformed suggestions from the API (closed set, unique, at most three) before any write.
@@ -2349,7 +2349,7 @@ try {
   for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
   const sending = (await row("SELECT turn_id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).turn_id;
   const base = { reply: 'x', inputTokens: 1, outputTokens: 1, providerCostMicrounits: 0 };
-  for (const suggestions of [['claire'], ['kai', 'kai'], ['kai', 'chad', 'marcus', 'kai'], 'kai', [1], [null]]) {
+  for (const suggestions of [['maya'], ['kai', 'kai'], ['kai', 'chad', 'marcus', 'kai'], 'kai', [1], [null]]) {
     const r = await settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, suggestions })])));
     assert.equal(r.error?.code, '22023', `${JSON.stringify(suggestions)} refused`);
   }
@@ -2359,7 +2359,7 @@ try {
   assert.deepEqual([r4?.status, r4?.replyDetail?.suggestions, await stored(sending)], ['COMPLETED', ['chad'], ['chad']], JSON.stringify(r4 ?? (await pending).error));
   fakes.hon.suggestions = [];
   assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])','EXECUTE') s", [runtimeRole])).s, false, 'internal helper');
-  pass('INV-28', 'C3a: HON suggestions are a closed list (marcus, kai, chad; unique; at most three) stored with the reply only for agents the requester holds the capability for, shown only on a whole, visible COMPLETED answer and only for agents still held now (concealed and cut-off answers show none; the table refuses others), malformed suggestions are refused before any write, and a suggestion runs no specialist, invocation or Action Center request');
+  pass('INV-28', 'C3a: HON suggestions are a closed list (marcus, kai, chad, and claire since K2c; unique; at most three) stored with the reply only for agents the requester holds the capability for, shown only on a whole, visible COMPLETED answer and only for agents still held now (concealed and cut-off answers show none; the table refuses others), malformed suggestions are refused before any write, and a suggestion runs no specialist, invocation or Action Center request');
   }
 
   // ---- INV-29 (C3a, 0215): confirming HON's suggestions is an ordinary delegation, grouped with a derived status ----
@@ -2704,7 +2704,108 @@ try {
   await dropRep();
   assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'claire').blockedBy, 'NOT_AUTHORIZED');
   await addRep();
-  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or confirmed as suggestions; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view");
+  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or used as a suggestion source; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view");
+  }
+
+  // ---- INV-32 (K2c, 0234): HON may suggest Claire; confirming her is an ordinary K2 analysis grouped under the answer ----
+  {
+  const o = await makeOrg('inv-32');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? r.error?.message ?? 'OK'; };
+  const turnsOf = async (id) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [id])).n;
+  const stored = async (turnId) => (await row('SELECT suggested_agents FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId])).suggested_agents;
+  const conv = await hon.create(scope, { title: 'How are we doing' }, K());
+  const ask = async (suggestions, text) => { fakes.hon.suggestions = suggestions; try { return await hon.sendTurn(scope, conv.id, { text, delegation: null }, K()); } finally { fakes.hon.suggestions = []; } };
+  const claireFrom = (from, key = K(), text = 'How are trials converting this month?') => hon.sendTurn(scope, conv.id, { text, delegation: { agentKey: 'claire' }, fromSuggestionTurnId: from }, key);
+  const marcus = (from) => hon.sendTurn(scope, conv.id, { text: 'Draft a friendly trial-week post. Use placeholders for unprovided facts.', delegation: { agentKey: 'marcus', campaignId: o.campaign }, fromSuggestionTurnId: from }, K());
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  const members = async () => (await row('SELECT count(*)::int n FROM hon.hon_orchestration_members WHERE organization_id=$1', [o.id])).n;
+  const replies = async () => (await row('SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE conversation_id=$1', [conv.id])).n;
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const honText = fakes.hon.reply;
+  // 1. HON may suggest Claire (closed set now marcus, kai, chad, claire), stored and shown for a reporting.view holder.
+  const src = await ask(['claire', 'marcus'], 'How is the school doing, and what should we do?');
+  assert.deepEqual([src.replyDetail.suggestions, await stored(src.turnId)], [['claire', 'marcus'], ['claire', 'marcus']], JSON.stringify(src));
+  // 2. Without reporting.view Claire is never stored: the answer recorded then keeps only agents they may use.
+  await dropRep();
+  const noRep = await ask(['claire', 'kai'], 'Anything for the instructors?');
+  await addRep();
+  assert.deepEqual(await stored(noRep.turnId), ['kai'], 'claire filtered by reporting.view when recorded');
+  // 3. Confirming Claire is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only) grouped under the answer.
+  const before = { hon: fakes.hon.calls, specialists: fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls };
+  const kc = K();
+  fakes.hon.reply = 'CLAIRE-ONLY-ANALYSIS-TEXT: trial conversion is steady.';
+  let c1;
+  try { c1 = await claireFrom(src.turnId, kc); } finally { fakes.hon.reply = honText; }
+  assert.deepEqual([c1.status, c1.delegatedAgentKeys, c1.replyDetail.mode, c1.replyDetail.suggestions], ['COMPLETED', ['claire'], 'DETAILED', []], JSON.stringify(c1));
+  assert.deepEqual([fakes.hon.calls - before.hon, fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls - before.specialists], [1, 0]);
+  assert.deepEqual([fakes.hon.inputs.at(-1).specialist, Object.keys(JSON.parse(fakes.hon.inputs.at(-1).facts))], ['claire', ['school']], 'metrics only');
+  const plan = await row('SELECT p.agent_key, p.task_class FROM hon.hon_reply_invocations r JOIN hon.ai_invocation_plans p ON p.id = r.plan_id WHERE r.turn_id=$1', [c1.turnId]);
+  assert.deepEqual(plan, { agent_key: 'claire', task_class: 'ANALYZE' });
+  assert.deepEqual(await claireFrom(src.turnId, kc), c1, 'resend replays');
+  assert.equal(fakes.hon.calls - before.hon, 1, 'no second call');
+  assert.deepEqual(await hon.orchestrations(scope, conv.id), { items: [{ sourceTurnId: src.turnId, status: 'COMPLETED', members: [{ agentKey: 'claire', turnId: c1.turnId, status: 'COMPLETED' }] }] });
+  // Marcus joins the same group; the derived status follows the members.
+  const m1 = await marcus(src.turnId);
+  assert.deepEqual((await hon.orchestrations(scope, conv.id)).items[0].members.map((m) => [m.agentKey, m.status]), [['claire', 'COMPLETED'], ['marcus', 'AWAITING_APPROVAL']]);
+  assert.equal((await hon.orchestrations(scope, conv.id)).items[0].status, 'NEEDS_REVIEW');
+  // 4. Claire is confirmed once per answer, only where suggested, and never from a Claire answer; refusals record nothing.
+  let n = await turnsOf(conv.id);
+  assert.equal(await code(claireFrom(src.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'already confirmed');
+  const onlyMarcus = await ask(['marcus'], 'Marketing ideas?');
+  n = await turnsOf(conv.id);
+  assert.equal(await code(claireFrom(onlyMarcus.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'not suggested');
+  assert.equal(await code(claireFrom(c1.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'a Claire answer is not a source');
+  assert.equal(await code(claireFrom(noRep.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'never stored without reporting.view');
+  assert.equal(await turnsOf(conv.id), n, 'refusals record no turn');
+  // Without reporting.view now, Claire is refused (her own capability) before anything is recorded.
+  const src2 = await ask(['claire'], 'Where are we losing students?');
+  await dropRep();
+  n = await turnsOf(conv.id);
+  assert.notEqual(await code(claireFrom(src2.turnId)), 'OK', 'refused without reporting.view');
+  assert.equal(await turnsOf(conv.id), n);
+  await addRep();
+  // 5. The source stops suggesting Claire while the confirmation waits behind its group writes (a blocker holds SHARE on
+  //    work_items): re-checked after every write, refused with nothing persisted (turn, group member, reply) and no call.
+  {
+    const before5 = { turns: await turnsOf(conv.id), members: await members(), replies: await replies(), calls: fakes.hon.calls };
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    let out;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('LOCK TABLE hon.work_items IN SHARE MODE');
+      const bpid = (await blocker.query('SELECT pg_backend_pid() p')).rows[0].p;
+      let done = false;
+      const p = code(claireFrom(src2.turnId, K(), 'Lapse while waiting?')).then((r) => { done = true; return r; });
+      for (const end = Date.now() + 5000; !(await row('SELECT count(*)::int n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [bpid])).n; await sleep(20)) {
+        assert.ok(!done && Date.now() < end, 'the Claire confirmation never waited on the work item');
+      }
+      await admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{}' WHERE turn_id=$1", [src2.turnId]);
+      await blocker.query('COMMIT');
+      out = await p;
+    } finally { await blocker.query('ROLLBACK').catch(() => {}); await blocker.end(); await admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{claire}' WHERE turn_id=$1", [src2.turnId]); }
+    assert.equal(out, 'HON_SUGGESTION_NOT_CONFIRMABLE', 'refused after the wait');
+    assert.deepEqual({ turns: await turnsOf(conv.id), members: await members(), replies: await replies(), calls: fakes.hon.calls }, before5, 'nothing persisted');
+  }
+  // 6. A finished group with Claire can be summarized: HON sees her agent, status and reason only, never her text.
+  fakes.hon.reply = 'CLAIRE-ONLY-ANALYSIS-TEXT: churn is low.';
+  let c2;
+  try { c2 = await claireFrom(src2.turnId); } finally { fakes.hon.reply = honText; }
+  assert.equal(c2.status, 'COMPLETED');
+  const sum = await hon.sendTurn(scope, conv.id, { text: 'Summarize what the team did.', delegation: null, summarizeTurnId: src2.turnId }, K());
+  assert.equal(sum.status, 'COMPLETED', JSON.stringify(sum));
+  const facts = fakes.hon.inputs.at(-1).facts;
+  assert.deepEqual(JSON.parse(facts).group.members, [{ agentKey: 'claire', status: 'COMPLETED' }], facts);
+  assert.ok(!facts.includes('CLAIRE-ONLY-ANALYSIS-TEXT'), 'Claire text never reaches HON');
+  // 7. Table rules: members and suggestions accept claire; Claire's own rows still carry no suggestions.
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{maya}' WHERE turn_id=$1", [src.turnId]))).error?.code, '23514');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{kai}' WHERE turn_id=$1", [c1.turnId]))).error?.code, '23514', 'Claire never suggests');
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])','EXECUTE') s", [runtimeRole])).s, false, 'internal helper');
+  void m1;
+  pass('INV-32', "K2c: HON may suggest Claire (closed set marcus, kai, chad, claire), stored and shown only for a reporting.view holder; confirming her from this human's own whole, visible HON answer is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only, resend replays) grouped under that answer with a status derived from her reply; she is confirmed once, only where suggested and never from a Claire answer; the source is re-checked after the group and work writes wait (a lapse persists no turn, member or reply and calls nothing); a C3b summary sees her agent, status and reason but never her text; Claire rows still never suggest");
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
