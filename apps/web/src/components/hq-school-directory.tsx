@@ -25,13 +25,14 @@ function DirectoryTable({ directory }: { directory: HqSchoolDirectory }): React.
     <header><p className={styles.eyebrow}>{t('directoryTableEyebrow')}</p><h2 id="hq-schools-directory-title">{t('directorySchools')}</h2><p>{t('directoryTableHelp')}</p></header>
     <div className={styles.tableWrap} role="region" aria-label={t('directoryTableLabel')} tabIndex={0}>
       <table>
-        <thead><tr><th>{t('directoryOrganization')}</th><th>{t('directorySchool')}</th><th>{t('directoryOperationalStatus')}</th><th>{t('directoryCurrentTier')}</th><th>{t('directoryCreated')}</th></tr></thead>
+        <thead><tr><th>{t('directoryOrganization')}</th><th>{t('directorySchool')}</th><th>{t('directoryOperationalStatus')}</th><th>{t('directoryCurrentTier')}</th><th>{t('directoryCreated')}</th><th><span className={styles.announcement}>{t('directoryDetail')}</span></th></tr></thead>
         <tbody>{directory.schools.map((school) => <tr key={school.schoolId}>
           <td><strong>{school.organizationDisplayName}</strong><small>{hqSchoolStatus(preferences.language, school.organizationOperationalStatus)}</small></td>
           <td><strong>{school.schoolDisplayName}</strong><small>{hqSchoolStatus(preferences.language, school.schoolOperationalStatus)}</small></td>
           <td><span className={styles.statusPair}>{hqSchoolStatus(preferences.language, school.organizationOperationalStatus)} / {hqSchoolStatus(preferences.language, school.schoolOperationalStatus)}</span></td>
           <td>{school.entitlementTier ?? <span className={styles.unavailable}>{t('directoryNoTier')}</span>}</td>
           <td>{formatDate(school.createdAt, formattingLocale)} UTC</td>
+          <td><a href={`/hq/schools/${encodeURIComponent(school.schoolId)}`} aria-label={`${t('directoryOpen')}: ${school.schoolDisplayName}`}>{t('directoryDetail')}</a></td>
         </tr>)}</tbody>
       </table>
     </div>

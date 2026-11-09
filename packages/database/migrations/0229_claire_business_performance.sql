@@ -1,6 +1,6 @@
 BEGIN;
 
--- K2 (proposed number; the owner allocates the final one): Claire, Business Performance, read-only.
+-- K2 (migration number 0229, allocated by the owner 2026-11-09): Claire, Business Performance, read-only.
 -- Owner master blueprint 2026-11-06: HON is the central assistant, Kai owns teaching, Claire is the Business Performance
 -- specialist. Design: /mnt/project-files/sprint4a/K2_CLAIRE_BUSINESS_PERFORMANCE.md (project files, not in the repo).
 --
