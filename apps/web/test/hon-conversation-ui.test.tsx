@@ -19,7 +19,7 @@ const id = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${Stri
 const AT = '2026-11-06T18:00:00.000Z';
 const SCHOOL = { organizationId: id(1), schoolId: id(2) };
 const BASE = `/api/v1/organizations/${id(1)}/schools/${id(2)}/hon`;
-const readiness = (honReply = true) => ({ contract: true as const, providerRoute: honReply, entitlement: true, authorization: true, availableAgentKeys: ['marcus' as const], honReply, asOf: AT });
+const readiness = (honReply = true) => ({ contract: true as const, providerRoute: honReply, entitlement: true, authorization: true, availableAgentKeys: ['marcus' as const], honReply, businessPerformance: false, asOf: AT });
 const summary = (n: number, turnCount = 1) => ({ id: id(n), title: `Question ${n}`, createdAt: AT, updatedAt: AT, turnCount, status: 'COMPLETED' as const });
 const human = (turn: number, text: string): HonConversationTurn => ({ turnId: id(turn), role: 'HUMAN', text, createdAt: AT, status: 'COMPLETED', reason: null,
   references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
