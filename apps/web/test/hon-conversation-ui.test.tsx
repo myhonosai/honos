@@ -296,7 +296,7 @@ describe('Ask HON suggestion cards (C3a)', () => {
     const asked: string[] = [];
     for (const status of ['COMPLETED', 'FAILED', 'PARTIAL'] as const) {
       const html = render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: (t) => asked.push(t) });
-      expect(html).toMatch(/<button type="button" class="[^"]*">Summarize with HON<\/button>/); expect(html).toContain('It changes nothing.');
+      expect(html).toMatch(/<button type="button" class="[^"]*">Summarize with HON<\/button>/); expect(html).toContain('It changes nothing.'); expect(html).toContain('asking again uses credits again.');
     }
     for (const status of ['PENDING', 'NEEDS_REVIEW', 'UNKNOWN'] as const)
       expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: noop })).not.toContain('Summarize with HON');
@@ -309,7 +309,7 @@ describe('Ask HON suggestion cards (C3a)', () => {
     expect(body).toEqual({ text: 'Summarize', delegation: null, summarizeTurnId: id(6) });
     expect(() => prepareTurn(SCHOOL, id(5), { text: 'Summarize', delegation: null, summarizeTurnId: id(6), continueTurnId: id(6) })).toThrow(HonConversationError);
     expect(render({ thread: answer(['marcus']), threadPhase: 'READY', pending: { prepared, kind: 'turn', label: 'Summarize with HON', state: 'INVALID', conversationId: id(5), code: 'HON_GROUP_NOT_SUMMARIZABLE' } }))
-      .toContain('HON can’t summarize those specialists yet');
+      .toContain('HON can’t summarize those specialists: their group changed since you saw it');
     expect(render({ thread: thread([human(4, 'Summarize'), reply(6, { text: null, status: 'FAILED', reason: 'GROUP_NOT_SUMMARIZABLE' })]), threadPhase: 'READY' })).toContain('HON did not summarize');
   });
 });

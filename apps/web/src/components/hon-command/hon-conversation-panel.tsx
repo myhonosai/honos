@@ -53,7 +53,7 @@ const CODE_TEXT: Record<string, string> = {
   HON_REPLY_NOT_CONTINUABLE: 'That answer can no longer be continued. Ask a new question instead. Nothing was sent.',
   HON_CONVERSATION_NOT_FOUND: 'That conversation is no longer available. Refresh to see your conversations. Nothing was sent.',
   HON_SUGGESTION_NOT_CONFIRMABLE: 'That suggestion can no longer be confirmed: this specialist was already asked from this answer, or the answer or the specialist’s access changed. Nothing was sent.',
-  HON_GROUP_NOT_SUMMARIZABLE: 'HON can’t summarize those specialists yet: their work isn’t finished, or this group is no longer yours to summarize. Nothing was sent.',
+  HON_GROUP_NOT_SUMMARIZABLE: 'HON can’t summarize those specialists: their group changed since you saw it, or it is no longer yours to summarize. Nothing was sent. Refresh to see where it stands.',
 };
 const failureText = (state: HonConversationFailure, code: string | null | undefined) => (code && state !== 'UNKNOWN' ? CODE_TEXT[code] : undefined) ?? FAILURE[state];
 const reasonText = (reason: string | null) => reason === null ? null : REASON[reason] ?? `HON could not answer (${reason.toLowerCase().replaceAll('_', ' ')}). Nothing is charged.`;
@@ -155,7 +155,7 @@ function Suggestions({ turn, group, groupPhase, available, locked, canSummarize,
       {group.status === 'NEEDS_REVIEW' || group.status === 'PARTIAL' ? <a className={styles.link} href="/staff/action-center/approvals">Review drafts in Action Center →</a> : null}
       {SUMMARIZABLE_GROUP.has(group.status) && verified && onSummarize ? <div className={styles.actions} data-hon-summarize={turn.turnId}>
         <button type="button" className={styles.secondary} disabled={!canSummarize} onClick={() => onSummarize(turn.turnId)}>Summarize with HON</button>
-        <p className={styles.meta}>HON reads only what these specialists recorded and answers below as a new question. It changes nothing.</p>
+        <p className={styles.meta}>HON reads only what these specialists recorded and answers below as a new question. It changes nothing. Each summary is a new question, so asking again uses credits again.</p>
       </div> : null}
     </div> : null}
     {suggested.length > 0 ? <>
