@@ -47,7 +47,7 @@ Forced RLS on all five tables; immutability triggers on events, paid periods and
 
 - Founder spot race at #50 (piece 4): recommended to count at first payment and refuse the founder sign-up before charging once 50 are paid.
 - Scheduling the expiry worker (no job runner here); it is a privileged call with no route.
-- Piece 2: real access switch-on in the hook (B6A `PAYMENT_ACTIVE`).
+- Piece 2: real access switch-on in the hook (B6A `PAYMENT_ACTIVE`), migration 0235, see [HON_OS_SCHEDULE_PAID_ACCESS.md](HON_OS_SCHEDULE_PAID_ACCESS.md).
 - Piece 3: HQ review queue (payment problems, refunds), stopping founder and lifetime sales in the legacy checkout.
 - Piece 4: founder terms V2 (new pricing-terms version; 0188 history untouched) and counting the 50 spots (new founder-plan sales only).
 - Piece 5: screens.

@@ -58,6 +58,11 @@ export const saasBillingFunctions = [
  ['hon.read_saas_schedule_binding(text,uuid,uuid)',true,true],
  ['hon.read_saas_schedule_binding_from_hq(text,uuid)',true,true],
  ['hon.ingest_saas_schedule_evidence(jsonb,text)',true,true],
+ // 0235 HON OS schedule billing piece 2: access after the first verified schedule payment
+ ['hon.saas_schedule_access_grace()',false,false],
+ ['hon.saas_schedule_access_json(uuid)',false,false],
+ ['hon.saas_schedule_activate_access(uuid,uuid,timestamp with time zone)',false,false],
+ ['hon.retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.saas_price_usd(integer)',false,false],
  ['hon.saas_price_content(uuid,uuid)',false,false],
  ['hon.saas_price_schedule_json(hon.saas_price_schedules)',false,false],

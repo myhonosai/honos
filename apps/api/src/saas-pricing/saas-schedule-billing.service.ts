@@ -1,8 +1,8 @@
 import { BadRequestException, Inject, Injectable, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import type { SaasScheduleBinding } from '@hon/contracts';
 import { randomUUID } from 'node:crypto';
-import { saasUuid, validateSaasScheduleBinding, validateSaasScheduleBindingInput, validateSaasScheduleBindingReceipt,
-  validateSaasScheduleEvidenceReceipt, type SaasScheduleRequirements } from '@hon/contracts';
+import { saasUuid, validateSaasScheduleAccessRetryInput, validateSaasScheduleAccessRetryReceipt, validateSaasScheduleBindingInput,
+  validateSaasScheduleBindingReceipt, validateSaasScheduleBindingView, validateSaasScheduleEvidenceReceipt, type SaasScheduleRequirements } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 import { SUBSCRIPTION_SCHEDULE_PROVIDER, type ProviderScheduleRequirements, type ProviderSubscriptionScheduleAdapter } from '../payments/subscription-schedule-provider.js';
 
@@ -50,10 +50,16 @@ export class SaasScheduleBillingService {
 
   read(subject: string, school: unknown, binding: unknown) {
     const [s,b] = parse(() => [saasUuid(school),saasUuid(binding)] as const);
-    return this.billing.call('readScheduleBinding',[subject,s,b],validateSaasScheduleBinding);
+    return this.billing.call('readScheduleBinding',[subject,s,b],validateSaasScheduleBindingView);
   }
   readHq(subject: string, binding: unknown) {
-    return this.billing.call('readScheduleBindingHq',[subject,parse(() => saasUuid(binding))],validateSaasScheduleBinding);
+    return this.billing.call('readScheduleBindingHq',[subject,parse(() => saasUuid(binding))],validateSaasScheduleBindingView);
+  }
+
+  /** HQ owner only (database-enforced): re-run access activation for an ACTIVE binding whose access is in review. */
+  async retryAccess(subject: string, binding: unknown, body: unknown, key: unknown) {
+    const [b,input,k] = parse(() => [saasUuid(binding), validateSaasScheduleAccessRetryInput(body), saasUuid(key)] as const);
+    return this.billing.call('retryScheduleAccess',[subject,b,JSON.stringify(input),k,randomUUID(),randomUUID()],validateSaasScheduleAccessRetryReceipt);
   }
 
   /**
@@ -97,7 +103,7 @@ export class SaasScheduleBillingService {
    */
   async cancelBeforePayment(subject: string, school: unknown, bindingId: unknown, key: unknown) {
     const [s,b,k] = parse(() => [saasUuid(school),saasUuid(bindingId),saasUuid(key)] as const);
-    const binding = await this.billing.call('readScheduleBinding',[subject,s,b],validateSaasScheduleBinding);
+    const binding = await this.billing.call('readScheduleBinding',[subject,s,b],validateSaasScheduleBindingView);
     if (binding.status === 'CANCELLED_BEFORE_PAYMENT') return { binding, replayed: true };
     if (binding.status !== 'BOUND_TEST_ONLY' || binding.qualifyingPaidPeriodCount !== 0 || !binding.providerAccountReference
       || !binding.providerSubscriptionReference || !binding.providerScheduleReference)
