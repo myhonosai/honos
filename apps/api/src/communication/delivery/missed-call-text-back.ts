@@ -74,9 +74,11 @@ export class MissedCallTextBackDispatcher {
     const summary: MissedCallDispatchSummary = { claimed: 0, accepted: 0, retrying: 0, failed: 0, unknown: 0, lateResults: 0 };
     const adapter = this.adapters.find((candidate) => candidate.channel === 'SMS' && candidate.readiness() === 'READY');
     if (!adapter || !this.store.isConfigured() || !this.store.claimMissedCallTextBacks || !this.store.recordMissedCallTextBackResult) return summary;
-    const claimed = await this.store.claimMissedCallTextBacks(limit, LEASE_SECONDS);
-    summary.claimed = claimed.length;
-    for (const call of claimed) {
+    // Batches of two keep every send (20 s timeout each) inside the 60 s lease.
+    for (let batch = await this.store.claimMissedCallTextBacks(Math.min(2, limit), LEASE_SECONDS); batch.length;
+      batch = summary.claimed < limit ? await this.store.claimMissedCallTextBacks(Math.min(2, limit - summary.claimed), LEASE_SECONDS) : []) {
+    summary.claimed += batch.length;
+    for (const call of batch) {
       let outcome: 'ACCEPTED' | 'RETRYABLE' | 'FAILED' | 'UNKNOWN';
       let providerMessageId: string | null = null;
       try {
@@ -96,6 +98,7 @@ export class MissedCallTextBackDispatcher {
       else if (recorded.textBackStatus === 'PENDING') summary.retrying += 1;
       else if (recorded.textBackStatus === 'FAILED') summary.failed += 1;
       else summary.unknown += 1;
+    }
     }
     return summary;
   }

@@ -71,7 +71,7 @@ function store(claims, results = []) {
   return {
     results,
     isConfigured: () => true,
-    claimMissedCallTextBacks: async (limit, lease) => { assert.equal(limit, 25); assert.equal(lease, 60); return claims.splice(0); },
+    claimMissedCallTextBacks: async (limit, lease) => { assert.ok(limit <= 2); assert.equal(lease, 60); return claims.splice(0, limit); },
     recordMissedCallTextBackResult: async (id, token, outcome, providerMessageId) => {
       results.push({ id, token, outcome, providerMessageId });
       return { textBackStatus: outcome === 'ACCEPTED' ? 'ACCEPTED' : outcome === 'RETRYABLE' ? 'PENDING' : outcome, accepted: true };
