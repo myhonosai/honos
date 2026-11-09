@@ -3,7 +3,7 @@
 // HON-bills-schools records,
 // separate from school-to-family billing.
 // Private deny-all tables reachable only through fixed functions.
-export const saasBillingTables = ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
+export const saasBillingTables = ['saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_bindings','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_price_schedules','saas_price_acceptances','saas_policy_decisions','saas_catalog_versions','saas_catalog_plans','saas_catalog_offers','saas_founder_reservations',
  'saas_subscriptions','saas_subscription_history','saas_requests','saas_audit','saas_outbox',
  'saas_policy_records','saas_invoice_sequences','saas_invoices','saas_invoice_lines','saas_payment_evidence',
  'saas_credit_program','saas_provider_cost_evidence','saas_pricing_versions','saas_operation_prices','saas_credit_allowances',
@@ -15,7 +15,7 @@ export const saasBillingTables = ['saas_subscription_generations','saas_price_sc
  'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_new_sales_policy','saas_access_exceptions','saas_exception_policy_decisions','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications',
  'saas_creative_program','saas_creative_rate_versions','saas_creative_rates','saas_creative_topup_packages','saas_creative_wallets',
  'saas_creative_topup_purchases','saas_creative_adjustments','saas_creative_lots','saas_creative_reservations','saas_creative_ledger','saas_creative_cost_events'];
-const evidenceTables = ['saas_subscription_generations','saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
+const evidenceTables = ['saas_subscription_generations','saas_billing_lifecycle_policy','saas_schedule_provider_events','saas_schedule_paid_periods','saas_schedule_reconciliations','saas_price_schedules','saas_price_acceptances','saas_trial_program','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_policy_decisions','saas_subscription_history','saas_requests','saas_audit','saas_outbox','saas_policy_records','saas_payment_evidence',
  'saas_provider_cost_evidence','saas_credit_ledger','saas_credit_threshold_events',
  'saas_refund_history','saas_reward_applications','saas_account_credit_ledger','saas_free_periods','saas_provider_events','saas_provider_payment_refs',
  'saas_exception_policy_decisions','saas_access_program','saas_access_policy_terms','saas_access_transitions','saas_offer_sales_stops','saas_new_sales_policy',
@@ -37,6 +37,26 @@ export const saasBillingFunctions = [
  ['hon.read_saas_subscription_generation_from_hq(text,uuid)',true,true],
  ['hon.guard_saas_generation_insert()',false,true],
  ['hon.verify_saas_generation_evidence()',false,true],
+ // 0230 HON OS schedule billing piece 1: TEST-only binding, verified paid periods and the binding lifecycle
+ ['hon.saas_schedule_requirements(hon.saas_subscription_generations)',false,false],
+ ['hon.saas_schedule_binding_json(hon.saas_schedule_bindings)',false,false],
+ ['hon.saas_org_billing_conflict(uuid)',false,false],
+ ['hon.saas_schedule_binding_available(uuid)',false,false],
+ ['hon.saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)',false,false],
+ ['hon.saas_schedule_after_binding_terminal(uuid,timestamp with time zone)',false,false],
+ ['hon.saas_schedule_binding_transition(hon.saas_schedule_bindings,text,text,text,uuid,timestamp with time zone)',false,false],
+ ['hon.record_saas_schedule_binding_reconciliation(uuid,jsonb)',true,true],
+ ['hon.record_saas_schedule_binding_expiry(uuid,jsonb)',true,true],
+ ['hon.guard_saas_schedule_lifecycle_exclusion()',false,true],
+ ['hon.saas_schedule_payment_program()',false,false],
+ ['hon.guard_saas_schedule_bindings()',false,false],
+ ['hon.guard_saas_schedule_binding_insert()',false,true],
+ ['hon.verify_saas_schedule_binding_evidence()',false,true],
+ ['hon.start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)',true,true],
+ ['hon.record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)',true,true],
+ ['hon.read_saas_schedule_binding(text,uuid,uuid)',true,true],
+ ['hon.read_saas_schedule_binding_from_hq(text,uuid)',true,true],
+ ['hon.ingest_saas_schedule_evidence(jsonb,text)',true,true],
  ['hon.saas_price_usd(integer)',false,false],
  ['hon.saas_price_content(uuid,uuid)',false,false],
  ['hon.saas_price_schedule_json(hon.saas_price_schedules)',false,false],
@@ -341,6 +361,12 @@ export const saasUtcExplicitCalendarFunctions = Object.freeze([
 const crossTriggers = [
  ['saas_subscription_generations','saas_generation_authority',7,'guard_saas_generation_insert'],
  ['saas_subscription_generations','saas_generation_evidence',5,'verify_saas_generation_evidence'],
+ ['saas_schedule_bindings','saas_schedule_binding_authority',7,'guard_saas_schedule_binding_insert'],
+ ['saas_schedule_bindings','saas_schedule_binding_evidence',21,'verify_saas_schedule_binding_evidence'],
+ ['saas_checkout_sessions','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
+ ['saas_subscriptions','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
+ ['saas_access_states','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
+ ['saas_access_exceptions','saas_schedule_lifecycle_exclusion',7,'guard_saas_schedule_lifecycle_exclusion'],
  ['saas_price_schedules','saas_price_authority',7,'guard_saas_price_insert'],
  ['saas_price_schedules','saas_price_evidence',5,'verify_saas_price_evidence'],
  ['saas_price_acceptances','saas_price_authority',7,'guard_saas_price_insert'],
@@ -383,6 +409,7 @@ export async function verifySaasBillingSecurity(client, runtime) {
    : catalogRowTables.includes(table) ? ['guard_saas_catalog_rows','saas_catalog_rows',31]
    : table === 'saas_invoice_lines' ? ['guard_saas_invoice_lines','saas_invoice_lines_rows',31]
    : table === 'saas_operation_prices' ? ['guard_saas_operation_prices','saas_operation_prices_rows',31]
+   : table === 'saas_schedule_bindings' ? ['guard_saas_schedule_bindings','saas_guarded',27]
    : paymentTables.includes(table) ? ['guard_saas_payments','saas_guarded',27]
    : table === 'saas_access_states' ? ['guard_saas_access','saas_guarded',27]
    : table === 'saas_access_exceptions' ? ['guard_saas_access_exceptions','saas_guarded',27]
