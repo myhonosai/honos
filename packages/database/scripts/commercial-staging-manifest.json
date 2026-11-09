@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "e6913196379854074cdb32a2bf4baa385403ccadfd405fac8b6156d2c037390f",
+  "chainSha256": "cbc89dec7486c3eec96ab4ae23e0339cd6ec19fb56f0bf58d63899985fd3d3fa",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -173,6 +173,10 @@
     {
       "file": "0223_school_ownership_handoff.sql",
       "sha256": "ade3ff7f22464c12caeb52983af398b7c17b6c2f950a9ed5a30f0164ff6f9e31"
+    },
+    {
+      "file": "0224_membership_pause_cancel_refund.sql",
+      "sha256": "f3bcbeae379890b4fb8e0418b9bffcb2933edc3db7453ed5bc48f972c4e66ae2"
     }
   ]
 }

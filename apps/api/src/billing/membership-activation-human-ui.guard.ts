@@ -52,3 +52,25 @@ export class MembershipStatusSummaryHumanUiGuard extends MembershipActivationHum
 export class CrmLeadMembershipsHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'crm.lead.memberships';
 }
+/** 0224: pause, resume, policy and refund-record calls are each their own browser command, so none replays as another. */
+@Injectable()
+export class MembershipPauseHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.pause';
+}
+@Injectable()
+export class MembershipResumeHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.resume';
+}
+@Injectable()
+export class MembershipPausePolicyHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.pause_policy.set';
+}
+@Injectable()
+export class MembershipRefundRecordHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.refund.record';
+}
+/** The two 0224 reads are GETs: the base guard admits them, and the source/delegation headers stay refused. */
+@Injectable()
+export class MembershipPauseReadHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.pauses.read';
+}
