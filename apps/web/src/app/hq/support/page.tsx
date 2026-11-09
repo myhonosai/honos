@@ -1,8 +1,10 @@
-import { HqPlannedPage } from '../../../components/hq-modern/pages';
+import type { Metadata } from 'next';
+import { HqSupportList } from '../../../components/hq-support/hq-support-list';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'HON HQ | Support', robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: 'HON HQ | Support', referrer: 'no-referrer', robots: { index: false, follow: false } };
 
+/** The HQ layout verifies the session; the support API decides HQ support authority on every read and command. */
 export default function Page(): React.ReactElement {
-  return <HqPlannedPage pagePath="/hq/support" />;
+  return <HqSupportList/>;
 }

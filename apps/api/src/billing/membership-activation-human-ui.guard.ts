@@ -79,3 +79,16 @@ export class MembershipCancelHumanUiGuard extends MembershipActivationHumanUiGua
 export class MembershipPauseReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'billing.membership.pauses.read';
 }
+/** B-TUI-1 (0240): recording and voiding a tuition payment are separate same-origin browser commands; reads are GET only. */
+@Injectable()
+export class TuitionPaymentRecordHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.invoice.payment.record';
+}
+@Injectable()
+export class TuitionPaymentVoidHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.invoice.payment.void';
+}
+@Injectable()
+export class TuitionReadHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.tuition.read';
+}

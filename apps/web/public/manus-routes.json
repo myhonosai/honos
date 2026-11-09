@@ -165,6 +165,10 @@
       "title": "HON | Bounded Class Sessions"
     },
     {
+      "path": "/staff/schedule/timetable",
+      "title": "HON | Weekly timetable"
+    },
+    {
       "path": "/staff/schedule/sessions/create",
       "title": "HON | Human Class-session Creation"
     },
@@ -223,6 +227,10 @@
     {
       "path": "/staff/billing/membership-changes",
       "title": "HON | Pause, cancel & refunds"
+    },
+    {
+      "path": "/staff/billing/receivables",
+      "title": "HON | Tuition balances"
     },
     {
       "path": "/staff/champions-club",
@@ -423,6 +431,10 @@
     {
       "path": "/hq/support",
       "title": "HON HQ | Support"
+    },
+    {
+      "path": "/hq/support/:caseId",
+      "title": "HON HQ | Support case"
     },
     {
       "path": "/hq/growth/champions-club/schools",

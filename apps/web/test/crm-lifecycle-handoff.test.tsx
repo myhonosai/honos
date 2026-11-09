@@ -52,7 +52,7 @@ describe('bounded CRM lifecycle handoff', () => {
 
     const source = readFileSync('src/components/crm-follow-ups-workbench.tsx', 'utf8');
     expect(source).toContain("const prefilledLeadId = after === null ? pendingLeadId.current : ''; pendingLeadId.current='';");
-    expect(source).toContain('const c = await loadFollowUps(queue,status,after); setContext(c); setDraft(initial(c.principalId,prefilledLeadId));');
+    expect(source).toContain('const c = await loadFollowUps(queue,status,after); setContext(c); schoolRef.current = c.schoolId; resetDraft(initial(c.principalId,prefilledLeadId));');
     expect(source).toContain("pendingLeadId.current='';setQueue");
     expect(source).toContain("pendingLeadId.current='';setStatus");
   });

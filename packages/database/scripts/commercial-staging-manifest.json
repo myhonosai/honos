@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "da786934e3166b5acb374d29324de007e7e3db7dc2b0aa919013191be45f4200",
+  "chainSha256": "de2ced2366bbc5c0a87c412dc7c755536f442f17fc083325f28a458ceb2b9a3f",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -205,6 +205,22 @@
     {
       "file": "0231_membership_pause_rolling_year.sql",
       "sha256": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc"
+    },
+    {
+      "file": "0232_hq_support_cases.sql",
+      "sha256": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf"
+    },
+    {
+      "file": "0236_crm_school_clock.sql",
+      "sha256": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213"
+    },
+    {
+      "file": "0239_recurring_class_series.sql",
+      "sha256": "13ff43e331e0019b8cd0fc2cbf485fce84a79c2cba89fa177f46b858c50a9b95"
+    },
+    {
+      "file": "0240_tuition_payment_records.sql",
+      "sha256": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233"
     }
   ]
 }
