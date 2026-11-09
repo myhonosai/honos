@@ -44,5 +44,5 @@ Before this change, CRM trial and follow-up times were entered in UTC. The runti
 
 ## Proof
 
-- **Database.** `packages/database/scripts/test-crm-school-clock-integrity.mjs` runs over signed HTTP on the guarded disposable CRM-close fixture and passes 63 checks. It covers each permission, three schools in three zones, every authority refusal (no permission, a family-type role, another school or organization, suspended paid access, a suspended school, a revoked grant), transport refusals, no writes, runtime ACL and the 011 section.
+- **Database.** `packages/database/scripts/test-crm-school-clock-integrity.mjs` runs over signed HTTP on the guarded disposable CRM-close fixture and passes 69 checks. It covers each permission, three schools in three zones, every authority refusal (no permission, a family-type role, another school or organization, suspended paid access, a suspended school, a revoked or expired grant, a second active principal, a management role scoped to another school), transport refusals, no writes, runtime ACL and the 011 section.
 - **Web.** `apps/web/test/school-time.test.ts` covers the conversions, including DST gaps and folds. `apps/web/test/crm-journey-ui.test.tsx` shows the converted instants are sent, skipped times are refused, and the UTC fallback holds.

@@ -2862,7 +2862,7 @@ END $$;
 -- internal actor helper with no runtime privilege.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.crm_school_clock_actor(text,uuid,uuid)',false,false,'s','a898879f9b5a6daf7f3c254ec450d1716aa23be2ebeeddd2eb13089599f3ed5b'),
+('hon.crm_school_clock_actor(text,uuid,uuid)',false,false,'s','325d5330c281e8a45e18897cd58bb5c6ad221b194ee2bbc5dce967df4b455b71'),
 ('hon.read_crm_school_clock(text)',true,true,'v','a64b59bea3f1d5037229a53d2cbd1ac42864959a4525e056bd2ff7df7f2f2ea3')) e(signature,definer,runtime_allowed,volatility,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.provolatile=f.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
       AND (o.rolsuper OR o.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed

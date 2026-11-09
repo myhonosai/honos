@@ -30,10 +30,11 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
       AND e.tier IN ('ESSENTIAL','CORE','COMPLETE')
       AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()))
     AND EXISTS(SELECT 1 FROM hon.principal_role_grants g
-      JOIN hon.roles r ON r.id=g.role_id
-      JOIN hon.role_permissions rp ON rp.role_id=g.role_id AND rp.organization_id=s.organization_id
+      JOIN hon.roles r ON r.id=g.role_id AND r.organization_id=g.organization_id
+      JOIN hon.role_permissions rp ON rp.role_id=r.id AND rp.organization_id=r.organization_id
         AND rp.permission_code IN ('crm.trial.schedule','crm.trial.manage','crm.follow_up.manage','crm.follow_up.self_manage')
       WHERE g.principal_id=p.id AND g.organization_id=s.organization_id AND g.school_id=s.id AND g.revoked_at IS NULL
+        AND (r.management_school_id IS NULL OR r.management_school_id=s.id)
         AND r.code !~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)'
         AND g.effective_from<=clock_timestamp() AND (g.effective_until IS NULL OR g.effective_until>clock_timestamp()))
   LIMIT 1

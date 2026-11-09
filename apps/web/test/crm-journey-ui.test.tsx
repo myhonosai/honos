@@ -118,6 +118,13 @@ it('B-CRM-3: with the server-named school timezone, trial times are entered and 
  const post=f.mock.calls.find(c=>c[1]?.method==='POST')!;expect(JSON.parse(String(post[1]!.body))).toMatchObject({startsAt:'2026-11-02T17:00:00.000Z',endsAt:'2026-11-02T18:00:00.000Z'});
  expect(text(el('trial-window'))).toMatch(/9:00.*PST/);
 });
+it('B-CRM-3: times typed before the school zone arrives are cleared, never reinterpreted as school time',async()=>{
+ let arrive:(v:unknown)=>void=()=>{};clock.reader=()=>new Promise(r=>{arrive=r;});
+ await loaded();click('step-trial');expect(text(el('time-basis'))).toBe(journeyCatalog.en.UTC);
+ change('start','2026-11-02T09:00');change('end','2026-11-02T10:00');expect(el('start').props.value).toBe('2026-11-02T09:00');
+ arrive({state:'READY',clock:{schoolId:scope.schoolId,schoolTimezone:'America/Los_Angeles',localToday:'2026-11-01',asOf:'2026-11-01T17:00:00.000Z'}});await settle();
+ expect(text(el('time-basis'))).toContain('America/Los_Angeles');expect(el('start').props.value).toBe('');expect(el('end').props.value).toBe('');
+});
 it('B-CRM-3: a school time skipped by daylight saving is refused before any command',async()=>{
  clock.reader=async()=>({state:'READY',clock:{schoolId:scope.schoolId,schoolTimezone:'America/Los_Angeles',localToday:'2026-03-01',asOf:'2026-03-01T17:00:00.000Z'}});
  const f=await loaded();click('step-trial');change('start','2027-03-14T02:30');change('end','2027-03-14T03:30');el('confirm').props.onChange({target:{checked:true}});

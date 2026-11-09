@@ -117,7 +117,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       if (normalized.schoolId !== scopeRef.current.schoolId || normalized.organizationId !== scopeRef.current.organizationId) { clearDraft(); setReceipts([]); setTrial(null); setReceiptConcealed(false); }
       if (original && list.some(r => r.id === original.id && r.primaryPersonId !== original.primaryPersonId)) { setLeadId(''); setTrial(null); trialHolds.current.add(trialScopeKey(normalized, original.id)); setReceipts([]); clearDraft(); }
       const zoneKey = `${normalized.organizationId}:${normalized.schoolId}`;
-      if (zone?.key !== zoneKey) { setZone(null); void clockReader(normalized, timeout()).then(r => { if (mounted.current && r.state === 'READY' && `${scopeRef.current.organizationId}:${scopeRef.current.schoolId}` === zoneKey) setZone({ key: zoneKey, timezone: r.clock.schoolTimezone }); }); }
+      if (zone?.key !== zoneKey) { setZone(null); void clockReader(normalized, timeout()).then(r => { if (mounted.current && r.state === 'READY' && `${scopeRef.current.organizationId}:${scopeRef.current.schoolId}` === zoneKey) { setZone({ key: zoneKey, timezone: r.clock.schoolTimezone }); setStart(''); setEnd(''); setDue(''); } }); }
       setScope(normalized); setRows(list); setQuery(''); setQueue(null); setRegistration(registrationReadDenied.current ? 'UNAVAILABLE' : null); registrationReadDenied.current = false; refreshRequired.current = false; setNeedsRefresh(false);
       navigationVerified.current = true;
       if (!list.some(r => r.id === leadId)) setLeadId('');

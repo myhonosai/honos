@@ -175,6 +175,30 @@ try {
   await sql("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [ids.schoolA]);
   await sql('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=principal_id WHERE id=$1', [MANAGER.grants[0]]);
   await refused(MANAGER, 403, 'CRM_SCHOOL_CLOCK_FORBIDDEN', 'revoked grant');
+  await sql("UPDATE hon.principal_role_grants SET effective_until=clock_timestamp()-interval '1 minute' WHERE id=$1", [FOLLOW.grants[0]]);
+  await refused(FOLLOW, 403, 'CRM_SCHOOL_CLOCK_FORBIDDEN', 'expired grant');
+  await sql("INSERT INTO hon.principals(id,principal_type,user_id,display_name) SELECT $1,'HUMAN_USER',user_id,'CRM Clock Second' FROM hon.principals WHERE id=$2", [randomUUID(), SELF.principal]);
+  await refused(SELF, 403, undefined, 'a second active human principal for the same user');
+  // A management role scoped to school B never authorizes school A, and a role from another organization never counts,
+  // checked on the private actor helper itself (the route resolver refuses both before the definer is reached).
+  const scopedRole = await role(ids.organization, ['crm.trial.schedule']);
+  await sql('UPDATE hon.roles SET management_school_id=$2 WHERE id=$1', [scopedRole, ids.schoolB]);
+  const SCOPED = await staff('scoped-elsewhere', [scopedRole]);
+  await refused(SCOPED, 403, undefined, 'management role scoped to another school');
+  const helper = async (actor, org = ids.organization, school = ids.schoolA) => (await sql(
+    "SELECT set_config('app.hon_principal_id',$2,true), hon.crm_school_clock_actor($1,$3::uuid,$4::uuid) a", [actor.subject, actor.principal, org, school])).rows[0].a;
+  await sql('BEGIN'); try {
+    ok(await helper(SCHEDULER) === SCHEDULER.principal, 'actor helper admits a live scheduler at its school');
+    ok(await helper(SCOPED) === null, 'actor helper: management role scoped to another school never counts');
+    // A grant of another organization's role cannot exist: the composite foreign key refuses it (the helper's
+    // r.organization_id=g.organization_id clause is defence in depth).
+    const foreign = await role(ids.otherOrganization, ['crm.trial.schedule']);
+    await sql('SAVEPOINT cross_org');
+    let refusedCode = '';
+    try { await staff('cross-org-role', [foreign]); } catch (error) { refusedCode = error.code; }
+    await sql('ROLLBACK TO SAVEPOINT cross_org');
+    ok(refusedCode === '23503', `a grant of another organization's role is refused by the foreign key (${refusedCode})`);
+  } finally { await sql('ROLLBACK'); }
 
   // 3. Browser transport refusals.
   await refused(SCHEDULER, 400, 'CRM_SCHOOL_CLOCK_SELECTORS_NOT_ACCEPTED', 'query selectors', { query: '?schoolId=x' });
