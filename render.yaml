@@ -1,11 +1,14 @@
 # HON OS Render Blueprint (owner hosting decision 2026-11-09: Render + Supabase Pro).
 #
-# This file deploys NOTHING by itself. David creates the Blueprint in his own Render account, enters
-# the `sync: false` values in the dashboard, and starts every deploy by hand. Runbook and deploy gates:
-# docs/operations/RENDER_DEPLOYMENT.md. Guarded by apps/api/test/render-blueprint.test.cjs.
+# Merging this file deploys nothing. Commit-triggered deploys are off. But Render DOES deploy:
+#   1. both services immediately when David first applies (creates) the Blueprint, and
+#   2. on a later render.yaml change to main while Blueprint Auto Sync is on (Render's default).
+# So: apply only when the database, roles and CA are ready and David has approved the deploy, and
+# turn Auto Sync off right after creation (see "Before you click Apply" in
+# docs/operations/RENDER_DEPLOYMENT.md). Guarded by apps/api/test/render-blueprint.test.cjs.
 #
 # Safety rules this file must keep (the test enforces them):
-# - No auto-deploys and no preview environments.
+# - No commit-triggered deploys and no preview environments.
 # - No preDeployCommand: database migrations are a separate, owner-approved step with the migration
 #   role, which the API startup gate refuses to hold (MIGRATION_CREDENTIAL_IN_API_PROCESS).
 # - No DATABASE_URL, OPENROUTER_*, STRIPE_*, ZERNIO_* or MANUS_* variables: live money, paid AI,

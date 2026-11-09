@@ -20,7 +20,7 @@ installed for the build even though `NODE_ENV=production`.
 
 Deliberately **absent**:
 
-- auto-deploys (`autoDeployTrigger: off`) and preview environments (`previews.generation: off`);
+- commit-triggered deploys (`autoDeployTrigger: off`) and preview environments (`previews.generation: off`);
 - `preDeployCommand`: migrations are a separate, owner-approved step using the migration role
   (`DATABASE_URL`), which the API refuses to hold (`MIGRATION_CREDENTIAL_IN_API_PROCESS`);
 - `DATABASE_URL`, `OPENROUTER_*`, `STRIPE_*`, `ZERNIO_*`, `MANUS_*`: live money, paid AI, messaging and the
@@ -28,6 +28,24 @@ Deliberately **absent**:
 
 `HON_DEPLOYMENT_ENVIRONMENT` is fixed to `staging` in Git. Promoting to `production` is a reviewed PR that
 changes both services.
+
+## Before you click Apply
+
+`autoDeployTrigger: off` only stops deploys triggered by new commits. Render still starts deploys in two
+other ways (per Render's Blueprint docs; recheck before applying):
+
+1. **Applying (creating) the Blueprint deploys both services from `main` at once.** Apply only when the
+   target database is migrated to the release, `hon_runtime` exists, the CA and every `sync: false`
+   value are ready to enter during creation, and David has approved this deploy. Without them `hon-api`
+   refuses to start (safe, but it is still a deploy).
+2. **Blueprint Auto Sync is on by default.** A later `render.yaml` change merged to `main` (for example
+   moving the label to `production`) would be applied, and can redeploy, with nobody starting it.
+   **Turn Auto Sync off right after creation** (Blueprint → Settings) and sync by hand after each
+   reviewed `render.yaml` change.
+
+`HON_API_BASE_URL` is read by `apps/web/next.config.ts` `rewrites()` at **build** time: enter it before
+the first `hon-web` build, and rebuild (not just restart) after changing it. The internal `hon-api`
+address is only shown after creation, so expect to set it then and run one manual `hon-web` deploy.
 
 ## Values entered in the Render dashboard (`sync: false`)
 
