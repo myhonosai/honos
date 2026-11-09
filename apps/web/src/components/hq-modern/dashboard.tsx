@@ -102,7 +102,7 @@ function PerformanceStrip(): React.ReactElement {
       [t("Revenue"), '/hq/revenue', 'chart', null, t("Unavailable")],
       [t("AI costs"), '/hq/ai-costs', 'database', null, t("Per-school report")],
       [t("Approvals"), '/hq/approvals', 'check', null, t("Unavailable")],
-      [t("Support"), '/hq/support', 'support', null, t("Unavailable")],
+      [t("Support"), '/hq/support', 'support', null, t("Case records")],
     ] as const).map(([label, href, icon, value, state]) => <Link className={styles.performanceTile} href={href} key={label}><span className={styles.metricIcon}><HqIcon name={icon} size={23}/></span><div><h2>{label}</h2><strong>{value === null ? '—' : value.toLocaleString(formattingLocale)}</strong><small>{state}</small></div></Link>)}
   </section>;
 }

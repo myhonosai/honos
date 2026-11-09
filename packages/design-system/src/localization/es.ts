@@ -414,6 +414,7 @@ export const es = {
   "United States": "Estados Unidos",
   "Unsent message draft for HON": "Borrador de mensaje sin enviar para HON",
   "Usage & spend": "Uso y gasto",
+  "Case records": "Registro de casos",
   "Per-school report": "Informe por escuela",
   "Use secure hosted test checkout": "Usar pago seguro de prueba alojado",
   "Use your currently authorized features to prepare programs and classes through the existing": "Utiliza tus funciones autorizadas para preparar programas y clases en el espacio existente de",

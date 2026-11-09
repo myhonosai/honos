@@ -5,8 +5,19 @@ import type { CrmAppointmentSummary, CrmTrialOutcomeStatus } from '@hon/contract
 import { recordTrialOutcome, scheduleTrial, TrialAppointmentAccessError, type TrialOutcomeInput, type TrialScheduleInput } from './trial-appointment-http';
 import { terminalTrialFollowUpHref } from './crm-follow-up-handoff';
 import styles from './staff-availability-workbench.module.css';
+import { formatInSchool, readSchoolClock, schoolLocalToInstant } from './school-time';
 
 type Pending = { fingerprint: string; key: string; operation: 'SCHEDULE' | 'OUTCOME'; input: TrialScheduleInput | TrialOutcomeInput };
+
+/** B-CRM-3: school wall time when the server named the school's timezone, otherwise explicit UTC. */
+function asInstant(value: string, zone: string | null): string {
+  if (!zone) return asUtc(value);
+  if (!value) throw new Error('A school date and time are required.');
+  const r = schoolLocalToInstant(value, zone);
+  if (r.state === 'NONEXISTENT') throw new Error("That time does not exist in the school's timezone because of a daylight-saving change. Choose another time.");
+  if (r.state !== 'OK') throw new Error('A valid school date and time is required.');
+  return r.instant;
+}
 
 function asUtc(value: string): string {
   if (!value) throw new Error('A UTC date and time are required.');
@@ -15,8 +26,9 @@ function asUtc(value: string): string {
   return date.toISOString();
 }
 
-function summary(appointment: CrmAppointmentSummary): React.ReactElement {
-  return <dl><dt>Trial appointment</dt><dd><code>{appointment.id}</code> · {appointment.status} · version {appointment.version}</dd><dt>Lead</dt><dd><code>{appointment.crmLeadId}</code></dd><dt>Time</dt><dd>{appointment.startsAt} to {appointment.endsAt}</dd><dt>Location</dt><dd>{appointment.location ?? 'No location recorded'}</dd><dt>Recorded</dt><dd>{appointment.updatedAt}</dd></dl>;
+function summary(appointment: CrmAppointmentSummary, zone: string | null): React.ReactElement {
+  const at = (v: string) => zone ? formatInSchool(v, zone, 'en-US') : v;
+  return <dl><dt>Trial appointment</dt><dd><code>{appointment.id}</code> · {appointment.status} · version {appointment.version}</dd><dt>Lead</dt><dd><code>{appointment.crmLeadId}</code></dd><dt>Time</dt><dd>{at(appointment.startsAt)} to {at(appointment.endsAt)}</dd><dt>Location</dt><dd>{appointment.location ?? 'No location recorded'}</dd><dt>Recorded</dt><dd>{appointment.updatedAt}</dd></dl>;
 }
 
 export interface TrialAppointmentInitialScope { organizationId?: string | undefined; schoolId?: string | undefined; leadId?: string | undefined }
@@ -36,6 +48,16 @@ export function TrialAppointmentWorkbench({ initialScope = {} }: { initialScope?
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [uncertain, setUncertain] = useState(false);
+  const [zone, setZone] = useState<{ key: string; timezone: string } | null>(null);
+  const scopeKey = `${organizationId.trim().toLowerCase()}:${schoolId.trim().toLowerCase()}`;
+  const schoolZone = zone && zone.key === scopeKey ? zone.timezone : null;
+  async function adoptSchoolTime(): Promise<void> {
+    const key = scopeKey; setZone(null);
+    let read: Awaited<ReturnType<typeof readSchoolClock>> = { state: 'UNAVAILABLE' };
+    try { read = await readSchoolClock({ organizationId: organizationId.trim(), schoolId: schoolId.trim() }, AbortSignal.timeout(15000)); } catch { /* invalid scope stays UTC */ }
+    if (read.state === 'READY') { setZone({ key, timezone: read.clock.schoolTimezone }); setStartsAt(''); setEndsAt(''); }
+    else setError('The school timezone could not be verified for this school. Times stay in UTC.');
+  }
   const pending = useRef<Pending | null>(null);
 
   function clearReceipt(): void { setAppointment(null); setError(''); setNotice(''); setUncertain(false); pending.current = null; }
@@ -57,7 +79,7 @@ export function TrialAppointmentWorkbench({ initialScope = {} }: { initialScope?
   async function schedule(event?: FormEvent): Promise<void> {
     event?.preventDefault();
     await run(async () => {
-      const input: TrialScheduleInput = { startsAt: asUtc(startsAt), endsAt: asUtc(endsAt), ...(location.trim() ? { location: location.trim() } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) };
+      const input: TrialScheduleInput = { startsAt: asInstant(startsAt, schoolZone), endsAt: asInstant(endsAt, schoolZone), ...(location.trim() ? { location: location.trim() } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) };
       const current = remember('SCHEDULE', input);
       setAppointment(null);
       const saved = await scheduleTrial(organizationId, schoolId, leadId, input, current.key);
@@ -101,7 +123,7 @@ export function TrialAppointmentWorkbench({ initialScope = {} }: { initialScope?
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {uncertain && pending.current && <aside><strong>Outcome unverified.</strong><p>The exact request is retained in memory only. Do not change inputs before choosing whether to retry it; no automatic retry occurs.</p><button type="button" disabled={busy} onClick={() => void retry()}>Retry exact retained request</button></aside>}
-    <section aria-labelledby="trial-schedule-title"><h2 id="trial-schedule-title">Schedule a future trial appointment</h2><p>Trial times are entered as UTC. The existing service requires a future end-after-start appointment within 90 days and current <code>crm.trial.schedule</code> authority.</p><form onSubmit={(event) => void schedule(event)}><fieldset disabled={busy}><div className={styles.row}><label>Organization UUID<input required autoComplete="off" value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clearReceipt(); }} /></label><label>School UUID<input required autoComplete="off" value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clearReceipt(); }} /></label><label>Known CRM lead UUID<input required autoComplete="off" value={leadId} onChange={(event) => { setLeadId(event.target.value); clearReceipt(); }} /></label></div><div className={styles.dates}><label>Starts at (UTC)<input required type="datetime-local" step="1" value={startsAt} onChange={(event) => { setStartsAt(event.target.value); clearReceipt(); }} /></label><label>Ends at (UTC)<input required type="datetime-local" step="1" value={endsAt} onChange={(event) => { setEndsAt(event.target.value); clearReceipt(); }} /></label></div><label>Location (optional, internal)<input maxLength={160} value={location} onChange={(event) => { setLocation(event.target.value); clearReceipt(); }} /></label><label>Private scheduling note (optional)<textarea maxLength={2000} rows={4} value={notes} onChange={(event) => { setNotes(event.target.value); clearReceipt(); }} /></label><div className={styles.actions}><button>{busy ? 'Verifying…' : 'Record trial appointment'}</button><button type="button" disabled={busy} onClick={clearReceipt}>Clear current receipt</button></div></fieldset></form></section>
-    {appointment && <section aria-labelledby="trial-receipt-title"><h2 id="trial-receipt-title">Current command receipt</h2>{summary(appointment)}<p>This receipt is current only for this page session. Reloading the page clears it; use an established authorized CRM workflow to find a different record. An appointment receipt is not a trial attendance or conversion result.</p>{followUpHref && <p><a href={followUpHref}>Create human follow-up</a> after this recorded terminal outcome. The destination will load and authorize its own queue.</p>}{appointment.status === 'SCHEDULED' && <form onSubmit={(event) => void saveOutcome(event)}><fieldset disabled={busy}><h3>Record a final human trial outcome</h3><p>Only this immediately verified scheduled receipt may be updated here. Current <code>crm.trial.manage</code> authority, appointment type, status, version, tenant scope and direct-human posture are rechecked by the server.</p><label>Outcome<select value={outcome} onChange={(event) => { setOutcome(event.target.value as CrmTrialOutcomeStatus); setOutcomeNotes(''); clearOutcomeRetry(); }}><option value="COMPLETED">Completed</option><option value="NO_SHOW">No show</option><option value="CANCELLED">Cancelled</option></select></label><label>Outcome note (optional, internal)<textarea maxLength={2000} rows={4} value={outcomeNotes} onChange={(event) => { setOutcomeNotes(event.target.value); clearOutcomeRetry(); }} /></label><button>{busy ? 'Verifying…' : 'Record final outcome'}</button></fieldset></form>}</section>}
+    <section aria-labelledby="trial-schedule-title"><h2 id="trial-schedule-title">Schedule a future trial appointment</h2><p data-testid="trial-time-basis">{schoolZone ? `Trial times are entered in school time (${schoolZone}), as named by the server.` : 'Trial times are entered as UTC.'} The existing service requires a future end-after-start appointment within 90 days and current <code>crm.trial.schedule</code> authority.</p><form onSubmit={(event) => void schedule(event)}><fieldset disabled={busy}><div className={styles.row}><label>Organization UUID<input required autoComplete="off" value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clearReceipt(); }} /></label><label>School UUID<input required autoComplete="off" value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clearReceipt(); }} /></label><label>Known CRM lead UUID<input required autoComplete="off" value={leadId} onChange={(event) => { setLeadId(event.target.value); clearReceipt(); }} /></label></div><p><button type="button" data-testid="use-school-time" disabled={busy} onClick={() => void adoptSchoolTime()}>Use school time</button></p><div className={styles.dates}><label>{schoolZone ? `Starts at (school time, ${schoolZone})` : 'Starts at (UTC)'}<input required type="datetime-local" step="1" value={startsAt} onChange={(event) => { setStartsAt(event.target.value); clearReceipt(); }} /></label><label>{schoolZone ? `Ends at (school time, ${schoolZone})` : 'Ends at (UTC)'}<input required type="datetime-local" step="1" value={endsAt} onChange={(event) => { setEndsAt(event.target.value); clearReceipt(); }} /></label></div><label>Location (optional, internal)<input maxLength={160} value={location} onChange={(event) => { setLocation(event.target.value); clearReceipt(); }} /></label><label>Private scheduling note (optional)<textarea maxLength={2000} rows={4} value={notes} onChange={(event) => { setNotes(event.target.value); clearReceipt(); }} /></label><div className={styles.actions}><button>{busy ? 'Verifying…' : 'Record trial appointment'}</button><button type="button" disabled={busy} onClick={clearReceipt}>Clear current receipt</button></div></fieldset></form></section>
+    {appointment && <section aria-labelledby="trial-receipt-title"><h2 id="trial-receipt-title">Current command receipt</h2>{summary(appointment, schoolZone)}<p>This receipt is current only for this page session. Reloading the page clears it; use an established authorized CRM workflow to find a different record. An appointment receipt is not a trial attendance or conversion result.</p>{followUpHref && <p><a href={followUpHref}>Create human follow-up</a> after this recorded terminal outcome. The destination will load and authorize its own queue.</p>}{appointment.status === 'SCHEDULED' && <form onSubmit={(event) => void saveOutcome(event)}><fieldset disabled={busy}><h3>Record a final human trial outcome</h3><p>Only this immediately verified scheduled receipt may be updated here. Current <code>crm.trial.manage</code> authority, appointment type, status, version, tenant scope and direct-human posture are rechecked by the server.</p><label>Outcome<select value={outcome} onChange={(event) => { setOutcome(event.target.value as CrmTrialOutcomeStatus); setOutcomeNotes(''); clearOutcomeRetry(); }}><option value="COMPLETED">Completed</option><option value="NO_SHOW">No show</option><option value="CANCELLED">Cancelled</option></select></label><label>Outcome note (optional, internal)<textarea maxLength={2000} rows={4} value={outcomeNotes} onChange={(event) => { setOutcomeNotes(event.target.value); clearOutcomeRetry(); }} /></label><button>{busy ? 'Verifying…' : 'Record final outcome'}</button></fieldset></form>}</section>}
   </main>;
 }

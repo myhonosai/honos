@@ -414,6 +414,7 @@ export const ko = {
   "United States": "미국",
   "Unsent message draft for HON": "HON에게 보내지 않은 메시지 초안",
   "Usage & spend": "사용량 및 비용",
+  "Case records": "지원 기록",
   "Per-school report": "학교별 보고서",
   "Use secure hosted test checkout": "안전한 호스팅 테스트 결제 사용",
   "Use your currently authorized features to prepare programs and classes through the existing": "현재 허용된 기능으로 프로그램과 수업을 준비하세요. 기존",

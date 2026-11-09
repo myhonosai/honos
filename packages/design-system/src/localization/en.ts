@@ -413,6 +413,7 @@ export const en = {
   "United States": "United States",
   "Unsent message draft for HON": "Unsent message draft for HON",
   "Usage & spend": "Usage & spend",
+  "Case records": "Case records",
   "Per-school report": "Per-school report",
   "Use secure hosted test checkout": "Use secure hosted test checkout",
   "Use your currently authorized features to prepare programs and classes through the existing": "Use your currently authorized features to prepare programs and classes through the existing",
