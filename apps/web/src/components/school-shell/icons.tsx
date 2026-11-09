@@ -9,6 +9,7 @@ const paths = {
   billing: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
   attendance: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M9 3v3h6V3M8.5 13l2.5 2.5 4.5-5" /></>,
   marketing: <><path d="M3 10v4a1 1 0 0 0 1 1h3l6 5V4L7 9H4a1 1 0 0 0-1 1Z" /><path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" /></>,
+  referrals: <><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4v1a3 3 0 0 0 3 3m10-4h3v1a3 3 0 0 1-3 3" /></>,
   community: <><path d="M4 5h16v11H9l-5 4Z" /></>,
   aiTeam: <><path d="m12 3 2.2 4.8L19 10l-4.8 2.2L12 17l-2.2-4.8L5 10l4.8-2.2Z" /><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z" /></>,
   hon: <><circle cx="12" cy="12" r="8.5" /><path d="M8 9v6m8-6v6M8 12h8" /></>,
