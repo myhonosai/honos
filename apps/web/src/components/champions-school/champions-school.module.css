@@ -1,0 +1,58 @@
+/* Champions Club school page. HON workspace tokens (--hon-*) with legible fallbacks, like Memberships. */
+.page { display: grid; gap: 14px; min-width: 0; max-width: 1080px; margin: 0 auto; padding: 20px; border-radius: var(--hon-radius, 16px); background: #08121f; color: #eaf4fb; }
+.head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.head h1 { margin: 0 0 4px; font-size: 24px; }
+.intro { max-width: 68ch; margin: 0; color: #b6c8da; font-size: 15px; line-height: 1.5; }
+.card { display: grid; align-content: start; gap: 10px; min-width: 0; padding: 16px; border: 1px solid var(--hon-line, #24405a); border-radius: var(--hon-radius, 16px); background: linear-gradient(160deg, #10263b, #0b1828); }
+.card h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.card h3 { margin: 6px 0 0; font-size: 15px; }
+.card p { margin: 0; }
+.cardHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.notice { display: grid; gap: 8px; justify-items: start; margin: 0; padding: 12px; border: 1px solid #35506d; border-radius: 12px; background: #10243a; color: #cfe0f2; font-size: 14px; }
+.notice p { margin: 0; }
+.meta { margin: 0; color: var(--hon-muted, #9fb4c8); font-size: 13px; line-height: 1.5; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { min-height: var(--hon-target, 44px); padding: 8px 14px; border: 1px solid var(--hon-line, #24405a); border-radius: 999px; background: #0d1d2e; color: #cfe0f2; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.tab[aria-pressed="true"] { border-color: var(--hon-accent, #8de3d8); background: #123047; color: #eef6fc; }
+.check { display: flex; align-items: center; gap: 8px; min-height: var(--hon-target, 44px); font-size: 14px; font-weight: 700; }
+.check input { width: 20px; height: 20px; accent-color: var(--hon-accent, #8de3d8); }
+.form { display: grid; gap: 10px; padding: 12px; border: 1px solid #35506d; border-radius: 12px; background: #13263a; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.list li { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid #1c3349; overflow-wrap: anywhere; }
+.chip { display: inline-flex; align-items: center; justify-self: start; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #15283c; color: #cfe0f2; box-shadow: inset 0 0 0 1px #35506d; }
+.chip[data-state="ACTIVE"] { background: #10392f; color: #8ff0c9; box-shadow: inset 0 0 0 1px #2b7a63; }
+.chip[data-state="FROZEN"], .chip[data-kind="open"] { background: #3a2f12; color: #ffe29a; box-shadow: inset 0 0 0 1px #7a6328; }
+.chip[data-state="CANCELLED"], .chip[data-state="EXPIRED"] { background: #2a2232; color: #d9c8e8; box-shadow: inset 0 0 0 1px #5a4a6a; }
+.primary, .secondary { display: inline-flex; align-items: center; justify-content: center; min-height: var(--hon-target, 44px); padding: 8px 14px; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 800; text-decoration: none; cursor: pointer; }
+.primary { border: 0; background: linear-gradient(135deg, #8de3d8, #5fb8f0); color: var(--hon-accent-ink, #04202a); }
+.secondary { border: 1px solid var(--hon-line, #24405a); background: var(--hon-raised, #13263a); color: #cfeff0; }
+.primary:disabled, .secondary:disabled, .tab:disabled { opacity: .55; cursor: not-allowed; }
+.primary:focus-visible, .secondary:focus-visible, .tab:focus-visible, .field select:focus-visible, .field input:focus-visible, .field textarea:focus-visible, .check input:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+@media (max-width: 820px) { .page { padding: 14px; } }
+.card h4 { margin: 4px 0 0; font-size: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 14px; }
+.code { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 26px; font-weight: 800; letter-spacing: .08em; color: #eef6fc; overflow-wrap: anywhere; user-select: all; }
+.counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: 0; }
+.counts div { display: grid; gap: 2px; padding: 10px; border: 1px solid #1c3349; border-radius: 12px; background: #0d1d2e; }
+.counts dt { color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 700; }
+.counts dd { margin: 0; font-size: 22px; font-weight: 800; }
+.fieldset { display: grid; gap: 2px; margin: 0; padding: 0; border: 0; }
+.fieldset legend { padding: 0; font-size: 14px; font-weight: 800; }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { padding: 8px 6px; border-bottom: 1px solid #1c3349; text-align: left; overflow-wrap: anywhere; }
+.table th { color: var(--hon-muted, #9fb4c8); font-size: 12px; }
+.table td:first-child, .table th:first-child { width: 56px; }
+.table td:last-child, .table th:last-child { width: 120px; text-align: right; }
+.table tr[data-you="true"] td { background: #123047; font-weight: 800; }
+.table .chip { margin-left: 8px; }
+.contests { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.contests > li { display: grid; gap: 6px; padding: 12px; border: 1px solid #1c3349; border-radius: 12px; background: #0d1d2e; }
+.won { color: #8ff0c9; font-weight: 800; }
+.chip[data-kind="you"], .chip[data-state="APPROVED"], .chip[data-state="COMPLETED"] { background: #10392f; color: #8ff0c9; box-shadow: inset 0 0 0 1px #2b7a63; }
+.chip[data-state="REVERSAL_REVIEW"], .chip[data-state="PAUSED"], .chip[data-state="PENDING_WINNER_APPROVAL"] { background: #3a2f12; color: #ffe29a; box-shadow: inset 0 0 0 1px #7a6328; }
+.chip[data-state="CANCELLED"], .chip[data-state="ENDED"] { background: #2a2232; color: #d9c8e8; box-shadow: inset 0 0 0 1px #5a4a6a; }
+.notice[data-tone="ok"] { border-color: #2b7a63; background: #10302a; color: #c9f5e3; }
+.notice[data-tone="blocked"] { border-color: #8a6a2a; background: #2a2210; color: #ffe4a8; }
+.check input[type="radio"]:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
