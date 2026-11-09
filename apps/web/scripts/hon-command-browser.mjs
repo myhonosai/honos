@@ -233,6 +233,7 @@ async function api(route) {
   if (path === `${prefix}/billing/membership-pause-policy` || /\/billing\/memberships\/[0-9a-f-]{36}\/(pause|resume|cancel|refund-records|pauses-and-refunds)$/.test(path)) { const answered = await changesApiRoute(route, path, method, prefix); if (answered !== null) return answered; }
   if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
+  if (path.startsWith(`/api/v1/schools/${scope.schoolId}/champions/`)) { const answered = await championsApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
@@ -579,6 +580,66 @@ function resetChanges(over = {}) {
     members: new Map([[id(1500), { state: 'ACTIVE', version: 1, pauses: [], refunds: [] }]]), posts: [], replies: [], byKey: new Map(), reads: [], historyDenied: false }, over);
 }
 resetChanges();
+// ---------- Champions Club school page (synthetic) ----------
+// replies, one per POST: 'ok', 'unknown' (503, nothing stored). summaryDenied: the summary read answers 403.
+const CHP_COMMAND = { 'referral-code': 'champions-referral-code-issue', 'leaderboard-preference': 'champions-leaderboard-preference' };
+const chp = { code: null, mode: 'ANONYMOUS', posts: [], replies: [], byKey: new Map(), reads: [], summaryDenied: false };
+function resetChampions(over = {}) { Object.assign(chp, { code: null, mode: 'ANONYMOUS', posts: [], replies: [], byKey: new Map(), reads: [], summaryDenied: false }, over); }
+const chpAt = '2026-11-05T12:00:00.000Z';
+const chpMonths = Array.from({ length: 12 }, (_, i) => ({ month: `2026-${String(i + 1).padStart(2, '0')}`, qualified: i === 10 ? 2 : 0 }));
+const chpCounts = { pending: 1, qualified: 4, rejected: 1, refunded: 0, reversed: 0 };
+async function championsApiRoute(route, path, method, url) {
+  const request = route.request(), headers = request.headers(), tail = path.slice(`/api/v1/schools/${scope.schoolId}/champions/`.length);
+  const allowed = tail === 'leaderboard' ? ['period', 'month'] : [];
+  if ([...url.searchParams.keys()].some((k) => !allowed.includes(k)) || Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command')) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+  if (method === 'GET') {
+    if (headers['idempotency-key'] !== undefined || headers['x-hon-human-command'] !== undefined || request.postData()) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+    chp.reads.push(`${tail}${url.search}`);
+    if (tail === 'summary') return chp.summaryDenied ? json(route, 403, { code: 'CHAMPIONS_FORBIDDEN' }) : json(route, 200, { data: { schoolId: scope.schoolId,
+      referralCode: chp.code ? { code: chp.code, status: 'ACTIVE', issuedAt: chpAt } : null, program: { status: 'PUBLISHED', policyVersion: 3, financialRewards: 'DISABLED' }, referrals: chpCounts } });
+    if (tail === 'statistics') return json(route, 200, { data: { schoolId: scope.schoolId, referrals: chpCounts, monthlyQualified: chpMonths,
+      milestones: { program: { status: 'PUBLISHED', policyVersion: 3 }, reached: [{ rewardKind: 'FREE_MONTHS', milestoneCount: 3 }], nextMilestone: { rewardKind: 'LIFETIME_MEMBERSHIP', milestoneCount: 10, remaining: 6 }, qualifiedReferrals: 4 },
+      allTimeRank: 2, history: [{ occurredAt: chpAt, fromState: 'PENDING', toState: 'QUALIFIED', reason: 'QUALIFICATION_VERIFIED' }, { occurredAt: '2026-11-01T09:00:00.000Z', fromState: null, toState: 'PENDING', reason: 'CAPTURED' }],
+      historyLimit: 50, displayMode: chp.mode } });
+    if (tail === 'rewards') return json(route, 200, { data: { schoolId: scope.schoolId, qualifiedReferrals: 4, program: { status: 'PUBLISHED', policyVersion: 3 },
+      nextMilestone: { rewardKind: 'LIFETIME_MEMBERSHIP', milestoneCount: 10, remaining: 6 },
+      rewards: [{ rewardKind: 'REFERRER_CREDIT', beneficiaryRole: 'REFERRER', milestoneCount: null, creditMinor: 10000, freeMonths: null, lifetimeTier: null, aiAllowance: null, status: 'APPROVED', accruedAt: chpAt },
+        { rewardKind: 'FREE_MONTHS', beneficiaryRole: 'REFERRER', milestoneCount: 3, creditMinor: null, freeMonths: 2, lifetimeTier: null, aiAllowance: null, status: 'ACCRUED', accruedAt: chpAt }],
+      financialActivation: 'DISABLED' } });
+    if (tail === 'contests') return json(route, 200, { data: { schoolId: scope.schoolId, countsOnly: 'QUALIFIED', contests: [{ contestId: id(2390), name: 'Winter referral sprint',
+      description: 'Most qualified referrals between November and January.', termsReference: null, status: 'ACTIVE', startsAt: '2026-11-01T00:00:00.000Z', endsAt: '2027-01-31T23:59:59.000Z', minimumQualified: 2,
+      prizes: [{ placeFrom: 1, placeTo: 1, kind: 'ELECTRONICS', description: 'Tablet for the front desk', quantity: 1 }],
+      standings: [{ rank: 1, displayName: 'Synthetic Martial Arts Academy', anonymous: false, qualifiedReferrals: 2, isYou: true }], you: { qualifiedReferrals: 2, status: 'RANKED', rank: 1 }, won: false }] } });
+    if (tail === 'leaderboard') {
+      const period = url.searchParams.get('period'), month = url.searchParams.get('month');
+      if (!((period === 'ALL_TIME' && month === null) || (period === 'MONTH' && /^20\d{2}-(0[1-9]|1[0-2])$/.test(month ?? '')))) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+      const m = period === 'MONTH';
+      return json(route, 200, { data: { period, month: m ? month : null, limit: 25, countsOnly: 'QUALIFIED', timeZone: 'UTC',
+        standings: [{ rank: 1, displayName: m ? 'Northside Taekwondo' : 'Tiger Rock Dojang', anonymous: false, qualifiedReferrals: m ? 3 : 9, isYou: false },
+          { rank: 2, displayName: 'Synthetic Martial Arts Academy', anonymous: false, qualifiedReferrals: m ? 2 : 4, isYou: true },
+          { rank: 3, displayName: null, anonymous: true, qualifiedReferrals: 1, isYou: false }],
+        you: { schoolId: scope.schoolId, status: 'RANKED', rank: 2, qualifiedReferrals: m ? 2 : 4, displayMode: chp.mode } } });
+    }
+    return null;
+  }
+  if (method !== 'POST' || !CHP_COMMAND[tail]) return null;
+  const key = headers['idempotency-key'], body = JSON.parse(request.postData() ?? 'null');
+  chp.posts.push({ key, tail, command: headers['x-hon-human-command'], body });
+  if (headers['x-hon-human-command'] !== CHP_COMMAND[tail] || !/^application\/json/.test(headers['content-type'] ?? '')) return json(route, 403, { code: 'CHAMPIONS_FORBIDDEN' });
+  if (!key) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+  if (chp.byKey.has(key)) return json(route, 200, { data: { ...chp.byKey.get(key), replayed: true } });
+  if ((chp.replies.shift() ?? 'ok') === 'unknown') return json(route, 503, { code: 'CHAMPIONS_UNAVAILABLE_TRY_AGAIN' });
+  let receipt;
+  if (tail === 'referral-code') {
+    const created = chp.code === null; chp.code ??= 'K7M2Q9X4PA';
+    receipt = { schoolId: scope.schoolId, code: chp.code, status: 'ACTIVE', issuedAt: chpAt, created, replayed: false };
+  } else {
+    if (!body || !['ANONYMOUS', 'SCHOOL_NAME'].includes(body.displayMode) || Object.keys(body).length !== 1) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+    chp.mode = body.displayMode; receipt = { schoolId: scope.schoolId, displayMode: chp.mode, version: 2, updatedAt: chpAt, replayed: false };
+  }
+  chp.byKey.set(key, receipt);
+  return json(route, 200, { data: receipt });
+}
 async function changesApiRoute(route, path, method, prefix) {
   const request = route.request(), headers = request.headers(), meta = { requestId: id(1950), correlationId: id(1950) };
   if (new URL(request.url()).search || ['x-hon-source', 'x-hon-action-request-id', 'x-hon-delegated-by-principal-id'].some((k) => headers[k] !== undefined)) return json(route, 400, { code: 'VALIDATION_FAILED' });
@@ -2951,6 +3012,78 @@ await check('Pause, cancel & refunds: turning pauses off removes Pause; leaving 
   await chgPage(second.page).getByTestId('membership-select').selectOption(id(1500));
   await chgPage(second.page).getByText("You cannot see this membership's pauses and refunds.").waitFor();
   assert.equal(await chgPage(second.page).getByTestId('membership-actions').count(), 0);
+  await second.ctx.close();
+});
+
+// ---------- Champions Club school page ----------
+const chpPage = (page) => page.getByTestId('champions-school');
+const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Referrals & Rewards'], ko: ['챔피언스 클럽', '4', '추천 및 보상'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`Champions Club ${nextTheme} ${language} ${name}: code, referrals, rewards, leaderboard, contests and history from the reads`, async () => {
+    resetChampions({ code: 'K7M2Q9X4PA' });
+    const [title, you] = CHP_TEXT[language];
+    const { ctx, page } = await ownershipPage('/staff/champions-club', viewport, { nextTheme, language });
+    await chpPage(page).getByTestId('champions-code-value').waitFor({ timeout: 20000 });
+    await chpPage(page).getByTestId('champions-history-row').first().waitFor({ timeout: 20000 });
+    await chpPage(page).getByTestId('champions-contest').waitFor({ timeout: 20000 });
+    await chpPage(page).getByTestId('champions-you').filter({ hasText: you }).waitFor({ timeout: 20000 });
+    assert.equal(await chpPage(page).locator('h1').innerText(), title);
+    assert.equal(await chpPage(page).getByTestId('champions-code-value').innerText(), 'K7M2Q9X4PA');
+    assert.equal(await chpPage(page).locator('tr[data-you="true"]').first().locator('td').first().innerText(), '2');
+    assert.ok(await page.locator('a[href="/staff/champions-club"]').count() >= 1, 'listed in school navigation');
+    assert.deepEqual(chp.posts, [], 'reading the page sends no command');
+    assert.ok(chp.reads.includes('leaderboard?period=ALL_TIME'));
+    await noOverflow(page, `champions-${nextTheme}-${language}-${name}`);
+    await axe(page, `champions-${nextTheme}-${language}-${name}`);
+    await shot(page, `champions-${nextTheme}-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('Champions Club: create the referral code, switch to this UTC month, and show the school name, each read again from the server', async () => {
+  resetChampions();
+  const { ctx, page } = await ownershipPage('/staff/champions-club', { width: 1280, height: 900 });
+  await chpPage(page).getByTestId('champions-code-create').waitFor({ timeout: 20000 });
+  await shot(page, 'champions-no-code', true);
+  await chpPage(page).getByTestId('champions-code-create').click();
+  await chpPage(page).getByTestId('champions-outcome').filter({ hasText: 'Your referral code is ready.' }).waitFor();
+  await chpPage(page).getByTestId('champions-code-value').filter({ hasText: 'K7M2Q9X4PA' }).waitFor();
+  assert.deepEqual({ tail: chp.posts[0].tail, command: chp.posts[0].command, body: chp.posts[0].body }, { tail: 'referral-code', command: 'champions-referral-code-issue', body: {} });
+  assert.ok(chp.reads.filter((r) => r === 'summary').length >= 2, 'read again after the answer');
+  await chpPage(page).getByTestId('champions-period-MONTH').click();
+  await chpPage(page).getByText('Northside Taekwondo').waitFor();
+  const month = new Date().toISOString().slice(0, 7);
+  assert.ok(chp.reads.includes(`leaderboard?period=MONTH&month=${month}`), `asked for ${month}`);
+  await chpPage(page).getByTestId('champions-display').getByLabel('Show our school name').check();
+  await chpPage(page).getByTestId('champions-display').getByRole('button', { name: 'Save' }).click();
+  await chpPage(page).getByTestId('champions-outcome').filter({ hasText: 'Show our school name' }).waitFor();
+  assert.deepEqual({ tail: chp.posts[1].tail, command: chp.posts[1].command, body: chp.posts[1].body }, { tail: 'leaderboard-preference', command: 'champions-leaderboard-preference', body: { displayMode: 'SCHOOL_NAME' } });
+  await page.waitForFunction(() => document.querySelector('[data-testid="champions-display"] input[value="SCHOOL_NAME"]')?.checked === true);
+  assert.equal(new Set(chp.posts.map((p) => p.key)).size, 2, 'a fresh key for each command');
+  await axe(page, 'champions-after-commands');
+  await shot(page, 'champions-after-commands', true);
+  await ctx.close();
+});
+await check('Champions Club: an unknown outcome keeps the same key for Try again, Stop reads again, leaving the tab hides the code, a refused read shows nothing', async () => {
+  resetChampions({ code: 'K7M2Q9X4PA', replies: ['unknown', 'unknown'] });
+  const { ctx, page } = await ownershipPage('/staff/champions-club', { width: 1280, height: 900 });
+  await chpPage(page).getByTestId('champions-display').waitFor({ timeout: 20000 });
+  await chpPage(page).getByTestId('champions-display').getByLabel('Show our school name').check();
+  await chpPage(page).getByTestId('champions-display').getByRole('button', { name: 'Save' }).click();
+  await chpPage(page).getByRole('button', { name: 'Try again' }).waitFor();
+  assert.equal(await chpPage(page).getByTestId('champions-display').getByRole('button', { name: 'Save' }).isDisabled(), true, 'locked while a command is kept');
+  await chpPage(page).getByRole('button', { name: 'Try again' }).click();
+  await chpPage(page).getByRole('button', { name: 'Try again' }).waitFor();
+  assert.equal(chp.posts.length, 2); assert.equal(chp.posts[0].key, chp.posts[1].key);
+  await chpPage(page).getByRole('button', { name: 'Stop and read again' }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="champions-outcome"]'));
+  assert.equal(chp.mode, 'ANONYMOUS');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('K7M2Q9X4PA'));
+  await ctx.close();
+  resetChampions({ code: 'K7M2Q9X4PA', summaryDenied: true });
+  const second = await ownershipPage('/staff/champions-club', { width: 1280, height: 900 });
+  await chpPage(second.page).getByTestId('champions-code').getByText('Your access does not include the Champions Club at this school.').waitFor({ timeout: 20000 });
+  assert.ok(!(await chpPage(second.page).innerText()).includes('K7M2Q9X4PA'));
   await second.ctx.close();
 });
 
