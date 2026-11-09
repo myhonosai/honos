@@ -5,7 +5,7 @@ import type { HonConversationThread, HonConversationTurn, HonOrchestration } fro
 import {
   HON_CONVERSATION_API, HON_CONVERSATION_COMMAND, HonConversationError, honConversationBase, prepareConversation, prepareTurn, verifyHonPage, verifyHonReadiness,
 } from '../src/components/hon-command/hon-conversation-http';
-import { HonConversationView, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
+import { HonConversationView, composerTurnRequest, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { honTargetPath } from '../src/components/hon-command/hon-conversation-http';
@@ -30,7 +30,7 @@ const reply = (turn: number, over: Partial<HonConversationTurn> = {}, detail: Pa
 const thread = (turns: HonConversationTurn[]): HonConversationThread => ({ ...summary(5, turns.length / 2), turns });
 const noop = () => {};
 const props = (over: Partial<HonConversationViewProps> = {}): HonConversationViewProps => ({
-  presentation: 'full', phase: 'READY', readiness: readiness(), conversations: [summary(5)], thread: null, threadPhase: 'NONE', pending: null, draft: '', mode: 'STANDARD',
+  presentation: 'full', phase: 'READY', readiness: readiness(), conversations: [summary(5)], thread: null, threadPhase: 'NONE', pending: null, draft: '', mode: 'STANDARD', ask: 'hon', onAsk: noop,
   groups: new Map(), groupPhase: 'READY', confirm: null, onSuggest: noop, onConfirmChange: noop, onConfirmSend: noop, onConfirmCancel: noop,
   onDraft: noop, onMode: noop, onSend: noop, onOpen: noop, onNew: noop, onContinue: noop, onRetry: noop, onDismiss: noop, onRefresh: noop, ...over });
 const render = (over: Partial<HonConversationViewProps> = {}) => renderToStaticMarkup(<HonConversationView {...props(over)} />);
@@ -296,7 +296,7 @@ describe('Ask HON suggestion cards (C3a)', () => {
     const asked: string[] = [];
     for (const status of ['COMPLETED', 'FAILED', 'PARTIAL'] as const) {
       const html = render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: (t) => asked.push(t) });
-      expect(html).toMatch(/<button type="button" class="[^"]*">Summarize with HON<\/button>/); expect(html).toContain('It changes nothing.');
+      expect(html).toMatch(/<button type="button" class="[^"]*">Summarize with HON<\/button>/); expect(html).toContain('It changes nothing.'); expect(html).toContain('asking again runs a new summary.');
     }
     for (const status of ['PENDING', 'NEEDS_REVIEW', 'UNKNOWN'] as const)
       expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: noop })).not.toContain('Summarize with HON');
@@ -309,7 +309,42 @@ describe('Ask HON suggestion cards (C3a)', () => {
     expect(body).toEqual({ text: 'Summarize', delegation: null, summarizeTurnId: id(6) });
     expect(() => prepareTurn(SCHOOL, id(5), { text: 'Summarize', delegation: null, summarizeTurnId: id(6), continueTurnId: id(6) })).toThrow(HonConversationError);
     expect(render({ thread: answer(['marcus']), threadPhase: 'READY', pending: { prepared, kind: 'turn', label: 'Summarize with HON', state: 'INVALID', conversationId: id(5), code: 'HON_GROUP_NOT_SUMMARIZABLE' } }))
-      .toContain('HON can’t summarize those specialists yet');
+      .toContain('HON can’t summarize those specialists: their group changed since you saw it');
     expect(render({ thread: thread([human(4, 'Summarize'), reply(6, { text: null, status: 'FAILED', reason: 'GROUP_NOT_SUMMARIZABLE' })]), threadPhase: 'READY' })).toContain('HON did not summarize');
+  });
+});
+
+describe('Ask Claire, Business Performance (K2)', () => {
+  const claireReady = { ...readiness(), businessPerformance: true };
+  it('offers Claire only when the server says she can answer here', () => {
+    expect(render()).not.toContain('value="claire"');
+    const html = render({ readiness: claireReady });
+    expect(html).toMatch(/<legend>Who answers<\/legend>/); expect(html).toContain('value="hon"'); expect(html).toContain('value="claire"');
+    expect(html).toContain('Message HON');
+  });
+  it('a question for Claire is always one detailed answer and never changes anything', () => {
+    const html = render({ readiness: claireReady, ask: 'claire' });
+    expect(html).toContain('Message Claire'); expect(html).toMatch(/<input(?=[^>]*value="claire")(?=[^>]*checked="")[^>]*>/);
+    expect(html).toMatch(/<input type="radio" name="hon-ask-full-mode" checked=""\/>Detailed/);
+    expect(html).toMatch(/<fieldset[^>]*disabled=""[^>]*><legend>Answer<\/legend>/);
+    expect(html).toContain('Claire reads this school’s performance numbers'); expect(html).toContain('She never drafts, sends or changes anything');
+    expect(html).not.toMatch(/customer credits|purchased credit/i);
+  });
+  it('falls back to HON when Claire is chosen but no longer available', () => {
+    const html = render({ readiness: readiness(), ask: 'claire' });
+    expect(html).toContain('Message HON'); expect(html).not.toContain('Message Claire'); expect(html).not.toContain('value="claire"');
+  });
+  it('shows a Claire answer under her own name with no continue control or Action Center link', () => {
+    const claire = reply(6, { role: 'claire', text: 'Recorded facts: 12 active members. Claire’s view: focus on trials.', references: { workItemId: id(8), actionRequestId: null, invocationId: id(9) } },
+      { mode: 'DETAILED', step: 1, maxSteps: 3, canContinue: false });
+    const html = render({ readiness: claireReady, thread: thread([human(6, 'How are we doing?'), claire]), threadPhase: 'READY' });
+    expect(html).toMatch(/<strong>Claire<\/strong>/); expect(html).not.toMatch(/<strong>Kai<\/strong>/);
+    expect(html).toContain('Recorded facts: 12 active members'); expect(html).not.toContain('Continue this answer'); expect(html).not.toContain('action-center');
+  });
+  it('builds a Claire turn as a bare delegation with no answer mode; a HON turn keeps its mode', () => {
+    expect(composerTurnRequest('How are we doing?', 'claire', 'STANDARD')).toEqual({ text: 'How are we doing?', delegation: { agentKey: 'claire' } });
+    expect(composerTurnRequest('Who needs follow-up?', 'hon', 'DETAILED')).toEqual({ text: 'Who needs follow-up?', delegation: null, replyMode: 'DETAILED' });
+    const prepared = prepareTurn(SCHOOL, id(5), composerTurnRequest('How are we doing?', 'claire', 'DETAILED'));
+    expect(JSON.parse(prepared.body)).toEqual({ text: 'How are we doing?', delegation: { agentKey: 'claire' } });
   });
 });

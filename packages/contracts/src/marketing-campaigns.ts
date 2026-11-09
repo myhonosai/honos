@@ -29,9 +29,11 @@ export interface CampaignSummary extends Omit<SaveCampaignInput, 'expectedVersio
   updatedAt: string;
   planningOnly: true;
 }
+/** 0227: the LIST, CURRENT and FUNNEL reads also name the session school the campaign belongs to. Command receipts and SAVED reads do not. */
+export interface CampaignReadSummary extends CampaignSummary { schoolId: string }
 /** Cohort counts of actual CRM records, not enrollment/revenue conversions. */
 export interface CampaignFunnel {
-  campaign: CampaignSummary;
+  campaign: CampaignReadSummary;
   from: string;
   to: string;
   asOf: string;
