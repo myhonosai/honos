@@ -2340,6 +2340,23 @@ DO $$ DECLARE r text; BEGIN
   END IF;
 END $$;
 
+-- B-ID-4 0223 (proposed) school ownership: the HQ-owner read, the HQ-owner command and the school-owner read
+-- are the only runtime boundary; the helpers and the three private tables stay internal.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['school_owner_review_or_busy(uuid)','guard_school_primary_owner()','school_owner_grant_rows(uuid,timestamptz)','school_live_primary_grant(uuid,timestamptz)',
+    'school_set_primary_owner(uuid,uuid,uuid,text,uuid,timestamptz)',
+    'school_ownership_owner_json(uuid,timestamptz,uuid)','school_ownership_notices_json(uuid)',
+    'read_school_ownership_from_hq(text,uuid)','manage_school_ownership(text,text,jsonb,uuid)',
+    'read_school_ownership(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_ownership_from_hq(text,uuid),
+      hon.manage_school_ownership(text,text,jsonb,uuid),hon.read_school_ownership(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0224 membership pause, cancellation and manual refund records: private policy/pause/refund tables, private helpers,
 -- seven runtime entry points. The runtime gains no privilege on hon.memberships or on the new tables.
 DO $$ DECLARE r text; col text; t text; f text; BEGIN

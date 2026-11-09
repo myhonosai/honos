@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-export const schoolAccountTables=['school_owner_invitations','school_account_requests','school_account_events','school_staff_invitations','school_staff_account_events','school_family_access_invitations','school_family_account_events'];
+export const schoolAccountTables=['school_owner_invitations','school_account_requests','school_account_events','school_staff_invitations','school_staff_account_events','school_family_access_invitations','school_family_account_events','school_primary_owners','school_ownership_notices','school_ownership_requests'];
 export async function verifySchoolAccountSecurity(client,runtime) {
   for(const table of schoolAccountTables){
     const q=(await client.query('SELECT relrowsecurity rls,relforcerowsecurity forced FROM pg_class WHERE oid=$1::regclass',['hon.'+table])).rows[0];assert(q.rls&&q.forced);
