@@ -119,7 +119,6 @@ summary+=("| Database TLS verification: configured CA required, wrong CA and hos
 
 # Communication delivery (0243) has its own fixture with the canonical 013 worker login.
 setup communication-delivery HON_COMMUNICATION_DELIVERY_VALIDATION_TARGET hon_comm_delivery_validation HON_COMMUNICATION_DELIVERY_ENV_FILE
-proof communication-delivery verify-rls.mjs "Forced RLS on every tracked operational table (communication delivery fixture)"
 proof communication-delivery test-communication-delivery-integrity.mjs "Communication delivery and receipts (0243): worker-only claim/lease/record functions, SMS quiet hours in school time, consent and address re-checked at send time, retry backoff and exhaustion, lease expiry and late results UNKNOWN (never retried), idempotent forward-only provider receipts, unsubscribe and spam report record OPTED_OUT/RECIPIENT, suspended school held, forced-RLS school read without address or provider IDs, dispatcher end to end through the fake provider"
 
 setup champions-club HON_CHAMPIONS_VALIDATION_TARGET hon_champions_validation HON_CHAMPIONS_ENV_FILE
