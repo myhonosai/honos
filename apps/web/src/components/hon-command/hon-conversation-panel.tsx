@@ -155,7 +155,7 @@ function Suggestions({ turn, group, groupPhase, available, locked, canSummarize,
       {group.status === 'NEEDS_REVIEW' || group.status === 'PARTIAL' ? <a className={styles.link} href="/staff/action-center/approvals">Review drafts in Action Center →</a> : null}
       {SUMMARIZABLE_GROUP.has(group.status) && verified && onSummarize ? <div className={styles.actions} data-hon-summarize={turn.turnId}>
         <button type="button" className={styles.secondary} disabled={!canSummarize} onClick={() => onSummarize(turn.turnId)}>Summarize with HON</button>
-        <p className={styles.meta}>HON reads only what these specialists recorded and answers below as a new question. It changes nothing. Each summary is a new question, so asking again uses credits again.</p>
+        <p className={styles.meta}>HON reads only what these specialists recorded and answers below as a new question. It changes nothing. Each summary is a new question, so asking again runs a new summary.</p>
       </div> : null}
     </div> : null}
     {suggested.length > 0 ? <>

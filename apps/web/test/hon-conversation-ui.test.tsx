@@ -296,7 +296,7 @@ describe('Ask HON suggestion cards (C3a)', () => {
     const asked: string[] = [];
     for (const status of ['COMPLETED', 'FAILED', 'PARTIAL'] as const) {
       const html = render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: (t) => asked.push(t) });
-      expect(html).toMatch(/<button type="button" class="[^"]*">Summarize with HON<\/button>/); expect(html).toContain('It changes nothing.'); expect(html).toContain('asking again uses credits again.');
+      expect(html).toMatch(/<button type="button" class="[^"]*">Summarize with HON<\/button>/); expect(html).toContain('It changes nothing.'); expect(html).toContain('asking again runs a new summary.');
     }
     for (const status of ['PENDING', 'NEEDS_REVIEW', 'UNKNOWN'] as const)
       expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', groups: orchestrationsBySource({ items: [group(status, members)] }), onSummarize: noop })).not.toContain('Summarize with HON');
