@@ -42,7 +42,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'staff', titleKey: 'navStaff', routes: [r('/staff/work', 'routeWork'), r('/staff/automation/rules', 'routeAutomation'), r('/staff/team/invitations', 'routeTeam', true),
     r('/staff/roles', 'routeRoles'), r('/staff/team/availability', 'routeAvailability'), r('/staff/instructor-qualifications', 'routeQualifications'),
     r('/staff/documents', 'routeDocuments'), r('/staff/voice', 'routeVoice')] },
-  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/account-status', 'routeAccount'), r('/staff/subscription', 'routeSubscription'),
+  { key: 'settings', titleKey: 'navSettings', routes: [r('/staff/account-status', 'routeAccount'), r('/staff/owners', 'routeOwners'), r('/staff/subscription', 'routeSubscription'),
     r('/staff/launch', 'routeLaunch'), r('/settings/language-region', 'routeLanguage')] },
 ];
 

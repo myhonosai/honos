@@ -225,6 +225,7 @@ async function api(route) {
     financialMetrics: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ financial MRR, ARR, cash, or gross-margin projection is available.' },
     aiUsage: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ AI usage or cost projection is available.' },
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
+  if (path === '/api/v1/hq/schools' || path.endsWith('/ownership') || path === '/api/v1/hq/school-ownership/primary-owner') { const answered = await ownershipApiRoute(route, path, method); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
@@ -563,6 +564,58 @@ async function membershipListApiRoute(route, path, method, url, prefix) {
   const all = mblRows().filter((m) => !state || m.state === state), start = cursor === `${state ?? 'ALL'}-page-2` ? 50 : 0, data = all.slice(start, start + 50);
   return json(route, 200, { data, meta: { requestId: id(1498), correlationId: id(1498), limit: 50, nextCursor: start + 50 < all.length ? `${state ?? 'ALL'}-page-2` : null,
     schoolTimezone: 'America/Los_Angeles', localToday: '2026-11-08' } });
+}
+// School ownership (B-ID-4, synthetic). HQ directory of two schools; the HQ owner sees owners, the primary, HQ seats and notices,
+// and can make another owner primary. replies, one per POST: 'ok', 'unknown' (503, nothing changed), 'notLive' (404).
+const own = { denied: false, ownerDenied: false, primary: new Map(), posts: [], replies: [], byKey: new Map(), reads: [] };
+const ownSecond = id(1802);
+const ownOwners = (schoolId) => schoolId === ownSecond
+  ? [{ ownerGrantId: id(1821), displayName: 'Jamie Cho', email: 'jamie.owner@example.invalid', since: '2026-10-03T10:00:00.000Z', viaInvitation: true }]
+  : [{ ownerGrantId: id(1811), displayName: 'Dana Reyes', email: 'dana.owner@example.invalid', since: '2026-09-15T10:00:00.000Z', viaInvitation: false },
+    { ownerGrantId: id(1812), displayName: 'Sam Park', email: 'sam.owner@example.invalid', since: '2026-10-20T10:00:00.000Z', viaInvitation: true }];
+const ownNotices = (schoolId) => schoolId === ownSecond ? [] : [
+  ...(own.primary.get(schoolId) === id(1812) ? [{ noticeId: id(1890), kind: 'PRIMARY_OWNER_CHANGED', occurredAt: '2026-11-08T12:00:00.000Z', invitedEmail: null }] : []),
+  { noticeId: id(1891), kind: 'OWNER_ADDED', occurredAt: '2026-10-20T10:00:00.000Z', invitedEmail: 'sam.owner@example.invalid' },
+  { noticeId: id(1892), kind: 'OWNER_INVITED', occurredAt: '2026-10-19T10:00:00.000Z', invitedEmail: 'sam.owner@example.invalid' }];
+function resetOwnership(over = {}) {
+  Object.assign(own, { denied: false, ownerDenied: false, primary: new Map([[scope.schoolId, id(1811)], [ownSecond, null]]), posts: [], replies: [], byKey: new Map(), reads: [] }, over);
+}
+resetOwnership();
+const ownView = (schoolId) => { const primary = own.primary.get(schoolId) ?? null, owners = ownOwners(schoolId).map((o) => ({ ...o, primary: o.ownerGrantId === primary }));
+  return { owners, primaryOwnerGrantId: primary, notices: ownNotices(schoolId), asOf: '2026-11-08T12:30:00.000Z' }; };
+async function ownershipApiRoute(route, path, method) {
+  const request = route.request(), headers = request.headers();
+  if (Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command') || new URL(request.url()).search) return json(route, 400, { code: 'ACCOUNT_INPUT_INVALID' });
+  if (path === '/api/v1/hq/schools' && method === 'GET') return json(route, 200, { data: { directory: { schools: [
+    { schoolId: scope.schoolId, organizationDisplayName: 'Synthetic Dojo Group', schoolDisplayName: 'Synthetic Martial Arts Academy', organizationOperationalStatus: 'ACTIVE', schoolOperationalStatus: 'ACTIVE', entitlementTier: 'COMPLETE', createdAt: '2026-09-01T10:00:00.000Z' },
+    { schoolId: ownSecond, organizationDisplayName: 'Synthetic Dojo Group', schoolDisplayName: 'Synthetic North Branch', organizationOperationalStatus: 'ACTIVE', schoolOperationalStatus: 'ACTIVE', entitlementTier: 'CORE', createdAt: '2026-10-01T10:00:00.000Z' }] } } });
+  const hqRead = path.match(/^\/api\/v1\/hq\/schools\/([0-9a-f-]{36})\/ownership$/), ownerRead = path.match(/^\/api\/v1\/account\/schools\/([0-9a-f-]{36})\/ownership$/);
+  if (hqRead && method === 'GET') {
+    own.reads.push(`hq:${hqRead[1]}`);
+    if (own.denied) return json(route, 403, { code: 'ACCOUNT_FORBIDDEN' });
+    const v = ownView(hqRead[1]);
+    return json(route, 200, { data: { schoolId: hqRead[1], organizationId: scope.organizationId, ...v, primaryNeeded: v.owners.length > 0 && v.primaryOwnerGrantId === null,
+      hqOwnerGrantIds: hqRead[1] === ownSecond ? [] : [id(1801)] } });
+  }
+  if (ownerRead && method === 'GET') {
+    own.reads.push(`owner:${ownerRead[1]}`);
+    if (own.ownerDenied || ownerRead[1] !== scope.schoolId) return json(route, 403, { code: 'ACCOUNT_FORBIDDEN' });
+    const v = ownView(ownerRead[1]);
+    return json(route, 200, { data: { schoolId: ownerRead[1], owners: v.owners, yourOwnerGrantId: id(1811), primaryOwnerGrantId: v.primaryOwnerGrantId, notices: v.notices, asOf: v.asOf } });
+  }
+  if (path === '/api/v1/hq/school-ownership/primary-owner' && method === 'POST') {
+    const key = headers['idempotency-key'], body = JSON.parse(request.postData() ?? '{}');
+    own.posts.push({ key, command: headers['x-hon-human-command'], body });
+    if (headers['x-hon-human-command'] !== 'school-owner-account' || !/^application\/json/.test(headers['content-type'] ?? '')) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+    if (own.byKey.has(key)) return json(route, 200, { data: own.byKey.get(key) });
+    const next = own.replies.shift() ?? 'ok';
+    if (next === 'unknown') return json(route, 503, { code: 'ACCOUNT_UNAVAILABLE' });
+    if (next === 'notLive') return json(route, 404, { code: 'OWNERSHIP_OWNER_NOT_LIVE' });
+    const changed = own.primary.get(body.schoolId) !== body.ownerGrantId; own.primary.set(body.schoolId, body.ownerGrantId);
+    const receipt = { operation: 'SET_PRIMARY', schoolId: body.schoolId, organizationId: scope.organizationId, primaryOwnerGrantId: body.ownerGrantId, changed };
+    own.byKey.set(key, receipt); return json(route, 200, { data: receipt });
+  }
+  return null;
 }
 const ppl = { canEdit: true, records: new Map(), posts: [], replies: [], byKey: new Map(), gate: null };
 function resetPeople(over = {}) {
@@ -2507,6 +2560,117 @@ await check('Memberships: a late sign-in answer to a read retired by a filter ch
   mbl.step = 'session';
   await section().getByRole('button', { name: 'Refresh' }).click();
   await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
+  await ctx.close();
+});
+
+// ---------- School ownership (B-ID-4) ----------
+async function ownershipPage(path, viewport, { nextTheme = 'modern', language = 'en' } = {}) {
+  theme = nextTheme; mode = 'ready';
+  const ctx = await context(viewport);
+  if (language !== 'en') {
+    const presentation = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, 'hon-command-synthetic-owner'])).digest('hex');
+    await ctx.addCookies([{ name: `hon_locale_v1_${presentation}`, value: encodeURIComponent(JSON.stringify({ version: 1, language, region: 'auto', currencyDisplay: 'symbol', timeZone: 'UTC' })), url: origin, sameSite: 'Lax' }]);
+  }
+  const page = await ctx.newPage();
+  page.on('pageerror', (error) => report.pageErrors.push(String(error)));
+  await page.goto(`${origin}${path}`);
+  return { ctx, page };
+}
+const ownHq = (page) => page.getByTestId('hq-school-ownership');
+async function chooseOwnSchool(page, schoolId = scope.schoolId) {
+  await ownHq(page).locator('select').waitFor({ timeout: 20000 });
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="hq-school-ownership"] select option').length === 3);
+  await ownHq(page).locator('select').selectOption(schoolId);
+  await ownHq(page).getByTestId('ownership-hq-access').waitFor();
+}
+const OWN_TEXT = { en: ['School owners', 'Make primary', 'Yes, make primary', 'Primary owner'], ko: ['도장 소유자', '대표로 지정', '예, 대표로 지정', '대표 소유자'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`School owners HQ ${nextTheme} ${language} ${name}: owners, HQ access apart from owners, and Make primary after confirming`, async () => {
+    resetOwnership();
+    const [title, make, yes, primary] = OWN_TEXT[language];
+    const { ctx, page } = await ownershipPage('/hq/schools/owners', viewport, { nextTheme, language });
+    await chooseOwnSchool(page);
+    assert.equal(await ownHq(page).locator('h1').innerText(), title);
+    assert.equal(await ownHq(page).getByTestId('ownership-owner').count(), 2);
+    assert.ok((await ownHq(page).getByTestId('ownership-owner').first().innerText()).includes(primary));
+    assert.ok(!(await ownHq(page).getByTestId('ownership-owner').allInnerTexts()).join(' ').includes(id(1801)), 'HQ seat never listed as an owner');
+    assert.ok((await ownHq(page).getByTestId('ownership-hq-access').innerText()).includes(language === 'en' ? '1 HQ seat(s)' : 'HQ 좌석 1개'));
+    await noOverflow(page, `school-owners-hq-${nextTheme}-${language}-${name}`);
+    await axe(page, `school-owners-hq-${nextTheme}-${language}-${name}`);
+    await shot(page, `school-owners-hq-${nextTheme}-${language}-${name}`, true);
+    await ownHq(page).getByRole('button', { name: make }).click();
+    await shot(page, `school-owners-hq-confirm-${nextTheme}-${language}-${name}`, true);
+    await ownHq(page).getByRole('button', { name: yes }).click();
+    await ownHq(page).getByTestId('ownership-outcome').filter({ hasText: language === 'en' ? 'Sam Park is now the primary owner.' : 'Sam Park 님이 이제 대표 소유자입니다.' }).waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="ownership-owner"][data-primary]').length === 1
+      && document.querySelector('[data-testid="ownership-owner"][data-primary]')?.textContent?.includes('Sam Park'));
+    assert.equal(own.posts.length, 1);
+    assert.equal(own.posts[0].command, 'school-owner-account');
+    assert.deepEqual(own.posts[0].body, { schoolId: scope.schoolId, ownerGrantId: id(1812) });
+    assert.ok(own.reads.filter((r) => r === `hq:${scope.schoolId}`).length >= 2, 'read again after the answer');
+    await ctx.close();
+  });
+}
+await check('School owners HQ: an unknown outcome offers Try again, which replays the same key once', async () => {
+  resetOwnership({ replies: ['unknown'] });
+  const { ctx, page } = await ownershipPage('/hq/schools/owners', { width: 1280, height: 900 });
+  await chooseOwnSchool(page);
+  await ownHq(page).getByRole('button', { name: 'Make primary' }).click();
+  await ownHq(page).getByRole('button', { name: 'Yes, make primary' }).click();
+  await ownHq(page).getByRole('button', { name: 'Try again' }).waitFor();
+  assert.equal(await ownHq(page).locator('select').isDisabled(), true, 'school choice locked while a command is kept');
+  await ownHq(page).getByRole('button', { name: 'Try again' }).click();
+  await ownHq(page).getByTestId('ownership-outcome').filter({ hasText: 'Sam Park is now the primary owner.' }).waitFor();
+  assert.equal(own.posts.length, 2); assert.equal(own.posts[0].key, own.posts[1].key);
+  await ctx.close();
+});
+await check('School owners HQ: a school without a primary says so; Cancel sends nothing; leaving the tab hides every owner', async () => {
+  resetOwnership();
+  const { ctx, page } = await ownershipPage('/hq/schools/owners', { width: 1280, height: 900 });
+  await chooseOwnSchool(page, ownSecond);
+  await ownHq(page).getByTestId('ownership-primary-needed').waitFor();
+  assert.ok((await ownHq(page).getByTestId('ownership-hq-access').innerText()).includes('No HQ seats'));
+  await ownHq(page).getByRole('button', { name: 'Make primary' }).click();
+  await ownHq(page).getByRole('button', { name: 'Cancel' }).click();
+  assert.equal(own.posts.length, 0);
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await ownHq(page).getByRole('button', { name: 'Show again' }).waitFor();
+  assert.ok(!(await ownHq(page).innerText()).includes('jamie.owner@example.invalid'), 'hidden after leaving');
+  await ctx.close();
+});
+await check('School owners HQ: a non-owner HQ reader is told so and sees no owner', async () => {
+  resetOwnership({ denied: true });
+  const { ctx, page } = await ownershipPage('/hq/schools/owners', { width: 1280, height: 900 });
+  await ownHq(page).locator('select').waitFor({ timeout: 20000 });
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="hq-school-ownership"] select option').length === 3);
+  await ownHq(page).locator('select').selectOption(scope.schoolId);
+  await ownHq(page).getByText('Only the HQ owner can see and change school owners.').waitFor();
+  assert.ok(!(await ownHq(page).innerText()).includes('dana.owner@example.invalid'));
+  await ctx.close();
+});
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'classic', 'en'], ['phone-390', { width: 390, height: 844 }, 'modern', 'es']]) {
+  await check(`School owners settings ${nextTheme} ${language} ${name}: co-owners with You and Primary, notices, and no command`, async () => {
+    resetOwnership();
+    const { ctx, page } = await ownershipPage('/staff/owners', viewport, { nextTheme, language });
+    const section = page.getByTestId('owner-school-ownership');
+    await section.getByTestId('ownership-owner').first().waitFor({ timeout: 20000 });
+    assert.equal(await section.getByTestId('ownership-owner').count(), 2);
+    const first = await section.getByTestId('ownership-owner').first().innerText();
+    assert.ok(first.includes(language === 'en' ? 'You' : 'Usted') && first.includes(language === 'en' ? 'Primary owner' : 'Propietario principal'), first);
+    assert.equal(await section.getByRole('button', { name: /Make primary|Hacer principal/ }).count(), 0);
+    assert.ok((await section.innerText()).includes('sam.owner@example.invalid'));
+    await noOverflow(page, `school-owners-settings-${nextTheme}-${language}-${name}`);
+    await axe(page, `school-owners-settings-${nextTheme}-${language}-${name}`);
+    await shot(page, `school-owners-settings-${nextTheme}-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('School owners settings: a staff member who is not an owner is told so and sees nobody', async () => {
+  resetOwnership({ ownerDenied: true });
+  const { ctx, page } = await ownershipPage('/staff/owners', { width: 1280, height: 900 });
+  const section = page.getByTestId('owner-school-ownership');
+  await section.getByText("Only this school's owners can see this page.").waitFor({ timeout: 20000 });
+  assert.ok(!(await section.innerText()).includes('dana.owner@example.invalid'));
   await ctx.close();
 });
 
