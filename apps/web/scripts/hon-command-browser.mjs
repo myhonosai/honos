@@ -3802,7 +3802,7 @@ for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1
     await ctx.close();
   });
 }
-await check('Creative Credits: a refused read shows nothing; a session end hides everything until shown again', async () => {
+await check('Creative Credits: a refused read shows nothing; leaving the window or a session end hides everything until shown again', async () => {
   Object.assign(ccx, { reads: [], denied: true, other: 0 });
   const { ctx, page } = await ownershipPage('/hq/creative-credits', { width: 1280, height: 900 });
   await creditsPage(page).getByText('does not include creative credits').waitFor({ timeout: 20000 });
@@ -3813,12 +3813,18 @@ await check('Creative Credits: a refused read shows nothing; a session end hides
   await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo South' }).click();
   await creditsPage(page).getByText('No wallet has been opened for this school yet.').waitFor();
   await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
-  await creditsPage(page).getByText('Hidden because your session ended.').waitFor();
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
   assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
   assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
   await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
   await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
   assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
+  // Leaving the window hides per-school billing data too.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
   assert.equal(ccx.other, 0);
   await ctx.close();
 });

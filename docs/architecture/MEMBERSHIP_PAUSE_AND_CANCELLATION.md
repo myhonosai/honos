@@ -37,7 +37,8 @@ Every POST needs an `Idempotency-Key`. An exact retry returns the stored receipt
 - **Pause:** `{ expectedVersion, resumeOn, pauseReason }`.
   - Only an ACTIVE membership can be paused. The pause starts on the school's local today.
   - `resumeOn` must be after today and within `maxPauseDays`. Otherwise the pause is refused with 422 `MEMBERSHIP_PAUSE_TOO_LONG`.
-  - Days paused by pauses that began in the last 365 days, plus this pause, must stay within `maxPausedDaysPerYear`. Otherwise the pause is refused with 422 `MEMBERSHIP_PAUSE_YEARLY_LIMIT`.
+  - **Rolling year (0231, owner decision 2026-11-09).** Only paused days that fall within the last 365 days (the school's local today included) count. A past pause that started before that window counts only its days inside it. Those days plus this pause must stay within `maxPausedDaysPerYear`. Otherwise the pause is refused with 422 `MEMBERSHIP_PAUSE_YEARLY_LIMIT`.
+  - The window is taken at today. While the new pause runs, older days only leave the window, so the check is never looser than a day-by-day rolling count.
   - A membership with an ACTIVE payment schedule cannot be paused, because the schedule would keep charging. It returns 409 `MEMBERSHIP_PAUSE_REQUIRES_BILLING_ARRANGEMENT` until the billing arrangement workflow exists.
   - The membership goes from ACTIVE to FROZEN at version + 1. The hold fee in force is copied onto the pause row as evidence.
 - **Resume:** `{ expectedVersion, resumeReason? }`. A FROZEN membership goes back to ACTIVE today, and its pause row is closed as RESUMED.
