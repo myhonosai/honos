@@ -1514,7 +1514,7 @@ await check('Ask HON group summary: Summarize with HON appears once the group is
   await shot(page, 'ask-hon-group-summary-offer', true);
   hon.queue = ['notSummarizable'];
   await ask.getByRole('button', { name: 'Summarize with HON' }).click();
-  await ask.getByText(/HON can’t summarize those specialists yet/).waitFor();
+  await ask.getByText(/HON can’t summarize those specialists: their group changed/).waitFor();
   assert.equal(await ask.getByRole('button', { name: 'Retry the same request' }).count(), 0, 'a refusal is not retried');
   const posts = hon.posts.length;
   await ask.getByRole('button', { name: 'Summarize with HON' }).click();
