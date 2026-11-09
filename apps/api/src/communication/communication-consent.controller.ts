@@ -20,6 +20,7 @@ import type { Response } from 'express';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { CommunicationConsentHumanUiGuard } from './communication-consent-human-ui.guard.js';
 import { CommunicationConsentService } from './communication-consent.service.js';
 import { RecordCommunicationConsentDto } from './record-communication-consent.dto.js';
 
@@ -32,6 +33,7 @@ export class CommunicationConsentController {
   ) {}
 
   @Put(':personId/communication-consents/:channel')
+  @UseGuards(CommunicationConsentHumanUiGuard)
   @HttpCode(HttpStatus.CREATED)
   async record(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
@@ -83,6 +85,7 @@ export class CommunicationConsentController {
   }
 
   @Get(':personId/communication-consents')
+  @UseGuards(CommunicationConsentHumanUiGuard)
   async list(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
