@@ -233,6 +233,7 @@ async function api(route) {
   if (path === `${prefix}/billing/membership-pause-policy` || /\/billing\/memberships\/[0-9a-f-]{36}\/(pause|resume|cancel|refund-records|pauses-and-refunds)$/.test(path)) { const answered = await changesApiRoute(route, path, method, prefix); if (answered !== null) return answered; }
   if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
+  if (path.startsWith(`/api/v1/schools/${scope.schoolId}/champions/`)) { const answered = await championsApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
@@ -579,6 +580,66 @@ function resetChanges(over = {}) {
     members: new Map([[id(1500), { state: 'ACTIVE', version: 1, pauses: [], refunds: [] }]]), posts: [], replies: [], byKey: new Map(), reads: [], historyDenied: false }, over);
 }
 resetChanges();
+// ---------- Champions Club school page (synthetic) ----------
+// replies, one per POST: 'ok', 'unknown' (503, nothing stored). summaryDenied: the summary read answers 403.
+const CHP_COMMAND = { 'referral-code': 'champions-referral-code-issue', 'leaderboard-preference': 'champions-leaderboard-preference' };
+const chp = { code: null, mode: 'ANONYMOUS', posts: [], replies: [], byKey: new Map(), reads: [], summaryDenied: false };
+function resetChampions(over = {}) { Object.assign(chp, { code: null, mode: 'ANONYMOUS', posts: [], replies: [], byKey: new Map(), reads: [], summaryDenied: false }, over); }
+const chpAt = '2026-11-05T12:00:00.000Z';
+const chpMonths = Array.from({ length: 12 }, (_, i) => ({ month: `2026-${String(i + 1).padStart(2, '0')}`, qualified: i === 10 ? 2 : 0 }));
+const chpCounts = { pending: 1, qualified: 4, rejected: 1, refunded: 0, reversed: 0 };
+async function championsApiRoute(route, path, method, url) {
+  const request = route.request(), headers = request.headers(), tail = path.slice(`/api/v1/schools/${scope.schoolId}/champions/`.length);
+  const allowed = tail === 'leaderboard' ? ['period', 'month'] : [];
+  if ([...url.searchParams.keys()].some((k) => !allowed.includes(k)) || Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command')) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+  if (method === 'GET') {
+    if (headers['idempotency-key'] !== undefined || headers['x-hon-human-command'] !== undefined || request.postData()) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+    chp.reads.push(`${tail}${url.search}`);
+    if (tail === 'summary') return chp.summaryDenied ? json(route, 403, { code: 'CHAMPIONS_FORBIDDEN' }) : json(route, 200, { data: { schoolId: scope.schoolId,
+      referralCode: chp.code ? { code: chp.code, status: 'ACTIVE', issuedAt: chpAt } : null, program: { status: 'PUBLISHED', policyVersion: 3, financialRewards: 'DISABLED' }, referrals: chpCounts } });
+    if (tail === 'statistics') return json(route, 200, { data: { schoolId: scope.schoolId, referrals: chpCounts, monthlyQualified: chpMonths,
+      milestones: { program: { status: 'PUBLISHED', policyVersion: 3 }, reached: [{ rewardKind: 'FREE_MONTHS', milestoneCount: 3 }], nextMilestone: { rewardKind: 'LIFETIME_MEMBERSHIP', milestoneCount: 10, remaining: 6 }, qualifiedReferrals: 4 },
+      allTimeRank: 2, history: [{ occurredAt: chpAt, fromState: 'PENDING', toState: 'QUALIFIED', reason: 'QUALIFICATION_VERIFIED' }, { occurredAt: '2026-11-01T09:00:00.000Z', fromState: null, toState: 'PENDING', reason: 'CAPTURED' }],
+      historyLimit: 50, displayMode: chp.mode } });
+    if (tail === 'rewards') return json(route, 200, { data: { schoolId: scope.schoolId, qualifiedReferrals: 4, program: { status: 'PUBLISHED', policyVersion: 3 },
+      nextMilestone: { rewardKind: 'LIFETIME_MEMBERSHIP', milestoneCount: 10, remaining: 6 },
+      rewards: [{ rewardKind: 'REFERRER_CREDIT', beneficiaryRole: 'REFERRER', milestoneCount: null, creditMinor: 10000, freeMonths: null, lifetimeTier: null, aiAllowance: null, status: 'APPROVED', accruedAt: chpAt },
+        { rewardKind: 'FREE_MONTHS', beneficiaryRole: 'REFERRER', milestoneCount: 3, creditMinor: null, freeMonths: 2, lifetimeTier: null, aiAllowance: null, status: 'ACCRUED', accruedAt: chpAt }],
+      financialActivation: 'DISABLED' } });
+    if (tail === 'contests') return json(route, 200, { data: { schoolId: scope.schoolId, countsOnly: 'QUALIFIED', contests: [{ contestId: id(2390), name: 'Winter referral sprint',
+      description: 'Most qualified referrals between November and January.', termsReference: null, status: 'ACTIVE', startsAt: '2026-11-01T00:00:00.000Z', endsAt: '2027-01-31T23:59:59.000Z', minimumQualified: 2,
+      prizes: [{ placeFrom: 1, placeTo: 1, kind: 'ELECTRONICS', description: 'Tablet for the front desk', quantity: 1 }],
+      standings: [{ rank: 1, displayName: 'Synthetic Martial Arts Academy', anonymous: false, qualifiedReferrals: 2, isYou: true }], you: { qualifiedReferrals: 2, status: 'RANKED', rank: 1 }, won: false }] } });
+    if (tail === 'leaderboard') {
+      const period = url.searchParams.get('period'), month = url.searchParams.get('month');
+      if (!((period === 'ALL_TIME' && month === null) || (period === 'MONTH' && /^20\d{2}-(0[1-9]|1[0-2])$/.test(month ?? '')))) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+      const m = period === 'MONTH';
+      return json(route, 200, { data: { period, month: m ? month : null, limit: 25, countsOnly: 'QUALIFIED', timeZone: 'UTC',
+        standings: [{ rank: 1, displayName: m ? 'Northside Taekwondo' : 'Tiger Rock Dojang', anonymous: false, qualifiedReferrals: m ? 3 : 9, isYou: false },
+          { rank: 2, displayName: 'Synthetic Martial Arts Academy', anonymous: false, qualifiedReferrals: m ? 2 : 4, isYou: true },
+          { rank: 3, displayName: null, anonymous: true, qualifiedReferrals: 1, isYou: false }],
+        you: { schoolId: scope.schoolId, status: 'RANKED', rank: 2, qualifiedReferrals: m ? 2 : 4, displayMode: chp.mode } } });
+    }
+    return null;
+  }
+  if (method !== 'POST' || !CHP_COMMAND[tail]) return null;
+  const key = headers['idempotency-key'], body = JSON.parse(request.postData() ?? 'null');
+  chp.posts.push({ key, tail, command: headers['x-hon-human-command'], body });
+  if (headers['x-hon-human-command'] !== CHP_COMMAND[tail] || !/^application\/json/.test(headers['content-type'] ?? '')) return json(route, 403, { code: 'CHAMPIONS_FORBIDDEN' });
+  if (!key) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+  if (chp.byKey.has(key)) return json(route, 200, { data: { ...chp.byKey.get(key), replayed: true } });
+  if ((chp.replies.shift() ?? 'ok') === 'unknown') return json(route, 503, { code: 'CHAMPIONS_UNAVAILABLE_TRY_AGAIN' });
+  let receipt;
+  if (tail === 'referral-code') {
+    const created = chp.code === null; chp.code ??= 'K7M2Q9X4PA';
+    receipt = { schoolId: scope.schoolId, code: chp.code, status: 'ACTIVE', issuedAt: chpAt, created, replayed: false };
+  } else {
+    if (!body || !['ANONYMOUS', 'SCHOOL_NAME'].includes(body.displayMode) || Object.keys(body).length !== 1) return json(route, 400, { code: 'INVALID_CHAMPIONS_INPUT' });
+    chp.mode = body.displayMode; receipt = { schoolId: scope.schoolId, displayMode: chp.mode, version: 2, updatedAt: chpAt, replayed: false };
+  }
+  chp.byKey.set(key, receipt);
+  return json(route, 200, { data: receipt });
+}
 async function changesApiRoute(route, path, method, prefix) {
   const request = route.request(), headers = request.headers(), meta = { requestId: id(1950), correlationId: id(1950) };
   if (new URL(request.url()).search || ['x-hon-source', 'x-hon-action-request-id', 'x-hon-delegated-by-principal-id'].some((k) => headers[k] !== undefined)) return json(route, 400, { code: 'VALIDATION_FAILED' });
@@ -782,10 +843,45 @@ function resetPeople(over = {}) {
   [id(302), { personId: id(302), schoolId: scope.schoolId, givenName: 'Ben', familyName: 'Okafor', email: null, phoneE164: '+15555550102',
     version: 2, updatedAt: iso(-24), student: null, consents: { EMAIL: 'NOT_RECORDED', SMS: 'OPTED_OUT' } }]]);
   Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+  // Contact consent records (0217 rule source): one row per recorded channel. puts/replies are the consent commands' own.
+  ppl.consents = new Map([[id(301), new Map([['EMAIL', { channel: 'EMAIL', status: 'OPTED_IN', source: 'STAFF', capturedAt: '2026-10-01T16:00:00.000Z', version: 1, updatedAt: '2026-10-01T16:00:00.000Z' }]])],
+    [id(302), new Map([['SMS', { channel: 'SMS', status: 'OPTED_OUT', source: 'PARENT', capturedAt: '2026-10-02T16:00:00.000Z', version: 1, updatedAt: '2026-10-02T16:00:00.000Z' }]])]]);
+  Object.assign(ppl, { consentPuts: [], consentReplies: [], consentKeys: new Map(), consentReads: 0, consentDenied: false }, over.consent ?? {});
 }
 resetPeople();
+async function consentApiRoute(route, method, url, personId, channel) {
+  const request = route.request(), headers = request.headers(), meta = { requestId: id(960), correlationId: id(960) };
+  if (url.search || ['x-hon-source', 'x-hon-action-request-id', 'x-hon-delegated-by-principal-id'].some((k) => headers[k] !== undefined)) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+  const rows = ppl.consents.get(personId);
+  if (method === 'GET' && channel === null) {
+    ppl.consentReads++;
+    if (headers['idempotency-key'] !== undefined || headers['x-hon-human-command'] !== undefined) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+    if (ppl.consentDenied) return json(route, 403, { statusCode: 403, message: 'Forbidden' });
+    if (!rows) return json(route, 404, { statusCode: 404, message: 'Person was not found in this school.' });
+    return json(route, 200, { data: [...rows.values()].sort((a, b) => a.channel.localeCompare(b.channel)), meta });
+  }
+  if (method !== 'PUT' || channel === null) return null;
+  const key = headers['idempotency-key'], body = JSON.parse(request.postData() ?? '{}');
+  ppl.consentPuts.push({ key, channel, command: headers['x-hon-human-command'], body });
+  if (headers['x-hon-human-command'] !== 'communication.consent.record' || headers.origin !== origin || !/^application\/json/.test(headers['content-type'] ?? '')) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+  if (!key) return json(route, 409, { code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  if (ppl.consentKeys.has(key)) return json(route, 200, { data: ppl.consentKeys.get(key), meta: { ...meta, replayed: true } });
+  const next = ppl.consentReplies.shift() ?? 'ok';
+  if (next === 'unknown') return json(route, 503, { statusCode: 503, message: 'Service Unavailable' });
+  if (!rows) return json(route, 404, { statusCode: 404 });
+  const current = rows.get(channel);
+  if (current && body.expectedVersion === undefined) return json(route, 409, { code: 'VERSION_REQUIRED' });
+  if (current && body.expectedVersion !== current.version) return json(route, 409, { code: 'VERSION_CONFLICT' });
+  if (!current && body.expectedVersion !== undefined) return json(route, 409, { code: 'VERSION_NOT_ALLOWED_ON_CREATE' });
+  const saved = { channel, status: body.status, source: 'STAFF', capturedAt: new Date(body.capturedAt).toISOString(), version: (current?.version ?? 0) + 1, updatedAt: new Date().toISOString() };
+  rows.set(channel, saved); ppl.consentKeys.set(key, saved);
+  const person = ppl.records.get(personId); if (person && (channel === 'EMAIL' || channel === 'SMS')) person.consents[channel] = body.status;
+  return json(route, current ? 200 : 201, { data: saved, meta: { ...meta, replayed: false } });
+}
 const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents: { ...r.consents }, canEdit: ppl.canEdit });
 async function peopleApiRoute(route, path, method, url) {
+  const consent = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people/([0-9a-f-]{36})/communication-consents(?:/([A-Z]+))?$`));
+  if (consent) return consentApiRoute(route, method, url, consent[1], consent[2] ?? null);
   if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
     const q = (url.searchParams.get('query') ?? '').toLowerCase();
     const items = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
@@ -793,7 +889,7 @@ async function peopleApiRoute(route, path, method, url) {
     return json(route, 200, { data: items, meta: { requestId: id(900), correlationId: id(900) } });
   }
   const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
-  if (read && method === 'GET') { const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
+  if (read && method === 'GET') { ppl.recordReads = (ppl.recordReads ?? 0) + 1; const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
   if (method !== 'POST' || !['/api/v1/school/people/update', '/api/v1/school/people/birth-date'].includes(path)) return null;
   const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
   ppl.posts.push({ path, key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
@@ -1651,6 +1747,13 @@ async function peoplePage(viewport, { nextTheme = 'modern', language = 'en' } = 
   return { ctx, page, section };
 }
 const open = async (section, name) => { await section().getByRole('button', { name: new RegExp(name) }).click(); };
+/** Opens a person and waits for the new record and its consent card to be read, never the form already on screen. */
+const openFresh = async (section, name) => {
+  const records = ppl.recordReads ?? 0, consents = ppl.consentReads;
+  await open(section, name);
+  for (let i = 0; i < 200 && ((ppl.recordReads ?? 0) <= records || ppl.consentReads <= consents); i++) await new Promise((done) => setTimeout(done, 50));
+  await section().getByTestId('person-consents').getByRole('button').first().waitFor();
+};
 const TITLES = { en: ['People', 'Child details', 'Save changes'], ko: ['사람', '자녀 정보', '변경 사항 저장'], es: ['Personas', 'Datos del niño', 'Guardar cambios'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'en'],
   ['desktop-1440', { width: 1440, height: 900 }, 'big-button', 'en'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'],
@@ -1723,6 +1826,88 @@ await check('People: consent, busy and version refusals say what to do; a new sa
   assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Anna', 'reload shows the saved record');
   await ctx.close();
 });
+const CONSENT_TEXT = { en: ['Contact consent', 'Record opt-out', 'Record opt-out now', 'Opt-out recorded for email.', 'Opted out'],
+  ko: ['연락 동의', '수신 거부 기록', '지금 수신 거부 기록', '이메일 수신 거부가 기록되었습니다.', '수신 거부'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`People consent ${nextTheme} ${language} ${name}: record an email opt-out, then the address can change`, async () => {
+    resetPeople();
+    const [title, optOut, confirm, done, optedOut] = CONSENT_TEXT[language];
+    const { ctx, page, section } = await peoplePage(viewport, { nextTheme, language });
+    await open(section, 'Ana Rivera');
+    const card = () => section().getByTestId('person-consents');
+    await card().locator('[data-testid="consent-EMAIL"][data-status="OPTED_IN"]').waitFor({ timeout: 20000 });
+    assert.ok(await card().getByRole('heading', { name: title }).isVisible());
+    await card().getByTestId('consent-EMAIL').getByRole('button', { name: optOut }).click();
+    await card().getByTestId('consent-form').waitFor();
+    await noOverflow(page, `people-consent-${nextTheme}-${language}-${name}`);
+    await axe(page, `people-consent-${nextTheme}-${language}-${name}`);
+    await card().scrollIntoViewIfNeeded();
+    await shot(page, `people-consent-optout-form-${nextTheme}-${language}-${name}`, true);
+    await card().getByRole('button', { name: confirm }).click();
+    await card().getByTestId('consent-outcome').filter({ hasText: done }).waitFor();
+    await card().locator('[data-testid="consent-EMAIL"][data-status="OPTED_OUT"]').getByText(optedOut).waitFor();
+    assert.equal(ppl.consentPuts.length, 1);
+    const put = ppl.consentPuts[0];
+    assert.equal(put.channel, 'EMAIL'); assert.equal(put.command, 'communication.consent.record');
+    assert.deepEqual({ ...put.body, capturedAt: undefined }, { status: 'OPTED_OUT', source: 'STAFF', capturedAt: undefined, expectedVersion: 1 });
+    assert.ok(Math.abs(Date.parse(put.body.capturedAt) - Date.now()) < 120_000, 'recorded now');
+    assert.ok(ppl.consentReads >= 2, 'read again after the answer');
+    await shot(page, `people-consent-recorded-${nextTheme}-${language}-${name}`, true);
+    if (language === 'en') {
+      await section().locator('input[name="email"]').fill('new.parent@example.invalid');
+      await section().getByRole('button', { name: 'Save changes' }).click();
+      await section().getByText('Saved. Changed: email.').waitFor();
+    }
+    await ctx.close();
+  });
+}
+await check('People consent: agreement needs the attestation; an unknown answer replays the same key; Stop and a conflict read again', async () => {
+  resetPeople({ consent: { consentReplies: ['unknown'] } });
+  const { ctx, page, section } = await peoplePage({ width: 1280, height: 900 });
+  await open(section, 'Ana Rivera');
+  const card = () => section().getByTestId('person-consents');
+  await card().locator('[data-testid="consent-SMS"][data-status="NOT_RECORDED"]').waitFor({ timeout: 20000 });
+  await card().getByTestId('consent-SMS').getByRole('button', { name: 'Record agreement' }).click();
+  await card().getByRole('button', { name: 'Record agreement now' }).click();
+  assert.equal(ppl.consentPuts.length, 0, 'the attestation is required');
+  await card().getByRole('checkbox').check();
+  await shot(page, 'people-consent-optin-form', true);
+  await card().getByRole('button', { name: 'Record agreement now' }).click();
+  await card().getByTestId('consent-outcome').filter({ hasText: 'We could not confirm whether this was recorded' }).waitFor();
+  assert.equal(await card().getByRole('button', { name: 'Record agreement now' }).isDisabled(), true, 'locked while unknown');
+  await card().getByRole('button', { name: 'Try again' }).click();
+  await card().getByTestId('consent-outcome').filter({ hasText: 'Agreement recorded for text messages.' }).waitFor();
+  assert.equal(ppl.consentPuts.length, 2);
+  assert.equal(ppl.consentPuts[0].key, ppl.consentPuts[1].key); assert.deepEqual(ppl.consentPuts[0].body, ppl.consentPuts[1].body);
+  assert.equal(ppl.consentPuts[0].body.expectedVersion, undefined, 'a first record carries no version');
+  await card().locator('[data-testid="consent-SMS"][data-status="OPTED_IN"]').waitFor();
+  // Stop drops a kept request and reads again.
+  ppl.consentReplies.push('unknown');
+  await card().getByTestId('consent-SMS').getByRole('button', { name: 'Record opt-out' }).click();
+  await card().getByRole('button', { name: 'Record opt-out now' }).click();
+  await card().getByRole('button', { name: 'Stop and read again' }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="consent-outcome"]'));
+  assert.equal(await card().getByTestId('consent-form').count(), 0);
+  // Someone else changed it meanwhile: a conflict is final and reads again.
+  ppl.consents.get(id(301)).get('EMAIL').version = 5;
+  await card().getByTestId('consent-EMAIL').getByRole('button', { name: 'Record opt-out' }).click();
+  await card().getByRole('button', { name: 'Record opt-out now' }).click();
+  await card().getByTestId('consent-outcome').filter({ hasText: 'changed since it was read' }).waitFor();
+  assert.equal(await card().getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.notEqual(ppl.consentPuts.at(-1).key, ppl.consentPuts[0].key);
+  await axe(page, 'people-consent-conflict');
+  await ctx.close();
+});
+await check('People consent: a refused consent read shows the saved summary only, with no record buttons', async () => {
+  resetPeople({ consent: { consentDenied: true } });
+  const { ctx, section } = await peoplePage({ width: 1280, height: 900 });
+  await open(section, 'Ana Rivera');
+  const card = () => section().getByTestId('person-consents');
+  await card().getByText('Showing the saved summary only.', { exact: false }).waitFor({ timeout: 20000 });
+  await card().locator('[data-testid="consent-EMAIL"][data-status="OPTED_IN"]').waitFor();
+  assert.equal(await card().getByRole('button').count(), 0);
+  await ctx.close();
+});
 await check('People: a birth date correction needs a reason, may need the owner, and carries into the enrollment', async () => {
   resetPeople({ replies: ['owner', 'ok'] });
   const { ctx, page, section } = await peoplePage({ width: 390, height: 844 });
@@ -1789,7 +1974,8 @@ const retire = {
   },
   'open another person': async (page, section) => {
     await open(section, 'Ben Okafor');
-    await section().locator('input[name="givenName"]').waitFor();
+    // The click commits asynchronously: wait for Ben's record, not for whichever form is on screen.
+    await section().locator('input[name="givenName"][value="Ben"]').waitFor({ timeout: 10000 });
     assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Ben');
   },
   unmount: async (page, section) => {
@@ -1826,8 +2012,7 @@ for (const [command, field, value, button] of [['contact', 'familyName', 'Rivera
       assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired save did not end the session');
       assert.ok(await section().getByTestId('people-list').isVisible(), 'the current view stays shown');
       // A save that is still the one shown: its sign-in answer ends the session.
-      await open(section, 'Ana Rivera');
-      await section().locator('input[name="givenName"]').waitFor();
+      await openFresh(section, 'Ana Rivera');
       await save(section);
       await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
       assert.equal(ppl.posts.length, 2);
@@ -2951,6 +3136,78 @@ await check('Pause, cancel & refunds: turning pauses off removes Pause; leaving 
   await chgPage(second.page).getByTestId('membership-select').selectOption(id(1500));
   await chgPage(second.page).getByText("You cannot see this membership's pauses and refunds.").waitFor();
   assert.equal(await chgPage(second.page).getByTestId('membership-actions').count(), 0);
+  await second.ctx.close();
+});
+
+// ---------- Champions Club school page ----------
+const chpPage = (page) => page.getByTestId('champions-school');
+const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Referrals & Rewards'], ko: ['챔피언스 클럽', '4', '추천 및 보상'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`Champions Club ${nextTheme} ${language} ${name}: code, referrals, rewards, leaderboard, contests and history from the reads`, async () => {
+    resetChampions({ code: 'K7M2Q9X4PA' });
+    const [title, you] = CHP_TEXT[language];
+    const { ctx, page } = await ownershipPage('/staff/champions-club', viewport, { nextTheme, language });
+    await chpPage(page).getByTestId('champions-code-value').waitFor({ timeout: 20000 });
+    await chpPage(page).getByTestId('champions-history-row').first().waitFor({ timeout: 20000 });
+    await chpPage(page).getByTestId('champions-contest').waitFor({ timeout: 20000 });
+    await chpPage(page).getByTestId('champions-you').filter({ hasText: you }).waitFor({ timeout: 20000 });
+    assert.equal(await chpPage(page).locator('h1').innerText(), title);
+    assert.equal(await chpPage(page).getByTestId('champions-code-value').innerText(), 'K7M2Q9X4PA');
+    assert.equal(await chpPage(page).locator('tr[data-you="true"]').first().locator('td').first().innerText(), '2');
+    assert.ok(await page.locator('a[href="/staff/champions-club"]').count() >= 1, 'listed in school navigation');
+    assert.deepEqual(chp.posts, [], 'reading the page sends no command');
+    assert.ok(chp.reads.includes('leaderboard?period=ALL_TIME'));
+    await noOverflow(page, `champions-${nextTheme}-${language}-${name}`);
+    await axe(page, `champions-${nextTheme}-${language}-${name}`);
+    await shot(page, `champions-${nextTheme}-${language}-${name}`, true);
+    await ctx.close();
+  });
+}
+await check('Champions Club: create the referral code, switch to this UTC month, and show the school name, each read again from the server', async () => {
+  resetChampions();
+  const { ctx, page } = await ownershipPage('/staff/champions-club', { width: 1280, height: 900 });
+  await chpPage(page).getByTestId('champions-code-create').waitFor({ timeout: 20000 });
+  await shot(page, 'champions-no-code', true);
+  await chpPage(page).getByTestId('champions-code-create').click();
+  await chpPage(page).getByTestId('champions-outcome').filter({ hasText: 'Your referral code is ready.' }).waitFor();
+  await chpPage(page).getByTestId('champions-code-value').filter({ hasText: 'K7M2Q9X4PA' }).waitFor();
+  assert.deepEqual({ tail: chp.posts[0].tail, command: chp.posts[0].command, body: chp.posts[0].body }, { tail: 'referral-code', command: 'champions-referral-code-issue', body: {} });
+  assert.ok(chp.reads.filter((r) => r === 'summary').length >= 2, 'read again after the answer');
+  await chpPage(page).getByTestId('champions-period-MONTH').click();
+  await chpPage(page).getByText('Northside Taekwondo').waitFor();
+  const month = new Date().toISOString().slice(0, 7);
+  assert.ok(chp.reads.includes(`leaderboard?period=MONTH&month=${month}`), `asked for ${month}`);
+  await chpPage(page).getByTestId('champions-display').getByLabel('Show our school name').check();
+  await chpPage(page).getByTestId('champions-display').getByRole('button', { name: 'Save' }).click();
+  await chpPage(page).getByTestId('champions-outcome').filter({ hasText: 'Show our school name' }).waitFor();
+  assert.deepEqual({ tail: chp.posts[1].tail, command: chp.posts[1].command, body: chp.posts[1].body }, { tail: 'leaderboard-preference', command: 'champions-leaderboard-preference', body: { displayMode: 'SCHOOL_NAME' } });
+  await page.waitForFunction(() => document.querySelector('[data-testid="champions-display"] input[value="SCHOOL_NAME"]')?.checked === true);
+  assert.equal(new Set(chp.posts.map((p) => p.key)).size, 2, 'a fresh key for each command');
+  await axe(page, 'champions-after-commands');
+  await shot(page, 'champions-after-commands', true);
+  await ctx.close();
+});
+await check('Champions Club: an unknown outcome keeps the same key for Try again, Stop reads again, leaving the tab hides the code, a refused read shows nothing', async () => {
+  resetChampions({ code: 'K7M2Q9X4PA', replies: ['unknown', 'unknown'] });
+  const { ctx, page } = await ownershipPage('/staff/champions-club', { width: 1280, height: 900 });
+  await chpPage(page).getByTestId('champions-display').waitFor({ timeout: 20000 });
+  await chpPage(page).getByTestId('champions-display').getByLabel('Show our school name').check();
+  await chpPage(page).getByTestId('champions-display').getByRole('button', { name: 'Save' }).click();
+  await chpPage(page).getByRole('button', { name: 'Try again' }).waitFor();
+  assert.equal(await chpPage(page).getByTestId('champions-display').getByRole('button', { name: 'Save' }).isDisabled(), true, 'locked while a command is kept');
+  await chpPage(page).getByRole('button', { name: 'Try again' }).click();
+  await chpPage(page).getByRole('button', { name: 'Try again' }).waitFor();
+  assert.equal(chp.posts.length, 2); assert.equal(chp.posts[0].key, chp.posts[1].key);
+  await chpPage(page).getByRole('button', { name: 'Stop and read again' }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="champions-outcome"]'));
+  assert.equal(chp.mode, 'ANONYMOUS');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('K7M2Q9X4PA'));
+  await ctx.close();
+  resetChampions({ code: 'K7M2Q9X4PA', summaryDenied: true });
+  const second = await ownershipPage('/staff/champions-club', { width: 1280, height: 900 });
+  await chpPage(second.page).getByTestId('champions-code').getByText('Your access does not include the Champions Club at this school.').waitFor({ timeout: 20000 });
+  assert.ok(!(await chpPage(second.page).innerText()).includes('K7M2Q9X4PA'));
   await second.ctx.close();
 });
 

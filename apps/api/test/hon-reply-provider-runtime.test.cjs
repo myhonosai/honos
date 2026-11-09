@@ -92,6 +92,7 @@ test('HON prompt keeps the owner identities: Kai teaches, Claire is business per
   assert.match(HON_REPLY_SYSTEM_PROMPT, /Kai, the teaching and curriculum/);
   assert.match(HON_REPLY_SYSTEM_PROMPT, /never call Claire a teaching assistant/);
   assert.match(HON_REPLY_SYSTEM_PROMPT, /cannot take any action/);
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /"Recorded facts".*"HON's view"/, 'a group summary keeps recorded facts apart from interpretation');
   for (const file of ['src/ai/hon-reply-provider-runtime.ts', 'src/hon-conversation/hon-reply.service.ts']) {
     const s = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
     assert(!/invokeLLM|generateText|openai\//i.test(s));

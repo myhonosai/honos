@@ -7,7 +7,7 @@ import type { ShellKey } from './copy';
  * prefill, which the destination re-verifies server-side.
  */
 export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'crm' | 'students' | 'billing' | 'classes' | 'attendance' | 'marketing'
-  | 'community' | 'analytics' | 'staff' | 'settings';
+  | 'referrals' | 'community' | 'analytics' | 'staff' | 'settings';
 export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean }>;
 export type SchoolShellItem = Readonly<{ key: SchoolShellIcon; titleKey: ShellKey; routes: readonly SchoolShellRoute[] }>;
 
@@ -15,8 +15,8 @@ const r = (href: string, titleKey: ShellKey, scoped = false): SchoolShellRoute =
 
 /**
  * Owner blueprint (2026-11-06) section 9 information architecture. Areas with no
- * route yet (Referrals & Rewards, Connections) are deliberately absent until a
- * connected page exists; nothing links to an inert screen.
+ * route yet (Connections) are deliberately absent until a connected page exists;
+ * nothing links to an inert screen.
  */
 export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'home', titleKey: 'navHome', routes: [r('/staff/dashboard', 'routeOverview', true), r('/staff/operations', 'routeOperationsReport', true), r('/staff/command-center', 'routeCommandCenter')] },
@@ -37,6 +37,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'marketing', titleKey: 'navMarketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/forms', 'routeForms'),
     r('/staff/marketing/intake', 'routeIntake'), r('/staff/creative-studio', 'routeCreativeStudio')] },
+  { key: 'referrals', titleKey: 'navReferrals', routes: [r('/staff/champions-club', 'routeChampions')] },
   { key: 'community', titleKey: 'navCommunity', routes: [r('/community', 'routeCommunity'), r('/community/marketplace', 'routeMarketplace')] },
   { key: 'analytics', titleKey: 'navAnalytics', routes: [r('/staff/health-score', 'routeHealthScore'), r('/staff/planning/revenue', 'routeRevenuePlanning')] },
   { key: 'staff', titleKey: 'navStaff', routes: [r('/staff/work', 'routeWork'), r('/staff/automation/rules', 'routeAutomation'), r('/staff/team/invitations', 'routeTeam', true),
