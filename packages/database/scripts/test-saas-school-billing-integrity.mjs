@@ -142,7 +142,7 @@ try{
 
  // A: registered through HQ provisioning, a second school A2 in the same organization, and a front-desk clerk without billing.hon.view.
  const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Billing Reads Martial Arts LLC',
-  displayName:'Billing Reads Martial Arts',schoolName:'Billing Reads Main',schoolSlug:`b51-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
+  displayName:'Billing Reads Martial Arts',schoolName:'Billing Reads Main',schoolSlug:`b51-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K(),expectedPrincipalId:humans.owner.id});
  A={id:provisioned.organizationId,school:provisioned.schoolId,school2:randomUUID(),clerkRole:randomUUID()};
  // This fixture stands in for a school provisioned before D9 (0185 holds new provisioning SUSPENDED).
  await activatePreD9ProvisionedSchool(admin,provisioned.organizationId);
@@ -337,15 +337,30 @@ try{
  const shadow=async org=>{const r=await dryRun(org);return [r.dryRun.wouldBeState,r.dryRun.reason,r.dryRun.enforcement];};
  const rA=await dryRun(A.id);
  assert.deepEqual([rA.program.status,rA.program.mutationsEnabled,rA.proposedTerms.status,rA.proposedTerms.graceDays,rA.proposedTerms.suspendAfterDays,rA.dryRun.wouldBeState],
-  ['INACTIVE',false,'PROPOSED',7,21,'ACTIVE']);
+  ['INACTIVE',false,'PROPOSED',7,7,'ACTIVE']);
+ // Proposed terms v2 (owner suspension policy): grace counted from the failed renewal due date, then 90 days of
+ // verified-owner CRM read-only access, then CRM locked with billing recovery open.
+ assert.deepEqual([rA.proposedTerms.policyVersion,rA.proposedTerms.graceBasis,rA.proposedTerms.ownerReadOnlyDays,rA.proposedTerms.afterReadOnlyEffect],
+  [2,'FAILED_RENEWAL_DUE_DATE',90,'CRM_LOCKED_BILLING_RECOVERY_AND_SUPPORT_OPEN']);
  assert.deepEqual(await shadow(O.F.id),['ACTIVE','PROVISIONED_WITHOUT_SUBSCRIPTION','NONE']);
  assert.deepEqual(await shadow(O.E.id),['ENDED','REFUNDED','NONE']);
  assert.deepEqual(await shadow(O.W.id),['SUSPENDED','DISPUTE_OPEN','NONE']);
- // D: about 10 days unpaid (40 days since its start, minus its paid month) is past the 7-day grace: RESTRICTED; 14 days later SUSPENDED.
+ // D: about 10 days unpaid (40 days since its start, minus its paid month) is past the 7-day grace: under terms v2
+ // there is no restricted stage, so the dry run says SUSPENDED (enforcement NONE); 14 days later still SUSPENDED.
  const rD=await dryRun(O.D.id);
  const daysD=Math.floor((Date.now()-Date.parse(rD.dryRun.condition.unpaidSince))/DAY);
  assert.ok(daysD>7&&daysD<=21,String(daysD));
- assert.deepEqual([rD.dryRun.wouldBeState,rD.dryRun.daysUnpaid,rD.dryRun.premiumAiWouldBeSuspended,rD.dryRun.condition.paymentStatus],['RESTRICTED',daysD,true,'PAST_DUE']);
+ assert.deepEqual([rD.dryRun.wouldBeState,rD.dryRun.daysUnpaid,rD.dryRun.premiumAiWouldBeSuspended,rD.dryRun.condition.paymentStatus],['SUSPENDED',daysD,true,'PAST_DUE']);
+ // In-app standing: the entitlement is still in effect (paid access is INACTIVE, nothing is enforced), so the owner is
+ // told about the payment issue with the grace end counted from the renewal due date; no owner window exists.
+ const stD=await reads.readAccessStanding(H('ownerD'),O.D.school);
+ assert.deepEqual([stD.state,stD.paymentIssue,stD.paymentStatus,stD.renewalDueAt,Date.parse(stD.graceEndsAt)-Date.parse(stD.renewalDueAt),stD.suspendedAt,stD.ownerReadOnlyUntil,stD.billingRecoveryOpen,stD.policyVersion,stD.paidAccessProgram],
+  ['PAYMENT_ISSUE_GRACE_ENDED',true,'PAST_DUE',rD.dryRun.condition.unpaidSince,7*DAY,null,null,true,2,'INACTIVE']);
+ const stF=await reads.readAccessStanding(H('ownerF'),O.F.school);
+ assert.deepEqual([stF.state,stF.paymentIssue,stF.graceEndsAt],['IN_GOOD_STANDING',false,null]);
+ // C: suspended entitlement with no recorded past-due suspension: no owner CRM window, billing still readable.
+ const stC=await reads.readAccessStanding(H('ownerC'),O.C.school);
+ assert.deepEqual([stC.state,stC.suspendedAt,stC.ownerReadOnlyUntil,stC.billingRecoveryOpen],['NO_ACCESS',null,null,true]);
  assert.deepEqual(await writes(),writesBefore,'school reads and the dry run write nothing');
  await elapse(subD.subscriptionId,14);
  const rD2=await dryRun(O.D.id);
@@ -353,6 +368,7 @@ try{
  assert.deepEqual([rD2.dryRun.wouldBeState,rD2.dryRun.daysUnpaid>21,rD2.dryRun.daysUnpaid-daysD>=13],['SUSPENDED',true,true]);
  await deny(dryRun(randomUUID()),404,'SAAS_UNAVAILABLE');
  await deny(reads.readAccessReadiness(H('support'),A.id),403,'SAAS_FORBIDDEN');
+ await deny(reads.readAccessStanding(H('support'),O.D.school),403,'SAAS_FORBIDDEN');
 
  // ---------- 9. nothing changed: entitlements, family billing, audit/outbox, programs ----------
  const after=await untouched();

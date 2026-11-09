@@ -80,7 +80,7 @@ try{
   d.founderProgram={...d.founderProgram,eligibility:'ANY_ACTIVE_ORGANIZATION',opensAt:iso(Date.now()-3600_000)};
   await billing.publishCatalog(H('owner'),(await billing.createCatalogDraft(H('owner'),d,K())).catalog.catalogId,K());
   const provisioned=await new HqOnboardingService(database).provisionInitialSchool({externalSubject:H('owner')},{legalName:'Sandbox Test Dojo LLC',
-   displayName:'Sandbox Test Dojo',schoolName:'Sandbox Test Dojo Main',schoolSlug:`sandbox-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K()});
+   displayName:'Sandbox Test Dojo',schoolName:'Sandbox Test Dojo Main',schoolSlug:`sandbox-${randomUUID().slice(0,8)}`,timezone:'America/Chicago',initialTier:'CORE',idempotencyKey:K(),expectedPrincipalId:humans.owner.id});
   await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 minute')",
    [provisioned.organizationId,provisioned.schoolId,humans.schoolOwner.id,provisioned.ownerRoleId,humans.owner.id]);
   const program=(await payments.setPaymentProgram(H('owner'),{action:'ENABLE_TEST_MODE',expectedVersion:1,provider:'STRIPE',

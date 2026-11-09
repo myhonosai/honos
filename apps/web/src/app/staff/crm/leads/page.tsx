@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { HON_SESSION_COOKIE, verifySession, sessionConfig } from '@hon/auth';
-import { CrmLeadsWorkbench } from '../../../../components/crm-leads-workbench';
+import { CrmMembershipJourney } from '../../../../components/crm-membership-journey';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,5 +26,5 @@ export default async function CrmLeadsPage({ searchParams }: CrmLeadsPageProps) 
     // The session may expire after the layout gate. Never render a stale CRM view.
     redirect('/auth/login');
   }
-  return <CrmLeadsWorkbench key={sessionViewKey} sessionSubject={sessionSubject} initialScope={{ organizationId: value(query.organizationId), schoolId: value(query.schoolId) }} />;
+  return <CrmMembershipJourney key={sessionViewKey} sessionSubject={sessionSubject} initialScope={{ organizationId: value(query.organizationId), schoolId: value(query.schoolId) }} />;
 }

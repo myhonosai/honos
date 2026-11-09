@@ -1,6 +1,18 @@
 {
   "routes": [
     {
+      "path": "/staff/account-status",
+      "title": "HON | School Account & Usage"
+    },
+    {
+      "path": "/staff/entry",
+      "title": "HON | School Workspace"
+    },
+    {
+      "path": "/auth/access",
+      "title": "HON | Access not verified"
+    },
+    {
       "path": "/",
       "title": "HON Complete | AI Command Center"
     },
@@ -15,6 +27,22 @@
     {
       "path": "/hq/schools",
       "title": "HON HQ | School Directory"
+    },
+    {
+      "path": "/hq/schools/access",
+      "title": "HON HQ | School access"
+    },
+    {
+      "path": "/hq/schools/access/policy",
+      "title": "HON HQ | Exception policy"
+    },
+    {
+      "path": "/hq/schools/:schoolId",
+      "title": "HON HQ | School detail"
+    },
+    {
+      "path": "/hq/schools/owners",
+      "title": "HON HQ | School owners"
     },
     {
       "path": "/hq/ai-providers",
@@ -93,6 +121,26 @@
       "title": "HON | Lead Sources & Intake Monitor"
     },
     {
+      "path": "/staff/creative-studio",
+      "title": "HON | Creative Studio"
+    },
+    {
+      "path": "/staff/people",
+      "title": "HON | People"
+    },
+    {
+      "path": "/staff/crm",
+      "title": "HON | Leads"
+    },
+    {
+      "path": "/staff/schedule",
+      "title": "HON | Class rosters"
+    },
+    {
+      "path": "/staff/marketing",
+      "title": "HON | Marketing"
+    },
+    {
       "path": "/forms/:publicId",
       "title": "School Enquiry Form"
     },
@@ -149,8 +197,24 @@
       "title": "Human membership renewal reviews"
     },
     {
+      "path": "/staff/memberships",
+      "title": "HON | Memberships"
+    },
+    {
+      "path": "/staff/owners",
+      "title": "HON | School owners"
+    },
+    {
       "path": "/staff/billing/memberships",
       "title": "Human membership activation only"
+    },
+    {
+      "path": "/staff/billing/membership-dates",
+      "title": "HON OS | Membership dates and history"
+    },
+    {
+      "path": "/staff/billing/membership-changes",
+      "title": "HON | Pause, cancel & refunds"
     },
     {
       "path": "/staff/billing/invoices",
@@ -195,6 +259,10 @@
     {
       "path": "/staff/dashboard",
       "title": "HON | Staff Operations Dashboard"
+    },
+    {
+      "path": "/staff/operations",
+      "title": "HON | Operations Report"
     },
     {
       "path": "/staff/command-center",
@@ -297,6 +365,10 @@
       "title": "HON HQ | Ai Costs"
     },
     {
+      "path": "/hq/ai-safety",
+      "title": "HON HQ | Ai Safety"
+    },
+    {
       "path": "/hq/approvals",
       "title": "HON HQ | Approvals"
     },
@@ -377,8 +449,32 @@
       "title": "HON OS | Owner invitation"
     },
     {
+      "path": "/account/staff-invitation",
+      "title": "HON OS | Accept staff invitation"
+    },
+    {
+      "path": "/staff/team/invitations",
+      "title": "HON OS | Staff invitations"
+    },
+    {
       "path": "/hq/school-owner-invitations",
       "title": "HON HQ | Owner invitations"
+    },
+    {
+      "path": "/staff/crm/journey",
+      "title": "Human CRM leads"
+    },
+    {
+      "path": "/staff/crm/lead-memberships",
+      "title": "HON | CRM Membership Recovery"
+    },
+    {
+      "path": "/staff/family-access",
+      "title": "HON OS | Family access"
+    },
+    {
+      "path": "/account/family-invitation",
+      "title": "HON OS | Family invitation"
     },
     {
       "path": "/staff/founder-setup",

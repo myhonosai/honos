@@ -1,5 +1,11 @@
 import { SchoolOwnerInvitationController, SchoolAccountHumanGuard } from './accounts/school-owner-invitation.controller.js';
 import { SchoolOwnerInvitationService } from './accounts/school-owner-invitation.service.js';
+import { SchoolOwnershipController } from './accounts/school-ownership.controller.js';
+import { SchoolOwnershipService } from './accounts/school-ownership.service.js';
+import { SchoolStaffInvitationController, SchoolStaffAccountHumanGuard } from './accounts/school-staff-invitation.controller.js';
+import { SchoolStaffInvitationService } from './accounts/school-staff-invitation.service.js';
+import { SchoolFamilyAccessInvitationController, SchoolFamilyAccountHumanGuard } from './accounts/school-family-access-invitation.controller.js';
+import { SchoolFamilyAccessInvitationService } from './accounts/school-family-access-invitation.service.js';
 import { SaasSubscriptionGenerationService } from './saas-pricing/saas-subscription-generation.service.js';
 import { SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController } from './saas-pricing/saas-subscription-generation.controller.js';
 import { SaasPriceAcceptanceService } from './saas-pricing/saas-price-acceptance.service.js';
@@ -31,9 +37,16 @@ import { MARKETING_PROVIDER_RUNTIME, OpenRouterRuntime } from './ai/provider-run
 import { ChadFollowUpAssistantController, ChadFollowUpAssistantHumanUiGuard } from './chad-follow-up-assistant/chad-follow-up-assistant.controller.js';
 import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-follow-up-assistant.service.js';
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
+import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
+import { HonReplyService } from './hon-conversation/hon-reply.service.js';
+import { CREATIVE_PROVIDER_RUNTIME, UnconfiguredCreativeProviderRuntime } from './creative-studio/creative-provider-runtime.js';
+import { CreativeStudioService } from './creative-studio/creative-studio.service.js';
+import { CreativeStudioController } from './creative-studio/creative-studio.controller.js';
 import { TeachingAssistantController, TeachingAssistantHumanUiGuard } from './teaching-assistant/teaching-assistant.controller.js';
 import { TeachingAssistantService } from './teaching-assistant/teaching-assistant.service.js';
 import { CLAIRE_PROVIDER_RUNTIME, OpenRouterClaireRuntime } from './ai/claire-provider-runtime.js';
+import { AiTeamReadinessController, AiTeamReadinessService } from './ai-team/ai-team-readiness.controller.js';
+import { HonConversationController, HonConversationHumanUiGuard, HonConversationService } from './hon-conversation/hon-conversation.controller.js';
 import { MarketplaceController } from './marketplace/marketplace.controller.js';
 import { MarketplaceService } from './marketplace/marketplace.service.js';
 import { MarketplaceHumanUiGuard } from './marketplace/marketplace.dto.js';
@@ -81,14 +94,21 @@ import { LeadRegistrationRecoveryHumanUiGuard } from './crm/lead-registration-re
 import { TrialAppointmentController } from './crm/trial-appointment.controller.js';
 import { TrialAppointmentService } from './crm/trial-appointment.service.js';
 import { TrialAppointmentOutcomeController } from './crm/trial-appointment-outcome.controller.js';
+import { TrialAppointmentReadController } from './crm/trial-appointment-read.controller.js';
 import { TrialAppointmentOutcomeService } from './crm/trial-appointment-outcome.service.js';
 import { ActionEngineService } from './action/action-engine.service.js';
 import { InterfaceThemeController } from './preferences/interface-theme.controller.js';
 import { InterfaceThemeService } from './preferences/interface-theme.service.js';
 import { MembershipController } from './billing/membership.controller.js';
 import { MembershipService } from './billing/membership.service.js';
+import { CrmLeadMembershipsController } from './billing/crm-lead-memberships.controller.js';
+import { CrmLeadMembershipsService } from './billing/crm-lead-memberships.service.js';
 import { MembershipDateRevisionController } from './billing/membership-date-revision.controller.js';
 import { MembershipDateRevisionService } from './billing/membership-date-revision.service.js';
+import { MembershipPauseController } from './billing/membership-pause.controller.js';
+import { MembershipPauseService } from './billing/membership-pause.service.js';
+import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
+import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
 import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -104,6 +124,8 @@ import { PipelineService } from './crm/pipeline.service.js';
 import { HqOnboardingController } from './hq/hq-onboarding.controller.js';
 import { HqOnboardingService } from './hq/hq-onboarding.service.js';
 import { PersonController } from './people/person.controller.js';
+import { SchoolPersonRecordController, SchoolPersonRecordHumanGuard } from './people/school-person-record.controller.js';
+import { SchoolPersonRecordService } from './people/school-person-record.service.js';
 import { PersonService } from './people/person.service.js';
 import { ActionReviewController, ActionApprovalWorkbenchController } from './action/action-review.controller.js';
 import { FamilyController } from './families/family.controller.js';
@@ -154,8 +176,12 @@ import { ClassSessionService } from './schedule/class-session.service.js';
 import { ClassSessionsReadController } from './schedule/class-sessions-read.controller.js';
 import { ClassSessionsReadHumanUiGuard } from './schedule/class-sessions-read-human-ui.guard.js';
 import { ClassSessionsReadService } from './schedule/class-sessions-read.service.js';
+import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
+import { ClassSessionPagesService } from './schedule/class-session-pages.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
+import { ClassSessionRosterController } from './schedule/class-session-roster.controller.js';
+import { ClassSessionRosterService } from './schedule/class-session-roster.service.js';
 import { AttendancePolicyService } from './schedule/attendance-policy.service.js';
 import { AttendancePolicyController } from './schedule/attendance-policy.controller.js';
 import { AttendanceHumanUiGuard } from './schedule/attendance-human-ui.guard.js';
@@ -209,11 +235,16 @@ import { ChampionsHqController, ChampionsSchoolController } from './champions/ch
 import { ChampionsClubService } from './champions/champions-club.service.js';
 import { ChampionsCommandGuard, ChampionsReadGuard } from './champions/champions-club.guards.js';
 import { SaasBillingHqController, SaasCreditsSchoolController } from './saas-billing/saas-billing.controller.js';
+import { SaasCreativeWalletHqController, SaasCreativeWalletSchoolController } from './saas-billing/saas-creative-wallet.controller.js';
+import { SaasCreativeWalletService } from './saas-billing/saas-creative-wallet.service.js';
 import { SaasBillingService } from './saas-billing/saas-billing.service.js';
 import { SaasOffersHqController, SaasOffersSchoolController } from './saas-billing/saas-offers.controller.js';
 import { PaymentWebhookController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
 import { SaasPaymentsService } from './payments/saas-payments.service.js';
-import { SaasExceptionPolicyHqController, SaasAccessExceptionCommandsHqController, SaasAccessExceptionsHqController, SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
+import { AiSpendPauseHqController, AiSpendPauseService } from './ai-spend/ai-spend-pause.controller.js';
+import { AiUnknownResolutionHqController, AiUnknownResolutionService } from './ai-spend/ai-unknown-resolution.controller.js';
+import { AiSchoolUsageHqController, AiSchoolUsageService } from './ai-spend/ai-school-usage.controller.js';
+import { SaasExceptionPolicyHqController, SaasAccessExceptionCommandsHqController, SaasAccessExceptionsHqController, SaasAccessOverviewHqController, HqSchoolDetailController, SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
 import { SaasSchoolBillingService } from './school-billing/saas-school-billing.service.js';
 import { LanguageCommandGuard, LanguagePreferencesService, LanguageReadGuard, MyLanguagePreferenceController, SchoolLanguageDefaultController } from './preferences/language-preferences.controller.js';
 import { PAYMENT_PROVIDER_ADAPTER, UnconfiguredPaymentProvider } from './payments/payment-provider.js';
@@ -259,7 +290,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
 
 @Module({
   imports: [ClassPassModule, KioskModule],
-  controllers: [SchoolOwnerInvitationController,OwnerLaunchController,
+  controllers: [SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
     StaffCurriculumLibraryController, ParentCurriculumLibraryController,
     AchievementsController, ParentAchievementsController,
@@ -289,7 +320,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     FoundationController,
     SessionContextController,
     IdentityController,
-    PersonController,
+    PersonController, SchoolPersonRecordController,
     FamilyController,
     ParentJourneyViewController,
     ParentBillingViewController,
@@ -306,12 +337,15 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     LeadRegistrationRecoveryController,
     TrialAppointmentController,
     TrialAppointmentOutcomeController,
+    TrialAppointmentReadController,
     PipelineController,
     CurriculumController,
     ProgramController,
     ClassSessionController,
     ClassSessionsReadController,
+    ClassSessionPagesController,
     AttendanceController,
+    ClassSessionRosterController,
     AttendancePolicyController,
     ClassBookingController,
     PlannedAbsenceReviewController,
@@ -341,7 +375,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ParentTestingStatusController,
     InterfaceThemeController,
     MembershipController,
+    CrmLeadMembershipsController,
     MembershipDateRevisionController,
+    MembershipPauseController,
+    SchoolMembershipListController,
     MembershipStatusReportController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
@@ -357,10 +394,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
-  providers: [SchoolOwnerInvitationService, SchoolAccountHumanGuard,
+  providers: [SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
     SaasSubscriptionGenerationService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
     CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard,
@@ -386,6 +423,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ChadFollowUpAssistantService,
     ChadFollowUpAssistantHumanUiGuard,
     { provide: CHAD_PROVIDER_RUNTIME, useFactory: () => new OpenRouterChadRuntime() },
+    { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
+    // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
+    { provide: CREATIVE_PROVIDER_RUNTIME, useFactory: () => new UnconfiguredCreativeProviderRuntime() },
     TeachingAssistantService,
     TeachingAssistantHumanUiGuard,
     { provide: CLAIRE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterClaireRuntime() },
@@ -429,7 +469,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionHumanUiGuard,
     ClassSessionsReadService,
     ClassSessionsReadHumanUiGuard,
+    ClassSessionPagesService,
+    ClassSessionPagesHumanUiGuard,
     AttendanceService,
+    ClassSessionRosterService,
     AttendancePolicyService,
     AttendanceHumanUiGuard,
     ClassBookingHumanUiGuard,
@@ -464,7 +507,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ActionEngineService,
     InterfaceThemeService,
     MembershipService,
+    CrmLeadMembershipsService,
     MembershipDateRevisionService,
+    MembershipPauseService,
+    SchoolMembershipListService,
+    SchoolMembershipListHumanUiGuard,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
@@ -482,7 +529,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
-    SaasBillingService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
+    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, AiSpendPauseService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
     // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
     { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },
     HqOverviewService,

@@ -3,10 +3,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ActionReviewItem, AiDraftWorkItem, CommandCenterRecommendation } from '@hon/contracts';
 import type { HonInterfaceTheme } from '@hon/design-system';
-import { HON_MARK_SOURCE } from '../classic-dashboard/portraits';
+import { NO_SCHOOL_SHELL, useSchoolShell } from '../school-shell/context';
 import type { HonCommandSnapshot, HonSection } from './hon-command-data';
 import { HON_CONVERSATION_BOUNDARY, honComposerEnabled } from './hon-conversation';
-import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, teachingAiPortrait, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
+import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, teachingAiPortrait, aiTeamPortrait, HON_CORE_SOURCE, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
 import styles from './hon-command.module.css';
 
 /** The existing requester-scoped reads return at most 20 records per source across all schools. */
@@ -33,6 +33,8 @@ export interface HonWorkspaceViewProps {
   onClose?: (() => void) | undefined;
   expandHref?: string | undefined;
   returnHref?: string | undefined;
+  /** The live conversation for a verified school. Without it the honest not-connected boundary is shown. */
+  conversation?: React.ReactNode | undefined;
 }
 
 const STATUS_WORDS = (value: string): string => value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
@@ -48,11 +50,27 @@ export function HonMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }): React.R
     if (element?.complete && element.naturalWidth === 0) setFailed(true);
   }, []);
   return <span className={styles.mark} data-size={size} aria-hidden="true">
-    {failed ? <span className={styles.markFallback}>H</span> : <img ref={image} src={HON_MARK_SOURCE} alt="" onError={() => setFailed(true)} />}
+    {failed ? <span className={styles.markFallback}>H</span> : <img ref={image} src={HON_CORE_SOURCE} alt="" onError={() => setFailed(true)} />}
   </span>;
 }
 
-export function AgentPortrait({ agent, size = 'md' }: { agent: Pick<HonCommandAgent, 'name' | 'color' | 'portrait'>; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
+/**
+ * Inside the school app the viewer's team art style chip chooses the portrait style
+ * (presentation only). Outside it the caller's portrait is kept unchanged.
+ */
+function useStyledPortrait(id: string | undefined, fallback: string): string {
+  const shell = useSchoolShell();
+  if (shell === NO_SCHOOL_SHELL || !id) return fallback;
+  return aiTeamPortrait(id, shell.artStyle) ?? fallback;
+}
+
+export function AgentPortrait(props: { agent: Pick<HonCommandAgent, 'name' | 'color' | 'portrait'> & { id?: string }; size?: 'sm' | 'md' | 'lg' }): React.ReactElement {
+  const source = useStyledPortrait(props.agent.id, props.agent.portrait);
+  // Keyed by source so a style switch retries the image instead of keeping an earlier fallback.
+  return <PortraitImage key={source} {...props} source={source} />;
+}
+
+function PortraitImage({ agent, size = 'md', source }: { agent: Pick<HonCommandAgent, 'name' | 'color'>; size?: 'sm' | 'md' | 'lg'; source: string }): React.ReactElement {
   const [failed, setFailed] = useState(false);
   const image = useRef<HTMLImageElement>(null);
   useEffect(() => {
@@ -60,7 +78,7 @@ export function AgentPortrait({ agent, size = 'md' }: { agent: Pick<HonCommandAg
     if (element?.complete && element.naturalWidth === 0) setFailed(true);
   }, []);
   return <span className={styles.portrait} data-size={size} style={{ '--agent': agent.color } as React.CSSProperties} aria-hidden="true">
-    {failed ? <span>{agent.name.charAt(0)}</span> : <img ref={image} src={agent.portrait} alt="" onError={() => setFailed(true)} />}
+    {failed ? <span>{agent.name.charAt(0)}</span> : <img ref={image} src={source} alt="" onError={() => setFailed(true)} />}
   </span>;
 }
 
@@ -127,10 +145,10 @@ function TeamGrid({ snapshot, variant, onSelectAgent }: { snapshot: HonCommandSn
 
 function TeachingAiCard({ variant }: { variant: HonInterfaceTheme }): React.ReactElement {
   const ai = HON_TEACHING_AI;
-  const portrait = teachingAiPortrait(variant);
+  const portrait = useStyledPortrait('kai', teachingAiPortrait(variant));
   return <section className={styles.teachingAi} style={{ '--agent': ai.color } as React.CSSProperties} aria-labelledby="hon-teaching-ai" data-kai-style={variant}>
     {/* Keyed by source so a mode switch retries the image instead of keeping an earlier fallback. */}
-    <AgentPortrait key={portrait} agent={{ ...ai, portrait }} size="lg" />
+    <AgentPortrait key={portrait} agent={{ name: ai.name, color: ai.color, portrait }} size="lg" />
     <div>
       <p className={styles.kicker}>Separate instructional AI · not part of the management team</p>
       <h3 id="hon-teaching-ai">{ai.name} <small>(provisional name)</small></h3>
@@ -332,7 +350,7 @@ export function HonWorkspaceView(props: HonWorkspaceViewProps): React.ReactEleme
     {scope.state === 'RESOLVING' ? <p className={styles.state} role="status" data-state="LOADING">{scope.message}</p> : null}
     {/* Management agents, suggestions, AI work and approvals render only for a server-verified management scope. */}
     {verified ? <div className={styles.body}>
-      <Conversation presentation={presentation} />
+      {props.conversation ?? <Conversation presentation={presentation} />}
       <section className={styles.sections} aria-label="HON workspace">
         <HonTabs tab={tab} snapshot={snapshot} onTab={props.onTab} idPrefix={idPrefix} />
         <div className={styles.tabPanel} role="tabpanel" id={`${idPrefix}-panel`} aria-labelledby={`${idPrefix}-tab-${tab}`} tabIndex={0}>

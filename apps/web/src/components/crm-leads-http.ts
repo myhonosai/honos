@@ -36,8 +36,13 @@ export async function loadCrmLeads(organizationId: string, schoolId: string, sta
   }
   const envelope: unknown = await response.json();
   closed(envelope, ['data', 'meta']);
-  if (!Array.isArray(envelope.data) || envelope.data.length > 50) invalid();
-  const leads = envelope.data.map(verifyLead);
+  return verifyCrmLeadList(envelope.data);
+}
+
+/** Shared read projection; identifiers are never tenant authority. */
+export function verifyCrmLeadList(value: unknown): LeadListItem[] {
+  if (!Array.isArray(value) || value.length > 50) invalid();
+  const leads = value.map(verifyLead);
   if (new Set(leads.map((lead) => lead.id)).size !== leads.length) invalid();
   return leads;
 }

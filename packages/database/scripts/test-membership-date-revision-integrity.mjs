@@ -57,7 +57,10 @@ try {
   const migration = await readFile(new URL('../migrations/0178_membership_date_revisions.sql', import.meta.url), 'utf8');
 
   // ---------- 1. posture ----------
-  const bodyOf = (name) => migration.match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION hon\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)\\$\\$;`))?.[1];
+  // 0224 (membership pause) replaces the transition trigger and the two authority helpers; they are checked against 0224.
+  const pauses = await readFile(new URL('../migrations/0224_membership_pause_cancel_refund.sql', import.meta.url), 'utf8');
+  const replacedBy0224 = ['guard_membership_state_transition', 'membership_lifecycle_permission', 'require_membership_lifecycle_actor'];
+  const bodyOf = (name) => (replacedBy0224.includes(name) ? pauses : migration).match(new RegExp(`CREATE (?:OR REPLACE )?FUNCTION hon\\.${name}\\([\\s\\S]*?AS \\$\\$([\\s\\S]*?)\\$\\$;`))?.[1];
   const entry = ['preview_membership_date_revision(text,uuid,jsonb)', 'revise_membership_dates(text,uuid,jsonb,text,uuid,uuid)', 'read_membership_date_history(text,uuid)',
     'read_membership_date_confirmation_queue(text,jsonb)', 'read_school_membership_status_summary(text)'];
   const definers = ['evaluate_membership_date_revision(uuid,text,boolean,date,date)', 'membership_lifecycle_permission(uuid,uuid,uuid,text)', 'require_membership_lifecycle_actor(text,text)'];
@@ -82,7 +85,7 @@ try {
   // The trigger body is the reviewed 0177 body with exactly one added ACTIVE branch.
   { const old = (await readFile(new URL('../migrations/0177_membership_activation_gate.sql', import.meta.url), 'utf8'))
       .match(/CREATE FUNCTION hon\.guard_membership_state_transition\([\s\S]*?AS \$\$([\s\S]*?)\$\$;/)[1];
-    const added = bodyOf('guard_membership_state_transition').replace(/\n    -- E1b \(0178\)[\s\S]*?      RETURN NEW;\n    END IF;\n/, '\n');
+    const added = migration.match(/CREATE OR REPLACE FUNCTION hon\.guard_membership_state_transition\([\s\S]*?AS \$\$([\s\S]*?)\$\$;/)[1].replace(/\n    -- E1b \(0178\)[\s\S]*?      RETURN NEW;\n    END IF;\n/, '\n');
     assert.equal(added, old, 'only the ACTIVE->ACTIVE revision branch was added'); }
   assert.doesNotMatch(bodyOf('preview_membership_date_revision') + bodyOf('evaluate_membership_date_revision') + bodyOf('read_membership_date_history')
     + bodyOf('read_membership_date_confirmation_queue') + bodyOf('read_school_membership_status_summary'), /\b(INSERT|UPDATE|DELETE|TRUNCATE|MERGE|LOCK)\b/, 'reads are DML- and lock-free');
@@ -744,8 +747,9 @@ try {
     assertions += 10; }
 
   // ---------- 9. unchanged V1 readers ----------
-  // [14] Every V1 reader of memberships keeps the exact body of the latest migration that defined it before 0178.
-  { const files = (await readdir(new URL('../migrations/', import.meta.url))).filter((f) => /^\d{4}_.*\.sql$/.test(f) && f < '0178').sort();
+  // [14] 0178 changes no V1 reader: each keeps the exact body of the latest other migration that defines it (0224 later
+  // replaces cancel_school_membership; that body is pinned by the 0224 proof).
+  { const files = (await readdir(new URL('../migrations/', import.meta.url))).filter((f) => /^\d{4}_.*\.sql$/.test(f) && !f.startsWith('0178')).sort();
     const readers = ['read_parent_billing_view', 'read_school_health_score', 'read_retention_review_signals', 'revenue_plan_snapshot', 'renewal_membership_facts', 'read_school_command_center',
       'read_parent_testing_status', 'acknowledge_retention_review_evidence', 'record_retention_attention_alert', 'resolve_retention_attention_alert', 'mutate_renewal',
       'activate_school_membership', 'cancel_school_membership', 'preview_school_membership_activation', 'evaluate_membership_activation', 'membership_effective_status_at'];
@@ -758,7 +762,7 @@ try {
       }
     }
     for (const name of readers) {
-      assert.ok(latest[name], `${name} defined before 0178`);
+      assert.ok(latest[name], `${name} defined outside 0178`);
       assert.equal((await sql('SELECT count(*)::int n FROM pg_proc WHERE pronamespace=\'hon\'::regnamespace AND proname=$1 AND prosrc=$2', [name, latest[name]]))[0].n, 1, `${name} unchanged`);
       assertions++;
     } }

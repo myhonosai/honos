@@ -1,8 +1,11 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { tierIncludesFeature } from '@hon/config';
+import { resolveCrmReadAccess, type CrmReadAccess } from './crm-entitlement.js';
+import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
 import type { CommandContext, CreateLeadInput, HonTier, LeadListItem, LeadSummary } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { cursorInstantSql, decodeListCursor, encodeListCursor } from '../foundation/list-cursor.js';
 
 export interface CreateLeadCommandResult {
   lead: LeadSummary;
@@ -28,25 +31,50 @@ function fingerprint(input: CreateLeadInput): string {
   })).digest('hex');
 }
 
+/** Lead positions are immutable (created_at, id), so the signed cursor carries them directly. */
+const LEAD_CURSOR = ['instant', 'uuid'] as const;
+
 @Injectable()
 export class LeadService {
   constructor(private readonly database: RuntimeDatabaseService) {}
 
-  async list(context: CommandContext, options: { status?: LeadListItem['status']; limit?: number }): Promise<LeadListItem[]> {
+  async list(
+    context: CommandContext,
+    options: { status?: LeadListItem['status'] | undefined; limit?: number | undefined; cursor?: string | undefined },
+    authority: { externalSubject: string },
+  ): Promise<{ leads: LeadListItem[]; access: CrmReadAccess; nextCursor: string | null; limit: number }> {
+    const limit = options.limit ?? 50;
+    const status = options.status ?? null;
+    // Decoded before any database work: a cursor from another school, list or filter is refused, never reinterpreted.
+    const after = decodeListCursor(options.cursor, 'crm.leads', context.schoolId, { status }, LEAD_CURSOR);
     return this.database.withTenantTransaction(context, async (client) => {
-      const result = await client.query<LeadListItem>(
+      // The controller authorized before this transaction began; a grant revocation or an organization/school
+      // suspension committed since then must refuse the read rather than return CRM data.
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.lead.read',
+        'HON CRM lead read access is no longer authorized for this school.');
+      // A suspended school's verified owner may read history inside the recorded read-only window; no one else may.
+      const access = await resolveCrmReadAccess(client, authority.externalSubject, context, 'LEAD_LIST',
+        'An active HON CRM entitlement is required to read leads.');
+      // Keyset page: newest first with the id as a unique tiebreaker, so rows sharing a timestamp are never repeated or
+      // skipped between pages. One extra row decides whether another page exists.
+      const result = await client.query<LeadListItem & { cursorAt: string }>(
         `SELECT lead.id, lead.status, lead.pipeline_stage_id AS "pipelineStageId", lead.primary_person_id AS "primaryPersonId",
                 lead.version, lead.created_at AS "createdAt", person.given_name AS "givenName", person.family_name AS "familyName",
-                person.email::text AS email, person.phone_e164 AS "phoneE164", lead.next_follow_up_at AS "nextFollowUpAt"
+                person.email::text AS email, person.phone_e164 AS "phoneE164", lead.next_follow_up_at AS "nextFollowUpAt",
+                ${cursorInstantSql('lead.created_at')} AS "cursorAt"
          FROM hon.crm_leads AS lead
          JOIN hon.people AS person ON person.id = lead.primary_person_id
          WHERE lead.organization_id = $1 AND lead.school_id = $2
            AND ($3::hon.lead_status IS NULL OR lead.status = $3::hon.lead_status)
-         ORDER BY lead.created_at DESC
+           AND ($5::timestamptz IS NULL OR (lead.created_at, lead.id) < ($5::timestamptz, $6::uuid))
+         ORDER BY lead.created_at DESC, lead.id DESC
          LIMIT $4`,
-        [context.organizationId, context.schoolId, options.status ?? null, options.limit ?? 50],
+        [context.organizationId, context.schoolId, status, limit + 1, after?.[0] ?? null, after?.[1] ?? null],
       );
-      return result.rows;
+      const rows = result.rows.slice(0, limit);
+      const last = result.rows.length > limit ? rows[rows.length - 1] : undefined;
+      const nextCursor = last ? encodeListCursor('crm.leads', context.schoolId, { status }, LEAD_CURSOR, [last.cursorAt, last.id]) : null;
+      return { leads: rows.map(({ cursorAt: _cursorAt, ...lead }) => lead), access, nextCursor, limit };
     });
   }
 

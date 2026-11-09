@@ -337,7 +337,9 @@ describe('HON integration boundaries', () => {
       expect(fetcher).not.toHaveBeenCalled();
     } finally { fetcher.mockRestore(); }
     const dashboard = readFileSync('src/components/staff-dashboard.tsx', 'utf8');
-    expect(dashboard).toContain('{snapshot && selection && <HonTeamBand scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} variant={interfaceTheme} />}');
+    expect(dashboard).toContain('const privateVisible = Boolean(snapshot && selection && !privacyShield.current);');
+    expect(dashboard).toContain('ref={privateTeam} hidden={!privateVisible} inert={!privateVisible}');
+    expect(dashboard).toContain('{privateVisible && selection && <HonTeamBand scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} variant={interfaceTheme} />}');
   });
 
   it('declares a session-gated no-index workspace route whose query never selects a school', () => {

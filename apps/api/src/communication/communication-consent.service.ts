@@ -20,6 +20,13 @@ import {
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/**
+ * Person/channel serialization key shared with every writer that must order against consent capture
+ * (0217 hon.update_school_person). The person id is canonicalized through uuid so an uppercase selector
+ * takes the same lock as the lowercase uuid text other writers derive.
+ */
+export const COMMUNICATION_CONSENT_ADVISORY_LOCK_SQL =
+  `SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text || ':' || $2::text, 0))`;
 const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/i;
 
 interface CommunicationConsentRow {
@@ -199,10 +206,7 @@ export class CommunicationConsentService {
 
       // The unique person/channel constraint plus this scoped advisory lock makes
       // first-write races deterministic without weakening RLS.
-      await client.query(
-        `SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))`,
-        [personId, channel],
-      );
+      await client.query(COMMUNICATION_CONSENT_ADVISORY_LOCK_SQL, [personId, channel]);
       const currentResult = await client.query<CommunicationConsentRow>(
         `SELECT
            id,

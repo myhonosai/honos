@@ -24,6 +24,12 @@ export const HQ_GROWTH = [
   { path: '/hq/growth/rewards', title: 'Reward Management', icon: 'gift' },
   { path: '/hq/growth/founder-campaigns', title: 'Founder Campaigns', icon: 'target' },
 ] as const;
+export const HQ_SCHOOLS = [
+  { path: '/hq/schools', title: 'School Directory', icon: 'school' },
+  { path: '/hq/schools/access', title: 'School Access', icon: 'check' },
+  { path: '/hq/schools/access/policy', title: 'Exception Policy', icon: 'settings' },
+  { path: '/hq/schools/owners', title: 'School Owners', icon: 'team' },
+] as const;
 export const HQ_REVENUE = [
   { path: '/hq/revenue', title: 'Subscriptions', icon: 'chart' },
   { path: '/hq/revenue/invoices', title: 'Invoices', icon: 'database' },
@@ -32,6 +38,7 @@ export const HQ_REVENUE = [
 export const HQ_AI = [
   { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
+  { path: '/hq/ai-safety', title: 'AI Safety', icon: 'check' },
   { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
 ] as const;
 /** Top-level HQ entries. A grouped entry's path is a route inside that group; grouped children keep their existing URLs. */
@@ -45,9 +52,10 @@ export const HQ_NAV = [
   { path: '/hq/support', title: 'Support', icon: 'support' },
 ] as const;
 type HqNavLink = { readonly path: string; readonly title: string; readonly icon: string };
-export type HqNavGroup = { readonly key: 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };
+export type HqNavGroup = { readonly key: 'schools' | 'revenue' | 'ai' | 'growth'; readonly title: string; readonly icon: string; readonly overview?: HqNavLink; readonly children: readonly HqNavLink[] };
 /** Desktop rail and mobile drawer share this one structure. */
 export const HQ_NAV_GROUPS: Readonly<Record<string, HqNavGroup>> = {
+  '/hq/schools': { key: 'schools', title: 'Schools', icon: 'school', children: HQ_SCHOOLS },
   '/hq/revenue': { key: 'revenue', title: 'Revenue', icon: 'chart', children: HQ_REVENUE },
   '/hq/executives': { key: 'ai', title: 'AI', icon: 'team', children: HQ_AI },
   '/hq/growth': { key: 'growth', title: 'Growth & Referrals', icon: 'growth', overview: { path: '/hq/growth', title: 'Growth overview', icon: 'growth' }, children: HQ_GROWTH },
@@ -59,7 +67,6 @@ export function hqGroupContains(group: HqNavGroup, path: string): boolean {
 
 export const HQ_PLANNED: Readonly<Record<string, { title: string; description: string; areas: readonly string[] }>> = {
   '/hq/revenue': { title: 'Revenue', description: 'Company revenue reporting requires an authoritative HQ financial projection.', areas: ['MRR & ARR', 'Cash & refunds', 'Gross margin'] },
-  '/hq/ai-costs': { title: 'AI Costs', description: 'Verified provider costs, usage and allowance accounting are not available in HQ-1.', areas: ['Usage & spend', 'Provider reconciliation', 'School contribution'] },
   '/hq/approvals': { title: 'Approvals', description: 'An HQ approval queue is not available. School approval authority is separate and is not reused here.', areas: ['Pending decisions', 'Approval history', 'Policy evidence'] },
   '/hq/support': { title: 'Support', description: 'HQ support cases and escalations are not available. This interface does not grant school access or impersonation.', areas: ['Cases & escalations', 'Failed operations', 'Owner decisions'] },
   '/hq/growth': { title: 'Growth & Referrals', description: 'HON company growth operations, governed by the owner. No campaign, contest or reward is active from this interface.', areas: ['Champions Club', 'Referral competitions', 'Founder campaigns'] },
@@ -74,8 +81,9 @@ export function hqPageLabel(path: string): string {
   if (path === '/hq/revenue/invoices') return 'Invoices';
   if (/^\/hq\/revenue\/invoices\/[0-9a-f-]{36}$/i.test(path)) return 'Invoice detail';
   if (path === '/hq/growth/champions-club/schools') return 'School referrals';
+  if (/^\/hq\/schools\/[0-9a-f-]{36}$/i.test(path)) return 'School detail';
   if (path === '/hq/revenue') return 'Revenue';
-  const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV].find((item) => item.path === path);
+  const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_NAV, ...HQ_SCHOOLS].find((item) => item.path === path);
   if (fixed) return fixed.title;
   const executive = HQ_EXECUTIVES.find((entry) => path === `/hq/executives/${entry.executiveKey}`);
   return executive ? `${executive.displayName} workspace` : 'HQ workspace';

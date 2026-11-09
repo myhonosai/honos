@@ -22,6 +22,11 @@ export class SaasSchoolBillingController {
   async account(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
     return { data: await this.reads.readAccount(subject(req), schoolId) };
   }
+  /** In-app payment-issue and suspension standing (grace end, owner CRM read-only window, CRM lock). Read-only. */
+  @Get('access-standing') @UseGuards(SaasReadGuard)
+  async accessStanding(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.reads.readAccessStanding(subject(req), schoolId) };
+  }
   @Get('invoices') @UseGuards(SaasReadGuard) @SaasReadQuery(['status','kind','cursor','limit'])
   async invoices(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Query() query: Record<string, unknown>) {
     return { data: await this.reads.readInvoices(subject(req), schoolId, query) };
@@ -40,6 +45,31 @@ export class SaasAccessReadinessHqController {
   @Get(':organizationId') @UseGuards(SaasReadGuard)
   async readiness(@Req() req: HonRequest, @Param('organizationId') organizationId: string) {
     return { data: await this.reads.readAccessReadiness(subject(req), organizationId) };
+  }
+}
+
+/**
+ * B-HQ-1 HQ access overview: every organization's entitlement, access state, open exception, subscription, open checkout,
+ * owner-invitation status and advisory exception-grant eligibility. Read only; no grant, revoke or payment effect.
+ */
+@Controller('hq/saas/access-overview')
+@UseGuards(HonIdentityGuard)
+export class SaasAccessOverviewHqController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get() @UseGuards(SaasReadGuard) @SaasReadQuery(['status','cursor','limit'])
+  async overview(@Req() req: HonRequest, @Query() query: Record<string, unknown>) {
+    return { data: await this.reads.readAccessOverview(subject(req), query) };
+  }
+}
+
+/** C-HQ-3 HQ school detail: one school's access standing, ownership summary and counts. Read only; names no people. */
+@Controller('hq/saas/schools')
+@UseGuards(HonIdentityGuard)
+export class HqSchoolDetailController {
+  constructor(private readonly reads: SaasSchoolBillingService) {}
+  @Get(':schoolId') @UseGuards(SaasReadGuard)
+  async detail(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.reads.readHqSchoolDetail(subject(req), schoolId) };
   }
 }
 

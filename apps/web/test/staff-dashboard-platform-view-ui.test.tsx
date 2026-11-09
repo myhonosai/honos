@@ -2,6 +2,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0 }));
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: 'en' } }) }));
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
@@ -12,6 +13,8 @@ vi.mock('react', async () => {
       if (index >= hooks.cells.length) hooks.cells[index] = initial;
       return [hooks.cells[index], (value: unknown) => { hooks.cells[index] = typeof value === 'function' ? (value as (previous: unknown) => unknown)(hooks.cells[index]) : value; }];
     },
+    // No provider in this hook shim: every context reads its default value.
+    useContext: (context: { _currentValue: unknown }) => context._currentValue,
     useRef: (initial: unknown) => {
       const index = hooks.cursor++;
       if (index >= hooks.cells.length) hooks.cells[index] = { current: initial };
@@ -30,6 +33,7 @@ vi.mock('react', async () => {
 });
 
 import { StaffDashboard } from '../src/components/staff-dashboard';
+import { HonTeamBand } from '../src/components/hon-command/hon-command';
 
 const id = (value: string) => `${value.repeat(8)}-${value.repeat(4)}-4${value.repeat(3)}-8${value.repeat(3)}-${value.repeat(12)}`;
 const organizationId = id('1');
@@ -99,7 +103,75 @@ beforeEach(() => {
   hooks.cursor = 0;
   vi.stubGlobal('crypto', { randomUUID: () => id('9') });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+describe('Verified dashboard operational navigation', () => {
+  function accountLink(key: 'team' | 'family') {
+    return elements(render()).find(element => element.props['data-testid'] === `operations-${key}`);
+  }
+  it('exposes only the exact independently verified organization/school and retires retained links before reloading another organization', async () => {
+    const otherOrganization = id('4'), otherSchool = id('5');
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async path => {
+      if (path === reportPath()) return response({ operationalSnapshot: report() });
+      if (path === `/api/v1/organizations/${otherOrganization}/schools/${otherSchool}/reports/operations`) return response({ operationalSnapshot: { ...report(otherSchool), organizationId: otherOrganization } });
+      return { ok: false, status: 403 } as Response;
+    });
+    expect(accountLink('team')).toBeUndefined(); fillVerifiedScope(); await submit();
+    const first = accountLink('team')!; expect(first.props.href).toBe(`/staff/team/invitations?organizationId=${organizationId}&schoolId=${schoolId}`);
+    (input(0).props.onChange as Function)({ target: { value: otherOrganization } });
+    const stale = { preventDefault: vi.fn() }; (first.props.onClick as Function)(stale); expect(stale.preventDefault).toHaveBeenCalledOnce();
+    expect(accountLink('team')).toBeUndefined();
+    (input(1).props.onChange as Function)({ target: { value: otherSchool } }); await submit();
+    expect(accountLink('family')!.props.href).toBe(`/staff/family-access?organizationId=${otherOrganization}&schoolId=${otherSchool}`);
+    expect(fetch.mock.calls.some(([path]) => String(path).includes(`/organizations/${otherOrganization}/schools/${otherSchool}/reports/operations`))).toBe(true);
+  });
+  it('conceals native links synchronously, never restores on focus, and keeps navigation absent after revoked access', async () => {
+    vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
+    let revoked = false;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async path => path === reportPath() && !revoked ? response({ operationalSnapshot: report() }) : { ok: false, status: 403 } as Response);
+    fillVerifiedScope(); await submit(); const anchor = accountLink('team')!;
+    const container = elements(render()).find(element => element.props['data-testid'] === 'dashboard-private')!;
+    const native = { removeAttribute: vi.fn() }, ref = container.props.ref as { current: unknown };
+    const dom = { hidden: false, inert: false, querySelectorAll: () => [native] }; ref.current = dom;
+    window.dispatchEvent(new Event('blur')); expect(dom.hidden).toBe(true); expect(dom.inert).toBe(true); expect(native.removeAttribute).toHaveBeenCalledWith('href');
+    const event = { preventDefault: vi.fn() }; (anchor.props.onClick as Function)(event); expect(event.preventDefault).toHaveBeenCalledOnce(); expect(accountLink('team')).toBeUndefined();
+    const count = fetch.mock.calls.length; window.dispatchEvent(new Event('focus')); expect(fetch.mock.calls).toHaveLength(count);
+    revoked = true; fillVerifiedScope(); await submit(); expect(accountLink('family')).toBeUndefined();
+  });
+  it('retires a late verified report after a school-context event and cannot restart after session invalidation', async () => {
+    vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
+    let finish!: (value: Response) => void;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async path => path === reportPath() ? new Promise(resolve => { finish = resolve; }) : { ok: false, status: 403 } as Response);
+    fillVerifiedScope(); const task = submit();
+    window.dispatchEvent(new Event('hon:school-context-changed')); finish(response({ operationalSnapshot: report() })); await task; expect(accountLink('team')).toBeUndefined();
+    window.dispatchEvent(new Event('hon:session-invalidated')); const count = fetch.mock.calls.length;
+    await submit(); expect(fetch.mock.calls).toHaveLength(count); expect(accountLink('family')).toBeUndefined();
+  });
+  it('synchronously retires school badges, choices and typed selectors on privacy events without remounting ordinary edits', async () => {
+    vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async path => path === reportPath() ? response({ operationalSnapshot: report() }) : { ok: false, status: 403 } as Response);
+    fillVerifiedScope(); await submit();
+    const section = elements(render()).find(element => element.props['data-testid'] === 'dashboard-scope')!;
+    const ref = section.props.ref as { current: unknown }, dom = { hidden: false, inert: false }; ref.current = dom;
+    (input(1).props.onChange as Function)({ target: { value: nextSchoolId } });
+    const afterEdit = elements(render()).find(element => element.props['data-testid'] === 'dashboard-scope')!;
+    expect(afterEdit.key).toBe(section.key); expect(dom.hidden).toBe(false);
+    window.dispatchEvent(new Event('blur')); expect(dom.hidden).toBe(true); expect(dom.inert).toBe(true);
+    const fresh = elements(render()).find(element => element.props['data-testid'] === 'dashboard-scope')!;
+    expect(fresh.key).not.toBe(section.key); expect(input(0).props.value).toBe(''); expect(input(1).props.value).toBe('');
+  });
+  it('embeds the HON band only for the exact verified report scope and retires its wrapper on concealment', async () => {
+    vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async path => path === reportPath() ? response({ operationalSnapshot: report() }) : { ok: false, status: 403 } as Response);
+    const band = () => elements(render()).find(element => element.type === HonTeamBand);
+    expect(band()).toBeUndefined(); fillVerifiedScope(); await submit();
+    expect(band()!.props).toEqual({ scope: { organizationId, schoolId }, variant: 'modern' });
+    const wrapper = elements(render()).find(element => element.type === 'div' && React.isValidElement(element.props.children) && element.props.children.type === HonTeamBand)!;
+    const ref = wrapper.props.ref as { current: unknown }, dom = { hidden: false, inert: false, querySelectorAll: () => [] }; ref.current = dom;
+    const count = fetch.mock.calls.length; window.dispatchEvent(new Event('blur')); expect(dom.hidden).toBe(true); expect(dom.inert).toBe(true); expect(band()).toBeUndefined();
+    window.dispatchEvent(new Event('focus')); expect(band()).toBeUndefined(); expect(fetch.mock.calls).toHaveLength(count);
+  });
+});
 
 describe('Staff Dashboard verified Platform View selector', () => {
   it('is absent and performs no preference read/save before a report independently verifies the dashboard scope, then reads that current-school preference', async () => {

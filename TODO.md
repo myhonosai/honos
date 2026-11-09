@@ -1,3 +1,248 @@
+## Sprint 3 closure → Sprint 4 — accepted-main Account & Usage integration
+
+- [x] Normally merge actual main `685e23ef43cd9a1f16333d144d5bf05f6a90822d` after accepted #143/#147 into the existing #146 preparation. Preserve the prior prepared tree exactly, both original wallet-positive assertions and final family retry receipt barrier. No API/packages/infra delta; all 201 accepted migration files/checksums retained.
+- [ ] Publish/retarget existing draft #146 to main, run one final integrated verification plus original account API/browser positives, and request focused Manus delta review. Prior green 42128265348 is historical, not fresh final-head evidence.
+- [ ] Manus continues approved private two-school B–G acceptance. A and initial CRM intake/persistence are independently verified; full owner-device acceptance remains separate. Frontend corrections require concrete findings, not invented success or test authority.
+
+## Sprint 3 — read-only school account and usage (incremental preparation)
+
+- [x] Publish dependent #146 application/proof `dac9b15c1703851218fab76988941e241e3effba`. Hosted run 42087632292 passed 2,984 workspace tests plus 3 fixture/diagnostic guards, types/build/200 hashes and 27 native account/browser/accessibility cases with all HON hashes unchanged. The integration job remains **FAILED**: both mandatory no-subscription wallet200 cases receive503; restricted PostgreSQL confirms SQLSTATE55000 / UNASSIGNED_PERIOD_RECORD. Claude owns the additive correction; no dummy subscription or relaxed assertion. Keep source review, backend acceptance, final integrated verification and real-owner acceptance separate. The [operator checklist](docs/OWNER_OPERATIONAL_CHECKLIST.md) preserves #143's failure and #145's four complete flows; #145 must not merge.
+- Implement `/staff/account-status` from owner-experience `5cc4133d2d9c0119011e46f4c471d8eadd43cc88`, intended to stack on #143. Use only canonical account/access-standing/creative-wallet GETs and exported closed validators. No API, contract, schema, migration, money, provider or credit mutation; superseded `/staff/subscription` remains untouched and unlinked.
+- Support explicit known school-only recovery and an optional organization equality check. Reject ambiguous/expanded URL selectors and automatic reads. Keep suspended billing readable independently of a creative-wallet 403, retain minimal projections and reject contradictory billing organizations; never use reporting permission as billing authority or invent a school picker.
+- Preserve EN/KO/ES, all three modes, a11y, original-subject pre/post checks including domain denials, shared session invalidation and synchronous privacy concealment/read retirement. Clear selectors on concealment, restore only blank identity-verified entry and require a fresh page for terminal session/identity changes. Add inert selected-school navigation and literal recovery links outside reporting-ready state.
+- Local validation passes: 85 focused cases in nine files (54 new account cases), full web regression 1,844 tests in 180 files, all six workspace package builds, web TypeScript/production build, 200 unchanged migration checksums, whitespace and API/packages/infra equivalence to base. Cached Node `24.19.0` differs from pinned hosted `22.23.4`. Independent source/contract/privacy review has no remaining blocker. Real signed-session API/disposable PostgreSQL/native browser proof is prepared by the separate verification workstream and remains a hosted gate. No installation, local sockets/database/browser, push, CI or publication. [Operating boundary and measured evidence](docs/architecture/SCHOOL_ACCOUNT_STATUS_FRONTEND.md).
+
+## Sprint 3 — combined hosted family-request accounting correction
+
+- [x] Preserve all application/backend bytes from the original #143 composition. Hosted head `0c9c835…` passed 2,918 repository tests, typecheck/build, 200 migration hashes, 13 commercial rehearsals, actual entry/HQ/staff checks and 27 mounted staff plus 27 family language/view/width cases.
+- [x] Correct the demonstrated harness failure at family suspension prefill: the original counter included the shared authenticated `/api/v1/me/language-preference` GET. Closed request accounting now distinguishes only the exact shared preference/identity paths, rejects unexpected/query/foreign paths, and still proves zero automatic family reads/identity verification/commands plus exact post-commit recovery. 12 new request-accounting cases are part of 109 passing focused family/language regressions. No application authorization is weakened.
+- [x] Normally incorporate accepted #137 main `b7697d671b710322cb15c24d0ab64503284c2617`; its landed tree equals reviewed #137, already present in the canonical #141 composition. Retain exact canonical 0208 evidence during four manifest/ceiling conflicts; all 198 accepted SQL files are unchanged, 200 total checksums valid. No authored backend delta.
+- [x] Keep independent browser proofs running after unrelated scenario failures when their own build/API/tool prerequisites succeeded; no assertion is suppressed and the job remains failed on any unsuccessful step. Report unmeasured native provider-call count as null.
+- [ ] The obsolete combined run's later core browser stages were skipped and its PostgreSQL job was unfinished at correction publication; neither is a pass. Obtain one fresh complete corrected-head run and record actual final status without unchanged-head reruns. Real owner environment/login and focused Manus acceptance remain separate gates.
+
+## PR #143 — family harness shared-language request accounting
+
+- Hosted combined head `0c9c835`, run `42065510215`, passed the signed API/suspension groups and 27 mounted views, then failed the new inert-prefill assertion because its all-`/api/v1` GET counter included the existing authenticated LocaleProvider read. The actual canonical shared path is `/api/v1/me/language-preference`, verified in `localization/provider.tsx` → `http.ts`; the failure is not an automatic family read.
+- Add closed harness-only accounting for that exact shared GET, identity GETs and the exact fixture family's two read paths. Preserve zero automatic family/invitation reads and API POSTs, reject unexpected API GETs, and assert no new domain reads throughout known-reference recovery with stage diagnostics. No application/backend change or hosted rerun.
+- [x] Local Node `24.19.0`: 12 request-accounting regressions plus the unchanged family/component/language tests pass (109 tests across 6 files); web TypeScript, both script syntax checks, two-job workflow YAML and whitespace checks pass. The locale regression invokes the actual `loadMyLanguage` transport; negative cases reject automatic family reads, lookalike/query-bearing shared routes, foreign schools/origins and new recovery-stage domain reads. All API POSTs now enter the existing strict command-count/fingerprint assertions. The original 27 variants, no-referrer probe and native-fetch response-loss blocks are unchanged. No hosted rerun or new browser/database result is claimed.
+
+## Sprint 2/3 — one dependent owner-experience composition (2026-11-05)
+
+- [x] Compose existing #129/#134 CRM, membership, class/attendance and role-based entry once with #112 HQ provisioning, #138 staff role discovery and #139 family accounts. Accepted main is `389f7d131192f5734a7a09e1ff08b6af26f8e06b`; the explicitly unmerged source-accepted backend composition is #141 `bf8a52ece2a4a89675d296d2d348b869a2436dee` (tree equals reviewed `f711ded`). No backend, package, infra or migration bytes are authored by this frontend integration.
+- [x] Preserve the original-microsecond HTTP 200 regression, canonical grants, exact-request UNKNOWN recovery and synchronous attendance callback retirement. Add verified entry/dashboard/idle-CRM links to account management, strict inert school selectors and synchronous dashboard scope concealment. No record/token/key is put in a navigation URL or browser storage.
+- [x] Integrate expected-principal/human-command HQ receipts and mismatch recovery; replace staff role UUID entry with the bounded authoritative picker; include explicit known-reference suspended guardian revoke/end with current server authorization. Mixed identities remain review-required, no provider delivery.
+- [x] Prepare one four-job exact-head workflow retaining canonical PostgreSQL proofs, commercial rehearsals, real signed-session API/database checks, existing synthetic localization/view matrices and an additional native browser -> Next -> Nest -> database CRM-to-attendance flow. The family-only workflow now filters to the same two bases its existing job guards already admitted, avoiding duplicate jobs on this dependent composition.
+- [ ] Fresh combined-head hosted CI, PostgreSQL/browser artifacts and focused Manus integration review. Prior component passes are historical, not passes on this composition. #142's separate test-only autovacuum isolation proposal is not silently included; existing assertions remain unchanged.
+- [ ] Actual owner-private-environment login and seven-journey acceptance: Manus environment pin, legitimate HQ/school identities and authorized operational access are still required. Disposable signed cookies and synthetic school fixtures do not prove this gate. No environment was deployed or provider activated.
+- Local complete-tree evidence is recorded in the integration PR. Local Node 24.19.0 differs from pinned hosted Node 22.23.4; HTTP listen returns EPERM, so local API HTTP/browser/PostgreSQL results are not claimed. Main's 197 historical SQL files are byte-identical; canonical #141 contains 200 checksum-locked files through 0208, with 0179/0180 still absent.
+
+## Sprint 3 — native CRM-to-attendance browser proof (prepared, not executed locally)
+
+- [x] Prepare an isolated verification-only increment from #134 `b925bdf42f90f4142d7080e7dd2874408f9c7ea0`. Reviewed application/backend sources and the original API/browser proofs are unchanged. Reuse canonical registration, payer, published-plan DRAFT and two-step activation services for synthetic durable adult/child fixtures; never write ACTIVE state directly or bypass a trigger.
+- [x] Add a hosted-runner/private-descriptor guarded native browser harness: normal signed synthetic HON session → production Next → real narrow Nest controllers/IAM → restricted marked disposable PostgreSQL. Assert explicit CRM lead selection, membership discovery, current dates/history, session selection, canonical booking and attendance, then a full reload and rediscovery/read without a saved student/membership selector. English desktop/mobile adult/child cases are separate from the existing synthetic language/view matrix.
+- Actual local evidence: script syntax, pure hosted-runner/checkout/auth guards, sanitized native transport observations and whitespace checks pass. No local listener, browser, database, external OIDC or owner-device acceptance execution is claimed. The combined candidate's one hosted workflow must run this native flow last and retain its report even on refusal.
+- Source-only dependency finding for Claude: the canonical Class Sessions GET guard requires Origin and rejects forwarded authority headers, while the production browser transport performs an ordinary same-origin GET through Next rewrites. This is not a runtime reproduction. The new proof records actual stage/status and native header-presence metadata, fails if refused, and never synthesizes Origin, alters proxy headers or supplies mock API success. See [native workflow verification](docs/architecture/OWNER_WORKFLOW_NATIVE_BROWSER_VERIFICATION.md).
+
+## Sprint 3 — verified operational navigation implemented; combined verification pending
+
+- Connect the existing owner entry, independently verified dashboard and idle CRM journey to staff invitations and family access. Carry only inert organization/school UUID selectors; each destination retains its own explicit authorization/read.
+- Preserve command/recovery memory, privacy concealment, EN/KO/ES, all three modes and protected visual sources. No backend/schema/configuration/policy changes or deployment.
+- Local evidence: 157 focused tests, web TypeScript, browser-script syntax and whitespace checks pass. Native and retained links retire on concealment/scope changes; CRM drafts, in-flight/UNKNOWN commands and abandoned unknown trial holds cannot use these exits to lose recovery memory. Account workstreams own inert destination props/pages. Root owns one combined-candidate full/browser/API/database verification; none is inferred from these frontend results. [Implementation boundary and evidence](docs/architecture/SPRINT3_OPERATIONAL_NAVIGATION.md).
+
+## Sprint 2/3 — approved narrow suspension commands (local verification complete)
+
+- Continue PR #139 on accepted backend/main `389f7d131192f5734a7a09e1ff08b6af26f8e06b` by normal merge. Preserve API/packages/infra and all 197 migration bytes unchanged.
+- Add an explicitly confirmed known-reference revoke/end form. UUIDs select a command target only; signed identity does not prove permission, suspension or record existence. No family/invitation list, invite or accept bypass. Reveal concealed command evidence only after a deliberate backend-authorized exact replay and current same-subject postcheck.
+- Verify focused controller/transport/presentation regressions and extend the real signed-session/browser harness without removing its 27 variants or native no-referrer response-loss injection. Local sockets are unavailable; hosted execution is pending and is not claimed here.
+- [x] Implement the known-reference command form, all EN/KO/ES copy, inert closed org/school query prefills, strict current-identity settlement and mandatory authoritative exact-command reconciliation after concealment. An unresolved invite/accept cannot switch into this exception. Mixed staff/parent refusal, manual ID/code custody and ordinary family selection remain intact.
+- [x] Local execution on installed Node `24.19.0`: 89 focused family tests (48 controller, 27 transport, 7 presentation, 7 page), full web suite 152 files / 1,397 tests, web TypeScript, final production Next build, all 197 checksum-locked migrations, harness syntax, workflow YAML, route JSON and whitespace checks pass. This is not pinned hosted Node `22.23.4` evidence. Existing installed tools were invoked directly after the pnpm wrapper tried and failed to create its HOME store; no dependency installation or network request completed.
+- [x] Accepted-main merge had no conflicts. API/packages/infra remain exactly equal to main `389f7d1`. The original native-fetch fault-injection block is byte-for-byte unchanged and the no-referrer probe/all 27 variants remain present. New real signed API/browser suspension scenarios are prepared and syntax-checked, not executed locally. Exact published-head hosted verification, independent frontend review and operational access remain outstanding; no push, CI dispatch or PR metadata change occurred here.
+
+## Sprint 2 — family invitation frontend on reconciled backend
+
+- Normally incorporate Claude's reviewed/reconciled #136 `558bd339a026aba5a51f8e8ceee8f2b358994f9e` on accepted main through0203;197 checksums pass and API/packages/infra exactly match that dependency. No backend source or migration is authored here.
+- Preserve exact localized accessible-name assertions with explicit select labels, the original no-referrer policy for every request, closed commands, current identity checks and exact UNKNOWN recovery. Fresh mounted signed-API/browser evidence remains pending on the final published tree.
+- The earlier OIDC namespace repair passed all8 actual API groups; its browser label failure remains recorded as a failure, not a successful owner test. Backend acceptance, independent frontend review and owner approval remain gates in#131.
+
+## PR #139 — mounted browser labels and original privacy policy
+
+- [x] Preserve exact localized selectors with explicit family/access-level select labels. Hosted run `41994633747`, job `127134741405`, passed all eight API groups, then timed out on the exact family label; Playwright reads the wrapping label's descendant option text. Add bounded entry diagnostics and preserve privacy/authorization checks.
+- [x] Retain the original `no-referrer` policy for reads and commands. Real Chromium run `41997261365`, job `127143380860`, entered the corrected family selector and demonstrated `no-referrer` POST with expected Origin, no Referer and `400 ACCOUNT_INPUT_INVALID` for an empty closed body. The earlier Node-only Origin inference did not describe Chromium and is withdrawn; the erroneous probe expectation caused that run's failure. No guard, backend, contract or migration change.
+- [x] Replace Playwright API-client response-loss injection with a one-shot native browser fetch wrapper: send the original request unchanged, await the real 200/body, then throw a synthetic timeout. Require one persisted invitation/event/request and zero duplicate records after exact retry. No manually authored browser headers.
+- Local evidence: 74 focused frontend tests, web TypeScript, harness syntax and whitespace checks pass. Isolated execution of the actual injected wrapper preserves original arguments, loses only the first 200 response, propagates 403 unchanged and permits the exact next request. This does not establish a mounted-browser/database pass.
+- Fresh exact-head hosted browser/API/PostgreSQL evidence remains pending; local Chromium/socket execution is unavailable.
+
+## PR #139 — family frontend hosted acceptance fixture repair
+
+- [x] Correct only the synthetic signed-session identity namespace in the frontend verification harness to match the existing OIDC acceptance boundary. Preserve all acceptance, mixed-role refusal, privacy, exact-retry and database assertions; no UI, backend, contract or migration changes.
+- Hosted run `41971811688`, job `127061574513`, passed the first five frontend groups, then acceptance at `apps/web/scripts/family-access-integration.mjs:66` returned `ACCOUNT_INPUT_INVALID`. The fixture generated `family-ui:…`; migration 0205 correctly requires `oidc:…`, matching the real OIDC normalizer and canonical backend proof.
+- Local evidence: the original signed verified-email fixture reproduced the namespace mismatch; six corrected recipient/staff/browser identities passed real session signing/verification with distinct OIDC subjects. All 74 focused family frontend tests, 101 authentication tests, web TypeScript, harness syntax and whitespace checks passed. Existing assertions are unchanged.
+- Fresh exact-head hosted API/PostgreSQL/browser verification remains required. Local sockets are unavailable; no local database/browser pass or operational approval is claimed.
+
+## HQ school creation — isolated #141 composition (in progress)
+
+- Continue existing #112: normally fast-forward prepared frontend `05fa605a0ff2329dbe0d8ddb8612375bd4b13245` into the existing HQ local branch, then compose accepted main `389f7d131192f5734a7a09e1ff08b6af26f8e06b` and exact #141 source `f711ded42d1cc4a9d2076a9339139fb4a0f0a7e1` on isolated `codex/hq-school-create-141-composition`. Backend source acceptance is recorded, but #141 remains unmerged and cannot be operationally activated.
+- [x] Normal composition merge `0ebe029` retains every API/packages/infra byte from #141 and all 197 historical migration files/checksum entries from accepted main; inherited `0206`–`0208` produce 200 checksum-locked migrations. Inspect the actual expected-principal/human-command guard and actor/status receipt; strengthen only the frontend signed-session/browser harness for real second-owner mismatch re-verification, exact-request recovery and privacy. The native-ESM loader regression and 200 checksum validations pass.
+- [x] Local validation: 62 focused tests and all 1,358 web tests in 152 files; six workspace package TypeScript builds, API Nest build, web production build, API/web explicit typechecks, two socket-free actual #141 receipt/error-mapping tests, native-ESM loader regression, four harness/loader syntax checks, 200 migration checksums, historical ledger/tree comparisons and `git diff --check` pass. Installed tools under Node `v24.19.0` were reused; no install was attempted.
+- [ ] Fresh combined-head repository/CI, real signed-session API/disposable PostgreSQL and mounted browser/accessibility evidence remain hosted gates, followed by backend merge/allocation and owner release review. No local listeners, installation retry, guard bypass or shared staff-proof 409-versus-503 edit/reclassification occurred. No push, CI dispatch, PR metadata, merge to main, operational activation or deployment.
+
+## HQ school creation — local preparation dependent on #141
+
+- [x] From preserved HQ frontend `a57197f2129ed27846697004df1830e663d430aa` (accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0`, 196 migrations), prepare only the `X-HON-Expected-Principal` request header, closed actor/status receipt validation and explicit mismatch re-verification against draft #141 `f711ded42d1cc4a9d2076a9339139fb4a0f0a7e1`. Preserve the original payload/key/principal, privacy and existing UI; reject legacy receipts without fallback.
+- [x] Local evidence: 62 focused tests (55 preserved plus 7), web typecheck, native-ESM loader regression, four harness/loader syntax checks, 196 migration checksum validations and `git diff --check` pass under Node `v24.19.0`, reusing existing dependency/generated-config caches. See `docs/CODEX_HQ_SCHOOL_CREATE_141_DEPENDENCY.md`.
+- [ ] Acceptance and integration of #141, its backend stack and final migration allocation, followed by real API/database/browser proof, remain separate gates. This isolated branch is local preparation only: do not publish, change #112, merge backend, modify migrations, or dispatch CI.
+
+## Current HQ integration composition — accepted main 0204
+
+- Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after #135. All196 migration/checksum and backend bytes match accepted main; HQ production frontend and corrected proof loader are unchanged.
+- The complete three-job green run at `b3f0185…` is historical evidence for the195-migration checkpoint. Fresh196-migration combined-head verification follows publication. Separate #141 expected-principal authority remains a review/acceptance dependency.
+
+## C-HQ-2 — existing HQ school management, Sprint 2 reconciliation
+
+- [x] Preserve #112 checkpoint `2fdca2b` and normally merge accepted main `029de0cadbeb047ef8e38767de4e60e460325821` through local merge `217938b`. API/packages/infra bytes remain those of accepted main, including migration `0203`.
+- [x] Localize creation/directory EN/KO/ES; retain the shared Modern/Classic/Big Button controls and existing visual sources. Add persistent directory status and immediate DOM concealment for form/receipts, read retirement, same-owner exact UNKNOWN recovery and late retired-401 rejection.
+- [x] Re-run 55 focused frontend regressions, web typecheck, both harness syntax checks and 195 migration checksum validations locally on merged main `029de0c`. Earlier all 1,351 web tests and the production web build remain evidence for unchanged frontend source; those broader runs were not repeated for this backend-only merge. Hosted harness prepares 27 language/view/width browser/axe captures; local socket restrictions are not passing browser evidence.
+- [ ] Complete final-head hosted workspace/build/migration and signed-session API/database/browser verification, then focused independent review and owner approval. Do not infer full success from a source check.
+- [x] Correct the harness-only frontend dependency mapping after connected job `127137588905` in run `41995513902` failed to resolve `./session-invalidation` from a transpiled controller. The socket-free native-ESM regression reproduces the missing mapping and passes with the fix; 55 focused tests, web typecheck and harness syntax checks pass. Hosted API/browser verification still requires a new run; the failed run established no API proof-group or browser result.
+- [ ] Claude backend gate: canonical human-Origin enforcement and immutable expected-principal binding for legacy HQ provisioning are tracked in separate [draft #141](https://github.com/myhonosai/honos/pull/141) at `bac9cb55138733ea036be7a181e8c1f98d221f75`, pending independent review and merge. That draft is not integrated here; the accepted-main gaps remain. Creation remains suspended/no operating access, payment or AI. Frontend pre/post identity checks are not atomic command binding, and no frontend marker supplies backend authority.
+- Shared sprint tracking and dependencies: GitHub Issue #131; original #111/#129/#134 and Claude branches are preserved. No merge, deployment or provider activation.
+
+## Sprint 2/3 — eligible staff invitation roles (local dependent composition)
+
+- Continue existing PR #138 from local `cbf40bc4a11536878bfe7ff7f6458abdb90a48db`, source-equivalent to published `6a16c87717ae47038344717477b58024b9a98832` (tree `246d80c964aeade4c14c81d5decac9077e6649b6`). Normal local merges incorporate reviewed preparation `808fec136d73a0bac0909a709462e9fd3d53173c`, actual #140 `c11b96ff243a5f8171d794d9edb76910cbd40549` and accepted main `389f7d131192f5734a7a09e1ff08b6af26f8e06b`; no push or PR metadata change.
+- Dependency remains unmerged #140: direct canonical `validateStaffInvitationRoles` and exact school-scoped GET `/v1/school/schools/:schoolId/staff-invitation-roles` (provisional migration 0207). Composition `cd7b56b647d560c063e03e75e11195313c1f07e3` has byte-identical `apps/api`, `packages` and `infra` to #140; its 12 accepted-main squash-overlap conflicts retain canonical #140 source. No backend authoring, substitute parser, permission model or list.
+- Require explicit role choice and the existing independently authorized exact-role read. Preserve server mutation-time grantability checks, bounded/truncated/unavailable states, EN/KO/ES and all three views. No automatic role selection, permission inference, manual-ID fallback or reads caused by presentation changes.
+- Accept only a complete inert organization/school UUID navigation prefill through the shared `3182a0323d85659a7df94217a1ed7ef23fff1dc7` helper. Reject partial/malformed/duplicate/expanded queries; stay IDLE until explicit verification. Preserve the session-only lifetime key and mounted pending/UNKNOWN scope against later navigation props or stale edits; acceptance ignores school-prefill props.
+- Normally merged staff correction `cbf40bc4a11536878bfe7ff7f6458abdb90a48db`, preserving all 17 incomplete-selector restoration regressions. Identity-only restoration clears eligible options and the selected role, returns IDLE without school/role reads, and cannot move or release a retained UNKNOWN command.
+- Combined-source local evidence: canonical contracts compile, 116 focused frontend tests pass without a dependency alias (original 107 plus nine navigation/UNKNOWN-scope checks), and the complete web suite passes 1,424 tests in 153 files. Web TypeScript/production build and canonical API compilation/staff unit-test file pass, all 199 checksum-locked migration files verify, and harness syntax/whitespace/source-equivalence checks pass. Existing cached tools run under Node `24.19.0` (hosted pinned `22.23.4` remains required); no installation, local listener, database or mounted-browser execution. The earlier isolated alias-qualified result remains historical; unit tests are not signed-session API/database evidence.
+- Fresh exact-head hosted repository, signed-session API/disposable PostgreSQL, role-picker/blank/partial-selector browser, screenshots and accessibility evidence remains pending. Preserve the unchanged real backend/browser harness; shared database proof busy/refusal failure remains Claude-owned. Independent review, #140 merge and owner merge approval remain gates; no main merge, deployment, provider call or external delivery.
+
+## PR #138 — explicit recovery before school selectors are complete
+
+- [x] Restore selector entry only after an explicit matching-subject identity check when privacy concealed incomplete selectors and no command is retained. Return IDLE with no school authorization, private records or list/role/command read; retain all original pending/UNKNOWN scope and retry boundaries.
+- Hosted run `42003409620`, job `127164059514`, timed out while filling the concealed school selector. Reproduce the controller and mounted lifecycle deadlock before correcting it; keep privacy events enabled and add browser foreground/conditional restoration plus bounded failure diagnostics. No backend/schema/provider changes.
+- Before correction, 16 new controller/mounted lifecycle regressions failed and 42 tests passed. After correction, all 81 focused tests, web TypeScript, harness syntax and whitespace checks pass. Fresh exact-head hosted blank/partial-selector, privacy, signed-session API/PostgreSQL and full browser evidence remains pending; no local mounted-browser/database pass is claimed.
+
+
+## Sprint 2 — staff invitation native-browser fault verification
+
+- Preserve the existing frontend draft and normally incorporate Claude's reconciled #135 `7d1134ac2ea98f791b5a30291c3ebe0b1e1c9ef0`, including accepted main through0203. API/packages/infra match that backend source exactly;196 historical checksum-locked migrations are unchanged.
+- Preserve the original no-referrer transport byte-for-byte. Real Chromium disproved the Node-only Origin hypothesis: the original policy sends the expected Origin and no Referer. The temporary policy change is reverted; no production transport defect is claimed from that inference.
+- Replace Playwright HTTP-client fault injection with the browser native fetch, forwarding original arguments unchanged. Assert actual200 before synthetic post-commit loss or cookie switching; preserve original URL/body/key and denial behavior. Pin the observed original-policy400 invalid-input/zero-write result and safe diagnostics. Local64frontend regressions/typecheck pass; fresh exact-head hosted browser evidence remains required.
+- No provider, delivery, paid access, AI, deployment or persistent database changes. Independent frontend review and owner merge approval remain gates in#131.
+
+## Sprint 2/3 — owner entry on accepted main 0205 (2026-11-05)
+
+- [x] Normally incorporate reconciled #129 `1814f0c6b03b74371f55a3bdd14bc3bea304d750`, which includes accepted main `389f7d131192f5734a7a09e1ff08b6af26f8e06b` after #135/#136 acceptance. All API, package and infra bytes, including all 197 checksum-locked migrations and canonical ACLs, equal that exact main. The sole merge conflict was appended TODO evidence; both histories are retained.
+- [x] Preserve reviewed #134 production frontend byte-for-byte from local checkpoint `70d2b6825b9c6b9fb9fce5a87e18adec9ca65c68`, including exact retries, privacy, callback retirement, EN/KO/ES and all three presentation modes. Retain the original-microsecond HTTP 200/unchanged-raw-timestamp proof and canonical owner-entry fixture unchanged. Separate navigation work is not included.
+- Local evidence: 196 focused owner-entry/connected-recovery tests in 11 files, web typecheck, all 197 migration/checksum validations, canonical-fixture guards, proof syntax and source comparisons pass using cached dependencies. No listener, PostgreSQL, browser, full-repository or hosted exact-head pass is inferred.
+- Keep prior 195/196-migration results below as historical evidence. One fresh combined-head hosted verification and focused review follow the prepared batch's publication. This reconciliation performs no push, workflow dispatch, PR metadata change, merge into main, deployment or activation.
+
+## Sprint 2/3 — accepted main 0205 core reconciliation (2026-11-05)
+
+- [x] Normally incorporate accepted main `389f7d131192f5734a7a09e1ff08b6af26f8e06b` after #135/#136 acceptance. All API, package and infra bytes, including all 197 checksum-locked migrations and canonical ACLs, match that exact main. The merge is conflict-free; no backend source is authored here.
+- [x] Preserve reviewed #129 production frontend byte-for-byte from local checkpoint `d3ae18bcd4325b54a9c93c7a195b420a16e9d1f5`. Exact retries, callback retirement, privacy, EN/KO/ES, three presentation modes and the original-microsecond HTTP 200/unchanged-raw-timestamp proof are unchanged. Navigation expansion belongs to a separate isolated workstream.
+- Local evidence: 338 focused frontend tests in 15 files, web typecheck, all 197 migration/checksum validations, unchanged-proof syntax and source comparisons pass using cached dependencies. No local listener, PostgreSQL, browser, full-repository or hosted exact-head pass is inferred.
+- Publish this prepared batch once and obtain fresh combined-head CI and focused review. Prior 195/196-migration evidence below remains historical. No push, workflow dispatch, PR metadata change, source merge into main, deployment or provider activation is performed by this reconciliation.
+
+## Sprint 2 — owner entry on accepted main 0204
+
+- Prepare the current196-migration composition with accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` and final CRM frontend. All production frontend bytes remain those of reviewed #134; all backend/API/packages/infra bytes equal accepted main.
+- Preserve the four-job green195-migration checkpoint at `3c86b66…` as historical source evidence. A fresh exact-head196-migration run follows this batched reconciliation. No new broad audit or runtime behavior change is introduced.
+
+## Sprint 2 — owner entry reconciliation on accepted backend 0203
+
+- Preserve the reviewed #134 production frontend byte-for-byte while normally incorporating the final #129 integration and accepted main `029de0cadbeb047ef8e38767de4e60e460325821`. All 195 migration/checksum and canonical ACL bytes come from accepted main; no backend source is authored here.
+- Retain the owner-entry canonical-role fixture and actual Next/signed-session/resolver/browser proof. Incorporate #129's positive original-microsecond regression and unique trial/journey proof consolidation. No fixture timestamp normalization, access exception or provider activation.
+- The historical #134 four-job run at `1285328…` remains historical; fresh exact-head combined verification and focused independent reconciliation review follow publication. Shared sprint tracking: GitHub #131.
+
+## Owner entry integration — implemented; exact-head hosted verification follows publication
+
+- Reuse PR #111 on reviewed #129 plus accepted main `8257ad2`; preserve backend, migrations and reviewed CRM/booking/attendance bytes. Route verified school owners to a localized school-entry screen and HQ principals to HQ.
+- Reuse selector-free current-school and bounded authorized school-choice readers, then independently verify the exact selected school before exposing navigation. Conceal on blur/hidden/pagehide/session/school changes; no storage, automatic retry, test-access exception or business mutation.
+- Local prepublication evidence: 113 focused tests, full web suite 1,503, auth 101/domain 421, TypeScript/production web build and 192 migration checksums pass. The final full workspace/API/PostgreSQL/browser result must come from the exact-head hosted workflow. Local pnpm store setup failed and API HTTP listeners return EPERM (single-file reproduction: 22 pass, 3 listener failures); neither is a passing full local repository run. Draft only; no deployment or activation. Shared sprint dependencies: Issue #132.
+
+## C-AUTH-1 — original PR #111 checkpoint (historical)
+
+- Replace the callback's unconditional HQ landing with a fixed session-verified continuation route. Reuse only current HQ-session and exact-one staff reporting-school APIs; strict closed results select fixed local destinations, while ambiguous/missing/error classifications remain **Access not verified**. No role claims, parent-content probe, backend, migration, provider or provisioning changes.
+- Document the precise missing minimal guardian/current-access reader for Claude; preserve parent/staff/HQ independent API authorization, all callback PKCE/nonce/verified-email behavior, manual workspace choices and no automatic retries. Scope and evidence limits: [verified post-login routing](docs/architecture/VERIFIED_POST_LOGIN_ROUTING.md).
+- Local verification on the isolated current-main branch: 73 focused auth/routing/page tests and all 1,106 web tests pass; web TypeScript and production build pass. Response streaming is bounded to 16 KB and cancels on deadline. Script syntax, workflow YAML, documentation links, manifest uniqueness and whitespace checks pass. Local mounted HTTP/browser execution is blocked by `listen EPERM`; the dedicated synthetic production-Next/browser proof awaits hosted CI, while the existing account workflow retains full repository/disposable PostgreSQL checks. Web classification responses are mocked; no fresh API/database/IAM proof is claimed. No commit, publication, merge, deployment, Codespaces or changes to PRs #94/#95/#104 are authorized by this checkpoint.
+
+
+## Sprint 2 — accepted main 0204 reconciliation
+
+- Normally incorporate accepted main `e8c407d8bb908f763860e88afeb5e2286d4bfec0` after the owner-authorized #135 squash; its backend tree is identical to reviewed #135 `7d1134a`. All196 migration checksums and canonical API/package/infra bytes are preserved. No backend logic is authored here.
+- Reviewed #129 production frontend remains unchanged. The prior four-job green run at `41e06bc…` is evidence for the195-migration checkpoint, not fresh verification of this196-migration composition. Publish one batch and obtain fresh final-head verification; do not repeat unchanged-head runs.
+- Existing exact retries, privacy, callback retirement and original-microsecond HTTP200 proof remain unchanged. Tracking#131; no merge/deployment/provider activation.
+
+## Sprint 2 — final accepted backend / reviewed CRM frontend integration
+
+- [x] Normally incorporate accepted main `029de0cadbeb047ef8e38767de4e60e460325821`; preserve all 195 migrations/checksums and all canonical backend/ACL source. Reviewed #126/#127/#129 production UI files remain byte-identical and are included once.
+- [x] Replace the obsolete HTTP 500 expectation with HTTP 200 on the original microsecond collision; assert published-ms/UUID order and unchanged raw timestamps, without fixture normalization or parser/grant workaround.
+- [x] Consolidate #129's overlapping CI: keep the complete four jobs and port the unique trial/journey API/browser scripts into it. Other PRs' workflows are unaffected. Local YAML, syntax, retained-proof mapping and checksum checks pass.
+- [ ] Hosted exact-head full repository, canonical PostgreSQL, commercial and API/browser/axe evidence; focused delta review and explicit owner merge approval remain required. No production/browser launch or activation is claimed.
+- Shared tracking is GitHub #131. Older checkpoints below retain historical evidence only.
+
+## Membership operations — isolated canonical-ACL integration candidate (DRAFT)
+
+- Combine exact reviewed frontend sources #126 `67e01f2a346dbdb0390824b2ebaf856f248750a1` / #127 `6241e34d9632be1cfc430fa6a6e96e26b996fab1`, current reconciled backend #122 `952f20118a867295d67a80049f9807e98541f112`, and accepted main/#128 `7096f916f5aa350876aff19e7eba5f9da6f1406b` in an isolated candidate. Original frontend and Claude branches remain unchanged; this is not backend merge approval.
+- The ACL append conflict was reconciled to Claude's final canonical file exactly after the chain integrated #128; both accepted grant/verifier and current S4 blocks are preserved without custom grant logic. Require canonical EXECUTE/verifier and a positive signed class-list read; remove the old fixture-only GRANT/403 fallback. A rollback-only revoked-grant probe must fail verification, then recover by rollback alone. Existing permission/entitlement/tenant and six canonical drift proofs remain required.
+- Preserve reviewed synchronous callback retirement, identity/tenant binding, read/reconfirmation, exact UNKNOWN URL/body/key retry and concealment unchanged. Keep the microsecond-to-millisecond HTTP 500 reproduction as an unresolved production ordering limitation; fixture normalization is not a production fix.
+- Executed locally: 123 focused tests, web typecheck and all 192 checksum validations pass; source comparisons preserve all 184 accepted-main migrations and the reviewed frontend. One complete integrated-head workflow follows (repository, canonical DB proofs, commercial, real signed API/database, mounted synthetic browser/accessibility). Final exact-head evidence is recorded in the draft PR; no historical pass is presented as fresh integrated evidence. No production, provider, activation or persistent-database operation.
+
+## 2026-11-03 — Connected student booking and attendance (dependency draft)
+
+- PR #127 P2 correction: synchronously retire submit revisions before releasing the command lock, on read replacement/failure and on deliberate abandonment. Ten added component cases reproduce five failures before the fix (including SUCCESS/CONFLICT replacement POSTs) and pass afterward; all 70 focused component/transport/handoff tests pass. Mounted React regressions and fresh exact-head CI verify retained callbacks, fresh confirmed versions and exact UNKNOWN retry without backend, migration or grant changes; final run evidence belongs in the PR report.
+- Final CI repair: normalize only synthetic class-session fixture times to avoid microsecond SQL ordering collapsing into millisecond/UUID contract ties. Add a deterministic actual signed-API reproduction and retain the ACL-denial regression. The mounted CONFLICT test must await completed reread before confirming; no production validator, backend or grant is changed. PR #128 remains the separate canonical ACL dependency.
+- Connect the verified adult/child membership-discovery student reference to the existing bounded sessions, canonical booking, and exact attendance APIs. No new backend, roster, eligibility, financial or provider logic.
+- Keep selections and exact unknown requests in private mounted memory; shield/reauthorize, prevent mounted replacement bookings, require attendance reads and versions, and preserve EN/KO/ES and Modern/Classic/Big Button.
+- Reusable workbench first committed on accepted main; connected handoff depends on #126/#122, without changing those PRs. Signed-session/disposable-DB and mounted browser evidence run in the dedicated draft-safe workflow. See docs/architecture/CONNECTED_STUDENT_BOOKING_ATTENDANCE.md for actual boundaries and dependencies.
+
+## 2026-11-03 — Lead-bound membership recovery frontend (dependency draft)
+
+- Implement actual CRM-list/journey navigation to an idle, signed-session-gated saved-memberships screen. Reuse PR #122's exact closed discovery validator; reopen each adult/child record through existing activation/date/history components, with original lead selectors retained for an authorized return. No school directory, matching, new backend or migration.
+- Explicit identity checks before/after read; distinct 401/403/404/409/503/unverifiable/empty states; synchronous session/school/focus/pagehide concealment, cancellation, late-response rejection, independent detail command ownership, EN/KO/ES, three inherited presentation modes and no sensitive browser storage.
+- Dependency branch starts at #122 `2446820575ae13cdd65284c2168003140fc5b8da`, which already contains accepted main `fac44beba30f5bec3d06d32022c6875ac7019f41`. Draft PR targets that branch; no #122/S4 merge or backend edit. All inherited 192 migrations remain byte-identical, including accepted main's 184; proposed 0200 allocation and upstream security/merge gates remain.
+- Executed locally: 120 focused regressions, 1,354 full web tests, web typecheck, production build and 192 checksum-locked migrations. New signed-session API/PostgreSQL discovery/revocation scenarios and mounted recovery browser/screenshots/axe checks await exact-head GitHub CI; local listeners/PostgreSQL/Chromium are unavailable. No environmental failure is called a pass.
+- Existing authorized bookings/attendance links remain. A verified student/session operational context and supported selector handoff are the next separate integration dependency; do not invent a route or claim a booking/benefit from this lookup. Issue #125 P3 and #121 remain separate. No provider, S4, payment, activation or production changes.
+
+## 2026-11-02 — PR #104 dates/history integration after merged #117
+
+- Reconcile preserved `codex/membership-dates-dependent-117` checkpoint `99cac87` with accepted main `8074f6be2243ecbfa8ee859be5beacdf8bb4d0e5`; preserve original PR #104 head `c4b607a` on `codex/pr104-preserved-c4b607a`. Continue the existing draft PR by normal fast-forward; no competing membership implementation.
+- Connect a fresh authorized ACTIVE lifecycle observation to independently authorized current effective dates/history, two-step date changes, exact-request recovery, and existing bookings/attendance links. Historical receipts cannot establish current status, eligibility or payment. No automatic reads or consequential retries.
+- Complete EN/KO/ES date copy, three presentation modes, persistent accessible status, bound-stage keyboard focus, readonly handoff selectors, stale callback rejection and safe deliberate retry abandonment. Preserve merged #117 privacy/session invalidation and adult/family activation.
+- Executed local evidence: 81 focused safety/localization tests; 1,308 complete web tests in 148 files; web typecheck and production build; 184 unchanged checksum-locked migrations. Fresh final-head GitHub repository, signed-session API/disposable PostgreSQL, commercial, browser/screenshots and accessibility results remain pending publication; do not infer those results from local source checks.
+- Durable ACTIVE discovery after full reload is the next separate backend lookup dependency, already handed off to Claude on PR #104. Issue #121 remains separate. No backend, contract, migration, S4, billing, provider, entitlement or production changes.
+
+## Current full-product frontend delivery — Codex
+
+- Owner direction: preview-only PRs #101/#102 are paused; retain their work without merging preview scaffolding into production. Continue the actual application in small reviewed PRs, with Manus coordinating and Claude owning backend/S4/financial boundaries. Use Manus's [consolidated full-product backlog PR #103](https://github.com/myhonosai/honos/pull/103) for coordination; do not maintain a competing roadmap here.
+- Resume authorized membership-date issue #56 from preserved `fb767a874469bb82bf242d474f42fe3c8c09351b` on main `6ab871cd781935fc633dfec7685075b3d95432be`; retain all newer application and migration changes. Original checkpoint code is preserved, with current shared session invalidation/pagehide/school-context protection, final identity checks and narrow regression tests added.
+- Local verification: 51 focused date frontend tests, web typecheck and all 183 historical migration checksums pass. Full exact-head repository, signed-session API/disposable PostgreSQL, browser/accessibility and commercial evidence remain pending publication. No backend, migration, billing, provider, entitlement or parent-publication behavior changes.
+- #94/#95 corrected heads are independently source-reviewed; await current regular CI and owner merge authorization. #97 is AI-0 test-only evidence, not S4; its separately reported P2 connection-guard correction is required before source readiness. #90 retains its migration-ledger/policy gates. No merge, activation, paid call or deployment is authorized here.
+
+## 2026-11-02 — Connected school membership integration (in review)
+
+- Existing CRM registration and creator-visible current adult/child DRAFTs now hand off to the existing independently authorized E1a two-step activation UI without manual IDs. No backend, contract, migration, billing or provider behavior is added.
+- Activation privacy, original-identity verification, command settlement and exact-request retry protections extended; localized EN/KO/ES activation and three presentation modes. Current lifecycle observation remains distinct from historical receipt/effective status/payment.
+- Separate draft PR and exact-head CI evidence required before source merge. Local initial web suite: 1,222 passed; focused safety suite: 52 passed; web typecheck/build and 183 checksum-locked migration validation passed. New final regressions and real disposable API/browser verification are tracked in the PR, not inferred from these earlier results.
+- PR #104 remains unchanged/separate. Durable active-membership lookup after a full reload, effective-status integration, historical plan terms, financial enrollment and deployment remain dependencies. See `docs/architecture/MEMBERSHIP_ACTIVATION_GATE_CODEX_HANDOFF.md` connected-workflow section.
+
+## Connected CRM — persistent trial recovery integration
+
+- [x] Prepare explicit saved-trial list/detail reads, current-version outcome review, strict duplicate-conflict evidence and retained exact retries on top of PR #95; preserve F1 scheduling holds, F2 lead-refresh barriers, EN/KR/ES, privacy and all existing registration workflows.
+- [x] Normally incorporate accepted #107/main `dce550e7c286dcf34a8ca6beb175b39289f7c69e`, source-identical to reviewed `9e8289fc0e9485ea8f4cc4b76f3765940c8b7f52`. Preserve the reviewed frontend application code from `bc6c0188d9c0354845ac660d60052497fd736120` and run the recovery proof against this same combined checkout, without an alternate backend.
+- Local evidence: 131 focused regressions and all 1,191 web tests passed, with typecheck and 183 unchanged migration checksums. Browser/API/PostgreSQL evidence remains pending on the final published head; no local socket/database pass is claimed.
+- [ ] Verify the final reconciled PR #95 head through fresh repository/build, browser/accessibility, all 48 canonical PostgreSQL proofs and combined-source signed-session recovery tests. Earlier `bc6c0188` passed all five draft-safe jobs; that history does not establish this new head. Keep draft for independent frontend review, required regular CI and owner merge approval; entitlement-lapse policy remains a pilot gate.
+
+## Connected staff CRM operating journey — Codex (in progress)
+
+- PR #95 independent-review corrections F1/F2: retain school-scoped trial scheduling holds for this mounted lifetime across lead switches, refreshes and deliberate abandonment; retain required lead refresh until a successful authorized lead read. Add negative key/POST/preparation regressions and fresh draft-safe verification. No backend reader is invented; cross-session trial recovery and pilot readiness remain blocked.
+
+- [ ] Connect verified lead selection, internal self-assigned follow-up, trial schedule/outcome, CRM-only WON/LOST and optional registration record through existing exact-school commands. No provider, messaging, billing, membership activation or AI execution.
+- [ ] Preserve in-memory immutable exact retries, command ownership across privacy concealment, explicit session/school restoration, and honest historical receipts versus current reads. Three modes and EN/KR/ES; independent draft PR, no changes to PRs #90/#94.
+- [ ] Verify targeted interactions, complete workspace/build/migration checks, disposable security proofs and desktop/tablet/mobile browser accessibility on the final exact head. Inventory: `docs/architecture/CONNECTED_STAFF_CRM_JOURNEY.md`.
+
 ## Founder Setup guide — Codex (isolated frontend)
 
 - Manus P2/P3 correction pass on PR #94 only: announce every user-initiated stage change through a persistent EN/KR/ES status region; preserve native keyboard focus and all four navigation methods. Include the routes manifest in dedicated CI, nest HQ headings under the existing shell title, and restore a persistent underline on owner invitations. Fresh exact-head tests/browser/accessibility/typecheck/build evidence belongs in PR #94. No backend, permission, completion-state, PR #95 or #97 change.
@@ -18,6 +263,50 @@
 
 - [x] Refuse missing/invalid deployment identity and non-OIDC/incomplete authentication at customer-facing production/staging web startup, reusing the existing auth validator. Keep builds credential-free and explicitly labelled isolated previews/development useful; no provider calls or authority changes.
 - [ ] Exact-head CI: verify actual Next startup refusals, development/preview compatibility, signed-session routes, sanitized errors, workspace checks and desktop/mobile browser accessibility. Separate draft PR; PR #89 remains unchanged. Deployment and preview hosting policy require owner review.
+
+## S4-d lost AI outcomes (UNKNOWN) and HQ owner resolution — Claude (2026-11-01, owner-authorized draft, stacked on S4-c)
+
+- Migration `0196_ai_unknown_resolution.sql` (number proposed; owner allocates). Owner decision AI-D3. Finding AI-8. Design: `docs/architecture/HON_AI_UNKNOWN_RESOLUTION_S4D.md`.
+- [x] Window-scoped counting: UNKNOWN and stale (1 hour) SENDING holds count only in the window in which they were held; in-flight calls always count.
+- [x] `resolve_ai_unknown_invocation` (human HQ owner only; RECORD_PROVIDER_COST / NO_PROVIDER_CHARGE / WRITE_OFF with closed evidence; one ledger row in the original window or none; immutable record, audit, inert outbox; idempotent; once per call) and the HQ queue read; `GET /v1/hq/ai/unknown-invocations`, `POST .../:agent/:invocationId/resolve`.
+- [x] AI-0: KF-AI8 flipped to `FIXED_BY_S4D`, replaced by INV-19 and INV-20; no open known failures remain. API test `ai-unknown-resolution.test.cjs`.
+- [ ] Codex: HQ queue and resolution screen.
+- [ ] Later slice: UNKNOWN escalation monitor (more than 5 in 24 hours pauses the organization; older than 72 hours alerts HQ).
+- [ ] Independent review; owner merge after #97, S4-a, S4-b and S4-c.
+
+## S4-c AI spend access decision and HQ pause — Claude (2026-11-01, owner-authorized draft, stacked on S4-b)
+
+- Migration `0195_ai_spend_access_decision.sql` (number proposed; owner allocates). Owner decision AI-D1 = A. Findings AI-9, AI-1. Design: `docs/architecture/HON_AI_ACCESS_DECISION_S4C.md`.
+- [x] One access decision `ai_spend_allowed(org, at, class)`: HQ pause, promotional hook (off), live exception refuses (`AI_EXCEPTION_NO_AI`), legacy unchanged, explicit mapping for every paid-access state (unknown refuses). Applied at begin, at every hold increase (before the budget check) and at B3 reservation insert. Evidence steps never gated.
+- [x] HQ emergency pause: append-only `ai_spend_pauses`, human HQ owner only, organization or platform, per class or ALL, idempotent per key; `GET/POST /v1/hq/ai/spend-pauses` with exact human-command guard.
+- [x] AI-0: KF-AI9 flipped to `FIXED_BY_S4C`, replaced by INV-16 (all three agents); INV-17 (state mapping) and INV-18 (pause) added. API test `ai-spend-pause.test.cjs`.
+- [ ] Codex: HQ pause screen and plain refusal copy on agent screens.
+- [ ] Owner decisions before the hooks do anything: promotional AI access, trial AI funding.
+- [ ] Independent review; owner merge after #97, S4-a and S4-b.
+
+## S4-b organization agent budget and lock — Claude (2026-11-01, owner-authorized draft, stacked on S4-a)
+
+- Migration `0194_ai_org_budget_lock.sql` (number proposed; owner allocates). Findings AI-2, AI-3, AI-17. Design: `docs/architecture/HON_AI_ORG_BUDGET_LOCK_S4B.md`.
+- [x] One organization agent budget: `ai_org_committed_credits` (agent-inference ledger credits in the `ai_spend_window` plus every open Marcus/Claire/Chad hold), `ai_org_ceiling` (12,000, the only literal left), `ai_budget_lock` (`ai.budget:<org>`, taken first in every prepare, before the gate row locks; see the design doc for the deadlock it avoids). The three prepares use them; refusal stays durable `BLOCKED` / `CUSTOMER_BUDGET_EXCEEDED`. Reserve guard trigger re-checks any hold increase (`AI_ORG_BUDGET_EXCEEDED`, 42501).
+- [x] `ai_usage_ledger.spend_class` (AGENT_INFERENCE / CREATIVE_MEDIA / HQ_INTERNAL); B3 rows backfilled and written CREATIVE_MEDIA; agent writers set AGENT_INFERENCE; planning eligibility counts agent rows only.
+- [x] AI-0: KF-AI2 and KF-AI3 flipped to `FIXED_BY_S4B`, replaced by INV-14 (all 6 arrival orders at used 11,990) and INV-15 (deterministic pg_locks serialization, 3 same-agent + 3 cross-agent pairs). KF-AI8 probe now shows the stale hold blocking both agents (still open for S4-d).
+- [ ] B3 creative reservations keep their own allowance check (closed program); the B3 budget guard is deferred to the creative-wallet slices (AI-17 keeps creative out of the agent budget).
+- [ ] Independent review; owner merge after #97 and S4-a.
+
+## S4-a durable AI usage evidence — Claude (2026-11-01, owner-authorized draft, stacked on AI-0)
+
+- Migration `0193_ai_spend_durable_evidence.sql` (number proposed; owner allocates). Owner decisions AI-D6, AI-D7. Design: `docs/architecture/HON_AI_SPEND_DURABLE_EVIDENCE_S4A.md`.
+- [x] Evidence-only actor `ai_evidence_actor`; the six `record_*`/`fail_*` functions check only tenant, requester and SENDING, so a charged result is recorded after a mid-flight lapse (AI-14). Recording ends `RESULT_RECORDED`; the approval proposal is a separate transaction under the full gate (AI-16); a lapse ends `RESULT_HELD` / `ACCESS_LAPSED` and retry binds it once after access returns (AI-D7). `ai_usage_ledger.source_invocation_id` unique per invocation (AI-5, agent rows).
+- [x] AI-0 KF-AI14 flipped to `FIXED_BY_S4A`, replaced by INV-13 (3 agents x 3 lapse kinds, failed-proposal survival, replay, duplicate ledger refusal).
+- [ ] Independent review (Manus or Codex); regular CI after mark-ready; owner merge after PR #97. Codex: web workbenches should label `RESULT_RECORDED`/`RESULT_HELD` (validators already accept them).
+
+## AI-0 spend-authority regression baseline — Claude (2026-10-31)
+
+- Test only; not the security fix. No migration, runtime, policy, provider or deployment change. Design: `docs/architecture/HON_AI_SPEND_AUTHORITY_BASELINE.md`.
+- [x] Dedicated single-use disposable fixture `hon_ai_spend_baseline_validation`; strict inventory `packages/database/scripts/ai-spend-entrypoints.json` (spend tables/functions, ledger/reservation/allowance/credit writers, 12000 ceilings, grants, programs, AI policy records); 12 invariants; fake providers only; wired into `run-db-proofs.sh` (AI-10 closed for the baseline) and `db:test-ai-spend-baseline`.
+- [x] Known failures pinned OPEN: KF-AI2 cross-agent over-commit (S4), KF-AI9 unpaid HQ COMPLETE exception reaches the provider (S4), KF-AI8 UNKNOWN hold never released and not month-scoped (AI-D3 slice), KF-AI3 same-agent race (S4; observed serialized, not reproduced), and new KF-AI14: an entitlement lapse while a call is in flight loses its usage record and leaves the hold SENDING for all three agents (S4).
+- [ ] Independent review of the draft PR, then owner merge decision. AI-D1 (S4 scope/order) stays open.
+- [ ] S4 must flip KF-AI2/AI9/AI3/AI14 to FIXED_BY_S4 and replace each probe with its invariant in the same reviewed PR; an explicit exception refusal (`AI_EXCEPTION_NO_AI`) and an organization-wide budget lock and unguarded evidence steps (record/fail after a lapse) are required.
 
 ## Launch P0-1 — HQ-assisted school-owner accounts (in progress)
 

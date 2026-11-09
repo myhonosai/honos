@@ -12,7 +12,7 @@ function endpoint(path: string) {
 export function verifyTeachingInvocation(value: unknown, curriculumId?: string, invocationId?: string): TeachingInvocationView {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Unverified teaching assistant result.');
   const item = value as Record<string, unknown>;
-  const statuses = ['PENDING', 'CONFIGURATION_REQUIRED', 'BLOCKED', 'SENDING', 'UNKNOWN', 'FAILED', 'AWAITING_APPROVAL', 'SAVED', 'REJECTED'];
+  const statuses = ['PENDING', 'CONFIGURATION_REQUIRED', 'BLOCKED', 'SENDING', 'UNKNOWN', 'FAILED', 'RESULT_RECORDED', 'RESULT_HELD', 'AWAITING_APPROVAL', 'SAVED', 'REJECTED'];
   if (!UUID.test(String(item.id)) || (invocationId !== undefined && item.id !== invocationId) || !UUID.test(String(item.schoolId)) || (curriculumId !== undefined && item.curriculumId !== curriculumId) || !UUID.test(String(item.curriculumId)) || !UUID.test(String(item.workItemId)) || !statuses.includes(String(item.status)) || (item.reason !== null && typeof item.reason !== 'string') || (item.actionRequestId !== null && !UUID.test(String(item.actionRequestId)))) throw new Error('Unverified teaching assistant scope or durable state.');
   if (item.draft !== null) validateTeachingDraft(item.draft);
   for (const key of ['inputTokens', 'outputTokens', 'providerCostMicrounits', 'customerCredits']) if (item[key] !== null && (!Number.isSafeInteger(item[key]) || Number(item[key]) < 0)) throw new Error('Unverified teaching usage.');

@@ -34,6 +34,7 @@ import { verifyActionApprovalSecurity } from './action-approval-security.mjs';
 import { communityTables, verifyCommunitySecurity } from './community-security.mjs';
 import { championsClubTables, verifyChampionsClubSecurity } from './champions-club-security.mjs';
 import { saasBillingTables, verifySaasBillingSecurity } from './saas-billing-security.mjs';
+import { creativeStudioTables, verifyCreativeStudioSecurity } from './creative-studio-security.mjs';
 import { languagePreferenceTables, verifyLanguagePreferenceSecurity } from './language-preferences-security.mjs';
 import { readFile } from 'node:fs/promises';
 
@@ -85,6 +86,7 @@ const expectedRlsTables = [
   ...communityTables,
   ...championsClubTables,
   ...saasBillingTables,
+  ...creativeStudioTables,
   ...schoolAccountTables,
   ...languagePreferenceTables,
   'membership_renewal_reviews', 'membership_renewal_versions', 'membership_renewal_requests',
@@ -99,6 +101,15 @@ const expectedRlsTables = [
   'action_requests',
   'ai_team_presentation_preferences',
   'ai_usage_ledger',
+  'ai_spend_pauses',
+  'ai_unknown_resolutions',
+  'hon_conversations',
+  'hon_conversation_turns',
+  'hon_reply_invocations',
+  'hon_orchestrations',
+  'hon_orchestration_members',
+  'ai_late_provider_expenses',
+  'ai_spend_pause_commands',
   'ai_invocation_plans',
   'chad_follow_up_invocations',
   'chad_follow_up_drafts',
@@ -125,11 +136,16 @@ const expectedRlsTables = [
   'crm_guardian_child_enrolled_children',
   'crm_guardian_child_payer_designations',
   'crm_guardian_child_membership_draft_sources',
+  'crm_guardian_child_identity_corrections',
+  'school_person_command_receipts',
   'membership_activation_decisions',
   'membership_effective_periods',
   'membership_activation_follow_ups',
   'membership_date_revisions',
   'membership_date_revision_follow_ups',
+  'school_membership_pause_policies',
+  'membership_pauses',
+  'membership_refund_records',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',
@@ -266,8 +282,8 @@ try {
   const inboxFunctions = runtimeRoleName === 'hon_marketing_ai_runtime'
     ? ['hon.list_my_marketing_invocations(text)']
     : runtimeRoleName === 'hon_teaching_ai_runtime'
-      ? ['hon.list_my_teaching_invocations(text)']
-      : ['hon.list_my_marketing_invocations(text)', 'hon.list_my_teaching_invocations(text)', 'hon.list_my_chad_follow_up_invocations(text)'];
+      ? ['hon.list_my_teaching_invocations(text)', 'hon.list_teaching_assistant_curricula(text)']
+      : ['hon.list_my_marketing_invocations(text)', 'hon.list_my_teaching_invocations(text)', 'hon.list_teaching_assistant_curricula(text)', 'hon.list_my_chad_follow_up_invocations(text)'];
   for (const signature of inboxFunctions) {
     const inbox = (await client.query(`SELECT
       p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AS definition_safe,
@@ -291,6 +307,7 @@ try {
   await verifyCommunitySecurity(client, runtimeRoleName);
   await verifyChampionsClubSecurity(client, runtimeRoleName);
   await verifySaasBillingSecurity(client, runtimeRoleName);
+  await verifyCreativeStudioSecurity(client, runtimeRoleName);
   await verifyA2pPreparationSecurity(client, runtimeRoleName);
   await verifySchoolAccountSecurity(client, runtimeRoleName);
   await verifyLanguagePreferenceSecurity(client, runtimeRoleName);

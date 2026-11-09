@@ -49,4 +49,13 @@ try {
 } finally { await client.end(); }
 const canonical=(await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql',import.meta.url),'utf8')).replaceAll('hon_runtime',runtime).replaceAll('FOR ROLE postgres',`FOR ROLE ${owner}`).replaceAll('DATABASE postgres',`DATABASE ${database}`);
 psql(canonical,database);psql(canonical,database);
+// The school-account authority envelope (0191 hon.lock_school_account_authority) takes SHARE ROW EXCLUSIVE ... NOWAIT on
+// these tables by design. An autovacuum/autoanalyze worker holds SHARE UPDATE EXCLUSIVE, so on a freshly seeded disposable
+// database it can turn a sequential, uncontended proof command into ACCOUNT_BUSY (55P03) at random. Proofs exercise busy
+// deliberately with their own blockers; background maintenance is switched off for these tables in this fixture only.
+psql(`ALTER TABLE hon.organizations SET (autovacuum_enabled=false); ALTER TABLE hon.schools SET (autovacuum_enabled=false);
+ ALTER TABLE hon.users SET (autovacuum_enabled=false); ALTER TABLE hon.principals SET (autovacuum_enabled=false);
+ ALTER TABLE hon.principal_role_grants SET (autovacuum_enabled=false); ALTER TABLE hon.hq_operator_grants SET (autovacuum_enabled=false);
+ ALTER TABLE hon.family_access_grants SET (autovacuum_enabled=false); ALTER TABLE hon.roles SET (autovacuum_enabled=false);
+ ALTER TABLE hon.role_permissions SET (autovacuum_enabled=false);`,database);
 console.log('PASS: dedicated marked localhost Champions Club database migrated; canonical least-privilege grants applied twice. Credentials remain only in the fresh private job env file.');

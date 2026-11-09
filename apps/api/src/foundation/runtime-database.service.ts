@@ -41,6 +41,8 @@ export interface ResolvedParentFamilyScope extends ResolvedPrincipalScope {
 
 export interface HqSchoolProvisioningCommand {
   externalSubject: string;
+  /** The HQ principal the human screen verified; the database refuses before any write unless it is the actor. */
+  expectedPrincipalId: string;
   legalName: string;
   displayName: string;
   schoolName: string;
@@ -58,6 +60,8 @@ export interface HqSchoolProvisioningResult {
   schoolId: string;
   ownerRoleId: string;
   replayed: boolean;
+  actorPrincipalId: string;
+  entitlementStatus: string;
 }
 
 const CHAMPIONS_CLUB_CALLS = {
@@ -130,6 +134,25 @@ const SAAS_BILLING_CALLS = {
   estimatePremiumOperation: { sql: 'SELECT hon.estimate_saas_premium_operation($1,$2::uuid,$3,$4::integer) AS data', arity: 4, readOnly: true },
   reservePremiumCredits: { sql: 'SELECT hon.reserve_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   settlePremiumCredits: { sql: 'SELECT hon.settle_saas_premium_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // CW1: HON OS creative credit wallet (no provider call, no card charge; purchases are recorded intents only).
+  setCreativeProgram: { sql: 'SELECT hon.set_saas_creative_program($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  publishCreativeRates: { sql: 'SELECT hon.publish_saas_creative_rates($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  grantCreativeCredits: { sql: 'SELECT hon.grant_saas_creative_credits_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  debitCreativeLot: { sql: 'SELECT hon.debit_saas_creative_lot_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  resolveCreativeReservation: { sql: 'SELECT hon.resolve_saas_creative_reservation_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  recordCreativeCost: { sql: 'SELECT hon.record_saas_creative_cost_from_hq($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  readCreativeWalletFromHq: { sql: 'SELECT hon.read_saas_creative_wallet_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeWalletsFromHq: { sql: 'SELECT hon.read_saas_creative_wallets_from_hq($1) AS data', arity: 1, readOnly: true },
+  readSchoolCreativeWallet: { sql: 'SELECT hon.read_saas_creative_wallet($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  openCreativeWindow: { sql: 'SELECT hon.open_saas_creative_window($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  reserveCreativeCredits: { sql: 'SELECT hon.reserve_saas_creative_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  settleCreativeCredits: { sql: 'SELECT hon.settle_saas_creative_credits($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  createCreativeTopupPurchase: { sql: 'SELECT hon.create_saas_creative_topup_purchase($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
+  // CS1 (0216, proposed): Creative Studio generations on the school's creative wallet (no provider is called by the database).
+  createCreativeGeneration: { sql: 'SELECT hon.create_creative_generation($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  recordCreativeGenerationResult: { sql: 'SELECT hon.record_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  readCreativeGenerations: { sql: 'SELECT hon.read_creative_generations($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeGeneration: { sql: 'SELECT hon.read_creative_generation($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
@@ -157,11 +180,18 @@ const SAAS_BILLING_CALLS = {
   readSchoolBillingAccount: { sql: 'SELECT hon.read_saas_school_billing_account($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readSchoolInvoices: { sql: 'SELECT hon.read_saas_school_invoices($1,$2::uuid,$3,$4,$5::timestamptz,$6::uuid,$7::integer) AS data', arity: 7, readOnly: true },
   readSchoolInvoice: { sql: 'SELECT hon.read_saas_school_invoice($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  readSchoolAccessStanding: { sql: 'SELECT hon.read_saas_school_access_standing($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readAccessReadiness: { sql: 'SELECT hon.read_saas_access_readiness_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   readOrganizationAccess: { sql: 'SELECT hon.read_saas_organization_access_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   awaitFirstPayment: { sql: 'SELECT hon.place_saas_organization_awaiting_payment($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   retryFirstPaymentActivation: { sql: 'SELECT hon.retry_saas_first_payment_activation($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   // D9 HQ-owner access exceptions (0185): time-limited free access for testing, demos and approved pilots; never credits.
+  readAiUnknownInvocations: { sql: 'SELECT hon.read_ai_unknown_invocations_from_hq($1) AS data', arity: 1, readOnly: true },
+  readAiSchoolUsage: { sql: 'SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) AS data', arity: 3, readOnly: true },
+  resolveAiUnknownInvocation: { sql: 'SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  recordAiLateProviderExpense: { sql: 'SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  readAiSpendPauses: { sql: 'SELECT hon.read_ai_spend_pauses_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandAiSpendPause: { sql: 'SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -175,6 +205,10 @@ const SAAS_BILLING_CALLS = {
   publishTrialCampaign: { sql: 'SELECT hon.publish_saas_trial_campaign($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   withdrawTrialCampaign: { sql: 'SELECT hon.withdraw_saas_trial_campaign($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   readExceptionPolicy: { sql: 'SELECT hon.read_saas_exception_policy($1) AS data', arity: 1, readOnly: true },
+  // B-HQ-1 (0219): read-only HQ overview of every organization's access standing; writes nothing.
+  readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
+  readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   decideExceptionPolicy: { sql: 'SELECT hon.decide_saas_exception_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
   readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },
@@ -196,6 +230,8 @@ const LANGUAGE_CALLS = {
   updateSchool: { sql: 'SELECT hon.set_school_language_default($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
 } as const;
 export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
+
+export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1024,11 +1060,11 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   async provisionSchoolFromHq(command: HqSchoolProvisioningCommand): Promise<HqSchoolProvisioningResult> {
     await this.assertRuntimePosture();
-    const result = await this.getPool().query<HqSchoolProvisioningResult>(
-      `SELECT organization_id AS "organizationId", school_id AS "schoolId", owner_role_id AS "ownerRoleId", replayed
-       FROM hon.provision_school_from_hq($1, $2, $3, $4, $5, $6, $7::hon.plan_tier, $8, $9, $10::uuid, $11::uuid)`,
+    const result = await this.getPool().query<{ data: HqSchoolProvisioningResult }>(
+      `SELECT hon.provision_school_from_hq_human($1, $2::uuid, $3, $4, $5, $6, $7, $8::hon.plan_tier, $9, $10, $11::uuid, $12::uuid) AS data`,
       [
         command.externalSubject,
+        command.expectedPrincipalId,
         command.legalName,
         command.displayName,
         command.schoolName,
@@ -1041,7 +1077,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
         command.correlationId,
       ],
     );
-    const provisioned = result.rows[0];
+    const provisioned = result.rows[0]?.data;
     if (!provisioned) throw new Error('HON HQ tenant provisioning did not return a result.');
     return provisioned;
   }
@@ -1178,6 +1214,56 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
     return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  /** B-ID-4 (0223 proposed): school ownership handoff reads and HQ-owner commands. */
+  async callSchoolOwnership(operation: SchoolOwnershipOperation, params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      hqRead: {sql: 'SELECT hon.read_school_ownership_from_hq($1,$2::uuid) data',arity:2},
+      setPrimary: {sql: "SELECT hon.manage_school_ownership($1,'SET_PRIMARY',$2::jsonb,$3::uuid) data",arity:3},
+      ownerRead: {sql: 'SELECT hon.read_school_ownership($1,$2::uuid) data',arity:2},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callSchoolStaffAccount(operation: 'invite'|'revoke'|'accept'|'list'|'roles', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      invite: {sql: "SELECT hon.manage_school_staff_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},
+      revoke: {sql: "SELECT hon.manage_school_staff_invitation($1,'REVOKE',$2::jsonb,$3::uuid) data",arity:3},
+      accept: {sql: 'SELECT hon.accept_school_staff_invitation($1,$2,$3::jsonb,$4::uuid) data',arity:4},
+      list: {sql: 'SELECT hon.read_school_staff_invitations($1,$2::uuid) data',arity:2},
+      roles: {sql: 'SELECT hon.read_school_staff_invitation_roles($1,$2::uuid) data',arity:2},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      invite: {sql: "SELECT hon.manage_school_family_access_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},
+      revoke: {sql: "SELECT hon.manage_school_family_access_invitation($1,'REVOKE',$2::jsonb,$3::uuid) data",arity:3},
+      end: {sql: "SELECT hon.manage_school_family_access_invitation($1,'END',$2::jsonb,$3::uuid) data",arity:3},
+      accept: {sql: 'SELECT hon.accept_school_family_access_invitation($1,$2,$3::jsonb,$4::uuid) data',arity:4},
+      list: {sql: 'SELECT hon.read_school_family_access_invitations($1,$2::uuid) data',arity:2},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  /** B-CRM-1a person record: the subject is the verified session subject; the database decides school authority. */
+  async callSchoolPersonRecord(operation: 'read'|'update'|'birthDate', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_school_person($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      update: {sql: 'SELECT hon.update_school_person($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      birthDate: {sql: 'SELECT hon.update_school_student_birth_date($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

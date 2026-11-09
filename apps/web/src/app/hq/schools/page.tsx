@@ -1,4 +1,5 @@
 import { HqSchoolDirectory } from '../../../components/hq-school-directory';
+import { HqOnboardingPanel } from '../../../components/hq-onboarding-panel';
 
 export const metadata = {
   title: 'HON HQ | School Directory',
@@ -9,5 +10,5 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default function HqSchoolsPage(): React.ReactElement {
-  return <HqSchoolDirectory />;
+  return <><HqSchoolDirectory /><HqOnboardingPanel /></>;
 }

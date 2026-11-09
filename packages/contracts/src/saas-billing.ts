@@ -93,6 +93,18 @@ export const SAAS_COMMANDS = {
   revokeAccessException: 'saas-access-exception-revoke',
   closeExpiredAccessExceptions: 'saas-access-exception-close',
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
+  aiSpendPause: 'ai-spend-pause',
+  aiUnknownResolve: 'ai-unknown-resolve',
+  aiLateProviderExpense: 'ai-late-provider-expense',
+  setCreativeProgram: 'saas-creative-program',
+  publishCreativeRates: 'saas-creative-rates-publish',
+  grantCreativeCredits: 'saas-creative-grant',
+  debitCreativeLot: 'saas-creative-debit',
+  resolveCreativeReservation: 'saas-creative-resolve',
+  recordCreativeCost: 'saas-creative-cost-record',
+  openCreativeWindow: 'saas-creative-window-open',
+  createCreativeTopupPurchase: 'saas-creative-topup-purchase',
+  createCreativeGeneration: 'saas-creative-generation-create',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

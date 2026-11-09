@@ -65,7 +65,7 @@ test('POST create guard closes origin/JSON/fetch metadata/marker/key/query/conte
  const body = input(), lead = summary(body), creates = [], scopes = [];
  let authenticated = true, authorized = true, replayed = false, identityPatch = {};
  const db = { resolveAuthorizedScope: async (...args) => { scopes.push(args); return authorized ? scope : undefined; } };
- const leads = { create: async (c, b) => { creates.push({ c, b }); return { lead, replayed }; }, list: async () => [] };
+ const leads = { create: async (c, b) => { creates.push({ c, b }); return { lead, replayed }; }, list: async () => ({ leads: [], access: { mode: 'FULL' } }) };
  const module = await Test.createTestingModule({ controllers: [LeadController], providers: [LeadCreateHumanUiGuard, { provide: RuntimeDatabaseService, useValue: db }, { provide: LeadService, useValue: leads }] })
   .overrideGuard(HonIdentityGuard).useValue({ canActivate(c) { if (!authenticated) throw new UnauthorizedException(); c.switchToHttp().getRequest().honIdentity = { externalSubject: 'signed-subject', ...identityPatch }; return true; } }).compile();
  const app = module.createNestApplication(); app.setGlobalPrefix('v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); await app.listen(0, '127.0.0.1');

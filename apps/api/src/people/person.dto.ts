@@ -1,4 +1,5 @@
-import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsEmail, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreatePersonDto {
   @IsString()
@@ -26,4 +27,17 @@ export class ListPeopleDto {
   @IsString()
   @MaxLength(160)
   query?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  /** Opaque keyset cursor from the previous page's meta.nextCursor. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  cursor?: string;
 }

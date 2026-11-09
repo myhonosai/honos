@@ -13,14 +13,16 @@ import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
 import { MembershipPlanTerms } from './membership-plans/terms';
 import styles from './crm-family-flow.module.css';
 import { useLocale } from './localization/provider';
+import type { KnownMembership } from './membership-activation-http';
+import { membershipJourneyText } from './crm-membership-journey-copy';
 
 const childStatus = { AWAITING_PAYER_DESIGNATION: 'Awaiting guardian payer designation', READY_FOR_DRAFT: 'Ready to choose a plan', CURRENT_DRAFT: 'Current DRAFT verified', CURRENT_DRAFT_BY_OTHER_STAFF: 'Current DRAFT recorded by other staff', NEEDS_STAFF_REVIEW: 'Staff review required' };
 type History = { childName: string; draft: CrmGuardianChildMembershipDraftFromPlan };
-export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onStarted, onAccessLost, onAdult }: {
+export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onStarted, onAccessLost, onAdult, onMembershipReview }: {
   scope: PlanScope; row: LeadListItem; initialFamily: CrmGuardianChildEnrollment; onCancel(): void; onBusy(busy: boolean): void;
-  onStarted(): void; onAccessLost(): void; onAdult(): void;
+  onStarted(): void; onAccessLost(): void; onAdult(): void; onMembershipReview?(selectors: KnownMembership): void;
 }): React.ReactElement {
-  const { date } = useLocale();
+  const { date, preferences } = useLocale();
   const [family, setFamily] = useState<CrmGuardianChildEnrollment | null>(initialFamily), [selected, setSelected] = useState('');
   const [given, setGiven] = useState(''), [surname, setSurname] = useState(''), [birth, setBirth] = useState(''), [currency, setCurrency] = useState('USD');
   const [confirmed, setConfirmed] = useState(false), [busy, setBusy] = useState(false), [pickerBlocked, setPickerBlocked] = useState(false);
@@ -30,7 +32,8 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
   const [previousFamily, setPreviousFamily] = useState(initialFamily);
   const pendingChild = useRef(''), preferredChild = useRef('');
   const active = useRef(false), epoch = useRef(0), abort = useRef<AbortController | null>(null), heading = useRef<HTMLHeadingElement | null>(null);
-  useEffect(() => { heading.current?.focus(); return () => { epoch.current++; abort.current?.abort(); active.current = false; }; }, [scope.organizationId, scope.schoolId, row.id]);
+  const membershipReview = useRef<KnownMembership | null>(null), mounted = useRef(true);
+  useEffect(() => { mounted.current = true; heading.current?.focus(); return () => { mounted.current = false; membershipReview.current = null; epoch.current++; abort.current?.abort(); active.current = false; }; }, [scope.organizationId, scope.schoolId, row.id]);
   // An explicit privacy restore supplies a newly authorized read. Keep exact
   // requests, but discard earlier receipts, inputs and catalog review facts.
   if (previousFamily !== initialFamily) {
@@ -39,7 +42,15 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
   const verified = family && 'children' in family ? family : null;
   const child = verified?.children.find(c => c.studentProfileId === selected);
   const locked = busy || pickerBlocked || pending !== null || unexpectedRetry !== null;
+  const reviewSelectors = onMembershipReview && child?.workflowState === 'CURRENT_DRAFT' && child.currentMembershipDraft && 'receipt' in child.currentMembershipDraft && !locked && previousFamily === initialFamily
+    ? { organizationId: scope.organizationId, schoolId: scope.schoolId, membershipId: child.currentMembershipDraft.receipt.membershipId } : null;
+  membershipReview.current = reviewSelectors;
+  const reviewMembership = (): void => {
+    if (!mounted.current || active.current || !reviewSelectors || membershipReview.current !== reviewSelectors) return;
+    membershipReview.current = null; onMembershipReview?.(reviewSelectors);
+  };
   async function fresh(): Promise<void> {
+    membershipReview.current = null;
     const generation = epoch.current;
     setFamily(null); setSelected(''); setConfirmed(false);
     const controller = new AbortController(); abort.current = controller;
@@ -55,6 +66,7 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
   }
   async function run(request: FamilyRequest): Promise<void> {
     if (active.current || pickerBlocked || unexpectedRetry || pending && pending !== request) return;
+    membershipReview.current = null;
     const generation = epoch.current; active.current = true; setBusy(true); onBusy(true); onStarted(); setError(''); setMessage(''); setHistory(null);
 
     try {
@@ -112,13 +124,14 @@ export function CrmFamilyFlow({ scope, row, initialFamily, onCancel, onBusy, onS
     {verified && <><section aria-labelledby="guardian-overview"><h3 id="guardian-overview">Guardian &amp; family</h3><p><strong>{verified.guardian.displayName}</strong> · verified guardian for {verified.children.length} {verified.children.length === 1 ? 'child' : 'children'}</p><p>Guardian and children have separate identities. Historical registration is not evidence of current membership.</p>
       <p>{verified.billingAccount ? `Canonical guardian billing account verified · ${verified.billingAccount.currency}` : 'No canonical guardian billing account is available.'}</p>
       <p>{verified.payerDesignation ? `Guardian payer designation verified · ${verified.payerDesignation.currency}` : 'Payer responsibility has not been designated. Contact information alone does not establish a payer.'}</p></section>
-      <section aria-labelledby="family-children-title"><h3 id="family-children-title">Children · {verified.children.length} / {CRM_GUARDIAN_CHILD_MAX_CHILDREN}</h3><div className={styles.children}>{verified.children.map(c => <button type="button" key={c.studentProfileId} disabled={locked} aria-pressed={selected === c.studentProfileId} onClick={() => { setSelected(c.studentProfileId); preferredChild.current = c.studentProfileId; setHistory(null); setError(''); }}><strong>{c.displayName}</strong><span>{c.origin === 'CRM_REGISTRATION' ? 'First registered child' : 'Additional child'}</span><span>{childStatus[c.workflowState]}</span></button>)}</div></section>
+      <section aria-labelledby="family-children-title"><h3 id="family-children-title">Children · {verified.children.length} / {CRM_GUARDIAN_CHILD_MAX_CHILDREN}</h3><div className={styles.children}>{verified.children.map(c => <button type="button" key={c.studentProfileId} disabled={locked} aria-pressed={selected === c.studentProfileId} onClick={() => { if (active.current || locked) return; membershipReview.current = null; setSelected(c.studentProfileId); preferredChild.current = c.studentProfileId; setHistory(null); setError(''); }}><strong>{c.displayName}</strong><span>{c.origin === 'CRM_REGISTRATION' ? 'First registered child' : 'Additional child'}</span><span>{childStatus[c.workflowState]}</span></button>)}</div></section>
     </>}
     {child && <section className={styles.child} aria-labelledby="selected-child-title"><h3 id="selected-child-title">Membership for {child.displayName}</h3><p role="status">{childStatus[child.workflowState]}</p>
       {child.workflowState === 'NEEDS_STAFF_REVIEW' && <p>This child requires authorized staff review. No replacement membership or automatic identity merge is available.</p>}
       {child.workflowState === 'AWAITING_PAYER_DESIGNATION' && <p>Complete the guardian payer step before choosing this child’s plan.</p>}
       {child.workflowState === 'CURRENT_DRAFT_BY_OTHER_STAFF' && <p>A current DRAFT exists, recorded by another staff member. Receipt, creator, confirmation, editing, transfer and activation controls are unavailable.</p>}
       {child.workflowState === 'CURRENT_DRAFT' && child.currentMembershipDraft && 'receipt' in child.currentMembershipDraft && <><h4>Verified current DRAFT</h4><p>Recorded {date(child.currentMembershipDraft.receipt.recordedAt)}. Original bound plan version; subsequent catalog changes do not replace these terms.</p><MembershipPlanTerms plan={child.currentMembershipDraft.plan}/></>}
+      {reviewSelectors && <button type="button" onClick={reviewMembership}>{membershipJourneyText(preferences?.language, 'review')}</button>}
       {child.workflowState === 'READY_FOR_DRAFT' && verified?.workflowState === 'PAYER_DESIGNATED' && verified.billingAccount && <AdultMembershipPlanPicker key={child.studentProfileId} scope={scope} studentProfileId={child.studentProfileId} childName={child.displayName} currency={verified.billingAccount.currency} disabled={busy || pending !== null || unexpectedRetry !== null}
         onBlocking={blocked => { setPickerBlocked(blocked); onBusy(blocked); }}
         onUncertain={request => { if (!('step' in request) || request.step !== 'childDraft') { setUnexpectedRetry(request); setPickerBlocked(false); setSelected(''); onBusy(false); setError('Unexpected retry request retained. No command was resent.'); return; } pendingChild.current = child.displayName; setPending(request); setPickerBlocked(false); setSelected(''); setError('The child DRAFT outcome is uncertain. Retry only the exact family request retained in memory.'); }} onStarted={onStarted} onAccessLost={onAccessLost}

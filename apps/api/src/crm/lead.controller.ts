@@ -29,6 +29,7 @@ import { CreateHumanLeadDto } from './create-lead.dto.js';
 import { assertDirectHumanLeadCreateRequest, LeadCreateHumanUiGuard } from './lead-create-human-ui.guard.js';
 import { LeadService } from './lead.service.js';
 import { ListLeadsDto } from './list-leads.dto.js';
+import { crmAccessMeta } from './crm-entitlement.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/crm/leads')
 export class LeadController {
@@ -54,8 +55,8 @@ export class LeadController {
       organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId,
       principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey: `read:${requestId}`, source: 'HUMAN_UI',
     };
-    const leads = await this.leads.list(context, query);
-    return { data: leads, meta: { requestId, correlationId: requestId } };
+    const { leads, access, nextCursor, limit } = await this.leads.list(context, query, { externalSubject: identity.externalSubject });
+    return { data: leads, meta: { requestId, correlationId: requestId, ...crmAccessMeta(access), limit, nextCursor } };
   }
 
   @Post()

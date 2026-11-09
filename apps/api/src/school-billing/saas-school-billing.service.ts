@@ -4,9 +4,9 @@ import {
   saasUuid, validateSaasAccessAwaitInput, validateSaasAccessExceptionCloseInput, validateSaasAccessExceptionCloseReceipt,
   validateSaasAccessExceptionGrantInput, validateSaasAccessExceptionGrantReceipt, validateSaasAccessExceptionRevokeInput,
   validateSaasAccessExceptionRevokeReceipt, validateSaasAccessExceptionsView, validateSaasAccessAwaitReceipt, validateSaasAccessReadiness, validateSaasAccessRetryInput,
-  validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
+  validateSaasAccessRetryReceipt, validateSaasOrganizationAccessView, validateSaasSchoolAccessStanding, validateSaasSchoolBillingAccount, validateSaasSchoolInvoiceDetail, validateSaasSchoolInvoicePage,
   validateSaasSchoolInvoiceQuery,
-  validateSaasExceptionPolicyDecisionInput, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
+  validateSaasExceptionPolicyDecisionInput, validateSaasAccessOverview, validateSaasAccessOverviewQuery, validateHqSchoolDetail, validateSaasExceptionPolicyReceipt, validateSaasExceptionPolicyView,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
@@ -26,6 +26,10 @@ export class SaasSchoolBillingService {
   async readAccount(subject: string, schoolId: unknown) {
     const school = parse(() => saasUuid(schoolId));
     return this.billing.call('readSchoolBillingAccount', [subject, school], validateSaasSchoolBillingAccount);
+  }
+  async readAccessStanding(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.billing.call('readSchoolAccessStanding', [subject, school], validateSaasSchoolAccessStanding);
   }
   async readInvoices(subject: string, schoolId: unknown, query: unknown) {
     const [school, q] = parse(() => [saasUuid(schoolId), validateSaasSchoolInvoiceQuery(query)] as const);
@@ -53,6 +57,17 @@ export class SaasSchoolBillingService {
     const [checkout, input, idempotencyKey] = parse(() => [saasUuid(checkoutId), validateSaasAccessRetryInput(body), saasUuid(key)] as const);
     return this.billing.call('retryFirstPaymentActivation', [subject, checkout, JSON.stringify(input), idempotencyKey, randomUUID(), randomUUID()],
       validateSaasAccessRetryReceipt);
+  }
+  /** B-HQ-1: every organization's access standing for HQ owners and billing operators. Advisory; commands re-decide. */
+  async readAccessOverview(subject: string, query: unknown) {
+    const q = parse(() => validateSaasAccessOverviewQuery(query));
+    return this.billing.call('readAccessOverview', [subject, q.status, q.cursor?.createdAt ?? null, q.cursor?.organizationId ?? null, String(q.limit)],
+      validateSaasAccessOverview);
+  }
+  /** C-HQ-3: one school for HQ owners and billing operators: access standing, ownership and invitation/people counts. */
+  async readHqSchoolDetail(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.billing.call('readHqSchoolDetail', [subject, school], validateHqSchoolDetail);
   }
   // D9: HQ-owner access exceptions. The database enforces the HQ-owner authority, eligibility and window cap.
   async readExceptionPolicy(subject: string) {

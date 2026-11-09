@@ -8,7 +8,7 @@ The protected UI is `/staff/schedule/sessions`. It begins with no data and perfo
 
 ## Exact bounded window and result
 
-The PostgreSQL projection `hon.read_current_school_class_sessions(text)` has no caller range, cursor, search, filter, sort, or list selector. At the database statement's UTC date it returns, in deterministic `starts_at ASC, id ASC` order, **at most 50** sessions where:
+The PostgreSQL projection `hon.read_current_school_class_sessions(text)` has no caller range, cursor, search, filter, sort, or list selector. At the database statement's UTC date it returns, in deterministic order by published UTC millisecond `startsAt` (persisted `starts_at` truncated, never rounded, to milliseconds) then `id` ASC, **at most 50** sessions where:
 
 - `starts_at` is **at or after 00:00 UTC 30 calendar days before today**; and
 - `starts_at` is **before 00:00 UTC 91 calendar days after today**.
@@ -21,7 +21,7 @@ Each returned item contains exactly:
 |---|---|
 | `sessionId` | Existing persisted class-session ID |
 | `name` | Persisted session name |
-| `startsAt`, `endsAt` | Persisted UTC session boundaries |
+| `startsAt`, `endsAt` | Persisted UTC session boundaries, published truncated to milliseconds |
 | `roomName` | Persisted room name or `null` |
 | `capacity` | Persisted capacity fact |
 | `bookingPolicy` | Persisted booking policy fact |
@@ -55,6 +55,6 @@ The existing class-session creation receipt has one clean destination link to th
 
 ## Verification
 
-`pnpm db:setup-class-sessions-read` creates only the marked disposable localhost database and private job-directory credentials. `pnpm db:test-class-sessions-read` proves the 50-row bound/window/order/minimum shape, denied direct table reads and helper execution, forced RLS/function ACLs, no-write behavior, cross-school suppression, and direct-human/current-school/permission/entitlement/HQ/family/mixed-role/nonhuman/delegated/action denials.
+`pnpm db:setup-class-sessions-read` creates only the marked disposable localhost database and private job-directory credentials. `pnpm db:test-class-sessions-read` proves the single ordering rule through a real signed-session HTTP read (sub-millisecond collisions, exact ties, reverse UUIDs, the 50th-row boundary, non-UTC session TimeZone, repeat reads), and the 50-row bound/window/order/minimum shape, denied direct table reads and helper execution, forced RLS/function ACLs, no-write behavior, cross-school suppression, and direct-human/current-school/permission/entitlement/HQ/family/mixed-role/nonhuman/delegated/action denials.
 
 Focused API/browser contracts, the disposable 0147 integrity proof, the session-to-booking idle-handoff UI tests, root `pnpm test`, root `pnpm check`, root `pnpm build`, and `git diff --check` passed locally. The fixture is localhost-only and does not exercise any remote/shared database, provider, payment, or deployment.

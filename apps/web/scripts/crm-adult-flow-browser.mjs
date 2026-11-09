@@ -1,6 +1,12 @@
 /** Actual production Next application, real session gate, synthetic localhost API contracts. No database/provider access. */
 import assert from 'node:assert/strict';
 import { createActivationFixture, runActivationBrowserChecks } from './membership-activation-browser.mjs';
+import { createLeadMembershipRecoveryFixture, runLeadMembershipRecoveryBrowserChecks } from './crm-lead-memberships-browser.mjs';
+import { createStudentOperationsFixture, runStudentOperationsBrowserChecks } from './connected-student-operations-browser.mjs';
+import { createDateFixture, runDateBrowserChecks } from './membership-dates-browser.mjs';
+import { runLocalizedDateBrowserChecks } from './membership-dates-localized-browser.mjs';
+import { runSchoolMembershipJourneyBrowserChecks } from './school-membership-journey-browser.mjs';
+import { runCrmSessionPrivacyBrowserChecks } from './crm-session-privacy-browser.mjs';
 import { createCloseFixture, runCloseBrowserChecks } from './crm-close-browser.mjs';
 import { createFamilyFixture, runFamilyBrowserChecks } from './crm-family-browser.mjs';
 import { createServer } from 'node:http';
@@ -33,8 +39,12 @@ const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.school
 const program = { programId: id(38), name: 'Adult martial arts' };
 const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
 let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
+let language = 'en';
 const closeFixture = createCloseFixture({id,scope,date,origin,send,rejected});
 const activationFixture = createActivationFixture({id,scope,origin,send,rejected});
+const recoveryFixture = createLeadMembershipRecoveryFixture({id,scope,origin,send,rejected});
+const operationsFixture = createStudentOperationsFixture({id,scope,rejected});
+const dateFixture = createDateFixture({id,scope,origin,send,rejected});
 const familyFixture = createFamilyFixture({ id, scope, date, origin, send, rejected, plans: () => publishedPlans });
 function plainPlan(p) { const { programName, ...terms } = p; return terms; }
 function rejected(res, status, code) { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({code})); }
@@ -49,11 +59,14 @@ const api = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1:3001');
     let actor; try { actor = verifySession(cookieValue(req.headers.cookie, HON_SESSION_COOKIE) ?? '', session).externalSubject; } catch { send(res, 401, {}); return; }
     report.requests.push({ method: req.method, path: url.pathname });
-    if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: null, schoolDefault: null, effective: { language: 'en', source: 'SYSTEM_DEFAULT' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
+    if (url.pathname === '/v1/me/language-preference') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }); res.end(JSON.stringify({ data: { preference: {language,version:1,updatedAt:date}, schoolDefault: null, effective: { language, source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] } })); return; }
     if (actor === 'crm-staff-synthetic' && url.pathname === '/v1/staff/current-reporting-school' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({data:{state:'RESOLVED',...scope}})); return;
     }
     if (actor !== 'crm-staff-synthetic' || !url.pathname.startsWith(prefix + '/')) { send(res, 403, { secret: 'private-canary' }); return; }
+    if (await recoveryFixture.handle(req,res,url)) return;
+    if (await operationsFixture.handle(req,res,url)) return;
+    if (await dateFixture.handle(req,res,url)) return;
     if (await activationFixture.handle(req,res,url)) return;
     if (await closeFixture.handle(req,res,url)) return;
     if (req.method === 'GET' && url.pathname === `${prefix}/crm/leads`) { send(res, 200, [lead]); return; }
@@ -179,7 +192,7 @@ async function draftStep(page) { await page.getByRole('button', { name: 'Check D
 async function visual(page, name) {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Horizontal overflow');
   await page.addScriptTag({ content: axe }); const result = await page.evaluate(() => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } }));
-  const violations = result.violations.map(v => ({ id: v.id, impact: v.impact })); report.accessibility.push({ name, violations }); assert.equal(violations.filter(v => ['serious', 'critical'].includes(v.impact)).length, 0, JSON.stringify(violations));
+  const violations = result.violations.map(v => ({ id: v.id, impact: v.impact })); report.accessibility.push({ name, violations }); assert.equal(violations.filter(v => ['serious', 'critical'].includes(v.impact)).length, 0, JSON.stringify(result.violations.map(v => ({ id: v.id, impact: v.impact, targets: v.nodes.slice(0, 5).map(n => `${n.target.join(' ')}: ${n.any?.[0]?.message ?? ''}`) }))));
   await page.screenshot({ path: join(results, `${name}.png`), fullPage: true }); report.screenshots.push(`${name}.png`);
   if (name.endsWith('family-current-drafts') || name.endsWith('family-two-children')) {
     await page.locator('section[aria-labelledby="family-flow-title"]').screenshot({ path: join(results, `${name}-panel.png`) });
@@ -189,7 +202,17 @@ async function visual(page, name) {
 try {
   let started = false; for (let i = 0; i < 100; i++) { try { await fetch(origin); started = true; break; } catch {} await new Promise(done => setTimeout(done, 250)); } assert(started, log.slice(-1200));
   browser = await chromium.launch({ executablePath: process.env.HON_CRM_CHROME, headless: true });
+  await runLeadMembershipRecoveryBrowserChecks({fixture:recoveryFixture,open,visual,check,origin,scope,id,report,setLanguage(value){language=value;},restoreSession:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-staff-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
+  await runStudentOperationsBrowserChecks({fixture:operationsFixture,recoveryFixture,open,visual,check,origin,scope,id,report,setLanguage(value){language=value;}});
+  recoveryFixture.reset('disabled');
+  await runDateBrowserChecks({fixture:dateFixture,open,visual,check,origin});
+  await runLocalizedDateBrowserChecks({fixture:dateFixture,open,visual,check,origin,setLanguage(value){language=value;},report});
   await runActivationBrowserChecks({fixture:activationFixture,open,visual,check,origin});
+  await runCrmSessionPrivacyBrowserChecks({fixture:closeFixture,reset,open,visual,check});
+  await runSchoolMembershipJourneyBrowserChecks({ activationFixture, dateFixture, familyFixture, reset, open, visual, check, origin, scope, id, report,
+    setLanguage(value) { assert(['en','ko','es'].includes(value)); language = value; },
+    restoreSession: context => context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject:'crm-staff-synthetic' }, session), url: origin, httpOnly:true, sameSite:'Lax' }]),
+  });
   await runCloseBrowserChecks({fixture:closeFixture,reset,open,visual,check,captureFailure:async page=>{await page.screenshot({path:join(results,'close-first-failure.png'),fullPage:true});report.screenshots.push('close-first-failure.png');},replaceActor:context=>context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:'crm-other-synthetic'},session),url:origin,httpOnly:true,sameSite:'Lax'}])});
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     await check(`${name}: connected registration/account/DRAFT/current confirmation; keyboard and accessibility`, async () => {
@@ -366,3 +389,4 @@ try {
   assert.equal(report.pageErrors.length, 0, JSON.stringify(report.pageErrors)); assert.equal(report.failures.length, 0, JSON.stringify(report.failures));
 } finally { await writeFile(join(results, 'report.json'), JSON.stringify(report, null, 2)); await browser?.close(); app.kill('SIGTERM'); api.closeAllConnections(); await new Promise(done => api.close(done)); }
 console.log(`PASS: ${report.checks.length} browser checks; ${report.screenshots.length} actual application screenshots; synthetic API verification only.`);
+console.log(JSON.stringify({ sourceSha:report.sourceSha, browserChecks:report.checks.length, screenshots:report.screenshots.length, accessibilityScans:report.accessibility.length, accessibilityViolations:report.accessibility.reduce((sum,scan)=>sum+scan.violations.length,0), connectedMembershipCases:report.schoolMembershipJourney?.length ?? 0, pageErrors:report.pageErrors.length, syntheticFixturesOnly:true, databaseAccess:false, providerCalls:false }));

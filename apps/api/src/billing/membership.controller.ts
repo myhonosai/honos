@@ -9,7 +9,7 @@ import { ActivateMembershipDto, MembershipActivationPreviewDto } from './activat
 import { CancelMembershipDto } from './cancel-membership.dto.js';
 import { CreateMembershipDto } from './create-membership.dto.js';
 import { MembershipService, type MembershipLifecycleContext } from './membership.service.js';
-import { MembershipActivationHumanUiGuard, MembershipActivationPreviewHumanUiGuard } from './membership-activation-human-ui.guard.js';
+import { MembershipActivationHumanUiGuard, MembershipActivationPreviewHumanUiGuard, MembershipCancelHumanUiGuard } from './membership-activation-human-ui.guard.js';
 
 /** DTO instances may carry declared-but-absent fields as undefined; JSON bodies never do. */
 function definedFields(input: object): Record<string, unknown> {
@@ -158,10 +158,13 @@ export class MembershipController {
    * A human operator directly cancels exactly one RLS-visible ACTIVE membership.
    * The route derives actor, tenant, permission, source, and attribution; the
    * request body cannot select an Action Engine, delegate, payment action, or
-   * related billing/scheduling resource.
+   * related billing/scheduling resource. Only a same-origin browser command
+   * naming billing.membership.cancel reaches it (no cross-site, delegated or
+   * source-selected call).
    */
   @Post(':membershipId/cancel')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(MembershipCancelHumanUiGuard)
   async cancel(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Param('schoolId', new ParseUUIDPipe()) schoolId: string,

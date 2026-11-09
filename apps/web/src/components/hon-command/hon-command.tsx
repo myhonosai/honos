@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
-import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonScope } from './hon-command-data';
+import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot, type HonScope } from './hon-command-data';
+import { HonConversation } from './hon-conversation-panel';
 import { HON_COMMAND_ROSTER, honAgent, safeHonReturnPath } from './roster';
 import { AgentPortrait, AvailabilityBadge, HonMark, HonWorkspaceView, type HonTab } from './hon-workspace-view';
 import styles from './hon-command.module.css';
@@ -38,6 +39,12 @@ interface HonPanelProps {
   initialAgentId?: string | null;
   returnPath: string;
   api?: HonCommandApi | undefined;
+}
+
+/** The live Ask HON conversation, only for a server-verified school; a school change remounts it. */
+function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: 'panel' | 'full'): React.ReactNode {
+  if (scope.state !== 'VERIFIED') return null;
+  return <HonConversation key={`${scope.organizationId}/${scope.schoolId}`} school={{ organizationId: scope.organizationId, schoolId: scope.schoolId }} presentation={presentation} />;
 }
 
 /** Expandable HON panel: a modal side sheet that keeps the page underneath intact. */
@@ -96,6 +103,7 @@ export function HonPanel({ open, onClose, scope = null, variant = null, initialA
         onRefresh={() => void controller.refresh()}
         onClose={onClose}
         expandHref={honExpandHref(returnPath, agentId)}
+        conversation={verifiedConversation(snapshot.scope, 'panel')}
       />
     </div>
   </div>;
@@ -112,7 +120,7 @@ export function HonLauncher({ pathname }: { pathname: string }): React.ReactElem
   // The dashboard embeds its own verified HON band and the full workspace is HON itself.
   if (!pathname.startsWith('/staff/') || pathname === '/staff/dashboard' || pathname.startsWith('/staff/hon')) return null;
   return <>
-    <button ref={button} type="button" className={styles.launcher} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+    <button ref={button} type="button" className={styles.launcher} data-hon-launcher aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
       <HonMark size="sm" /><span>Ask HON</span>
     </button>
     {open ? <HonPanel open onClose={close} returnPath={pathname} /> : null}
@@ -172,6 +180,7 @@ export function HonFullWorkspace({ returnPath, agentId: initialAgent, api }: { r
       onSelectAgent={(id) => { setAgentId(id); setTab('team'); }}
       onRefresh={() => void controller.refresh()}
       returnHref={safeHonReturnPath(returnPath)}
+      conversation={verifiedConversation(snapshot.scope, 'full')}
     />
   </main>;
 }

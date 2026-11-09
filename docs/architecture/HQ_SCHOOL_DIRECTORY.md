@@ -36,6 +36,8 @@ The source tables (`organizations`, `schools`, and `organization_entitlements`) 
 
 The browser uses one fixed same-origin `GET`, with `credentials: 'same-origin'`, `cache: 'no-store'`, `redirect: 'error'`, `referrerPolicy: 'no-referrer'`, and a strict closed response-envelope reconstruction. `/hq/schools` is dynamic and no-index. Big-Button, Modern, and Classic modes change density only, never scope or fields.
 
+The school-creation page integration additionally verifies the same current HQ principal through strictly parsed fixed `GET /hq/session` reads before and after this projection. OWNER and OPERATOR remain allowed; SUPPORT stays denied. Reads carry cancellation and bounded timeouts. Shared authenticated 401 signals are emitted before body consumption; 403 remains local. Blur, hidden visibility, pagehide, session/school changes and unmount synchronously hide/inert the facts DOM, clear the snapshot, abort pending reads and invalidate late responses. After concealment, the explicit **Verify and read school directory** action is required; focus, restored visibility and presentation changes never refresh. The separately mounted creation panel retains its own immutable unknown request across directory concealment/restoration. This lifecycle hardening adds no projection fields, selector, permission or backend route.
+
 ## Explicit non-goals
 
 This directory creates no audit/outbox record, provider/AI call, worker action, Action Engine proposal, payment operation, communication, support session, impersonation, or school mutation. It supplies no follow-on detail route.
