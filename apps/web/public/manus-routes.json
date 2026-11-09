@@ -37,6 +37,10 @@
       "title": "HON HQ | Exception policy"
     },
     {
+      "path": "/hq/schools/:schoolId",
+      "title": "HON HQ | School detail"
+    },
+    {
       "path": "/hq/schools/owners",
       "title": "HON HQ | School owners"
     },
