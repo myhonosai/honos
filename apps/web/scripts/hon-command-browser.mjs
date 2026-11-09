@@ -91,8 +91,8 @@ const draftWork = {
 const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AWAITING_APPROVAL', requestedByPrincipalId: id(60), effectiveAuthorityMode: 'CONFIRM', policyVersion: 1, approvalExpiresAt: iso(hours + 48), createdAt: iso(hours) });
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
-const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0, groups: new Map(), targets: { step: null, gate: null, reads: [] } };
-const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, businessPerformance: false, asOf: iso(0) });
+const hon = { reply: false, claire: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0, groups: new Map(), targets: { step: null, gate: null, reads: [] } };
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, businessPerformance: hon.reply && hon.claire, asOf: iso(0) });
 // C3a: each specialist's own target list (synthetic), and the grouped confirmations by HON answer.
 const honCampaigns = () => [['Spring trial week', 'ACTIVE'], ['Summer camp', 'DRAFT'], ['Old open house', 'ARCHIVED']].map(([name, status], n) => ({ id: id(720 + n), code: `C${n}`, name, goal: 'More trials', offerLabel: '',
   channel: 'EMAIL', startsAt: iso(-100), endsAt: iso(100), plannedBudgetMinor: 0, currency: 'USD', version: 3, status, createdAt: iso(-200), updatedAt: iso(-10), planningOnly: true }));
@@ -150,6 +150,17 @@ async function honApi(route, path, method, prefix) {
   const c = turn && hon.conversations.find((x) => x.id === turn[1]);
   if (!c) return json(route, 404, { code: 'HON_CONVERSATION_NOT_FOUND' });
   const ask = JSON.parse(body); const turnId = id(honSeq += 1);
+  if (ask.delegation?.agentKey === 'claire') {
+    // K2: Claire's read-only Business Performance analysis. One detailed answer from aggregate metrics; nothing is drafted.
+    const text = 'Recorded facts: trial conversion is 40% over the last 30 days and 2 inquiries are unanswered. Claire’s view: answer the inquiries first, then book trial follow-ups.';
+    const detail = replyDetail('DETAILED');
+    c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
+    c.turns.push({ turnId, role: 'claire', text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: id(honSeq += 1), actionRequestId: null, invocationId: id(honSeq += 1) }, replyDetail: detail });
+    c.turnCount += 1; c.status = 'COMPLETED';
+    const receipt = { turnId, conversationId: c.id, status: 'COMPLETED', reason: null, delegatedAgentKeys: ['claire'], actionRequestIds: [], workItemIds: [c.turns.at(-1).references.workItemId], invocationId: c.turns.at(-1).references.invocationId, reply: text, replyDetail: detail };
+    hon.turns.set(headers['idempotency-key'], receipt);
+    return json(route, 200, { data: receipt });
+  }
   if (ask.delegation) {
     // A confirmed suggestion: the specialist records a draft that waits for approval. Nothing is sent or published.
     const agent = ask.delegation.agentKey; const actionRequestId = id(honSeq += 1); const workItemId = id(honSeq += 1); const invocationId = id(honSeq += 1);
@@ -1164,7 +1175,7 @@ await check('no unsupported capability presented as operational', async () => {
 });
 
 // ---------- Ask HON conversation ----------
-function resetHon(reply) { hon.reply = reply; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; hon.groups = new Map(); hon.targets = { step: null, gate: null, reads: [] }; }
+function resetHon(reply, claire = false) { hon.reply = reply; hon.claire = claire; hon.conversations = []; hon.turns = new Map(); hon.queue = []; hon.posts = []; hon.held = null; hon.readinessReads = 0; hon.groups = new Map(); hon.targets = { step: null, gate: null, reads: [] }; }
 async function fullHon(viewport, nextTheme = 'modern') {
   theme = nextTheme; mode = 'ready';
   const ctx = await context(viewport); const page = await ctx.newPage();
@@ -1215,6 +1226,39 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     await ctx.close();
   });
 }
+
+await check('Ask Claire: one read-only Business Performance answer, offered only when readiness allows', async () => {
+  resetHon(true, false);
+  {
+    const { ctx, ask } = await fullHon({ width: 1440, height: 900 });
+    assert.equal(await ask.getByRole('radio', { name: /Claire/ }).count(), 0, 'no Claire choice without businessPerformance');
+    await ctx.close();
+  }
+  resetHon(true, true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  await ask.getByRole('radio', { name: 'Claire, Business Performance' }).check();
+  assert.ok(await ask.getByText(/She never drafts, sends or changes anything/).isVisible());
+  assert.equal(await ask.getByRole('radio', { name: 'Quick' }).isDisabled(), true);
+  const box = ask.getByRole('textbox', { name: 'Message Claire' });
+  await box.fill('How is the school doing this month?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/Recorded facts: trial conversion is 40%/).waitFor();
+  assert.equal(hon.posts.length, 2, 'create then the Claire turn');
+  assert.deepEqual(JSON.parse(hon.posts[1].body), { text: 'How is the school doing this month?', delegation: { agentKey: 'claire' } });
+  assert.ok(await ask.locator('li[data-role="claire"]').getByText('Claire', { exact: true }).isVisible());
+  assert.equal(await ask.getByRole('button', { name: 'Continue this answer' }).count(), 0);
+  assert.equal(await ask.locator('li[data-role="claire"] a').count(), 0, 'no Action Center link: nothing was drafted');
+  // Back to HON: the next question is an ordinary HON turn with its mode.
+  await ask.getByRole('radio', { name: 'HON', exact: true }).check();
+  await askBox(ask).fill('Who should I follow up with today?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByText(/You have 3 new leads in the last 24 hours/).waitFor();
+  assert.deepEqual(JSON.parse(hon.posts[2].body), { text: 'Who should I follow up with today?', delegation: null, replyMode: 'STANDARD' });
+  await noOverflow(page, 'ask-claire-desktop-1440');
+  await axe(page, 'ask-claire-desktop-1440');
+  await shot(page, 'ask-claire-desktop-1440');
+  await ctx.close();
+});
 
 await check('Ask HON from the school shell corner on another staff page', async () => {
   resetHon(true);
