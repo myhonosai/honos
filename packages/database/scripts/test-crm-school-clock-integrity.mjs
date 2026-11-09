@@ -29,7 +29,7 @@ const { RuntimeDatabaseService } = await load('foundation/runtime-database.servi
 const { HonIdentityGuard } = await load('foundation/hon-identity.guard.js');
 const { HonIdentityService } = await load('foundation/hon-identity.service.js');
 const { HonExceptionFilter } = await load('observability/http-telemetry.js');
-const { CrmSchoolClockController, CrmSchoolClockHumanUiGuard } = await load('crm/crm-school-clock.controller.js');
+const { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } = await load('crm/crm-school-clock.controller.js');
 const { CrmSchoolClockService } = await load('crm/crm-school-clock.service.js');
 
 const admin = new pg.Client(targets.owner);
@@ -53,7 +53,7 @@ const PREFIX = `crm-clock-${ids.organization}`;
 
 async function startApp() {
   const module = await Test.createTestingModule({
-    controllers: [CrmSchoolClockController],
+    controllers: [CrmSchoolClockController, CrmSessionSchoolClockController],
     providers: [HonIdentityGuard, HonIdentityService, CrmSchoolClockHumanUiGuard, CrmSchoolClockService, { provide: RuntimeDatabaseService, useValue: database }],
   }).compile();
   app = module.createNestApplication({ logger: false });
@@ -64,8 +64,8 @@ async function startApp() {
   origin = `http://127.0.0.1:${app.getHttpServer().address().port}`;
   process.env.HON_PUBLIC_ORIGIN = origin;
 }
-function read(actor, { school = actor.school, organization = actor.org, headers = {}, query = '', method = 'GET' } = {}) {
-  const target = new URL(`${origin}/v1/organizations/${organization}/schools/${school}/crm/school-clock${query}`);
+function read(actor, { school = actor.school, organization = actor.org, headers = {}, query = '', method = 'GET', sessionScoped = false } = {}) {
+  const target = new URL(sessionScoped ? `${origin}/v1/staff/crm/school-clock${query}` : `${origin}/v1/organizations/${organization}/schools/${school}/crm/school-clock${query}`);
   return new Promise((resolvePromise, reject) => {
     const request = http.request(target, { method, headers: {
       Cookie: `${HON_SESSION_COOKIE}=${issueSession({ externalSubject: actor.subject }, session)}`,
@@ -208,6 +208,26 @@ try {
   { const post = await read(SCHEDULER, { method: 'POST' }); ok(post.status === 404 || post.status === 403, 'no POST route'); }
   { const anonymous = await new Promise((done, fail) => { const r = http.request(new URL(`${origin}/v1/organizations/${ids.organization}/schools/${ids.schoolA}/crm/school-clock`), { method: 'GET' }, (res) => { res.resume(); res.on('end', () => done(res.statusCode)); }); r.on('error', fail); r.end(); });
     ok(anonymous === 401, 'no session is 401'); }
+
+  // 3b. The session-scoped route (standalone follow-ups page): scope comes only from the verified follow-up session.
+  { const FOLLOW_B = await staff('follow-b', [await role(ids.organization, ['crm.follow_up.self_manage', 'crm.lead.read'])], { school: ids.schoolB });
+    const FOLLOW_A = await staff('follow-a', [await role(ids.organization, ['crm.follow_up.manage', 'crm.lead.read'])]);
+    const READER = await staff('lead-reader', [await role(ids.organization, ['crm.lead.read'])]);
+    const TRIAL_ONLY = await staff('trial-only', [await role(ids.organization, ['crm.trial.schedule', 'crm.lead.read'])]);
+    await clock(FOLLOW_B, 'session route: follow-up self-manager in Seoul', { sessionScoped: true });
+    await clock(FOLLOW_A, 'session route: follow-up manager in Los Angeles', { sessionScoped: true });
+    await refused(READER, 403, 'CRM_SCHOOL_CLOCK_FORBIDDEN', 'session route: no follow-up permission', { sessionScoped: true });
+    await refused(TRIAL_ONLY, 403, 'CRM_SCHOOL_CLOCK_FORBIDDEN', 'session route: no follow-up scope (trial-only staff use the scoped route)', { sessionScoped: true });
+    await refused(FOLLOW_A, 400, 'CRM_SCHOOL_CLOCK_SELECTORS_NOT_ACCEPTED', 'session route: query selectors', { sessionScoped: true, query: `?schoolId=${ids.schoolB}` });
+    await refused(FOLLOW_A, 403, 'HUMAN_UI_REQUIRED', 'session route: caller-supplied source header', { sessionScoped: true, headers: { 'X-HON-Source': 'HUMAN_UI' } });
+    await refused(FOLLOW_A, 403, 'HUMAN_UI_REQUIRED', 'session route: cross-site fetch', { sessionScoped: true, headers: { 'Sec-Fetch-Site': 'cross-site' } });
+    await sql("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1", [ids.organization]);
+    await refused(FOLLOW_A, 403, 'CRM_SCHOOL_CLOCK_FORBIDDEN', 'session route: paid access suspended', { sessionScoped: true });
+    await sql("UPDATE hon.organization_entitlements SET status='ACTIVE' WHERE organization_id=$1", [ids.organization]);
+    await sql("UPDATE hon.schools SET status='SUSPENDED' WHERE id=$1", [ids.schoolB]);
+    await refused(FOLLOW_B, 403, undefined, 'session route: school suspended', { sessionScoped: true });
+    await sql("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [ids.schoolB]);
+    await clock(FOLLOW_B, 'session route: school restored', { sessionScoped: true }); }
 
   // 4. The read writes nothing.
   ok(await evidenceCount() === evidence, 'no audit or outbox evidence written by reads');

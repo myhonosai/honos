@@ -16,9 +16,22 @@ export const schoolClockPath = (s: SchoolClockScope): string => {
 
 /** Reads the verified school clock. Any failure is UNAVAILABLE: screens then keep explicit UTC entry. */
 export async function readSchoolClock(scope: SchoolClockScope, signal: AbortSignal): Promise<SchoolClockRead> {
+  let path: string;
+  try { path = schoolClockPath(scope); } catch { return { state: 'UNAVAILABLE' }; }
+  return fetchSchoolClock(path, scope.schoolId, signal);
+}
+
+/** The session-scoped read, for screens that know only the verified school (the standalone follow-ups page). */
+export const SESSION_SCHOOL_CLOCK_PATH = '/api/v1/staff/crm/school-clock';
+export async function readSessionSchoolClock(expectedSchoolId: string, signal: AbortSignal): Promise<SchoolClockRead> {
+  if (!UUID.test(expectedSchoolId)) return { state: 'UNAVAILABLE' };
+  return fetchSchoolClock(SESSION_SCHOOL_CLOCK_PATH, expectedSchoolId, signal);
+}
+
+async function fetchSchoolClock(path: string, expectedSchoolId: string, signal: AbortSignal): Promise<SchoolClockRead> {
   let response: Response;
   try {
-    response = await fetch(schoolClockPath(scope), { method: 'GET', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+    response = await fetch(path, { method: 'GET', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
       referrerPolicy: 'no-referrer', signal, headers: { Accept: 'application/json' } });
   } catch { return { state: 'UNAVAILABLE' }; }
   if (response.status === 401) { reportConfirmedSessionInvalidation(); return { state: 'UNAVAILABLE' }; }
@@ -28,7 +41,7 @@ export async function readSchoolClock(scope: SchoolClockScope, signal: AbortSign
     if (raw.length > 4096) return { state: 'UNAVAILABLE' };
     const body = JSON.parse(raw) as unknown;
     if (!body || typeof body !== 'object' || Array.isArray(body) || !Object.hasOwn(body, 'data')) return { state: 'UNAVAILABLE' };
-    const clock = verifyCrmSchoolClock((body as { data: unknown }).data, scope.schoolId);
+    const clock = verifyCrmSchoolClock((body as { data: unknown }).data, expectedSchoolId);
     if (!validTimeZone(clock.schoolTimezone)) return { state: 'UNAVAILABLE' };
     return { state: 'READY', clock };
   } catch { return { state: 'UNAVAILABLE' }; }
