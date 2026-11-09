@@ -393,6 +393,10 @@
       "title": "HON HQ | Contests"
     },
     {
+      "path": "/hq/growth/contests/:contestId",
+      "title": "HON HQ | Contest"
+    },
+    {
       "path": "/hq/growth/founder-campaigns",
       "title": "HON HQ | Founder Campaigns"
     },
