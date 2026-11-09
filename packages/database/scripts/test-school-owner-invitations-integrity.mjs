@@ -63,7 +63,8 @@ try{
  const orgA=await provision(),orgB=await provision();
  const bootstrapGrants=()=>q('SELECT to_jsonb(g) value FROM hon.principal_role_grants g WHERE principal_id=$1 AND school_id=ANY($2::uuid[]) ORDER BY id',[actor.hq.principal,[orgA.schoolId,orgB.schoolId]]);
  const originalBootstrapGrants=await bootstrapGrants();assert.equal(originalBootstrapGrants.length,2);
- const excluded=['users','principals','principal_role_grants','school_owner_invitations','school_account_requests','school_account_events'];
+ const excluded=['users','principals','principal_role_grants','school_owner_invitations','school_account_requests','school_account_events',
+  'school_primary_owners','school_ownership_notices','school_ownership_requests']; // 0223: owner-identity evidence
  const tables=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' AND NOT(tablename=ANY($1)) ORDER BY tablename",[excluded])).map(r=>r.tablename);
  const snapshot=async()=>{const out={};for(const t of tables){assert.match(t,/^[a-z_]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};const baseline=await snapshot();
  const module=await Test.createTestingModule({controllers:[SchoolOwnerInvitationController,HqController],providers:[SchoolOwnerInvitationService,SchoolAccountHumanGuard,HonIdentityService,HqOverviewService,HqSchoolDirectoryService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();

@@ -229,6 +229,8 @@ const LANGUAGE_CALLS = {
 } as const;
 export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
+export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
+
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
@@ -1206,6 +1208,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       revoke: {sql: "SELECT hon.manage_school_owner_invitation($1,'REVOKE',$2::jsonb,$3::uuid) data",arity:3},
       accept: {sql: 'SELECT hon.accept_school_owner_invitation($1,$2,$3::jsonb,$4::uuid) data',arity:4},
       list: {sql: 'SELECT hon.read_school_owner_invitations($1,$2::uuid) data',arity:2},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
+    return this.callFixedSubjectFunction({...call,readOnly:false},params,'ACCOUNT_UNAVAILABLE');
+  }
+
+  /** B-ID-4 (0223 proposed): school ownership handoff reads and HQ-owner commands. */
+  async callSchoolOwnership(operation: SchoolOwnershipOperation, params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      hqRead: {sql: 'SELECT hon.read_school_ownership_from_hq($1,$2::uuid) data',arity:2},
+      setPrimary: {sql: "SELECT hon.manage_school_ownership($1,'SET_PRIMARY',$2::jsonb,$3::uuid) data",arity:3},
+      ownerRead: {sql: 'SELECT hon.read_school_ownership($1,$2::uuid) data',arity:2},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');
