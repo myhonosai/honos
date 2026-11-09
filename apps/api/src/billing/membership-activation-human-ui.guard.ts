@@ -69,6 +69,11 @@ export class MembershipPausePolicyHumanUiGuard extends MembershipActivationHuman
 export class MembershipRefundRecordHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'billing.membership.refund.record';
 }
+/** The 0177 cancellation, now reachable from the staff page: only a same-origin browser command, never delegated or automated. */
+@Injectable()
+export class MembershipCancelHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'billing.membership.cancel';
+}
 /** The two 0224 reads are GETs: the base guard admits them, and the source/delegation headers stay refused. */
 @Injectable()
 export class MembershipPauseReadHumanUiGuard extends MembershipActivationHumanUiGuard {

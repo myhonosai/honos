@@ -229,6 +229,7 @@ async function api(route) {
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
+  if (path === `${prefix}/billing/membership-pause-policy` || /\/billing\/memberships\/[0-9a-f-]{36}\/(pause|resume|cancel|refund-records|pauses-and-refunds)$/.test(path)) { const answered = await changesApiRoute(route, path, method, prefix); if (answered !== null) return answered; }
   if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
@@ -549,7 +550,8 @@ const mblRows = () => Array.from({ length: 60 }, (_, n) => {
     currentPeriod: dated ? { periodVersion: 1, changeKind: 'INITIAL', startDate: kind === 1 ? '2026-12-01' : '2026-10-01', endDate: n % 4 === 0 ? null : '2027-01-31' } : null,
     legacyStoredTerm: dated ? null : { termStartedAt: kind === 3 ? '2026-09-01T00:00:00.000Z' : null, termEndsAt: null },
     createdAt: new Date(Date.parse('2026-10-20T12:00:00.000Z') - n * 3_600_000).toISOString() };
-});
+}).map((m) => { const c = chg.members.get(m.membershipId);
+  return c && c.state !== m.state ? { ...m, state: c.state, version: c.version, effectiveStatus: c.state === 'ACTIVE' ? 'IN_EFFECT' : c.state } : m; });
 function resetMemberships(over = {}) { Object.assign(mbl, { denied: false, gate: null, step: null, reads: [] }, over); }
 async function membershipListApiRoute(route, path, method, url, prefix) {
   if (method !== 'GET' || path !== `${prefix}/billing/memberships`) return null;
@@ -564,6 +566,72 @@ async function membershipListApiRoute(route, path, method, url, prefix) {
   const all = mblRows().filter((m) => !state || m.state === state), start = cursor === `${state ?? 'ALL'}-page-2` ? 50 : 0, data = all.slice(start, start + 50);
   return json(route, 200, { data, meta: { requestId: id(1498), correlationId: id(1498), limit: 50, nextCursor: start + 50 < all.length ? `${state ?? 'ALL'}-page-2` : null,
     schoolTimezone: 'America/Los_Angeles', localToday: '2026-11-08' } });
+}
+// Pause, cancel & refunds (0224, synthetic). Member00 (id 1500) starts ACTIVE at version 1; its state, pauses and refund records
+// live here. replies, one per POST: 'ok', 'unknown' (503, nothing changed), 'schedule' (409 active payment schedule).
+const chg = { policy: null, members: new Map(), posts: [], replies: [], byKey: new Map(), reads: [], historyDenied: false };
+const CHG_COMMAND = { 'membership-pause-policy': 'billing.membership.pause_policy.set', pause: 'billing.membership.pause', resume: 'billing.membership.resume',
+  cancel: 'billing.membership.cancel', 'refund-records': 'billing.membership.refund.record' };
+const chgToday = '2026-11-08';
+function resetChanges(over = {}) {
+  Object.assign(chg, { policy: { version: 3, pausesAllowed: true, maxPauseDays: 60, maxPausedDaysPerYear: 90, holdFee: { amountMinor: 1500, currency: 'USD' }, createdAt: '2026-11-01T10:00:00.000Z' },
+    members: new Map([[id(1500), { state: 'ACTIVE', version: 1, pauses: [], refunds: [] }]]), posts: [], replies: [], byKey: new Map(), reads: [], historyDenied: false }, over);
+}
+resetChanges();
+async function changesApiRoute(route, path, method, prefix) {
+  const request = route.request(), headers = request.headers(), meta = { requestId: id(1950), correlationId: id(1950) };
+  if (new URL(request.url()).search || ['x-hon-source', 'x-hon-action-request-id', 'x-hon-delegated-by-principal-id'].some((k) => headers[k] !== undefined)) return json(route, 400, { code: 'VALIDATION_FAILED' });
+  const target = path.match(/\/billing\/memberships\/([0-9a-f-]{36})\/([a-z-]+)$/), tail = target ? target[2] : 'membership-pause-policy';
+  if (method === 'GET') {
+    if (headers['idempotency-key'] !== undefined) return json(route, 409, { code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    chg.reads.push(tail);
+    if (tail === 'membership-pause-policy') return json(route, 200, { data: { policy: chg.policy, localToday: chgToday }, meta });
+    if (chg.historyDenied) return json(route, 403, { code: 'MEMBERSHIP_PAUSE_HISTORY_FORBIDDEN' });
+    const m = chg.members.get(target[1]) ?? (() => { const row = mblRows().find((r) => r.membershipId === target[1]); return row ? { state: row.state, version: row.version, pauses: [], refunds: [] } : null; })();
+    if (!m) return json(route, 404, { code: 'BILLING_MEMBERSHIP_NOT_FOUND' });
+    return json(route, 200, { data: { membershipId: target[1], state: m.state, version: m.version, localToday: chgToday, pauses: m.pauses, refunds: m.refunds }, meta });
+  }
+  if (method !== 'POST') return null;
+  const key = headers['idempotency-key'], body = JSON.parse(request.postData() ?? '{}');
+  chg.posts.push({ key, tail, command: headers['x-hon-human-command'], body });
+  if (headers['x-hon-human-command'] !== CHG_COMMAND[tail] || !/^application\/json/.test(headers['content-type'] ?? '')) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+  if (!key) return json(route, 409, { code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  if (chg.byKey.has(key)) return json(route, 200, { data: chg.byKey.get(key), meta: { ...meta, replayed: true } });
+  const next = chg.replies.shift() ?? 'ok';
+  if (next === 'unknown') return json(route, 503, { code: 'MEMBERSHIP_LIFECYCLE_UNAVAILABLE' });
+  if (next === 'schedule') return json(route, 409, { code: 'MEMBERSHIP_PAUSE_REQUIRES_BILLING_ARRANGEMENT' });
+  let receipt;
+  if (tail === 'membership-pause-policy') {
+    if (body.expectedVersion !== chg.policy.version) return json(route, 409, { code: 'VERSION_CONFLICT' });
+    chg.policy = { version: chg.policy.version + 1, pausesAllowed: body.pausesAllowed, maxPauseDays: body.maxPauseDays, maxPausedDaysPerYear: body.maxPausedDaysPerYear, holdFee: body.holdFee, createdAt: '2026-11-08T12:00:00.000Z' };
+    receipt = chg.policy;
+  } else {
+    const m = chg.members.get(target[1]);
+    if (!m) return json(route, 404, { code: 'BILLING_MEMBERSHIP_NOT_FOUND' });
+    if (tail !== 'refund-records' && body.expectedVersion !== m.version) return json(route, 409, { code: 'VERSION_CONFLICT' });
+    const open = m.pauses.find((x) => x.endedKind === null);
+    if (tail === 'pause') {
+      if (m.state !== 'ACTIVE') return json(route, 409, { code: 'MEMBERSHIP_NOT_ACTIVE' });
+      const pause = { pauseId: id(1960 + m.pauses.length), membershipId: target[1], policyVersion: chg.policy.version, startsOn: chgToday, plannedResumeOn: body.resumeOn, pauseReason: body.pauseReason,
+        holdFee: chg.policy.holdFee, pausedAt: '2026-11-08T12:00:00.000Z', endedKind: null, endedOn: null, endReason: null, endedAt: null };
+      m.pauses.push(pause); m.state = 'FROZEN'; m.version++; receipt = { ...pause, membershipState: 'FROZEN', membershipVersion: m.version };
+    } else if (tail === 'resume') {
+      if (m.state !== 'FROZEN' || !open) return json(route, 409, { code: 'MEMBERSHIP_NOT_PAUSED' });
+      Object.assign(open, { endedKind: 'RESUMED', endedOn: chgToday, endReason: body.resumeReason ?? null, endedAt: '2026-11-08T12:05:00.000Z' });
+      m.state = 'ACTIVE'; m.version++; receipt = { ...open, membershipState: 'ACTIVE', membershipVersion: m.version };
+    } else if (tail === 'cancel') {
+      if (m.state !== 'ACTIVE' && m.state !== 'FROZEN') return json(route, 409, { code: 'MEMBERSHIP_NOT_ACTIVE' });
+      if (open) Object.assign(open, { endedKind: 'CANCELLED', endedOn: chgToday, endReason: body.cancellationReason, endedAt: '2026-11-08T12:10:00.000Z' });
+      m.state = 'CANCELLED'; m.version++;
+      receipt = { id: target[1], billingAccountId: id(1600), participantPersonId: id(1700), planCode: 'ADULT-MONTHLY', state: 'CANCELLED', version: m.version, cancellationReason: body.cancellationReason, createdAt: '2026-10-20T12:00:00.000Z' };
+    } else {
+      if (m.state !== 'CANCELLED') return json(route, 409, { code: 'MEMBERSHIP_NOT_CANCELLED' });
+      receipt = { refundId: id(1980 + m.refunds.length), membershipId: target[1], amountMinor: body.amountMinor, currency: body.currency, refundedOn: body.refundedOn, method: body.method, reason: body.reason, recordedAt: '2026-11-08T12:15:00.000Z' };
+      m.refunds.push(receipt);
+    }
+  }
+  chg.byKey.set(key, receipt);
+  return json(route, 200, { data: receipt, meta: { ...meta, replayed: false } });
 }
 // School ownership (B-ID-4, synthetic). HQ directory of two schools; the HQ owner sees owners, the primary, HQ seats and notices,
 // and can make another owner primary. replies, one per POST: 'ok', 'unknown' (503, nothing changed), 'notLive' (404).
@@ -2672,6 +2740,128 @@ await check('School owners settings: a staff member who is not an owner is told 
   await section.getByText("Only this school's owners can see this page.").waitFor({ timeout: 20000 });
   assert.ok(!(await section.innerText()).includes('dana.owner@example.invalid'));
   await ctx.close();
+});
+
+// ---------- Pause, cancel & refunds (0224) ----------
+const chgPage = (page) => page.getByTestId('membership-changes');
+async function chooseMember00(page) {
+  await chgPage(page).getByTestId('pause-rules').getByText(/60/).first().waitFor({ timeout: 20000 });
+  await chgPage(page).getByTestId('membership-select').waitFor({ timeout: 20000 });
+  await chgPage(page).getByTestId('membership-select').selectOption(id(1500));
+  await chgPage(page).getByTestId('membership-actions').waitFor();
+}
+const CHG_TEXT = { en: ['Pause, cancel & refunds', 'Pause membership', 'Pause this membership', 'The membership is paused.', 'Paused'],
+  ko: ['일시정지·취소·환불', '회원권 일시정지', '이 회원권 일시정지', '회원권이 일시정지되었습니다.', '일시정지'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`Pause, cancel & refunds ${nextTheme} ${language} ${name}: school rules, then pause a membership within them`, async () => {
+    resetChanges(); resetMemberships();
+    const [title, pause, confirm, done, paused] = CHG_TEXT[language];
+    const { ctx, page } = await ownershipPage('/staff/billing/membership-changes', viewport, { nextTheme, language });
+    await chooseMember00(page);
+    assert.equal(await chgPage(page).locator('h1').innerText(), title);
+    await noOverflow(page, `membership-changes-${nextTheme}-${language}-${name}`);
+    await axe(page, `membership-changes-${nextTheme}-${language}-${name}`);
+    await shot(page, `membership-changes-${nextTheme}-${language}-${name}`, true);
+    await chgPage(page).getByRole('button', { name: pause }).click();
+    const date = chgPage(page).getByTestId('pause-form').locator('input[type="date"]');
+    assert.equal(await date.getAttribute('min'), '2026-11-09'); assert.equal(await date.getAttribute('max'), '2027-01-07');
+    await date.fill('2026-12-01');
+    await chgPage(page).getByTestId('pause-form').locator('textarea').fill('Travelling for work');
+    await axe(page, `membership-changes-pause-form-${nextTheme}-${language}-${name}`);
+    await shot(page, `membership-changes-pause-form-${nextTheme}-${language}-${name}`, true);
+    await chgPage(page).getByRole('button', { name: confirm }).click();
+    await chgPage(page).getByTestId('change-outcome').filter({ hasText: done }).waitFor();
+    await chgPage(page).getByTestId('membership-selected').locator('[data-state="FROZEN"]').filter({ hasText: paused }).waitFor();
+    assert.equal(chg.posts.length, 1);
+    assert.deepEqual({ tail: chg.posts[0].tail, command: chg.posts[0].command, body: chg.posts[0].body },
+      { tail: 'pause', command: 'billing.membership.pause', body: { expectedVersion: 1, resumeOn: '2026-12-01', pauseReason: 'Travelling for work' } });
+    assert.ok(/^[0-9a-f-]{36}$/.test(chg.posts[0].key), 'an idempotency key');
+    assert.ok(chg.reads.filter((r) => r === 'pauses-and-refunds').length >= 2, 'read again after the answer');
+    await ctx.close();
+  });
+}
+await check('Pause, cancel & refunds: resume, cancel and record a refund, each read again from the server', async () => {
+  resetChanges(); resetMemberships();
+  const { ctx, page } = await ownershipPage('/staff/billing/membership-changes', { width: 1280, height: 900 });
+  await chooseMember00(page);
+  const sel = () => chgPage(page).getByTestId('membership-selected');
+  await chgPage(page).getByRole('button', { name: 'Pause membership' }).click();
+  await chgPage(page).getByTestId('pause-form').locator('input[type="date"]').fill('2026-11-20');
+  await chgPage(page).getByTestId('pause-form').locator('textarea').fill('Injury');
+  await chgPage(page).getByRole('button', { name: 'Pause this membership' }).click();
+  await sel().getByRole('button', { name: 'Resume now' }).waitFor();
+  await sel().getByRole('button', { name: 'Resume now' }).click();
+  await chgPage(page).getByRole('button', { name: 'Resume this membership today' }).click();
+  await chgPage(page).getByTestId('change-outcome').filter({ hasText: 'The membership is active again.' }).waitFor();
+  await sel().getByText(/Resumed/).waitFor();
+  await sel().getByRole('button', { name: 'Cancel membership' }).click();
+  await shot(page, 'membership-changes-cancel-confirm', true);
+  await chgPage(page).getByTestId('cancel-form').locator('textarea').fill('Moving away');
+  await chgPage(page).getByRole('button', { name: 'Yes, cancel this membership' }).click();
+  await chgPage(page).getByTestId('change-outcome').filter({ hasText: 'The membership is cancelled.' }).waitFor();
+  await sel().getByRole('button', { name: 'Record a refund' }).click();
+  const refund = chgPage(page).getByTestId('refund-form');
+  await refund.locator('input[name="amount"]').fill('49.99');
+  await refund.locator('select[name="method"]').selectOption('CARD_TERMINAL');
+  await refund.locator('textarea').fill('Unused month');
+  await shot(page, 'membership-changes-refund-form', true);
+  await chgPage(page).getByRole('button', { name: 'Save refund record' }).click();
+  await chgPage(page).getByTestId('change-outcome').filter({ hasText: 'The refund record is saved.' }).waitFor();
+  await sel().getByTestId('refund-row').filter({ hasText: '$49.99' }).waitFor();
+  assert.deepEqual(chg.posts.map((p) => [p.tail, p.command, p.body.expectedVersion ?? null]),
+    [['pause', 'billing.membership.pause', 1], ['resume', 'billing.membership.resume', 2], ['cancel', 'billing.membership.cancel', 3], ['refund-records', 'billing.membership.refund.record', null]]);
+  assert.deepEqual(chg.posts[3].body, { amountMinor: 4999, currency: 'USD', refundedOn: '2026-11-08', method: 'CARD_TERMINAL', reason: 'Unused month' });
+  assert.equal(new Set(chg.posts.map((p) => p.key)).size, 4, 'a fresh key for each command');
+  await axe(page, 'membership-changes-after-refund');
+  await shot(page, 'membership-changes-after-refund', true);
+  await ctx.close();
+});
+await check('Pause, cancel & refunds: an unknown cancel outcome offers Try again with the same key; an active payment schedule refuses a pause', async () => {
+  resetChanges({ replies: ['unknown'] }); resetMemberships();
+  const { ctx, page } = await ownershipPage('/staff/billing/membership-changes', { width: 1280, height: 900 });
+  await chooseMember00(page);
+  await chgPage(page).getByRole('button', { name: 'Cancel membership' }).click();
+  await chgPage(page).getByTestId('cancel-form').locator('textarea').fill('Moving away');
+  await chgPage(page).getByRole('button', { name: 'Yes, cancel this membership' }).click();
+  await chgPage(page).getByRole('button', { name: 'Try again' }).waitFor();
+  assert.equal(await chgPage(page).getByTestId('membership-select').isDisabled(), true, 'choice locked while a command is kept');
+  await chgPage(page).getByRole('button', { name: 'Try again' }).click();
+  await chgPage(page).getByTestId('change-outcome').filter({ hasText: 'The membership is cancelled.' }).waitFor();
+  assert.equal(chg.posts.length, 2); assert.equal(chg.posts[0].key, chg.posts[1].key);
+  await ctx.close();
+  resetChanges({ replies: ['schedule'] }); resetMemberships();
+  const second = await ownershipPage('/staff/billing/membership-changes', { width: 1280, height: 900 });
+  await chooseMember00(second.page);
+  await chgPage(second.page).getByRole('button', { name: 'Pause membership' }).click();
+  await chgPage(second.page).getByTestId('pause-form').locator('input[type="date"]').fill('2026-11-20');
+  await chgPage(second.page).getByTestId('pause-form').locator('textarea').fill('Injury');
+  await chgPage(second.page).getByRole('button', { name: 'Pause this membership' }).click();
+  await chgPage(second.page).getByTestId('change-outcome').filter({ hasText: 'active payment schedule' }).waitFor();
+  assert.equal(await chgPage(second.page).getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.equal(chg.members.get(id(1500)).state, 'ACTIVE');
+  await second.ctx.close();
+});
+await check('Pause, cancel & refunds: turning pauses off removes Pause; leaving the tab hides the membership; a refused read shows nothing', async () => {
+  resetChanges(); resetMemberships();
+  const { ctx, page } = await ownershipPage('/staff/billing/membership-changes', { width: 1280, height: 900 });
+  await chooseMember00(page);
+  await chgPage(page).getByRole('button', { name: 'Change pause rules' }).click();
+  await chgPage(page).getByTestId('pause-rules-form').getByLabel('Offer pauses at this school').uncheck();
+  await chgPage(page).getByRole('button', { name: 'Save pause rules' }).click();
+  await chgPage(page).getByTestId('change-outcome').filter({ hasText: 'The pause rules are saved.' }).waitFor();
+  await chgPage(page).getByText('Pauses are turned off at this school.').waitFor();
+  assert.deepEqual(chg.posts[0].body, { expectedVersion: 3, pausesAllowed: false, maxPauseDays: null, maxPausedDaysPerYear: null, holdFee: null });
+  assert.equal(await chgPage(page).getByRole('button', { name: 'Pause membership' }).count(), 0);
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.waitForFunction(() => !document.body.innerText.includes('Member00'));
+  await ctx.close();
+  resetChanges({ historyDenied: true }); resetMemberships();
+  const second = await ownershipPage('/staff/billing/membership-changes', { width: 1280, height: 900 });
+  await chgPage(second.page).getByTestId('membership-select').waitFor({ timeout: 20000 });
+  await chgPage(second.page).getByTestId('membership-select').selectOption(id(1500));
+  await chgPage(second.page).getByText("You cannot see this membership's pauses and refunds.").waitFor();
+  assert.equal(await chgPage(second.page).getByTestId('membership-actions').count(), 0);
+  await second.ctx.close();
 });
 
 await browser.close();

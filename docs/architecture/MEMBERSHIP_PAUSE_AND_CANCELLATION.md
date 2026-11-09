@@ -21,7 +21,7 @@ All routes sit under `/v1/organizations/:organizationId/schools/:schoolId/billin
 | `POST membership-pause-policy` | `billing.membership.pause_policy.manage` | `billing.membership.pause_policy.set` |
 | `POST memberships/:id/pause` | `billing.membership.pause` | `billing.membership.pause` |
 | `POST memberships/:id/resume` | `billing.membership.pause` | `billing.membership.resume` |
-| `POST memberships/:id/cancel` (0177) | `billing.membership.cancel` | (unchanged) |
+| `POST memberships/:id/cancel` (0177) | `billing.membership.cancel` | `billing.membership.cancel` (same-origin browser guard added with the staff screen; body and receipt unchanged) |
 | `POST memberships/:id/refund-records` | `billing.membership.refund.record` | `billing.membership.refund.record` |
 | `GET memberships/:id/pauses-and-refunds` | billing.membership.read, pause or refund.record | (GET) |
 
@@ -79,3 +79,7 @@ Every POST needs an `Idempotency-Key`. An exact retry returns the stored receipt
 ## Permissions
 
 The three new permissions go to system OWNER roles only. Owners grant them to staff roles per school.
+
+## Staff screen
+
+`/staff/billing/membership-changes` (Memberships & Billing → Pause, cancel & refunds) is the only browser caller. It shows the school's pause rules (with a form to change them), a membership picker over the school's ACTIVE, paused and cancelled memberships, and for the chosen membership its pauses, refund records and only the actions its current state allows. Every command answer is followed by fresh reads; an unknown outcome keeps the exact request in memory so Try again replays the same key. Blur, a hidden tab, a school change or a session end hide it and drop any kept request.

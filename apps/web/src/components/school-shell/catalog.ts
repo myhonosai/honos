@@ -28,7 +28,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'students', titleKey: 'navStudents', routes: [r('/staff/search', 'routeStudentSearch'), r('/staff/people', 'routePeople'), r('/staff/family-access', 'routeFamilyAccess', true),
     r('/staff/students/achievements', 'routeAchievements'), r('/staff/retention/review', 'routeRetention')] },
   { key: 'billing', titleKey: 'navBilling', routes: [r('/staff/memberships', 'routeMembershipList'), r('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-plans', 'routePlans'),
-    r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/billing/invoices', 'routeInvoices')] },
+    r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'), r('/staff/billing/renewals', 'routeRenewals'), r('/staff/billing/invoices', 'routeInvoices')] },
   { key: 'classes', titleKey: 'navClasses', routes: [r('/staff/schedule', 'routeRosters'), r('/staff/schedule/sessions', 'routeSessions'), r('/staff/schedule/bookings', 'routeBookings'),
     r('/staff/classpass', 'routeClassPass', true), r('/staff/kiosk', 'routeKiosk')] },
   { key: 'attendance', titleKey: 'navAttendance', routes: [r('/staff/attendance', 'routeAttendance', true), r('/staff/attendance/planned-absences', 'routePlannedAbsences'),
