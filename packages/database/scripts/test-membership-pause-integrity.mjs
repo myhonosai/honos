@@ -214,7 +214,7 @@ async function seed() {
   OTHER_SCHOOL = await staff('other-school', [await role(ids.organization, allPermissions)], { school: ids.schoolB });
   const otherOwner = await staff('other-org', [await role(ids.otherOrganization, allPermissions, 'OWNER')], { org: ids.otherOrganization, school: ids.otherSchool });
   OTHER_ORG = otherOwner;
-  for (const label of ['One', 'Two', 'Three', 'Four', 'Five', 'Six']) m[label] = await activeMembership(OWN, label);
+  for (const label of ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven']) m[label] = await activeMembership(OWN, label);
   m.schoolB = await activeMembership(OTHER_SCHOOL, 'SchoolB');
   m.otherOrg = await activeMembership(OTHER_ORG, 'OtherOrg');
   // Legacy FROZEN (paused outside HON before 0224): no pause row.
@@ -288,6 +288,14 @@ try {
   ok((await success(() => readPolicy(OTHER_SCHOOL), 'school B policy read')).data.policy === null, 'school B has its own (absent) policy');
   // Restore the earlier closed pause of Five (15 days in the last year) now that a policy version exists.
   await sql('BEGIN'); await sql('ALTER TABLE hon.membership_pauses DISABLE TRIGGER USER');
+  // Seven (0231 rolling year): a 30-day pause straddling the window edge (15 of its days inside today-364..today) and
+  // one wholly outside the window. Only the 15 inside days count.
+  for (const [from, to, v] of [[-379, -349, 80], [-500, -470, 60]]) {
+    await sql(`INSERT INTO hon.membership_pauses(organization_id,school_id,membership_id,policy_version,starts_on,planned_resume_on,pause_reason,paused_by_principal_id,
+        pause_prior_version,pause_next_version,ended_kind,ended_on,ended_by_principal_id,ended_at,end_prior_version,end_next_version)
+      VALUES($1,$2,$3,1,$4::date,$5::date,'Earlier travel',$6,$7,$7+1,'RESUMED',$5::date,$6,clock_timestamp(),$7+1,$7+2)`,
+      [ids.organization, ids.schoolA, m.Seven, addDays(today, from), addDays(today, to), OWN.principal, v]);
+  }
   await sql(`INSERT INTO hon.membership_pauses(id,organization_id,school_id,membership_id,policy_version,starts_on,planned_resume_on,pause_reason,paused_by_principal_id,paused_at,
       pause_prior_version,pause_next_version,ended_kind,ended_on,ended_by_principal_id,ended_at,end_prior_version,end_next_version)
     VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`, [earlier.id, earlier.organization_id, earlier.school_id, earlier.membership_id, earlier.starts_on,
@@ -332,6 +340,10 @@ try {
   const five = await membership(m.Five);
   await refused(() => pause(PAUSER, m.Five, { expectedVersion: five.version, resumeOn: addDays(today, 26), pauseReason: 'Surgery' }), 422, 'MEMBERSHIP_PAUSE_YEARLY_LIMIT', 'over the paused days per year');
   await success(() => pause(PAUSER, m.Five, { expectedVersion: five.version, resumeOn: addDays(today, 25), pauseReason: 'Surgery' }), 'pause Five exactly to the yearly cap');
+  // 0231 rolling year: Seven's straddling pause counts only its 15 days inside the window; the older pause counts none.
+  const seven = await membership(m.Seven);
+  await refused(() => pause(PAUSER, m.Seven, { expectedVersion: seven.version, resumeOn: addDays(today, 26), pauseReason: 'Surgery' }), 422, 'MEMBERSHIP_PAUSE_YEARLY_LIMIT', 'rolling year: straddling pause counts its in-window days');
+  await success(() => pause(PAUSER, m.Seven, { expectedVersion: seven.version, resumeOn: addDays(today, 25), pauseReason: 'Surgery' }), 'rolling year: pause Seven exactly to the cap');
   const four = await membership(m.Four);
   await refused(() => pause(PAUSER, m.Four, { expectedVersion: four.version, resumeOn: addDays(today, 5), pauseReason: 'Exams' }), 409, 'MEMBERSHIP_PAUSE_REQUIRES_BILLING_ARRANGEMENT', 'active payment schedule');
   ok((await membership(m.Four)).state === 'ACTIVE' && (await pausesOf(m.Four)).length === 0, 'Four unchanged');
