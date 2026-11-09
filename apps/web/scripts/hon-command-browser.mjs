@@ -3661,12 +3661,20 @@ await check('Creative Credits corrections: an unknown answer keeps the request a
   await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
   assert.equal(await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo North' }).isDisabled(), true, 'nothing else opens while a request is kept');
   await axe(page, 'credits-unknown');
+  // Leaving the window keeps the unconfirmed grant: Show again brings back its school, its outcome and Try again (same key).
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credit-outcome').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  assert.equal(ccx.posts.length, 1);
   await outcome.getByRole('button', { name: 'Try again' }).click();
   await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
   assert.equal(ccx.posts.length, 2);
   assert.equal(ccx.posts[0].key, ccx.posts[1].key, 'Try again replays the identical request');
   assert.deepEqual(ccx.posts[0].body, ccx.posts[1].body);
   await detail.getByText('Adjustment: 100 credits').waitFor();
+  assert.equal(ccx.state.get(ccSouth).lots.length, 1, 'the grant applied once');
   // A refusal (not the HQ owner) is final: nothing kept, nothing changed.
   ccx.replies = ['denied'];
   await detail.getByRole('button', { name: 'Remove credits' }).click();
@@ -3677,10 +3685,19 @@ await check('Creative Credits corrections: an unknown answer keeps the request a
   await debit.getByRole('button', { name: 'Remove credits' }).click();
   await outcome.getByText('Only the HQ owner can do this. Nothing changed.').waitFor();
   assert.equal(await outcome.getByRole('button', { name: 'Try again' }).count(), 0);
-  // Leaving the window drops everything.
-  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  // A session end drops an unconfirmed correction and says so after Show again, with no Try again.
+  ccx.replies = ['unknown'];
+  await detail.getByRole('button', { name: 'Remove credits' }).click();
+  await debit.getByLabel('Credits', { exact: true }).fill('10');
+  await debit.getByLabel('Note (why, for the record)').fill('Testing a session end');
+  await debit.getByRole('checkbox').check();
+  await debit.getByRole('button', { name: 'Remove credits' }).click();
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
   await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
-  assert.equal(await creditsPage(page).getByTestId('credit-outcome').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.getByText('Check this school\'s wallet before sending it again.').waitFor();
+  assert.equal(await outcome.getByRole('button', { name: 'Try again' }).count(), 0);
   assert.equal(ccx.other, 0);
   await ctx.close();
 });

@@ -9,7 +9,8 @@ type T = (key: CreditsKey, vars?: Record<string, string>) => string;
 export type CreditForm = null | { kind: 'grant' } | { kind: 'debit'; lotId: string }
   | { kind: 'resolve'; reservationId: string; resolution: 'SUCCEEDED' | 'NOT_CHARGED' } | { kind: 'cost'; reservationId: string };
 export type CreditAction = Exclude<CreditForm, null>['kind'];
-export type CreditOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | CreditsErrorKind; action: CreditAction; replayed?: boolean }>;
+/** LOST: a session end dropped a correction before its answer was confirmed; check the wallet before sending it again. */
+export type CreditOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | 'LOST' | CreditsErrorKind; action: CreditAction; replayed?: boolean }>;
 export type Fields = Readonly<Record<string, string>>;
 
 export const GRANT_REASONS = ['PROMOTION', 'GOODWILL', 'SERVICE_RECOVERY', 'BILLING_CORRECTION', 'OTHER'] as const;

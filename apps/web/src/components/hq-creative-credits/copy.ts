@@ -59,6 +59,7 @@ const en = {
   e_CHANGED: 'The wallet changed since it was read. Nothing changed; it has been read again.', e_REFUSED: 'A credit rule refused this (for example more credits than are unused, a purchased lot, or more units than were held). Nothing changed.',
   e_INVALID: 'Check the details and try again. Nothing changed.', e_RATE: 'Too many requests. Nothing changed. Wait a minute and try again.',
   e_UNKNOWN: 'We could not confirm whether this went through. Try again sends the exact same request and cannot apply twice.', tryAgain: 'Try again', stop: 'Stop and review',
+  e_LOST: 'A correction was not confirmed before your session ended. Check this school\'s wallet before sending it again.',
 };
 export type CreditsKey = keyof typeof en;
 const ko: Record<CreditsKey, string> = {
@@ -121,6 +122,7 @@ const ko: Record<CreditsKey, string> = {
   e_CHANGED: '읽은 이후 지갑이 변경되었습니다. 변경된 내용이 없으며 다시 읽었습니다.', e_REFUSED: '크레딧 규칙에 따라 거부되었습니다 (예: 미사용분보다 많은 크레딧, 구매 묶음, 보류보다 많은 단위). 변경된 내용이 없습니다.',
   e_INVALID: '내용을 확인하고 다시 시도하세요. 변경된 내용이 없습니다.', e_RATE: '요청이 너무 많습니다. 변경된 내용이 없습니다. 잠시 후 다시 시도하세요.',
   e_UNKNOWN: '처리되었는지 확인할 수 없습니다. 다시 시도하면 똑같은 요청을 보내며 두 번 적용되지 않습니다.', tryAgain: '다시 시도', stop: '중지하고 검토',
+  e_LOST: '세션이 끝나기 전에 정정이 확인되지 않았습니다. 다시 보내기 전에 이 학교의 지갑을 확인하세요.',
 };
 const es: Record<CreditsKey, string> = {
   title: 'Créditos creativos', intro: 'La billetera de créditos creativos de cada escuela para generar imágenes y videos, con las tarifas, los paquetes de recarga y el costo del proveedor que HON registró.',
@@ -182,6 +184,7 @@ const es: Record<CreditsKey, string> = {
   e_CHANGED: 'La billetera cambió desde que se leyó. No cambió nada; se volvió a leer.', e_REFUSED: 'Una regla de créditos lo rechazó (por ejemplo, más créditos de los que quedan sin usar, un lote comprado o más unidades de las retenidas). No cambió nada.',
   e_INVALID: 'Revise los datos e intente de nuevo. No cambió nada.', e_RATE: 'Demasiadas solicitudes. No cambió nada. Espere un minuto e intente de nuevo.',
   e_UNKNOWN: 'No pudimos confirmar si se aplicó. Intentar de nuevo envía exactamente la misma solicitud y no puede aplicarse dos veces.', tryAgain: 'Intentar de nuevo', stop: 'Detener y revisar',
+  e_LOST: 'Una corrección no se confirmó antes de que terminara su sesión. Revise la billetera de esta escuela antes de enviarla de nuevo.',
 };
 export const CREDITS_LANGUAGES = { en, ko, es } as const;
 export function creditsText(language: string, key: CreditsKey, vars: Record<string, string> = {}): string {

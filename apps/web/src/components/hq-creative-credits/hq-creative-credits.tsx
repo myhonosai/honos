@@ -85,18 +85,28 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
   const [lock, setLock] = useState<Lock>('NONE');
   const generation = useRef(0), privacy = useRef(0), mounted = useRef(false);
   const pending = useRef<Pending | null>(null), sending = useRef(false);
+  // What to show for a correction once the page is shown again: its unknown answer (with Try again), its late answer, or
+  // that a session end dropped it before it was confirmed. Grants and removals carry no version, so an unconfirmed one is
+  // never silently forgotten: a fresh request could apply twice.
+  const afterReveal = useRef<{ schoolId: string; outcome: NonNullable<CreditOutcome> } | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; privacy.current++; pending.current = null; }; }, []);
   useEffect(() => {
-    // Per-school billing data: leaving the window or tab, or a session end, hides everything, retires every read and drops a kept correction.
-    const conceal = () => {
-      generation.current++; privacy.current++; pending.current = null;
-      setConcealed(true); setWallets({ state: 'LOADING' }); setSelected(null); setDetail(null); setForm(null); setOutcome(null); setLock(sending.current ? 'SENDING' : 'NONE');
+    // Per-school billing data: leaving the window or tab, or a session end, hides everything and retires every read. Leaving
+    // keeps an unconfirmed correction (same key) for Try again after Show again; a session end drops it and says so.
+    const conceal = (sessionEnded: boolean) => {
+      generation.current++; privacy.current++;
+      const kept = pending.current;
+      if (kept && !afterReveal.current) afterReveal.current = { schoolId: kept.request.schoolId, outcome: { kind: 'UNKNOWN', action: kept.request.action } };
+      if (sessionEnded && kept) { pending.current = null; afterReveal.current = { schoolId: kept.request.schoolId, outcome: { kind: 'LOST', action: kept.request.action } }; }
+      setConcealed(true); setWallets({ state: 'LOADING' }); setSelected(null); setDetail(null); setForm(null); setOutcome(null);
+      setLock(sending.current ? 'SENDING' : pending.current ? 'KEPT' : 'NONE');
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
-    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    const away = () => conceal(false), ended = () => conceal(true);
+    const visibility = () => { if (document.visibilityState === 'hidden') away(); };
+    window.addEventListener('blur', away); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', away);
+    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, ended);
+    return () => { window.removeEventListener('blur', away); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', away);
+      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, ended); };
   }, []);
 
   // The list and the open school's wallet are read together, fresh, on open, refresh and after every correction answer.
@@ -130,9 +140,16 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
       keep = keepForRetry(error);
       next = { kind: error instanceof CreditsError ? error.kind : 'UNKNOWN', action: request.request.action };
     } finally { sending.current = false; }
-    if (pending.current?.key === request.key) pending.current = keep ? request : null;
+    const dropped = pending.current?.key !== request.key;
+    if (!dropped) pending.current = keep ? request : null;
     setLock(pending.current ? 'KEPT' : 'NONE');
-    if (shown !== privacy.current || !mounted.current) return;
+    if (!mounted.current) return;
+    if (shown !== privacy.current) {
+      // Answered while hidden: show it after Show again. A session end that dropped an unconfirmed request says so.
+      afterReveal.current = { schoolId: request.request.schoolId, outcome: dropped && keep ? { kind: 'LOST', action: next.action } : next };
+      return;
+    }
+    afterReveal.current = null;
     setOutcome(next);
     // Any answer closes the form: Try again replays the stored request, never the form as edited since.
     setForm(null);
@@ -149,14 +166,20 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
   }, [form, lock, detail, send]);
   const onStop = useCallback(() => {
     if (lock !== 'KEPT' || sending.current) return;
-    pending.current = null; setLock('NONE'); setOutcome(null); setRefresh((n) => n + 1);
+    pending.current = null; afterReveal.current = null; setLock('NONE'); setOutcome(null); setRefresh((n) => n + 1);
   }, [lock]);
+  const onShowAgain = useCallback(() => {
+    const shown = afterReveal.current;
+    // A kept or late-answered correction brings back its school and its outcome; Try again still sends the same key.
+    if (shown) { setSelected(shown.schoolId); setOutcome(shown.outcome); if (shown.outcome.kind !== 'UNKNOWN' && shown.outcome.kind !== 'RATE') afterReveal.current = null; }
+    setConcealed(false); setRefresh((n) => n + 1);
+  }, []);
   const onOpenForm = useCallback((next: Exclude<CreditForm, null>) => { if (lock === 'NONE') { setOutcome(null); setForm(next); } }, [lock]);
   const onOpen = useCallback((schoolId: string) => { if (lock === 'NONE') { setForm(null); setOutcome(null); setSelected(schoolId.toLowerCase()); setRefresh((n) => n + 1); } }, [lock]);
   const onClose = useCallback(() => { if (lock === 'NONE') { setForm(null); setOutcome(null); setSelected(null); } }, [lock]);
 
   return <CreditsView language={preferences.language} concealed={concealed} wallets={wallets} detail={detail}
-    onRefresh={() => setRefresh((n) => n + 1)} onShowAgain={() => { setConcealed(false); setRefresh((n) => n + 1); }} onOpen={onOpen} onClose={onClose}
+    onRefresh={() => setRefresh((n) => n + 1)} onShowAgain={onShowAgain} onOpen={onOpen} onClose={onClose}
     form={form} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'} onOpenForm={onOpenForm} onCloseForm={() => setForm(null)} onSubmit={onSubmit}
     onTryAgain={() => { void send(); }} onStop={onStop}/>;
 }
