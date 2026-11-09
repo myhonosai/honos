@@ -60,3 +60,20 @@
 }
 @media (prefers-reduced-motion: reduce) { .conversation * { scroll-behavior: auto; } }
 .turn > button { justify-self: start; }
+
+/* C3a suggestion cards and grouped specialist status under a HON answer. */
+.suggestions { display: grid; gap: 8px; margin-top: 4px; padding-top: 10px; border-top: 1px dashed #2f4a63; min-width: 0; }
+.group { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid #35506d; border-radius: 12px; background: #0c1b2b; }
+.group[data-orchestration="NEEDS_REVIEW"], .group[data-orchestration="PARTIAL"] { border-color: #7c6125; }
+.group[data-orchestration="FAILED"], .group[data-orchestration="UNKNOWN"] { border-color: #7a3a4d; }
+.members { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.members li { display: inline-flex; align-items: center; gap: 6px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.card { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 10px 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #11243a; }
+.card > button { justify-self: start; }
+.confirm { display: grid; gap: 8px; min-width: 0; }
+.confirm label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; }
+.confirm .modes label { display: inline-flex; font-weight: 600; }
+.confirm select, .confirm textarea { width: 100%; min-width: 0; min-height: var(--hon-target, 44px); box-sizing: border-box; border: 1px solid #3b5269; border-radius: 10px; padding: 9px 10px; background: #0a1625; color: #eef6fc; font: inherit; }
+.confirm textarea { resize: vertical; }
+.confirm select:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
