@@ -10,7 +10,7 @@ import {
 
 type Scope = ResolvedPrincipalScope & { externalSubject: string };
 type Limits = { replyMode: HonReplyMode; taskClass: string; inputBudget: number; outputBudget: number; maxProviderCostMicrounits: number };
-type Reference = { invocationId: string; workItemId: string; workVersion: number; limits: Limits };
+type Reference = { invocationId: string; workItemId: string; workVersion: number; limits: Limits; agentKey: 'hon' | 'claire' };
 
 /** The database names the mode; its budgets must be exactly the contract's (no caller or stored value can raise them). */
 function modeLimits(limits: Limits | undefined) {
@@ -28,7 +28,9 @@ function suggestionsValid(v: unknown, truncated: boolean): boolean {
   return Array.isArray(v) && v.length <= HON_REPLY_MAX_SUGGESTIONS && (!truncated || v.length === 0) && new Set(v).size === v.length
     && v.every((k) => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(k));
 }
-function verified(result: HonReplyResult): HonReplyResult {
+function verified(result: HonReplyResult, specialist: 'hon' | 'claire'): HonReplyResult {
+  // Claire (K2) never suggests specialists; any suggestion from her runtime is unverified output.
+  if (specialist === 'claire' && (result?.suggestions ?? []).length > 0) throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
   if (reply.length < 1 || reply.length > HON_REPLY_LIMITS.replyCharacters || !tokens(result.inputTokens, 1_000_000) || !tokens(result.outputTokens, 1_000_000)
     || !Number.isSafeInteger(result.providerCostMicrounits) || result.providerCostMicrounits < 0 || result.providerCostMicrounits > 1_000_000_000
@@ -71,10 +73,12 @@ export class HonReplyService {
     const ref = await this.transaction(scope, async (client) => (await client.query<{ data: Reference | null }>('SELECT hon.hon_reply_planning_reference($1,$2::uuid) data', [scope.externalSubject, turnId])).rows[0]!.data);
     if (!ref) return;
     const limits = modeLimits(ref.limits);
+    // The database names the agent: HON, or Claire whose analysis is always the DETAILED (ANALYZE) mode.
+    if ((ref.agentKey !== 'hon' && ref.agentKey !== 'claire') || (ref.agentKey === 'claire' && ref.limits.replyMode !== 'DETAILED')) throw new Error('HON_REPLY_AGENT_DRIFT');
     let planId: string | null = null;
     try {
       const planned = await this.plans.plan({ ...this.context(scope), idempotencyKey: ref.invocationId }, ref.workItemId, {
-        expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'hon', modality: 'TEXT', taskClass: limits.taskClass,
+        expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: ref.agentKey, modality: 'TEXT', taskClass: limits.taskClass,
         inputBudget: limits.inputTokens, outputBudget: limits.outputTokens, maxProviderCostMicrounits: limits.maxProviderCostMicrounits,
       });
       planId = planned.status === 'PLANNED' ? planned.plan.id : null;
@@ -87,7 +91,7 @@ export class HonReplyService {
     if (!invocation) return;
     let result: HonReplyResult;
     try {
-      result = verified(await this.provider.generate(invocation));
+      result = verified(await this.provider.generate(invocation), invocation.specialist);
     } catch (error) {
       const failure = error instanceof HonReplyProviderRuntimeError ? error : new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
       await this.transaction(scope, async (client) => { await client.query('SELECT hon.fail_hon_reply($1,$2::uuid,$3,$4)', [scope.externalSubject, turnId, failure.outcome, failure.reason]); });
