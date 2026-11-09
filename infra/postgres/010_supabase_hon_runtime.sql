@@ -2414,3 +2414,24 @@ DO $$ DECLARE r text; BEGIN
     EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM '||quote_ident(r);
   END LOOP;
 END $$;
+
+-- 0243 communication delivery: school staff read delivery status and receipts through forced RLS only.
+-- The runtime never writes deliveries and cannot call the worker functions (013 grants them to hon_communication_worker).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.claim_communication_deliveries(text[],integer,integer)') IS NULL THEN RAISE EXCEPTION 'Apply communication delivery migration 0243 first'; END IF;
+  REVOKE ALL ON TABLE hon.communication_deliveries, hon.communication_delivery_events FROM hon_runtime;
+  GRANT SELECT ON TABLE hon.communication_deliveries, hon.communication_delivery_events TO hon_runtime;
+  GRANT USAGE ON TYPE hon.communication_delivery_status, hon.communication_delivery_event_type TO hon_runtime;
+  FOREACH f IN ARRAY ARRAY[
+    'hon.communication_delivery_evidence(hon.communication_deliveries,text,text)',
+    'hon.communication_record_recipient_opt_out(uuid,uuid,uuid,text,timestamptz)',
+    'hon.reconcile_expired_communication_leases(integer)',
+    'hon.claim_communication_deliveries(text[],integer,integer)',
+    'hon.record_communication_send_result(uuid,uuid,text,text,text,text,integer,text,text,integer)',
+    'hon.record_communication_provider_event(text,text,text,uuid,text,timestamptz,bigint)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION '||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+END $$;

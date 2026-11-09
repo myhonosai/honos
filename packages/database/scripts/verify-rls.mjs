@@ -126,6 +126,8 @@ const expectedRlsTables = [
   'class_templates',
   'communication_consents',
   'communication_messages',
+  'communication_deliveries',
+  'communication_delivery_events',
   'crm_activities',
   'crm_appointments',
   'crm_lead_registration_conversions',

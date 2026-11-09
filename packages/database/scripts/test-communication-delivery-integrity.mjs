@@ -1,0 +1,280 @@
+// 0243 communication delivery and provider receipts: worker claim/lease/record, quiet hours, consent and
+// address re-checks at send time, retry backoff and exhaustion, lease expiry and late results as UNKNOWN,
+// idempotent forward-only receipts, recipient opt-out, forced RLS reads and exact role boundaries.
+import pg from 'pg';
+import { randomUUID } from 'node:crypto';
+
+const { Client } = pg;
+for (const key of ['DATABASE_URL', 'HON_RUNTIME_DATABASE_URL', 'HON_COMMUNICATION_WORKER_DATABASE_URL']) {
+  if (!process.env[key]) throw new Error(`${key} is required for communication delivery integrity tests.`);
+}
+const local = (url) => {
+  const parsed = new URL(url);
+  if (!['localhost', '127.0.0.1'].includes(parsed.hostname) || parsed.port !== '5432') throw new Error('Disposable localhost:5432 target required.');
+  return { connectionString: url, ssl: false };
+};
+const admin = new Client(local(process.env.DATABASE_URL));
+const runtime = new Client(local(process.env.HON_RUNTIME_DATABASE_URL));
+const worker = new Client(local(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL));
+
+let passed = 0;
+function check(condition, message) {
+  if (!condition) throw new Error(`FAIL: ${message}`);
+  passed += 1;
+}
+async function expectError(code, work, message) {
+  try { await work(); } catch (error) {
+    if (error?.code === code) { passed += 1; return; }
+    throw new Error(`FAIL: ${message} (got ${error?.code ?? error?.message})`);
+  }
+  throw new Error(`FAIL: ${message} (no error)`);
+}
+
+const hourIn = (zone) => Number(new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+const zones = ['Pacific/Kiritimati', 'Pacific/Auckland', 'Asia/Tokyo', 'Asia/Kolkata', 'Europe/Berlin', 'UTC', 'America/Sao_Paulo', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Pacific/Honolulu', 'Pacific/Pago_Pago'];
+const dayZone = zones.find((zone) => hourIn(zone) >= 10 && hourIn(zone) <= 18);
+const nightZone = zones.find((zone) => hourIn(zone) >= 23 || hourIn(zone) <= 5);
+if (!dayZone || !nightZone) throw new Error('No suitable day/night time zones for the quiet-hours proof.');
+
+const ids = Object.fromEntries(['org', 'schoolA', 'schoolB', 'user', 'principal'].map((key) => [key, randomUUID()]));
+const person = {};
+const message = {};
+
+async function addPerson(key, school, email, phone) {
+  person[key] = randomUUID();
+  await admin.query('INSERT INTO hon.people (id, organization_id, school_id, given_name, family_name, email, phone_e164) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [person[key], ids.org, school, 'Test', key, email, phone]);
+}
+async function consent(key, school, channel, status) {
+  await admin.query(`INSERT INTO hon.communication_consents (organization_id, school_id, person_id, channel, status, source, captured_at, updated_by_principal_id)
+    VALUES ($1,$2,$3,$4,$5,'STAFF',now(),$6) ON CONFLICT (person_id, channel) DO UPDATE SET status = EXCLUDED.status`,
+    [ids.org, school, person[key], channel, status, ids.principal]);
+}
+async function queued(key, school, personKey, channel, content, scheduledAt = null) {
+  message[key] = randomUUID();
+  await admin.query(`INSERT INTO hon.communication_messages (id, organization_id, school_id, recipient_person_id, channel, content, lifecycle, scheduled_at, created_by_principal_id, queued_by_principal_id, version)
+    VALUES ($1,$2,$3,$4,$5,$6,'QUEUED',$7,$8,$8,2)`, [message[key], ids.org, school, person[personKey], channel, content, scheduledAt, ids.principal]);
+}
+const delivery = async (key) => (await admin.query('SELECT * FROM hon.communication_deliveries WHERE message_id = $1', [message[key]])).rows[0];
+const claim = async (channels = ['EMAIL', 'SMS'], limit = 100, lease = 60) =>
+  (await worker.query('SELECT * FROM hon.claim_communication_deliveries($1::text[], $2, $3)', [channels, limit, lease])).rows
+    .filter((row) => row.organization_id === ids.org);
+const record = async (row, outcome, extra = {}) => (await worker.query(
+  'SELECT * FROM hon.record_communication_send_result($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+  [row.delivery_id, row.lease_token, outcome, extra.provider ?? 'FAKE', extra.providerMessageId ?? null, extra.sentAs ?? null,
+    extra.segments ?? null, extra.encoding ?? null, extra.failureCode ?? null, extra.retryAfter ?? null])).rows[0];
+const receipt = async (eventId, providerMessageId, type, extra = {}) => (await worker.query(
+  'SELECT * FROM hon.record_communication_provider_event($1,$2,$3,$4,$5,$6,$7)',
+  [extra.provider ?? 'FAKE', eventId, providerMessageId, extra.honDeliveryId ?? null, type, extra.occurredAt ?? new Date().toISOString(), extra.cost ?? null])).rows[0];
+
+async function cleanup() {
+  await admin.query('BEGIN');
+  try {
+    await admin.query('DELETE FROM hon.communication_delivery_events WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.communication_deliveries WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.outbox_events WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.audit_events WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.communication_messages WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.communication_consents WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.principals WHERE id = $1', [ids.principal]);
+    await admin.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
+    await admin.query('DELETE FROM hon.schools WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.organizations WHERE id = $1', [ids.org]);
+    await admin.query('COMMIT');
+  } catch (error) { await admin.query('ROLLBACK'); throw error; }
+}
+
+await Promise.all([admin.connect(), runtime.connect(), worker.connect()]);
+try {
+  await admin.query("INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, 'Delivery Org', 'Delivery Org')", [ids.org]);
+  await admin.query('INSERT INTO hon.schools (id, organization_id, name, slug, timezone) VALUES ($1,$2,$3,$4,$5), ($6,$2,$7,$8,$9)',
+    [ids.schoolA, ids.org, 'Day School', `day-${ids.schoolA.slice(0, 8)}`, dayZone, ids.schoolB, 'Night School', `night-${ids.schoolB.slice(0, 8)}`, nightZone]);
+  await admin.query("INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, 'staff@example.test', 'Staff')", [ids.user, `delivery-${ids.user}`]);
+  await admin.query("INSERT INTO hon.principals (id, principal_type, user_id, display_name) VALUES ($1, 'HUMAN_USER', $2, 'Staff')", [ids.principal, ids.user]);
+  await addPerson('ada', ids.schoolA, 'ada@example.test', '+15555550101');
+  await addPerson('noEmail', ids.schoolA, null, '+15555550102');
+  await addPerson('revoked', ids.schoolA, 'revoked@example.test', '+15555550103');
+  await addPerson('night', ids.schoolB, 'night@example.test', '+15555550104');
+  for (const key of ['ada', 'noEmail', 'revoked']) { await consent(key, ids.schoolA, 'EMAIL', 'OPTED_IN'); await consent(key, ids.schoolA, 'SMS', 'OPTED_IN'); }
+  await consent('night', ids.schoolB, 'SMS', 'OPTED_IN');
+  await consent('night', ids.schoolB, 'EMAIL', 'OPTED_IN');
+
+  // 1. Role boundaries.
+  await expectError('42501', () => runtime.query("SELECT * FROM hon.claim_communication_deliveries(ARRAY['EMAIL'], 1, 60)"), 'runtime cannot claim deliveries');
+  await expectError('42501', () => runtime.query("SELECT * FROM hon.record_communication_provider_event('FAKE','e','m',NULL,'DELIVERED',now(),NULL)"), 'runtime cannot record provider events');
+  await expectError('42501', () => runtime.query('INSERT INTO hon.communication_deliveries (organization_id, school_id, message_id, channel) VALUES ($1,$2,$3,$4)', [ids.org, ids.schoolA, randomUUID(), 'EMAIL']), 'runtime cannot write deliveries');
+  await expectError('42501', () => worker.query('SELECT 1 FROM hon.communication_deliveries LIMIT 1'), 'worker cannot read the delivery table');
+  await expectError('42501', () => worker.query('SELECT 1 FROM hon.people LIMIT 1'), 'worker cannot read people');
+  await expectError('42501', () => worker.query("SELECT hon.communication_record_recipient_opt_out($1,$2,$3,'EMAIL',now())", [ids.org, ids.schoolA, randomUUID()]), 'worker cannot call the opt-out helper directly');
+  const workerRole = (await worker.query('SELECT rolsuper, rolbypassrls, rolinherit FROM pg_roles WHERE rolname = current_user')).rows[0];
+  check(!workerRole.rolsuper && !workerRole.rolbypassrls && !workerRole.rolinherit, 'worker is not superuser, has no BYPASSRLS and does not inherit');
+  await expectError('22023', () => worker.query("SELECT * FROM hon.claim_communication_deliveries(ARRAY['PUSH'], 1, 60)"), 'PUSH cannot be claimed');
+  await expectError('22023', () => worker.query("SELECT * FROM hon.claim_communication_deliveries(ARRAY['EMAIL'], 101, 60)"), 'claim limit is bounded');
+
+  // 2. Claim: one lease per due message, address and body only for the leased send; future schedule waits.
+  await queued('email1', ids.schoolA, 'ada', 'EMAIL', 'Welcome to class');
+  await queued('future', ids.schoolA, 'ada', 'EMAIL', 'Later', new Date(Date.now() + 3600_000).toISOString());
+  await queued('noAddress', ids.schoolA, 'noEmail', 'EMAIL', 'Hello');
+  await queued('revoked', ids.schoolA, 'revoked', 'EMAIL', 'Hello');
+  await consent('revoked', ids.schoolA, 'EMAIL', 'OPTED_OUT'); // consent withdrawn after queueing
+  await queued('smsDay', ids.schoolA, 'ada', 'SMS', 'Class at 5pm');
+  await queued('smsNight', ids.schoolB, 'night', 'SMS', 'Class tomorrow');
+  const emailOnly = await claim(['EMAIL']);
+  check(emailOnly.length === 1 && emailOnly[0].message_id === message.email1, 'only the due, consented, addressed email is leased');
+  check(emailOnly[0].recipient_address === 'ada@example.test' && emailOnly[0].content === 'Welcome to class' && emailOnly[0].school_name === 'Day School' && emailOnly[0].attempt === 1, 'leased row carries address, body, school name and attempt');
+  check(!(await delivery('future')), 'a future scheduled message gets no delivery yet');
+  check((await delivery('noAddress')).status === 'SUPPRESSED' && (await delivery('noAddress')).failure_code === 'ADDRESS_MISSING', 'missing address is SUPPRESSED/ADDRESS_MISSING');
+  check((await delivery('revoked')).status === 'SUPPRESSED' && (await delivery('revoked')).failure_code === 'CONSENT_MISSING', 'consent withdrawn after queueing is SUPPRESSED/CONSENT_MISSING');
+  check(!(await delivery('smsDay')), 'an SMS is not claimed when only EMAIL is ready');
+  check((await claim(['EMAIL'])).length === 0, 'a leased delivery is not claimed twice');
+
+  // 3. Quiet hours: the night school's text waits for 08:00 local; the day school's text is leased.
+  const sms = await claim(['SMS']);
+  check(sms.length === 1 && sms[0].message_id === message.smsDay && sms[0].recipient_address === '+15555550101', 'day-time text is leased to the phone number');
+  const night = await delivery('smsNight');
+  check(night.status === 'PENDING' && night.hold_reason === 'QUIET_HOURS' && new Date(night.next_attempt_at) > new Date(), 'night-time text is held for quiet hours');
+  const localWake = new Intl.DateTimeFormat('en-US', { timeZone: nightZone, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).format(new Date(night.next_attempt_at));
+  check(localWake === '08:00', `quiet-hours hold ends at 08:00 school time (got ${localWake})`);
+  const nightVersion = night.version;
+  const heldEvidence = async () => (await admin.query("SELECT count(*)::int AS n FROM hon.audit_events WHERE entity_id = $1 AND action_code = 'communication.delivery.held'", [night.id])).rows[0].n;
+  check(await heldEvidence() === 1, 'the quiet-hours hold is evidenced once');
+  await admin.query('UPDATE hon.communication_deliveries SET next_attempt_at = now() WHERE id = $1', [night.id]);
+  await claim(['SMS']);
+  check((await delivery('smsNight')).version === nightVersion && await heldEvidence() === 1, 'a repeated quiet-hours check neither churns versions nor repeats evidence');
+  check(new Date((await delivery('smsNight')).next_attempt_at).getTime() === new Date(night.next_attempt_at).getTime(), 'a repeated check keeps the 08:00 wake time');
+
+  // 4. Results: accepted, then stale lease and replays refused.
+  const accepted = await record(emailOnly[0], 'ACCEPTED', { providerMessageId: 'fake-msg-1', sentAs: 'EMAIL' });
+  check(accepted.status === 'ACCEPTED' && accepted.accepted === true, 'accepted send is recorded');
+  const again = await record(emailOnly[0], 'ACCEPTED', { providerMessageId: 'fake-msg-1', sentAs: 'EMAIL' });
+  check(again.accepted === false && again.status === 'ACCEPTED', 'a second result on a used lease is not accepted');
+  await expectError('22023', () => record(sms[0], 'ACCEPTED', {}), 'accepted needs a provider message id');
+  await expectError('22023', () => record(sms[0], 'FAILED', { failureCode: 'BOUNCED' }), 'failed needs a closed send failure code');
+  const smsAccepted = await record(sms[0], 'ACCEPTED', { providerMessageId: 'fake-sms-1', sentAs: 'MMS', segments: 3, encoding: 'UCS2' });
+  check(smsAccepted.status === 'ACCEPTED', 'text accepted as MMS');
+  const smsRow = await delivery('smsDay');
+  check(smsRow.sent_as === 'MMS' && smsRow.segments === 3 && smsRow.encoding === 'UCS2', 'sent-as, pieces and encoding are measured per delivery');
+
+  // 5. Retry backoff, exhaustion, permanent failure and UNKNOWN.
+  await queued('retry', ids.schoolA, 'ada', 'EMAIL', 'Retry me');
+  let lease = (await claim(['EMAIL']))[0];
+  const retry1 = await record(lease, 'RETRYABLE');
+  const retryRow = await delivery('retry');
+  check(retry1.status === 'PENDING' && retryRow.hold_reason === 'RETRY_WAIT' && new Date(retryRow.next_attempt_at) > new Date(Date.now() + 100_000), 'retryable failure waits with backoff');
+  for (let attempt = 2; attempt <= 5; attempt += 1) {
+    await admin.query('UPDATE hon.communication_deliveries SET next_attempt_at = now() WHERE message_id = $1', [message.retry]);
+    lease = (await claim(['EMAIL']))[0];
+    check(lease?.attempt === attempt, `retry attempt ${attempt} is leased`);
+    await record(lease, 'RETRYABLE');
+  }
+  const exhausted = await delivery('retry');
+  check(exhausted.status === 'FAILED' && exhausted.failure_code === 'RETRIES_EXHAUSTED' && exhausted.attempt_count === 5, 'five retryable failures end as FAILED/RETRIES_EXHAUSTED');
+  await queued('reject', ids.schoolA, 'ada', 'EMAIL', 'Bad');
+  lease = (await claim(['EMAIL']))[0];
+  check((await record(lease, 'FAILED', { failureCode: 'INVALID_ADDRESS' })).status === 'FAILED', 'permanent rejection is FAILED');
+  await queued('unknown', ids.schoolA, 'ada', 'EMAIL', 'Lost answer');
+  const unknownLease = (await claim(['EMAIL']))[0];
+  check((await record(unknownLease, 'UNKNOWN')).status === 'UNKNOWN', 'lost provider answer is UNKNOWN');
+  await admin.query('UPDATE hon.communication_deliveries SET next_attempt_at = now() WHERE message_id = $1', [message.unknown]);
+  check((await claim(['EMAIL'])).length === 0, 'UNKNOWN is never retried automatically');
+
+  // 6. Lease expiry and late results become UNKNOWN, never success.
+  await queued('expire', ids.schoolA, 'ada', 'EMAIL', 'Slow worker');
+  const slow = (await claim(['EMAIL'], 100, 15))[0];
+  await admin.query("UPDATE hon.communication_deliveries SET lease_expires_at = now() - interval '1 second' WHERE id = $1", [slow.delivery_id]);
+  const late = await record(slow, 'ACCEPTED', { providerMessageId: 'fake-late', sentAs: 'EMAIL' });
+  check(late.status === 'UNKNOWN' && late.accepted === false, 'a late ACCEPTED after lease expiry is UNKNOWN and not accepted');
+  await queued('sweep', ids.schoolA, 'ada', 'EMAIL', 'Crashed worker');
+  const crashed = (await claim(['EMAIL'], 100, 15))[0];
+  await admin.query("UPDATE hon.communication_deliveries SET lease_expires_at = now() - interval '1 second' WHERE id = $1", [crashed.delivery_id]);
+  check(Number((await worker.query('SELECT hon.reconcile_expired_communication_leases(10) AS n')).rows[0].n) >= 1, 'expired lease is reconciled');
+  check((await delivery('sweep')).status === 'UNKNOWN' && (await delivery('sweep')).failure_code === 'LEASE_EXPIRED', 'crashed worker lease is UNKNOWN/LEASE_EXPIRED');
+
+  // 7. Provider receipts: idempotent, forward-only, UNKNOWN resolved by HON delivery id, unmatched writes nothing.
+  check((await receipt('evt-1', 'fake-msg-1', 'DELIVERED')).delivery_status === 'DELIVERED', 'DELIVERED receipt moves ACCEPTED to DELIVERED');
+  check((await receipt('evt-1', 'fake-msg-1', 'DELIVERED')).outcome === 'REPLAYED', 'redelivered receipt is a replay');
+  check((await receipt('evt-2', 'fake-msg-1', 'DEFERRED')).delivery_status === 'DELIVERED', 'a late DEFERRED never undoes DELIVERED');
+  check((await receipt('evt-3', 'fake-msg-1', 'BOUNCED')).delivery_status === 'DELIVERED', 'a terminal status is not replaced by another terminal status');
+  const events = (await admin.query('SELECT count(*)::int AS n FROM hon.communication_delivery_events e JOIN hon.communication_deliveries d ON d.id = e.delivery_id WHERE d.message_id = $1', [message.email1])).rows[0].n;
+  check(events === 3, 'each distinct receipt is stored once');
+  const resolved = await receipt('evt-4', 'fake-late-2', 'DELIVERED', { honDeliveryId: unknownLease.delivery_id });
+  check(resolved.outcome === 'RECORDED' && resolved.delivery_status === 'DELIVERED', 'a provider DELIVERED receipt with the HON delivery id resolves an UNKNOWN send');
+  check((await receipt('evt-5', 'no-such-message', 'DELIVERED')).outcome === 'UNMATCHED', 'an unknown provider message id is UNMATCHED');
+  check((await receipt('evt-6', 'other', 'DELIVERED', { honDeliveryId: (await delivery('reject')).id })).outcome === 'UNMATCHED', 'a HON delivery id cannot attach a different provider message to a FAILED delivery');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.communication_delivery_events WHERE provider_event_id IN ('evt-5','evt-6')")).rows[0].n === 0, 'unmatched receipts write nothing');
+  await expectError('22023', () => receipt('evt-7', 'fake-msg-1', 'OPENED'), 'opens are not a stored event type');
+  await expectError('22023', () => receipt('evt-8', 'fake-msg-1', 'DELIVERED', { occurredAt: '2001-01-01T00:00:00Z' }), 'ancient event time is refused');
+  check((await receipt('evt-9', 'fake-sms-1', 'SENT', { cost: 22000 })).delivery_status === 'ACCEPTED', 'SENT keeps ACCEPTED');
+  check(Number((await delivery('smsDay')).provider_cost_microunits) === 22000, 'measured provider cost is stored per delivery');
+  check((await receipt('evt-10', 'fake-sms-1', 'UNDELIVERED')).delivery_status === 'FAILED' && (await delivery('smsDay')).failure_code === 'UNDELIVERED', 'UNDELIVERED is FAILED/UNDELIVERED');
+
+  // 8. Recipient unsubscribe records OPTED_OUT with source RECIPIENT, once, and blocks the next send.
+  check((await receipt('evt-11', 'fake-msg-1', 'UNSUBSCRIBED')).outcome === 'RECORDED', 'unsubscribe receipt recorded');
+  const optOut = (await admin.query("SELECT status::text, source::text, updated_by_principal_id FROM hon.communication_consents WHERE person_id = $1 AND channel = 'EMAIL'", [person.ada])).rows[0];
+  check(optOut.status === 'OPTED_OUT' && optOut.source === 'RECIPIENT' && optOut.updated_by_principal_id === '00000000-0000-4000-8000-00000000c043', 'unsubscribe records OPTED_OUT/RECIPIENT by the delivery principal');
+  await receipt('evt-12', 'fake-msg-1', 'SPAM_REPORT');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.audit_events WHERE action_code = 'communication.consent.recipient_opt_out' AND organization_id = $1", [ids.org])).rows[0].n === 1, 'a second opt-out signal records nothing new');
+  check((await admin.query("SELECT status::text FROM hon.communication_consents WHERE person_id = $1 AND channel = 'SMS'", [person.ada])).rows[0].status === 'OPTED_IN', 'an email unsubscribe does not change text consent');
+  await queued('afterOptOut', ids.schoolA, 'ada', 'EMAIL', 'After unsubscribe');
+  await claim(['EMAIL']);
+  check((await delivery('afterOptOut')).status === 'SUPPRESSED', 'the next email after unsubscribe is SUPPRESSED');
+
+  // 9. Inactive school: held, not sent, not failed.
+  await queued('inactive', ids.schoolB, 'night', 'EMAIL', 'Suspended school');
+  await admin.query("UPDATE hon.schools SET status = 'SUSPENDED' WHERE id = $1", [ids.schoolB]);
+  check((await claim(['EMAIL'])).length === 0, 'a suspended school is not sent');
+  check((await delivery('inactive')).hold_reason === 'SCHOOL_INACTIVE' && (await delivery('inactive')).status === 'PENDING', 'a suspended school is held as SCHOOL_INACTIVE');
+  await admin.query("UPDATE hon.schools SET status = 'ACTIVE' WHERE id = $1", [ids.schoolB]);
+
+  // 10. Evidence and forced RLS: school staff read only their own school's deliveries.
+  const evidence = (await admin.query("SELECT count(*)::int AS n FROM hon.audit_events WHERE entity_type = 'COMMUNICATION_DELIVERY' AND organization_id = $1 AND actor_principal_id = '00000000-0000-4000-8000-00000000c043'", [ids.org])).rows[0].n;
+  const outbox = (await admin.query("SELECT count(*)::int AS n FROM hon.outbox_events WHERE aggregate_type = 'COMMUNICATION_DELIVERY' AND organization_id = $1", [ids.org])).rows[0].n;
+  check(evidence > 20 && evidence === outbox, `every delivery transition has one audit row and one outbox event (${evidence}/${outbox})`);
+  await runtime.query('BEGIN');
+  await runtime.query("SELECT set_config('app.hon_organization_id', $1, true), set_config('app.hon_school_id', $2, true)", [ids.org, ids.schoolA]);
+  const visible = (await runtime.query('SELECT school_id FROM hon.communication_deliveries')).rows;
+  const visibleEvents = (await runtime.query('SELECT school_id FROM hon.communication_delivery_events')).rows;
+  await runtime.query('ROLLBACK');
+  check(visible.length > 0 && visible.every((row) => row.school_id === ids.schoolA), 'runtime sees only the current school deliveries');
+  check(visibleEvents.length > 0 && visibleEvents.every((row) => row.school_id === ids.schoolA), 'runtime sees only the current school receipts');
+  check((await runtime.query('SELECT count(*)::int AS n FROM hon.communication_deliveries')).rows[0].n === 0, 'no tenant context sees nothing');
+
+  // 11. API end to end: the dispatcher (worker login) sends through the fake provider and the school reads the result.
+  const { CommunicationDispatcher } = await import('../../../apps/api/dist/communication/delivery/communication-dispatcher.js');
+  const { CommunicationWorkerDatabase } = await import('../../../apps/api/dist/communication/delivery/communication-worker-database.js');
+  const { FakeCommunicationProvider } = await import('../../../apps/api/dist/communication/delivery/fake-communication-provider.js');
+  const { CommunicationMessageService } = await import('../../../apps/api/dist/communication/communication-message.service.js');
+  const { RuntimeDatabaseService } = await import('../../../apps/api/dist/foundation/runtime-database.service.js');
+  await consent('ada', ids.schoolA, 'EMAIL', 'OPTED_IN');
+  await queued('api', ids.schoolA, 'ada', 'EMAIL', 'Sent through the dispatcher');
+  const workerDb = new CommunicationWorkerDatabase();
+  const fakeEnv = () => ({ HON_COMMUNICATION_FAKE_PROVIDER: '1' });
+  const fakeEmail = new FakeCommunicationProvider('EMAIL', fakeEnv);
+  const off = await new CommunicationDispatcher(workerDb, [new FakeCommunicationProvider('EMAIL', () => ({}))]).runOnce();
+  check(off.claimed === 0 && !(await delivery('api')), 'with no READY provider nothing is claimed and the message stays QUEUED without a delivery');
+  const dispatched = await new CommunicationDispatcher(workerDb, [fakeEmail]).runOnce(100);
+  check(dispatched.accepted >= 1 && fakeEmail.sent.some((sent) => sent.messageId === message.api && sent.content === 'Sent through the dispatcher'), 'dispatcher sends the queued email through the fake provider');
+  const apiRow = await delivery('api');
+  check(apiRow.status === 'ACCEPTED' && apiRow.provider === 'FAKE' && apiRow.provider_message_id === `fake-${apiRow.id}-1`, 'the accepted send is recorded with the fake provider message id');
+  const receiptResult = await workerDb.recordReceipt({ provider: 'FAKE', providerEventId: 'api-evt-1', providerMessageId: apiRow.provider_message_id, eventType: 'DELIVERED', occurredAt: new Date().toISOString() });
+  check(receiptResult.outcome === 'RECORDED' && receiptResult.deliveryStatus === 'DELIVERED', 'the worker store records a provider receipt');
+  const service = new CommunicationMessageService(new RuntimeDatabaseService());
+  const ctx = (school) => ({ organizationId: ids.org, schoolId: school, principalId: ids.principal, principalType: 'HUMAN_USER', requestId: randomUUID() });
+  const view = await service.readDelivery(ctx(ids.schoolA), message.api);
+  check(view.status === 'DELIVERED' && view.channel === 'EMAIL' && view.attempts === 1 && view.receipts.length === 1 && view.receipts[0].type === 'DELIVERED', 'school read shows DELIVERED with its receipt timeline');
+  check(!JSON.stringify(view).includes('ada@example.test') && !JSON.stringify(view).includes('fake-'), 'school read carries no address and no provider id');
+  const nightView = await service.readDelivery(ctx(ids.schoolB), message.smsNight);
+  check(nightView.status === 'PENDING' && nightView.holdReason === 'QUIET_HOURS' && typeof nightView.nextAttemptAt === 'string', 'school read shows a quiet-hours hold with its next attempt');
+  await queued('notStarted', ids.schoolA, 'ada', 'SMS', 'Waiting for a text provider');
+  check((await service.readDelivery(ctx(ids.schoolA), message.notStarted)).status === 'NOT_STARTED', 'a queued message without a delivery reads NOT_STARTED');
+  let foreign = false;
+  try { await service.readDelivery(ctx(ids.schoolB), message.api); } catch (error) { foreign = error?.getStatus?.() === 404; }
+  check(foreign, 'another school cannot read this school delivery (404)');
+  await workerDb.onModuleDestroy();
+
+  console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
+} finally {
+  await cleanup();
+  await Promise.all([admin.end(), runtime.end(), worker.end()]);
+}

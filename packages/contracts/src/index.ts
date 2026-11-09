@@ -870,7 +870,8 @@ export const COMMUNICATION_CONSENT_STATUSES = ['OPTED_IN', 'OPTED_OUT'] as const
 export type CommunicationConsentStatus = (typeof COMMUNICATION_CONSENT_STATUSES)[number];
 
 /** Provenance is evidence metadata, distinct from CommandContext.source. */
-export const COMMUNICATION_CONSENT_SOURCES = ['STAFF', 'PARENT', 'IMPORT'] as const;
+/** RECIPIENT (0243): the person opted out themselves (email unsubscribe, spam report, STOP reply). */
+export const COMMUNICATION_CONSENT_SOURCES = ['STAFF', 'PARENT', 'IMPORT', 'RECIPIENT'] as const;
 export type CommunicationConsentSource = (typeof COMMUNICATION_CONSENT_SOURCES)[number];
 
 /**
@@ -929,6 +930,37 @@ export interface CommunicationMessageSummary {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 0243 delivery of a QUEUED message. NOT_STARTED: queued, no delivery record yet. */
+export const COMMUNICATION_DELIVERY_STATUSES = ['NOT_STARTED', 'PENDING', 'SENDING', 'ACCEPTED', 'DELIVERED', 'BOUNCED', 'FAILED', 'SUPPRESSED', 'UNKNOWN'] as const;
+export type CommunicationDeliveryStatus = (typeof COMMUNICATION_DELIVERY_STATUSES)[number];
+export const COMMUNICATION_DELIVERY_HOLD_REASONS = ['SCHEDULED', 'QUIET_HOURS', 'SCHOOL_INACTIVE', 'RETRY_WAIT'] as const;
+export type CommunicationDeliveryHoldReason = (typeof COMMUNICATION_DELIVERY_HOLD_REASONS)[number];
+export const COMMUNICATION_DELIVERY_FAILURE_CODES = [
+  'CONSENT_MISSING', 'ADDRESS_MISSING', 'LEASE_EXPIRED', 'PROVIDER_UNKNOWN', 'PROVIDER_REJECTED', 'INVALID_ADDRESS',
+  'RETRIES_EXHAUSTED', 'BOUNCED', 'DROPPED', 'UNDELIVERED', 'PROVIDER_FAILED',
+] as const;
+export type CommunicationDeliveryFailureCode = (typeof COMMUNICATION_DELIVERY_FAILURE_CODES)[number];
+export const COMMUNICATION_DELIVERY_EVENT_TYPES = ['SENT', 'DELIVERED', 'DEFERRED', 'BOUNCED', 'DROPPED', 'UNDELIVERED', 'FAILED', 'UNSUBSCRIBED', 'SPAM_REPORT'] as const;
+export type CommunicationDeliveryEventType = (typeof COMMUNICATION_DELIVERY_EVENT_TYPES)[number];
+export type CommunicationSentAs = 'EMAIL' | 'SMS' | 'MMS';
+
+/** School delivery read: no address, provider IDs or cost. */
+export interface CommunicationDeliveryView {
+  messageId: string;
+  channel: CommunicationMessageChannel;
+  status: CommunicationDeliveryStatus;
+  holdReason?: CommunicationDeliveryHoldReason | undefined;
+  nextAttemptAt?: string | undefined;
+  attempts: number;
+  sentAs?: CommunicationSentAs | undefined;
+  segments?: number | undefined;
+  failureCode?: CommunicationDeliveryFailureCode | undefined;
+  acceptedAt?: string | undefined;
+  finalAt?: string | undefined;
+  updatedAt?: string | undefined;
+  receipts: Array<{ type: CommunicationDeliveryEventType; occurredAt: string }>;
 }
 
 export interface RegisteredAction {

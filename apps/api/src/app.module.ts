@@ -219,6 +219,10 @@ import { HealthScoreController } from './reports/health-score.controller.js';
 import { HealthScoreService } from './reports/health-score.service.js';
 import { CommunicationMessageController } from './communication/communication-message.controller.js';
 import { CommunicationMessageService } from './communication/communication-message.service.js';
+import { COMMUNICATION_PROVIDER_ADAPTERS } from './communication/delivery/communication-provider.js';
+import { FakeCommunicationProvider } from './communication/delivery/fake-communication-provider.js';
+import { COMMUNICATION_WORKER_STORE, CommunicationWorkerDatabase } from './communication/delivery/communication-worker-database.js';
+import { CommunicationDispatcher, CommunicationDispatchScheduler } from './communication/delivery/communication-dispatcher.js';
 import { HqAiProviderController } from './hq/hq-ai-provider.controller.js';
 import { HqAiProviderService } from './hq/hq-ai-provider.service.js';
 import { ZernioIntegrationController, ZernioHumanUiGuard } from './integrations/zernio.controller.js';
@@ -492,6 +496,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HealthScoreService,
     CommunicationConsentService,
     CommunicationMessageService,
+    CommunicationWorkerDatabase,
+    { provide: COMMUNICATION_WORKER_STORE, useExisting: CommunicationWorkerDatabase },
+    // Real adapters (SendGrid, Twilio) are listed before the fakes; each is READY only behind its own approval flag.
+    { provide: COMMUNICATION_PROVIDER_ADAPTERS, useFactory: () => [new FakeCommunicationProvider('EMAIL'), new FakeCommunicationProvider('SMS')] },
+    CommunicationDispatcher,
+    CommunicationDispatchScheduler,
     TestingEventService,
     TestingCandidateService,
     PromotionDecisionService,
