@@ -52,7 +52,7 @@ CREATE TABLE hon.saas_schedule_bindings (
     'EXPIRED_UNPAID','VOIDED_PROVIDER_FAILED','CANCELLED_BEFORE_PAYMENT')),
   status_reason text NOT NULL CHECK (status_reason IN ('BINDING_REQUESTED','BINDING_OBSERVED_TEST_ONLY','FIRST_PAYMENT_VERIFIED',
     'PROVIDER_CONFIRMED_NOT_CREATED','PROVIDER_TERMS_MISMATCH','UNPAID_WINDOW_ELAPSED','AMOUNT_MISMATCH','OVERLAPPING_COVERED_PERIOD',
-    'REVERSAL_REVIEW_REQUIRED','UNLINKED_REVERSAL','PURCHASER_CANCELLED_BEFORE_PAYMENT')),
+    'REVERSAL_REVIEW_REQUIRED','UNLINKED_REVERSAL','PURCHASER_CANCELLED_BEFORE_PAYMENT','PERIOD_INTERVAL_MISMATCH')),
   version integer NOT NULL DEFAULT 1 CHECK (version>=1),
   provider_account_reference text CHECK (provider_account_reference ~ '^fake_[a-z0-9_-]{1,150}$'),
   provider_subscription_reference text UNIQUE CHECK (provider_subscription_reference ~ '^fake_[a-z0-9_-]{1,150}$'),
@@ -173,12 +173,23 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
 $$;
 
 -- Read-only billing-conflict probe shared with later pieces. STABLE, no writes; NULL means no conflict. Any payment held
--- for review (legacy checkout or schedule binding) blocks a new binding until piece 3 adds resolution.
+-- for review (legacy checkout, a parked schedule binding, or money stored for review on an ended binding) blocks a new
+-- binding until piece 3 adds resolution, so late money can never be followed by a second, duplicate charge.
 CREATE FUNCTION hon.saas_org_billing_conflict(p_org uuid) RETURNS text
 LANGUAGE sql STABLE SET search_path=pg_catalog,hon AS $$
   SELECT CASE WHEN EXISTS (SELECT 1 FROM hon.saas_checkout_sessions WHERE organization_id=p_org AND status='PAID_NEEDS_REVIEW')
     OR EXISTS (SELECT 1 FROM hon.saas_schedule_bindings WHERE organization_id=p_org AND status='NEEDS_REVIEW')
+    OR EXISTS (SELECT 1 FROM hon.saas_schedule_bindings b JOIN hon.saas_schedule_reconciliations r ON r.binding_id=b.id
+      WHERE b.organization_id=p_org AND b.status IN ('EXPIRED_UNPAID','VOIDED_PROVIDER_FAILED','CANCELLED_BEFORE_PAYMENT'))
   THEN 'PAID_NEEDS_REVIEW' END
+$$;
+
+-- A paid period must be exactly one billing interval of the locked terms (one calendar month or year, within one day).
+CREATE FUNCTION hon.saas_schedule_period_matches(p_interval text,p_starts timestamptz,p_ends timestamptz) RETURNS boolean
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,hon AS $$
+  SELECT coalesce(p_ends BETWEEN e.expected - interval '1 day' AND e.expected + interval '1 day', false)
+  FROM (SELECT ((p_starts AT TIME ZONE 'UTC') + CASE p_interval WHEN 'MONTHLY' THEN interval '1 month' WHEN 'ANNUAL' THEN interval '1 year' END)
+    AT TIME ZONE 'UTC' AS expected) e
 $$;
 
 CREATE FUNCTION hon.saas_schedule_binding_available(p_org uuid) RETURNS void
@@ -294,7 +305,10 @@ BEGIN
     IF NOT EXISTS(SELECT 1 FROM hon.saas_audit a JOIN hon.saas_outbox o ON o.audit_id=a.id
       WHERE a.entity_type='SCHEDULE_BINDING' AND a.entity_id=NEW.id AND a.organization_id=NEW.organization_id
         AND a.next_state->>'version'=NEW.version::text AND a.next_state->>'status'=NEW.status
-        AND a.action_code IN ('saas.schedule_binding.reconcile','saas.schedule_binding.expire','saas.schedule_binding.transition','saas.schedule_binding.cancel')
+        AND a.action_code = ANY(CASE NEW.status WHEN 'ACTIVE' THEN ARRAY['saas.schedule_binding.transition']
+          WHEN 'NEEDS_REVIEW' THEN ARRAY['saas.schedule_binding.transition','saas.schedule_binding.reconcile']
+          WHEN 'VOIDED_PROVIDER_FAILED' THEN ARRAY['saas.schedule_binding.reconcile'] WHEN 'EXPIRED_UNPAID' THEN ARRAY['saas.schedule_binding.expire']
+          WHEN 'CANCELLED_BEFORE_PAYMENT' THEN ARRAY['saas.schedule_binding.cancel'] ELSE ARRAY[]::text[] END)
         AND o.event_type='saas.schedule_binding.transitioned' AND o.payload->>'executionAllowed'='false')
     THEN RAISE EXCEPTION 'SAAS_SCHEDULE_BINDING_EVIDENCE_REQUIRED' USING ERRCODE='23514'; END IF;
     RETURN NULL;
@@ -379,7 +393,7 @@ BEGIN
     OR jsonb_typeof(p->'automaticCalendarTransition')<>'boolean' OR p->'automaticCalendarTransition' IS DISTINCT FROM 'false'::jsonb
     OR jsonb_typeof(p->'automaticCollectionEnabled')<>'boolean' OR p->'automaticCollectionEnabled' IS DISTINCT FROM 'false'::jsonb
   THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
-  PERFORM hon.saas_schedule_payment_program();
+  PERFORM hon.saas_refuse_context(); PERFORM hon.saas_schedule_payment_program();
   SELECT organization_id INTO org FROM hon.saas_schedule_bindings WHERE id=p_binding;
   IF org IS NULL THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE='P0002'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('saas.organization:'||org::text,0));
@@ -444,7 +458,7 @@ BEGIN
   THEN RAISE EXCEPTION 'SAAS_SCHEDULE_BINDING_NOT_EXPIRABLE' USING ERRCODE='23514'; END IF;
   SELECT * INTO pol FROM hon.saas_billing_lifecycle_policy WHERE policy_id=1;
   IF pol.policy_id IS NULL OR pol.unpaid_window_minutes IS NULL THEN RAISE EXCEPTION 'SAAS_BILLING_POLICY_UNAVAILABLE' USING ERRCODE='23514'; END IF;
-  IF at < b.bound_at + make_interval(mins=>pol.unpaid_window_minutes) THEN RAISE EXCEPTION 'SAAS_SCHEDULE_BINDING_NOT_EXPIRABLE' USING ERRCODE='23514'; END IF;
+  IF at < b.created_at + make_interval(mins=>pol.unpaid_window_minutes) THEN RAISE EXCEPTION 'SAAS_SCHEDULE_BINDING_NOT_EXPIRABLE' USING ERRCODE='23514'; END IF;
   -- Money evidence (even a reversal) must never be expired away: any stored non-failure event for this binding blocks.
   IF EXISTS(SELECT 1 FROM hon.saas_schedule_provider_events WHERE binding_id=b.id AND event_type<>'invoice.payment_failed')
   THEN RAISE EXCEPTION 'SAAS_SCHEDULE_BINDING_NOT_EXPIRABLE' USING ERRCODE='23514'; END IF;
@@ -552,6 +566,8 @@ BEGIN
     -- The single locked price, fixed at acceptance (owner answer 4a). Never derived from current offers or a count.
     IF (p->>'amountMinor')::integer<>(b.requirements->>'lockedPriceMinor')::integer THEN reason:='AMOUNT_MISMATCH';
     ELSIF EXISTS(SELECT 1 FROM hon.saas_schedule_paid_periods q WHERE q.binding_id=b.id AND q.provider_invoice_reference=p->>'invoiceReference') THEN outcome:='ALREADY_APPLIED'; reason:='DUPLICATE_INVOICE_REFERENCE';
+    -- One payment covers exactly one billing interval of the locked terms; any other length is reviewed, never counted.
+    ELSIF NOT hon.saas_schedule_period_matches(b.requirements->>'billingInterval',(p->'coveredPeriod'->>'startsAt')::timestamptz,(p->'coveredPeriod'->>'endsAt')::timestamptz) THEN reason:='PERIOD_INTERVAL_MISMATCH';
     ELSIF EXISTS(SELECT 1 FROM hon.saas_schedule_paid_periods q WHERE q.binding_id=b.id AND tstzrange(q.covered_starts_at,q.covered_ends_at,'[)') && tstzrange((p->'coveredPeriod'->>'startsAt')::timestamptz,(p->'coveredPeriod'->>'endsAt')::timestamptz,'[)')) THEN reason:='OVERLAPPING_COVERED_PERIOD';
     ELSE
       -- A late earlier period is recorded normally; only overlap needs review.
@@ -637,7 +653,7 @@ DO $$ DECLARE t text;r text;c text;f text; BEGIN
     END LOOP;
   END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.saas_schedule_requirements(hon.saas_subscription_generations)','hon.saas_schedule_binding_json(hon.saas_schedule_bindings)',
-    'hon.saas_org_billing_conflict(uuid)','hon.saas_schedule_binding_available(uuid)','hon.guard_saas_schedule_lifecycle_exclusion()',
+    'hon.saas_org_billing_conflict(uuid)','hon.saas_schedule_period_matches(text,timestamp with time zone,timestamp with time zone)','hon.saas_schedule_binding_available(uuid)','hon.guard_saas_schedule_lifecycle_exclusion()',
     'hon.saas_schedule_payment_program()','hon.saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)',
     'hon.saas_schedule_after_binding_terminal(uuid,timestamp with time zone)','hon.guard_saas_schedule_bindings()',
     'hon.guard_saas_schedule_binding_insert()','hon.verify_saas_schedule_binding_evidence()',

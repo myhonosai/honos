@@ -177,6 +177,14 @@ BEGIN
   -- Renewal: extend the same binding's access window forward; a late earlier period never shortens it.
   SELECT * INTO ent FROM hon.organization_entitlements WHERE organization_id = b.organization_id FOR UPDATE;
   SELECT * INTO st FROM hon.saas_access_states WHERE organization_id = b.organization_id FOR UPDATE;
+  -- Paid access switched off after activation: the payment stands, the window is not extended, HQ reviews.
+  IF NOT hon.saas_access_program_active() THEN
+    INSERT INTO hon.saas_access_transitions(organization_id, kind, outcome, reason, binding_id, paid_period_id, provider_event_id,
+        prior_entitlement, actor_principal_id, occurred_at)
+      VALUES (b.organization_id, 'SCHEDULE_RENEWAL_EXTENSION', 'NEEDS_REVIEW', 'ACCESS_PROGRAM_INACTIVE', b.id, per.id, per.provider_event_id,
+        hon.saas_entitlement_json(b.organization_id), actor, p_at);
+    RETURN jsonb_build_object('accessActivation','NEEDS_REVIEW','accessGranted',false,'reason','ACCESS_PROGRAM_INACTIVE');
+  END IF;
   IF st.state IS DISTINCT FROM 'PAYMENT_ACTIVE' OR st.binding_id IS DISTINCT FROM b.id OR ent.organization_id IS NULL OR ent.status <> 'ACTIVE' THEN
     -- The payment stands; HQ reviews why this organization's access no longer follows the binding.
     INSERT INTO hon.saas_access_transitions(organization_id, kind, outcome, reason, binding_id, paid_period_id, provider_event_id,
@@ -200,9 +208,11 @@ BEGIN
   new_until := greatest(coalesce(ent.effective_until, '-infinity'::timestamptz), per.covered_ends_at + hon.saas_schedule_access_grace());
   UPDATE hon.organization_entitlements SET effective_until = new_until, version = version + 1, updated_at = p_at
     WHERE organization_id = b.organization_id AND version = ent.version;
+  IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT'; END IF;
   nxt := hon.saas_entitlement_json(b.organization_id);
   UPDATE hon.saas_access_states SET paid_through = per.covered_ends_at, version = version + 1, changed_by_principal_id = actor, updated_at = p_at
     WHERE organization_id = b.organization_id AND version = st.version;
+  IF NOT FOUND THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT'; END IF;
   INSERT INTO hon.saas_access_transitions(organization_id, kind, outcome, reason, binding_id, paid_period_id, provider_event_id,
       prior_entitlement, next_entitlement, actor_principal_id, occurred_at)
     VALUES (b.organization_id, 'SCHEDULE_RENEWAL_EXTENSION', 'APPLIED', 'RENEWAL_PAYMENT_VERIFIED', b.id, per.id, per.provider_event_id,
@@ -249,7 +259,15 @@ BEGIN
   IF result->>'accessActivation' = 'APPLIED' THEN
     FOR later IN SELECT q.id FROM hon.saas_schedule_paid_periods q JOIN hon.saas_access_states s ON s.binding_id = b.id
         WHERE q.binding_id = b.id AND q.covered_ends_at > s.paid_through ORDER BY q.covered_ends_at, q.id LOOP
-      PERFORM hon.saas_schedule_after_paid_period(b.id, later, at);
+      -- Each waiting renewal is isolated: a failure rolls back only that row's extension and is recorded for HQ review.
+      BEGIN
+        PERFORM hon.saas_schedule_after_paid_period(b.id, later, at);
+      EXCEPTION WHEN OTHERS THEN
+        INSERT INTO hon.saas_access_transitions(organization_id, kind, outcome, reason, binding_id, paid_period_id, provider_event_id,
+            prior_entitlement, actor_principal_id, occurred_at)
+          SELECT b.organization_id, 'SCHEDULE_RENEWAL_EXTENSION', 'NEEDS_REVIEW', 'ACCESS_ACTIVATION_ERROR', b.id, q.id, q.provider_event_id,
+            hon.saas_entitlement_json(b.organization_id), actor, at FROM hon.saas_schedule_paid_periods q WHERE q.id = later;
+      END;
     END LOOP;
   END IF;
   RETURN hon.saas_record(actor, p_key, 'saas.access.retry', 'saas.access.retried', 'ACCESS_STATE', b.organization_id, b.organization_id, NULL,

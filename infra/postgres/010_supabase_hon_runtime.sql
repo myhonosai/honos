@@ -2410,7 +2410,7 @@ DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)','record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)',
     'record_saas_schedule_binding_reconciliation(uuid,jsonb)','record_saas_schedule_binding_expiry(uuid,jsonb)',
     'cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid)','read_saas_schedule_binding(text,uuid,uuid)','read_saas_schedule_binding_from_hq(text,uuid)','ingest_saas_schedule_evidence(jsonb,text)',
-    'saas_org_billing_conflict(uuid)','saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)',
+    'saas_org_billing_conflict(uuid)','saas_schedule_period_matches(text,timestamp with time zone,timestamp with time zone)','saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)',
     'saas_schedule_after_binding_terminal(uuid,timestamp with time zone)',
     'saas_schedule_binding_transition(hon.saas_schedule_bindings,text,text,text,uuid,timestamp with time zone)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';

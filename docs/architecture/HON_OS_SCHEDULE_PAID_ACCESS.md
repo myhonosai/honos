@@ -32,6 +32,8 @@ recorded and lands in HQ access review. Turning the program on needs a separate 
 - **Renewals** extend `effective_until` and `paid_through` forward only (`EXTENDED`). A late earlier period is
   `ALREADY_COVERED`. A period starting after the current window has lapsed is reviewed (`PAID_PERIOD_GAP`), never bridged.
   A renewal for an organization whose access no longer follows this binding is reviewed (`ACCESS_STATE_NOT_ELIGIBLE`).
+  A renewal while the paid-access program is off is kept as money and reviewed (`ACCESS_PROGRAM_INACTIVE`), never extended.
+  Renewals applied by an HQ retry are isolated one by one: a failure is reviewed (`ACCESS_ACTIVATION_ERROR`) without undoing the activation.
 - **Reads**: school and HQ binding reads add `access: { accessActivation, reason, paidThrough, accessUntil }`.
 
 ## Data and security changes
