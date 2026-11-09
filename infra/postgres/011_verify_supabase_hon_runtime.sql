@@ -2903,6 +2903,25 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'students.import must exist as a sensitive staff-assignable permission'; END IF;
 END $$;
 -- End student CSV import exact verification.
+
+-- CRM school clock exact verification (0236): one read-only definer projection with runtime EXECUTE only, and its
+-- internal actor helper with no runtime privilege.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.crm_school_clock_actor(text,uuid,uuid)',false,false,'s','325d5330c281e8a45e18897cd58bb5c6ad221b194ee2bbc5dce967df4b455b71'),
+('hon.read_crm_school_clock(text)',true,true,'v','a64b59bea3f1d5037229a53d2cbd1ac42864959a4525e056bd2ff7df7f2f2ea3')) e(signature,definer,runtime_allowed,volatility,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.provolatile=f.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
+      AND (o.rolsuper OR o.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (NOT f.runtime_allowed OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe CRM school clock function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End CRM school clock exact verification.
+
 -- Recurring class series exact verification (B-SCH-1 0239): private forced-RLS series and occurrence tables, the series guard,
 -- private helpers, six runtime entry points; the runtime still has no UPDATE on hon.class_sessions.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
