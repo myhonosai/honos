@@ -425,6 +425,10 @@
       "title": "HON HQ | Invoice detail"
     },
     {
+      "path": "/hq/revenue/trials",
+      "title": "HON HQ | Free Trials"
+    },
+    {
       "path": "/staff/subscription",
       "title": "HON OS | School subscription"
     },
