@@ -2414,3 +2414,12 @@ DO $$ DECLARE r text; BEGIN
     EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM '||quote_ident(r);
   END LOOP;
 END $$;
+
+-- R1 0242 task-class routing: the category mapping is internal to the planner; plan_ai_invocation's grant is unchanged.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.ai_route_task_category(text,text)') IS NULL THEN RAISE EXCEPTION 'Apply R1 migration 0242 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.ai_route_task_category(text,text) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.ai_route_task_category(text,text) FROM '||quote_ident(r);
+  END LOOP;
+END $$;

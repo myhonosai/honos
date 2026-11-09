@@ -156,6 +156,13 @@ describe('HQ reviewed task-profile validation and pure selection', () => {
       expect(() => validateAiControlPlaneWrite('TASK_PROFILE', { ...profile, privacyControls })).toThrow();
     }
   });
+  it('R1 (0242): accepts HON and Kai routing profiles and the new task categories, nothing else', () => {
+    for (const [agentKey, taskCategory] of [['hon', 'HON_STANDARD'], ['hon', 'HON_DETAILED'], ['claire', 'BUSINESS_PERFORMANCE'], ['kai', 'KAI_TEACHING']] as const) {
+      expect(validateAiControlPlaneWrite('TASK_PROFILE', { ...profile, agentKey, taskCategory })).toMatchObject({ agentKey, taskCategory });
+    }
+    for (const agentKey of ['HON', 'kai ', 'chase', 'olivia', 'system']) expect(() => validateAiControlPlaneWrite('TASK_PROFILE', { ...profile, agentKey })).toThrow();
+    for (const taskCategory of ['HON_ADVANCED', 'hon_standard', 'TEACHING']) expect(() => validateAiControlPlaneWrite('TASK_PROFILE', { ...profile, taskCategory })).toThrow();
+  });
   it.each(['prompt', 'output', 'url', 'endpoint', 'credentialSecretRef', 'apiKey', 'tools', 'permissions', 'authority', 'organizationId', 'schoolId', 'tenantSelector', 'actionRequestId', 'metadata'])('rejects forbidden profile and preview field %s', (key) => {
     expect(() => validateAiControlPlaneWrite('TASK_PROFILE', { ...profile, [key]: 'rejected' })).toThrow();
     expect(() => validateAiTaskProfilePreviewRequest({ ...taskRequest, [key]: 'rejected' })).toThrow();
