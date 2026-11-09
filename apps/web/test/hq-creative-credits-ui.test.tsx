@@ -67,10 +67,15 @@ it('reads one school wallet only for the school asked, and a 401 ends the sessio
 it('shows the program, packages, rates and school wallets, with no command anywhere', () => {
   const html = view(), t = text(html);
   expect(t).toContain('Creative Credits');
-  expect(t).toContain('This page only reads. Nothing here grants, removes or charges credits, and payment collection is not connected.');
+  expect(t).toContain('Nothing here turns the program on, charges a card or changes a purchase: payment collection is not connected.');
   expect(html).toMatch(/data-testid="credits-program"[^>]*data-state="INACTIVE"/);
-  expect(t).toContain('Each eligible paying school receives 12,000 included credits a month.');
-  expect(t).toContain('While the program is off, no school can use or receive creative credits.');
+  expect(t).toContain('Once the program is on, each eligible paying school would receive 12,000 included credits a month.');
+  expect(t).not.toContain('Each eligible paying school receives');
+  expect(t).toContain('Recorded provider cost');
+  const on = text(view({ wallets: { state: 'READY', view: validateSaasCreativeHqWalletList(list({ program: { status: 'ACTIVE', version: 2, monthlyIncludedCredits: 12000 } })) } }));
+  expect(on).toContain('Each eligible paying school receives 12,000 included credits a month.');
+  expect(on).not.toContain('While the program is off');
+  expect(t).toContain('While the program is off, no school can use creative credits.');
   expect(t).toContain('7,200 credits (6,000 + 1,200 bonus) for $60.00');
   expect(t).toContain('No card can be charged: payment collection is not connected.');
   expect(t).toContain('Standard image');
@@ -122,7 +127,7 @@ it('shows nothing when a read is denied, unavailable or the session ended', () =
   expect(text(view({ detail: { state: 'DENIED', schoolId: school } }))).toContain('Your HQ access does not include this school\'s wallet. Nothing is shown.');
   expect(text(view({ detail: { state: 'UNAVAILABLE', schoolId: school } }))).toContain('This school\'s wallet could not be read. Nothing is shown.');
   const hidden = view({ concealed: true, detail: ready(), onShowAgain: () => {} });
-  expect(text(hidden)).toContain('Hidden because your session ended.');
+  expect(text(hidden)).toContain('Hidden while you were away or because your session ended.');
   expect(text(hidden)).not.toContain('Synthetic Dojo');
   expect([...hidden.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual(['Show again']);
   const empty = text(view({ wallets: { state: 'READY', view: validateSaasCreativeHqWalletList(list({ rates: null, wallets: [] })) } }));

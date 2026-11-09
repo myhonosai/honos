@@ -2,6 +2,7 @@ import React from 'react';
 import type { SaasCreativeHqWallet, SaasCreativeHqWalletList, SaasCreativeHqWalletRow } from '@hon/contracts';
 import { creditsText, type CreditsKey } from './copy';
 import { dollars, usd } from './http';
+import { CostForm, DebitForm, GrantForm, Outcome, ResolveForm, costable, debitable, settleable, type CreditForm, type CreditOutcome, type Fields } from './forms';
 import styles from './hq-creative-credits.module.css';
 
 type T = (key: CreditsKey, vars?: Record<string, string>) => string;
@@ -20,7 +21,12 @@ function Notice({ state, t, onRefresh }: { state: { state: string }; t: T; onRef
 export type CreditsViewProps = Readonly<{
   language: string; concealed: boolean; wallets: ReadState<SaasCreativeHqWalletList>; detail: DetailState | null;
   onRefresh?: (() => void) | undefined; onShowAgain?: (() => void) | undefined; onOpen?: ((schoolId: string) => void) | undefined; onClose?: (() => void) | undefined;
+  /** HQ-owner corrections on the open school's wallet. Without onOpenForm the page is read only. */
+  form?: CreditForm | undefined; outcome?: CreditOutcome | undefined; locked?: boolean | undefined; canRetry?: boolean | undefined;
+  onOpenForm?: ((form: Exclude<CreditForm, null>) => void) | undefined; onCloseForm?: (() => void) | undefined; onSubmit?: ((fields: Fields) => void) | undefined;
+  onTryAgain?: (() => void) | undefined; onStop?: (() => void) | undefined;
 }>;
+type Commands = Pick<CreditsViewProps, 'form' | 'outcome' | 'locked' | 'canRetry' | 'onOpenForm' | 'onCloseForm' | 'onSubmit' | 'onTryAgain' | 'onStop'>;
 /** Read-only HQ creative credits. Every value comes from the wallet list read or one school's wallet read; nothing here can change it. */
 export function CreditsView(p: CreditsViewProps): React.ReactElement {
   const t: T = (key, vars) => creditsText(p.language, key, vars);
@@ -28,7 +34,7 @@ export function CreditsView(p: CreditsViewProps): React.ReactElement {
   return <section className={styles.page} aria-labelledby="hq-credits-title" data-testid="hq-creative-credits">
     <header className={styles.head}>
       <div><h1 id="hq-credits-title">{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
-      {!p.concealed && p.onRefresh ? <button type="button" className={styles.secondary} onClick={p.onRefresh} disabled={w.state === 'LOADING'}>{t('refresh')}</button> : null}
+      {!p.concealed && p.onRefresh ? <button type="button" className={styles.secondary} onClick={p.onRefresh} disabled={w.state === 'LOADING' || p.locked === true}>{t('refresh')}</button> : null}
     </header>
     <p className={styles.meta}>{t('scope')}</p>
     {p.concealed ? <div className={styles.notice} role="status"><p>{t('concealed')}</p>
@@ -37,7 +43,7 @@ export function CreditsView(p: CreditsViewProps): React.ReactElement {
   </section>;
 }
 
-function Body({ list, language, detail, onOpen, onClose, t }: CreditsViewProps & { list: SaasCreativeHqWalletList; t: T }) {
+function Body({ list, language, detail, onOpen, onClose, t, ...commands }: CreditsViewProps & { list: SaasCreativeHqWalletList; t: T }) {
   const active = list.program.status === 'ACTIVE';
   const rates = list.rates;
   return <>
@@ -45,7 +51,7 @@ function Body({ list, language, detail, onOpen, onClose, t }: CreditsViewProps &
       <article className={styles.card} aria-labelledby="hq-credits-program">
         <div className={styles.cardHead}><h2 id="hq-credits-program">{t('programTitle')}</h2>
           <span className={styles.chip} data-testid="credits-program" data-state={list.program.status} data-kind={active ? 'ok' : 'off'}>{t(active ? 'on' : 'off')}</span></div>
-        <p>{t('monthly', { n: num(language, list.program.monthlyIncludedCredits) })}</p>
+        <p>{t(active ? 'monthly' : 'monthlyOff', { n: num(language, list.program.monthlyIncludedCredits) })}</p>
         {active ? null : <p className={styles.warnText}>{t('programOffNote')}</p>}
         <p className={styles.meta}>{t('programVersion', { version: String(list.program.version) })}</p>
       </article>
@@ -82,17 +88,17 @@ function Body({ list, language, detail, onOpen, onClose, t }: CreditsViewProps &
         <div className={styles.tableWrap}><table className={styles.table}>
           <thead><tr><th scope="col">{t('school')}</th><th scope="col">{t('available')}</th><th scope="col">{t('held')}</th><th scope="col">{t('consumed')}</th>
             <th scope="col">{t('providerCost')}</th><th scope="col">{t('unknownOutcome')}</th><th scope="col">{t('unknownCost')}</th><th scope="col">{t('updated')}</th><th scope="col"><span className={styles.meta}>{t('open')}</span></th></tr></thead>
-          <tbody>{list.wallets.map((w) => <WalletRow key={w.schoolId} w={w} language={language} t={t} onOpen={onOpen} open={detail?.schoolId.toLowerCase() === w.schoolId.toLowerCase()}/>)}</tbody>
+          <tbody>{list.wallets.map((w) => <WalletRow key={w.schoolId} w={w} language={language} t={t} onOpen={onOpen} locked={commands.locked === true} open={detail?.schoolId.toLowerCase() === w.schoolId.toLowerCase()}/>)}</tbody>
         </table></div>
         {list.wallets.length >= 200 ? <p className={styles.meta}>{t('more')}</p> : null}
       </>}
     </article>
 
-    {detail ? <Detail detail={detail} name={list.wallets.find((w) => w.schoolId.toLowerCase() === detail.schoolId.toLowerCase())?.schoolName ?? ''} language={language} t={t} onClose={onClose}/> : null}
+    {detail ? <Detail detail={detail} name={list.wallets.find((w) => w.schoolId.toLowerCase() === detail.schoolId.toLowerCase())?.schoolName ?? ''} language={language} t={t} onClose={onClose} {...commands}/> : null}
   </>;
 }
 
-function WalletRow({ w, language, t, onOpen, open }: { w: SaasCreativeHqWalletRow; language: string; t: T; onOpen?: ((id: string) => void) | undefined; open: boolean }) {
+function WalletRow({ w, language, t, onOpen, open, locked }: { w: SaasCreativeHqWalletRow; language: string; t: T; onOpen?: ((id: string) => void) | undefined; open: boolean; locked: boolean }) {
   const attention = w.outcomeUnknown > 0 || w.unknownCostGenerations > 0;
   return <tr data-testid="credits-wallet" data-school={w.schoolId} data-attention={attention ? 'true' : 'false'}>
     <th scope="row">{w.schoolName}<small>{t('organization', { name: w.organizationName })}</small></th>
@@ -103,21 +109,31 @@ function WalletRow({ w, language, t, onOpen, open }: { w: SaasCreativeHqWalletRo
     <td data-label={t('unknownOutcome')} className={w.outcomeUnknown ? styles.warnText : undefined}>{num(language, w.outcomeUnknown)}</td>
     <td data-label={t('unknownCost')} className={w.unknownCostGenerations ? styles.warnText : undefined}>{num(language, w.unknownCostGenerations)}</td>
     <td data-label={t('updated')}>{moment(language, w.updatedAt)}</td>
-    <td>{onOpen ? <button type="button" className={styles.secondary} aria-pressed={open} aria-label={t('openFor', { school: w.schoolName })} onClick={() => onOpen(w.schoolId)}>{t('open')}</button> : null}</td>
+    <td>{onOpen ? <button type="button" className={styles.secondary} aria-pressed={open} aria-label={t('openFor', { school: w.schoolName })} disabled={locked} onClick={() => onOpen(w.schoolId)}>{t('open')}</button> : null}</td>
   </tr>;
 }
 
-function Detail({ detail, name, language, t, onClose }: { detail: DetailState; name: string; language: string; t: T; onClose?: (() => void) | undefined }) {
-  const close = onClose ? <button type="button" className={styles.secondary} onClick={onClose}>{t('close')}</button> : null;
+function Detail({ detail, name, language, t, onClose, ...c }: Commands & { detail: DetailState; name: string; language: string; t: T; onClose?: (() => void) | undefined }) {
+  const locked = c.locked === true;
+  const close = onClose ? <button type="button" className={styles.secondary} onClick={onClose} disabled={locked}>{t('close')}</button> : null;
+  const outcome = <Outcome outcome={c.outcome ?? null} t={t} canRetry={c.canRetry === true} onTryAgain={c.onTryAgain} onStop={c.onStop}/>;
+  const common = { t, locked, onClose: c.onCloseForm ?? (() => {}), onSubmit: c.onSubmit ?? (() => {}) };
+  const act = (label: string, form: Exclude<CreditForm, null>, aria?: string) => c.onOpenForm
+    ? <button type="button" className={styles.secondary} disabled={locked} aria-label={aria} onClick={() => c.onOpenForm?.(form)}>{label}</button> : null;
+  const isForm = (pred: (f: Exclude<CreditForm, null>) => boolean) => c.form != null && pred(c.form);
   if (detail.state !== 'READY') {
     return <article className={styles.card} aria-labelledby="hq-credits-detail" data-testid="credits-detail" data-state={detail.state}>
       <div className={styles.cardHead}><h2 id="hq-credits-detail">{t('walletTitle', { school: name })}</h2>{close}</div>
+      {outcome}
       <p className={detail.state === 'LOADING' ? styles.meta : styles.notice} role="status">{t(detail.state === 'LOADING' ? 'detailLoading' : detail.state === 'DENIED' ? 'detailDenied' : 'detailFailed')}</p>
     </article>;
   }
   const w = detail.wallet, e = w.providerExpense, el = w.eligibility;
   return <article className={styles.card} aria-labelledby="hq-credits-detail" data-testid="credits-detail" data-state="READY">
     <div className={styles.cardHead}><h2 id="hq-credits-detail">{t('walletTitle', { school: name })}</h2>{close}</div>
+    {outcome}
+    {c.onOpenForm ? <div className={styles.actionsRow}>{act(t('grantOpen'), { kind: 'grant' })}<span className={styles.meta}>{t('ownerOnly')}</span></div> : null}
+    {isForm((f) => f.kind === 'grant') ? <GrantForm school={name} {...common}/> : null}
     <p className={styles.meta}>{w.walletVersion === null ? t('noWallet') : t('walletVersion', { version: String(w.walletVersion) })}</p>
     <p data-testid="credits-eligibility" data-eligible={el.eligible ? 'true' : 'false'} className={el.eligible ? undefined : styles.warnText}>{el.eligible && el.window
       ? t('eligible', { from: moment(language, el.window.startsAt), to: moment(language, el.window.endsAt) })
@@ -156,11 +172,13 @@ function Detail({ detail, name, language, t, onClose }: { detail: DetailState; n
         <span>{t('lotParts', { available: num(language, l.availableCredits), held: num(language, l.heldCredits), consumed: num(language, l.consumedCredits),
           expired: num(language, l.expiredCredits), debited: num(language, l.debitedCredits) })}</span>
         <span className={styles.meta}>{l.expired ? t('lotExpired') : l.expiresAt ? t('expires', { time: moment(language, l.expiresAt) }) : t('noExpiry')}</span>
+        {debitable(l) ? <div className={styles.actionsRow}>{act(t('debitOpen'), { kind: 'debit', lotId: l.lotId })}</div> : null}
+        {isForm((f) => f.kind === 'debit' && f.lotId === l.lotId) ? <DebitForm lot={l} {...common}/> : null}
       </li>)}</ul>}
     </details>
 
-    <details className={styles.detail}>
-      <summary>{t('reservationsTitle')} ({w.reservations.length})</summary>
+    <section className={styles.detail} aria-labelledby="hq-credits-generations">
+      <h3 id="hq-credits-generations">{t('reservationsTitle')} ({w.reservations.length})</h3>
       {w.reservations.length === 0 ? <p className={styles.meta}>{t('noReservations')}</p> : <ul className={styles.list}>{w.reservations.map((r) => <li key={r.reservationId}
         data-testid="credits-reservation" data-status={r.status} data-cost={r.costStatus}>
         <strong>{t('reservationRow', { operation: r.operationCode, media: t(`m_${r.mediaKind}` as CreditsKey), credits: num(language, r.reservedCredits), time: moment(language, r.reservedAt) })}</strong>
@@ -168,8 +186,13 @@ function Detail({ detail, name, language, t, onClose }: { detail: DetailState; n
         <span className={r.costStatus === 'UNKNOWN' ? styles.warnText : undefined}>{r.costStatus === 'RECORDED' && r.providerCostMicrounits !== null
           ? t('cs_RECORDED', { cost: usd(language, r.providerCostMicrounits) }) : t(`cs_${r.costStatus}` as CreditsKey)}</span>
         <span className={styles.meta}>{t('providerModel', { provider: r.providerId, model: r.modelCode })}</span>
+        {settleable(r) ? <div className={styles.actionsRow}>{act(t('resolveOkOpen'), { kind: 'resolve', reservationId: r.reservationId, resolution: 'SUCCEEDED' })}
+          {act(t('resolveNoOpen'), { kind: 'resolve', reservationId: r.reservationId, resolution: 'NOT_CHARGED' })}</div> : null}
+        {costable(r) ? <div className={styles.actionsRow}>{act(t('costOpen'), { kind: 'cost', reservationId: r.reservationId })}</div> : null}
+        {c.form?.kind === 'resolve' && c.form.reservationId === r.reservationId ? <ResolveForm reservation={r} resolution={c.form.resolution} {...common}/> : null}
+        {isForm((f) => f.kind === 'cost' && f.reservationId === r.reservationId) ? <CostForm {...common}/> : null}
       </li>)}</ul>}
-    </details>
+    </section>
 
     <details className={styles.detail}>
       <summary>{t('adjustmentsTitle')} ({w.adjustments.length})</summary>
