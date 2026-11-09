@@ -2481,3 +2481,35 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_crm_school_clock(text) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-SCH-1 0239 recurring weekly classes: private series/occurrence tables, private guard/helpers, six runtime entry
+-- points. The runtime gains no privilege on the new tables and still has no UPDATE on hon.class_sessions.
+DO $$ DECLARE r text; col text; t text; f text; BEGIN
+  FOREACH t IN ARRAY ARRAY['class_series','class_series_occurrences'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_class_series()','hon.require_class_series_actor(text)','hon.class_series_json(hon.class_series)',
+    'hon.class_series_pattern(jsonb,boolean)','hon.class_series_command_begin(text,text,text)',
+    'hon.class_series_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)','hon.class_series_apply_future(hon.class_series,text)',
+    'hon.create_class_series(text,jsonb,text,uuid,uuid)','hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid)','hon.end_class_series(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.fill_class_series(text,uuid,jsonb,text,uuid,uuid)','hon.read_school_class_series(text)','hon.read_school_weekly_timetable(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_class_series(text,jsonb,text,uuid,uuid),hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid),
+      hon.end_class_series(text,uuid,jsonb,text,uuid,uuid),hon.fill_class_series(text,uuid,jsonb,text,uuid,uuid),
+      hon.read_school_class_series(text),hon.read_school_weekly_timetable(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

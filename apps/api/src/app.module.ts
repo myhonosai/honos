@@ -181,6 +181,9 @@ import { ClassSessionsReadController } from './schedule/class-sessions-read.cont
 import { ClassSessionsReadHumanUiGuard } from './schedule/class-sessions-read-human-ui.guard.js';
 import { ClassSessionsReadService } from './schedule/class-sessions-read.service.js';
 import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
+import { ClassSeriesController } from './schedule/class-series.controller.js';
+import { ClassSeriesService } from './schedule/class-series.service.js';
+import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
 import { ClassSessionPagesService } from './schedule/class-session-pages.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
@@ -350,6 +353,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionController,
     ClassSessionsReadController,
     ClassSessionPagesController,
+    ClassSeriesController,
     AttendanceController,
     ClassSessionRosterController,
     AttendancePolicyController,
@@ -519,6 +523,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipDateRevisionService,
     MembershipPauseService,
     StudentImportService,
+    ClassSeriesService,
+    ClassSeriesCreateHumanUiGuard,
+    ClassSeriesReviseHumanUiGuard,
+    ClassSeriesEndHumanUiGuard,
+    ClassSeriesFillHumanUiGuard,
+    ClassSeriesReadHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,
