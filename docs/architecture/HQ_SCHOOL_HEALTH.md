@@ -75,6 +75,9 @@ suspended schools are not checked.
 - API tests `apps/api/test/hq-school-health.test.cjs`: contract consistency, routes forward only the subject, path id
   and declared limit; mismatched or inconsistent answers become 503.
 - Web tests `apps/web/test/hq-school-health-ui.test.tsx`.
+- Mounted browser check `apps/web/scripts/hq-school-health-browser.mjs` (synthetic fixture API, no database): attention list
+  at desktop and 390px, Show up to 200, the detail page health card, concealment, denial, Korean; axe WCAG 2.1 AA and no
+  horizontal overflow.
 
 ## Not included
 
