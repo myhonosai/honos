@@ -2807,6 +2807,7 @@ END $$;
 -- End class-session pages exact verification.
 -- Membership pause, cancellation and refund records exact verification (0224): private forced-RLS tables, settings-free
 -- guards, private helpers, six new runtime entry points (cancel is pinned in the 0177 block) and the three permissions.
+-- 0231 replaced the body of hon.pause_school_membership (rolling-year paused-days count); its hash below is the 0231 body.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOREACH t IN ARRAY ARRAY['school_membership_pause_policies','membership_pauses','membership_refund_records'] LOOP
     SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
@@ -2829,7 +2830,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.membership_command_args_ok(text,text,uuid,uuid)',false,false,'search_path=pg_catalog','7afb3caf93863cd51c5da2fed002341221cb8628e15285689470f394ee94f042'),
 ('hon.read_school_membership_pause_policy(text)',true,true,'search_path=pg_catalog, hon','8a4ccf67894ced208e7bdd88f38b95da2d0dea40dfb2969d1f511997133eb76b'),
 ('hon.set_school_membership_pause_policy(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','8a5de833ffd79e01bfae58768b5a5d4d15a6a269ed3775cd9e41dd48364a733c'),
-('hon.pause_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','03bfdfa4c08fc0d72cfbfa3732987982cbb8c29da0e076d06ec46c70c25081d2'),
+('hon.pause_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7d891a384ff23ea9ae763d04b181e4f6d571888760c925f7c21ef8107c1315dc'),
 ('hon.resume_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','674b318b8920bbce7b05faf8cdb59e883e3a5c9b8b7a275fc875fb9d4d0fa172'),
 ('hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','56e4abbfa70311bf8272b35716223d6c877b43171e1b119b9099343a756dbc23'),
 ('hon.read_membership_pauses_and_refunds(text,uuid)',true,true,'search_path=pg_catalog, hon','3f15ad85d31109214ba9b5cfd3df6f227a21ef7b75d022b312c30ff18aab20dc')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
@@ -2857,6 +2858,51 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
     RAISE EXCEPTION 'Membership pause permissions must exist as sensitive staff-assignable permissions'; END IF;
 END $$;
 -- End membership pause exact verification.
+-- Student CSV import exact verification (0226): private forced-RLS tables, the evidence guard, private helpers, five
+-- runtime entry points and the students.import permission.
+DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
+  FOREACH t IN ARRAY ARRAY['student_import_batches','student_import_rows','student_import_requests'] LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a WHERE x.attrelid=c.oid AND a.grantee<>c.relowner)
+    INTO safe FROM pg_class c WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Student import table must be private with FORCE RLS: %',t; END IF;
+  END LOOP;
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_student_import()',true,false,'search_path=pg_catalog, hon','45ba00a2951101e7c0510a8ff136da84e498aa1a9437524d37fd775f5ccb92df'),
+('hon.require_student_import_actor(text)',true,false,'search_path=pg_catalog, hon','0d7763a58e4e5edcf15f4fd90fedac036afd941a2ef7ffc939fc7f28202259c6'),
+('hon.student_import_fields()',false,false,'search_path=pg_catalog','d5df936dbc745cb27a1d2c8f84a4412e05f562220314f42ff04ee6f24c6e217f'),
+('hon.student_import_check_row(jsonb,jsonb,jsonb,date)',false,false,'search_path=pg_catalog','33d7ae2571e2606ee89f6d31b18d23541c63b292a304d2cab1b7e8a339525f72'),
+('hon.student_import_guardian(jsonb)',false,false,'search_path=pg_catalog','6d250b75a53d90cd8c9a191ab1455fe5f4850dc4a4d3494f910623b98ede7adc'),
+('hon.student_import_summary(uuid)',false,false,'search_path=pg_catalog, hon','4dd9747e4b5057cc22bee8966b9e376214e8e5a6bedf1e74fb3b12548a2fdc6f'),
+('hon.student_import_detail(uuid)',false,false,'search_path=pg_catalog, hon','c12cb5a08ec6894ae2670cb09368fd57084d64ae26addeebccdeb19ddbc8aadc'),
+('hon.student_import_begin(text,text,jsonb,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','c0fbbfc4c2009f4935f8d81a8e6a1f606d9a01291f80e92d8267120af84685bd'),
+('hon.student_import_finish(text,uuid,text,uuid,text,uuid,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','dc66fc11d55165df91669d2dcc7f16c9ba46f965b3d84685c07c7795171052f2'),
+('hon.stage_student_import(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','9a22cad3496e4dea6777f79c09e67fbd0a0b927a92e399418426475bc5777bd1'),
+('hon.decide_student_import(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','22e689083a5a7b5c8b6c70a6490db94a23c5c92c48ec61908f573e021dbe1358'),
+('hon.apply_student_import_row(uuid,integer,uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','00b8f229730f706cb1a3d34f73bed554a53a1e008b58c4c481e1c6b0becf02b8'),
+('hon.finalize_student_import(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','8b59499c923f77aaede863956a1a688e5321db076a5f4df48f381ca18bc87656'),
+('hon.read_student_imports(text)',true,true,'search_path=pg_catalog, hon','52575a8becbf9ad433a997d038b926658e71d31e7205df58ba012f9032f4e0ca'),
+('hon.read_student_import(text,uuid)',true,true,'search_path=pg_catalog, hon','9016bdadb2a2e7591ac349861dae3f9f8f1b15fd291bcdce9b45275f9888d59b')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe student import function: %',f.signature; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES ('student_import_batches','student_import_batches_guard'),('student_import_rows','student_import_rows_guard'),
+    ('student_import_requests','student_import_requests_guard'),('student_import_batches','student_import_batches_no_truncate'),
+    ('student_import_rows','student_import_rows_no_truncate'),('student_import_requests','student_import_requests_no_truncate')) e(tbl,name) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||expected.tbl)::regclass AND tgname=expected.name AND tgfoid='hon.guard_student_import()'::regprocedure AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Missing student import guard: %',expected.name; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='students.import' AND is_sensitive AND is_staff_assignable) THEN
+    RAISE EXCEPTION 'students.import must exist as a sensitive staff-assignable permission'; END IF;
+END $$;
+-- End student CSV import exact verification.
 
 -- CRM school clock exact verification (0236): one read-only definer projection with runtime EXECUTE only, and its
 -- internal actor helper with no runtime privilege.

@@ -42,7 +42,7 @@ export function MarketingHome({ api = marketingApi }: { api?: MarketingApi }): R
     if (!selection) return;
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     const owned = () => mounted.current && current === listGeneration.current && shown === privacy.current;
-    api.campaigns(signal, owned).then(
+    api.campaigns(selection.schoolId, signal, owned).then(
       (items) => { if (owned()) { setList({ state: 'READY', items }); setSelectedId((now) => now && items.some((c) => c.id === now) ? now : null); } },
       (error) => { if (owned() && !abort.signal.aborted) setList({ state: error instanceof MarketingError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
@@ -54,7 +54,7 @@ export function MarketingHome({ api = marketingApi }: { api?: MarketingApi }): R
     setFunnel({ state: 'LOADING' });
     const abort = new AbortController(), campaignId = selectedId, signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     const owned = () => mounted.current && current === funnelGeneration.current && shown === privacy.current;
-    api.funnel(campaignId, signal, owned).then(
+    api.funnel(selection.schoolId, campaignId, signal, owned).then(
       (value) => { if (owned()) setFunnel({ state: 'READY', campaignId, funnel: value }); },
       (error) => { if (owned() && !abort.signal.aborted) setFunnel({ state: error instanceof MarketingError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
