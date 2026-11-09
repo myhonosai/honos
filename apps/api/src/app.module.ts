@@ -248,6 +248,8 @@ import { AiUnknownResolutionHqController, AiUnknownResolutionService } from './a
 import { AiSchoolUsageHqController, AiSchoolUsageService } from './ai-spend/ai-school-usage.controller.js';
 import { SaasExceptionPolicyHqController, SaasAccessExceptionCommandsHqController, SaasAccessExceptionsHqController, SaasAccessOverviewHqController, HqSchoolDetailController, SaasAccessReadinessHqController, SaasAccessRetryHqController, SaasOrganizationAccessHqController, SaasSchoolBillingController } from './school-billing/saas-school-billing.controller.js';
 import { SaasSchoolBillingService } from './school-billing/saas-school-billing.service.js';
+import { HqSupportController } from './hq-support/hq-support.controller.js';
+import { HqSupportService } from './hq-support/hq-support.service.js';
 import { LanguageCommandGuard, LanguagePreferencesService, LanguageReadGuard, MyLanguagePreferenceController, SchoolLanguageDefaultController } from './preferences/language-preferences.controller.js';
 import { PAYMENT_PROVIDER_ADAPTER, UnconfiguredPaymentProvider } from './payments/payment-provider.js';
 import { paymentProviderFromEnvironment } from './payments/stripe-test-mode-adapter.js';
@@ -397,7 +399,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     A2pPreparationController,
     HqEntitlementController,
     ChampionsSchoolController, ChampionsHqController,
-    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
+    SaasSubscriptionGenerationHqController, SaasSubscriptionGenerationSchoolController, SaasPriceScheduleHqController, SaasPriceAcceptanceSchoolController, SaasTrialsHqController, SaasBillingHqController, SaasOffersHqController, SaasOffersSchoolController, SaasCreditsSchoolController, SaasCreativeWalletHqController, SaasCreativeWalletSchoolController, CreativeStudioController, SaasPlanSchoolController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, PaymentWebhookController, SaasSchoolBillingController, SaasAccessReadinessHqController, SaasOrganizationAccessHqController, SaasAccessRetryHqController, SaasAccessExceptionsHqController, SaasAccessExceptionCommandsHqController, SaasExceptionPolicyHqController, SaasAccessOverviewHqController, HqSchoolDetailController, HqSupportController, AiSpendPauseHqController, AiUnknownResolutionHqController, AiSchoolUsageHqController, AiTeamReadinessController, HonConversationController, MyLanguagePreferenceController, SchoolLanguageDefaultController,
     ActionReviewController, ActionApprovalWorkbenchController,
   ],
   providers: [SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard,
@@ -533,7 +535,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
-    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, AiSpendPauseService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
+    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, HqSupportService, AiSpendPauseService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard,
     // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
     { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },
     HqOverviewService,

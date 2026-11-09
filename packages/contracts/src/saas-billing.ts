@@ -105,6 +105,10 @@ export const SAAS_COMMANDS = {
   openCreativeWindow: 'saas-creative-window-open',
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
   createCreativeGeneration: 'saas-creative-generation-create',
+  // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
+  openSupportCase: 'hq-support-case-open',
+  addSupportNote: 'hq-support-case-note',
+  changeSupportCase: 'hq-support-case-change',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 
