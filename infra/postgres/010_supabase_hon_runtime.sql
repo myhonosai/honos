@@ -2393,10 +2393,10 @@ DO $$ DECLARE r text; col text; t text; f text; BEGIN
   END IF;
 END $$;
 
--- C3b 0225 (proposed) HON group summary: the group-facts helper is internal; summaries use the existing turn and reply
+-- C3b 0228 HON group summary: the group-facts helper is internal; summaries use the existing turn and reply
 -- entry points (begin_hon_turn, prepare_hon_reply), whose grants are unchanged.
 DO $$ DECLARE r text; BEGIN
-  IF to_regprocedure('hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply C3b migration 0225 first'; END IF;
+  IF to_regprocedure('hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply C3b migration 0228 first'; END IF;
   REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM '||quote_ident(r);

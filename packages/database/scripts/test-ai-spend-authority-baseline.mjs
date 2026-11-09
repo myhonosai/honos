@@ -2485,7 +2485,7 @@ try {
   pass('INV-29', `C3a: a human confirms a HON suggestion as an ordinary delegation turn (own capability, plan and Action Center path; resend replays), grouped per answer with a status derived from the members' recorded statuses (${combos.length} combinations equal in SQL and contract; UNKNOWN never success); each suggestion confirms once; only suggested, capability-held agents from this human's own whole, visible COMPLETED answer in the same conversation with AI access, re-checked after the group and member writes wait (a lapse during either wait is refused with nothing persisted and no specialist call; concurrent fresh keys admit one, one key replays one turn); refusals record no turn; groups are append-only and readable only by their owner`);
   }
 
-  // ---- INV-30 (C3b, 0225): HON summarizes a finished group's recorded outcomes; a summary is an ordinary question ----
+  // ---- INV-30 (C3b, 0228): HON summarizes a finished group's recorded outcomes; a summary is an ordinary question ----
   {
   const o = await makeOrg('inv-30');
   const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };

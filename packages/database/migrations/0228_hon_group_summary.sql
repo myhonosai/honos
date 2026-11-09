@@ -1,7 +1,7 @@
 BEGIN;
 
 -- C3b: HON summarizes a confirmed group's recorded outcomes (design HON_ORCHESTRATION_KAI_AND_ACTIVATION.md §4,
--- "Unified result"). Proposed migration number 0225; the owner allocates the final number.
+-- "Unified result"). Migration number 0228 (allocated by the owner 2026-11-09).
 -- A summary is an ordinary C2 question ({ text, delegation: null, summarizeTurnId }) with its own plan, reservation,
 -- S4 checks and settlement. It is allowed only for this human's own group (0215) in the same conversation, while the
 -- source answer is still visible to them and every member has finished (group status COMPLETED, FAILED or PARTIAL).
