@@ -253,3 +253,17 @@ test('C3a grouped confirmation contract: fromSuggestionTurnId on delegations onl
     assert.throws(() => contracts.validateHonOrchestrationList(bad), /INVALID_HON_CONVERSATION_RESPONSE/, JSON.stringify(bad).slice(0, 100));
   }
 });
+
+test('C3b group summary contract: summarizeTurnId on fresh questions only', () => {
+  const contracts = require('@hon/contracts');
+  const ID = () => require('node:crypto').randomUUID();
+  const src = ID();
+  const q = { text: 'Summarize what the team did.', delegation: null, summarizeTurnId: src };
+  assert.deepEqual(contracts.validateHonTurnRequest(q), q);
+  assert.deepEqual(contracts.validateHonTurnRequest({ ...q, replyMode: 'DETAILED' }), { ...q, replyMode: 'DETAILED' });
+  assert.equal('summarizeTurnId' in contracts.validateHonTurnRequest({ text: 'x', delegation: null }), false);
+  for (const bad of [{ ...q, summarizeTurnId: 'nope' }, { ...q, continueTurnId: ID() },
+    { text: 'Draft.', delegation: { agentKey: 'marcus', campaignId: ID() }, summarizeTurnId: src }]) {
+    assert.throws(() => contracts.validateHonTurnRequest(bad), /INVALID_HON_CONVERSATION_INPUT/, JSON.stringify(bad));
+  }
+});
