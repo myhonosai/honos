@@ -2414,3 +2414,32 @@ DO $$ DECLARE r text; BEGIN
     EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM '||quote_ident(r);
   END LOOP;
 END $$;
+
+-- B-TUI-1 0240 tuition payment records: a private record table, private guards/helpers, four runtime entry points.
+-- The runtime gains no privilege on hon.invoice_payment_records; its existing hon.invoices privileges are unchanged.
+DO $$ DECLARE r text; col text; f text; BEGIN
+  EXECUTE 'REVOKE ALL ON TABLE hon.invoice_payment_records FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.invoice_payment_records FROM %I',r);
+  END LOOP;
+  FOR col IN SELECT attname FROM pg_attribute WHERE attrelid='hon.invoice_payment_records'::regclass AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON hon.invoice_payment_records FROM PUBLIC',col);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.invoice_payment_records FROM %I',col,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_invoice_payment_record()','hon.guard_invoice_payment_status()','hon.require_tuition_actor(text,text)',
+    'hon.require_tuition_reader(text)','hon.invoice_payment_json(hon.invoice_payment_records)','hon.invoice_balance_json(hon.invoices)',
+    'hon.tuition_command_begin(text,text,text)','hon.tuition_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,uuid,integer,uuid,uuid)',
+    'hon.record_invoice_payment(text,uuid,jsonb,text,uuid,uuid)','hon.void_invoice_payment(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.read_invoice_payments(text,uuid)','hon.read_school_receivables(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.record_invoice_payment(text,uuid,jsonb,text,uuid,uuid),hon.void_invoice_payment(text,uuid,jsonb,text,uuid,uuid),
+      hon.read_invoice_payments(text,uuid),hon.read_school_receivables(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

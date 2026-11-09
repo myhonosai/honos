@@ -110,7 +110,9 @@ import { MembershipPauseService } from './billing/membership-pause.service.js';
 import { SchoolMembershipListController, SchoolMembershipListHumanUiGuard } from './billing/school-membership-list.controller.js';
 import { SchoolMembershipListService } from './billing/school-membership-list.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
-import { MembershipActivationHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
+import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
+import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
+import { TuitionPaymentService } from './billing/tuition-payment.service.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -378,6 +380,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CrmLeadMembershipsController,
     MembershipDateRevisionController,
     MembershipPauseController,
+    TuitionPaymentController,
     SchoolMembershipListController,
     MembershipStatusReportController,
     CrmAdultMembershipDraftController,
@@ -510,12 +513,16 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CrmLeadMembershipsService,
     MembershipDateRevisionService,
     MembershipPauseService,
+    TuitionPaymentService,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
     MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
+    TuitionPaymentRecordHumanUiGuard,
+    TuitionPaymentVoidHumanUiGuard,
+    TuitionReadHumanUiGuard,
     BillingAccountService,
     BillingAccountHumanUiGuard,
     InvoiceService,

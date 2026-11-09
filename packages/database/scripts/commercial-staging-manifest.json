@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "51d51c1874e29f766f5fe4020c4a8f73eb2eba319e5d71b74664fe4dc24bbfe2",
+  "chainSha256": "1e1bda8c211fe8757fd767157e078fd9b6aef98ea0673b82d628683a410fcf91",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -189,6 +189,10 @@
     {
       "file": "0229_claire_business_performance.sql",
       "sha256": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac"
+    },
+    {
+      "file": "0240_tuition_payment_records.sql",
+      "sha256": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233"
     }
   ]
 }
