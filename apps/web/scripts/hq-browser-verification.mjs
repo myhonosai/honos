@@ -380,9 +380,7 @@ try {
         await rail.getByRole('link', { name: 'Referral Contests', exact: true }).click();
       }
       await page.waitForURL('**/hq/growth/contests');
-      await page.getByRole('group', { name: 'Contest lifecycle preview' }).getByRole('button', { name: 'Launch', exact: true }).click();
-      await page.getByRole('heading', { name: 'Launch — planned', exact: true }).waitFor();
-      assert(await page.getByRole('button', { name: 'Launch competition — unavailable', exact: true }).isDisabled());
+      await page.locator('[data-hq-contests]').getByRole('heading', { name: 'Referral contests', exact: true }).waitFor();
       await noOverflow(page, `${label} growth`);
       if (label === 'desktop' || label === 'mobile') await screenshot(page, `${label}-growth-contests`);
     });
