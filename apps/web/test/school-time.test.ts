@@ -43,6 +43,7 @@ describe('school clock read (B-CRM-3)', () => {
     const scope = { organizationId: ORG, schoolId: SCHOOL };
     expect(await readSchoolClock(scope, new AbortController().signal)).toEqual({ state: 'READY', clock });
     expect(fetchMock.mock.calls[0]![0]).toBe(schoolClockPath(scope));
+    expect(schoolClockPath(scope)).toBe(`/api/v1/organizations/${ORG}/schools/${SCHOOL}/crm/school-clock`);
     expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe('GET');
     for (const response of [new Response('{}', { status: 403 }), new Response(JSON.stringify({ data: { ...clock, schoolId: ORG } }), { status: 200 }), new Response('not json', { status: 200 })]) {
       vi.stubGlobal('fetch', vi.fn(async () => response));

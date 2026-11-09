@@ -11,7 +11,7 @@ export type SchoolClockRead = { state: 'READY'; clock: CrmSchoolClock } | { stat
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const schoolClockPath = (s: SchoolClockScope): string => {
   if (!UUID.test(s.organizationId) || !UUID.test(s.schoolId)) throw new Error('Invalid school clock scope.');
-  return `/v1/organizations/${s.organizationId.toLowerCase()}/schools/${s.schoolId.toLowerCase()}/crm/school-clock`;
+  return `/api/v1/organizations/${s.organizationId.toLowerCase()}/schools/${s.schoolId.toLowerCase()}/crm/school-clock`;
 };
 
 /** Reads the verified school clock. Any failure is UNAVAILABLE: screens then keep explicit UTC entry. */
