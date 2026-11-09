@@ -365,38 +365,3 @@ describe('Ask Claire, Business Performance (K2)', () => {
     expect(JSON.parse(prepared.body)).toEqual({ text: 'How are we doing?', delegation: { agentKey: 'claire' } });
   });
 });
-
-describe('Ask Claire, Business Performance (K2)', () => {
-  const claireReady = { ...readiness(), businessPerformance: true };
-  it('offers Claire only when the server says she can answer here', () => {
-    expect(render()).not.toContain('value="claire"');
-    const html = render({ readiness: claireReady });
-    expect(html).toMatch(/<legend>Who answers<\/legend>/); expect(html).toContain('value="hon"'); expect(html).toContain('value="claire"');
-    expect(html).toContain('Message HON');
-  });
-  it('a question for Claire is always one detailed answer and never changes anything', () => {
-    const html = render({ readiness: claireReady, ask: 'claire' });
-    expect(html).toContain('Message Claire'); expect(html).toMatch(/<input(?=[^>]*value="claire")(?=[^>]*checked="")[^>]*>/);
-    expect(html).toMatch(/<input type="radio" name="hon-ask-full-mode" checked=""\/>Detailed/);
-    expect(html).toMatch(/<fieldset[^>]*disabled=""[^>]*><legend>Answer<\/legend>/);
-    expect(html).toContain('Claire reads this school’s performance numbers'); expect(html).toContain('She never drafts, sends or changes anything');
-    expect(html).not.toMatch(/customer credits|purchased credit/i);
-  });
-  it('falls back to HON when Claire is chosen but no longer available', () => {
-    const html = render({ readiness: readiness(), ask: 'claire' });
-    expect(html).toContain('Message HON'); expect(html).not.toContain('Message Claire'); expect(html).not.toContain('value="claire"');
-  });
-  it('shows a Claire answer under her own name with no continue control or Action Center link', () => {
-    const claire = reply(6, { role: 'claire', text: 'Recorded facts: 12 active members. Claire’s view: focus on trials.', references: { workItemId: id(8), actionRequestId: null, invocationId: id(9) } },
-      { mode: 'DETAILED', step: 1, maxSteps: 3, canContinue: false });
-    const html = render({ readiness: claireReady, thread: thread([human(6, 'How are we doing?'), claire]), threadPhase: 'READY' });
-    expect(html).toMatch(/<strong>Claire<\/strong>/); expect(html).not.toMatch(/<strong>Kai<\/strong>/);
-    expect(html).toContain('Recorded facts: 12 active members'); expect(html).not.toContain('Continue this answer'); expect(html).not.toContain('action-center');
-  });
-  it('builds a Claire turn as a bare delegation with no answer mode; a HON turn keeps its mode', () => {
-    expect(composerTurnRequest('How are we doing?', 'claire', 'STANDARD')).toEqual({ text: 'How are we doing?', delegation: { agentKey: 'claire' } });
-    expect(composerTurnRequest('Who needs follow-up?', 'hon', 'DETAILED')).toEqual({ text: 'Who needs follow-up?', delegation: null, replyMode: 'DETAILED' });
-    const prepared = prepareTurn(SCHOOL, id(5), composerTurnRequest('How are we doing?', 'claire', 'DETAILED'));
-    expect(JSON.parse(prepared.body)).toEqual({ text: 'How are we doing?', delegation: { agentKey: 'claire' } });
-  });
-});
