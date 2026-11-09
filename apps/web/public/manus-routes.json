@@ -483,6 +483,14 @@
     {
       "path": "/account/family-invitation",
       "title": "HON OS | Family invitation"
+    },
+    {
+      "path": "/staff/founder-setup",
+      "title": "HON OS | Founder Setup"
+    },
+    {
+      "path": "/hq/founder-setup",
+      "title": "HON HQ | Founder Setup"
     }
   ]
 }
