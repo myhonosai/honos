@@ -218,6 +218,7 @@
     "0223_school_ownership_handoff.sql": "ade3ff7f22464c12caeb52983af398b7c17b6c2f950a9ed5a30f0164ff6f9e31",
     "0224_membership_pause_cancel_refund.sql": "f3bcbeae379890b4fb8e0418b9bffcb2933edc3db7453ed5bc48f972c4e66ae2",
     "0225_hq_school_detail.sql": "f0c4ae400b1785b0df8793bdefe477d3624a27bb86dcfbf95db3a12e3d9bcb79",
-    "0228_hon_group_summary.sql": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db"
+    "0228_hon_group_summary.sql": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db",
+    "0236_crm_school_clock.sql": "8fd82370bd690f52ab4329b68393acfe8c9dc58906ff443641b64a220e871925"
   }
 }

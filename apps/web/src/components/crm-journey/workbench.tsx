@@ -10,15 +10,16 @@ import { leadMembershipHref } from '../crm-lead-memberships-http';
 import { membershipRecoveryText } from '../crm-lead-memberships-copy';
 import { readTrialRecovery, readTrialDetail, parseTrialConflict, type TrialRecovery } from './trial-recovery-http';
 import { SchoolOperationsNavigation } from '../school-operations-navigation';
+import { formatInSchool, readSchoolClock, schoolLocalToInstant } from '../school-time';
 import { entryText } from '../school-entry/copy';
 
 type Step = 'lead' | 'follow' | 'trial' | 'outcome' | 'close' | 'register' | 'history';
 const steps: Step[] = ['lead','follow','trial','outcome','close','register','history'];
-type Notice = 'denied' | 'readError' | 'rejected' | 'unknown' | 'invalid' | 'restoredMissing' | 'retryRejected' | 'trialConflict' | '';
+type Notice = 'denied' | 'readError' | 'rejected' | 'unknown' | 'invalid' | 'restoredMissing' | 'retryRejected' | 'trialConflict' | 'timeSkipped' | '';
 type CommandResult = Exclude<Kind, 'REGISTER'> | 'REGISTERED' | 'REVIEW' | '';
 const timeout = () => AbortSignal.timeout(20_000);
 const trialScopeKey = (s: Scope, lead: string) => [s.organizationId, s.schoolId, lead].map(v => v.toLowerCase()).join(':');
-export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = '' }: { sessionSubject: string; initialScope?: Partial<Scope>; initialLeadId?: string }): React.ReactElement {
+export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = '', clockReader = readSchoolClock }: { sessionSubject: string; initialScope?: Partial<Scope>; initialLeadId?: string; clockReader?: typeof readSchoolClock }): React.ReactElement {
   const locale = useLocale(), t = (k: JourneyKey) => journeyText(locale.preferences.language, k);
   const [mode, setMode] = useState('modern'), [step, setStep] = useState<Step>('lead');
   const [scope, setScope] = useState<Scope>({ organizationId: initialScope.organizationId ?? '', schoolId: initialScope.schoolId ?? '' });
@@ -32,6 +33,8 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   const [concealed, setConcealed] = useState(false), [sessionLost, setSessionLost] = useState(false), [notice, setNotice] = useState<Notice>(''), [discard, setDiscard] = useState(false), [confirmed, setConfirmed] = useState(false);
   const [subject, setSubject] = useState(''), [note, setNote] = useState(''), [due, setDue] = useState(''), [priority, setPriority] = useState('NORMAL');
   const [start, setStart] = useState(''), [end, setEnd] = useState(''), [location, setLocation] = useState(''), [outcome, setOutcome] = useState('COMPLETED'), [decision, setDecision] = useState('WON');
+  // B-CRM-3: the server-named school timezone for this verified scope, or null (explicit UTC entry).
+  const [zone, setZone] = useState<{ key: string; timezone: string } | null>(null);
   const [path, setPath] = useState('ADULT'), [birth, setBirth] = useState(''), [childGiven, setChildGiven] = useState(''), [childFamily, setChildFamily] = useState('');
   const area = useRef<HTMLDivElement | null>(null), heading = useRef<HTMLHeadingElement | null>(null), shieldHeading = useRef<HTMLHeadingElement | null>(null);
   const registrationReadDenied = useRef(false);
@@ -48,12 +51,15 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
   const trialUsed = Boolean(selected && trialHolds.current.has(trialScopeKey(scope, selected.id)));
   facts.current = Boolean(rows || trial || trialRecovery || receipts.length || dirty || pending.current); rowRef.current = selected; scopeRef.current = scope; queueRef.current = queue; dirtyRef.current = dirty;
   const locked = busy || loading || uncertain || dirty;
+  const schoolZone = zone && zone.key === `${scope.organizationId}:${scope.schoolId}` ? zone.timezone : null;
+  const timeLabel = (k: 'start' | 'end' | 'due') => schoolZone ? `${t(({ start: 'startSchool', end: 'endSchool', due: 'dueSchool' } as const)[k])} (${schoolZone})` : t(k);
+  const when = (instant: string) => schoolZone ? formatInSchool(instant, schoolZone, locale.preferences.language) : locale.date(instant);
   function requireRefresh(): void { refreshRequired.current = true; setNeedsRefresh(true); }
   function clearDraft(): void { setSubject(''); setNote(''); setDue(''); setPriority('NORMAL'); setStart(''); setEnd(''); setLocation(''); setBirth(''); setChildGiven(''); setChildFamily(''); setConfirmed(false); setCommandResult(''); setDirty(false); dirtyRef.current = false; }
   function changeScope(field: keyof Scope, value: string): void {
     if (commandBusy.current || readActive.current || pending.current || dirtyRef.current || shield.current || dead.current) return;
     navigationVerified.current = false; readEpoch.current++;
-    const next = { ...scopeRef.current, [field]: value }; scopeRef.current = next; setScope(next);
+    const next = { ...scopeRef.current, [field]: value }; scopeRef.current = next; setScope(next); setZone(null);
     setCommandResult(''); setTrialRecovery(null); setTrialVerified(false); setRetryReviewed(false); setRows(null); setLeadId(''); setQueue(null); setTrial(null); setReceipts([]);
   }
   function conceal(): void {
@@ -110,6 +116,8 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       if (!mounted.current || epoch !== readEpoch.current || signal.aborted || document.visibilityState === 'hidden') return;
       if (normalized.schoolId !== scopeRef.current.schoolId || normalized.organizationId !== scopeRef.current.organizationId) { clearDraft(); setReceipts([]); setTrial(null); setReceiptConcealed(false); }
       if (original && list.some(r => r.id === original.id && r.primaryPersonId !== original.primaryPersonId)) { setLeadId(''); setTrial(null); trialHolds.current.add(trialScopeKey(normalized, original.id)); setReceipts([]); clearDraft(); }
+      const zoneKey = `${normalized.organizationId}:${normalized.schoolId}`;
+      if (zone?.key !== zoneKey) { setZone(null); void clockReader(normalized, timeout()).then(r => { if (mounted.current && r.state === 'READY' && `${scopeRef.current.organizationId}:${scopeRef.current.schoolId}` === zoneKey) setZone({ key: zoneKey, timezone: r.clock.schoolTimezone }); }); }
       setScope(normalized); setRows(list); setQuery(''); setQueue(null); setRegistration(registrationReadDenied.current ? 'UNAVAILABLE' : null); registrationReadDenied.current = false; refreshRequired.current = false; setNeedsRefresh(false);
       navigationVerified.current = true;
       if (!list.some(r => r.id === leadId)) setLeadId('');
@@ -230,14 +238,23 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
     event.preventDefault();
     if (!selected || !confirmed || commandBusy.current || readActive.current || pending.current || shield.current || dead.current || refreshRequired.current
       || kind === 'SCHEDULE' && trialHolds.current.has(trialScopeKey(scope, selected.id))) return;
+    // School time when the server named the zone for this scope; otherwise the inputs are explicit UTC.
+    const activeZone = zone && zone.key === `${scope.organizationId}:${scope.schoolId}` ? zone.timezone : null;
+    const instant = (local: string): string => {
+      if (!activeZone) return new Date(`${local}:00Z`).toISOString();
+      const r = schoolLocalToInstant(local, activeZone);
+      if (r.state === 'NONEXISTENT') { setNotice('timeSkipped'); throw new Error('skipped'); }
+      if (r.state !== 'OK') throw new Error();
+      return r.instant;
+    };
     try {
       let input: unknown;
       if (kind === 'FOLLOW_UP') {
         if (!queue || queue.schoolId !== scope.schoolId) throw new Error();
-        input = { expectedVersion: 0, leadId: selected.id, assigneeId: queue.principalId, subject: subject.trim(), note: note.trim(), dueAt: due ? new Date(`${due}:00Z`).toISOString() : null, priority };
+        input = { expectedVersion: 0, leadId: selected.id, assigneeId: queue.principalId, subject: subject.trim(), note: note.trim(), dueAt: due ? instant(due) : null, priority };
       } else if (kind === 'SCHEDULE') {
         if (trialUsed) throw new Error();
-        input = { startsAt: new Date(`${start}:00Z`).toISOString(), endsAt: new Date(`${end}:00Z`).toISOString(), ...(location.trim() ? { location: location.trim() } : {}), ...(note.trim() ? { notes: note.trim() } : {}) };
+        input = { startsAt: instant(start), endsAt: instant(end), ...(location.trim() ? { location: location.trim() } : {}), ...(note.trim() ? { notes: note.trim() } : {}) };
       } else if (kind === 'OUTCOME') { if (!trial || !trialVerified || trial.status !== 'SCHEDULED') throw new Error(); input = { expectedVersion: trial.version, status: outcome, ...(note.trim() ? { outcomeNotes: note.trim() } : {}) }; }
       else if (kind === 'CLOSE') input = { expectedVersion: selected.version, status: decision, ...(note.trim() ? { closeNote: note.trim() } : {}) };
       else {
@@ -246,7 +263,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       }
       const c = prepareCommand(kind, scope, selected, input, crypto.randomUUID(), kind === 'OUTCOME' ? trial : null);
       void send(c);
-    } catch { setNotice('invalid'); }
+    } catch (e) { if (!(e instanceof Error && e.message === 'skipped')) setNotice('invalid'); }
   }
   function abandon(): void {
     if (commandBusy.current) return;
@@ -275,7 +292,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
     && !pending.current && !dirtyRef.current && !refreshRequired.current && trialHolds.current.size === 0 && unresolvedTrials.current.size === 0 && navigationRevision === readEpoch.current;
   const trialReadDisabled = busy || loading || needsRefresh || dirty && !pending.current || Boolean(pending.current && !['SCHEDULE','OUTCOME'].includes(pending.current.kind));
   const trialRow = (r: CrmAppointmentSummary) => <li key={r.id}>
-    {statusLabel(r.status)} · {locale.date(r.startsAt)} — {locale.date(r.endsAt)} · {t('version')} {locale.number(r.version)}{' '}
+    {statusLabel(r.status)} · {when(r.startsAt)} — {when(r.endsAt)} · {t('version')} {locale.number(r.version)}{' '}
     <button data-testid={`inspect-trial-${r.id}`} disabled={trialReadDisabled} onClick={() => void recoverTrials(r.id)}>{t('reviewTrial')}</button>
   </li>;
   return <main className={styles.page} data-mode={mode}>
@@ -306,7 +323,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
             <div className={styles.lead}><strong>{selected.givenName} {selected.familyName}</strong><p>{t('status')}: {statusLabel(selected.status)} · {t('version')} {locale.number(selected.version)}</p></div><p><a data-testid="membership-recovery" href={!navigationBlocked ? leadMembershipHref({ ...scope, leadId: selected.id }) : undefined} aria-disabled={navigationBlocked} onClick={event => { if (!canLeave()) event.preventDefault(); }}>{membershipRecoveryText(locale.preferences.language, 'title')}</a></p>
             {step === 'lead' && <><dl><dt>{t('email')}</dt><dd>{selected.email ?? t('missing')}</dd><dt>{t('phone')}</dt><dd>{selected.phoneE164 ?? t('missing')}</dd><dt>{t('created')}</dt><dd>{locale.date(selected.createdAt)}</dd><dt>{t('next')}</dt><dd>{selected.nextFollowUpAt ? locale.date(selected.nextFollowUpAt) : t('missing')}</dd></dl><button disabled={locked} onClick={() => navigate('follow')}>{t('continue')}</button></>}
             <div>
-            {step === 'follow' && <><p>{t('followHelp')}</p><button data-testid="verify-follow" disabled={locked || needsRefresh} onClick={() => void readExtra('follow')}>{t('verifyFollow')}</button>{!queue ? <p>{t('followUnavailable')}</p> : <><form autoComplete="off" onSubmit={e => submit(e,'FOLLOW_UP')}><fieldset disabled={inert}><label>{t('subject')}<input data-testid="subject" required maxLength={120} value={subject} onChange={e => edit(setSubject, e.target.value)} /></label>{noteField}<label>{t('due')}<input type="datetime-local" value={due} onChange={e => edit(setDue, e.target.value)} /></label><label>{t('priority')}<select value={priority} onChange={e => edit(setPriority, e.target.value)}>{(['LOW','NORMAL','HIGH'] as const).map(v => <option key={v} value={v}>{t(v)}</option>)}</select></label>{confirmation}<button data-testid="save-follow" disabled={!confirmed}>{t('followSave')}</button></fieldset></form><h3>{t('queue')}</h3><p>{t('boundedQueue')}</p><ul>{queue.items.filter(r => r.leadId === selected.id).map(r => <li key={r.followUpId}>{statusLabel(r.status)} · {r.dueAt ? locale.date(r.dueAt) : t('missing')} · {t('version')} {locale.number(r.version)}</li>)}</ul><a href={navigationBlocked ? undefined : `/staff/crm/follow-ups?${new URLSearchParams({leadId:selected.id})}`} aria-disabled={navigationBlocked || undefined} onClick={event => { if (!canLeave()) event.preventDefault(); }}>{t('followWorkbench')}</a></> }</>}
+            {step === 'follow' && <><p>{t('followHelp')}</p><button data-testid="verify-follow" disabled={locked || needsRefresh} onClick={() => void readExtra('follow')}>{t('verifyFollow')}</button>{!queue ? <p>{t('followUnavailable')}</p> : <><form autoComplete="off" onSubmit={e => submit(e,'FOLLOW_UP')}><fieldset disabled={inert}><label>{t('subject')}<input data-testid="subject" required maxLength={120} value={subject} onChange={e => edit(setSubject, e.target.value)} /></label>{noteField}<label>{timeLabel('due')}<input type="datetime-local" value={due} onChange={e => edit(setDue, e.target.value)} /></label><label>{t('priority')}<select value={priority} onChange={e => edit(setPriority, e.target.value)}>{(['LOW','NORMAL','HIGH'] as const).map(v => <option key={v} value={v}>{t(v)}</option>)}</select></label>{confirmation}<button data-testid="save-follow" disabled={!confirmed}>{t('followSave')}</button></fieldset></form><h3>{t('queue')}</h3><p>{t('boundedQueue')}</p><ul>{queue.items.filter(r => r.leadId === selected.id).map(r => <li key={r.followUpId}>{statusLabel(r.status)} · {r.dueAt ? locale.date(r.dueAt) : t('missing')} · {t('version')} {locale.number(r.version)}</li>)}</ul><a href={navigationBlocked ? undefined : `/staff/crm/follow-ups?${new URLSearchParams({leadId:selected.id})}`} aria-disabled={navigationBlocked || undefined} onClick={event => { if (!canLeave()) event.preventDefault(); }}>{t('followWorkbench')}</a></> }</>}
             {['trial','outcome','history'].includes(step) && <section className={styles.receipts} aria-label={t('savedTrials')}>
               <h3>{t('savedTrials')}</h3><p>{t('trialReadHelp')}</p>
               <button data-testid="read-trials" disabled={trialReadDisabled} onClick={() => void recoverTrials()}>{t('readTrials')}</button>
@@ -315,16 +332,16 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
               {trialRecovery && <><p data-testid="trial-active-status">{t(trialRecovery.activeTrial ? 'activeTrial' : 'noActiveTrial')}</p>
                 {trialRecovery.activeTrial && <ul>{trialRow(trialRecovery.activeTrial)}</ul>}
                 <details><summary>{t('trialHistoryBound')}</summary><ul>{trialRecovery.trials.filter(r => r.id !== trialRecovery.activeTrial?.id).map(trialRow)}</ul></details></>}
-              {trialVerified && trial && <p data-testid="verified-trial">{t('trialReadStatus')}: {statusLabel(trial.status)} · {locale.date(trial.startsAt)} — {locale.date(trial.endsAt)} · {t('version')} {locale.number(trial.version)}</p>}
+              {trialVerified && trial && <p data-testid="verified-trial">{t('trialReadStatus')}: {statusLabel(trial.status)} · {when(trial.startsAt)} — {when(trial.endsAt)} · {t('version')} {locale.number(trial.version)}</p>}
               {selected && unresolvedTrials.current.has(trialScopeKey(scope, selected.id)) && <p>{t('trialUnresolvedHold')}</p>}
             </section>}
-            {step === 'trial' && <><p>{t('trialHelp')}</p><p>{t('UTC')}</p>{trialUsed ? <p>{t('trialHold')}</p> : <form autoComplete="off" onSubmit={e => submit(e,'SCHEDULE')}><fieldset disabled={inert}><div className={styles.fields}><label>{t('start')}<input data-testid="start" type="datetime-local" required value={start} onChange={e => edit(setStart, e.target.value)} /></label><label>{t('end')}<input data-testid="end" type="datetime-local" required value={end} onChange={e => edit(setEnd, e.target.value)} /></label></div><label>{t('location')}<input maxLength={160} value={location} onChange={e => edit(setLocation, e.target.value)} /></label>{noteField}{confirmation}<button data-testid="save-trial" disabled={!confirmed}>{t('trialSave')}</button></fieldset></form>}</>}
-            {step === 'outcome' && <><p>{t('outcomeHelp')}</p>{trial?.status === 'SCHEDULED' && trialVerified ? <><p>{t('trialReadStatus')}</p><p>{locale.date(trial.startsAt)} — {locale.date(trial.endsAt)}</p><form autoComplete="off" onSubmit={e => submit(e,'OUTCOME')}><fieldset disabled={inert}><label>{t('outcome')}<select data-testid="outcome" value={outcome} onChange={e => edit(setOutcome, e.target.value)}>{(['COMPLETED','NO_SHOW','CANCELLED'] as const).map(v => <option key={v} value={v}>{t(v)}</option>)}</select></label>{noteField}{confirmation}<button data-testid="save-outcome" disabled={!confirmed}>{t('outcomeSave')}</button></fieldset></form></> : <p>{t('outcomeMissing')}</p>}</>}
+            {step === 'trial' && <><p>{t('trialHelp')}</p><p data-testid="time-basis">{schoolZone ? `${t('schoolTime')} ${schoolZone}.` : t('UTC')}</p>{trialUsed ? <p>{t('trialHold')}</p> : <form autoComplete="off" onSubmit={e => submit(e,'SCHEDULE')}><fieldset disabled={inert}><div className={styles.fields}><label>{timeLabel('start')}<input data-testid="start" type="datetime-local" required value={start} onChange={e => edit(setStart, e.target.value)} /></label><label>{timeLabel('end')}<input data-testid="end" type="datetime-local" required value={end} onChange={e => edit(setEnd, e.target.value)} /></label></div><label>{t('location')}<input maxLength={160} value={location} onChange={e => edit(setLocation, e.target.value)} /></label>{noteField}{confirmation}<button data-testid="save-trial" disabled={!confirmed}>{t('trialSave')}</button></fieldset></form>}</>}
+            {step === 'outcome' && <><p>{t('outcomeHelp')}</p>{trial?.status === 'SCHEDULED' && trialVerified ? <><p>{t('trialReadStatus')}</p><p>{when(trial.startsAt)} — {when(trial.endsAt)}</p><form autoComplete="off" onSubmit={e => submit(e,'OUTCOME')}><fieldset disabled={inert}><label>{t('outcome')}<select data-testid="outcome" value={outcome} onChange={e => edit(setOutcome, e.target.value)}>{(['COMPLETED','NO_SHOW','CANCELLED'] as const).map(v => <option key={v} value={v}>{t(v)}</option>)}</select></label>{noteField}{confirmation}<button data-testid="save-outcome" disabled={!confirmed}>{t('outcomeSave')}</button></fieldset></form></> : <p>{t('outcomeMissing')}</p>}</>}
             {step === 'close' && <><p>{t('closeHelp')}</p>{selected.status !== 'OPEN' ? <p>{t('closeBlocked')}</p> : <form autoComplete="off" onSubmit={e => submit(e,'CLOSE')}><fieldset disabled={inert}><label>{t('closeChoice')}<select data-testid="decision" value={decision} onChange={e => edit(setDecision, e.target.value)}><option value="WON">{t('WON')}</option><option value="LOST">{t('LOST')}</option></select></label>{noteField}{confirmation}<button data-testid="save-close" disabled={!confirmed}>{t('closeSave')}</button></fieldset></form>}</>}
             {step === 'register' && <><p>{t('registerHelp')}</p><button data-testid="verify-registration" disabled={locked || needsRefresh} onClick={() => void readExtra('registration')}>{t('checkRegistration')}</button>{registration === null ? <p>{t('unchecked')}</p> : registration === 'EXISTING_RECORD' ? <p>{t('existingRegistration')}</p> : registration === 'UNAVAILABLE' ? <><p>{t('registrationLimited')}</p><button data-testid="prepare-record" disabled={inert} onClick={() => { setRegistration('UNVERIFIED_PREPARED'); setConfirmed(false); }}>{t('prepareRecord')}</button></> : <><p>{t(registration === 'NOT_REGISTERED' ? 'registrationReady' : 'registrationUnverified')}</p><form autoComplete="off" onSubmit={e => submit(e,'REGISTER')}><fieldset disabled={inert}><label>{t('registrationPath')}<select data-testid="registration-path" value={path} onChange={e => { edit(setPath, e.target.value); setBirth(''); }}><option value="ADULT">{t('adult')}</option><option value="GUARDIAN_CHILD">{t('family')}</option></select></label>{path === 'GUARDIAN_CHILD' && <div className={styles.fields}><label>{t('childGiven')}<input data-testid="child-given" required maxLength={100} value={childGiven} onChange={e => edit(setChildGiven, e.target.value)} /></label><label>{t('childFamily')}<input data-testid="child-family" required maxLength={100} value={childFamily} onChange={e => edit(setChildFamily, e.target.value)} /></label></div>}<label>{t(path === 'ADULT' ? 'birth' : 'childBirth')}<input data-testid="birth" type="date" required value={birth} onChange={e => edit(setBirth, e.target.value)} /></label>{confirmation}<button data-testid="save-registration" disabled={!confirmed}>{t('registerSave')}</button></fieldset></form></>}<p><a href={navigationBlocked ? undefined : `/staff/crm/leads?${linkedScope}`} aria-disabled={navigationBlocked || undefined} onClick={event => { if (!canLeave()) event.preventDefault(); }}>{t('registrationWorkbench')}</a></p></>}
             </div>
             {step === 'history' && <><p>{t('historyUnavailable')}</p>{receipts.length === 0 && <p>{t('noReceipts')}</p>}</>}
-            {receipts.length > 0 && <section className={styles.receipts} aria-label={t('history')}><h3>{t('receipt')}</h3><p>{t('historical')}</p>{receipts.map((r,i) => <p key={i} data-testid="receipt">{t(({FOLLOW_UP:'follow',SCHEDULE:'trial',OUTCOME:'outcome',CLOSE:'close',REGISTER:'register'} as const)[r.kind])}: {r.kind === 'REGISTER' ? t(r.record.outcome === 'REGISTERED' ? 'registered' : 'review') : <>{statusLabel(r.record.status)} · {t('version')} {locale.number(r.record.version)} · {locale.date(r.kind === 'FOLLOW_UP' ? r.record.recordedAt : r.kind === 'CLOSE' ? r.record.closedAt : r.record.updatedAt)}{(r.kind === 'SCHEDULE' || r.kind === 'OUTCOME') && <span data-testid="trial-window"><br />{locale.date(r.record.startsAt)} — {locale.date(r.record.endsAt)}</span>}</>}</p>)}</section>}
+            {receipts.length > 0 && <section className={styles.receipts} aria-label={t('history')}><h3>{t('receipt')}</h3><p>{t('historical')}</p>{receipts.map((r,i) => <p key={i} data-testid="receipt">{t(({FOLLOW_UP:'follow',SCHEDULE:'trial',OUTCOME:'outcome',CLOSE:'close',REGISTER:'register'} as const)[r.kind])}: {r.kind === 'REGISTER' ? t(r.record.outcome === 'REGISTERED' ? 'registered' : 'review') : <>{statusLabel(r.record.status)} · {t('version')} {locale.number(r.record.version)} · {locale.date(r.kind === 'FOLLOW_UP' ? r.record.recordedAt : r.kind === 'CLOSE' ? r.record.closedAt : r.record.updatedAt)}{(r.kind === 'SCHEDULE' || r.kind === 'OUTCOME') && <span data-testid="trial-window"><br />{when(r.record.startsAt)} — {when(r.record.endsAt)}</span>}</>}</p>)}</section>}
             {receiptConcealed && <p>{t('receiptLost')}</p>}
             <div className={styles.actions}><button data-testid="refresh" disabled={locked} onClick={() => void load()}>{t('refresh')}</button><button data-testid="discard" disabled={busy || loading} onClick={() => setDiscard(true)}>{t('discard')}</button></div>
           </>}

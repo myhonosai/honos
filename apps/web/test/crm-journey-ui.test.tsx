@@ -15,14 +15,15 @@ vi.mock('../src/components/localization/provider',()=>({useLocale:()=>({preferen
 type El=ReactElement<Record<string,any>>;
 const nodes=(v:unknown):El[]=>Array.isArray(v)?v.flatMap(nodes):React.isValidElement(v)?[v as El,...nodes((v as El).props.children)]:[];
 const text=(v:unknown):string=>Array.isArray(v)?v.map(text).join(''):React.isValidElement(v)?text((v as El).props.children):typeof v==='string'?v:'';
-const render=()=>{h.cursor=0;const tree=CrmJourney({sessionSubject:'staff:synthetic',initialScope:scope,initialLeadId:row.id});h.effects.splice(0).forEach(f=>f());return tree;};
+const clock={reader:async(..._a:unknown[])=>({state:'UNAVAILABLE'} as any)};
+const render=()=>{h.cursor=0;const tree=CrmJourney({sessionSubject:'staff:synthetic',initialScope:scope,initialLeadId:row.id,clockReader:(s,signal)=>clock.reader(s,signal)});h.effects.splice(0).forEach(f=>f());return tree;};
 const el=(test:string)=>nodes(render()).find(e=>e.props['data-testid']===test)!;
 const click=(test:string)=>el(test).props.onClick();
 const change=(test:string,value:string)=>el(test).props.onChange({target:{value}});
 const settle=async()=>{for(let i=0;i<120;i++)await Promise.resolve();};
 const hidden=()=>nodes(render()).some(e=>e.props.hidden===true&&e.props.inert===true);
 function cleanup(){for(const v of h.values)v?.cleanup?.();}
-beforeEach(()=>{h.values=[];h.cursor=0;h.effects=[];h.language='en';vi.stubGlobal('window',new EventTarget());vi.stubGlobal('document',Object.assign(new EventTarget(),{visibilityState:'visible'}));});
+beforeEach(()=>{clock.reader=async()=>({state:'UNAVAILABLE'});h.values=[];h.cursor=0;h.effects=[];h.language='en';vi.stubGlobal('window',new EventTarget());vi.stubGlobal('document',Object.assign(new EventTarget(),{visibilityState:'visible'}));});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 async function loaded(){const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row])).mockResolvedValueOnce(identity());click('load');await settle();expect(text(render())).toContain('Private');return f;}
 function prepareClose(){click('step-close');el('confirm').props.onChange({target:{checked:true}});return nodes(render()).find(e=>e.type==='form')!.props.onSubmit;}
@@ -106,6 +107,28 @@ it('shows the exact validated trial window using the shared date formatter',asyn
  const f=await loaded();click('step-trial');change('start','2026-11-02T09:00');change('end','2026-11-02T10:00');el('confirm').props.onChange({target:{checked:true}});
  f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({id:'00000000-0000-4000-8000-000000000008',crmLeadId:row.id,appointmentType:'TRIAL',status:'SCHEDULED',startsAt:'2026-11-02T09:00:00.000Z',endsAt:'2026-11-02T10:00:00.000Z',createdByPrincipalId:'00000000-0000-4000-8000-000000000006',version:1,createdAt:'2026-10-31T05:00:00.000Z',updatedAt:'2026-10-31T05:00:00.000Z'}));
  nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();expect(text(el('trial-window'))).toContain('2026-11-02T09:00:00.000Z');expect(text(el('trial-window'))).toContain('2026-11-02T10:00:00.000Z');
+});
+it('B-CRM-3: with the server-named school timezone, trial times are entered and shown in school time',async()=>{
+ const reads:unknown[]=[];clock.reader=async(s:unknown)=>{reads.push(s);return {state:'READY',clock:{schoolId:scope.schoolId,schoolTimezone:'America/Los_Angeles',localToday:'2026-11-01',asOf:'2026-11-01T17:00:00.000Z'}};};
+ const f=await loaded();expect(reads).toHaveLength(1);click('step-trial');
+ expect(text(el('time-basis'))).toContain('America/Los_Angeles');expect(text(render())).toContain(`${journeyCatalog.en.startSchool} (America/Los_Angeles)`);
+ change('start','2026-11-02T09:00');change('end','2026-11-02T10:00');el('confirm').props.onChange({target:{checked:true}});
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({id:'00000000-0000-4000-8000-000000000008',crmLeadId:row.id,appointmentType:'TRIAL',status:'SCHEDULED',startsAt:'2026-11-02T17:00:00.000Z',endsAt:'2026-11-02T18:00:00.000Z',createdByPrincipalId:'00000000-0000-4000-8000-000000000006',version:1,createdAt:'2026-10-31T05:00:00.000Z',updatedAt:'2026-10-31T05:00:00.000Z'}));
+ nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();
+ const post=f.mock.calls.find(c=>c[1]?.method==='POST')!;expect(JSON.parse(String(post[1]!.body))).toMatchObject({startsAt:'2026-11-02T17:00:00.000Z',endsAt:'2026-11-02T18:00:00.000Z'});
+ expect(text(el('trial-window'))).toMatch(/9:00.*PST/);
+});
+it('B-CRM-3: a school time skipped by daylight saving is refused before any command',async()=>{
+ clock.reader=async()=>({state:'READY',clock:{schoolId:scope.schoolId,schoolTimezone:'America/Los_Angeles',localToday:'2026-03-01',asOf:'2026-03-01T17:00:00.000Z'}});
+ const f=await loaded();click('step-trial');change('start','2027-03-14T02:30');change('end','2027-03-14T03:30');el('confirm').props.onChange({target:{checked:true}});
+ const n=f.mock.calls.length;nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();
+ expect(f.mock.calls.length).toBe(n);expect(text(render())).toContain(journeyCatalog.en.timeSkipped);
+});
+it('B-CRM-3: without a verified school clock the inputs stay explicit UTC',async()=>{
+ const f=await loaded();click('step-trial');expect(text(el('time-basis'))).toBe(journeyCatalog.en.UTC);
+ change('start','2026-11-02T09:00');change('end','2026-11-02T10:00');el('confirm').props.onChange({target:{checked:true}});
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope({},503));nodes(render()).find(e=>e.type==='form')!.props.onSubmit({preventDefault(){}});await settle();
+ const post=f.mock.calls.find(c=>c[1]?.method==='POST')!;expect(JSON.parse(String(post[1]!.body))).toMatchObject({startsAt:'2026-11-02T09:00:00.000Z'});
 });
 it('clears concealed form details but keeps the exact private note and key for an explicit retry',async()=>{
  const f=await loaded();click('step-close');change('note','Private original note');el('confirm').props.onChange({target:{checked:true}});f.mockResolvedValueOnce(identity()).mockRejectedValueOnce(new Error('Unknown outcome'));
