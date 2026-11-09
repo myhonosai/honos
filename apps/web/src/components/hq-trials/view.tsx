@@ -3,6 +3,7 @@ import type { TrialCampaignDefinition, TrialCampaignVersion, TrialGovernanceView
   TrialPublicationPreview } from '@hon/contracts';
 import { trialsText, type TrialsKey } from './copy';
 import { dollars } from './http';
+import { ApproveForm, DraftForm, EndForm, Outcome, ProposeForm, PublishForm, WithdrawForm, type Fields, type TrialForm, type TrialOutcome } from './forms';
 import styles from './hq-trials.module.css';
 
 type T = (key: TrialsKey, vars?: Record<string, string>) => string;
@@ -99,9 +100,13 @@ function Readiness({ state, version, language, t }: { state: PreviewState; versi
 
 export type TrialsViewProps = Readonly<{
   language: string; concealed: boolean; governance: ReadState<TrialGovernanceView>; now: number; preview: PreviewState | null;
-  onRefresh?: (() => void) | undefined; onCheck?: ((versionId: string) => void) | undefined;
+  onRefresh?: (() => void) | undefined; onCheck?: ((versionId: string) => void) | undefined; onReveal?: (() => void) | undefined;
+  /** HQ-owner commands. Without onOpen the page is read only. */
+  form?: TrialForm | undefined; outcome?: TrialOutcome | undefined; locked?: boolean | undefined; canRetry?: boolean | undefined;
+  onOpen?: ((form: Exclude<TrialForm, null>) => void) | undefined; onClose?: (() => void) | undefined; onSubmit?: ((fields: Fields) => void) | undefined;
+  onTryAgain?: (() => void) | undefined; onStop?: (() => void) | undefined;
 }>;
-/** Read-only HQ trial governance. Every value comes from the governance read or one readiness check; nothing here can change it. */
+/** HQ trial governance. Every value comes from the governance read or one readiness check; commands only record definitions. */
 export function TrialsView(p: TrialsViewProps): React.ReactElement {
   const t: T = (key, vars) => trialsText(p.language, key, vars);
   const g = p.governance;
@@ -112,20 +117,26 @@ export function TrialsView(p: TrialsViewProps): React.ReactElement {
       {!p.concealed && p.onRefresh ? <button type="button" className={styles.secondary} onClick={p.onRefresh} disabled={busy}>{t('refresh')}</button> : null}
     </header>
     <p className={styles.meta}>{t('scope')}</p>
-    {p.concealed ? <p className={styles.notice} role="status">{t('concealed')}</p>
+    {p.concealed ? <div className={styles.notice} role="status"><p>{t('concealed')}</p>{p.onReveal ? <button type="button" className={styles.secondary} onClick={p.onReveal}>{t('reveal')}</button> : null}</div>
       : g.state !== 'READY' ? <Notice state={g} t={t} onRefresh={p.onRefresh}/> : <Body view={g.view} {...p} t={t}/>}
   </section>;
 }
 function approvedText(rules: Extract<RuleState, { kind: 'IN_FORCE' | 'NOT_YET' | 'EXPIRED' }>, t: T, window: (d: TrialPolicyDecision) => { from: string; to: string }) {
-  return t(rules.kind === 'IN_FORCE' ? 'inForce' : rules.kind === 'NOT_YET' ? 'notYet' : 'expired', { version: String(rules.version ?? '?'), ...window(rules.decision) });
+  return t(rules.kind === 'IN_FORCE' ? 'inForce' : rules.kind === 'NOT_YET' ? 'notYet' : 'expired', { version: rules.version === null ? t('earlier') : String(rules.version), ...window(rules.decision) });
 }
-function Body({ view, language, now, preview, onCheck, t }: TrialsViewProps & { view: TrialGovernanceView; t: T }) {
+function Body({ view, language, now, preview, onCheck, t, form, outcome, locked = false, canRetry = false, onOpen, onClose = () => {}, onSubmit = () => {}, onTryAgain, onStop }: TrialsViewProps & { view: TrialGovernanceView; t: T }) {
+  const latestPolicy = view.policyVersions[0] ?? null;
+  const common = { t, locked, onClose, onSubmit };
+  const opener = (next: Exclude<TrialForm, null>, label: string, primary = false) => onOpen
+    ? <button type="button" className={primary ? styles.primary : styles.secondary} disabled={locked || form !== null && form !== undefined} onClick={() => onOpen(next)}>{label}</button> : null;
+  const isForm = (kind: string, campaignId?: string | null) => !!form && form.kind === kind && (campaignId === undefined || ('campaignId' in form && (form.campaignId ?? null) === campaignId));
   const rules = ruleState(view, now), campaigns = campaignsOf(view);
   const truncated = Object.values(view.hasMore).some(Boolean);
   const versionOf = (policyId: string) => view.policyVersions.find((v) => v.policyId.toLowerCase() === policyId.toLowerCase())?.version;
   const window = (d: TrialPolicyDecision) => ({ from: moment(language, d.validFrom), to: moment(language, d.validUntil) });
   return <>
     <p className={styles.meta}>{t('asOf', { time: moment(language, view.asOf) })}</p>
+    <Outcome outcome={outcome ?? null} t={t} canRetry={canRetry} onTryAgain={onTryAgain} onStop={onStop}/>
     <div className={styles.grid}>
       <article className={styles.card} aria-labelledby="hq-trials-program">
         <div className={styles.cardHead}><h2 id="hq-trials-program">{t('programTitle')}</h2><span className={styles.chip} data-kind="off">{t('programOff')}</span></div>
@@ -149,6 +160,15 @@ function Body({ view, language, now, preview, onCheck, t }: TrialsViewProps & { 
       <p data-testid="trial-rule-state" data-rule-state={rules.kind} className={rules.kind === 'IN_FORCE' ? undefined : styles.warnText}>{
         rules.kind === 'NONE' ? t('noDecision') : 'version' in rules ? approvedText(rules, t, window)
           : t(rules.kind === 'WITHDRAWN' ? 'withdrawnNow' : 'revokedNow')}</p>
+      {onOpen ? <div className={styles.row}>
+        {opener({ kind: 'propose' }, t('proposeOpen'))}
+        {latestPolicy ? opener({ kind: 'approve' }, t('approveOpen', { version: String(latestPolicy.version) }), true) : null}
+        {rules.kind === 'NOT_YET' ? opener({ kind: 'end', decision: 'WITHDRAWN' }, t('withdrawRules')) : null}
+        {rules.kind === 'IN_FORCE' || rules.kind === 'EXPIRED' ? opener({ kind: 'end', decision: 'REVOKED' }, t('revokeRules')) : null}
+      </div> : null}
+      {isForm('propose') ? <ProposeForm {...common} base={latestPolicy?.terms ?? null}/> : null}
+      {isForm('approve') && latestPolicy ? <ApproveForm {...common} version={latestPolicy.version} now={now}/> : null}
+      {form?.kind === 'end' ? <EndForm {...common} decision={form.decision}/> : null}
       {view.policyVersions.length === 0 ? <p className={styles.meta}>{t('noRules')}</p> : view.policyVersions.map((v: TrialPolicyVersion) =>
         <details key={v.policyId} className={styles.detail} open={'version' in rules && rules.version === v.version}>
           <summary>{t('versionTitle', { version: String(v.version) })} · {t('proposed', { time: moment(language, v.recordedAt) })}</summary>
@@ -158,13 +178,15 @@ function Body({ view, language, now, preview, onCheck, t }: TrialsViewProps & { 
       <h3>{t('decisionsTitle')}</h3>
       {view.policyDecisions.length === 0 ? <p className={styles.meta}>{t('noDecisions')}</p> : <ul className={styles.list}>{view.policyDecisions.map((d) => <li key={d.decisionId}>
         <span>{t('decisionRow', { decision: t(`dec_${d.decision}` as TrialsKey), revision: String(d.revision), time: moment(language, d.recordedAt) })}</span>
-        {d.decision === 'APPROVED' ? <span className={styles.meta}>{t('forVersion', { version: String(versionOf(d.policyId) ?? '?') })} · {t('validWindow', window(d))}</span> : null}
+        {d.decision === 'APPROVED' ? <span className={styles.meta}>{t('forVersion', { version: String(versionOf(d.policyId) ?? t('earlier')) })} · {t('validWindow', window(d))}</span> : null}
         <span className={styles.meta}>{t('because', { reason: d.reason })}</span>
       </li>)}</ul>}
     </article>
 
     <article className={styles.card} aria-labelledby="hq-trials-campaigns">
       <h2 id="hq-trials-campaigns">{t('campaignsTitle')}</h2>
+      {onOpen ? <div className={styles.row}>{opener({ kind: 'draft', campaignId: null }, t('draftNewOpen'))}</div> : null}
+      {isForm('draft', null) ? <DraftForm {...common} base={null} termsReference={latestPolicy?.terms.termsReference ?? ''} now={now} isNew/> : null}
       {campaigns.length === 0 ? <p className={styles.meta}>{t('noCampaigns')}</p> : <>
         {campaigns.some((c) => c.status === 'PUBLISHED') ? <p className={styles.meta}>{t('publishedNote')}</p> : null}
         <ul className={styles.campaigns}>{campaigns.map((c) => {
@@ -178,9 +200,17 @@ function Body({ view, language, now, preview, onCheck, t }: TrialsViewProps & { 
             {c.status === 'PUBLISHED' && c.publishedVersion !== null && c.publishedVersion !== c.latest.version
               ? <p className={styles.warnText}>{t('newerDraft', { published: String(c.publishedVersion), latest: String(c.latest.version) })}</p> : null}
             <Definition d={c.latest.definition} language={language} t={t}/>
-            {onCheck ? <div className={styles.row}><button type="button" className={styles.secondary} disabled={checking?.state === 'LOADING'}
-              onClick={() => onCheck(c.latest.versionId)}>{t('check')}</button></div> : null}
             {checking ? <Readiness state={checking} version={c.latest.version} language={language} t={t}/> : null}
+            <div className={styles.row}>
+              {onCheck ? <button type="button" className={styles.secondary} disabled={checking?.state === 'LOADING' || locked}
+                onClick={() => onCheck(c.latest.versionId)}>{t('check')}</button> : null}
+              {checking?.state === 'READY' && checking.preview.ready ? opener({ kind: 'publish', campaignId: c.campaignId }, t('publishOpen', { version: String(c.latest.version) }), true) : null}
+              {opener({ kind: 'draft', campaignId: c.campaignId }, t('draftNextOpen'))}
+              {c.status === 'PUBLISHED' ? opener({ kind: 'withdraw', campaignId: c.campaignId }, t('withdrawCampaign')) : null}
+            </div>
+            {isForm('publish', c.campaignId) && checking?.state === 'READY' ? <PublishForm {...common} version={c.latest.version}/> : null}
+            {isForm('draft', c.campaignId) ? <DraftForm {...common} base={c.latest.definition} termsReference={c.latest.definition.termsReference} now={now} isNew={false}/> : null}
+            {isForm('withdraw', c.campaignId) ? <WithdrawForm {...common}/> : null}
             <details className={styles.detail}>
               <summary>{t('history')}</summary>
               <ul className={styles.list}>
