@@ -425,6 +425,10 @@
       "title": "HON HQ | Support"
     },
     {
+      "path": "/hq/support/:caseId",
+      "title": "HON HQ | Support case"
+    },
+    {
       "path": "/hq/growth/champions-club/schools",
       "title": "HON HQ | School referrals"
     },
