@@ -227,6 +227,7 @@ async function api(route) {
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path === '/api/v1/hq/schools' || path.endsWith('/ownership') || path === '/api/v1/hq/school-ownership/primary-owner') { const answered = await ownershipApiRoute(route, path, method); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/ai/')) { const answered = await aiControlApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path === '/api/v1/hq/saas/creative-credits' || path.startsWith('/api/v1/hq/saas/creative-credits/')) { const answered = await creditsApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
@@ -715,6 +716,57 @@ const ownView = (schoolId) => { const primary = own.primary.get(schoolId) ?? nul
   return { owners, primaryOwnerGrantId: primary, notices: ownNotices(schoolId), asOf: '2026-11-08T12:30:00.000Z' }; };
 // HQ AI costs and safety (S4-c/d/e, synthetic). Pauses, lost calls and settlements live here; replies, one per POST:
 // 'ok', 'unknown' (503, nothing changed), 'active' (422 AI_SPEND_PAUSE_ALREADY_ACTIVE).
+// ---------- HQ creative credits (read only, synthetic) ----------
+const ccx = { reads: [], denied: false, other: 0 };
+const ccId = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const ccPackages = [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({
+  packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' }));
+const ccRates = { rateVersionId: ccId(70), rateVersion: 1, termsReference: 'hon-creative-rates/v1', publishedAt: '2026-11-04T10:00:00.000Z',
+  rates: [{ operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 20, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL', costEvidenceId: null },
+    { operationCode: 'video.short', mediaKind: 'VIDEO', displayName: 'Short video clip', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 10, rateBasis: 'PROVISIONAL', costEvidenceId: null }] };
+const ccOrg = ccId(1), ccNorth = ccId(2), ccSouth = ccId(3), ccLot = ccId(60), ccAdj = ccId(61);
+const ccRow = (over) => ({ schoolId: ccNorth, schoolName: 'Synthetic Dojo North', organizationId: ccOrg, organizationName: 'Synthetic Martial Arts LLC', availableCredits: 440, heldCredits: 20,
+  consumedCredits: 40, actualProviderCostMicrounits: 80000, outcomeUnknown: 1, unknownCostGenerations: 0, updatedAt: '2026-11-08T12:00:00.000Z', ...over });
+const ccList = () => ({ program: { status: 'INACTIVE', version: 1, monthlyIncludedCredits: 12000 }, rates: ccRates, packages: ccPackages,
+  wallets: [ccRow({}), ccRow({ schoolId: ccSouth, schoolName: 'Synthetic Dojo South', availableCredits: 0, heldCredits: 0, consumedCredits: 0, actualProviderCostMicrounits: 0, outcomeUnknown: 0 })] });
+const ccKinds = (promo) => ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'].map((kind) => ({ kind, grantedCredits: 0, availableCredits: 0, heldCredits: 0, consumedCredits: 0,
+  expiredCredits: 0, debitedCredits: 0, ...(kind === 'PROMOTIONAL' ? promo : {}) }));
+const ccRes = (over) => ({ schoolId: ccNorth, organizationId: ccOrg, operationCode: 'image.standard', mediaKind: 'IMAGE', rateBasis: 'PROVISIONAL', creditsPerUnit: 20,
+  providerId: 'synthetic-provider', modelCode: 'synthetic-image-1', resolutionReference: null, version: 2, ...over });
+function ccWallet(schoolId) {
+  const empty = schoolId === ccSouth;
+  return { schoolId, organizationId: ccOrg, walletVersion: empty ? null : 3, program: { status: 'INACTIVE', monthlyIncludedCredits: 12000 },
+    eligibility: { eligible: false, reason: 'PROGRAM_INACTIVE', window: null },
+    balance: empty ? { availableCredits: 0, heldCredits: 0, byKind: ccKinds({}) } : { availableCredits: 440, heldCredits: 20, byKind: ccKinds({ grantedCredits: 500, availableCredits: 440, heldCredits: 20, consumedCredits: 40 }) },
+    lots: empty ? [] : [{ lotId: ccLot, kind: 'PROMOTIONAL', credits: 500, baseCredits: null, bonusCredits: null, window: null, purchaseId: null, adjustmentId: ccAdj, expiresAt: null, expired: false,
+      availableCredits: 440, heldCredits: 20, consumedCredits: 40, expiredCredits: 0, debitedCredits: 0, grantedAt: '2026-11-05T10:00:00.000Z' }],
+    history: empty ? [] : [{ entryId: ccId(80), lotId: ccLot, lotKind: 'PROMOTIONAL', entryKind: 'GRANT', credits: 500, reservationId: null, adjustmentId: ccAdj, occurredAt: '2026-11-05T10:00:00.000Z' }],
+    reservations: empty ? [] : [
+      ccRes({ reservationId: ccId(62), units: 2, reservedCredits: 40, status: 'FINALIZED', statusReason: 'PROVIDER_SUCCEEDED', finalUnits: 2, finalCredits: 40, lots: [{ lotId: ccLot, reservedCredits: 40 }],
+        reservedAt: '2026-11-06T10:00:00.000Z', settledAt: '2026-11-06T10:01:00.000Z', costStatus: 'RECORDED', providerCostMicrounits: 80000, costReference: 'synthetic-receipt-1',
+        costRecordedAt: '2026-11-06T10:01:00.000Z', usageId: ccId(64) }),
+      ccRes({ reservationId: ccId(63), units: 1, reservedCredits: 20, status: 'OUTCOME_UNKNOWN', statusReason: 'PROVIDER_OUTCOME_UNKNOWN', finalUnits: null, finalCredits: null, lots: [{ lotId: ccLot, reservedCredits: 20 }],
+        reservedAt: '2026-11-07T10:00:00.000Z', settledAt: null, costStatus: 'PENDING', providerCostMicrounits: null, costReference: null, costRecordedAt: null, usageId: null })],
+    adjustments: empty ? [] : [{ adjustmentId: ccAdj, kind: 'PROMOTIONAL_GRANT', credits: 500, lotId: ccLot, reasonCode: 'PROMOTION', occurredAt: '2026-11-05T10:00:00.000Z',
+      note: 'Synthetic launch promotion', actorPrincipalId: ccId(9) }],
+    purchases: empty ? [] : [{ purchaseId: ccId(65), schoolId, packageCode: 'STARTER', packageVersion: 1, baseCredits: 3000, bonusCredits: 0, priceMinor: 3000, currency: 'usd',
+      status: 'PENDING_PAYMENT', statusReason: 'AWAITING_VERIFIED_PAYMENT', version: 1, lotId: null, payment: 'NOT_CONNECTED', createdAt: '2026-11-08T09:00:00.000Z', fulfilledAt: null,
+      paymentProvider: null, providerPaymentRef: null, paidAmountMinor: null, paidCurrency: null }],
+    rates: ccRates, packages: ccPackages, agentConversationsDeductCredits: false, paymentsActive: false,
+    providerExpense: { actualProviderCostMicrounits: empty ? 0 : 80000, finalizedProviderCostMicrounits: empty ? 0 : 80000, failedOrNotChargedProviderCostMicrounits: 0, consumedCredits: empty ? 0 : 40,
+      unknownCostGenerations: 0, pendingCostGenerations: empty ? 0 : 1, spendClass: 'CREATIVE_MEDIA', generations: { finalized: empty ? 0 : 1, released: 0, reserved: 0, outcomeUnknown: empty ? 0 : 1 } } };
+}
+async function creditsApiRoute(route, path, method, url) {
+  const headers = route.request().headers();
+  // Read only: any write, command marker, key or query is refused.
+  if (method !== 'GET' || url.search || Object.keys(headers).some((k) => k.startsWith('x-hon-') || k === 'idempotency-key')) { ccx.other++; return json(route, 400, { code: 'INVALID_SAAS_INPUT' }); }
+  if (ccx.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  ccx.reads.push(path.slice('/api/v1/hq/saas/creative-credits'.length) || '/');
+  if (path === '/api/v1/hq/saas/creative-credits') return json(route, 200, { data: ccList() });
+  const m = /^\/api\/v1\/hq\/saas\/creative-credits\/schools\/([0-9a-f-]{36})$/.exec(path);
+  if (m && (m[1] === ccNorth || m[1] === ccSouth)) return json(route, 200, { data: ccWallet(m[1]) });
+  return null;
+}
 const aix = { pauses: [], open: [], resolved: [], posts: [], replies: [], byKey: new Map(), usage: [], reads: [], denied: false };
 const AIX_COMMAND = { 'spend-pauses': 'ai-spend-pause', resolve: 'ai-unknown-resolve', 'late-provider-expense': 'ai-late-provider-expense' };
 const aixZero = { providerReportedCostMicrounits: 0, estimatedWriteOffCostMicrounits: 0, entries: 0, writeOffEntries: 0, lateProviderCostMicrounits: 0, lateProviderExpenseEntries: 0, supersededWriteOffEstimateMicrounits: 0 };
@@ -3385,6 +3437,56 @@ await check('AI Safety: leaving the tab hides pauses and calls; a refused read s
   await aiSafety(page).getByTestId('ai-pauses').getByText('does not include AI costs').waitFor();
   assert.equal(await aiSafety(page).getByTestId('unknown-row').count(), 0);
   assert.equal(await aiSafety(page).getByRole('button', { name: 'Pause AI spend' }).count(), 0);
+  await ctx.close();
+});
+
+const creditsPage = (page) => page.getByTestId('hq-creative-credits');
+const CC_TEXT = { en: ['Creative Credits', 'View wallet for Synthetic Dojo North', 'Generations (2)', 'Outcome unknown'],
+  es: ['Créditos creativos', 'Ver billetera de Synthetic Dojo North', 'Generaciones (2)', 'Resultado desconocido'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'es']]) {
+  await check(`Creative Credits ${nextTheme} ${language} ${name}: program, rates, wallets, and one school's wallet read that changes nothing`, async () => {
+    Object.assign(ccx, { reads: [], denied: false, other: 0 });
+    const [title, open, generations, unknown] = CC_TEXT[language];
+    const { ctx, page } = await ownershipPage('/hq/creative-credits', viewport, { nextTheme, language });
+    await creditsPage(page).getByTestId('credits-wallet').first().waitFor({ timeout: 20000 });
+    assert.equal(await creditsPage(page).locator('h1').innerText(), title);
+    assert.equal(await creditsPage(page).getByTestId('credits-program').getAttribute('data-state'), 'INACTIVE');
+    assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 2);
+    await noOverflow(page, `credits-${nextTheme}-${language}-${name}`);
+    await axe(page, `credits-${nextTheme}-${language}-${name}`);
+    await shot(page, `credits-${nextTheme}-${language}-${name}`, true);
+    await creditsPage(page).getByRole('button', { name: open }).click();
+    const detail = creditsPage(page).getByTestId('credits-detail');
+    await detail.and(page.locator('[data-state="READY"]')).waitFor();
+    await detail.getByText(generations).click();
+    await detail.getByText(unknown, { exact: true }).waitFor();
+    await detail.scrollIntoViewIfNeeded();
+    await noOverflow(page, `credits-detail-${nextTheme}-${language}-${name}`);
+    await axe(page, `credits-detail-${nextTheme}-${language}-${name}`);
+    await shot(page, `credits-detail-${nextTheme}-${language}-${name}`, true);
+    assert.deepEqual(ccx.reads, ['/', `/schools/${ccNorth}`]);
+    assert.equal(ccx.other, 0, 'no write, key or command marker was sent');
+    await ctx.close();
+  });
+}
+await check('Creative Credits: a refused read shows nothing; a session end hides everything until shown again', async () => {
+  Object.assign(ccx, { reads: [], denied: true, other: 0 });
+  const { ctx, page } = await ownershipPage('/hq/creative-credits', { width: 1280, height: 900 });
+  await creditsPage(page).getByText('does not include creative credits').waitFor({ timeout: 20000 });
+  assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
+  ccx.denied = false;
+  await creditsPage(page).getByRole('button', { name: 'Refresh' }).click();
+  await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
+  await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo South' }).click();
+  await creditsPage(page).getByText('No wallet has been opened for this school yet.').waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
+  await creditsPage(page).getByText('Hidden because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
+  assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
+  assert.equal(ccx.other, 0);
   await ctx.close();
 });
 

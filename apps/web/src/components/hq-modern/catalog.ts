@@ -38,6 +38,7 @@ export const HQ_REVENUE = [
 export const HQ_AI = [
   { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
+  { path: '/hq/creative-credits', title: 'Creative Credits', icon: 'chart' },
   { path: '/hq/ai-safety', title: 'AI Safety', icon: 'check' },
   { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
 ] as const;
