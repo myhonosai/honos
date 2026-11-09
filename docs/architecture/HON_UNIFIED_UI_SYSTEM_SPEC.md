@@ -88,7 +88,7 @@ Mounted by `app/staff/layout.tsx` after `requireVerifiedWebSession()`, wrapping 
 - **HON panel** (U3): right side panel / mobile sheet.
 
 ### 5.2 Navigation catalog (`school-shell/catalog.ts`, closed, typed)
-Follows the owner blueprint (2026-11-06, section 9), which supersedes the reference image's flat 13-item rail. Each area owns existing routes only; the first route is where it lands, the rest appear as in-section tabs. Areas with no connected page yet (Referrals & Rewards, Connections) are **not** shown until one exists.
+Follows the owner blueprint (2026-11-06, section 9), which supersedes the reference image's flat 13-item rail. Each area owns existing routes only; the first route is where it lands, the rest appear as in-section tabs. Areas with no connected page yet (Connections) are **not** shown until one exists. Referrals & Rewards (after Marketing) lands on the Champions Club page.
 
 | Area | Routes it owns |
 |---|---|

@@ -221,6 +221,10 @@
       "title": "HON | Pause, cancel & refunds"
     },
     {
+      "path": "/staff/champions-club",
+      "title": "HON | Champions Club"
+    },
+    {
       "path": "/staff/billing/invoices",
       "title": "HON | Human Invoice Workbench"
     },
