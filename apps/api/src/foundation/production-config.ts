@@ -15,6 +15,18 @@ function databaseUser(url: string): string | undefined {
   try { return decodeURIComponent(new URL(url).username).split('.', 1)[0]; } catch { return undefined; }
 }
 
+const LISTEN_HOSTS = ['0.0.0.0', '127.0.0.1', '::1'] as const;
+/**
+ * Interface the API binds to. Unset keeps the historical all-interfaces default; a private
+ * workstation environment can pin loopback. Any other value is refused rather than guessed.
+ */
+export function apiListenHost(env: DatabaseEnvironment = process.env): (typeof LISTEN_HOSTS)[number] {
+  const host = env.HON_API_LISTEN_HOST;
+  if (host === undefined) return '0.0.0.0';
+  if ((LISTEN_HOSTS as readonly string[]).includes(host)) return host as (typeof LISTEN_HOSTS)[number];
+  throw new Error('API_LISTEN_HOST_INVALID');
+}
+
 /**
  * Startup gate for the API process. A production build (NODE_ENV=production) must declare which
  * deployment it is, so a mislabelled environment cannot silently run with development defaults.
@@ -35,6 +47,7 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
   }
 
   try { runtimePoolMax(env); } catch { failures.push('RUNTIME_POOL_MAX_INVALID'); }
+  try { apiListenHost(env); } catch { failures.push('API_LISTEN_HOST_INVALID'); }
 
   const runtimeUrl = env.HON_RUNTIME_DATABASE_URL;
   if (runtimeUrl) {
