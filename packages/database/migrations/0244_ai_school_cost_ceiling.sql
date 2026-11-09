@@ -8,8 +8,13 @@ BEGIN;
 --   HQ pause (reason AI_PAUSED_BY_HQ, so every existing closed reason list and screen stays valid). HQ sees the real
 --   level: NORMAL, WARNING_75, WARNING_90 or CEILING_REACHED.
 -- - The HQ owner may pause one school's AI (agent and creative) with a reason, and resume it.
--- - Checked inside the one shared decision hon.ai_spend_allowed (every begin, prepare and readiness path) for the
---   tenant's current school, and again in the reserve guard for the row's own school after the org budget lock.
+-- - Enforced against the row's own school, never only the session setting (SaaS school paths forbid
+--   app.hon_school_id): the agent begin guard and reserve guard (after the org budget lock), the B3 credit reservation
+--   guard and a new guard on creative wallet reservations (which every creative and studio path inserts). The shared
+--   3-argument hon.ai_spend_allowed also applies it for the tenant's current school when that is set (readiness, begins);
+--   the 4-argument form takes the school explicitly.
+-- - A school pause takes the organization's creative pause gate exclusively, so it waits for in-flight creative
+--   reservations (which hold the gate shared until commit) exactly like an organization pause.
 -- - The organization budget lock (0194) and the platform/organization HQ pause (0195) are unchanged and still first.
 
 CREATE FUNCTION hon.ai_school_default_ceiling_micros() RETURNS bigint LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT 15000000::bigint $$;
@@ -127,11 +132,43 @@ BEGIN
   RETURN hon.ai_access_state_decision(s.state, in_effect, hon.ai_trial_funding_available(p_org, p_at, p_class));
 END $$;
 
--- The shared decision: organization/platform first (0195), then the tenant's current school.
+-- The shared decision for an explicit school: organization/platform first (0195), then that school.
+CREATE FUNCTION hon.ai_spend_allowed(p_org uuid, p_school uuid, p_at timestamptz, p_class text) RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+BEGIN
+  RETURN coalesce(hon.ai_org_spend_allowed(p_org, p_at, p_class), hon.ai_school_spend_decision(p_org, p_school, p_at, p_class));
+END $$;
+
+-- The 0195 signature: the tenant's current school when the session names one. Guards below never rely on it.
 CREATE OR REPLACE FUNCTION hon.ai_spend_allowed(p_org uuid, p_at timestamptz, p_class text) RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 BEGIN
-  RETURN coalesce(hon.ai_org_spend_allowed(p_org, p_at, p_class), hon.ai_school_spend_decision(p_org, hon.current_school_id(), p_at, p_class));
+  RETURN hon.ai_spend_allowed(p_org, hon.current_school_id(), p_at, p_class);
 END $$;
+
+-- Agent begin guard (0195 body): the row's own school, whatever the session says.
+CREATE OR REPLACE FUNCTION hon.ai_spend_start_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE why text := hon.ai_spend_allowed(NEW.organization_id, NEW.school_id, clock_timestamp(), 'AGENT_INFERENCE');
+BEGIN
+  IF why IS NOT NULL THEN RAISE EXCEPTION '%', why USING ERRCODE='42501'; END IF;
+  RETURN NEW;
+END $$;
+
+-- B3 credit reservations (0195 body): the row's own school.
+CREATE OR REPLACE FUNCTION hon.ai_spend_b3_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE why text := hon.ai_spend_allowed(NEW.organization_id, NEW.school_id, clock_timestamp(), 'CREATIVE_MEDIA');
+BEGIN
+  IF why IS NOT NULL THEN RAISE EXCEPTION '%', why USING ERRCODE='42501'; END IF;
+  RETURN NEW;
+END $$;
+
+-- Creative wallet reservations (0202, used by the studio 0216): a paused school cannot reserve. Runs inside
+-- reserve_saas_creative_credits after its pause gate and wallet lock, with the same refusal shape as its own S4 check.
+CREATE FUNCTION hon.ai_school_creative_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE why text := hon.ai_school_spend_decision(NEW.organization_id, NEW.school_id, clock_timestamp(), 'CREATIVE_MEDIA');
+BEGIN
+  IF why IS NOT NULL THEN RAISE EXCEPTION '%', 'SAAS_CREATIVE_' || why USING ERRCODE='23514'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER ai_school_creative_guard BEFORE INSERT ON hon.saas_creative_reservations FOR EACH ROW EXECUTE FUNCTION hon.ai_school_creative_guard();
 
 -- Reserve guard (0195 body): organization decision before the budget lock; the row's own school after the lock, so
 -- concurrent prepares of one organization see each other's committed holds.
@@ -176,6 +213,8 @@ BEGIN
   IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('ai.school-cost.key:' || p_key::text, 0));
   PERFORM pg_advisory_xact_lock(hashtextextended('ai.school-cost:' || v_school::text, 0));
+  -- The creative pause gate (0202), exclusively: in-flight creative reservations of this organization finish first.
+  PERFORM pg_advisory_xact_lock(hashtextextended('ai.pause:' || v_org::text || ':CREATIVE_MEDIA', 0));
   IF hon.require_saas_hq_actor(p_subject, true) IS DISTINCT FROM actor THEN RAISE EXCEPTION 'SAAS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   SELECT * INTO cmd FROM hon.ai_school_cost_limit_commands WHERE command_key = p_key;
   IF FOUND THEN
@@ -225,6 +264,8 @@ DO $$ DECLARE f regprocedure; r text; BEGIN
     'hon.guard_ai_school_cost_limits()'::regprocedure, 'hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)'::regprocedure,
     'hon.ai_school_cost_level(bigint,bigint)'::regprocedure, 'hon.ai_school_spend_decision(uuid,uuid,timestamptz,text)'::regprocedure,
     'hon.ai_org_spend_allowed(uuid,timestamptz,text)'::regprocedure, 'hon.ai_spend_allowed(uuid,timestamptz,text)'::regprocedure,
+    'hon.ai_spend_allowed(uuid,uuid,timestamptz,text)'::regprocedure, 'hon.ai_spend_start_guard()'::regprocedure,
+    'hon.ai_spend_b3_guard()'::regprocedure, 'hon.ai_school_creative_guard()'::regprocedure,
     'hon.command_ai_school_cost_limit(text,jsonb,uuid)'::regprocedure, 'hon.read_ai_school_cost_limits_from_hq(text)'::regprocedure] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP

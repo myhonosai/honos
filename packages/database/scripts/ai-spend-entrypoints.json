@@ -360,6 +360,7 @@
       "zz_ai_hold_origin"
     ],
     "saas_creative_reservations": [
+      "ai_school_creative_guard",
       "saas_guarded",
       "saas_no_truncate"
     ],

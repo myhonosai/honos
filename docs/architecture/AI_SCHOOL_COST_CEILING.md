@@ -25,8 +25,17 @@ cannot pause one school's AI without pausing the whole organization.
    decision for `hon.current_school_id()`. A paused school is refused for every spend class except `HQ_INTERNAL`. At or over
    the ceiling, `AGENT_INFERENCE` is refused. Both refusals reuse `AI_PAUSED_BY_HQ`, so the closed reason enums, HON's reply
    path and the team readiness screen stay valid. Other schools in the same organization are not affected.
-5. **Reserve guard.** `ai_spend_reserve_guard` re-checks the school decision for `NEW.school_id` after the org decision,
-   budget lock and credit check, so a reservation cannot pass the ceiling between planning and reserving.
+5. **The row's own school decides.** SaaS school paths forbid `app.hon_school_id`, so enforcement never relies on the
+   session alone. `hon.ai_spend_allowed(org, school, at, class)` takes the school explicitly, and the 0195 three-argument
+   form uses `hon.current_school_id()` when the session names one. The guards use the row's `school_id`:
+   - agent begin guard (`ai_spend_start_guard`, every agent invocation table);
+   - agent reserve guard, after the org decision, budget lock and credit check, so a reservation cannot pass the ceiling
+     between planning and reserving;
+   - B3 credit reservations (`ai_spend_b3_guard`);
+   - creative wallet reservations (new `ai_school_creative_guard` on `saas_creative_reservations`, which every creative
+     and studio path inserts), refused as `SAAS_CREATIVE_AI_PAUSED_BY_HQ` like the wallet's own S4 check.
+   A school pause takes the organization's creative pause gate exclusively, so it waits for in-flight creative
+   reservations, exactly like an organization pause.
 6. **HQ command** `hon.command_ai_school_cost_limit(subject, {schoolId, ceilingMicros, paused, reason, expectedVersion}, key)`:
    human HQ owner only (`require_saas_hq_actor(..., true)`); reason 10 to 500 characters; optimistic version
    (`SAAS_VERSION_CONFLICT`); unknown school `AI_SCHOOL_NOT_FOUND`; idempotent replay, and a reused key with a different
@@ -42,6 +51,13 @@ cannot pause one school's AI without pausing the whole organization.
 
 - The plan's "short answers continue at 100%" carve-out needs a daily cap and reduced-AI mode; it lands with 0245.
 - Alerts are levels on the HQ read for now. A notification at 75% and 90% and the HQ screen are follow-up slices.
+
+## Known limits
+
+- The ceiling check runs before a new hold is added, so one call can take a school past its ceiling by at most that
+  call's plan maximum (the per-call ceiling, $0.08 today). The next call is refused.
+- The HQ read returns the 500 highest-use schools; lower-use schools beyond that are left out of the list.
+- A ceiling refusal shows the existing "paused by HQ" reason to the school. Distinct wording is an owner copy decision.
 
 ## Deployment note
 

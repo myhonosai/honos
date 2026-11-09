@@ -2875,8 +2875,21 @@ try {
   s = await status(); assert.deepEqual([s.paused, s.reason, s.version], [true, 'Synthetic school pause for review', v]);
   assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
   assert.deepEqual((await row("SELECT set_config('app.hon_school_id',$2,true) x, hon.ai_spend_allowed($1,clock_timestamp(),'CREATIVE_MEDIA') c, hon.ai_spend_allowed($1,clock_timestamp(),'HQ_INTERNAL') h", [o.id, o.school])), { x: o.school, c: 'AI_PAUSED_BY_HQ', h: null });
+  // The row's own school decides, with no session school (SaaS school paths forbid app.hon_school_id): the explicit
+  // decision, the agent begin guard, the B3 credit reservation guard and the creative wallet reservation guard.
+  const ownSchool = async () => {
+    const d = await row("SELECT coalesce(current_setting('app.hon_school_id',true),'') x, hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),'CREATIVE_MEDIA') c, hon.ai_spend_allowed($1,$2::uuid,clock_timestamp(),'HQ_INTERNAL') h", [o.id, o.school]);
+    const out = [d.x, d.c, d.h];
+    for (const table of ['marketing_ai_invocations', 'saas_credit_reservations', 'saas_creative_reservations'])
+      out.push(await errCode(admin.query(`INSERT INTO hon.${table}(organization_id, school_id) VALUES ($1,$2)`, [o.id, o.school])));
+    return out;
+  };
+  assert.deepEqual(await ownSchool(), ['', 'AI_PAUSED_BY_HQ', null, '42501:AI_PAUSED_BY_HQ', '42501:AI_PAUSED_BY_HQ', '23514:SAAS_CREATIVE_AI_PAUSED_BY_HQ']);
   v = (await command(limit({ paused: false, expectedVersion: v }))).version;
   assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  const resumed = await ownSchool();
+  assert.deepEqual(resumed.slice(0, 3), ['', null, null]);
+  for (const e of resumed.slice(3)) assert.doesNotMatch(e, /PAUSED_BY_HQ/, 'a resumed school passes the guards (the bare row then fails its own constraints)');
   // 8. The command: HQ owner only, exact shape, versioned, idempotent; its log and the limits are immutable.
   assert.equal(await errCode(command(limit({ expectedVersion: v }), K(), o.subject)), '42501:SAAS_FORBIDDEN');
   assert.equal(await errCode(command(limit({ expectedVersion: v - 1 }))), '40001:SAAS_VERSION_CONFLICT');
