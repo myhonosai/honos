@@ -219,6 +219,7 @@
     "0224_membership_pause_cancel_refund.sql": "f3bcbeae379890b4fb8e0418b9bffcb2933edc3db7453ed5bc48f972c4e66ae2",
     "0225_hq_school_detail.sql": "f0c4ae400b1785b0df8793bdefe477d3624a27bb86dcfbf95db3a12e3d9bcb79",
     "0228_hon_group_summary.sql": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db",
-    "0229_claire_business_performance.sql": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac"
+    "0229_claire_business_performance.sql": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac",
+    "0238_hq_usage_claire_attribution.sql": "221c4c27d5ab7c6c4e0f151a62d7b0d63382c1bfe920e6d8e1c1fd6ecc33c3fb"
   }
 }

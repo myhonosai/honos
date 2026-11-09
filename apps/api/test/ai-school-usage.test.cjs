@@ -30,6 +30,10 @@ const report = (patch = {}) => { const o = U(); return { from: T, to: '2026-11-0
 test('S4-e contracts: per-school totals add up per class and per agent; credits never cross classes; estimates never count as provider charges', () => {
   assert.equal(contracts.validateAiSchoolUsageReport(report()).schools.length, 1);
   assert.equal(contracts.validateAiSchoolUsageReport(report({ schools: [], organizations: [] })).schools.length, 0);
+  // 0238: Claire's analysis calls are their own agent, BUSINESS_PERFORMANCE, beside HON_REPLY.
+  const withClaire = school(U(), { byClass: { AGENT_INFERENCE: { ...amt(7, 6000, 3, 900, 1), byAgent: { BUSINESS_PERFORMANCE: amt(4, 4000, 2, 900, 1), HON_REPLY: amt(3, 2000, 1) } },
+    CREATIVE_MEDIA: { ...amt(50, 3000, 1), byAgent: null } } });
+  assert.deepEqual(Object.keys(contracts.validateAiSchoolUsageReport(report({ schools: [withClaire], organizations: [org(withClaire.organizationId)] })).schools[0].byClass.AGENT_INFERENCE.byAgent).sort(), ['BUSINESS_PERFORMANCE', 'HON_REPLY']);
   const o = U();
   // Manus delta review P2: a school with only unresolved calls is listed with every amount zero and no class; it must
   // carry at least one unresolved call, and no amount may appear without a class (no invented cost).
