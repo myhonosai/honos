@@ -42,6 +42,9 @@ them. So HON Standard and HON Detailed, Claire, Marcus, Chad and Kai all use the
 6. **HQ can configure it.** The HQ control plane write and the shared validators accept agent keys `hon` and `kai` and the
    four new categories. Nothing else about the HQ write changes (HQ owner only, versions, audit).
 
+Claire's ANALYZE route is live: 0229 binds `claire` to `reporting.view` in `hon.ai_agent_capability_permission`, and AI-0
+INV-32 step 3 plans a real Claire turn through `BUSINESS_PERFORMANCE`.
+
 ## Not changed
 
 Spend authority (access decision, org budget lock, evidence, UNKNOWN handling), the per-mode token budgets and $0.08 ceiling,
