@@ -94,6 +94,7 @@ export const SAAS_COMMANDS = {
   closeExpiredAccessExceptions: 'saas-access-exception-close',
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
   aiSpendPause: 'ai-spend-pause',
+  aiSchoolCostLimit: 'ai-school-cost-limit',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   setCreativeProgram: 'saas-creative-program',

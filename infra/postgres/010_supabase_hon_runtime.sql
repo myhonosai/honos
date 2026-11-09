@@ -2423,3 +2423,17 @@ DO $$ DECLARE r text; BEGIN
     EXECUTE 'REVOKE ALL ON FUNCTION hon.ai_route_task_category(text,text) FROM '||quote_ident(r);
   END LOOP;
 END $$;
+
+-- R2 0244 per-school AI cost ceiling: only the HQ command and read reach the runtime; the decision helpers are internal.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.command_ai_school_cost_limit(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply R2 migration 0244 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['ai_school_spend_decision(uuid,uuid,timestamptz,text)','ai_school_committed_cost_micros(uuid,uuid,timestamptz)',
+    'ai_school_cost_level(bigint,bigint)','ai_org_spend_allowed(uuid,timestamptz,text)','ai_school_default_ceiling_micros()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.command_ai_school_cost_limit(text,jsonb,uuid), hon.read_ai_school_cost_limits_from_hq(text) TO hon_runtime;
+  END IF;
+END $$;

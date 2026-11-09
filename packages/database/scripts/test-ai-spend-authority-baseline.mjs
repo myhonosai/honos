@@ -2802,6 +2802,105 @@ try {
   pass('INV-32', 'R1: the planner routes by a code-owned task category (hon Standard/Detailed, Claire business performance, Marcus, Chad, Kai) through the single active effective HQ task profile on the school policy: its default, else the first eligible fallback (never advanced), each also inside the profile cost ceiling, provider list and privacy controls; no profile (or an inactive/expired/future one) keeps the legacy policy order; a profile with no eligible candidate or two active profiles refuse the route with no reservation or call; the profile and selection are recorded immutably on the plan; the HQ owner writes HON task profiles through the control plane');
   }
 
+  // ---- INV-33 (R2, 0244): per-school internal AI cost ceiling, HQ levels and single-school pause ----
+  {
+  const o = await makeOrg('inv-33'), other = await makeOrg('inv-33-other');
+  const scopeOf = (x) => ({ organizationId: x.id, schoolId: x.school, principalId: x.principal, externalSubject: x.subject });
+  const conversations = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const convs = new Map();
+  const ask = async (x = o) => {
+    if (!convs.has(x.id)) convs.set(x.id, (await conversations.create(scopeOf(x), { title: 'Cost' }, K())).id);
+    const turns = async () => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [convs.get(x.id)])).n;
+    const n = await turns();
+    const r = await settle(conversations.sendTurn(scopeOf(x), convs.get(x.id), { text: `Cost question ${K()}`, delegation: null }, K()));
+    // A refusal at the turn's start records nothing (the existing S4 begin behavior for an HQ pause).
+    if (r.error?.getResponse?.().code === 'HON_AI_SPEND_REFUSED') { assert.equal(await turns(), n, 'refused before any turn'); return { refused: r.error.getResponse().reason }; }
+    if (r.error) throw r.error;
+    return row('SELECT status, reason, reserved_credits::int AS reserved FROM hon.hon_reply_invocations WHERE turn_id=$1', [r.value.turnId]);
+  };
+  const committedCost = async (x = o) => Number((await row('SELECT hon.ai_school_committed_cost_micros($1,$2,clock_timestamp()) n', [x.id, x.school])).n);
+  const cmdSql = 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) r';
+  const limit = (patch = {}, x = o) => ({ schoolId: x.school, ceilingMicros: 15000000, paused: false, reason: 'Synthetic HQ cost limit change', expectedVersion: 0, ...patch });
+  const command = async (input, key = K(), subject = hq.subject) => (await admin.query(cmdSql, [subject, JSON.stringify(input), key])).rows[0].r;
+  const status = async (x = o) => (await row('SELECT hon.read_ai_school_cost_limits_from_hq($1) r', [hq.subject])).r.schools.find((s) => s.schoolId === x.school);
+  const errCode = async (p) => { const r = await settle(p); return r.error ? `${r.error.code}:${r.error.message}` : 'OK'; };
+  // 1. Default: $15 ceiling, NORMAL, no record; a question completes and its verified cost (900) is counted.
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  assert.equal(await committedCost(), 900);
+  let s = await status();
+  assert.deepEqual([s.ceilingMicros, s.defaultCeiling, s.paused, s.version, s.recordedCostMicros, s.committedCostMicros, s.level, s.usedBasisPoints], [15000000, true, false, 0, 900, 900, 'NORMAL', 0]);
+  // 2. Levels: 75%, 90%, 100% of the ceiling (pure and as HQ reads them).
+  assert.deepEqual((await rows('SELECT hon.ai_school_cost_level(c,1000) l FROM unnest(ARRAY[0,749,750,899,900,999,1000,5000]::bigint[]) c')).map((r) => r.l),
+    ['NORMAL', 'NORMAL', 'WARNING_75', 'WARNING_75', 'WARNING_90', 'WARNING_90', 'CEILING_REACHED', 'CEILING_REACHED']);
+  let v = (await command(limit({ ceilingMicros: 1200 }))).version;
+  s = await status(); assert.deepEqual([s.level, s.usedBasisPoints, s.defaultCeiling, s.version], ['WARNING_75', 7500, false, 1]);
+  v = (await command(limit({ ceilingMicros: 1000, expectedVersion: v }))).version;
+  assert.equal((await status()).level, 'WARNING_90');
+  // 3. Under the ceiling a question still runs; once the verified cost reaches it the next one is refused before any
+  //    reservation or provider call (reason AI_PAUSED_BY_HQ), while another organization's school is unaffected.
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  assert.equal(await committedCost(), 1800);
+  assert.equal((await status()).level, 'CEILING_REACHED');
+  let calls = fakes.hon.calls;
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.equal(fakes.hon.calls, calls, 'no provider call at the ceiling');
+  const marcusRefusal = await settle(agents.marcus.service.submit(context(o), agents.marcus.input(o)));
+  assert.equal(marcusRefusal.error?.getStatus?.(), 403, 'specialists are refused at begin too');
+  assert.match(JSON.stringify(marcusRefusal.error.getResponse()), /AI_PAUSED_BY_HQ|FORBIDDEN|REFUSED/, JSON.stringify(marcusRefusal.error.getResponse()));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.marketing_ai_invocations WHERE organization_id=$1', [o.id])).n, 0, 'nothing recorded for the refused request');
+  assert.deepEqual(await ask(other), { status: 'COMPLETED', reason: null, reserved: 0 });
+  const readiness = await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scopeOf(o));
+  assert.match(JSON.stringify(readiness), /AI_PAUSED_BY_HQ/, 'readiness reports the refusal');
+  // 4. Raising the ceiling restores AI at once.
+  v = (await command(limit({ ceilingMicros: 15000000, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  // 5. In-flight holds count at their plan maximum (80,000) until they are recorded.
+  fakes.hon.mode = 'HOLD';
+  const before = await committedCost();
+  const pending = settle(ask());
+  for (const end = Date.now() + 10000; (await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n < 1; await sleep(20)) {
+    if (Date.now() > end) throw new Error('INV-33: hold never started');
+  }
+  assert.equal(await committedCost(), before + 80000, 'a hold counts at its plan maximum');
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  assert.equal((await pending).value.status, 'COMPLETED');
+  assert.equal(await committedCost(), before + 900);
+  // 6. Defense in depth: the reserve guard refuses a hold for a school at its ceiling even outside the prepare path.
+  v = (await command(limit({ ceilingMicros: 0, expectedVersion: v }))).version;
+  const raw = await row("SELECT id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='COMPLETED' LIMIT 1", [o.id]);
+  assert.match(await errCode(admin.query('UPDATE hon.hon_reply_invocations SET reserved_credits=reserved_credits+1 WHERE id=$1', [raw.id])), /AI_PAUSED_BY_HQ|immutable|IMMUTABLE/);
+  // 7. Single-school pause (agent and creative classes) and resume, with the reason kept.
+  v = (await command(limit({ ceilingMicros: 15000000, paused: true, reason: 'Synthetic school pause for review', expectedVersion: v }))).version;
+  s = await status(); assert.deepEqual([s.paused, s.reason, s.version], [true, 'Synthetic school pause for review', v]);
+  assert.deepEqual(await ask(), { refused: 'AI_PAUSED_BY_HQ' });
+  assert.deepEqual((await row("SELECT set_config('app.hon_school_id',$2,true) x, hon.ai_spend_allowed($1,clock_timestamp(),'CREATIVE_MEDIA') c, hon.ai_spend_allowed($1,clock_timestamp(),'HQ_INTERNAL') h", [o.id, o.school])), { x: o.school, c: 'AI_PAUSED_BY_HQ', h: null });
+  v = (await command(limit({ paused: false, expectedVersion: v }))).version;
+  assert.deepEqual(await ask(), { status: 'COMPLETED', reason: null, reserved: 0 });
+  // 8. The command: HQ owner only, exact shape, versioned, idempotent; its log and the limits are immutable.
+  assert.equal(await errCode(command(limit({ expectedVersion: v }), K(), o.subject)), '42501:SAAS_FORBIDDEN');
+  assert.equal(await errCode(command(limit({ expectedVersion: v - 1 }))), '40001:SAAS_VERSION_CONFLICT');
+  for (const bad of [{ reason: 'short' }, { ceilingMicros: -1 }, { ceilingMicros: 1000000001 }, { ceilingMicros: 1.5 }, { paused: 'no' }, { schoolId: 'school' }, { organizationId: o.id }])
+    assert.match(await errCode(command(limit({ expectedVersion: v, ...bad }))), /^22023:/, JSON.stringify(bad));
+  assert.equal(await errCode(command(limit({ schoolId: K(), expectedVersion: 0 }))), 'P0002:AI_SCHOOL_NOT_FOUND');
+  const key = K(), input = limit({ ceilingMicros: 14000000, expectedVersion: v });
+  const first = await command(input, key);
+  assert.deepEqual(await command(input, key), { ...first, replayed: true });
+  assert.equal(await errCode(command({ ...input, ceilingMicros: 13000000 }, key)), '23505:AI_SCHOOL_COST_LIMIT_KEY_REUSED');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_school_cost_limit_commands WHERE school_id=$1', [o.school])).n, 7);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_school_cost_limit_commands WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('DELETE FROM hon.ai_school_cost_limits WHERE school_id=$1', [o.school])), /IMMUTABLE/);
+  assert.match(await errCode(admin.query('UPDATE hon.ai_school_cost_limits SET paused=true WHERE school_id=$1', [o.school])), /IMMUTABLE/, 'only the command bumps the version');
+  // 9. Only the two HQ entry points reach the runtime; the helpers and tables do not.
+  const acl = await rows(`SELECT p.oid::regprocedure::text f, has_function_privilege($1,p.oid,'EXECUTE') x FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace
+    AND p.proname IN ('command_ai_school_cost_limit','read_ai_school_cost_limits_from_hq','ai_school_spend_decision','ai_school_committed_cost_micros','ai_org_spend_allowed','ai_school_cost_level') ORDER BY 1`, [runtimeRole]);
+  assert.deepEqual(acl.map((a) => `${a.f}=${a.x}`), ['hon.ai_org_spend_allowed(uuid,timestamp with time zone,text)=false', 'hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)=false',
+    'hon.ai_school_cost_level(bigint,bigint)=false', 'hon.ai_school_spend_decision(uuid,uuid,timestamp with time zone,text)=false',
+    'hon.command_ai_school_cost_limit(text,jsonb,uuid)=true', 'hon.read_ai_school_cost_limits_from_hq(text)=true']);
+  assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_school_cost_limits','SELECT') OR has_table_privilege($1,'hon.ai_school_cost_limit_commands','SELECT') x", [runtimeRole])).x, false);
+  pass('INV-33', 'R2: each school has an internal monthly agent-AI cost ceiling ($15 default, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
+  }
+
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
   // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter

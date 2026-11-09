@@ -77,6 +77,7 @@
   ],
   "spendReferences": [
     "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
+    "hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)",
     "hon.ai_spend_reserve_guard()",
     "hon.ai_stamp_hold_origin()",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
@@ -96,6 +97,7 @@
     "hon.prepare_hon_reply(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.read_ai_school_cost_limits_from_hq(text)",
     "hon.read_ai_school_usage_from_hq(text,timestamp with time zone,timestamp with time zone)",
     "hon.read_ai_unknown_invocations_from_hq(text)",
     "hon.read_chad_follow_up_invocation(text,uuid)",
