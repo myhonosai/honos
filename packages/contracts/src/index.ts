@@ -1045,3 +1045,4 @@ export * from './membership-pauses.js';
 export * from './hq-support.js';
 export * from './student-imports.js';
 export * from './class-series.js';
+export * from './tuition-payments.js';

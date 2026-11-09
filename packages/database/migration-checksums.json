@@ -225,6 +225,7 @@
     "0231_membership_pause_rolling_year.sql": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc",
     "0232_hq_support_cases.sql": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf",
     "0236_crm_school_clock.sql": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213",
-    "0239_recurring_class_series.sql": "13ff43e331e0019b8cd0fc2cbf485fce84a79c2cba89fa177f46b858c50a9b95"
+    "0239_recurring_class_series.sql": "13ff43e331e0019b8cd0fc2cbf485fce84a79c2cba89fa177f46b858c50a9b95",
+    "0240_tuition_payment_records.sql": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233"
   }
 }

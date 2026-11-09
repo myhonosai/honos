@@ -229,6 +229,10 @@
       "title": "HON | Pause, cancel & refunds"
     },
     {
+      "path": "/staff/billing/receivables",
+      "title": "HON | Tuition balances"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },

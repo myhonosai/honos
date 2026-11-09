@@ -151,6 +151,7 @@ const expectedRlsTables = [
   'student_import_requests',
   'class_series',
   'class_series_occurrences',
+  'invoice_payment_records',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',

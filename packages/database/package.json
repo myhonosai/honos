@@ -157,6 +157,7 @@
     "db:test-membership-pause": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-pause-integrity.mjs",
     "db:test-student-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-student-import-integrity.mjs",
     "db:test-class-series": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-series-integrity.mjs",
+    "db:test-tuition-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-tuition-payment-integrity.mjs",
     "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs"
   },
   "dependencies": {
