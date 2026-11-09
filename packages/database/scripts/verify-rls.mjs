@@ -149,6 +149,7 @@ const expectedRlsTables = [
   'student_import_batches',
   'student_import_rows',
   'student_import_requests',
+  'invoice_payment_records',
   'crm_leads',
   'crm_lead_attributions',
   'crm_pipeline_stages',
