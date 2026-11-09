@@ -207,7 +207,7 @@ it('is read-only without edit access and offers no save', () => {
 it('explains why an address with active consent cannot be changed here', () => {
   const html = view({ record: { state: 'READY', record: rec({ consents: { EMAIL: 'OPTED_IN', SMS: 'OPTED_OUT' } }) } });
   expect(html).toContain('This person agreed to email');
-  expect(html).toContain('Recording an opt-out is not on this screen yet');
+  expect(html).toContain('Use Contact consent below');
   expect(html).toContain('Opted out');
 });
 

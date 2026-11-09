@@ -9,6 +9,8 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { PersonRecordError, peopleApi, sameEmail, type PeopleApi } from './http';
 import { attemptOutcome, type ListState, type RecordState, type SaveOutcome } from './model';
 import { PeopleView, type BirthDraft, type ContactDraft } from './view';
+import { PersonConsents } from './consents';
+import { consentApi, type ConsentApi } from './consent-http';
 
 /**
  * A save whose outcome is not known yet: the exact request and key, in memory only, so "Try again" replays it.
@@ -47,7 +49,7 @@ export function birthDateInput(schoolId: string, record: PersonRecord, draft: Bi
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi }: { api?: PeopleApi }): React.ReactElement {
+export function People({ api = peopleApi, consents = consentApi }: { api?: PeopleApi; consents?: ConsentApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -167,11 +169,18 @@ export function People({ api = peopleApi }: { api?: PeopleApi }): React.ReactEle
   const onTryAgain = useCallback(() => { void send(); }, [send]);
   const onSearch = useCallback((value: string) => { setQuery(value.trim()); setListRefresh(n => n + 1); }, []);
   const onReload = useCallback(() => setRecordRefresh(value => value + 1), []);
+  // A recorded consent changes only that channel's summary, taken from the server's answer, so the contact form's consent rule is current.
+  const onConsentRecorded = useCallback((channel: 'EMAIL' | 'SMS', status: 'OPTED_IN' | 'OPTED_OUT') => {
+    setRecord(prior => prior.state === 'READY' ? { state: 'READY', record: { ...prior.record, consents: { ...prior.record.consents, [channel]: status } } } : prior);
+  }, []);
+  const consentSlot = useCallback((r: PersonRecord) => selection ? <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
+    scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      onSearch={onSearch} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard}/>
+      onSearch={onSearch} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }

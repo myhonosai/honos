@@ -17,6 +17,8 @@ export type PeopleViewProps = Readonly<{
   onSearch?: ((query: string) => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;
   onTryAgain?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
+  /** The contact consent card for the open person (its own reads and commands); without it the saved summary is shown. */
+  consentSlot?: ((record: PersonRecord) => React.ReactNode) | undefined;
 }>;
 
 const FIELD: Record<string, PeopleKey> = { givenName: 'givenNameField', familyName: 'familyNameField', email: 'emailField', phoneE164: 'phoneE164Field' };
@@ -99,6 +101,7 @@ function RecordPanel(props: PeopleViewProps & { t: T }) {
   const r = record.record;
   return <>
     <ContactCard {...props} r={r}/>
+    {props.consentSlot ? props.consentSlot(r) : null}
     {r.student ? <BirthCard {...props} r={r} student={r.student}/> : null}
   </>;
 }
@@ -145,9 +148,9 @@ function ContactCard(props: PeopleViewProps & { t: T; r: PersonRecord }) {
         <input id={`${base}-phone`} name="phone" type="tel" inputMode="tel" defaultValue={r.phoneE164 ?? ''} maxLength={16} autoComplete="off" aria-describedby={`${base}-phone-help`}/>
         <small id={`${base}-phone-help`} className={styles.meta}>{consent('SMS') ? t('consentLocked', { channel: t('SMS').toLowerCase() }) : t('phoneHelp')}</small>
       </fieldset>
-      <dl className={styles.consents} aria-label={t('consentTitle')}>
+      {props.consentSlot ? null : <dl className={styles.consents} aria-label={t('consentTitle')}>
         {(['EMAIL', 'SMS'] as const).map(c => <div key={c}><dt>{t(c)}</dt><dd><span className={styles.status} data-tone={r.consents[c] === 'OPTED_IN' ? 'ready' : 'planned'}>{t(r.consents[c])}</span></dd></div>)}
-      </dl>
+      </dl>}
       {editable ? <div className={styles.actions}><button type="submit" className={styles.primary} disabled={locked}>{t('save')}</button></div> : null}
     </form>
     <Outcome props={props} command="contact"/>
