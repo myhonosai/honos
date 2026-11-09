@@ -8,8 +8,8 @@ BEGIN;
 --   * One locked price per binding (owner answer 4a): every qualifying payment must equal the accepted schedule's single
 --     price. Schedules with an introductory phase are refused, so the expected amount never depends on a paid-period count.
 --   * Fail-closed lifecycle: problems park the binding in NEEDS_REVIEW (resolution arrives in piece 3); provider-confirmed
---     failures and unpaid expiry are terminal and release the organization. Expiry needs an owner-recorded unpaid window;
---     the policy row is deliberately not seeded.
+--     failures, 7-day unpaid expiry and a no-cost purchaser cancel before first payment are terminal and release the
+--     organization (owner OD-4, seeded below as the immutable lifecycle policy).
 -- Never opens checkout, collects money, executes refunds, changes entitlements or access, or touches A2/B1/legacy B5 facts.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
@@ -22,7 +22,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Owner-recorded lifecycle values. No row is seeded: a missing row or NULL value refuses the dependent transition.
+-- Owner-recorded lifecycle values. One row (OD-4) is seeded; a missing row or NULL value refuses the dependent transition.
 CREATE TABLE hon.saas_billing_lifecycle_policy (
   policy_id smallint PRIMARY KEY CHECK (policy_id=1),
   version integer NOT NULL CHECK (version>0),
