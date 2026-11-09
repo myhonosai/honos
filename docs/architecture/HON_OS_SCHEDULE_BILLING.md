@@ -11,18 +11,20 @@
 | Five pieces, in order, each merged with owner approval | Piece 1 = schedule tracking only. Access hook is a stub; HQ queue, legacy founder/lifetime stop, founder counting and screens come later. |
 | Founder pricing recurs while subscribed ($199.20/mo or $1,494/yr), standard $249/$2,097 after cancel/lapse | One locked price per binding: `saas_schedule_requirements` refuses intro periods or initial ≠ renewal (`SAAS_SCHEDULE_PRICE_NOT_LOCKED`) and exposes `lockedPriceMinor`, `priceRule = LOCKED_WHILE_SUBSCRIBED`. No release/step-up path exists. Founder generations stay refused by 0189 until piece 4 adds founder terms V2 and the 50-spot allocation. |
 | Failed access switch-on: keep payment, HQ reviews access, no auto-refund | Billing and access are separate outcomes. See "First payment". |
+| OD-4: unpaid sign-up expires after 7 days; school may cancel before first payment at no cost (2026-11-09T04:20Z) | `saas_billing_lifecycle_policy` ships version 1 with `unpaid_window_minutes = 10080` and an approval reference to the owner decision (immutable). School command `cancel_saas_schedule_binding` (below). |
 | 7-day grace, then read-only suspension | Not changed here: the existing B6A/CRM suspension rules (0192) stay the authority. `invoice.payment_failed` is stored as `ATTEMPT_FAILED` and never suspends by itself. |
 
 ## Binding lifecycle
 
-Statuses: `PENDING_PROVIDER_BINDING`, `BOUND_TEST_ONLY`, `ACTIVE`, `NEEDS_REVIEW`, `EXPIRED_UNPAID`, `VOIDED_PROVIDER_FAILED`. The first four are live and block a second lifecycle for the organization (with the existing checkout, subscription, `PAYMENT_ACTIVE` and access-exception conflicts). The last two are terminal and release the organization.
+Statuses: `PENDING_PROVIDER_BINDING`, `BOUND_TEST_ONLY`, `ACTIVE`, `NEEDS_REVIEW`, `EXPIRED_UNPAID`, `VOIDED_PROVIDER_FAILED`, `CANCELLED_BEFORE_PAYMENT`. The first four are live and block a second lifecycle for the organization (with the existing checkout, subscription, `PAYMENT_ACTIVE` and access-exception conflicts). The last three are terminal and release the organization.
 
 Every change goes through `saas_schedule_binding_transition`, which bumps `version` by one and writes the claim, audit row and `saas.schedule_binding.transitioned` outbox event. The update trigger allows only a closed table of (from, to, columns) transitions; a deferred constraint trigger refuses a commit whose latest version has no matching audit row.
 
 - **Start** (school, `billing.hon.purchase`): rederives the immutable B1 generation, opens a TEST-only binding through the injected deterministic provider. Production default stays `UnconfiguredSubscriptionScheduleProvider`.
 - **Observation**: provider confirms the exact references and terms → `BOUND_TEST_ONLY`.
 - **Reconciliation worker** (`record_saas_schedule_binding_reconciliation`): for a pending binding, provider `NOT_FOUND` → `VOIDED_PROVIDER_FAILED`; `TERMS_MISMATCH` → `NEEDS_REVIEW`; unknown → 503, nothing written.
-- **Expiry worker** (`record_saas_schedule_binding_expiry`): `BOUND_TEST_ONLY` → `EXPIRED_UNPAID` only when an owner-recorded `saas_billing_lifecycle_policy` row exists, its `unpaid_window_minutes` has elapsed since `bound_at`, the provider confirms `CANCELLED_NOTHING_COLLECTED`, and no non-failure provider event is stored. **The policy table ships empty**, so expiry fails closed (`SAAS_BILLING_POLICY_UNAVAILABLE`) until the owner decides OD-4.
+- **Expiry worker** (`record_saas_schedule_binding_expiry`): `BOUND_TEST_ONLY` → `EXPIRED_UNPAID` only when the policy's 7-day window (10080 minutes) has elapsed since `bound_at`, the provider confirms `CANCELLED_NOTHING_COLLECTED`, and no non-failure provider event is stored. A missing policy row fails closed (`SAAS_BILLING_POLICY_UNAVAILABLE`).
+- **Cancel before first payment** (school, `billing.hon.purchase`, `POST /v1/schools/:schoolId/hon-os-subscription-schedule-bindings/:bindingId/cancel`, human command `saas-schedule-binding-cancel`): the API reads the binding through the exact-school read, asks the provider to cancel, and records only a confirmed `CANCELLED_NOTHING_COLLECTED`. The database rechecks purchaser authority after the organization lock and refuses (`SAAS_SCHEDULE_BINDING_NOT_CANCELLABLE`) unless the binding is `BOUND_TEST_ONLY` with matching provider references and no stored money evidence. Result: `CANCELLED_BEFORE_PAYMENT`, audited as `saas.schedule_binding.cancel`; exact-key replay returns the receipt. A pending binding is left to the reconciliation worker; a paid subscription follows the normal cancellation terms, not this path.
 - The workers are privileged runtime calls with no HTTP route.
 
 ## Evidence ingest and first payment
@@ -39,11 +41,12 @@ Every change goes through `saas_schedule_binding_transition`, which bumps `versi
 
 ## Security boundary
 
-Forced RLS on all five tables; immutability triggers on events, paid periods and reconciliations; all functions revoked from PUBLIC/anon/authenticated/service_role. `hon_runtime` gets EXECUTE on exactly seven procedures (start, observation, two workers, two reads, ingest), restored in `infra/postgres/010_supabase_hon_runtime.sql` after the global SaaS revoke. Hooks, transition helper, conflict probe and guards are unreachable. Receipts and views always report `checkoutAvailable: false`, `billingEnabled: false`, `accessDecidedSeparately: true`.
+Forced RLS on all five tables; immutability triggers on events, paid periods and reconciliations; all functions revoked from PUBLIC/anon/authenticated/service_role. `hon_runtime` gets EXECUTE on exactly eight procedures (start, cancel, observation, two workers, two reads, ingest), restored in `infra/postgres/010_supabase_hon_runtime.sql` after the global SaaS revoke. Hooks, transition helper, conflict probe and guards are unreachable. Receipts and views always report `checkoutAvailable: false`, `billingEnabled: false`, `accessDecidedSeparately: true`.
 
 ## Not in this piece (follow-ups)
 
-- OD-4 (owner): unpaid window length and whether a purchaser may cancel before first payment. Expiry is built but inert until the policy row is recorded.
+- Founder spot race at #50 (piece 4): recommended to count at first payment and refuse the founder sign-up before charging once 50 are paid.
+- Scheduling the expiry worker (no job runner here); it is a privileged call with no route.
 - Piece 2: real access switch-on in the hook (B6A `PAYMENT_ACTIVE`).
 - Piece 3: HQ review queue (payment problems, refunds), stopping founder and lifetime sales in the legacy checkout.
 - Piece 4: founder terms V2 (new pricing-terms version; 0188 history untouched) and counting the 50 spots (new founder-plan sales only).

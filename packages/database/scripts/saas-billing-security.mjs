@@ -47,6 +47,7 @@ export const saasBillingFunctions = [
  ['hon.saas_schedule_binding_transition(hon.saas_schedule_bindings,text,text,text,uuid,timestamp with time zone)',false,false],
  ['hon.record_saas_schedule_binding_reconciliation(uuid,jsonb)',true,true],
  ['hon.record_saas_schedule_binding_expiry(uuid,jsonb)',true,true],
+ ['hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid)',true,true],
  ['hon.guard_saas_schedule_lifecycle_exclusion()',false,true],
  ['hon.saas_schedule_payment_program()',false,false],
  ['hon.guard_saas_schedule_bindings()',false,false],

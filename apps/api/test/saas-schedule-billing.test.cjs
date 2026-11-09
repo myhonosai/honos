@@ -42,3 +42,26 @@ test('Schedule billing workers: pending reconciliation records only definite pro
  await assert.rejects(()=>broken.expireUnpaid(bound),e=>e.getStatus()===503);
  await assert.rejects(()=>service.expireUnpaid({...bound,status:'ACTIVE'}),e=>e.getStatus()===400);assert.equal(calls.length,0);
 });
+test('Schedule billing cancel before first payment: school-scoped read, confirmed no-cost provider cancel, nothing recorded otherwise',async()=>{
+ const {DeterministicScheduleProvider}=require('./fixtures/subscription-schedule-provider.cjs');
+ const bound=binding('BOUND_TEST_ONLY'),calls=[];let current=bound;
+ const billing={async call(op,args){calls.push([op,args]);if(op==='readScheduleBinding')return current;return {binding:{...current,status:'CANCELLED_BEFORE_PAYMENT'},replayed:false};}};
+ const provider=new DeterministicScheduleProvider(),service=new SaasScheduleBillingService(billing,provider),key=K();
+ await service.cancelBeforePayment('verified-purchaser',bound.schoolId,bound.bindingId,key);
+ assert.deepEqual(calls.map(x=>x[0]),['readScheduleBinding','cancelScheduleBinding']);
+ assert.deepEqual(calls[0][1],['verified-purchaser',bound.schoolId,bound.bindingId]);
+ const args=calls[1][1];assert.deepEqual(args.slice(0,3),['verified-purchaser',bound.schoolId,bound.bindingId]);assert.equal(JSON.parse(args[3]).outcome,'CANCELLED_NOTHING_COLLECTED');assert.equal(args[4],key);
+ // Already cancelled: return without provider I/O. Paid, pending or active: refused before the provider.
+ calls.length=0;const before=provider.calls;current={...bound,status:'CANCELLED_BEFORE_PAYMENT'};
+ assert.equal((await service.cancelBeforePayment('verified-purchaser',bound.schoolId,bound.bindingId,K())).replayed,true);
+ for(const patch of [{status:'ACTIVE'},{status:'PENDING_PROVIDER_BINDING'},{status:'NEEDS_REVIEW'},{qualifyingPaidPeriodCount:1}]){current={...bound,...patch};
+  await assert.rejects(()=>service.cancelBeforePayment('verified-purchaser',bound.schoolId,bound.bindingId,K()),e=>e.getStatus()===422&&e.getResponse().code==='SAAS_SCHEDULE_BINDING_NOT_CANCELLABLE');}
+ assert.equal(provider.calls,before);
+ // Money collected or provider failure: nothing recorded.
+ current=bound;calls.length=0;provider.collected.add(bound.bindingId);
+ await assert.rejects(()=>service.cancelBeforePayment('verified-purchaser',bound.schoolId,bound.bindingId,K()),e=>e.getStatus()===503&&e.getResponse().code==='SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED');
+ const broken=new SaasScheduleBillingService(billing,{async cancelUnpaidSchedule(){throw Error('network');}});
+ await assert.rejects(()=>broken.cancelBeforePayment('verified-purchaser',bound.schoolId,bound.bindingId,K()),e=>e.getStatus()===503);
+ assert.deepEqual(calls.map(x=>x[0]),['readScheduleBinding','readScheduleBinding']);
+ await assert.rejects(()=>service.cancelBeforePayment('verified-purchaser',bound.schoolId,bound.bindingId,'bad'),e=>e.getStatus()===400);
+});

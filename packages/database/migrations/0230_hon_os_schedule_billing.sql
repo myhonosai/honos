@@ -27,10 +27,15 @@ CREATE TABLE hon.saas_billing_lifecycle_policy (
   policy_id smallint PRIMARY KEY CHECK (policy_id=1),
   version integer NOT NULL CHECK (version>0),
   unpaid_window_minutes integer CHECK (unpaid_window_minutes BETWEEN 15 AND 43200),
-  approved_by_principal_id uuid NOT NULL REFERENCES hon.principals(id) ON DELETE RESTRICT,
+  -- NULL when the approval is an owner decision recorded in source (version 1) rather than an in-product HQ command.
+  approved_by_principal_id uuid REFERENCES hon.principals(id) ON DELETE RESTRICT,
   approval_reference text NOT NULL CHECK (length(approval_reference) BETWEEN 1 AND 200),
   recorded_at timestamptz NOT NULL
 );
+-- Owner decision OD-4 (David, 2026-11-09T04:20:38Z): an unpaid sign-up stays open for 7 days, then expires; the school may
+-- cancel at no cost any time before its first payment. Immutable once the evidence triggers below are installed.
+INSERT INTO hon.saas_billing_lifecycle_policy(policy_id,version,unpaid_window_minutes,approved_by_principal_id,approval_reference,recorded_at)
+VALUES(1,1,10080,NULL,'OD-4 owner decision 2026-11-09T04:20:38Z: unpaid sign-up expires after 7 days; cancel before first payment at no cost',clock_timestamp());
 
 -- Private schedule lifecycle. Live rows (pending, bound, active, review) block a second lifecycle for the organization.
 CREATE TABLE hon.saas_schedule_bindings (
@@ -44,10 +49,10 @@ CREATE TABLE hon.saas_schedule_bindings (
   provider text NOT NULL CHECK (provider='STRIPE_SIMULATED'),
   provider_mode text NOT NULL CHECK (provider_mode='TEST'),
   status text NOT NULL CHECK (status IN ('PENDING_PROVIDER_BINDING','BOUND_TEST_ONLY','ACTIVE','NEEDS_REVIEW',
-    'EXPIRED_UNPAID','VOIDED_PROVIDER_FAILED')),
+    'EXPIRED_UNPAID','VOIDED_PROVIDER_FAILED','CANCELLED_BEFORE_PAYMENT')),
   status_reason text NOT NULL CHECK (status_reason IN ('BINDING_REQUESTED','BINDING_OBSERVED_TEST_ONLY','FIRST_PAYMENT_VERIFIED',
     'PROVIDER_CONFIRMED_NOT_CREATED','PROVIDER_TERMS_MISMATCH','UNPAID_WINDOW_ELAPSED','AMOUNT_MISMATCH','OVERLAPPING_COVERED_PERIOD',
-    'REVERSAL_REVIEW_REQUIRED','UNLINKED_REVERSAL')),
+    'REVERSAL_REVIEW_REQUIRED','UNLINKED_REVERSAL','PURCHASER_CANCELLED_BEFORE_PAYMENT')),
   version integer NOT NULL DEFAULT 1 CHECK (version>=1),
   provider_account_reference text CHECK (provider_account_reference ~ '^fake_[a-z0-9_-]{1,150}$'),
   provider_subscription_reference text UNIQUE CHECK (provider_subscription_reference ~ '^fake_[a-z0-9_-]{1,150}$'),
@@ -66,10 +71,11 @@ CREATE TABLE hon.saas_schedule_bindings (
   UNIQUE(actor_principal_id,idempotency_key),
   CHECK (status <> 'PENDING_PROVIDER_BINDING' OR (bound_at IS NULL AND provider_account_reference IS NULL AND provider_subscription_reference IS NULL
     AND provider_schedule_reference IS NULL AND observed_by_principal_id IS NULL AND observation_key IS NULL)),
-  CHECK (status NOT IN ('BOUND_TEST_ONLY','ACTIVE','EXPIRED_UNPAID') OR (bound_at IS NOT NULL AND provider_account_reference IS NOT NULL
+  CHECK (status NOT IN ('BOUND_TEST_ONLY','ACTIVE','EXPIRED_UNPAID','CANCELLED_BEFORE_PAYMENT') OR (bound_at IS NOT NULL AND provider_account_reference IS NOT NULL
     AND provider_subscription_reference IS NOT NULL AND provider_schedule_reference IS NOT NULL AND observed_by_principal_id IS NOT NULL
     AND observation_key IS NOT NULL)),
-  CHECK ((status IN ('EXPIRED_UNPAID','VOIDED_PROVIDER_FAILED'))=(terminal_at IS NOT NULL)),
+  CHECK ((status IN ('EXPIRED_UNPAID','VOIDED_PROVIDER_FAILED','CANCELLED_BEFORE_PAYMENT'))=(terminal_at IS NOT NULL)),
+  CHECK (status <> 'CANCELLED_BEFORE_PAYMENT' OR activated_at IS NULL),
   CHECK (status <> 'ACTIVE' OR activated_at IS NOT NULL),
   CHECK (status <> 'BOUND_TEST_ONLY' OR activated_at IS NULL),
   CHECK (status <> 'EXPIRED_UNPAID' OR (activated_at IS NULL AND policy_version IS NOT NULL))
@@ -244,6 +250,8 @@ BEGIN
       THEN ARRAY['status','status_reason','version','activated_at']
     WHEN OLD.status='BOUND_TEST_ONLY' AND NEW.status='EXPIRED_UNPAID' AND NEW.status_reason='UNPAID_WINDOW_ELAPSED'
       THEN ARRAY['status','status_reason','version','terminal_at','policy_version']
+    WHEN OLD.status='BOUND_TEST_ONLY' AND NEW.status='CANCELLED_BEFORE_PAYMENT' AND NEW.status_reason='PURCHASER_CANCELLED_BEFORE_PAYMENT'
+      THEN ARRAY['status','status_reason','version','terminal_at']
   END;
   IF allowed IS NULL OR (new_row - allowed) IS DISTINCT FROM (old_row - allowed) THEN
     RAISE EXCEPTION 'SAAS_TRANSITION_NOT_ALLOWED' USING ERRCODE='42501'; END IF;
@@ -286,7 +294,7 @@ BEGIN
     IF NOT EXISTS(SELECT 1 FROM hon.saas_audit a JOIN hon.saas_outbox o ON o.audit_id=a.id
       WHERE a.entity_type='SCHEDULE_BINDING' AND a.entity_id=NEW.id AND a.organization_id=NEW.organization_id
         AND a.next_state->>'version'=NEW.version::text AND a.next_state->>'status'=NEW.status
-        AND a.action_code IN ('saas.schedule_binding.reconcile','saas.schedule_binding.expire','saas.schedule_binding.transition')
+        AND a.action_code IN ('saas.schedule_binding.reconcile','saas.schedule_binding.expire','saas.schedule_binding.transition','saas.schedule_binding.cancel')
         AND o.event_type='saas.schedule_binding.transitioned' AND o.payload->>'executionAllowed'='false')
     THEN RAISE EXCEPTION 'SAAS_SCHEDULE_BINDING_EVIDENCE_REQUIRED' USING ERRCODE='23514'; END IF;
     RETURN NULL;
@@ -445,6 +453,38 @@ BEGIN
   RETURN jsonb_build_object('binding',hon.saas_schedule_binding_json(b),'replayed',false);
 END $$;
 
+-- School purchaser: cancel a bound sign-up before its first payment, at no cost (owner OD-4). The provider cancellation
+-- ("cancelled, nothing collected") is fetched outside this transaction; this records it once. Authority is rechecked after
+-- the organization lock; any stored money evidence (even a reversal) refuses, so a paid school is never cancelled here.
+CREATE FUNCTION hon.cancel_saas_schedule_binding(p_subject text,p_school uuid,p_binding uuid,p jsonb,p_key uuid,p_request uuid,p_correlation uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE actor record; b hon.saas_schedule_bindings%ROWTYPE; prior jsonb; replay jsonb; at timestamptz:=clock_timestamp();
+BEGIN
+  IF p_binding IS NULL OR NOT hon.saas_trial_keys(p,ARRAY['accountReference','bindingId','identity','mode','outcome','scheduleReference','subscriptionReference'])
+    OR p->>'identity'<>'DETERMINISTIC_FAKE' OR p->>'mode'<>'TEST' OR p->>'outcome'<>'CANCELLED_NOTHING_COLLECTED'
+    OR p->>'bindingId' IS DISTINCT FROM p_binding::text
+  THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE='22023'; END IF;
+  SELECT * INTO actor FROM hon.require_saas_school_purchaser(p_subject,p_school);
+  replay:=hon.saas_claim_request(actor.principal_id,p_key,'saas.schedule_binding.cancel',
+    hon.saas_fingerprint(ARRAY['saas.schedule_binding.cancel',p_school::text,p_binding::text,p::text]),p_request,p_correlation);
+  IF replay IS NOT NULL THEN PERFORM hon.require_saas_school_purchaser(p_subject,p_school); RETURN replay; END IF;
+  PERFORM hon.saas_schedule_payment_program();
+  PERFORM pg_advisory_xact_lock(hashtextextended('saas.organization:'||actor.organization_id::text,0));
+  SELECT * INTO actor FROM hon.require_saas_school_purchaser(p_subject,p_school);
+  SELECT * INTO b FROM hon.saas_schedule_bindings WHERE id=p_binding AND organization_id=actor.organization_id AND school_id=p_school FOR UPDATE;
+  IF b.id IS NULL THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE='P0002'; END IF;
+  IF b.status<>'BOUND_TEST_ONLY' OR b.provider_account_reference IS DISTINCT FROM p->>'accountReference'
+    OR b.provider_subscription_reference IS DISTINCT FROM p->>'subscriptionReference' OR b.provider_schedule_reference IS DISTINCT FROM p->>'scheduleReference'
+    OR EXISTS(SELECT 1 FROM hon.saas_schedule_provider_events WHERE binding_id=b.id AND event_type<>'invoice.payment_failed')
+  THEN RAISE EXCEPTION 'SAAS_SCHEDULE_BINDING_NOT_CANCELLABLE' USING ERRCODE='23514'; END IF;
+  prior:=hon.saas_schedule_binding_json(b);
+  UPDATE hon.saas_schedule_bindings SET status='CANCELLED_BEFORE_PAYMENT',status_reason='PURCHASER_CANCELLED_BEFORE_PAYMENT',
+    version=version+1,terminal_at=at WHERE id=b.id AND version=b.version RETURNING * INTO b;
+  PERFORM hon.saas_schedule_after_binding_terminal(b.id,at);
+  RETURN hon.saas_record(actor.principal_id,p_key,'saas.schedule_binding.cancel','saas.schedule_binding.transitioned','SCHEDULE_BINDING',b.id,
+    b.organization_id,prior,hon.saas_schedule_binding_json(b),jsonb_build_object('binding',hon.saas_schedule_binding_json(b),'replayed',false),at);
+END $$;
+
 CREATE FUNCTION hon.read_saas_schedule_binding(p_subject text,p_school uuid,p_binding uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor record; b hon.saas_schedule_bindings%ROWTYPE;
@@ -560,7 +600,7 @@ END $$;
 DO $$ DECLARE def text; BEGIN
   SELECT pg_get_constraintdef(oid) INTO def FROM pg_constraint WHERE conrelid='hon.saas_audit'::regclass AND conname='saas_audit_action_code_check';
   ALTER TABLE hon.saas_audit DROP CONSTRAINT saas_audit_action_code_check;
-  EXECUTE 'ALTER TABLE hon.saas_audit ADD CONSTRAINT saas_audit_action_code_check CHECK (('||substring(def FROM 8 FOR length(def)-8)||') OR action_code IN (''saas.schedule_binding.start'',''saas.schedule_binding.observe'',''saas.schedule_binding.reconcile'',''saas.schedule_binding.expire'',''saas.schedule_binding.transition'',''saas.schedule_evidence.ingest''))';
+  EXECUTE 'ALTER TABLE hon.saas_audit ADD CONSTRAINT saas_audit_action_code_check CHECK (('||substring(def FROM 8 FOR length(def)-8)||') OR action_code IN (''saas.schedule_binding.start'',''saas.schedule_binding.observe'',''saas.schedule_binding.reconcile'',''saas.schedule_binding.expire'',''saas.schedule_binding.transition'',''saas.schedule_binding.cancel'',''saas.schedule_evidence.ingest''))';
   SELECT pg_get_constraintdef(oid) INTO def FROM pg_constraint WHERE conrelid='hon.saas_audit'::regclass AND conname='saas_audit_entity_type_check';
   ALTER TABLE hon.saas_audit DROP CONSTRAINT saas_audit_entity_type_check;
   EXECUTE 'ALTER TABLE hon.saas_audit ADD CONSTRAINT saas_audit_entity_type_check CHECK (('||substring(def FROM 8 FOR length(def)-8)||') OR entity_type IN (''SCHEDULE_BINDING'',''SCHEDULE_EVENT''))';
@@ -604,13 +644,14 @@ DO $$ DECLARE t text;r text;c text;f text; BEGIN
     'hon.saas_schedule_binding_transition(hon.saas_schedule_bindings,text,text,text,uuid,timestamp with time zone)',
     'hon.start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)','hon.record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)',
     'hon.record_saas_schedule_binding_reconciliation(uuid,jsonb)','hon.record_saas_schedule_binding_expiry(uuid,jsonb)',
-    'hon.read_saas_schedule_binding(text,uuid,uuid)','hon.read_saas_schedule_binding_from_hq(text,uuid)','hon.ingest_saas_schedule_evidence(jsonb,text)'] LOOP
+    'hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid)','hon.read_saas_schedule_binding(text,uuid,uuid)','hon.read_saas_schedule_binding_from_hq(text,uuid)','hon.ingest_saas_schedule_evidence(jsonb,text)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid),hon.record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid),
       hon.record_saas_schedule_binding_reconciliation(uuid,jsonb),hon.record_saas_schedule_binding_expiry(uuid,jsonb),
+      hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid),
       hon.read_saas_schedule_binding(text,uuid,uuid),hon.read_saas_schedule_binding_from_hq(text,uuid),hon.ingest_saas_schedule_evidence(jsonb,text) TO hon_runtime;
   END IF;
 END $$;

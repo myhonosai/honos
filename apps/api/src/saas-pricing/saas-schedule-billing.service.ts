@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import type { SaasScheduleBinding } from '@hon/contracts';
 import { randomUUID } from 'node:crypto';
 import { saasUuid, validateSaasScheduleBinding, validateSaasScheduleBindingInput, validateSaasScheduleBindingReceipt,
@@ -88,6 +88,28 @@ export class SaasScheduleBillingService {
     } catch { throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE' }); }
     if (observed.outcome !== 'CANCELLED_NOTHING_COLLECTED') throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED' });
     return this.billing.call('recordScheduleBindingExpiry', [binding.bindingId,JSON.stringify(observed)], validateSaasScheduleBindingReceipt);
+  }
+
+  /**
+   * School purchaser, before the first payment (owner OD-4: cancel at no cost). Reads the binding through the school-scoped
+   * read (authority + exact school), asks the provider to cancel, and records only a confirmed "cancelled, nothing
+   * collected". The database rechecks authority, status and money evidence after its locks.
+   */
+  async cancelBeforePayment(subject: string, school: unknown, bindingId: unknown, key: unknown) {
+    const [s,b,k] = parse(() => [saasUuid(school),saasUuid(bindingId),saasUuid(key)] as const);
+    const binding = await this.billing.call('readScheduleBinding',[subject,s,b],validateSaasScheduleBinding);
+    if (binding.status === 'CANCELLED_BEFORE_PAYMENT') return { binding, replayed: true };
+    if (binding.status !== 'BOUND_TEST_ONLY' || binding.qualifyingPaidPeriodCount !== 0 || !binding.providerAccountReference
+      || !binding.providerSubscriptionReference || !binding.providerScheduleReference)
+      throw new UnprocessableEntityException({ code: 'SAAS_SCHEDULE_BINDING_NOT_CANCELLABLE' });
+    let observed;
+    try {
+      observed = await this.provider.cancelUnpaidSchedule({ bindingId:binding.bindingId, accountReference:binding.providerAccountReference,
+        subscriptionReference:binding.providerSubscriptionReference, scheduleReference:binding.providerScheduleReference });
+    } catch { throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_PROVIDER_UNAVAILABLE' }); }
+    // A collected or unknown provider answer is never recorded as a no-cost cancellation.
+    if (observed.outcome !== 'CANCELLED_NOTHING_COLLECTED') throw new ServiceUnavailableException({ code: 'SAAS_SCHEDULE_BINDING_RECONCILIATION_REQUIRED' });
+    return this.billing.call('cancelScheduleBinding',[subject,s,b,JSON.stringify(observed),k,randomUUID(),randomUUID()],validateSaasScheduleBindingReceipt);
   }
 
   /** Internal only: caller must already have verified raw provider bytes and selected the fixed TEST adapter. */

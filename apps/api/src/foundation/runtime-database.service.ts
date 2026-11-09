@@ -103,6 +103,7 @@ const SAAS_BILLING_CALLS = {
   recordScheduleBindingObservation: { sql: 'SELECT hon.record_saas_schedule_binding_observation($1::uuid,$2::jsonb,$3::uuid,$4::uuid) AS data', arity: 4, readOnly: false },
   recordScheduleBindingReconciliation: { sql: 'SELECT hon.record_saas_schedule_binding_reconciliation($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
   recordScheduleBindingExpiry: { sql: 'SELECT hon.record_saas_schedule_binding_expiry($1::uuid,$2::jsonb) AS data', arity: 2, readOnly: false },
+  cancelScheduleBinding: { sql: 'SELECT hon.cancel_saas_schedule_binding($1::text,$2::uuid,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
   readScheduleBinding: { sql: 'SELECT hon.read_saas_schedule_binding($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
   readScheduleBindingHq: { sql: 'SELECT hon.read_saas_schedule_binding_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   ingestScheduleEvidence: { sql: 'SELECT hon.ingest_saas_schedule_evidence($1::jsonb,$2) AS data', arity: 2, readOnly: false },

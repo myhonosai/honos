@@ -18,6 +18,10 @@ export class SaasScheduleBindingSchoolController {
   read(@Req() r: HonRequest,@Param('schoolId') school: string,@Param('bindingId') binding: string) {
     return this.schedules.read(subject(r),school,binding).then(data => ({data}));
   }
+  @Post(':bindingId/cancel') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.cancelScheduleBinding)
+  cancel(@Req() r: HonRequest,@Param('schoolId') school: string,@Param('bindingId') binding: string,@Headers('idempotency-key') key: string | undefined) {
+    return this.schedules.cancelBeforePayment(subject(r),school,binding,key).then(data => ({data}));
+  }
 }
 
 @Controller('hq/saas/subscription-schedule-bindings') @UseGuards(HonIdentityGuard)

@@ -46,15 +46,15 @@ test('entire reviewed migration chain and every 0181–0230 checksum are pinned'
   assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0231_unreviewed.sql', sha256: 'x' }], actual));
   assert.throws(() => validateMigrationEvidence([...actual.entries.slice(0, -1), { file: '0179_reserved.sql', sha256: 'x' }], actual));
 });
-test('canonical runtime ACL restores only the seven fixed 0230 schedule-billing procedures after the global SaaS revoke', async () => {
+test('canonical runtime ACL restores only the eight fixed 0230 schedule-billing procedures after the global SaaS revoke', async () => {
   const acl = await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-  const expected = ['start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)', 'record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)', 'record_saas_schedule_binding_reconciliation(uuid,jsonb)', 'record_saas_schedule_binding_expiry(uuid,jsonb)', 'read_saas_schedule_binding(text,uuid,uuid)', 'read_saas_schedule_binding_from_hq(text,uuid)', 'ingest_saas_schedule_evidence(jsonb,text)'];
+  const expected = ['start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)', 'record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)', 'record_saas_schedule_binding_reconciliation(uuid,jsonb)', 'record_saas_schedule_binding_expiry(uuid,jsonb)', 'cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid)', 'read_saas_schedule_binding(text,uuid,uuid)', 'read_saas_schedule_binding_from_hq(text,uuid)', 'ingest_saas_schedule_evidence(jsonb,text)'];
   const start = acl.indexOf('-- 0230 HON OS schedule billing piece 1.');
   assert(start > acl.lastIndexOf("p.proname ~ 'saas'"), '0230 grant must follow the final global SaaS revoke');
   const block = acl.slice(start, acl.indexOf('END $$;', start) + 'END $$;'.length);
   const grant = block.slice(block.indexOf('GRANT EXECUTE'), block.indexOf('TO hon_runtime;') + 'TO hon_runtime;'.length);
   const found = [...grant.matchAll(/hon\.([a-z_]+\([^)]*\))/g)].map(match => match[1]);
-  assert.deepEqual([...new Set(found)].sort(), [...expected].sort(), '0230 grant list must contain exactly the seven fixed procedures');
+  assert.deepEqual([...new Set(found)].sort(), [...expected].sort(), '0230 grant list must contain exactly the eight fixed procedures');
   for (const forbidden of ['saas_schedule_requirements', 'saas_schedule_binding_json', 'saas_schedule_binding_available', 'saas_org_billing_conflict', 'saas_schedule_after_paid_period', 'saas_schedule_after_binding_terminal', 'saas_schedule_binding_transition', 'guard_saas_schedule', 'verify_saas_schedule_binding_evidence', 'saas_billing_lifecycle_policy', 'PUBLIC', 'anon', 'authenticated', 'service_role']) assert.doesNotMatch(grant, new RegExp(forbidden));
   assert.match(block, /REVOKE ALL ON FUNCTION hon\.'\|\|f\|\|' FROM PUBLIC/);
 });
