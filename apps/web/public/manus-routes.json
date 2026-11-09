@@ -49,6 +49,10 @@
       "title": "HON HQ | AI Provider Control"
     },
     {
+      "path": "/hq/creative-credits",
+      "title": "HON HQ | Creative Credits"
+    },
+    {
       "path": "/hq/integrations/zernio",
       "title": "HON HQ | Zernio"
     },
@@ -103,6 +107,10 @@
     {
       "path": "/staff/migration/leads",
       "title": "HON | Lead Migration Center"
+    },
+    {
+      "path": "/staff/migration/students",
+      "title": "HON | Import students"
     },
     {
       "path": "/staff/planning/revenue",
@@ -387,6 +395,10 @@
     {
       "path": "/hq/growth/contests",
       "title": "HON HQ | Contests"
+    },
+    {
+      "path": "/hq/growth/contests/:contestId",
+      "title": "HON HQ | Contest"
     },
     {
       "path": "/hq/growth/founder-campaigns",
