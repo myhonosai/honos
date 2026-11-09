@@ -45,7 +45,7 @@ function Body({ list, language, detail, onOpen, onClose, t }: CreditsViewProps &
       <article className={styles.card} aria-labelledby="hq-credits-program">
         <div className={styles.cardHead}><h2 id="hq-credits-program">{t('programTitle')}</h2>
           <span className={styles.chip} data-testid="credits-program" data-state={list.program.status} data-kind={active ? 'ok' : 'off'}>{t(active ? 'on' : 'off')}</span></div>
-        <p>{t('monthly', { n: num(language, list.program.monthlyIncludedCredits) })}</p>
+        <p>{t(active ? 'monthly' : 'monthlyOff', { n: num(language, list.program.monthlyIncludedCredits) })}</p>
         {active ? null : <p className={styles.warnText}>{t('programOffNote')}</p>}
         <p className={styles.meta}>{t('programVersion', { version: String(list.program.version) })}</p>
       </article>

@@ -2807,6 +2807,7 @@ END $$;
 -- End class-session pages exact verification.
 -- Membership pause, cancellation and refund records exact verification (0224): private forced-RLS tables, settings-free
 -- guards, private helpers, six new runtime entry points (cancel is pinned in the 0177 block) and the three permissions.
+-- 0231 replaced the body of hon.pause_school_membership (rolling-year paused-days count); its hash below is the 0231 body.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOREACH t IN ARRAY ARRAY['school_membership_pause_policies','membership_pauses','membership_refund_records'] LOOP
     SELECT c.relrowsecurity AND c.relforcerowsecurity AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
@@ -2829,7 +2830,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.membership_command_args_ok(text,text,uuid,uuid)',false,false,'search_path=pg_catalog','7afb3caf93863cd51c5da2fed002341221cb8628e15285689470f394ee94f042'),
 ('hon.read_school_membership_pause_policy(text)',true,true,'search_path=pg_catalog, hon','8a4ccf67894ced208e7bdd88f38b95da2d0dea40dfb2969d1f511997133eb76b'),
 ('hon.set_school_membership_pause_policy(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','8a5de833ffd79e01bfae58768b5a5d4d15a6a269ed3775cd9e41dd48364a733c'),
-('hon.pause_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','03bfdfa4c08fc0d72cfbfa3732987982cbb8c29da0e076d06ec46c70c25081d2'),
+('hon.pause_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7d891a384ff23ea9ae763d04b181e4f6d571888760c925f7c21ef8107c1315dc'),
 ('hon.resume_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','674b318b8920bbce7b05faf8cdb59e883e3a5c9b8b7a275fc875fb9d4d0fa172'),
 ('hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','56e4abbfa70311bf8272b35716223d6c877b43171e1b119b9099343a756dbc23'),
 ('hon.read_membership_pauses_and_refunds(text,uuid)',true,true,'search_path=pg_catalog, hon','3f15ad85d31109214ba9b5cfd3df6f227a21ef7b75d022b312c30ff18aab20dc')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
