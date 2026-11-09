@@ -51,3 +51,28 @@ export class CrmSchoolClockController {
     throw new ForbiddenException({ code: 'CRM_SCHOOL_CLOCK_FORBIDDEN' });
   }
 }
+
+/**
+ * Session-scoped variant for screens whose queue carries no organization id (the standalone follow-ups page). The
+ * scope is the verified session's follow-up scope, exactly as /staff/crm/follow-ups resolves it; the definer read
+ * re-decides the same live authority before and after.
+ */
+@Controller('staff/crm/school-clock')
+@UseGuards(HonIdentityGuard, CrmSchoolClockHumanUiGuard)
+export class CrmSessionSchoolClockController {
+  constructor(private readonly database: RuntimeDatabaseService, private readonly clock: CrmSchoolClockService) {}
+
+  @Get()
+  @Header('Cache-Control', 'private, no-store')
+  async read(@Req() request: HonRequest) {
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    const scope = await this.database.resolveFollowUpScope(identity.externalSubject);
+    if (!scope) throw new ForbiddenException({ code: 'CRM_SCHOOL_CLOCK_FORBIDDEN' });
+    const requestId = randomUUID();
+    const context: MembershipLifecycleContext = { ...scope, principalType: 'HUMAN_USER', source: 'HUMAN_UI', externalSubject: identity.externalSubject,
+      requestId, correlationId: requestId, idempotencyKey: '' };
+    const data = await this.clock.read(context);
+    return { data, meta: { requestId, correlationId: requestId } };
+  }
+}
