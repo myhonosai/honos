@@ -49,6 +49,10 @@
       "title": "HON HQ | AI Provider Control"
     },
     {
+      "path": "/hq/creative-credits",
+      "title": "HON HQ | Creative Credits"
+    },
+    {
       "path": "/hq/integrations/zernio",
       "title": "HON HQ | Zernio"
     },
