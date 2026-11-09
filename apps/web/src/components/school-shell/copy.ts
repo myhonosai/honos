@@ -15,7 +15,7 @@ const en = {
   routeOverview: 'Overview', routeOperationsReport: 'Operations report', routeCommandCenter: 'Command Center', routeHealthScore: 'Health Score',
   routeLeadsHome: 'Leads', routeLeads: 'Lead setup', routeJourney: 'Enrollment journey', routeFollowUps: 'Follow-ups', routeLeadMemberships: 'Lead memberships', routeLeadAssistant: 'Chad lead assistant', routeLeadImport: 'Import leads',
   routeTrials: 'Trial appointments', routeBookings: 'Class bookings',
-  routeStudentSearch: 'Search', routePeople: 'People', routeFamilyAccess: 'Family access', routeProgress: 'Curriculum progress', routeAchievements: 'Achievements', routeRetention: 'Retention review',
+  routeStudentSearch: 'Search', routePeople: 'People', routeFamilyAccess: 'Family access', routeProgress: 'Curriculum progress', routeAchievements: 'Achievements', routeRetention: 'Retention review', routeStudentImport: 'Import students',
   routeTesting: 'Testing', routeReadiness: 'Readiness', routeScorecards: 'Scorecards', routePromotions: 'Promotions', routeCertificates: 'Certificates',
   routeMembershipList: 'Memberships', routeMemberships: 'Activation', routePlans: 'Plans', routeDates: 'Dates & history', routeChanges: 'Pause, cancel & refunds', routeRenewals: 'Renewals', routeInvoices: 'Invoices',
   routeAttendance: 'Attendance', routeRosters: 'Class rosters', routeSessions: 'Class schedule', routePlannedAbsences: 'Planned absences', routeClassPass: 'ClassPass & walk-in', routeKiosk: 'Check-in kiosk',
@@ -23,7 +23,7 @@ const en = {
   routeVoice: 'Voice', routeDocuments: 'Documents',
   routeHon: 'HON workspace', routeAiWork: 'AI drafts', routeKai: 'Kai teaching assistant', routeTeachingStudio: 'Teaching studio', routeCurriculumLibrary: 'Curriculum library',
   routeApprovals: 'Action Center', routeWork: 'Work', routeAutomation: 'Automation rules',
-  routeTeam: 'Team & invitations', routeRoles: 'Roles', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch',
+  routeTeam: 'Team & invitations', routeRoles: 'Roles', routeAvailability: 'Availability', routeQualifications: 'Instructor qualifications', routeAccount: 'Account & usage', routeOwners: 'School owners', routeSubscription: 'HON subscription', routeLaunch: 'School launch', routeFounderSetup: 'Founder Setup guide',
 } as const;
 export type ShellKey = keyof typeof en;
 const ko: Record<ShellKey, string> = {
@@ -42,7 +42,7 @@ const ko: Record<ShellKey, string> = {
   routeOverview: '개요', routeOperationsReport: '운영 보고서', routeCommandCenter: '커맨드 센터', routeHealthScore: '건강 점수',
   routeLeadsHome: '문의', routeLeads: '문의 설정', routeJourney: '등록 여정', routeFollowUps: '후속 조치', routeLeadMemberships: '문의별 회원권', routeLeadAssistant: 'Chad 문의 도우미', routeLeadImport: '문의 가져오기',
   routeTrials: '체험 수업 예약', routeBookings: '수업 예약',
-  routeStudentSearch: '검색', routePeople: '사람', routeFamilyAccess: '가족 접근', routeProgress: '커리큘럼 진도', routeAchievements: '성취', routeRetention: '재등록 검토',
+  routeStudentSearch: '검색', routePeople: '사람', routeFamilyAccess: '가족 접근', routeProgress: '커리큘럼 진도', routeAchievements: '성취', routeRetention: '재등록 검토', routeStudentImport: '학생 가져오기',
   routeTesting: '승급 심사', routeReadiness: '심사 준비', routeScorecards: '채점표', routePromotions: '승급 결정', routeCertificates: '수료증',
   routeMembershipList: '회원권', routeMemberships: '회원권 활성화', routePlans: '요금제', routeDates: '날짜 및 이력', routeChanges: '일시정지·취소·환불', routeRenewals: '갱신', routeInvoices: '청구서',
   routeAttendance: '출석', routeRosters: '수업 명단', routeSessions: '수업 일정', routePlannedAbsences: '예정된 결석', routeClassPass: 'ClassPass 및 워크인', routeKiosk: '출석 키오스크',
@@ -50,7 +50,7 @@ const ko: Record<ShellKey, string> = {
   routeVoice: '음성', routeDocuments: '문서',
   routeHon: 'HON 업무 공간', routeAiWork: 'AI 초안', routeKai: 'Kai 교육 도우미', routeTeachingStudio: '교육 스튜디오', routeCurriculumLibrary: '커리큘럼 라이브러리',
   routeApprovals: '액션 센터', routeWork: '업무 목록', routeAutomation: '자동화 규칙',
-  routeTeam: '팀 및 초대', routeRoles: '역할', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설',
+  routeTeam: '팀 및 초대', routeRoles: '역할', routeAvailability: '근무 가능 시간', routeQualifications: '사범 자격', routeAccount: '계정 및 사용량', routeOwners: '도장 소유자', routeSubscription: 'HON 구독', routeLaunch: '도장 개설', routeFounderSetup: '창업 설정 가이드',
 };
 const es: Record<ShellKey, string> = {
   brand: 'HON OS', brandTagline: 'Para escuelas de artes marciales', skip: 'Saltar al contenido principal', primaryNav: 'Navegación de la escuela', sectionNav: 'Páginas de esta sección',
@@ -68,7 +68,7 @@ const es: Record<ShellKey, string> = {
   routeOverview: 'Resumen', routeOperationsReport: 'Informe de operaciones', routeCommandCenter: 'Centro de mando', routeHealthScore: 'Índice de salud',
   routeLeadsHome: 'Prospectos', routeLeads: 'Configurar prospectos', routeJourney: 'Proceso de inscripción', routeFollowUps: 'Seguimientos', routeLeadMemberships: 'Membresías por prospecto', routeLeadAssistant: 'Asistente de prospectos Chad', routeLeadImport: 'Importar prospectos',
   routeTrials: 'Citas de prueba', routeBookings: 'Reservas de clases',
-  routeStudentSearch: 'Buscar', routePeople: 'Personas', routeFamilyAccess: 'Acceso familiar', routeProgress: 'Progreso del plan de estudios', routeAchievements: 'Logros', routeRetention: 'Revisión de retención',
+  routeStudentSearch: 'Buscar', routePeople: 'Personas', routeFamilyAccess: 'Acceso familiar', routeProgress: 'Progreso del plan de estudios', routeAchievements: 'Logros', routeRetention: 'Revisión de retención', routeStudentImport: 'Importar alumnos',
   routeTesting: 'Exámenes', routeReadiness: 'Preparación', routeScorecards: 'Hojas de evaluación', routePromotions: 'Promociones', routeCertificates: 'Certificados',
   routeMembershipList: 'Membresías', routeMemberships: 'Activación', routePlans: 'Planes', routeDates: 'Fechas e historial', routeChanges: 'Pausas, cancelaciones y reembolsos', routeRenewals: 'Renovaciones', routeInvoices: 'Facturas',
   routeAttendance: 'Asistencia', routeRosters: 'Listas de clase', routeSessions: 'Horario de clases', routePlannedAbsences: 'Ausencias previstas', routeClassPass: 'ClassPass y visitas', routeKiosk: 'Quiosco de entrada',
@@ -76,7 +76,7 @@ const es: Record<ShellKey, string> = {
   routeVoice: 'Voz', routeDocuments: 'Documentos',
   routeHon: 'Espacio HON', routeAiWork: 'Borradores de IA', routeKai: 'Asistente de enseñanza Kai', routeTeachingStudio: 'Estudio de enseñanza', routeCurriculumLibrary: 'Biblioteca del plan de estudios',
   routeApprovals: 'Centro de acciones', routeWork: 'Trabajo', routeAutomation: 'Reglas de automatización',
-  routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela',
+  routeTeam: 'Equipo e invitaciones', routeRoles: 'Roles', routeAvailability: 'Disponibilidad', routeQualifications: 'Certificaciones de instructores', routeAccount: 'Cuenta y uso', routeOwners: 'Propietarios de la escuela', routeSubscription: 'Suscripción HON', routeLaunch: 'Apertura de la escuela', routeFounderSetup: 'Guía de configuración inicial',
 };
 export const SHELL_LANGUAGES = ['en', 'ko', 'es'] as const;
 export type ShellLanguage = (typeof SHELL_LANGUAGES)[number];

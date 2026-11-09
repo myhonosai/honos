@@ -1,12 +1,12 @@
 import React from 'react';
-import type { CampaignFunnel, CampaignStatus, CampaignSummary } from '@hon/contracts';
+import type { CampaignFunnel, CampaignReadSummary, CampaignStatus } from '@hon/contracts';
 import { marketingText, type MarketingKey } from './copy';
 import styles from './marketing-home.module.css';
 
 type T = (key: MarketingKey, vars?: Record<string, string>) => string;
 export const CAMPAIGN_TABS = ['ACTIVE', 'DRAFT', 'PAUSED', 'ARCHIVED', 'ALL'] as const;
 export type CampaignTab = typeof CAMPAIGN_TABS[number];
-export type CampaignListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; items: readonly CampaignSummary[] };
+export type CampaignListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; items: readonly CampaignReadSummary[] };
 export type FunnelState = { state: 'NONE' | 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; campaignId: string; funnel: CampaignFunnel };
 export type MarketingViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
@@ -16,7 +16,7 @@ export type MarketingViewProps = Readonly<{
 }>;
 const ORDER: Record<CampaignStatus, number> = { ACTIVE: 0, DRAFT: 1, PAUSED: 2, ARCHIVED: 3 };
 /** Local, display-only narrowing of the campaigns already read; it never reads anything else. */
-export function campaignsFor(items: readonly CampaignSummary[], tab: CampaignTab): readonly CampaignSummary[] {
+export function campaignsFor(items: readonly CampaignReadSummary[], tab: CampaignTab): readonly CampaignReadSummary[] {
   return items.filter((c) => tab === 'ALL' || c.status === tab)
     .slice().sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.startsAt.localeCompare(a.startsAt) || a.id.localeCompare(b.id));
 }
