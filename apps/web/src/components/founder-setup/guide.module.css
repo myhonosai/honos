@@ -1,4 +1,6 @@
 .page {
+  /* The HQ shell paints every p with --hon-text-muted (dark-theme grey); inside this light guide a paragraph keeps its container's colour. */
+  --hon-text-muted:currentColor;
   --ink:#092538;
   background:#f4f7fb;
   border-radius:18px;
