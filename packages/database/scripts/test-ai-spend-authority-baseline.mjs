@@ -2485,6 +2485,104 @@ try {
   pass('INV-29', `C3a: a human confirms a HON suggestion as an ordinary delegation turn (own capability, plan and Action Center path; resend replays), grouped per answer with a status derived from the members' recorded statuses (${combos.length} combinations equal in SQL and contract; UNKNOWN never success); each suggestion confirms once; only suggested, capability-held agents from this human's own whole, visible COMPLETED answer in the same conversation with AI access, re-checked after the group and member writes wait (a lapse during either wait is refused with nothing persisted and no specialist call; concurrent fresh keys admit one, one key replays one turn); refusals record no turn; groups are append-only and readable only by their owner`);
   }
 
+  // ---- INV-30 (C3b, 0225): HON summarizes a finished group's recorded outcomes; a summary is an ordinary question ----
+  {
+  const o = await makeOrg('inv-30');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? r.error?.message ?? 'OK'; };
+  const turnsOf = async (id) => (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [id])).n;
+  const conv = await hon.create(scope, { title: 'Grow trials' }, K());
+  const ask = async (suggestions, text) => { fakes.hon.suggestions = suggestions; try { return await hon.sendTurn(scope, conv.id, { text, delegation: null }, K()); } finally { fakes.hon.suggestions = []; } };
+  const marcus = (from) => hon.sendTurn(scope, conv.id, { text: 'Draft a friendly trial-week post. Use placeholders for unprovided facts.', delegation: { agentKey: 'marcus', campaignId: o.campaign }, fromSuggestionTurnId: from }, K());
+  const kai = (from) => hon.sendTurn(scope, conv.id, { text: 'Outline a first-class welcome practice.', delegation: { agentKey: 'kai', curriculumId: o.curriculum }, fromSuggestionTurnId: from }, K());
+  const summarize = (from, key = K(), extra = {}) => hon.sendTurn(scope, conv.id, { text: 'Summarize what the team did.', delegation: null, summarizeTurnId: from, ...extra }, key);
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY';
+  // 1. No group yet, and a group still awaiting review, cannot be summarized; a refusal records no turn.
+  const pending = await ask(['marcus'], 'How do I fill the trial week?');
+  let n = await turnsOf(conv.id);
+  assert.equal(await code(summarize(pending.turnId)), 'HON_GROUP_NOT_SUMMARIZABLE', 'no group');
+  await marcus(pending.turnId);
+  n = await turnsOf(conv.id);
+  assert.equal(await code(summarize(pending.turnId)), 'HON_GROUP_NOT_SUMMARIZABLE', 'NEEDS_REVIEW is not finished');
+  assert.equal(await turnsOf(conv.id), n, 'a refused summary records nothing');
+  // 2. A finished group (both members FAILED): the summary is an ordinary question whose facts carry only recorded outcomes.
+  const src = await ask(['marcus', 'kai'], 'How are enrollments trending?');
+  assert.equal((await row('SELECT used_reporting u FROM hon.hon_reply_invocations WHERE turn_id=$1', [src.turnId])).u, true, 'reporting-derived source');
+  fakes.marcus.mode = 'FAILED'; fakes.claire.mode = 'FAILED';
+  const m = await marcus(src.turnId), k = await kai(src.turnId);
+  fakes.marcus.mode = 'RESULT'; fakes.claire.mode = 'RESULT';
+  assert.deepEqual([m.status, k.status], ['FAILED', 'FAILED']);
+  const specialistCalls = fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls, honCalls = fakes.hon.calls;
+  const key = K();
+  const sum = await summarize(src.turnId, key);
+  assert.deepEqual([sum.status, fakes.hon.calls - honCalls, fakes.marcus.calls + fakes.claire.calls + fakes.chad.calls - specialistCalls], ['COMPLETED', 1, 0], JSON.stringify(sum));
+  const group = JSON.parse(fakes.hon.inputs.at(-1).facts).group;
+  assert.deepEqual([group.status, group.sourceQuestion, group.sourceAnswer, group.members.map((x) => [x.agentKey, x.status])],
+    ['FAILED', 'How are enrollments trending?', fakes.hon.reply, [['marcus', 'FAILED'], ['kai', 'FAILED']]]);
+  for (const x of group.members) assert.deepEqual(Object.keys(x).filter((k2) => !['agentKey', 'status', 'reason'].includes(k2)), [], 'recorded outcome fields only');
+  assert.doesNotMatch(fakes.hon.inputs.at(-1).facts, /Welcome to beginner classes|Practice outline/, 'no specialist drafts');
+  const recorded = await row('SELECT summarizes_turn_id s, step, continues_turn_id c FROM hon.hon_reply_invocations WHERE turn_id=$1', [sum.turnId]);
+  assert.deepEqual([recorded.s, recorded.step, recorded.c], [src.turnId, 1, null]);
+  assert.deepEqual(await summarize(src.turnId, key), sum, 'resend replays');
+  assert.equal(fakes.hon.calls - honCalls, 1, 'no second call');
+  // 3. Refusals: another conversation, an unknown answer, a concealed source answer, a continuation, a delegation.
+  const elsewhere = await hon.create(scope, { title: 'Elsewhere' }, K());
+  assert.equal(await code(hon.sendTurn(scope, elsewhere.id, { text: 'Summarize.', delegation: null, summarizeTurnId: src.turnId }, K())), 'HON_GROUP_NOT_SUMMARIZABLE', 'another conversation');
+  assert.equal(await code(summarize(K())), 'HON_GROUP_NOT_SUMMARIZABLE', 'unknown answer');
+  await dropRep();
+  assert.equal(await code(summarize(src.turnId)), 'HON_GROUP_NOT_SUMMARIZABLE', 'a concealed source answer');
+  await addRep();
+  for (const bad of [{ text: 'q', delegation: null, summarizeTurnId: src.turnId, continueTurnId: sum.turnId },
+    { text: 'Draft.', delegation: { agentKey: 'marcus', campaignId: o.campaign }, summarizeTurnId: src.turnId }]) {
+    assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify(bad), K()])))).error?.message, 'INVALID_HON_TURN', JSON.stringify(bad));
+  }
+  // 4. Eligibility lapses while the reply row write waits (a blocker holds SHARE on hon_reply_invocations): refused after
+  //    the wait, nothing persisted.
+  {
+    const before = { turns: await turnsOf(conv.id), replies: (await row('SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE conversation_id=$1', [conv.id])).n, calls: fakes.hon.calls };
+    const blocker = new pg.Client({ connectionString: ownerUrl, ssl: false });
+    await blocker.connect();
+    let out;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('LOCK TABLE hon.hon_reply_invocations IN SHARE MODE');
+      const bpid = (await blocker.query('SELECT pg_backend_pid() p')).rows[0].p;
+      let done = false;
+      const p = code(summarize(src.turnId)).then((r) => { done = true; return r; });
+      for (const end = Date.now() + 5000; !(await row('SELECT count(*)::int n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [bpid])).n; await sleep(20)) {
+        assert.ok(!done && Date.now() < end, 'the summary never waited on the reply row');
+      }
+      await dropRep();
+      await blocker.query('COMMIT');
+      out = await p;
+    } finally { await blocker.query('ROLLBACK').catch(() => {}); await blocker.end(); await addRep(); }
+    assert.equal(out, 'HON_GROUP_NOT_SUMMARIZABLE', 'refused after the wait');
+    assert.deepEqual({ turns: await turnsOf(conv.id), replies: (await row('SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE conversation_id=$1', [conv.id])).n, calls: fakes.hon.calls }, before, 'nothing persisted');
+  }
+  // 5. A lapse between the turn and prepare: nothing is reserved and HON is not called.
+  {
+    const kTurn = K();
+    const begun = await tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4) d', [o.subject, conv.id, JSON.stringify({ text: 'Summarize again.', delegation: null, summarizeTurnId: src.turnId }), kTurn]));
+    const turnId = begun.rows[0].d.turnId;
+    const ref = (await tenant(context(o), (c) => c.query('SELECT hon.hon_reply_planning_reference($1,$2::uuid) d', [o.subject, turnId]))).rows[0].d;
+    const lim = ref.limits;
+    const planned = await plans.plan({ ...context(o), idempotencyKey: ref.invocationId }, ref.workItemId, { expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: 'hon', modality: 'TEXT', taskClass: lim.taskClass, inputBudget: lim.inputBudget, outputBudget: lim.outputBudget, maxProviderCostMicrounits: lim.maxProviderCostMicrounits });
+    await dropRep();
+    const calls = fakes.hon.calls;
+    const prepared = await tenant(context(o), async (c) => { await c.query("SELECT set_config('app.hon_external_subject',$1,true)", [o.subject]); return (await c.query('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,true) d', [o.subject, turnId, planned.plan.id])).rows[0].d; });
+    await addRep();
+    const r = await row('SELECT status, reason, reserved_credits FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId]);
+    assert.deepEqual([prepared, r.status, r.reason, r.reserved_credits, fakes.hon.calls - calls], [null, 'BLOCKED', 'GROUP_NOT_SUMMARIZABLE', 0, 0]);
+  }
+  // 6. The table refuses a summary that continues an answer; the helper is internal.
+  assert.equal((await settle(admin.query('UPDATE hon.hon_reply_invocations SET step=2 WHERE turn_id=$1', [sum.turnId]))).error?.code ?? 'OK', '23514');
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid)','EXECUTE') s", [runtimeRole])).s, false);
+  pass('INV-30', 'C3b: HON summarizes a confirmed group only when it is finished (COMPLETED, FAILED or PARTIAL; never no group, NEEDS_REVIEW or UNKNOWN), for this human\'s own group in the same conversation while the source answer is visible; the summary is an ordinary planned question (resend replays, one call) whose facts carry only the recorded group status, source question and answer and each member\'s specialist, status and reason (no drafts) and call no specialist; eligibility is re-checked after the reply row write waits and again in prepare (a lapse persists nothing, or reserves nothing and calls nothing); refusals record no turn; the helper is internal');
+  }
+
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
   // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter

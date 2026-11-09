@@ -50,6 +50,11 @@ export interface HonTurnRequest {
    * names the delegated agent). The turn is an ordinary delegation; it is also grouped with the answer's other confirmations.
    */
   fromSuggestionTurnId?: string;
+  /**
+   * Question turns only (C3b), never with continueTurnId: ask HON to summarize the recorded outcomes of the confirmed group
+   * of this HON answer (HonOrchestration.sourceTurnId) once it is finished (COMPLETED, FAILED or PARTIAL).
+   */
+  summarizeTurnId?: string;
 }
 /** The conversational responder of a question turn (not one of the delegate specialists). */
 export const HON_REPLY_ROLE = 'hon' as const;
@@ -121,12 +126,15 @@ export function validateHonConversationCreate(value: unknown): HonConversationCr
 export function validateHonTurnRequest(value: unknown): HonTurnRequest {
   const r = record(value, invalid);
   if (r.delegation === null) {
-    exactKeys(r, ['text', 'delegation', ...('replyMode' in r ? ['replyMode'] : []), ...('continueTurnId' in r ? ['continueTurnId'] : [])], invalid);
+    exactKeys(r, ['text', 'delegation', ...('replyMode' in r ? ['replyMode'] : []), ...('continueTurnId' in r ? ['continueTurnId'] : []),
+      ...('summarizeTurnId' in r ? ['summarizeTurnId'] : [])], invalid);
     if (!marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
     if ('replyMode' in r && !(HON_REPLY_MODE_KEYS as readonly unknown[]).includes(r.replyMode)) invalid();
     if ('continueTurnId' in r && !isUuid(r.continueTurnId)) invalid();
+    if ('summarizeTurnId' in r && (!isUuid(r.summarizeTurnId) || 'continueTurnId' in r)) invalid();
     return { text: r.text as string, delegation: null,
-      ...('replyMode' in r ? { replyMode: r.replyMode as HonReplyMode } : {}), ...('continueTurnId' in r ? { continueTurnId: r.continueTurnId as string } : {}) };
+      ...('replyMode' in r ? { replyMode: r.replyMode as HonReplyMode } : {}), ...('continueTurnId' in r ? { continueTurnId: r.continueTurnId as string } : {}),
+      ...('summarizeTurnId' in r ? { summarizeTurnId: r.summarizeTurnId as string } : {}) };
   }
   exactKeys(r, ['text', 'delegation', ...('fromSuggestionTurnId' in r ? ['fromSuggestionTurnId'] : [])], invalid);
   if ('fromSuggestionTurnId' in r && !isUuid(r.fromSuggestionTurnId)) invalid();
