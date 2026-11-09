@@ -1,0 +1,134 @@
+# HON OS Render Blueprint (owner hosting decision 2026-11-09: Render + Supabase Pro).
+#
+# Merging this file deploys nothing. Commit-triggered deploys are off. But Render DOES deploy:
+#   1. both services immediately when David first applies (creates) the Blueprint, and
+#   2. on a later render.yaml change to main while Blueprint Auto Sync is on (Render's default).
+# So: apply only when the database, roles and CA are ready and David has approved the deploy, and
+# turn Auto Sync off right after creation (see "Before you click Apply" in
+# docs/operations/RENDER_DEPLOYMENT.md). Guarded by apps/api/test/render-blueprint.test.cjs.
+#
+# Safety rules this file must keep (the test enforces them):
+# - No commit-triggered deploys and no preview environments.
+# - No preDeployCommand: database migrations are a separate, owner-approved step with the migration
+#   role, which the API startup gate refuses to hold (MIGRATION_CREDENTIAL_IN_API_PROCESS).
+# - No DATABASE_URL, OPENROUTER_*, STRIPE_*, ZERNIO_* or MANUS_* variables: live money, paid AI,
+#   messaging and the development sign-in adapter stay off.
+# - HON_DEPLOYMENT_ENVIRONMENT stays `staging` until a reviewed PR promotes it to `production`.
+
+previews:
+  generation: off
+
+envVarGroups:
+  # Shared by API and web: the web server signs HON session cookies and the API verifies them.
+  # Render ignores `sync: false` inside groups, so this group only holds generated or fixed values.
+  - name: hon-session
+    envVars:
+      - key: HON_SESSION_JWT_SECRET
+        generateValue: true
+      - key: HON_SESSION_AUDIENCE
+        value: hon-os
+
+services:
+  # API: private service. No public URL; only hon-web reaches it over Render's private network
+  # (the web app proxies /api/v1/* to it). Bad configuration makes the process exit before it
+  # listens (apps/api/src/foundation/production-config.ts).
+  - type: pserv
+    name: hon-api
+    runtime: node
+    region: virginia # Supabase project region is us-east-1; cannot be changed after creation
+    plan: 0.5c-512mb # starting size; David confirms the plan when creating the Blueprint
+    branch: main
+    autoDeployTrigger: off
+    buildCommand: >-
+      node .github/scripts/verify-node-runtime.mjs --expect 22.23.4 &&
+      corepack enable && corepack prepare pnpm@10.18.0 --activate &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm prepare:workspace &&
+      pnpm --filter @hon/api build
+    startCommand: pnpm --filter @hon/api start
+    maxShutdownDelaySeconds: 30 # SIGTERM drains the runtime pool (Nest shutdown hooks)
+    envVars:
+      - key: NODE_VERSION
+        value: 22.23.4
+      - key: NODE_ENV
+        value: production
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
+      - key: HON_DEPLOYMENT_ENVIRONMENT
+        value: staging
+      - key: HON_AUTH_MODE
+        value: OIDC
+      - key: PORT
+        value: "3001"
+      - key: HON_API_PORT
+        value: "3001"
+      - key: HON_RUNTIME_DATABASE_POOL_MAX
+        value: "8"
+      # Supabase Session Pooler URL for the hon_runtime role (never the postgres/migration role).
+      # Remove any ?sslmode=... parameter: HON configures and verifies TLS itself.
+      - key: HON_RUNTIME_DATABASE_URL
+        sync: false
+      # PEM text of the Supabase project CA (Dashboard > Database > SSL Configuration).
+      - key: HON_DATABASE_CA_CERT
+        sync: false
+      # https origin of the public web app, e.g. https://app.<domain>. Same value as on hon-web.
+      - key: HON_PUBLIC_ORIGIN
+        sync: false
+      - fromGroup: hon-session
+
+  # Web: the only public service. Health check needs no database or provider traffic.
+  - type: web
+    name: hon-web
+    runtime: node
+    region: virginia
+    plan: 0.5c-512mb
+    branch: main
+    autoDeployTrigger: off
+    buildCommand: >-
+      node .github/scripts/verify-node-runtime.mjs --expect 22.23.4 &&
+      corepack enable && corepack prepare pnpm@10.18.0 --activate &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm prepare:workspace &&
+      pnpm --filter @hon/web build
+    startCommand: pnpm --filter @hon/web start
+    healthCheckPath: /api/identity/readiness
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_VERSION
+        value: 22.23.4
+      - key: NODE_ENV
+        value: production
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
+      - key: HON_DEPLOYMENT_ENVIRONMENT
+        value: staging
+      - key: HON_AUTH_MODE
+        value: OIDC
+      - key: PORT
+        value: "3000"
+      # http://<hon-api internal address>:3001 from the hon-api dashboard "Connect > Internal" panel.
+      - key: HON_API_BASE_URL
+        sync: false
+      - key: HON_PUBLIC_ORIGIN
+        sync: false
+      # OIDC sign-in provider (owner decision: which provider). Values come from that provider.
+      - key: HON_OIDC_ISSUER
+        sync: false
+      - key: HON_OIDC_AUTHORIZATION_ENDPOINT
+        sync: false
+      - key: HON_OIDC_TOKEN_ENDPOINT
+        sync: false
+      - key: HON_OIDC_JWKS_URI
+        sync: false
+      - key: HON_OIDC_CLIENT_ID
+        sync: false
+      - key: HON_OIDC_CLIENT_SECRET
+        sync: false
+      # Must be exactly <HON_PUBLIC_ORIGIN>/auth/callback.
+      - key: HON_OIDC_REDIRECT_URI
+        sync: false
+      - key: HON_OIDC_SCOPES
+        value: openid email profile
+      - key: HON_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
+        value: client_secret_basic
+      - fromGroup: hon-session

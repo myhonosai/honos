@@ -52,6 +52,7 @@ const REASON: Record<string, string> = {
   AGENT_REQUEST_INVALID: 'The specialist could not accept this request. Nothing was drafted and nothing is charged.',
   AGENT_TARGET_NOT_FOUND: 'The chosen campaign, curriculum or lead is no longer available to this specialist. Nothing was drafted and nothing is charged.',
   AGENT_REQUEST_CONFLICT: 'That record changed or already has a request in progress. Nothing new was drafted and nothing is charged.',
+  GROUP_NOT_SUMMARIZABLE: 'HON did not summarize: the specialists’ work changed or is no longer yours to summarize. Nothing is charged.',
 };
 /** Definitive refusals named by the server's error code; nothing was recorded for any of them. */
 const CODE_TEXT: Record<string, string> = {
@@ -60,6 +61,7 @@ const CODE_TEXT: Record<string, string> = {
   HON_REPLY_NOT_CONTINUABLE: 'That answer can no longer be continued. Ask a new question instead. Nothing was sent.',
   HON_CONVERSATION_NOT_FOUND: 'That conversation is no longer available. Refresh to see your conversations. Nothing was sent.',
   HON_SUGGESTION_NOT_CONFIRMABLE: 'That suggestion can no longer be confirmed: this specialist was already asked from this answer, or the answer or the specialist’s access changed. Nothing was sent.',
+  HON_GROUP_NOT_SUMMARIZABLE: 'HON can’t summarize those specialists: their group changed since you saw it, or it is no longer yours to summarize. Nothing was sent. Refresh to see where it stands.',
 };
 const failureText = (state: HonConversationFailure, code: string | null | undefined) => (code && state !== 'UNKNOWN' ? CODE_TEXT[code] : undefined) ?? FAILURE[state];
 const reasonText = (reason: string | null) => reason === null ? null : REASON[reason] ?? `HON could not answer (${reason.toLowerCase().replaceAll('_', ' ')}). Nothing is charged.`;
@@ -90,7 +92,10 @@ export type HonConversationViewProps = {
   groups: ReadonlyMap<string, HonOrchestration>; groupPhase: GroupPhase; confirm: SuggestionConfirm | null;
   onSuggest(sourceTurnId: string, agent: HonSuggestedAgentKey): void; onConfirmChange(patch: Partial<ConfirmChoice>): void; onConfirmSend(): void; onConfirmCancel(): void;
   onDraft(text: string): void; onMode(mode: HonReplyMode): void; onSend(): void; onOpen(id: string): void; onNew(): void;
-  onContinue(turn: HonConversationTurn): void; onRetry(): void; onDismiss(): void; onRefresh(): void;
+  onContinue(turn: HonConversationTurn): void;
+  /** C3b: ask HON (as a new question) to summarize what a finished group of specialists recorded. */
+  onSummarize?(sourceTurnId: string): void;
+  onRetry(): void; onDismiss(): void; onRefresh(): void;
 };
 
 const TARGET_FAILURE: Partial<Record<HonConversationFailure, string>> = {
@@ -148,8 +153,13 @@ function ConfirmForm({ confirm, locked, onChange, onSend, onCancel }: {
   </form>;
 }
 
-function Suggestions({ turn, group, groupPhase, available, locked, confirm, onSuggest, onConfirmChange, onConfirmSend, onConfirmCancel }: {
+/** A group HON may summarize: every specialist's outcome is recorded (done, not done, or some of each). */
+export const SUMMARIZABLE_GROUP: ReadonlySet<HonOrchestration['status']> = new Set(['COMPLETED', 'FAILED', 'PARTIAL']);
+export const SUMMARY_QUESTION = 'Summarize what the specialists I asked recorded, and what I should do next.';
+
+function Suggestions({ turn, group, groupPhase, available, locked, canSummarize, onSummarize, confirm, onSuggest, onConfirmChange, onConfirmSend, onConfirmCancel }: {
   turn: HonConversationTurn; group: HonOrchestration | undefined; groupPhase: GroupPhase; available: readonly HonSuggestedAgentKey[]; locked: boolean;
+  canSummarize: boolean; onSummarize: ((sourceTurnId: string) => void) | undefined;
   confirm: SuggestionConfirm | null; onSuggest: HonConversationViewProps['onSuggest']; onConfirmChange: HonConversationViewProps['onConfirmChange'];
   onConfirmSend: () => void; onConfirmCancel: () => void;
 }): React.ReactElement | null {
@@ -167,6 +177,10 @@ function Suggestions({ turn, group, groupPhase, available, locked, confirm, onSu
         return <li key={member.turnId}><span>{SUGGESTION_AGENT[member.agentKey].name}</span><span className={styles.status} data-tone={memberStatus.tone}>{memberStatus.label}</span></li>;
       })}</ul>
       {group.status === 'NEEDS_REVIEW' || group.status === 'PARTIAL' ? <a className={styles.link} href="/staff/action-center/approvals">Review drafts in Action Center →</a> : null}
+      {SUMMARIZABLE_GROUP.has(group.status) && verified && onSummarize ? <div className={styles.actions} data-hon-summarize={turn.turnId}>
+        <button type="button" className={styles.secondary} disabled={!canSummarize} onClick={() => onSummarize(turn.turnId)}>Summarize with HON</button>
+        <p className={styles.meta}>HON reads only what these specialists recorded and answers below as a new question. It changes nothing. Each summary is a new question, so asking again runs a new summary.</p>
+      </div> : null}
     </div> : null}
     {suggested.length > 0 ? <>
       <p className={styles.meta}>HON suggests asking {suggested.length === 1 ? 'a specialist' : 'these specialists'}. Nothing runs until you choose what they work on and confirm.</p>
@@ -250,6 +264,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
         {thread && props.threadPhase === 'READY' ? <ol className={styles.turns} aria-label={thread.title}>
           {thread.turns.map((turn, index) => <Turn key={`${turn.turnId}-${index}`} turn={turn} onContinue={props.onContinue} locked={locked}>
             {turn.role === 'hon' ? <Suggestions turn={turn} group={props.groups.get(turn.turnId.toLowerCase())} groupPhase={props.groupPhase} available={available} locked={suggestLocked}
+              canSummarize={canAsk && !suggestLocked} onSummarize={props.onSummarize}
               confirm={props.confirm} onSuggest={props.onSuggest} onConfirmChange={props.onConfirmChange} onConfirmSend={props.onConfirmSend} onConfirmCancel={props.onConfirmCancel} /> : null}
           </Turn>)}
         </ol> : null}
@@ -440,6 +455,14 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       if (!thread || concealed.current || !turn.replyDetail?.canContinue) return;
       try { run({ prepared: prepareTurn(school, thread.id, { text: 'Please continue.', delegation: null, continueTurnId: turn.turnId }), kind: 'turn', label: 'Continue HON’s answer', state: 'SENDING', conversationId: thread.id }); }
       catch { /* invalid continuation is never sent */ }
+    }}
+    onSummarize={(sourceTurnId) => {
+      if (!thread || concealed.current || groupPhase !== 'READY' || (pending && (pending.state === 'SENDING' || pending.state === 'UNKNOWN'))) return;
+      const group = groups.get(sourceTurnId.toLowerCase());
+      if (!group || !SUMMARIZABLE_GROUP.has(group.status)) return;
+      closeConfirm(); openId.current = thread.id;
+      try { run({ prepared: prepareTurn(school, thread.id, { text: SUMMARY_QUESTION, delegation: null, summarizeTurnId: group.sourceTurnId }), kind: 'turn', label: 'Summarize with HON', state: 'SENDING', conversationId: thread.id }); }
+      catch { /* an invalid summary request is never sent */ }
     }}
     onRetry={() => { if (pending && !concealed.current && pending.prepared.path) run({ ...pending, state: 'SENDING' }); }}
     onDismiss={() => { pendingKey.current = null; setPending(null); if (!concealed.current) load(); }}
