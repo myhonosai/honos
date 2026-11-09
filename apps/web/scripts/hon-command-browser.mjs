@@ -226,6 +226,7 @@ async function api(route) {
     aiUsage: { availability: 'UNAVAILABLE', reason: 'No authoritative HQ AI usage or cost projection is available.' },
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path === '/api/v1/hq/schools' || path.endsWith('/ownership') || path === '/api/v1/hq/school-ownership/primary-owner') { const answered = await ownershipApiRoute(route, path, method); if (answered !== null) return answered; }
+  if (path.startsWith('/api/v1/hq/ai/')) { const answered = await aiControlApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
@@ -651,6 +652,95 @@ function resetOwnership(over = {}) {
 resetOwnership();
 const ownView = (schoolId) => { const primary = own.primary.get(schoolId) ?? null, owners = ownOwners(schoolId).map((o) => ({ ...o, primary: o.ownerGrantId === primary }));
   return { owners, primaryOwnerGrantId: primary, notices: ownNotices(schoolId), asOf: '2026-11-08T12:30:00.000Z' }; };
+// HQ AI costs and safety (S4-c/d/e, synthetic). Pauses, lost calls and settlements live here; replies, one per POST:
+// 'ok', 'unknown' (503, nothing changed), 'active' (422 AI_SPEND_PAUSE_ALREADY_ACTIVE).
+const aix = { pauses: [], open: [], resolved: [], posts: [], replies: [], byKey: new Map(), usage: [], reads: [], denied: false };
+const AIX_COMMAND = { 'spend-pauses': 'ai-spend-pause', resolve: 'ai-unknown-resolve', 'late-provider-expense': 'ai-late-provider-expense' };
+const aixZero = { providerReportedCostMicrounits: 0, estimatedWriteOffCostMicrounits: 0, entries: 0, writeOffEntries: 0, lateProviderCostMicrounits: 0, lateProviderExpenseEntries: 0, supersededWriteOffEstimateMicrounits: 0 };
+function resetAiControl(over = {}) {
+  Object.assign(aix, { pauses: [], posts: [], replies: [], byKey: new Map(), usage: [], reads: [], denied: false,
+    open: [{ agent: 'MARKETING', invocationId: id(2100), organizationId: scope.organizationId, schoolId: scope.schoolId, status: 'UNKNOWN', reservedCredits: 40,
+      heldAt: '2026-11-08T10:00:00.000Z', countsAgainstCurrentWindow: true }],
+    resolved: [{ resolutionId: id(2110), agent: 'TEACHING', invocationId: id(2101), organizationId: scope.organizationId, schoolId: ownSecond, decision: 'WRITE_OFF', releasedCredits: 25,
+      ledgerEntryId: id(2111), customerCredits: 0, resolvedAt: '2026-11-07T12:00:00.000Z', reason: 'Provider has no record we can match', evidence: { estimatedProviderCostMicrounits: 2000 },
+      resolvedByPrincipalId: id(2190), priorStatus: 'UNKNOWN', heldAt: '2026-11-06T10:00:00.000Z', lateProviderExpense: null }] }, over);
+}
+resetAiControl();
+function aiUsage(from, to) {
+  const a = (credits, cost, entries) => ({ credits, ...aixZero, providerReportedCostMicrounits: cost, entries });
+  return { from, to, asOf: '2026-11-09T00:00:01.000Z', truncated: false, providerCostUnit: 'MICROUNITS_USD', schools: [
+    { organizationId: scope.organizationId, schoolId: scope.schoolId, ...aixZero, providerReportedCostMicrounits: 1_293_400, entries: 23, unreconciledInvocations: aix.open.length, byClass: {
+      AGENT_INFERENCE: { ...a(860, 93_400, 21), byAgent: { MARKETING: a(500, 61_000, 12), CHAD_FOLLOW_UP: a(240, 22_400, 7), TEACHING: a(120, 10_000, 2) } },
+      CREATIVE_MEDIA: { ...a(1_200, 1_200_000, 2), byAgent: null } } },
+    { organizationId: scope.organizationId, schoolId: ownSecond, ...aixZero, estimatedWriteOffCostMicrounits: 2_000, entries: 1, writeOffEntries: 1, unreconciledInvocations: 0, byClass: {
+      AGENT_INFERENCE: { credits: 0, ...aixZero, estimatedWriteOffCostMicrounits: 2_000, entries: 1, writeOffEntries: 1,
+        byAgent: { TEACHING: { credits: 0, ...aixZero, estimatedWriteOffCostMicrounits: 2_000, entries: 1, writeOffEntries: 1 } } } } }],
+    organizations: [{ organizationId: scope.organizationId, agentWindowStart: '2026-11-01T00:00:00.000Z', agentWindowEnd: '2026-12-01T00:00:00.000Z', agentCommittedCredits: 900,
+      agentCeilingCredits: 12_000, openUnknownHolds: aix.open.length, aiPaused: aix.pauses.some((p) => p.status === 'ACTIVE' && (p.organizationId === null || p.organizationId === scope.organizationId)) }] };
+}
+async function aiControlApiRoute(route, path, method, url) {
+  const request = route.request(), headers = request.headers();
+  if (Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command')) return json(route, 400, { code: 'SAAS_INVALID_REQUEST' });
+  if (method === 'GET') {
+    if (headers['idempotency-key'] !== undefined || headers['x-hon-human-command'] !== undefined) return json(route, 400, { code: 'SAAS_INVALID_REQUEST' });
+    if (aix.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    if (path === '/api/v1/hq/ai/school-usage') {
+      const keys = [...url.searchParams.keys()].sort().join(',');
+      if (keys !== 'from,to') return json(route, 400, { code: 'SAAS_INVALID_REQUEST' });
+      const from = url.searchParams.get('from'), to = url.searchParams.get('to');
+      aix.usage.push({ from, to });
+      return json(route, 200, { data: aiUsage(from, to) });
+    }
+    if (url.search) return json(route, 400, { code: 'SAAS_INVALID_REQUEST' });
+    aix.reads.push(path.split('/').pop());
+    if (path === '/api/v1/hq/ai/spend-pauses') return json(route, 200, { data: { pauses: [...aix.pauses].sort((x, y) => (x.status === 'ACTIVE' ? 0 : 1) - (y.status === 'ACTIVE' ? 0 : 1)), asOf: '2026-11-09T03:00:00.000Z' } });
+    if (path === '/api/v1/hq/ai/unknown-invocations') return json(route, 200, { data: { open: aix.open, resolved: aix.resolved, staleAfterSeconds: 900, asOf: '2026-11-09T03:00:00.000Z' } });
+    return null;
+  }
+  if (method !== 'POST' || url.search) return null;
+  const target = path.match(/^\/api\/v1\/hq\/ai\/unknown-invocations\/([A-Z_]+)\/([0-9a-f-]{36})\/(resolve|late-provider-expense)$/);
+  const tail = path === '/api/v1/hq/ai/spend-pauses' ? 'spend-pauses' : target ? target[3] : null;
+  if (!tail) return null;
+  const key = headers['idempotency-key'], body = JSON.parse(request.postData() ?? '{}');
+  aix.posts.push({ key, tail, command: headers['x-hon-human-command'], body, agent: target?.[1] ?? null, invocationId: target?.[2] ?? null });
+  if (headers['x-hon-human-command'] !== AIX_COMMAND[tail] || !/^application\/json/.test(headers['content-type'] ?? '') || headers.origin !== origin) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  if (!key) return json(route, 400, { code: 'SAAS_INVALID_REQUEST' });
+  if (aix.byKey.has(key)) return json(route, 200, { data: { ...aix.byKey.get(key), replayed: true } });
+  const next = aix.replies.shift() ?? 'ok';
+  if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+  if (next === 'active') return json(route, 422, { code: 'AI_SPEND_PAUSE_ALREADY_ACTIVE' });
+  let receipt;
+  if (tail === 'spend-pauses') {
+    if (body.action === 'PAUSE') {
+      const pause = { pauseId: id(2200 + aix.pauses.length), organizationId: body.organizationId, spendClass: body.spendClass, reason: body.reason, pausedAt: '2026-11-09T02:30:00.000Z',
+        pausedByPrincipalId: id(2190), status: 'ACTIVE', endReason: null, endedAt: null, endedByPrincipalId: null };
+      aix.pauses.push(pause); receipt = { pauseId: pause.pauseId, organizationId: pause.organizationId, spendClass: pause.spendClass, status: 'ACTIVE', replayed: false };
+    } else {
+      const pause = aix.pauses.find((p) => p.status === 'ACTIVE' && p.organizationId === body.organizationId && p.spendClass === body.spendClass);
+      if (!pause) return json(route, 422, { code: 'AI_SPEND_PAUSE_NOT_ACTIVE' });
+      Object.assign(pause, { status: 'ENDED', endReason: body.reason, endedAt: '2026-11-09T02:45:00.000Z', endedByPrincipalId: id(2190) });
+      receipt = { pauseId: pause.pauseId, organizationId: pause.organizationId, spendClass: pause.spendClass, status: 'ENDED', replayed: false };
+    }
+  } else if (tail === 'resolve') {
+    const at = aix.open.findIndex((x) => x.agent === target[1] && x.invocationId === target[2]);
+    if (at < 0) return json(route, 422, { code: 'AI_UNKNOWN_NOT_RESOLVABLE' });
+    const [item] = aix.open.splice(at, 1), recorded = body.decision !== 'NO_PROVIDER_CHARGE';
+    receipt = { resolutionId: id(2120 + aix.resolved.length), agent: item.agent, invocationId: item.invocationId, organizationId: item.organizationId, schoolId: item.schoolId,
+      decision: body.decision, releasedCredits: item.reservedCredits, ledgerEntryId: recorded ? id(2130 + aix.resolved.length) : null,
+      customerCredits: body.decision === 'RECORD_PROVIDER_COST' ? 12 : body.decision === 'WRITE_OFF' ? 0 : null, resolvedAt: '2026-11-09T02:50:00.000Z', replayed: false };
+    const { replayed: _r, ...row } = receipt;
+    aix.resolved.unshift({ ...row, reason: body.reason, evidence: body.evidence, resolvedByPrincipalId: id(2190), priorStatus: item.status, heldAt: item.heldAt, lateProviderExpense: null });
+  } else {
+    const row = aix.resolved.find((x) => x.agent === target[1] && x.invocationId === target[2]);
+    if (!row || row.decision !== 'WRITE_OFF') return json(route, 422, { code: 'AI_LATE_EXPENSE_NOT_WRITTEN_OFF' });
+    if (row.lateProviderExpense) return json(route, 422, { code: 'AI_LATE_EXPENSE_ALREADY_RECORDED' });
+    row.lateProviderExpense = { expenseId: id(2140), providerCostMicrounits: body.evidence.providerCostMicrounits, occurredAt: row.heldAt, recordedAt: '2026-11-09T02:55:00.000Z' };
+    receipt = { expenseId: id(2140), resolutionId: row.resolutionId, agent: row.agent, invocationId: row.invocationId, providerCostMicrounits: body.evidence.providerCostMicrounits,
+      estimatedProviderCostMicrounits: row.evidence.estimatedProviderCostMicrounits, customerCredits: 0, occurredAt: row.heldAt, recordedAt: '2026-11-09T02:55:00.000Z', replayed: false };
+  }
+  aix.byKey.set(key, receipt);
+  return json(route, 200, { data: receipt });
+}
 async function ownershipApiRoute(route, path, method) {
   const request = route.request(), headers = request.headers();
   if (Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command') || new URL(request.url()).search) return json(route, 400, { code: 'ACCOUNT_INPUT_INVALID' });
@@ -2862,6 +2952,183 @@ await check('Pause, cancel & refunds: turning pauses off removes Pause; leaving 
   await chgPage(second.page).getByText("You cannot see this membership's pauses and refunds.").waitFor();
   assert.equal(await chgPage(second.page).getByTestId('membership-actions').count(), 0);
   await second.ctx.close();
+});
+
+// ---------- HQ AI costs and safety (S4-c/d/e) ----------
+const aiCosts = (page) => page.getByTestId('hq-ai-costs'), aiSafety = (page) => page.getByTestId('hq-ai-safety');
+const AI_TEXT = { en: ['AI Costs', 'Synthetic Dojo Group — Synthetic Martial Arts Academy', '$1.29', 'Last 7 days'], ko: ['AI 비용', 'Synthetic Dojo Group — Synthetic Martial Arts Academy', '$1.29', '최근 7일'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`AI Costs ${nextTheme} ${language} ${name}: per-school usage from the HQ read, and a new read for another period`, async () => {
+    resetAiControl();
+    const [title, schoolName, cost, week] = AI_TEXT[language];
+    const { ctx, page } = await ownershipPage('/hq/ai-costs', viewport, { nextTheme, language });
+    await aiCosts(page).getByTestId('ai-usage-table').getByText(schoolName).first().waitFor({ timeout: 20000 });
+    assert.equal(await aiCosts(page).locator('h1').innerText(), title);
+    await aiCosts(page).getByTestId('ai-usage-table').getByText(cost).first().waitFor();
+    const first = aix.usage.at(-1);
+    assert.equal(Date.parse(first.to) - Date.parse(first.from), 30 * 86_400_000);
+    await noOverflow(page, `ai-costs-${nextTheme}-${language}-${name}`);
+    await axe(page, `ai-costs-${nextTheme}-${language}-${name}`);
+    await shot(page, `ai-costs-${nextTheme}-${language}-${name}`, true);
+    await aiCosts(page).getByRole('button', { name: week }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="hq-ai-costs"] [aria-pressed="true"]')?.textContent?.includes('7'));
+    await aiCosts(page).getByTestId('ai-usage-table').waitFor();
+    const last = aix.usage.at(-1);
+    assert.equal(Date.parse(last.to) - Date.parse(last.from), 7 * 86_400_000);
+    await ctx.close();
+  });
+}
+await check('AI Costs: a refused read shows nothing, and leaving the tab hides the numbers until Show again reads fresh', async () => {
+  resetAiControl({ denied: true });
+  const { ctx, page } = await ownershipPage('/hq/ai-costs', { width: 1280, height: 900 });
+  await aiCosts(page).getByText('does not include AI costs').waitFor({ timeout: 20000 });
+  assert.equal(await aiCosts(page).getByTestId('ai-usage-table').count(), 0);
+  aix.denied = false;
+  await aiCosts(page).getByRole('button', { name: 'Refresh' }).click();
+  await aiCosts(page).getByTestId('ai-usage-table').waitFor();
+  const reads = aix.usage.length;
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await aiCosts(page).getByText('Hidden while you were away.').waitFor();
+  assert.equal(await aiCosts(page).getByTestId('ai-usage-table').count(), 0);
+  await aiCosts(page).getByRole('button', { name: 'Show again' }).click();
+  await aiCosts(page).getByTestId('ai-usage-table').waitFor();
+  assert.ok(aix.usage.length > reads, 'read again after Show again');
+  await ctx.close();
+});
+const AIS_TEXT = { en: ['AI Safety', 'Pause AI spend', 'Pause now', 'AI spend is paused.'], ko: ['AI 안전', 'AI 지출 일시정지', '지금 일시정지', 'AI 지출이 일시정지되었습니다.'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`AI Safety ${nextTheme} ${language} ${name}: pause the whole platform, read again from the server`, async () => {
+    resetAiControl();
+    const [title, open, confirm, done] = AIS_TEXT[language];
+    const { ctx, page } = await ownershipPage('/hq/ai-safety', viewport, { nextTheme, language });
+    await aiSafety(page).getByTestId('unknown-row').waitFor({ timeout: 20000 });
+    assert.equal(await aiSafety(page).locator('h1').innerText(), title);
+    await noOverflow(page, `ai-safety-${nextTheme}-${language}-${name}`);
+    await axe(page, `ai-safety-${nextTheme}-${language}-${name}`);
+    await shot(page, `ai-safety-${nextTheme}-${language}-${name}`, true);
+    await aiSafety(page).getByRole('button', { name: open }).click();
+    const form = aiSafety(page).getByTestId('pause-form');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="pause-form"] select[name="organizationId"] option').length === 2);
+    await form.locator('textarea').fill('Provider bill spike under review');
+    await axe(page, `ai-safety-pause-form-${nextTheme}-${language}-${name}`);
+    await shot(page, `ai-safety-pause-form-${nextTheme}-${language}-${name}`, true);
+    await aiSafety(page).getByRole('button', { name: confirm }).click();
+    await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: done }).waitFor();
+    await aiSafety(page).locator('[data-testid="pause-row"][data-status="ACTIVE"]').waitFor();
+    assert.equal(aix.posts.length, 1);
+    assert.deepEqual({ tail: aix.posts[0].tail, command: aix.posts[0].command, body: aix.posts[0].body },
+      { tail: 'spend-pauses', command: 'ai-spend-pause', body: { action: 'PAUSE', organizationId: null, spendClass: 'ALL', reason: 'Provider bill spike under review' } });
+    assert.ok(/^[0-9a-f-]{36}$/.test(aix.posts[0].key), 'an idempotency key');
+    assert.ok(aix.reads.filter((r) => r === 'spend-pauses').length >= 2, 'read again after the answer');
+    await ctx.close();
+  });
+}
+await check('AI Safety: pause one organization for creative media, then resume with the listed scope', async () => {
+  resetAiControl();
+  const { ctx, page } = await ownershipPage('/hq/ai-safety', { width: 1280, height: 900 });
+  await aiSafety(page).getByTestId('unknown-row').waitFor({ timeout: 20000 });
+  await aiSafety(page).getByRole('button', { name: 'Pause AI spend' }).click();
+  const form = aiSafety(page).getByTestId('pause-form');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="pause-form"] select[name="organizationId"] option').length === 2);
+  await form.locator('select[name="organizationId"]').selectOption(scope.organizationId);
+  await form.locator('select[name="spendClass"]').selectOption('CREATIVE_MEDIA');
+  await form.locator('textarea').fill('Creative spend spike at one group');
+  await aiSafety(page).getByRole('button', { name: 'Pause now' }).click();
+  const row = aiSafety(page).locator('[data-testid="pause-row"][data-status="ACTIVE"]');
+  await row.getByText('Synthetic Dojo Group · Creative media').waitFor();
+  await row.getByRole('button', { name: 'Resume' }).click();
+  await aiSafety(page).getByTestId('resume-form').locator('textarea').fill('Spike explained by a launch');
+  await aiSafety(page).getByRole('button', { name: 'Resume AI spend' }).click();
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'AI spend is resumed.' }).waitFor();
+  await aiSafety(page).locator('[data-testid="pause-row"][data-status="ENDED"]').waitFor();
+  assert.deepEqual(aix.posts.map((p) => p.body), [
+    { action: 'PAUSE', organizationId: scope.organizationId, spendClass: 'CREATIVE_MEDIA', reason: 'Creative spend spike at one group' },
+    { action: 'RESUME', organizationId: scope.organizationId, spendClass: 'CREATIVE_MEDIA', reason: 'Spike explained by a launch' }]);
+  assert.notEqual(aix.posts[0].key, aix.posts[1].key);
+  await ctx.close();
+});
+await check('AI Safety: settle a lost call as a write-off, then record its late provider charge, each on its own path', async () => {
+  resetAiControl();
+  const { ctx, page } = await ownershipPage('/hq/ai-safety', { width: 1280, height: 900 });
+  await aiSafety(page).getByTestId('unknown-row').waitFor({ timeout: 20000 });
+  await aiSafety(page).getByTestId('unknown-row').getByRole('button', { name: 'Settle' }).click();
+  const settle = aiSafety(page).getByTestId('settle-form');
+  await settle.locator('select[name="decision"]').selectOption('WRITE_OFF');
+  await settle.locator('input[name="estimate"]').fill('0.004');
+  await settle.locator('textarea').fill('Provider has no matching record');
+  await axe(page, 'ai-safety-settle-form');
+  await shot(page, 'ai-safety-settle-form', true);
+  await aiSafety(page).getByRole('button', { name: 'Settle this call' }).click();
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'The call is settled.' }).waitFor();
+  await aiSafety(page).getByText('No open calls. Every AI call has a known result.').waitFor();
+  assert.deepEqual({ tail: aix.posts[0].tail, command: aix.posts[0].command, agent: aix.posts[0].agent, invocationId: aix.posts[0].invocationId, body: aix.posts[0].body },
+    { tail: 'resolve', command: 'ai-unknown-resolve', agent: 'MARKETING', invocationId: id(2100), body: { decision: 'WRITE_OFF', reason: 'Provider has no matching record', evidence: { estimatedProviderCostMicrounits: 4000 } } });
+  const fresh = aiSafety(page).getByTestId('resolved-row').filter({ hasText: 'Marketing' });
+  await fresh.getByRole('button', { name: 'Record a late provider charge' }).click();
+  const late = aiSafety(page).getByTestId('late-form');
+  await late.locator('input[name="providerGenerationId"]').fill('gen_synthetic_1');
+  await late.locator('input[name="inputTokens"]').fill('1200');
+  await late.locator('input[name="outputTokens"]').fill('300');
+  await late.locator('input[name="providerCost"]').fill('0.0031');
+  await late.locator('textarea').fill('Invoice line found on the provider bill');
+  await aiSafety(page).getByRole('button', { name: 'Record charge' }).click();
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'The late provider charge is recorded.' }).waitFor();
+  await fresh.getByText(/Late provider charge \$0\.0031 recorded/).waitFor();
+  assert.deepEqual({ tail: aix.posts[1].tail, command: aix.posts[1].command, body: aix.posts[1].body },
+    { tail: 'late-provider-expense', command: 'ai-late-provider-expense', body: { reason: 'Invoice line found on the provider bill',
+      evidence: { providerGenerationId: 'gen_synthetic_1', inputTokens: 1200, outputTokens: 300, providerCostMicrounits: 3100 } } });
+  await shot(page, 'ai-safety-settled', true);
+  await ctx.close();
+});
+await check('AI Safety: an unknown outcome offers Try again with the same key; Stop drops it; a refusal closes the form', async () => {
+  resetAiControl({ replies: ['unknown', 'unknown'] });
+  const { ctx, page } = await ownershipPage('/hq/ai-safety', { width: 1280, height: 900 });
+  await aiSafety(page).getByTestId('unknown-row').waitFor({ timeout: 20000 });
+  const pauseOnce = async (reason) => {
+    await aiSafety(page).getByRole('button', { name: 'Pause AI spend' }).click();
+    await aiSafety(page).getByTestId('pause-form').locator('textarea').fill(reason);
+    await aiSafety(page).getByRole('button', { name: 'Pause now' }).click();
+  };
+  await pauseOnce('Provider bill spike under review');
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'We could not confirm' }).waitFor();
+  await shot(page, 'ai-safety-unknown-outcome', true);
+  await aiSafety(page).getByRole('button', { name: 'Try again' }).click();
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'We could not confirm' }).waitFor();
+  assert.equal(aix.posts.length, 2); assert.equal(aix.posts[0].key, aix.posts[1].key);
+  await aiSafety(page).getByRole('button', { name: 'Try again' }).click();
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'AI spend is paused.' }).waitFor();
+  assert.equal(aix.posts.length, 3); assert.equal(aix.posts[2].key, aix.posts[0].key);
+  assert.equal(aix.pauses.length, 1);
+  // Stop: a kept unknown is dropped, the lists are read again, and a new attempt is refused by the server state.
+  aix.replies.push('unknown');
+  await pauseOnce('Second pause for the same scope');
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'We could not confirm' }).waitFor();
+  const reads = aix.reads.length;
+  await aiSafety(page).getByRole('button', { name: 'Stop and check the lists' }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="safety-outcome"]'));
+  assert.ok(aix.reads.length > reads, 'read again after Stop');
+  assert.equal(await aiSafety(page).getByTestId('pause-form').count(), 0);
+  aix.replies.push('active');
+  await pauseOnce('Third pause for the same scope');
+  await aiSafety(page).getByTestId('safety-outcome').filter({ hasText: 'This changed since it was read.' }).waitFor();
+  assert.equal(await aiSafety(page).getByTestId('pause-form').count(), 0);
+  assert.equal(await aiSafety(page).getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.notEqual(aix.posts.at(-1).key, aix.posts[0].key);
+  await ctx.close();
+});
+await check('AI Safety: leaving the tab hides pauses and calls; a refused read shows nothing', async () => {
+  resetAiControl();
+  const { ctx, page } = await ownershipPage('/hq/ai-safety', { width: 1280, height: 900 });
+  await aiSafety(page).getByTestId('unknown-row').waitFor({ timeout: 20000 });
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await aiSafety(page).getByText('Hidden while you were away.').waitFor();
+  assert.equal(await aiSafety(page).getByTestId('unknown-row').count(), 0);
+  aix.denied = true;
+  await aiSafety(page).getByRole('button', { name: 'Show again' }).click();
+  await aiSafety(page).getByTestId('ai-pauses').getByText('does not include AI costs').waitFor();
+  assert.equal(await aiSafety(page).getByTestId('unknown-row').count(), 0);
+  assert.equal(await aiSafety(page).getByRole('button', { name: 'Pause AI spend' }).count(), 0);
+  await ctx.close();
 });
 
 await browser.close();

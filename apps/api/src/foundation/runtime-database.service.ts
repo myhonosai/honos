@@ -207,6 +207,8 @@ const SAAS_BILLING_CALLS = {
   readExceptionPolicy: { sql: 'SELECT hon.read_saas_exception_policy($1) AS data', arity: 1, readOnly: true },
   // B-HQ-1 (0219): read-only HQ overview of every organization's access standing; writes nothing.
   readAccessOverview: { sql: 'SELECT hon.read_saas_access_overview_from_hq($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
+  // C-HQ-3 (0225): read-only HQ detail of one school; names, statuses and counts only.
+  readHqSchoolDetail: { sql: 'SELECT hon.read_hq_school_detail_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   decideExceptionPolicy: { sql: 'SELECT hon.decide_saas_exception_policy($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   // HON OS commercial offers (0181): HQ Pricing & Offers and the school purchaser discovery read; no checkout connection.
   readOfferManagement: { sql: 'SELECT hon.read_saas_offer_management_from_hq($1) AS data', arity: 1, readOnly: true },

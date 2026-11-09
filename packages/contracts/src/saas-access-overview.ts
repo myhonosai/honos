@@ -158,3 +158,43 @@ export function validateSaasAccessOverview(value: unknown): SaasAccessOverview {
   }
   return r as unknown as SaasAccessOverview;
 }
+
+// ---------- C-HQ-3 HQ school detail (migration 0225 proposed) ----------
+export interface HqInvitationCounts { pending: number; expired: number; accepted: number; revoked: number; ended: number }
+export interface HqSchoolDetail {
+  school: { schoolId: string; schoolDisplayName: string; slug: string; timezone: string; schoolStatus: string; createdAt: string };
+  organization: SaasAccessOverviewOrganization;
+  exceptionPolicyReady: boolean;
+  ownership: { ownerCount: number; primaryOwnerGrantId: string | null; primaryNeeded: boolean; hqSeatCount: number };
+  invitations: { owner: HqInvitationCounts; staff: HqInvitationCounts; family: HqInvitationCounts };
+  people: { staffWithAccess: number; familyMembersWithAccess: number; activeStudents: number };
+  viewer: { canGrantAndRevokeExceptions: boolean; canManageOwnership: boolean };
+  asOf: string;
+}
+const COUNT_MAX = 10_000_000;
+function invitationCounts(value: unknown, kind: 'OWNER' | 'STAFF' | 'FAMILY'): HqInvitationCounts {
+  const c = record(value, drift); exactKeys(c, ['pending','expired','accepted','revoked','ended'], drift);
+  if (Object.values(c).some(n => !isInt(n, 0, COUNT_MAX)) || (kind !== 'FAMILY' && c.ended !== 0)) drift();
+  return c as unknown as HqInvitationCounts;
+}
+/** One school for HQ: names, statuses and counts only; never a person's name, email, birth date or token. */
+export function validateHqSchoolDetail(value: unknown): HqSchoolDetail {
+  const r = record(value, drift);
+  exactKeys(r, ['school','organization','exceptionPolicyReady','ownership','invitations','people','viewer','asOf'], drift);
+  const s = record(r.school, drift); exactKeys(s, ['schoolId','schoolDisplayName','slug','timezone','schoolStatus','createdAt'], drift);
+  if (!isUuid(s.schoolId) || !label(s.schoolDisplayName, 300) || !label(s.slug, 300) || !label(s.timezone, 100) || !code(s.schoolStatus)
+    || !isTimestamp(s.createdAt) || typeof r.exceptionPolicyReady !== 'boolean' || !isTimestamp(r.asOf)) drift();
+  const org = organization(r.organization, r.exceptionPolicyReady as boolean);
+  if (org.schools.length < org.schoolCount ? false : !org.schools.some(x => x.schoolId === s.schoolId)) drift();
+  const o = record(r.ownership, drift); exactKeys(o, ['ownerCount','primaryOwnerGrantId','primaryNeeded','hqSeatCount'], drift);
+  if (!isInt(o.ownerCount, 0, COUNT_MAX) || !isInt(o.hqSeatCount, 0, COUNT_MAX) || !nullable(o.primaryOwnerGrantId, isUuid)
+    || o.primaryNeeded !== ((o.ownerCount as number) > 0 && o.primaryOwnerGrantId === null)
+    || (o.primaryOwnerGrantId !== null && o.ownerCount === 0)) drift();
+  const i = record(r.invitations, drift); exactKeys(i, ['owner','staff','family'], drift);
+  invitationCounts(i.owner, 'OWNER'); invitationCounts(i.staff, 'STAFF'); invitationCounts(i.family, 'FAMILY');
+  const p = record(r.people, drift); exactKeys(p, ['staffWithAccess','familyMembersWithAccess','activeStudents'], drift);
+  if (Object.values(p).some(n => !isInt(n, 0, COUNT_MAX))) drift();
+  const v = record(r.viewer, drift); exactKeys(v, ['canGrantAndRevokeExceptions','canManageOwnership'], drift);
+  if (typeof v.canGrantAndRevokeExceptions !== 'boolean' || v.canManageOwnership !== v.canGrantAndRevokeExceptions) drift();
+  return r as unknown as HqSchoolDetail;
+}
