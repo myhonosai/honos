@@ -6,7 +6,7 @@ const { ValidationPipe } = require('@nestjs/common');
 const { readFileSync } = require('node:fs');
 const { MembershipService } = require('../dist/billing/membership.service.js');
 const { MembershipController } = require('../dist/billing/membership.controller.js');
-const { MembershipActivationHumanUiGuard, MembershipActivationPreviewHumanUiGuard } = require('../dist/billing/membership-activation-human-ui.guard.js');
+const { MembershipActivationHumanUiGuard, MembershipActivationPreviewHumanUiGuard, MembershipCancelHumanUiGuard } = require('../dist/billing/membership-activation-human-ui.guard.js');
 const { HonIdentityGuard } = require('../dist/foundation/hon-identity.guard.js');
 const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
 
@@ -182,7 +182,7 @@ test('real HTTP path: separate preview and confirm commands, same-origin human m
   const oldOrigin = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.test';
   const f = fixture();
   const module = await Test.createTestingModule({ controllers: [MembershipController],
-    providers: [MembershipService, MembershipActivationHumanUiGuard, MembershipActivationPreviewHumanUiGuard, { provide: RuntimeDatabaseService, useValue: f.db }] })
+    providers: [MembershipService, MembershipActivationHumanUiGuard, MembershipActivationPreviewHumanUiGuard, MembershipCancelHumanUiGuard, { provide: RuntimeDatabaseService, useValue: f.db }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(c) { c.switchToHttp().getRequest().honIdentity = { externalSubject: subject }; return true; } }).compile();
   const app = module.createNestApplication(); app.setGlobalPrefix('v1'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   await app.listen(0, '127.0.0.1');
@@ -218,6 +218,14 @@ test('real HTTP path: separate preview and confirm commands, same-origin human m
     assert.equal(activated.status, 200); assert.equal(activated.headers.get('cache-control'), 'private, no-store');
     const body = await activated.json();
     assert.equal(body.data.state, 'ACTIVE'); assert.equal(body.data.effectivePeriod.endDateInclusive, true); assert.equal(body.meta.replayed, false);
+    // Cancellation is its own same-origin browser command: no other command, origin, source or delegation reaches it.
+    const cancelHeaders = { ...human('billing.membership.cancel'), 'Idempotency-Key': 'cancel-1' }, cancelBody = '{"expectedVersion":2,"cancellationReason":"Moved."}';
+    for (const patch of [{ 'X-HON-Human-Command': 'billing.membership.activate' }, { 'X-HON-Human-Command': '' }, { origin: 'https://other.test' }, { 'Sec-Fetch-Site': 'cross-site' },
+      { 'X-HON-Source': 'AI' }, { 'X-HON-Delegated-By-Principal-Id': randomUUID() }]) {
+      assert.equal((await fetch(`${base}/${id}/cancel`, { method: 'POST', headers: { ...cancelHeaders, ...patch }, body: cancelBody })).status, 403, JSON.stringify(patch));
+    }
+    const cancelled = await fetch(`${base}/${id}/cancel`, { method: 'POST', headers: cancelHeaders, body: cancelBody });
+    assert.equal(cancelled.status, 200); assert.equal((await cancelled.json()).data.state, 'CANCELLED');
   } finally { await app.close(); if (oldOrigin === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = oldOrigin; }
 });
 

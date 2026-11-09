@@ -80,6 +80,7 @@ export function MembershipListView(props: MembershipListViewProps): React.ReactE
         <ul className={styles.actions}>
           <li><a className={styles.primary} href="/staff/billing/memberships">{t('activate')}</a></li>
           <li><a className={styles.secondary} href="/staff/billing/membership-dates">{t('confirmDates')}</a></li>
+          <li><a className={styles.secondary} href="/staff/billing/membership-changes">{t('changes')}</a></li>
         </ul>
       </article>
       <p className={styles.meta}>{t('readOnly')}</p>

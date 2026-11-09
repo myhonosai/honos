@@ -17,7 +17,7 @@ const en = {
   SCHEDULED: 'Starts later', IN_EFFECT: 'In effect', ENDED: 'Ended', UNDATED: 'Active, dates not confirmed', DRAFT: 'Draft', FROZEN: 'Frozen',
   CANCELLATION_PENDING: 'Cancellation pending', CANCELLED: 'Cancelled', EXPIRED: 'Expired',
   c_inEffect: 'In effect', c_scheduled: 'Starts later', c_undated: 'Dates not confirmed', c_draft: 'Draft', c_other: 'Other states',
-  nextSteps: 'Next steps', activate: 'Activate a draft membership', confirmDates: 'Confirm or change dates',
+  nextSteps: 'Next steps', activate: 'Activate a draft membership', confirmDates: 'Confirm or change dates', changes: 'Pause, cancel or record a refund',
   waiting: 'Checking your school…', noSchool: 'Choose a school to see its memberships.', concealed: 'Memberships are hidden. Come back to this tab to check your school again.',
 };
 export type MembershipListKey = keyof typeof en;
@@ -39,7 +39,7 @@ const ko: Record<MembershipListKey, string> = {
   SCHEDULED: '시작 예정', IN_EFFECT: '유효', ENDED: '종료됨', UNDATED: '활성, 날짜 미확정', DRAFT: '초안', FROZEN: '일시 정지',
   CANCELLATION_PENDING: '해지 대기', CANCELLED: '해지됨', EXPIRED: '만료',
   c_inEffect: '유효', c_scheduled: '시작 예정', c_undated: '날짜 미확정', c_draft: '초안', c_other: '기타 상태',
-  nextSteps: '다음 단계', activate: '초안 회원권 활성화', confirmDates: '날짜 확정 또는 변경',
+  nextSteps: '다음 단계', activate: '초안 회원권 활성화', confirmDates: '날짜 확정 또는 변경', changes: '일시정지·취소·환불 기록',
   waiting: '학교를 확인하는 중…', noSchool: '회원권을 보려면 학교를 선택하세요.', concealed: '회원권이 숨겨졌습니다. 이 탭으로 돌아오면 학교를 다시 확인합니다.',
 };
 const es: Record<MembershipListKey, string> = {
@@ -60,7 +60,7 @@ const es: Record<MembershipListKey, string> = {
   SCHEDULED: 'Empieza más adelante', IN_EFFECT: 'Vigente', ENDED: 'Terminada', UNDATED: 'Activa, fechas sin confirmar', DRAFT: 'Borrador', FROZEN: 'Congelada',
   CANCELLATION_PENDING: 'Cancelación pendiente', CANCELLED: 'Cancelada', EXPIRED: 'Vencida',
   c_inEffect: 'Vigentes', c_scheduled: 'Empiezan más adelante', c_undated: 'Fechas sin confirmar', c_draft: 'Borrador', c_other: 'Otros estados',
-  nextSteps: 'Siguientes pasos', activate: 'Activar una membresía en borrador', confirmDates: 'Confirmar o cambiar fechas',
+  nextSteps: 'Siguientes pasos', activate: 'Activar una membresía en borrador', confirmDates: 'Confirmar o cambiar fechas', changes: 'Pausar, cancelar o registrar un reembolso',
   waiting: 'Comprobando tu escuela…', noSchool: 'Elige una escuela para ver sus membresías.', concealed: 'Las membresías están ocultas. Vuelve a esta pestaña para comprobar tu escuela de nuevo.',
 };
 export const MEMBERSHIP_LIST_LANGUAGES = { en, ko, es } as const;

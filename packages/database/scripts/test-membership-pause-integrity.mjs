@@ -70,7 +70,7 @@ async function startApp() {
 }
 
 const COMMAND = { pause: 'billing.membership.pause', resume: 'billing.membership.resume', 'refund-records': 'billing.membership.refund.record',
-  policy: 'billing.membership.pause_policy.set', cancel: undefined };
+  policy: 'billing.membership.pause_policy.set', cancel: 'billing.membership.cancel' };
 function call(actor, method, path, { body, key = randomUUID(), command, headers = {}, school = actor.school, organization = actor.org } = {}) {
   const target = new URL(`${origin}/v1/organizations/${organization}/schools/${school}/billing/${path}`);
   const payload = body === undefined ? undefined : JSON.stringify(body);
@@ -99,7 +99,7 @@ const pause = (actor, membershipId, body, options = {}) => call(actor, 'POST', `
 const resume = (actor, membershipId, body, options = {}) => call(actor, 'POST', `memberships/${membershipId}/resume`, { body, command: COMMAND.resume, ...options });
 const refund = (actor, membershipId, body, options = {}) => call(actor, 'POST', `memberships/${membershipId}/refund-records`, { body, command: COMMAND['refund-records'], ...options });
 const history = (actor, membershipId, options = {}) => call(actor, 'GET', `memberships/${membershipId}/pauses-and-refunds`, options);
-const cancel = (actor, membershipId, body, options = {}) => call(actor, 'POST', `memberships/${membershipId}/cancel`, { body, ...options });
+const cancel = (actor, membershipId, body, options = {}) => call(actor, 'POST', `memberships/${membershipId}/cancel`, { body, command: COMMAND.cancel, ...options });
 
 async function success(read, label, { noStore = true } = {}) {
   const { status, body, headers } = await read();
@@ -357,6 +357,8 @@ try {
   const cancelAudit = (await sql("SELECT prior_state, next_state FROM hon.audit_events WHERE entity_id=$1 AND action_code='billing.membership.cancel'", [m.One])).rows;
   ok(cancelAudit.length === 1 && cancelAudit[0].prior_state.state === 'FROZEN' && cancelAudit[0].next_state.endedPauseId === closed.id, 'cancel audit records the paused prior state');
   const six = await membership(m.Six);
+  await refused(() => cancel(CANCELLER, m.Six, { expectedVersion: six.version, cancellationReason: 'No marker' }, { command: null }), 403, 'HUMAN_UI_REQUIRED', 'cancel without its command header');
+  await refused(() => cancel(CANCELLER, m.Six, { expectedVersion: six.version, cancellationReason: 'Wrong marker' }, { command: COMMAND.pause }), 403, 'HUMAN_UI_REQUIRED', 'pause command header on cancel');
   const cancelledSix = await success(() => cancel(CANCELLER, m.Six, { expectedVersion: six.version, cancellationReason: 'Schedule change' }), 'cancel ACTIVE Six', { noStore: false });
   ok(cancelledSix.data.state === 'CANCELLED' && Object.keys(cancelledSix.data).sort().join(',') === 'billingAccountId,cancellationReason,createdAt,id,participantPersonId,planCode,state,version', 'ACTIVE cancellation keeps its public contract');
   await refused(() => cancel(CANCELLER, m.Six, { expectedVersion: six.version + 1, cancellationReason: 'Again' }), 409, 'MEMBERSHIP_NOT_ACTIVE', 'cancel a cancelled membership');
