@@ -692,10 +692,45 @@ function resetPeople(over = {}) {
   [id(302), { personId: id(302), schoolId: scope.schoolId, givenName: 'Ben', familyName: 'Okafor', email: null, phoneE164: '+15555550102',
     version: 2, updatedAt: iso(-24), student: null, consents: { EMAIL: 'NOT_RECORDED', SMS: 'OPTED_OUT' } }]]);
   Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+  // Contact consent records (0217 rule source): one row per recorded channel. puts/replies are the consent commands' own.
+  ppl.consents = new Map([[id(301), new Map([['EMAIL', { channel: 'EMAIL', status: 'OPTED_IN', source: 'STAFF', capturedAt: '2026-10-01T16:00:00.000Z', version: 1, updatedAt: '2026-10-01T16:00:00.000Z' }]])],
+    [id(302), new Map([['SMS', { channel: 'SMS', status: 'OPTED_OUT', source: 'PARENT', capturedAt: '2026-10-02T16:00:00.000Z', version: 1, updatedAt: '2026-10-02T16:00:00.000Z' }]])]]);
+  Object.assign(ppl, { consentPuts: [], consentReplies: [], consentKeys: new Map(), consentReads: 0, consentDenied: false }, over.consent ?? {});
 }
 resetPeople();
+async function consentApiRoute(route, method, url, personId, channel) {
+  const request = route.request(), headers = request.headers(), meta = { requestId: id(960), correlationId: id(960) };
+  if (url.search || ['x-hon-source', 'x-hon-action-request-id', 'x-hon-delegated-by-principal-id'].some((k) => headers[k] !== undefined)) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+  const rows = ppl.consents.get(personId);
+  if (method === 'GET' && channel === null) {
+    ppl.consentReads++;
+    if (headers['idempotency-key'] !== undefined || headers['x-hon-human-command'] !== undefined) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+    if (ppl.consentDenied) return json(route, 403, { statusCode: 403, message: 'Forbidden' });
+    if (!rows) return json(route, 404, { statusCode: 404, message: 'Person was not found in this school.' });
+    return json(route, 200, { data: [...rows.values()].sort((a, b) => a.channel.localeCompare(b.channel)), meta });
+  }
+  if (method !== 'PUT' || channel === null) return null;
+  const key = headers['idempotency-key'], body = JSON.parse(request.postData() ?? '{}');
+  ppl.consentPuts.push({ key, channel, command: headers['x-hon-human-command'], body });
+  if (headers['x-hon-human-command'] !== 'communication.consent.record' || headers.origin !== origin || !/^application\/json/.test(headers['content-type'] ?? '')) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+  if (!key) return json(route, 409, { code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  if (ppl.consentKeys.has(key)) return json(route, 200, { data: ppl.consentKeys.get(key), meta: { ...meta, replayed: true } });
+  const next = ppl.consentReplies.shift() ?? 'ok';
+  if (next === 'unknown') return json(route, 503, { statusCode: 503, message: 'Service Unavailable' });
+  if (!rows) return json(route, 404, { statusCode: 404 });
+  const current = rows.get(channel);
+  if (current && body.expectedVersion === undefined) return json(route, 409, { code: 'VERSION_REQUIRED' });
+  if (current && body.expectedVersion !== current.version) return json(route, 409, { code: 'VERSION_CONFLICT' });
+  if (!current && body.expectedVersion !== undefined) return json(route, 409, { code: 'VERSION_NOT_ALLOWED_ON_CREATE' });
+  const saved = { channel, status: body.status, source: 'STAFF', capturedAt: new Date(body.capturedAt).toISOString(), version: (current?.version ?? 0) + 1, updatedAt: new Date().toISOString() };
+  rows.set(channel, saved); ppl.consentKeys.set(key, saved);
+  const person = ppl.records.get(personId); if (person && (channel === 'EMAIL' || channel === 'SMS')) person.consents[channel] = body.status;
+  return json(route, current ? 200 : 201, { data: saved, meta: { ...meta, replayed: false } });
+}
 const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents: { ...r.consents }, canEdit: ppl.canEdit });
 async function peopleApiRoute(route, path, method, url) {
+  const consent = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people/([0-9a-f-]{36})/communication-consents(?:/([A-Z]+))?$`));
+  if (consent) return consentApiRoute(route, method, url, consent[1], consent[2] ?? null);
   if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
     const q = (url.searchParams.get('query') ?? '').toLowerCase();
     const items = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
@@ -703,7 +738,7 @@ async function peopleApiRoute(route, path, method, url) {
     return json(route, 200, { data: items, meta: { requestId: id(900), correlationId: id(900) } });
   }
   const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
-  if (read && method === 'GET') { const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
+  if (read && method === 'GET') { ppl.recordReads = (ppl.recordReads ?? 0) + 1; const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
   if (method !== 'POST' || !['/api/v1/school/people/update', '/api/v1/school/people/birth-date'].includes(path)) return null;
   const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
   ppl.posts.push({ path, key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
@@ -1561,6 +1596,13 @@ async function peoplePage(viewport, { nextTheme = 'modern', language = 'en' } = 
   return { ctx, page, section };
 }
 const open = async (section, name) => { await section().getByRole('button', { name: new RegExp(name) }).click(); };
+/** Opens a person and waits for the new record and its consent card to be read, never the form already on screen. */
+const openFresh = async (section, name) => {
+  const records = ppl.recordReads ?? 0, consents = ppl.consentReads;
+  await open(section, name);
+  for (let i = 0; i < 200 && ((ppl.recordReads ?? 0) <= records || ppl.consentReads <= consents); i++) await new Promise((done) => setTimeout(done, 50));
+  await section().getByTestId('person-consents').getByRole('button').first().waitFor();
+};
 const TITLES = { en: ['People', 'Child details', 'Save changes'], ko: ['사람', '자녀 정보', '변경 사항 저장'], es: ['Personas', 'Datos del niño', 'Guardar cambios'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['desktop-1440', { width: 1440, height: 900 }, 'classic', 'en'],
   ['desktop-1440', { width: 1440, height: 900 }, 'big-button', 'en'], ['phone-390', { width: 390, height: 844 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko'],
@@ -1633,6 +1675,88 @@ await check('People: consent, busy and version refusals say what to do; a new sa
   assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Anna', 'reload shows the saved record');
   await ctx.close();
 });
+const CONSENT_TEXT = { en: ['Contact consent', 'Record opt-out', 'Record opt-out now', 'Opt-out recorded for email.', 'Opted out'],
+  ko: ['연락 동의', '수신 거부 기록', '지금 수신 거부 기록', '이메일 수신 거부가 기록되었습니다.', '수신 거부'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`People consent ${nextTheme} ${language} ${name}: record an email opt-out, then the address can change`, async () => {
+    resetPeople();
+    const [title, optOut, confirm, done, optedOut] = CONSENT_TEXT[language];
+    const { ctx, page, section } = await peoplePage(viewport, { nextTheme, language });
+    await open(section, 'Ana Rivera');
+    const card = () => section().getByTestId('person-consents');
+    await card().locator('[data-testid="consent-EMAIL"][data-status="OPTED_IN"]').waitFor({ timeout: 20000 });
+    assert.ok(await card().getByRole('heading', { name: title }).isVisible());
+    await card().getByTestId('consent-EMAIL').getByRole('button', { name: optOut }).click();
+    await card().getByTestId('consent-form').waitFor();
+    await noOverflow(page, `people-consent-${nextTheme}-${language}-${name}`);
+    await axe(page, `people-consent-${nextTheme}-${language}-${name}`);
+    await card().scrollIntoViewIfNeeded();
+    await shot(page, `people-consent-optout-form-${nextTheme}-${language}-${name}`, true);
+    await card().getByRole('button', { name: confirm }).click();
+    await card().getByTestId('consent-outcome').filter({ hasText: done }).waitFor();
+    await card().locator('[data-testid="consent-EMAIL"][data-status="OPTED_OUT"]').getByText(optedOut).waitFor();
+    assert.equal(ppl.consentPuts.length, 1);
+    const put = ppl.consentPuts[0];
+    assert.equal(put.channel, 'EMAIL'); assert.equal(put.command, 'communication.consent.record');
+    assert.deepEqual({ ...put.body, capturedAt: undefined }, { status: 'OPTED_OUT', source: 'STAFF', capturedAt: undefined, expectedVersion: 1 });
+    assert.ok(Math.abs(Date.parse(put.body.capturedAt) - Date.now()) < 120_000, 'recorded now');
+    assert.ok(ppl.consentReads >= 2, 'read again after the answer');
+    await shot(page, `people-consent-recorded-${nextTheme}-${language}-${name}`, true);
+    if (language === 'en') {
+      await section().locator('input[name="email"]').fill('new.parent@example.invalid');
+      await section().getByRole('button', { name: 'Save changes' }).click();
+      await section().getByText('Saved. Changed: email.').waitFor();
+    }
+    await ctx.close();
+  });
+}
+await check('People consent: agreement needs the attestation; an unknown answer replays the same key; Stop and a conflict read again', async () => {
+  resetPeople({ consent: { consentReplies: ['unknown'] } });
+  const { ctx, page, section } = await peoplePage({ width: 1280, height: 900 });
+  await open(section, 'Ana Rivera');
+  const card = () => section().getByTestId('person-consents');
+  await card().locator('[data-testid="consent-SMS"][data-status="NOT_RECORDED"]').waitFor({ timeout: 20000 });
+  await card().getByTestId('consent-SMS').getByRole('button', { name: 'Record agreement' }).click();
+  await card().getByRole('button', { name: 'Record agreement now' }).click();
+  assert.equal(ppl.consentPuts.length, 0, 'the attestation is required');
+  await card().getByRole('checkbox').check();
+  await shot(page, 'people-consent-optin-form', true);
+  await card().getByRole('button', { name: 'Record agreement now' }).click();
+  await card().getByTestId('consent-outcome').filter({ hasText: 'We could not confirm whether this was recorded' }).waitFor();
+  assert.equal(await card().getByRole('button', { name: 'Record agreement now' }).isDisabled(), true, 'locked while unknown');
+  await card().getByRole('button', { name: 'Try again' }).click();
+  await card().getByTestId('consent-outcome').filter({ hasText: 'Agreement recorded for text messages.' }).waitFor();
+  assert.equal(ppl.consentPuts.length, 2);
+  assert.equal(ppl.consentPuts[0].key, ppl.consentPuts[1].key); assert.deepEqual(ppl.consentPuts[0].body, ppl.consentPuts[1].body);
+  assert.equal(ppl.consentPuts[0].body.expectedVersion, undefined, 'a first record carries no version');
+  await card().locator('[data-testid="consent-SMS"][data-status="OPTED_IN"]').waitFor();
+  // Stop drops a kept request and reads again.
+  ppl.consentReplies.push('unknown');
+  await card().getByTestId('consent-SMS').getByRole('button', { name: 'Record opt-out' }).click();
+  await card().getByRole('button', { name: 'Record opt-out now' }).click();
+  await card().getByRole('button', { name: 'Stop and read again' }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid="consent-outcome"]'));
+  assert.equal(await card().getByTestId('consent-form').count(), 0);
+  // Someone else changed it meanwhile: a conflict is final and reads again.
+  ppl.consents.get(id(301)).get('EMAIL').version = 5;
+  await card().getByTestId('consent-EMAIL').getByRole('button', { name: 'Record opt-out' }).click();
+  await card().getByRole('button', { name: 'Record opt-out now' }).click();
+  await card().getByTestId('consent-outcome').filter({ hasText: 'changed since it was read' }).waitFor();
+  assert.equal(await card().getByRole('button', { name: 'Try again' }).count(), 0);
+  assert.notEqual(ppl.consentPuts.at(-1).key, ppl.consentPuts[0].key);
+  await axe(page, 'people-consent-conflict');
+  await ctx.close();
+});
+await check('People consent: a refused consent read shows the saved summary only, with no record buttons', async () => {
+  resetPeople({ consent: { consentDenied: true } });
+  const { ctx, section } = await peoplePage({ width: 1280, height: 900 });
+  await open(section, 'Ana Rivera');
+  const card = () => section().getByTestId('person-consents');
+  await card().getByText('Showing the saved summary only.', { exact: false }).waitFor({ timeout: 20000 });
+  await card().locator('[data-testid="consent-EMAIL"][data-status="OPTED_IN"]').waitFor();
+  assert.equal(await card().getByRole('button').count(), 0);
+  await ctx.close();
+});
 await check('People: a birth date correction needs a reason, may need the owner, and carries into the enrollment', async () => {
   resetPeople({ replies: ['owner', 'ok'] });
   const { ctx, page, section } = await peoplePage({ width: 390, height: 844 });
@@ -1699,7 +1823,8 @@ const retire = {
   },
   'open another person': async (page, section) => {
     await open(section, 'Ben Okafor');
-    await section().locator('input[name="givenName"]').waitFor();
+    // The click commits asynchronously: wait for Ben's record, not for whichever form is on screen.
+    await section().locator('input[name="givenName"][value="Ben"]').waitFor({ timeout: 10000 });
     assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Ben');
   },
   unmount: async (page, section) => {
@@ -1736,8 +1861,7 @@ for (const [command, field, value, button] of [['contact', 'familyName', 'Rivera
       assert.equal(await page.evaluate(() => window.__honEnded), 0, 'the retired save did not end the session');
       assert.ok(await section().getByTestId('people-list').isVisible(), 'the current view stays shown');
       // A save that is still the one shown: its sign-in answer ends the session.
-      await open(section, 'Ana Rivera');
-      await section().locator('input[name="givenName"]').waitFor();
+      await openFresh(section, 'Ana Rivera');
       await save(section);
       await page.waitForFunction(() => window.__honEnded === 1, null, { timeout: 10000 });
       assert.equal(ppl.posts.length, 2);
