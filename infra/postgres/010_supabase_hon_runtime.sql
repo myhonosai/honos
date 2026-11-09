@@ -2447,6 +2447,8 @@ DO $$ DECLARE r text; t text; f text; BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.stage_student_import(text,jsonb,text,uuid,uuid),hon.decide_student_import(text,jsonb,text,uuid,uuid),
       hon.finalize_student_import(text,jsonb,text,uuid,uuid),hon.read_student_imports(text),hon.read_student_import(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
 -- R2 0244 per-school AI cost ceiling: only the HQ command and read reach the runtime; the decision helpers are internal.
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.command_ai_school_cost_limit(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply R2 migration 0244 first'; END IF;
