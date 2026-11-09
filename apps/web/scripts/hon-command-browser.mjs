@@ -834,7 +834,9 @@ async function creditsApiRoute(route, path, method, url) {
     const body = JSON.parse(route.request().postData() ?? 'null');
     ccx.posts.push({ kind: m[2], target: m[1], key, body });
     if (ccx.byKey.has(key)) { const [status, answer] = ccx.byKey.get(key); return json(route, status, status === 200 ? { data: { ...answer.data, replayed: true } } : answer); }
-    const reply = ccx.replies.shift() ?? 'ok';
+    let reply = ccx.replies.shift() ?? 'ok';
+    // 'hold' answers only when the check calls ccx.release(), then as 'ok'.
+    if (reply === 'hold') { await new Promise((resolve) => { ccx.release = resolve; }); reply = 'ok'; }
     if (reply === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
     if (reply === 'denied') return json(route, 403, { code: 'SAAS_FORBIDDEN' });
     const answer = ccCommand(m[2], m[1], body);
@@ -3685,9 +3687,26 @@ await check('Creative Credits corrections: an unknown answer keeps the request a
   await debit.getByRole('button', { name: 'Remove credits' }).click();
   await outcome.getByText('Only the HQ owner can do this. Nothing changed.').waitFor();
   assert.equal(await outcome.getByRole('button', { name: 'Try again' }).count(), 0);
+  // A grant still sending when the window is left: Show again shows it sending, and its late answer is applied on screen.
+  ccx.replies = ['hold'];
+  await detail.getByRole('button', { name: 'Grant credits' }).click();
+  await grant.getByLabel('Credits', { exact: true }).fill('30');
+  await grant.getByLabel('Note (why, for the record)').fill('Testing a late answer');
+  await grant.getByRole('checkbox').check();
+  await grant.getByRole('button', { name: 'Grant credits' }).click();
+  await outcome.and(page.locator('[data-kind="SENDING"]')).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.and(page.locator('[data-kind="SENDING"]')).waitFor();
+  ccx.release();
+  await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
+  await detail.getByText('Credit lots (2)').waitFor();
+  assert.equal(ccx.state.get(ccSouth).lots.length, 2, 'the late grant applied once');
+  assert.equal(await detail.getByRole('button', { name: 'Grant credits' }).isDisabled(), false, 'the lock is released');
   // A session end drops an unconfirmed correction and says so after Show again, with no Try again.
   ccx.replies = ['unknown'];
-  await detail.getByRole('button', { name: 'Remove credits' }).click();
+  await detail.getByRole('button', { name: 'Remove credits' }).first().click();
   await debit.getByLabel('Credits', { exact: true }).fill('10');
   await debit.getByLabel('Note (why, for the record)').fill('Testing a session end');
   await debit.getByRole('checkbox').check();

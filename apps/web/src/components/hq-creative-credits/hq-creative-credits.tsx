@@ -89,6 +89,8 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
   // that a session end dropped it before it was confirmed. Grants and removals carry no version, so an unconfirmed one is
   // never silently forgotten: a fresh request could apply twice.
   const afterReveal = useRef<{ schoolId: string; outcome: NonNullable<CreditOutcome> } | null>(null);
+  // Mirrors what is on screen now: an answer is held for Show again only while the page is actually hidden.
+  const hidden = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; privacy.current++; pending.current = null; }; }, []);
   useEffect(() => {
     // Per-school billing data: leaving the window or tab, or a session end, hides everything and retires every read. Leaving
@@ -98,6 +100,7 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
       const kept = pending.current;
       if (kept && !afterReveal.current) afterReveal.current = { schoolId: kept.request.schoolId, outcome: { kind: 'UNKNOWN', action: kept.request.action } };
       if (sessionEnded && kept) { pending.current = null; afterReveal.current = { schoolId: kept.request.schoolId, outcome: { kind: 'LOST', action: kept.request.action } }; }
+      hidden.current = true;
       setConcealed(true); setWallets({ state: 'LOADING' }); setSelected(null); setDetail(null); setForm(null); setOutcome(null);
       setLock(sending.current ? 'SENDING' : pending.current ? 'KEPT' : 'NONE');
     };
@@ -144,16 +147,16 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
     if (!dropped) pending.current = keep ? request : null;
     setLock(pending.current ? 'KEPT' : 'NONE');
     if (!mounted.current) return;
-    if (shown !== privacy.current) {
+    const answer: NonNullable<CreditOutcome> = dropped && keep ? { kind: 'LOST', action: next.action } : next;
+    if (hidden.current) {
       // Answered while hidden: show it after Show again. A session end that dropped an unconfirmed request says so.
-      afterReveal.current = { schoolId: request.request.schoolId, outcome: dropped && keep ? { kind: 'LOST', action: next.action } : next };
+      afterReveal.current = { schoolId: request.request.schoolId, outcome: answer };
       return;
     }
+    // Shown (possibly again after a hide while it was sending): apply the answer now and read fresh.
+    if (shown !== privacy.current) setSelected(request.request.schoolId);
     afterReveal.current = null;
-    setOutcome(next);
-    // Any answer closes the form: Try again replays the stored request, never the form as edited since.
-    setForm(null);
-    setRefresh((n) => n + 1);
+    setOutcome(answer); setForm(null); setRefresh((n) => n + 1);
   }, [api]);
 
   const onSubmit = useCallback((fields: Fields) => {
@@ -169,9 +172,12 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
     pending.current = null; afterReveal.current = null; setLock('NONE'); setOutcome(null); setRefresh((n) => n + 1);
   }, [lock]);
   const onShowAgain = useCallback(() => {
-    const shown = afterReveal.current;
+    hidden.current = false;
+    const shown = afterReveal.current, inFlight = sending.current ? pending.current : null;
+    // A correction still sending brings back its school, shown as sending; its answer is applied when it arrives.
+    if (inFlight) { afterReveal.current = null; setSelected(inFlight.request.schoolId); setOutcome({ kind: 'SENDING', action: inFlight.request.action }); }
     // A kept or late-answered correction brings back its school and its outcome; Try again still sends the same key.
-    if (shown) { setSelected(shown.schoolId); setOutcome(shown.outcome); if (shown.outcome.kind !== 'UNKNOWN' && shown.outcome.kind !== 'RATE') afterReveal.current = null; }
+    else if (shown) { setSelected(shown.schoolId); setOutcome(shown.outcome); if (shown.outcome.kind !== 'UNKNOWN' && shown.outcome.kind !== 'RATE') afterReveal.current = null; }
     setConcealed(false); setRefresh((n) => n + 1);
   }, []);
   const onOpenForm = useCallback((next: Exclude<CreditForm, null>) => { if (lock === 'NONE') { setOutcome(null); setForm(next); } }, [lock]);
