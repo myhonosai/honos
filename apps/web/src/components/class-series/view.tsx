@@ -148,7 +148,7 @@ function Form({ p }: { p: ClassSeriesViewProps }) {
         <label className={styles.field}>First date<input name="startsOn" type="date" required min={addDays(today, -7)} defaultValue={today}/></label>
         <PatternFields s={null}/>
       </> : form.kind === 'revise' ? <>
-        <p className={styles.meta}>Upcoming unbooked sessions move to the new pattern; ones on days no longer in it are cancelled. Sessions with bookings or attendance stay as they are.</p>
+        <p className={styles.meta}>Upcoming unbooked sessions move to the new pattern; ones on days no longer in it, or whose new start time has already passed today, are cancelled rather than moved. Sessions with bookings or attendance stay as they are.</p>
         <PatternFields s={s}/>
       </> : form.kind === 'end' ? <>
         <p className={styles.meta}>Unbooked sessions after the last date are cancelled. Sessions with bookings or attendance stay as they are. The series is kept, shown as ended.</p>

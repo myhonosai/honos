@@ -338,7 +338,55 @@ try {
     await refused(() => create(MANAGER, second), 403, undefined, `create refused: ${label}`);
     await sql(on, [ids.schoolA]);
   }
-  ok((await success(() => create(MANAGER, second), 'create after access is restored')).data.series.status === 'ACTIVE', 'second series created');
+  const secondMade = await success(() => create(MANAGER, second), 'create after access is restored');
+  ok(secondMade.data.series.status === 'ACTIVE', 'second series created');
+
+  // 7b. A booking or attendance that commits while a change waits on the session lock is seen after the lock: the session is kept.
+  // Bookings (0118) lock the session FOR UPDATE and insert; attendance (0115) locks it FOR SHARE and inserts. Neither updates the row.
+  const K = secondMade.data.series.seriesId;
+  const kFilled = await success(() => fill(MANAGER, K, { expectedVersion: 1, throughDate: addDays(today, 21) }), 'fill the second series');
+  const kRows = (await sessionsOf(K)).filter((r) => r.status === 'SCHEDULED');
+  ok(kRows.length >= 2, 'the second series has two upcoming Tuesdays');
+  const racer = new pg.Client(targets.owner);
+  await racer.connect();
+  await verifyCrmCloseProofConnection(racer, CRM_CLOSE_OWNER_ROLE);
+  const racerPid = (await racer.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+  const waitingOn = async () => {
+    for (let i = 0; i < 200; i += 1) {
+      // The runtime's query text is not visible to the owner role; a lock the racer holds that another backend waits for is.
+      const n = (await sql('SELECT count(*)::int n FROM pg_locks w WHERE NOT w.granted AND $1 = ANY(pg_blocking_pids(w.pid))', [racerPid])).rows[0].n;
+      if (n > 0) return true;
+      await new Promise((done) => setTimeout(done, 25));
+    }
+    return false;
+  };
+  const race = async (session, write, run, fn) => {
+    await racer.query('BEGIN');
+    await racer.query(`SELECT id FROM hon.class_sessions WHERE id=$1 ${write === 'booking' ? 'FOR UPDATE' : 'FOR SHARE'}`, [session.id]);
+    if (write === 'booking') await racer.query("INSERT INTO hon.class_bookings(organization_id,school_id,class_session_id,student_profile_id,booking_kind,status,source) VALUES($1,$2,$3,$4,'REGULAR','BOOKED','STAFF')",
+      [ids.organization, ids.schoolA, session.id, student]);
+    else await racer.query(`SELECT set_config('app.hon_organization_id',$1,true),set_config('app.hon_school_id',$2,true),set_config('app.hon_principal_id',$3,true),
+      set_config('app.hon_principal_type','HUMAN_USER',true),set_config('app.hon_external_subject',$4,true),set_config('app.hon_source','HUMAN_UI',true),
+      set_config('app.hon_request_id',$5,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)`,
+      [ids.organization, ids.schoolA, OWN.principal, OWN.subject, randomUUID()]);
+    if (write !== 'booking') await racer.query("INSERT INTO hon.attendance_records(organization_id,school_id,class_session_id,student_profile_id,status,recorded_by_principal_id,note) VALUES($1,$2,$3,$4,'PRESENT',$5,'Synthetic attendance')",
+      [ids.organization, ids.schoolA, session.id, student, OWN.principal]);
+    const pendingCommand = run();
+    const blocked = await waitingOn(fn);
+    await racer.query('COMMIT');
+    return { blocked, answer: await pendingCommand };
+  };
+  const [bookedTuesday, attendedTuesday] = kRows;
+  const moved = await race(bookedTuesday, 'booking', () => revise(MANAGER, K, { expectedVersion: kFilled.data.series.version, name: second.name, roomName: second.roomName, capacity: second.capacity, bookingPolicy: second.bookingPolicy, weekdays: second.weekdays, localStartTime: '16:30', durationMinutes: second.durationMinutes }), 'revise_class_series');
+  ok(moved.blocked && moved.answer.status === 200 && moved.answer.body.data.sessions.keptBooked === 1 && moved.answer.body.data.sessions.updated === kRows.length - 1, `revise waited on the booking and kept it: ${moved.blocked} ${moved.answer.status} ${JSON.stringify(moved.answer.body).slice(0, 300)}`);
+  let after = (await sessionsOf(K)).find((r) => r.id === bookedTuesday.id);
+  ok(after.status === 'SCHEDULED' && after.local_start === '16:00' && isoDay(after.local_date) === 2, 'the session booked during the change is exactly as it was');
+  const stopped = await race(attendedTuesday, 'attendance', () => end(MANAGER, K, { expectedVersion: moved.answer.body.data.series.version, lastDate: today, reason: 'Room closed' }), 'end_class_series');
+  ok(stopped.blocked && stopped.answer.status === 200 && stopped.answer.body.data.sessions.keptBooked >= 1, `end waited on the attendance and kept it: ${stopped.blocked} ${stopped.answer.status} ${JSON.stringify(stopped.answer.body).slice(0, 300)}`);
+  after = (await sessionsOf(K)).find((r) => r.id === attendedTuesday.id);
+  ok(after.status === 'SCHEDULED' && after.local_start === '16:30', 'the session attended during the end is not cancelled');
+  await racer.end();
+
 
   // 8. Settings-free guards: no owner write can rewrite a series outside the version rule or touch an occurrence.
   await sql('BEGIN');

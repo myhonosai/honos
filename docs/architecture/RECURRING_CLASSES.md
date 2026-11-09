@@ -24,7 +24,9 @@ automation. Sessions are created only when a staff member asks for them.
   re-proves the direct human subject (HUMAN_USER, HUMAN_UI, no action request, no delegation, one active principal,
   staff-eligible, no family/HQ/parent-type role), the live school-scoped permission and an active entitlement, before and after
   its locks, using the 0224 identity rules. The runtime still has no UPDATE on `hon.class_sessions`.
-- Commands: exact-request idempotency (24 h), IAM SHARE locks, the series row `FOR UPDATE` and an expected version. One audit
+- Commands: exact-request idempotency (24 h), IAM SHARE locks, the series row `FOR UPDATE` and an expected version. Change and end
+  lock each upcoming session `FOR UPDATE`, then check bookings and attendance in a separate statement, so one that committed while
+  the command waited for the lock is seen and the session is kept. One audit
   event and one inert outbox event (`schedule.series.created` / `revised` / `ended` / `filled`) per command.
 - Reads: up to 200 series and 200 programs with today, the time zone and the fill limit; the timetable is one Monday-to-Sunday
   school week (default this week), at most 500 sessions in start order, with booked counts.
@@ -56,9 +58,9 @@ menu label has English, Korean and Spanish).
 
 ## Evidence
 
-`pnpm --filter @hon/database db:test-class-series` (CI: `run-db-proofs.sh`, CRM-close fixture): 123 checks over signed HTTP,
+`pnpm --filter @hon/database db:test-class-series` (CI: `run-db-proofs.sh`, CRM-close fixture): 129 checks over signed HTTP,
 including create validation and cross-school/org programs, fill limits and replay, two concurrent fills creating each session
-once, DST round-trip, the timetable week and school isolation, a booked session kept through change and end, stale version and
+once, DST round-trip, the timetable week and school isolation, a booked session kept through change and end, a booking and an attendance that commit while a change or end waits on the session lock (two connections) kept, stale version and
 ended-series refusals, live grant/school/entitlement loss, browser transport, settings-free triggers, runtime ACL, the 011
 section, and no change to sessions outside a series. Web: `apps/web/test/class-series-ui.test.tsx`.
 

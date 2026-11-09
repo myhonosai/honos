@@ -219,13 +219,14 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE tz text; o record; starts timestamptz; updated integer:=0; cancelled integer:=0; kept integer:=0;
 BEGIN
   SELECT s.timezone INTO tz FROM hon.schools s WHERE s.id=x.school_id AND s.organization_id=x.organization_id;
-  FOR o IN SELECT oc.local_date,cs.id session_id,
-      EXISTS(SELECT 1 FROM hon.class_bookings b WHERE b.class_session_id=cs.id AND b.status<>'CANCELLED')
-        OR EXISTS(SELECT 1 FROM hon.attendance_records a WHERE a.class_session_id=cs.id) used
+  FOR o IN SELECT oc.local_date,cs.id session_id
     FROM hon.class_series_occurrences oc JOIN hon.class_sessions cs ON cs.id=oc.class_session_id
     WHERE oc.series_id=x.id AND cs.status='SCHEDULED' AND cs.starts_at>clock_timestamp()
     ORDER BY oc.local_date FOR UPDATE OF cs LOOP
-    IF o.used THEN kept:=kept+1; CONTINUE; END IF;
+    -- Checked in its own statement after the row lock: bookings (0118) and attendance (0115) lock the session and insert
+    -- without updating it, so a result computed in the locking query could still miss one that committed while we waited.
+    IF EXISTS(SELECT 1 FROM hon.class_bookings b WHERE b.class_session_id=o.session_id AND b.status<>'CANCELLED')
+      OR EXISTS(SELECT 1 FROM hon.attendance_records a WHERE a.class_session_id=o.session_id) THEN kept:=kept+1; CONTINUE; END IF;
     starts:=(o.local_date+x.local_start_time) AT TIME ZONE tz;
     IF (x.ends_on IS NOT NULL AND o.local_date>x.ends_on) OR NOT (extract(isodow FROM o.local_date)::smallint=ANY(x.weekdays))
       OR (starts AT TIME ZONE tz)::time<>x.local_start_time OR starts<=clock_timestamp() THEN
