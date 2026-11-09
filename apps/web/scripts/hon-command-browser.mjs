@@ -92,7 +92,7 @@ const approval = (n, actionCode, hours) => ({ id: id(n), actionCode, status: 'AW
 
 // Ask HON conversation fixtures. Default: provider route not activated, so HON cannot answer (the real state today).
 const hon = { reply: false, conversations: [], turns: new Map(), queue: [], posts: [], held: null, readinessReads: 0, groups: new Map(), targets: { step: null, gate: null, reads: [] } };
-const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, asOf: iso(0) });
+const honReadiness = () => ({ contract: true, providerRoute: hon.reply, entitlement: true, authorization: true, availableAgentKeys: hon.reply ? ['marcus', 'kai', 'chad'] : [], honReply: hon.reply, businessPerformance: false, asOf: iso(0) });
 // C3a: each specialist's own target list (synthetic), and the grouped confirmations by HON answer.
 const honCampaigns = () => [['Spring trial week', 'ACTIVE'], ['Summer camp', 'DRAFT'], ['Old open house', 'ARCHIVED']].map(([name, status], n) => ({ id: id(720 + n), code: `C${n}`, name, goal: 'More trials', offerLabel: '',
   channel: 'EMAIL', startsAt: iso(-100), endsAt: iso(100), plannedBudgetMinor: 0, currency: 'USD', version: 3, status, createdAt: iso(-200), updatedAt: iso(-10), planningOnly: true }));
@@ -135,6 +135,7 @@ async function honApi(route, path, method, prefix) {
   if (step === 'timeout') return json(route, 503, { code: 'HON_CONVERSATION_TIMEOUT' });
   if (step === 'paused') return json(route, 403, { code: 'HON_AI_SPEND_REFUSED', reason: 'AI_SPEND_PAUSED' });
   if (step === 'notConfirmable') return json(route, 400, { code: 'HON_SUGGESTION_NOT_CONFIRMABLE' });
+  if (step === 'notSummarizable') return json(route, 400, { code: 'HON_GROUP_NOT_SUMMARIZABLE' });
   if (step === 'holdSession') { await new Promise((done) => { hon.held = done; }); return json(route, 401, { code: 'SIGN_IN_REQUIRED' }); }
   if (step === 'hold') await new Promise((done) => { hon.held = done; });
   // Idempotent replay: the same key returns the first result.
@@ -165,9 +166,14 @@ async function honApi(route, path, method, prefix) {
     hon.turns.set(headers['idempotency-key'], receipt);
     return json(route, 200, { data: receipt });
   }
+  // C3b: a summary is a fresh question about this human's own finished group in this conversation.
+  if (ask.summarizeTurnId) {
+    const g = hon.groups.get(c.id)?.get(ask.summarizeTurnId);
+    if (!g || ask.continueTurnId || !['COMPLETED', 'FAILED', 'PARTIAL'].includes(groupStatus(g.members.map((m) => m.status)))) return json(route, 400, { code: 'HON_GROUP_NOT_SUMMARIZABLE' });
+  }
   const long = /long/i.test(ask.text);
   const suggest = /saturday/i.test(ask.text) ? ['marcus', 'chad', 'kai'] : [];
-  const text = ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
+  const text = ask.summarizeTurnId ? 'Summary: Marcus recorded a Saturday trial post draft that a human approved. Next, share it with parents this week.' : ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
     : long ? 'Here is a detailed plan for this week. First, follow up the three new leads from the weekend…' : 'You have 3 new leads in the last 24 hours and 2 trial appointments tomorrow. I suggest following up the leads first.';
   const detail = ask.continueTurnId ? replyDetail('DETAILED', { step: 2, continuesTurnId: ask.continueTurnId }) : replyDetail(ask.replyMode ?? 'STANDARD', long ? { truncated: true, canContinue: true } : { suggestions: suggest });
   c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
@@ -1444,6 +1450,39 @@ await check('Ask HON suggestions: an unknown outcome keeps one exact retry and l
   const sends = hon.posts.filter((p) => JSON.parse(p.body).delegation);
   assert.equal(sends.length, 2); assert.equal(new Set(sends.map((p) => p.key)).size, 1); assert.equal(new Set(sends.map((p) => p.body)).size, 1);
   assert.equal(hon.groups.get(hon.conversations[0].id).get(sourceTurn()).members.length, 1, 'exactly one Marcus request exists');
+  await ctx.close();
+});
+
+await check('Ask HON group summary: Summarize with HON appears once the group is finished and sends a question naming that group', async () => {
+  const { ctx, page, ask } = await suggestedAnswer({ width: 1440, height: 900 });
+  await ask.getByRole('button', { name: 'Ask Marcus' }).click();
+  const form = ask.getByRole('form', { name: 'Ask Marcus' });
+  await form.getByLabel('Campaign').selectOption({ label: 'Spring trial week (active)' });
+  await form.getByLabel('What should Marcus draft?').fill('A Saturday trial post for parents');
+  await form.getByRole('button', { name: 'Send to Marcus' }).click();
+  await ask.getByText('Needs your review').waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Summarize with HON' }).count(), 0, 'not offered while a draft waits for review');
+  // A human approves the draft in Action Center; reopening the conversation reads the group again.
+  const source = sourceTurn();
+  hon.groups.get(hon.conversations[0].id).get(source).members[0].status = 'COMPLETED';
+  await ask.getByRole('button', { name: /How do I fill Saturday trials\?/ }).click();
+  await ask.getByRole('button', { name: 'Summarize with HON' }).waitFor();
+  assert.ok(await ask.getByText('Done', { exact: true }).isVisible());
+  await axe(page, 'ask-hon-group-summary-offer');
+  await shot(page, 'ask-hon-group-summary-offer', true);
+  hon.queue = ['notSummarizable'];
+  await ask.getByRole('button', { name: 'Summarize with HON' }).click();
+  await ask.getByText(/HON can’t summarize those specialists yet/).waitFor();
+  assert.equal(await ask.getByRole('button', { name: 'Retry the same request' }).count(), 0, 'a refusal is not retried');
+  const posts = hon.posts.length;
+  await ask.getByRole('button', { name: 'Summarize with HON' }).click();
+  await ask.getByText(/^Summary: Marcus recorded/).waitFor();
+  assert.equal(hon.posts.length, posts + 1);
+  assert.deepEqual(lastBody(), { text: 'Summarize what the specialists I asked recorded, and what I should do next.', delegation: null, summarizeTurnId: source });
+  assert.notEqual(hon.posts.at(-1).key, hon.posts.at(-2).key, 'a fresh key after a definitive refusal');
+  await noOverflow(page, 'ask-hon-group-summary');
+  await axe(page, 'ask-hon-group-summary');
+  await shot(page, 'ask-hon-group-summary', true);
   await ctx.close();
 });
 
