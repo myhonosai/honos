@@ -233,6 +233,7 @@ async function api(route) {
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path === '/api/v1/hq/schools' || path.endsWith('/ownership') || path === '/api/v1/hq/school-ownership/primary-owner') { const answered = await ownershipApiRoute(route, path, method); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/ai/')) { const answered = await aiControlApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path.startsWith('/api/v1/hq/saas/trials/')) { const answered = await trialsApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/hq/saas/')) { const answered = await hqAccessApi(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith('/api/v1/marketing/campaigns')) { const answered = await marketingApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/schedule/sessions`)) { const answered = await rosterApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
@@ -721,6 +722,47 @@ const ownView = (schoolId) => { const primary = own.primary.get(schoolId) ?? nul
   return { owners, primaryOwnerGrantId: primary, notices: ownNotices(schoolId), asOf: '2026-11-08T12:30:00.000Z' }; };
 // HQ AI costs and safety (S4-c/d/e, synthetic). Pauses, lost calls and settlements live here; replies, one per POST:
 // 'ok', 'unknown' (503, nothing changed), 'active' (422 AI_SPEND_PAUSE_ALREADY_ACTIVE).
+// ---------- HQ free-trial governance (read only) ----------
+const tgx = { reads: [], denied: false, other: 0 };
+const tgId = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const tgTerms = { allowedDurationsDays: [14, 30], allowedCapabilityProfiles: ['CORE', 'COMPLETE'], allowedEligibilityCodes: ['NEW_ORGANIZATIONS_ONLY'], allowedLinkModes: ['PRIVATE_INVITATION'],
+  maxEnrollmentCapacity: 50, maxEnrollmentWindowDays: 90, maxPublishedCampaigns: 3, maxTotalEnrollmentCapacity: 120, termsReference: 'hon-trial-terms/v1', promotionalLimits: null };
+const tgDef = (over = {}) => ({ name: 'Spring pilot schools', durationDays: 30, capabilityProfile: 'COMPLETE', eligibility: 'NEW_ORGANIZATIONS_ONLY', linkMode: 'PRIVATE_INVITATION',
+  enrollmentOpensAt: '2026-11-15T00:00:00.000Z', enrollmentClosesAt: '2026-12-15T00:00:00.000Z', maximumEnrollments: 20, termsReference: 'hon-trial-terms/v1', promotionalBudget: null, ...over });
+function trialsGovernance() {
+  const actor = tgId(9);
+  return { scope: 'CUSTOMER_TRIAL_GOVERNANCE_ONLY', program: { status: 'INACTIVE', signupEnabled: false, enrollmentEnabled: false, promotionalIssuanceEnabled: false },
+    policyVersions: [{ policyId: tgId(11), version: 2, status: 'PROPOSED', terms: tgTerms, reason: 'Owner-approved pilot trial rules', actorPrincipalId: actor, recordedAt: '2026-11-02T10:00:00.000Z' },
+      { policyId: tgId(10), version: 1, status: 'PROPOSED', terms: { ...tgTerms, allowedDurationsDays: [14] }, reason: 'First draft of the trial rules', actorPrincipalId: actor, recordedAt: '2026-11-01T10:00:00.000Z' }],
+    policyDecisions: [{ decisionId: tgId(20), revision: 1, policyId: tgId(11), decision: 'APPROVED', validFrom: '2026-11-01T00:00:00.000Z', validUntil: '2027-02-01T00:00:00.000Z',
+      reason: 'Approved for the pilot window', actorPrincipalId: actor, recordedAt: '2026-11-03T10:00:00.000Z' }],
+    campaignVersions: [
+      { versionId: tgId(40), campaignId: tgId(30), version: 1, definition: tgDef(), reason: 'Draft for the first pilot cohort', actorPrincipalId: actor, recordedAt: '2026-11-04T10:00:00.000Z' },
+      { versionId: tgId(41), campaignId: tgId(30), version: 2, definition: tgDef({ maximumEnrollments: 60 }), reason: 'Larger cohort requested by HQ', actorPrincipalId: actor, recordedAt: '2026-11-05T10:00:00.000Z' },
+      { versionId: tgId(42), campaignId: tgId(31), version: 1, definition: tgDef({ name: 'Founder schools', capabilityProfile: 'CORE', durationDays: 14 }), reason: 'Founder cohort draft for review',
+        actorPrincipalId: actor, recordedAt: '2026-11-03T12:00:00.000Z' }],
+    publications: [{ publicationId: tgId(50), campaignId: tgId(30), revision: 1, kind: 'PUBLISHED', versionId: tgId(40), policyDecisionId: tgId(20), previewDigest: 'a'.repeat(64),
+      reason: 'Definition recorded for the pilot', actorPrincipalId: actor, recordedAt: '2026-11-04T12:00:00.000Z', activationAvailable: false }],
+    limit: 100, hasMore: { policyVersions: false, policyDecisions: false, campaignVersions: false, publications: false },
+    existingPrograms: { paidAccess: 'INACTIVE', aiCredits: 'INACTIVE', payments: 'TEST_MODE' }, asOf: '2026-11-09T05:00:00.000Z' };
+}
+async function trialsApiRoute(route, path, method, url) {
+  const headers = route.request().headers();
+  // Read only: any write, command marker, key or query is refused.
+  if (method !== 'GET' || url.search || Object.keys(headers).some((k) => k.startsWith('x-hon-') || k === 'idempotency-key')) { tgx.other++; return json(route, 400, { code: 'SAAS_INVALID_REQUEST' }); }
+  if (tgx.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+  tgx.reads.push(path.slice('/api/v1/hq/saas/trials/'.length));
+  if (path === '/api/v1/hq/saas/trials/governance') return json(route, 200, { data: trialsGovernance() });
+  const m = /^\/api\/v1\/hq\/saas\/trials\/campaign-versions\/([0-9a-f-]{36})\/publication-preview$/.exec(path);
+  if (m) {
+    const campaignId = m[1] === tgId(42) ? tgId(31) : tgId(30), version = m[1] === tgId(41) ? 2 : 1;
+    const blockers = m[1] === tgId(41) ? ['CAPACITY_EXCEEDS_POLICY'] : [];
+    return json(route, 200, { data: { campaignId, versionId: m[1], version, expectedRevision: campaignId === tgId(30) ? 1 : 0, policyDecisionId: tgId(20), policyId: tgId(11),
+      digest: 'b'.repeat(64), ready: blockers.length === 0, blockers, activationAvailable: false, promotionalCreditsAvailable: false,
+      plannedExposure: { enrollments: m[1] === tgId(41) ? 60 : 20, promotionalCostMinor: 0, currency: 'USD' }, asOf: '2026-11-09T05:01:00.000Z' } });
+  }
+  return null;
+}
 const aix = { pauses: [], open: [], resolved: [], posts: [], replies: [], byKey: new Map(), usage: [], reads: [], denied: false };
 const AIX_COMMAND = { 'spend-pauses': 'ai-spend-pause', resolve: 'ai-unknown-resolve', 'late-provider-expense': 'ai-late-provider-expense' };
 const aixZero = { providerReportedCostMicrounits: 0, estimatedWriteOffCostMicrounits: 0, entries: 0, writeOffEntries: 0, lateProviderCostMicrounits: 0, lateProviderExpenseEntries: 0, supersededWriteOffEstimateMicrounits: 0 };
@@ -3424,6 +3466,47 @@ await check('AI Safety: leaving the tab hides pauses and calls; a refused read s
   await aiSafety(page).getByTestId('ai-pauses').getByText('does not include AI costs').waitFor();
   assert.equal(await aiSafety(page).getByTestId('unknown-row').count(), 0);
   assert.equal(await aiSafety(page).getByRole('button', { name: 'Pause AI spend' }).count(), 0);
+  await ctx.close();
+});
+
+const trialsPage = (page) => page.getByTestId('hq-trials');
+const TG_TEXT = { en: ['Free Trials', 'Spring pilot schools', 'Check publication readiness', 'It allows more schools than the rules permit.'],
+  ko: ['무료 체험', 'Spring pilot schools', '게시 준비 상태 확인', '규칙이 허용하는 것보다 많은 학교를 허용합니다.'] };
+for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
+  await check(`Free Trials ${nextTheme} ${language} ${name}: rules in force, campaigns, and a readiness check that changes nothing`, async () => {
+    Object.assign(tgx, { reads: [], denied: false, other: 0 });
+    const [title, campaign, check, blocker] = TG_TEXT[language];
+    const { ctx, page } = await ownershipPage('/hq/revenue/trials', viewport, { nextTheme, language });
+    await trialsPage(page).getByTestId('trial-campaign').first().waitFor({ timeout: 20000 });
+    assert.equal(await trialsPage(page).locator('h1').innerText(), title);
+    assert.equal(await trialsPage(page).getByTestId('trial-rule-state').getAttribute('data-rule-state'), 'IN_FORCE');
+    assert.equal(await trialsPage(page).getByTestId('trial-campaign').count(), 2);
+    await noOverflow(page, `trials-${nextTheme}-${language}-${name}`);
+    await axe(page, `trials-${nextTheme}-${language}-${name}`);
+    await shot(page, `trials-${nextTheme}-${language}-${name}`, true);
+    const spring = trialsPage(page).getByTestId('trial-campaign').filter({ hasText: campaign });
+    await spring.getByRole('button', { name: check }).click();
+    await spring.getByTestId('trial-readiness').getByText(blocker).waitFor();
+    await spring.locator('details').click();
+    await noOverflow(page, `trials-readiness-${nextTheme}-${language}-${name}`);
+    await axe(page, `trials-readiness-${nextTheme}-${language}-${name}`);
+    await shot(page, `trials-readiness-${nextTheme}-${language}-${name}`, true);
+    assert.deepEqual(tgx.reads, ['governance', `campaign-versions/${tgId(41)}/publication-preview`]);
+    assert.equal(tgx.other, 0, 'no write, key or command marker was sent');
+    await ctx.close();
+  });
+}
+await check('Free Trials: a refused read shows nothing; a session end hides everything', async () => {
+  Object.assign(tgx, { reads: [], denied: true, other: 0 });
+  const { ctx, page } = await ownershipPage('/hq/revenue/trials', { width: 1280, height: 900 });
+  await trialsPage(page).getByText('does not include free-trial governance').waitFor({ timeout: 20000 });
+  assert.equal(await trialsPage(page).getByTestId('trial-campaign').count(), 0);
+  tgx.denied = false;
+  await trialsPage(page).getByRole('button', { name: 'Refresh' }).click();
+  await trialsPage(page).getByTestId('trial-campaign').first().waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
+  await trialsPage(page).getByText('Hidden because your session ended.').waitFor();
+  assert.equal(await trialsPage(page).getByTestId('trial-campaign').count(), 0);
   await ctx.close();
 });
 
