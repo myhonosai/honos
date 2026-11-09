@@ -202,7 +202,7 @@ it('words every outcome in three languages', () => {
 });
 
 it('is in the Schools navigation group and the route manifest', () => {
-  expect(HQ_NAV_GROUPS['/hq/schools']?.children.map(c => c.path)).toEqual(['/hq/schools', '/hq/schools/access', '/hq/schools/access/policy']);
+  expect(HQ_NAV_GROUPS['/hq/schools']?.children.map(c => c.path)).toEqual(['/hq/schools', '/hq/schools/access', '/hq/schools/access/policy', '/hq/schools/owners']);
   expect(hqPageLabel('/hq/schools/access')).toBe('School Access');
   expect(hqPageLabel('/hq/schools')).toBe('Schools');
   expect(existsSync('src/app/hq/schools/access/page.tsx')).toBe(true);

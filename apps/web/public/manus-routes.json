@@ -37,6 +37,10 @@
       "title": "HON HQ | Exception policy"
     },
     {
+      "path": "/hq/schools/owners",
+      "title": "HON HQ | School owners"
+    },
+    {
       "path": "/hq/ai-providers",
       "title": "HON HQ | AI Provider Control"
     },
@@ -191,6 +195,10 @@
     {
       "path": "/staff/memberships",
       "title": "HON | Memberships"
+    },
+    {
+      "path": "/staff/owners",
+      "title": "HON | School owners"
     },
     {
       "path": "/staff/billing/memberships",
