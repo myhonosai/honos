@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "ad448f4a0250db983989dc6904255ff6451b47785b08adbc2f5a9b71b646f89c",
+  "chainSha256": "bf8277c0d8c5e9b3fef9207f712dcaf95a0a7b46c812413bb6b1796759dfeebc",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -249,6 +249,10 @@
     {
       "file": "0249_missed_call_text_back.sql",
       "sha256": "7714b5cac10d99638b40998c6726cbb3dc3b0458be4f57061d266deed0118ef9"
+    },
+    {
+      "file": "0250_zernio_lead_intake.sql",
+      "sha256": "a50bd24bb5c2340ef0ba84526426ef4b7e30f850ebbf68ecf267f26ecb8fb233"
     },
     {
       "file": "0251_class_series_ongoing.sql",
