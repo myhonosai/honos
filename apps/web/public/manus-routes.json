@@ -361,6 +361,10 @@
       "title": "HON HQ | Ai Costs"
     },
     {
+      "path": "/hq/ai-safety",
+      "title": "HON HQ | Ai Safety"
+    },
+    {
       "path": "/hq/approvals",
       "title": "HON HQ | Approvals"
     },
