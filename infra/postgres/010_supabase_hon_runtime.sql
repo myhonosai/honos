@@ -2467,3 +2467,17 @@ DO $$ DECLARE r text; t text; f text; BEGIN
       hon.finalize_student_import(text,jsonb,text,uuid,uuid),hon.read_student_imports(text),hon.read_student_import(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-CRM-3 0236 CRM school clock: the one read-only definer projection is the only runtime boundary; its actor helper
+-- stays internal.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.crm_school_clock_actor(text,uuid,uuid)','hon.read_crm_school_clock(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_crm_school_clock(text) TO hon_runtime;
+  END IF;
+END $$;
