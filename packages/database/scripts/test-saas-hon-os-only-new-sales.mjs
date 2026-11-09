@@ -124,7 +124,11 @@ const osOffer=(code,kind,priceMinor,displayName,patch={})=>{const interval=contr
  cancellationTiming:interval==='ONE_TIME'?null:'END_OF_PAID_PERIOD',...patch};};
 
 await Promise.all([admin.connect(),restricted.connect()]);
+const v1Gate=on=>admin.query(`ALTER TABLE hon.saas_checkout_sessions ${on?'ENABLE':'DISABLE'} TRIGGER saas_hon_os_v1_offer_kind`);
 try{
+ // 0237 (owner answer 5) refuses every new HON OS v1 founder or lifetime checkout. This proof replays the pre-0237 sales
+ // history: the refusal is proven live where that history first sells one, then set aside in the disposable database
+ // only, and restored (and checked enabled) before the PASS line and in the finally block.
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  // ---------- 0. shipped posture: legacy new sales pinned CLOSED, HON OS the only new-sale product, private and immutable ----------
  await assertLegacySalesClosed(admin);
@@ -291,6 +295,10 @@ try{
  assert.deepEqual((await payments.readPlanOptions(H('ownerN'),N.school)).offers,[],'awaiting: still no legacy offer');
  for(const offerId of legacyOffers)await deny(payments.startSchoolCheckout(H('ownerN'),N.school,{offerId},K()),422,'SAAS_LEGACY_SALES_CLOSED');
  const kN=K();
+ await v1Gate(true);
+ await deny(startOs('N',V.OS_FOUNDER_MONTHLY,K(),N.school),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await deny(startOs('NC',V.OS_LIFETIME),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await v1Gate(false);
  const coN=await startOs('N',V.OS_FOUNDER_MONTHLY,kN,N.school);
  const paidN=sim.completeCheckout(sessionOf(coN));
  assert.deepEqual(await outcome(paidN.completed),['APPLIED','ACCESS_ACTIVATED']);
@@ -353,8 +361,11 @@ try{
  assert.deepEqual(await untouched(),before,'no entitlement outside the fixture, school-to-family billing, Champions or AI usage row changed');
  await assertLegacySalesClosed(admin);
  assert.deepEqual((await admin.query('SELECT status FROM hon.saas_access_program')).rows,[{status:'INACTIVE'}]);
+ await v1Gate(true);
+ assert.equal((await admin.query("SELECT tgenabled FROM pg_trigger WHERE tgrelid='hon.saas_checkout_sessions'::regclass AND tgname='saas_hon_os_v1_offer_kind'")).rows[0].tgenabled,'O','0237 v1 founder/lifetime refusal restored');
  console.log('PASS: HON OS-only new sales (0184, D8) proof (legacy new sales pinned CLOSED as shipped and reopened only to build the pre-closure fixture; paid access ACTIVE simulated in the disposable database only, then restored; TEST MODE, SIMULATED Stripe) — policy private and immutable; every legacy offer ID refused for school and HQ checkout with no provider call; HQ legacy subscription records (catalog and legacy entitlement) and legacy founder reservations refused; direct inserts and provider-session attaches refused by the guard itself; a replayed pre-closure key never reaches the provider; stale open, founder and inactive-held legacy payments held for review (LEGACY_SALES_CLOSED) with no subscription, entitlement or founder allocation, including replays and the HQ retry; new customers buy HON OS only (D7 awaiting path with founder pool, 0182 path with lifetime sale limit, replay safe, no AI credits); legacy customers keep refunds, lifecycle commands, renewals, provider refunds, disputes and lifetime rights.');
 }finally{
+ await v1Gate(true).catch(()=>{});
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
  await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  try{await cleanup();}finally{await Promise.allSettled([admin.end(),restricted.end()]);}

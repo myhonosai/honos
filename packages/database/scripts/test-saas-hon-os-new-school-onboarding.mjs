@@ -18,17 +18,18 @@ const {RuntimeDatabaseService}=await import('../../../apps/api/dist/foundation/r
 const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saas-billing.service.js');
 const {SaasPaymentsService}=await import('../../../apps/api/dist/payments/saas-payments.service.js');
 const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-billing/saas-school-billing.service.js');
+const {SaasPaidReviewService}=await import('../../../apps/api/dist/saas-paid-review/saas-paid-review.service.js');
 const {StripeTestModeAdapter}=await import('../../../apps/api/dist/payments/stripe-test-mode-adapter.js');
 const {StripeSimulator}=await import('../../../apps/api/dist/payments/stripe-simulator.js');
 const contracts=await import('@hon/contracts');
 const SECRET='whsec_disposableFixtureSecret0123456789',KEY='sk_test_disposableFixtureKey0123456789';
 const sim=new StripeSimulator(SECRET);
-const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),access=new SaasSchoolBillingService(billing);
+const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),access=new SaasSchoolBillingService(billing),reviews=new SaasPaidReviewService(billing);
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false});
 const pool=new pg.Pool({connectionString:owner.toString(),ssl:false,max:4});
 const offerTables=['saas_offer_sales_stops','saas_offer_set_offers','saas_offer_sets'];
-const saasTables=['saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
+const saasTables=['saas_paid_review_resolutions','saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
  'saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions',
  'saas_provider_cost_evidence','saas_payment_evidence','saas_invoice_lines','saas_invoices','saas_invoice_sequences','saas_outbox','saas_audit','saas_requests',
@@ -150,7 +151,11 @@ const offers=()=>[
 const TERMS='Fixture HON OS terms v1 (not customer terms)';
 
 await Promise.all([admin.connect(),restricted.connect()]);
+const v1Gate=on=>admin.query(`ALTER TABLE hon.saas_checkout_sessions ${on?'ENABLE':'DISABLE'} TRIGGER saas_hon_os_v1_offer_kind`);
 try{
+ // 0237 (owner answer 5) refuses every new HON OS v1 founder or lifetime checkout. This proof replays the pre-0237 sales
+ // history: the refusal is proven live where that history first sells one, then set aside in the disposable database
+ // only, and restored (and checked enabled) before the PASS line and in the finally block.
  assert.equal((await admin.query("SELECT shobj_description(oid,'pg_database') m FROM pg_database WHERE datname=current_database()")).rows[0].m,'HON disposable Champions Club validation');
  // ---------- runtime posture: registration and the HON OS activation core are never runtime-executable ----------
  for(const sig of ['initialize_saas_hon_os_school_account(text,jsonb,uuid,uuid,uuid)','saas_activate_hon_os_checkout_core(uuid,jsonb,timestamptz,boolean)',
@@ -314,13 +319,19 @@ try{
  await assertActivated('NX',coNX.checkout.offerKind,coNX.checkout.amountMinor,coNX.checkout.billingInterval);
 
  // ---------- 7. paid access inactive at payment time: held, then the HQ owner retries with every recheck ----------
+ await v1Gate(true);
+ await deny(startOf('NU',V.OS_FOUNDER_MONTHLY),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await deny(startOf('NU',V.OS_FOUNDER_ANNUAL),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await deny(startOf('NU',V.OS_FOUNDER_LIFETIME),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await deny(startOf('NS',V.OS_LIFETIME),422,'SAAS_OFFER_REQUIRES_SCHEDULE');
+ await v1Gate(false);
  const coNU=await startOf('NU',V.OS_FOUNDER_MONTHLY);// holds a founder slot (pool limit 3)
  const coNS=await startOf('NS',V.OS_LIFETIME);// holds the only lifetime sale
  const coNI=await startOf('NI',V.OS_MONTHLY);
  assert.deepEqual((await billing.readOfferManagement(H('operator'))).honOsSales.founderPool,{limit:3,allocated:0,held:1,remaining:2});
  await setAccessProgram(false);
- const paidNS=sim.completeCheckout(sessionOf(coNS));
- for(const[k,paid]of [['NI',sim.completeCheckout(sessionOf(coNI))],['NS',paidNS],['NU',sim.completeCheckout(sessionOf(coNU))]]){
+ const paidNS=sim.completeCheckout(sessionOf(coNS)),paidNU=sim.completeCheckout(sessionOf(coNU));
+ for(const[k,paid]of [['NI',sim.completeCheckout(sessionOf(coNI))],['NS',paidNS],['NU',paidNU]]){
   assert.deepEqual(await outcome(paid.completed),['NEEDS_REVIEW','ACCESS_PROGRAM_INACTIVE'],k);
   await assertAwaiting(k);
   assert.deepEqual((await transitions(org(k))).at(-1),'FIRST_PAYMENT_ACTIVATION:NEEDS_REVIEW:ACCESS_PROGRAM_INACTIVE');
@@ -375,6 +386,61 @@ try{
  // A held payment that is refunded is never activated by a later retry.
  assert.ok((await deliver(sim.refund(paidNS.paymentIntent,null,950000))).event);
  await deny(retry(coNS.checkout.checkoutId),422,'SAAS_ACCESS_PAYMENT_REVERSED');
+ // ---------- 0237 piece 3: HQ review queue for held v1 payments; refund obligation and verified refund ----------
+ const queue=async(who='owner')=>{const items=[];let cursor=null;do{const page=await reviews.list(H(who),cursor);items.push(...page.items);cursor=page.nextCursor;}while(cursor);return items;};
+ const itemOf=async id=>(await queue()).find(i=>i.subjectId===id);
+ const resolveBody=(id,version,decision='REFUND_OWED')=>({subjectKind:'V1_CHECKOUT',subjectId:id,expectedVersion:version,decision,reason:'Fixture held payment owed back to the school',confirmation:contracts.SAAS_PAID_REVIEW_RESOLVE_CONFIRMATION});
+ const verifyBody=version=>({expectedVersion:version,confirmation:contracts.SAAS_PAID_REVIEW_VERIFY_CONFIRMATION});
+ const conflict=async k=>(await row('SELECT hon.saas_org_billing_conflict($1) c',[org(k)])).c;
+ for(const who of ['support','ownerNU'])await deny(reviews.list(H(who),null),403,'SAAS_FORBIDDEN');
+ await deny(reviews.list(H('operator'),'not-a-cursor'),400,'INVALID_SAAS_INPUT');
+ const itemNU=await itemOf(coNU.checkout.checkoutId),itemNS=await itemOf(coNS.checkout.checkoutId);
+ assert.deepEqual([itemNU.billingStatus,itemNU.reason,itemNU.heldItemCount,itemNU.heldAmountMinor,itemNU.fullyRefunded,itemNU.blocker,itemNU.allowedDecisions,itemNU.providerActionExecuted],
+  ['PAID_NEEDS_REVIEW','ACCESS_PROGRAM_INACTIVE',1,18300,false,null,['REFUND_OWED'],false]);
+ assert.deepEqual([itemNS.heldAmountMinor,itemNS.refundedAmountMinor,itemNS.fullyRefunded],[950000,950000,true],'stored provider refund evidence is shown, never applied by the read');
+ assert.deepEqual((await reviews.list(H('operator'),null)).items.map(i=>i.subjectId).sort(),(await queue()).map(i=>i.subjectId).sort(),'HQ billing operators may read the queue');
+ assert.equal(await conflict('NS'),'PAID_NEEDS_REVIEW','raw refund evidence never clears a hold by itself');
+ // Commands: HQ owner only; accepting held money without a refund is owner decision OD-14 and refused.
+ for(const who of ['operator','support','ownerNU'])await deny(reviews.resolve(H(who),resolveBody(coNU.checkout.checkoutId,itemNU.subjectVersion),K()),403,'SAAS_FORBIDDEN');
+ for(const decision of ['ACTIVATE','RESUME_BILLING'])await deny(reviews.resolve(H('owner'),resolveBody(coNU.checkout.checkoutId,itemNU.subjectVersion,decision),K()),422,'SAAS_BILLING_POLICY_UNAVAILABLE');
+ await deny(reviews.resolve(H('owner'),{...resolveBody(coNU.checkout.checkoutId,itemNU.subjectVersion),confirmation:'YES'},K()),400,'INVALID_SAAS_INPUT');
+ await deny(reviews.resolve(H('owner'),resolveBody(coNU.checkout.checkoutId,itemNU.subjectVersion+1),K()),409,'SAAS_VERSION_CONFLICT');
+ const kNU=K(),owedNU=await reviews.resolve(H('owner'),resolveBody(coNU.checkout.checkoutId,itemNU.subjectVersion),kNU);
+ assert.deepEqual([owedNU.resolution.status,owedNU.resolution.heldAmountMinor,owedNU.resolution.providerActionExecuted,owedNU.item.allowedDecisions,owedNU.replayed],['AWAITING_REFUND_EVIDENCE',18300,false,[],false]);
+ assert.equal((await reviews.resolve(H('owner'),resolveBody(coNU.checkout.checkoutId,itemNU.subjectVersion),kNU)).replayed,true);
+ await deny(reviews.resolve(H('owner'),resolveBody(coNU.checkout.checkoutId,itemNU.subjectVersion),K()),422,'SAAS_REVIEW_NOT_RESOLVABLE');
+ assert.equal(await conflict('NU'),'PAID_NEEDS_REVIEW','a refund obligation keeps blocking');
+ // A recorded refund obligation can never be activated by the v1 access retry, and no writer may move the checkout.
+ assert.notEqual((await retry(coNU.checkout.checkoutId)).outcome,'APPLIED');
+ await admin.query('BEGIN');
+ await sqlDeny(admin.query("UPDATE hon.saas_checkout_sessions SET status='COMPLETED',version=version+1 WHERE id=$1",[coNU.checkout.checkoutId]),'23514','SAAS_REVIEW_REFUND_RECORDED');
+ await admin.query('ROLLBACK');
+ assert.equal((await checkoutRow(coNU.checkout.checkoutId)).status,'PAID_NEEDS_REVIEW');
+ const rNU=owedNU.resolution.resolutionId;
+ await deny(reviews.verifyRefund(H('operator'),rNU,verifyBody(1),K()),403,'SAAS_FORBIDDEN');
+ await deny(reviews.verifyRefund(H('owner'),rNU,verifyBody(1),K()),422,'SAAS_REFUND_EVIDENCE_MISSING');
+ assert.ok((await deliver(sim.refund(null,paidNU.invoice,10000))).event);
+ await deny(reviews.verifyRefund(H('owner'),rNU,verifyBody(1),K()),422,'SAAS_REFUND_INCOMPLETE');
+ assert.equal((await row('SELECT status FROM hon.saas_paid_review_resolutions WHERE id=$1',[rNU])).status,'AWAITING_REFUND_EVIDENCE','a partial refund writes nothing');
+ assert.ok((await deliver(sim.refund(null,paidNU.invoice,18300))).event);
+ await deny(reviews.verifyRefund(H('owner'),rNU,verifyBody(2),K()),409,'SAAS_VERSION_CONFLICT');
+ const kV=K(),verifiedNU=await reviews.verifyRefund(H('owner'),rNU,verifyBody(1),kV);
+ assert.deepEqual([verifiedNU.resolution.status,verifiedNU.resolution.refundedAmountMinor,verifiedNU.resolution.refundEvidence.length,verifiedNU.billingStatus,verifiedNU.billingReviewOpen,verifiedNU.replayed],
+  ['REFUND_VERIFIED',18300,2,'PAID_NEEDS_REVIEW',false,false]);
+ assert.equal((await reviews.verifyRefund(H('owner'),rNU,verifyBody(1),kV)).replayed,true);
+ await deny(reviews.verifyRefund(H('owner'),rNU,verifyBody(2),K()),422,'SAAS_REVIEW_NOT_RESOLVABLE');
+ assert.equal(await conflict('NU'),null,'only a verified full refund clears the hold');
+ assert.equal(await itemOf(coNU.checkout.checkoutId),undefined,'a verified item leaves the queue');
+ const owedNS=await reviews.resolve(H('owner'),resolveBody(coNS.checkout.checkoutId,itemNS.subjectVersion),K());
+ assert.equal((await reviews.verifyRefund(H('owner'),owedNS.resolution.resolutionId,verifyBody(1),K())).resolution.status,'REFUND_VERIFIED');
+ assert.equal(await conflict('NS'),null);
+ assert.deepEqual((await admin.query("SELECT action_code,count(*)::int n FROM hon.saas_audit WHERE action_code LIKE 'saas.paid_review.%' GROUP BY 1 ORDER BY 1")).rows,
+  [{action_code:'saas.paid_review.resolve',n:2},{action_code:'saas.paid_review.verify_refund',n:2}]);
+ assert.equal((await row("SELECT count(*)::int n FROM hon.saas_outbox WHERE event_type IN ('saas.paid_review.resolved','saas.paid_review.refund_verified') AND payload->>'executionAllowed'='false'")).n,4);
+ for(const q of ['UPDATE hon.saas_paid_review_resolutions SET reason=reason','DELETE FROM hon.saas_paid_review_resolutions','TRUNCATE hon.saas_paid_review_resolutions']){
+  await admin.query('BEGIN');await sqlDeny(admin.query(q),'42501');await admin.query('ROLLBACK');}
+ await sqlDeny(restricted.query('SELECT * FROM hon.saas_paid_review_resolutions'),'42501');
+ await sqlDeny(restricted.query('SELECT hon.saas_paid_review_items($1,$2)',['V1_CHECKOUT',coNU.checkout.checkoutId]),'42501');
 
  // ---------- 8. an existing provisioned COMPLETE school still buys through the 0182 path, unchanged ----------
  const coP=await payments.startSchoolHonOsCheckout(H('taken'),P.school,{offerId:V.OS_MONTHLY},K());
@@ -398,8 +464,11 @@ try{
  assert.deepEqual((await admin.query('SELECT status,mutations_enabled FROM hon.saas_access_program')).rows,[{status:'INACTIVE',mutations_enabled:false}]);
  assert.equal((await admin.query("SELECT pg_get_constraintdef(oid) d FROM pg_constraint WHERE conname='saas_access_program_status_check'")).rows[0].d,STATUS_CHECK);
  await deny(startOf('NZ',V.OS_MONTHLY),422,'SAAS_ENTITLEMENT_NOT_ACTIVE');
+ await v1Gate(true);
+ assert.equal((await admin.query("SELECT tgenabled FROM pg_trigger WHERE tgrelid='hon.saas_checkout_sessions'::regclass AND tgname='saas_hon_os_v1_offer_kind'")).rows[0].tgenabled,'O','0237 v1 founder/lifetime refusal restored');
  console.log('PASS: HON OS new-school onboarding (0183, D7) proof (paid access INACTIVE as shipped; ACTIVE simulated in the disposable database only, then restored; TEST MODE, SIMULATED Stripe) — registration refused while inactive; private registration with closed input, one school per verified identity (idempotent, concurrent-safe), entitlement held SUSPENDED with no capabilities or staff scope; a school awaiting its first payment buys a HQ-published HON OS offer without an active entitlement; the verified payment activates COMPLETE once for monthly, annual auto-renewing, annual prepaid, founder annual, founder monthly, founder lifetime and lifetime offers (concurrent duplicate deliveries, out-of-order first invoice, replay); failed async, cancelled and expired first payments leave the school awaiting and free to retry, late payments go to review; one checkout per school under concurrency; payments held while paid access was inactive are retried by the HQ owner only, re-checking the sale limit (SALE_LIMIT_REACHED), founder pool (FOUNDER_UNAVAILABLE) and refunds; provisioned schools unchanged; no AI credits opened.');
 }finally{
+ await v1Gate(true).catch(()=>{});
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));
  await cleanup().catch(e=>console.error(e));
  await Promise.allSettled([admin.end(),restricted.end(),pool.end(),database.onModuleDestroy?.()]);

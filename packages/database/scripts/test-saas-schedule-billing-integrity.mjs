@@ -16,6 +16,7 @@ const {SaasBillingService}=await import('../../../apps/api/dist/saas-billing/saa
 const {SaasPriceAcceptanceService}=await import('../../../apps/api/dist/saas-pricing/saas-price-acceptance.service.js');
 const {SaasSubscriptionGenerationService}=await import('../../../apps/api/dist/saas-pricing/saas-subscription-generation.service.js');
 const {SaasScheduleBillingService}=await import('../../../apps/api/dist/saas-pricing/saas-schedule-billing.service.js');
+const {SaasPaidReviewService}=await import('../../../apps/api/dist/saas-paid-review/saas-paid-review.service.js');
 const {SaasSchoolBillingService}=await import('../../../apps/api/dist/school-billing/saas-school-billing.service.js');
 const {SaasPaymentsService}=await import('../../../apps/api/dist/payments/saas-payments.service.js');
 const {HqOnboardingService}=await import('../../../apps/api/dist/hq/hq-onboarding.service.js');
@@ -23,12 +24,12 @@ const apiRequire=createRequire(new URL('../../../apps/api/package.json',import.m
 const contracts=apiRequire('@hon/contracts');
 const {DeterministicScheduleProvider}=apiRequire('./test/fixtures/subscription-schedule-provider.cjs');
 const database=new RuntimeDatabaseService(),billing=new SaasBillingService(database),pricing=new SaasPriceAcceptanceService(billing),generations=new SaasSubscriptionGenerationService(billing),access=new SaasSchoolBillingService(billing),onboarding=new HqOnboardingService(database);
-const provider=new DeterministicScheduleProvider(),schedules=new SaasScheduleBillingService(billing,provider),payments=new SaasPaymentsService(billing,database,{});
+const provider=new DeterministicScheduleProvider(),schedules=new SaasScheduleBillingService(billing,provider),reviews=new SaasPaidReviewService(billing),payments=new SaasPaymentsService(billing,database,{});
 const client=u=>new pg.Client({connectionString:u.toString(),ssl:false}),admin=client(owner),restricted=client(runtime);
 const humans=Object.fromEntries(['hq','school','other','staff','ai','d7','d9','race','cancel','iv','pa','pb','pc'].map(k=>[k,{id:K(),user:K(),subject:'b2-'+K()}]));
 const H=k=>humans[k].subject,org={id:K(),school:K(),second:K(),role:K()},foreign={id:K(),school:K(),role:K()};
 // The shipped OD-4 policy row is migration data: never deleted by fixture cleanup.
-const tables=['saas_access_transitions','saas_access_states','saas_schedule_reconciliations','saas_schedule_paid_periods','saas_schedule_provider_events','saas_schedule_bindings','saas_subscription_generations','saas_price_acceptances','saas_price_schedules'];
+const tables=['saas_paid_review_resolutions','saas_access_transitions','saas_access_states','saas_schedule_reconciliations','saas_schedule_paid_periods','saas_schedule_provider_events','saas_schedule_bindings','saas_subscription_generations','saas_price_acceptances','saas_price_schedules'];
 const row=async(q,p)=>(await admin.query(q,p)).rows[0];let groups=0;const passed=s=>console.log('PASS 0230 '+(++groups)+': '+s);
 const deny=(work,status,code)=>assert.rejects(Promise.resolve().then(work),e=>{assert.equal(e.getStatus?.(),status,e.stack);if(code)assert.equal(e.getResponse().code,code);return true;});
 const sqlDeny=(work,code)=>assert.rejects(work,e=>{assert.equal(e.code,code,e.stack);return true;});
@@ -523,10 +524,83 @@ try {
   assert.deepEqual(await row("SELECT status,mutations_enabled FROM hon.saas_access_program"),{status:'INACTIVE',mutations_enabled:false});
   assert.equal((await row("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conname='saas_access_program_status_check'")).definition,STATUS_CHECK);
   passed('0235 access: the first verified payment switches on COMPLETE access for the paid period plus the 7-day grace (program INACTIVE -> HQ review, payment kept); HQ-owner retry, renewal extension, no shortening, gap review, concurrent single activation, time lapse, and savepoint isolation');
+  // ---------- 0237 piece 3: HQ review queue for held schedule money; refund obligation and verified refund ----------
+  const queue=async(who='hq')=>{const items=[];let cursor=null;do{const page=await reviews.list(H(who),cursor);items.push(...page.items);cursor=page.nextCursor;}while(cursor);return items;};
+  const itemOf=async id=>(await queue()).find(i=>i.subjectId===id);
+  const owe=(id,version,decision='REFUND_OWED')=>({subjectKind:'SCHEDULE_BINDING',subjectId:id,expectedVersion:version,decision,reason:'Fixture held schedule payment owed back',confirmation:contracts.SAAS_PAID_REVIEW_RESOLVE_CONFIRMATION});
+  const verifyBody=version=>({expectedVersion:version,confirmation:contracts.SAAS_PAID_REVIEW_VERIFY_CONFIRMATION});
+  const conflictOf=async id=>(await row('SELECT hon.saas_org_billing_conflict($1) c',[id])).c;
+  const refundOf=(b,ref,amountMinor)=>({...baseEvent(evt(),amountMinor,undefined,undefined,b),eventType:'charge.refunded',invoiceReference:null,relatedInvoiceReference:ref,coveredPeriod:null});
+  const heldRef=async b=>(await row("SELECT normalized->>'invoiceReference' r FROM hon.saas_schedule_provider_events WHERE binding_id=$1 AND event_type='invoice.paid' AND outcome='NEEDS_REVIEW' ORDER BY received_at LIMIT 1",[b])).r;
+  // Reads: HQ only; every item reports held money and whether HQ may record a refund, never inferring one.
+  for(const who of ['school','staff','d9'])await deny(()=>reviews.list(H(who),null),403,'SAAS_FORBIDDEN');
+  const all=await queue();
+  assert.deepEqual(new Set(all.map(i=>i.subjectId)),new Set([binding.bindingId,raceStart.value.binding.bindingId,ivBinding.bindingId,d9Binding.bindingId,cancelBound.bindingId]),'every billing review is listed, access-only reviews are not');
+  const mainItem=all.find(i=>i.subjectId===binding.bindingId),raceItem=all.find(i=>i.subjectId===raceStart.value.binding.bindingId);
+  assert.deepEqual([mainItem.billingStatus,mainItem.heldItemCount,mainItem.heldAmountMinor,mainItem.blocker,mainItem.allowedDecisions],['NEEDS_REVIEW',2,2*price+1,'REVERSAL_POLICY_REQUIRED',[]],'a reversal of a counted payment waits for the refund/dispute policy');
+  assert.deepEqual([raceItem.allowedDecisions,raceItem.blocker!==null],[[],true]);
+  await deny(()=>reviews.resolve(H('hq'),owe(binding.bindingId,mainItem.subjectVersion),K()),422,'SAAS_REVIEW_NOT_RESOLVABLE');
+  // Cursor paging is stable on (created_at, id) and never silently truncates.
+  const firstCursor=(await row("SELECT to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')||'~'||id::text c FROM hon.saas_schedule_bindings WHERE id=$1",[all[0].subjectId])).c;
+  assert.deepEqual((await reviews.list(H('hq'),firstCursor)).items.map(i=>i.subjectId),all.slice(1).map(i=>i.subjectId));
+  assert.equal((await reviews.list(H('hq'),null)).nextCursor,null);
+  // Late money on an ended sign-up (d9): obligation -> partial refund refused -> full refund verified -> hold cleared.
+  const d9Item=all.find(i=>i.subjectId===d9Binding.bindingId);
+  assert.deepEqual([d9Item.billingStatus,d9Item.reason,d9Item.heldAmountMinor,d9Item.blocker,d9Item.allowedDecisions],['EXPIRED_UNPAID','UNPAID_WINDOW_ELAPSED',price,null,['REFUND_OWED']]);
+  for(const who of ['school','d9'])await deny(()=>reviews.resolve(H(who),owe(d9Binding.bindingId,d9Item.subjectVersion),K()),403,'SAAS_FORBIDDEN');
+  await deny(()=>reviews.resolve(H('hq'),owe(d9Binding.bindingId,d9Item.subjectVersion,'RESUME_BILLING'),K()),422,'SAAS_BILLING_POLICY_UNAVAILABLE');
+  const d9Owed=await reviews.resolve(H('hq'),owe(d9Binding.bindingId,d9Item.subjectVersion),K());
+  assert.deepEqual([d9Owed.resolution.status,d9Owed.resolution.heldAmountMinor,d9Owed.resolution.providerActionExecuted],['AWAITING_REFUND_EVIDENCE',price,false]);
+  await deny(()=>reviews.verifyRefund(H('hq'),d9Owed.resolution.resolutionId,verifyBody(1),K()),422,'SAAS_REFUND_EVIDENCE_MISSING');
+  const d9Ref=await heldRef(d9Binding.bindingId);
+  await ingest(refundOf(d9Binding,d9Ref,price-100));
+  await deny(()=>reviews.verifyRefund(H('hq'),d9Owed.resolution.resolutionId,verifyBody(1),K()),422,'SAAS_REFUND_INCOMPLETE');
+  assert.equal(await conflictOf(d9.organizationId),'PAID_NEEDS_REVIEW','stored refund evidence alone never clears a hold');
+  await ingest(refundOf(d9Binding,d9Ref,price));
+  // Two concurrent verifications with different keys: exactly one writes.
+  const both=await Promise.allSettled([1,2].map(()=>reviews.verifyRefund(H('hq'),d9Owed.resolution.resolutionId,verifyBody(1),K())));
+  assert.equal(both.filter(r=>r.status==='fulfilled').length,1);
+  const d9Verified=both.find(r=>r.status==='fulfilled').value;
+  assert.deepEqual([d9Verified.resolution.status,d9Verified.resolution.refundedAmountMinor,d9Verified.billingStatus,d9Verified.billingReviewOpen],['REFUND_VERIFIED',price,'EXPIRED_UNPAID',false]);
+  assert.equal(await conflictOf(d9.organizationId),null);
+  await admin.query('SELECT hon.saas_schedule_binding_available($1)',[d9.organizationId]);
+  // A later payment on the same ended sign-up opens the review again.
+  await ingest(baseEvent(evt(),price,'2031-03-01T00:00:00.000Z','2031-04-01T00:00:00.000Z',d9Binding));
+  assert.equal(await conflictOf(d9.organizationId),'PAID_NEEDS_REVIEW');
+  assert.equal((await itemOf(d9Binding.bindingId)).allowedDecisions[0],'REFUND_OWED','history kept, a new obligation may be recorded');
+  // A parked plan that was billing carries on as before once the held payment is refunded (owner decision 2026-11-09).
+  const pcBefore=await schedules.readHq(H('hq'),pcB.bindingId);
+  const pcWrong=await ingest(baseEvent(evt(),price+5,iso(P(2)[0]),iso(P(2)[1]),pcB));
+  assert.deepEqual([pcWrong.outcome,pcWrong.reason,pcWrong.billingStatus],['NEEDS_REVIEW','AMOUNT_MISMATCH','NEEDS_REVIEW']);
+  const pcItem=await itemOf(pcB.bindingId),pcOwed=await reviews.resolve(H('hq'),owe(pcB.bindingId,pcItem.subjectVersion),K());
+  await ingest(refundOf(pcB,await heldRef(pcB.bindingId),price+5));
+  const pcVerified=await reviews.verifyRefund(H('hq'),pcOwed.resolution.resolutionId,verifyBody(1),K());
+  const pcAfter=await schedules.readHq(H('hq'),pcB.bindingId);
+  assert.deepEqual([pcVerified.billingStatus,pcAfter.status,pcAfter.statusReason,pcAfter.version,pcAfter.activatedAt,pcAfter.qualifyingPaidPeriodCount],
+    ['ACTIVE','ACTIVE','REVIEW_REFUND_VERIFIED',pcBefore.version+2,pcBefore.activatedAt,2]);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.saas_audit WHERE entity_id=$1 AND action_code='saas.paid_review.verify_refund' AND next_state->>'status'='ACTIVE'",[pcB.bindingId])).n,1,'the return to billing is audited');
+  const pcNext=await ingest(pay(pcB,P(2)));
+  assert.deepEqual([pcNext.outcome,pcNext.billingStatus,pcNext.qualifyingPaidPeriodCount],['APPLIED','ACTIVE',3],'billing continues at the locked price');
+  // A never-paid plan goes back to waiting for its first payment (the 7-day window still applies).
+  const ivItem=await itemOf(ivBinding.bindingId),ivOwed=await reviews.resolve(H('hq'),owe(ivBinding.bindingId,ivItem.subjectVersion),K());
+  await ingest(refundOf(ivBinding,await heldRef(ivBinding.bindingId),price));
+  await reviews.verifyRefund(H('hq'),ivOwed.resolution.resolutionId,verifyBody(1),K());
+  const ivAfter=await schedules.read(H('iv'),ivOrg.schoolId,ivBinding.bindingId);
+  assert.deepEqual([ivAfter.status,ivAfter.statusReason,ivAfter.activatedAt],['BOUND_TEST_ONLY','REVIEW_REFUND_VERIFIED',null]);
+  assert.deepEqual([(await ingest(baseEvent(evt(),price,'2031-06-01T00:00:00.000Z','2031-07-01T00:00:00.000Z',ivBinding))).billingStatus],['ACTIVE']);
+  // Closed records: only the commands write; the owner cannot edit, delete or forge a review exit.
+  for(const q of ['UPDATE hon.saas_paid_review_resolutions SET reason=reason','DELETE FROM hon.saas_paid_review_resolutions','TRUNCATE hon.saas_paid_review_resolutions']){
+    await admin.query('BEGIN');await sqlDeny(admin.query(q),'42501');await admin.query('ROLLBACK');}
+  await admin.query('BEGIN');
+  await sqlDeny(admin.query("UPDATE hon.saas_schedule_bindings SET status='ACTIVE',status_reason='REVIEW_REFUND_VERIFIED',version=version+1 WHERE id=$1",[binding.bindingId]),'42501');
+  await admin.query('ROLLBACK');
+  for(const q of ['SELECT * FROM hon.saas_paid_review_resolutions',"SELECT hon.saas_paid_review_open('SCHEDULE_BINDING',gen_random_uuid())"])await sqlDeny(restricted.query(q),'42501');
+  await admin.query('BEGIN READ ONLY');assert.equal(await conflictOf(org.id),'PAID_NEEDS_REVIEW');await admin.query('COMMIT');
+  passed('0237 HQ review queue: every held schedule payment listed for HQ with its blocker; HQ-owner refund obligation (no provider action), partial refund refused, verified full refund clears the hold, concurrent single verification, a parked billing plan carries on and a never-paid plan goes back to waiting; later money reopens; records closed');
   for(const q of ['SELECT * FROM hon.saas_schedule_bindings','UPDATE hon.saas_schedule_bindings SET id=id','DELETE FROM hon.saas_schedule_provider_events','INSERT INTO hon.saas_schedule_paid_periods SELECT * FROM hon.saas_schedule_paid_periods LIMIT 1'])await sqlDeny(restricted.query(q),'42501');
   await verifySaasBillingSecurity(admin,'hon_champions_runtime');
   passed('forced RLS/private tables/functions and immutable evidence remain enforced for the restricted runtime');
-  console.log(`PASS: HON OS schedule billing (0230 + 0235) ${groups} scenario groups; deterministic fake only; no Stripe network, charge, invoice issuance, checkout, trial, credits, or deployment; access is switched on only inside the disposable fixture with the program briefly ACTIVE.`);
+  console.log(`PASS: HON OS schedule billing (0230 + 0235 + 0237) ${groups} scenario groups; deterministic fake only; no Stripe network, charge, invoice issuance, checkout, trial, credits, or deployment; access is switched on only inside the disposable fixture with the program briefly ACTIVE.`);
 } finally {
   await Promise.allSettled([admin.query('ROLLBACK'),restricted.query('ROLLBACK')]);
   try { if(shippedHook)await admin.query(shippedHook); await setAccessProgram(false); await cleanup(); }

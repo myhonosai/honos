@@ -37,13 +37,13 @@ test('network target policy accepts only canonical loopback PostgreSQL, includin
   for (const args of [[5432, 'localhost'], [{ port: 5432, host: '127.0.0.1' }], [[{ port: '5432', host: '::1' }]], ['/var/run/postgresql/.s.PGSQL.5432']]) assert(postgresTarget(args));
   for (const args of [[443, 'example.test'], [5432, 'database.internal'], [{ port: 5432, host: '127.0.0.2' }], [{ path: '/tmp/other.sock' }], [{ port: 3000, host: 'localhost' }]]) assert(!postgresTarget(args));
 });
-test('entire reviewed migration chain and every 0181–0235 checksum are pinned', async () => {
-  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 49); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0235');
-  assert.equal(actual.entries.length, 221);
-  assert.deepEqual(actual.targets.slice(-2).map(t => t.file.slice(0, 4)), ['0230', '0235']);
+test('entire reviewed migration chain and every 0181–0237 checksum are pinned', async () => {
+  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 50); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0237');
+  assert.equal(actual.entries.length, 222);
+  assert.deepEqual(actual.targets.slice(-3).map(t => t.file.slice(0, 4)), ['0230', '0235', '0237']);
   const changed = structuredClone(actual.entries); changed[0].sha256 = '0'.repeat(64);
   assert.throws(() => validateMigrationEvidence(changed, actual));
-  assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0236_unreviewed.sql', sha256: 'x' }], actual));
+  assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0238_unreviewed.sql', sha256: 'x' }], actual));
   assert.throws(() => validateMigrationEvidence([...actual.entries.slice(0, -1), { file: '0179_reserved.sql', sha256: 'x' }], actual));
 });
 test('canonical runtime ACL restores only the eight fixed 0230 schedule-billing procedures after the global SaaS revoke', async () => {
@@ -66,6 +66,25 @@ test('canonical runtime ACL restores only the 0235 HQ-owner access retry after t
   const grant = block.slice(block.indexOf('GRANT EXECUTE'), block.indexOf('TO hon_runtime;') + 'TO hon_runtime;'.length);
   assert.deepEqual([...grant.matchAll(/hon\.([a-z_]+\([^)]*\))/g)].map(m => m[1]), ['retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)']);
   for (const helper of ['saas_schedule_access_grace()', 'saas_schedule_access_json(uuid)', 'saas_schedule_activate_access(uuid,uuid,timestamp with time zone)']) assert(block.includes("'" + helper + "'"), helper + ' is revoked');
+});
+test('canonical runtime ACL restores only the three 0237 HQ paid-review entry points after the global SaaS revoke', async () => {
+  const acl = await readFile(new URL('../../../infra/postgres/010_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const start = acl.indexOf('-- 0237 HON OS schedule billing piece 3');
+  assert(start > acl.indexOf('-- 0235 HON OS schedule billing piece 2'), '0237 grant must follow the 0235 block and the global SaaS revoke');
+  const block = acl.slice(start, acl.indexOf('END $$;', start) + 'END $$;'.length);
+  const grant = block.slice(block.indexOf('GRANT EXECUTE'), block.indexOf('TO hon_runtime;') + 'TO hon_runtime;'.length);
+  assert.deepEqual([...grant.matchAll(/hon\.([a-z_]+\([^)]*\))/g)].map(m => m[1]),
+    ['read_saas_paid_reviews(text,text)', 'resolve_saas_paid_review(text,jsonb,uuid,uuid,uuid)', 'verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid)']);
+  for (const helper of ['saas_paid_review_items(text,uuid)', 'saas_paid_review_open(text,uuid)', 'saas_paid_review_reviewed_count(uuid)', 'guard_saas_hon_os_v1_offer_kind()'])
+    assert(block.includes("'" + helper + "'"), helper + ' is revoked');
+});
+test('0237 refuses new HON OS v1 founder/lifetime sales, never executes a refund and clears a hold only on a verified refund', async () => {
+  const migration = await readFile(new URL('../migrations/0237_hon_os_paid_review_queue.sql', import.meta.url), 'utf8');
+  assert.match(migration, /NEW\.hon_os_offer_id IS NOT NULL AND NEW\.offer_kind IN \('FOUNDER_MONTHLY','FOUNDER_ANNUAL','FOUNDER_LIFETIME','LIFETIME'\)/);
+  assert.match(migration, /IF p->>'decision'<>'REFUND_OWED' THEN RAISE EXCEPTION 'SAAS_BILLING_POLICY_UNAVAILABLE'/);
+  assert.match(migration, /status='REFUND_VERIFIED'/);
+  assert.match(migration, /require_saas_hq_actor\(p_subject,true\)/);
+  assert.doesNotMatch(migration, /REGULAR_MONTHLY|REGULAR_ANNUAL|hon\.saas_credit|hon\.saas_creative|stripe\.com/i);
 });
 test('0235 access activation keeps billing and access separate and never shortens a paid window', async () => {
   const migration = await readFile(new URL('../migrations/0235_hon_os_schedule_paid_access.sql', import.meta.url), 'utf8');
