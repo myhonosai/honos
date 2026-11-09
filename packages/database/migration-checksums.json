@@ -216,6 +216,7 @@
     "0221_school_class_session_pages.sql": "0c3abd19116998a0213194c6913af49ce19c61f554de8e1ff25214b8d282e83b",
     "0222_saas_exception_policy_terms_read.sql": "9f6799e60e87147a706218e53a8539bf00f2808e0f28fd679c019b9d946e48ce",
     "0223_school_ownership_handoff.sql": "ade3ff7f22464c12caeb52983af398b7c17b6c2f950a9ed5a30f0164ff6f9e31",
-    "0224_membership_pause_cancel_refund.sql": "f3bcbeae379890b4fb8e0418b9bffcb2933edc3db7453ed5bc48f972c4e66ae2"
+    "0224_membership_pause_cancel_refund.sql": "f3bcbeae379890b4fb8e0418b9bffcb2933edc3db7453ed5bc48f972c4e66ae2",
+    "0225_hq_school_detail.sql": "f0c4ae400b1785b0df8793bdefe477d3624a27bb86dcfbf95db3a12e3d9bcb79"
   }
 }
