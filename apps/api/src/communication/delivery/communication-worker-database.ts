@@ -14,6 +14,8 @@ export interface ClaimedCommunicationDelivery {
   content: string;
   schoolName: string;
   attempt: number;
+  senderAddress?: string | undefined;
+  senderServiceId?: string | undefined;
 }
 
 export interface CommunicationSendResult {
@@ -42,6 +44,8 @@ export interface CommunicationWorkerStore {
   claim(channels: DeliverableChannel[], limit: number, leaseSeconds: number): Promise<ClaimedCommunicationDelivery[]>;
   recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult): Promise<{ status: string; accepted: boolean }>;
   recordReceipt(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
+  recordInboundKeyword?(keyword: { to: string; from: string; keyword: 'STOP' | 'START' | 'HELP'; providerMessageId: string; receivedAt: string }):
+    Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; schoolName: string | null; consentsChanged: number }>;
 }
 
 export const COMMUNICATION_WORKER_STORE = Symbol('COMMUNICATION_WORKER_STORE');
@@ -92,11 +96,14 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, On
     const rows = await this.query<{
       delivery_id: string; lease_token: string; organization_id: string; school_id: string; message_id: string; channel: DeliverableChannel;
       recipient_address: string; content: string; school_name: string; attempt: number;
+      sender_address: string | null; sender_service_id: string | null;
     }>('SELECT * FROM hon.claim_communication_deliveries($1::text[], $2, $3)', [channels, limit, leaseSeconds]);
     return rows.map((row) => ({
       deliveryId: row.delivery_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,
       messageId: row.message_id, channel: row.channel, recipientAddress: row.recipient_address, content: row.content,
       schoolName: row.school_name, attempt: row.attempt,
+      ...(row.sender_address ? { senderAddress: row.sender_address } : {}),
+      ...(row.sender_service_id ? { senderServiceId: row.sender_service_id } : {}),
     }));
   }
 
@@ -116,5 +123,14 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, On
         receipt.occurredAt, receipt.providerCostMicrounits ?? null]))[0];
     if (!row) throw new Error('COMMUNICATION_RECEIPT_NOT_RECORDED');
     return { outcome: row.outcome, deliveryStatus: row.delivery_status };
+  }
+
+  /** 0248 inbound STOP/START/HELP to a school's ACTIVE number. */
+  async recordInboundKeyword(keyword: { to: string; from: string; keyword: 'STOP' | 'START' | 'HELP'; providerMessageId: string; receivedAt: string }) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNROUTED'; school_name: string | null; consents_changed: number }>(
+      'SELECT * FROM hon.record_inbound_text_keyword($1, $2, $3, $4, $5)',
+      [keyword.to, keyword.from, keyword.keyword, keyword.providerMessageId, keyword.receivedAt]))[0];
+    if (!row) throw new Error('COMMUNICATION_KEYWORD_NOT_RECORDED');
+    return { outcome: row.outcome, schoolName: row.school_name, consentsChanged: row.consents_changed };
   }
 }

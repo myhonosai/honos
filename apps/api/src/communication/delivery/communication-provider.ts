@@ -23,6 +23,9 @@ export interface CommunicationSendRequest {
    * briefing) and HQ (HQ messages) are tagged so the school receipt webhooks acknowledge and ignore them.
    */
   purpose?: 'SCHOOL' | 'INTERNAL' | 'HQ';
+  /** SMS (0248): the school's ACTIVE sender number and Messaging Service. */
+  senderAddress?: string | undefined;
+  senderServiceId?: string | undefined;
 }
 
 export interface CommunicationSendAccepted {

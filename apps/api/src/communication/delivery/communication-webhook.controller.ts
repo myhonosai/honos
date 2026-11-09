@@ -1,13 +1,18 @@
 import {
-  BadRequestException, Controller, Headers, HttpCode, Inject, Post, Req, ServiceUnavailableException,
+  BadRequestException, Controller, Header, Headers, HttpCode, Inject, Post, Req, ServiceUnavailableException,
 } from '@nestjs/common';
 import { raw, type NextFunction, type Request, type Response } from 'express';
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore, type VerifiedProviderReceipt } from './communication-worker-database.js';
 import { SendGridEventWebhookVerifier, SendGridWebhookError } from './sendgrid-email-provider.js';
+import { TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TwilioWebhookError, TwilioWebhookVerifier } from './twilio-text-provider.js';
 
 export const COMMUNICATION_WEBHOOK_PREFIX = /^\/v1\/communications\/webhooks(?:\/|$)/i;
-export const COMMUNICATION_WEBHOOK_PATHS = new Set(['/v1/communications/webhooks/sendgrid']);
+const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid']);
+const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_INBOUND_PATH]);
+export const COMMUNICATION_WEBHOOK_PATHS = new Set([...JSON_PATHS, ...FORM_PATHS]);
 export const SENDGRID_EVENT_VERIFIER = Symbol('SENDGRID_EVENT_VERIFIER');
+export const TWILIO_WEBHOOK_VERIFIER = Symbol('TWILIO_WEBHOOK_VERIFIER');
+const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
 /**
  * Mounted before the JSON parser: provider signatures cover the exact raw bytes. POST only, no query
@@ -21,7 +26,8 @@ export function communicationWebhookTransport() {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (req.method !== 'POST' || !COMMUNICATION_WEBHOOK_PATHS.has(req.path) || req.originalUrl.includes('?')
       || req.headers.cookie !== undefined || req.headers.authorization !== undefined
-      || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.headers['content-type'] ?? '')
+      || (JSON_PATHS.has(req.path) && !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.headers['content-type'] ?? ''))
+      || (FORM_PATHS.has(req.path) && !/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/i.test(req.headers['content-type'] ?? ''))
       || (req.headers['content-encoding'] !== undefined && req.headers['content-encoding'] !== 'identity')) {
       res.status(400).json({ received: false }); return;
     }
@@ -61,7 +67,31 @@ export class CommunicationWebhookController {
   constructor(
     @Inject(COMMUNICATION_WORKER_STORE) private readonly store: CommunicationWorkerStore,
     @Inject(SENDGRID_EVENT_VERIFIER) private readonly sendgrid: SendGridEventWebhookVerifier,
+    @Inject(TWILIO_WEBHOOK_VERIFIER) private readonly twilio: TwilioWebhookVerifier,
   ) {}
+
+  @Post('twilio/status') @HttpCode(200)
+  async twilioStatus(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<WebhookIngestSummary> {
+    if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    let receipt;
+    try { receipt = this.twilio.status(req.body, signature); }
+    catch (error) { throw twilioError(error); }
+    return ingestReceipts(this.store, receipt ? [receipt] : [], receipt ? 0 : 1);
+  }
+
+  /** Inbound texts: only STOP/START/HELP keywords are recorded; the reply is empty (Twilio Advanced Opt-Out answers). */
+  @Post('twilio/inbound') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
+  async twilioInbound(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
+    if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    let keyword;
+    try { keyword = this.twilio.inbound(req.body, signature); }
+    catch (error) { throw twilioError(error); }
+    if (!keyword) return EMPTY_TWIML;
+    if (!this.store.isConfigured() || !this.store.recordInboundKeyword) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+    try { await this.store.recordInboundKeyword(keyword); }
+    catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
+    return EMPTY_TWIML;
+  }
 
   @Post('sendgrid') @HttpCode(200)
   async sendgridEvents(
@@ -81,4 +111,9 @@ export class CommunicationWebhookController {
     }
     return ingestReceipts(this.store, receipts, total - receipts.length);
   }
+}
+
+function twilioError(error: unknown): Error {
+  if (error instanceof TwilioWebhookError && error.reason === 'NOT_CONFIGURED') return new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+  return new BadRequestException({ code: 'INVALID_WEBHOOK' });
 }

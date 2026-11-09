@@ -47,6 +47,7 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 
 /** Human-command header values, one per command route. */
 export const SAAS_COMMANDS = {
+  setSchoolTextSender: 'hq-school-text-sender-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
   startScheduleBinding: 'saas-schedule-binding-start',
   cancelScheduleBinding: 'saas-schedule-binding-cancel',

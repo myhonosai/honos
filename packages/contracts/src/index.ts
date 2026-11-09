@@ -936,7 +936,7 @@ export interface CommunicationMessageSummary {
 /** 0243 delivery of a QUEUED message. NOT_STARTED: queued, no delivery record yet. */
 export const COMMUNICATION_DELIVERY_STATUSES = ['NOT_STARTED', 'PENDING', 'SENDING', 'ACCEPTED', 'DELIVERED', 'BOUNCED', 'FAILED', 'SUPPRESSED', 'UNKNOWN'] as const;
 export type CommunicationDeliveryStatus = (typeof COMMUNICATION_DELIVERY_STATUSES)[number];
-export const COMMUNICATION_DELIVERY_HOLD_REASONS = ['SCHEDULED', 'QUIET_HOURS', 'SCHOOL_INACTIVE', 'RETRY_WAIT'] as const;
+export const COMMUNICATION_DELIVERY_HOLD_REASONS = ['SCHEDULED', 'QUIET_HOURS', 'SCHOOL_INACTIVE', 'RETRY_WAIT', 'SENDER_NOT_READY'] as const;
 export type CommunicationDeliveryHoldReason = (typeof COMMUNICATION_DELIVERY_HOLD_REASONS)[number];
 export const COMMUNICATION_DELIVERY_FAILURE_CODES = [
   'CONSENT_MISSING', 'ADDRESS_MISSING', 'LEASE_EXPIRED', 'PROVIDER_UNKNOWN', 'PROVIDER_REJECTED', 'INVALID_ADDRESS',
@@ -1089,3 +1089,4 @@ export * from './tuition-payments.js';
 export * from './school-payments.js';
 export * from './school-checkout.js';
 export * from './maya-at-risk.js';
+export * from './text-pieces.js';

@@ -36,7 +36,7 @@ const dayZone = zones.find((zone) => hourIn(zone) >= 10 && hourIn(zone) <= 18);
 const nightZone = zones.find((zone) => hourIn(zone) >= 23 || hourIn(zone) <= 5);
 if (!dayZone || !nightZone) throw new Error('No suitable day/night time zones for the quiet-hours proof.');
 
-const ids = Object.fromEntries(['org', 'schoolA', 'schoolB', 'user', 'principal'].map((key) => [key, randomUUID()]));
+const ids = Object.fromEntries(['org', 'schoolA', 'schoolB', 'schoolC', 'user', 'principal', 'hqUser', 'hqPrincipal'].map((key) => [key, randomUUID()]));
 const person = {};
 const message = {};
 
@@ -47,7 +47,7 @@ async function addPerson(key, school, email, phone) {
 }
 async function consent(key, school, channel, status) {
   await admin.query(`INSERT INTO hon.communication_consents (organization_id, school_id, person_id, channel, status, source, captured_at, updated_by_principal_id)
-    VALUES ($1,$2,$3,$4,$5,'STAFF',now(),$6) ON CONFLICT (person_id, channel) DO UPDATE SET status = EXCLUDED.status`,
+    VALUES ($1,$2,$3,$4,$5,'STAFF',now(),$6) ON CONFLICT (person_id, channel) DO UPDATE SET status = EXCLUDED.status, source = 'STAFF'`,
     [ids.org, school, person[key], channel, status, ids.principal]);
 }
 async function queued(key, school, personKey, channel, content, scheduledAt = null) {
@@ -75,10 +75,13 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.outbox_events WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.audit_events WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.communication_messages WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.inbound_text_keywords WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.school_text_senders WHERE organization_id = $1', [ids.org]);
+    await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id = $1', [ids.hqPrincipal]);
     await admin.query('DELETE FROM hon.communication_consents WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.org]);
-    await admin.query('DELETE FROM hon.principals WHERE id = $1', [ids.principal]);
-    await admin.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
+    await admin.query('DELETE FROM hon.principals WHERE id = ANY($1::uuid[])', [[ids.principal, ids.hqPrincipal]]);
+    await admin.query('DELETE FROM hon.users WHERE id = ANY($1::uuid[])', [[ids.user, ids.hqUser]]);
     await admin.query('DELETE FROM hon.schools WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.organizations WHERE id = $1', [ids.org]);
     await admin.query('COMMIT');
@@ -99,6 +102,10 @@ try {
   for (const key of ['ada', 'noEmail', 'revoked']) { await consent(key, ids.schoolA, 'EMAIL', 'OPTED_IN'); await consent(key, ids.schoolA, 'SMS', 'OPTED_IN'); }
   await consent('night', ids.schoolB, 'SMS', 'OPTED_IN');
   await consent('night', ids.schoolB, 'EMAIL', 'OPTED_IN');
+  // 0248: each school texts from its own ACTIVE sender.
+  const sid = (n) => `MG${String(n).repeat(32).slice(0, 32)}`;
+  await admin.query(`INSERT INTO hon.school_text_senders (organization_id, school_id, phone_e164, messaging_service_sid, status, set_by_principal_id)
+    VALUES ($1,$2,'+15555559001',$3,'ACTIVE',$5), ($1,$4,'+15555559002',$6,'ACTIVE',$5)`, [ids.org, ids.schoolA, sid(1), ids.schoolB, ids.principal, sid(2)]);
 
   // 1. Role boundaries.
   await expectError('42501', () => runtime.query("SELECT * FROM hon.claim_communication_deliveries(ARRAY['EMAIL'], 1, 60)"), 'runtime cannot claim deliveries');
@@ -132,6 +139,7 @@ try {
   // 3. Quiet hours: the night school's text waits for 08:00 local; the day school's text is leased.
   const sms = await claim(['SMS']);
   check(sms.length === 1 && sms[0].message_id === message.smsDay && sms[0].recipient_address === '+15555550101', 'day-time text is leased to the phone number');
+  check(sms[0].sender_address === '+15555559001' && sms[0].sender_service_id === sid(1), 'the leased text carries the school ACTIVE sender (0248)');
   const night = await delivery('smsNight');
   check(night.status === 'PENDING' && night.hold_reason === 'QUIET_HOURS' && new Date(night.next_attempt_at) > new Date(), 'night-time text is held for quiet hours');
   const localWake = new Intl.DateTimeFormat('en-US', { timeZone: nightZone, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).format(new Date(night.next_attempt_at));
@@ -289,7 +297,8 @@ try {
   check(sgRow.status === 'ACCEPTED' && sgRow.provider === 'SENDGRID' && sgCall && sgCall.body.mail_settings.sandbox_mode.enable === true, 'an approved SendGrid adapter wins over the fake and sends in sandbox mode with the HON delivery id');
   const pair = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   const verifierEnv = () => ({ SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY: pair.publicKey.export({ format: 'der', type: 'spki' }).toString('base64') });
-  const controller = new CommunicationWebhookController(sgWorker, new SendGridEventWebhookVerifier(verifierEnv));
+  const { TwilioWebhookVerifier: SgTwilioVerifier } = await import('../../../apps/api/dist/communication/delivery/twilio-text-provider.js');
+  const controller = new CommunicationWebhookController(sgWorker, new SendGridEventWebhookVerifier(verifierEnv), new SgTwilioVerifier(() => ({})));
   const post = async (events) => {
     const body = Buffer.from(JSON.stringify(events)); const ts = String(Math.floor(Date.now() / 1000));
     const signature = sign('sha256', Buffer.concat([Buffer.from(ts), body]), { key: pair.privateKey, dsaEncoding: 'der' }).toString('base64');
@@ -309,6 +318,83 @@ try {
   try { await post([{ ...sgEvent('delivered', 'sg-e9'), sg_message_id: 'unknownmsg.filter', hon_delivery_id: randomUUID() }]); } catch (error) { retry = error?.getStatus?.() === 503; }
   check(retry, 'a receipt for an unknown HON delivery asks SendGrid to redeliver (503) and writes nothing');
   await sgWorker.onModuleDestroy();
+
+  // 13. 0248 senders and inbound keywords.
+  await admin.query('INSERT INTO hon.schools (id, organization_id, name, slug, timezone) VALUES ($1,$2,$3,$4,$5)', [ids.schoolC, ids.org, 'No Number School', `nonum-${ids.schoolC.slice(0, 8)}`, dayZone]);
+  await addPerson('carl', ids.schoolC, 'carl@example.test', '+15555550105');
+  await consent('carl', ids.schoolC, 'SMS', 'OPTED_IN');
+  await queued('noSender', ids.schoolC, 'carl', 'SMS', 'No number yet');
+  await claim(['SMS']);
+  check((await delivery('noSender')).status === 'PENDING' && (await delivery('noSender')).hold_reason === 'SENDER_NOT_READY', 'a text from a school without an ACTIVE sender waits as SENDER_NOT_READY');
+  await expectError('42501', () => runtime.query("SELECT hon.set_school_text_sender_from_hq($1,$2,'+15555559003',$3,'ACTIVE',NULL)", [`delivery-${ids.user}`, ids.schoolC, sid(3)]), 'a school staff member cannot set a text sender');
+  await admin.query("INSERT INTO hon.users (id, external_subject, email, display_name) VALUES ($1, $2, 'hq@example.test', 'HQ Owner')", [ids.hqUser, `hq-${ids.hqUser}`]);
+  await admin.query("INSERT INTO hon.principals (id, principal_type, user_id, display_name) VALUES ($1, 'HUMAN_USER', $2, 'HQ Owner')", [ids.hqPrincipal, ids.hqUser]);
+  await admin.query("INSERT INTO hon.hq_operator_grants (principal_id, hq_role) VALUES ($1, 'HON_HQ_OWNER')", [ids.hqPrincipal]);
+  const setSender = (version, phone = '+15555559003', status = 'ACTIVE') => runtime.query('SELECT hon.set_school_text_sender_from_hq($1,$2,$3,$4,$5,$6) AS data', [`hq-${ids.hqUser}`, ids.schoolC, phone, sid(3), status, version]);
+  const created = (await setSender(null)).rows[0].data;
+  check(created.status === 'ACTIVE' && created.version === 1 && created.phoneE164 === '+15555559003', 'the HQ owner sets a school text sender');
+  await expectError('40001', () => setSender(null), 'a second create without the version conflicts');
+  await expectError('23505', () => runtime.query('SELECT hon.set_school_text_sender_from_hq($1,$2,$3,$4,$5,$6)', [`hq-${ids.hqUser}`, ids.schoolC, '+15555559001', sid(3), 'ACTIVE', 1]), 'another school number cannot be reused');
+  check((await admin.query("SELECT count(*)::int AS n FROM hon.audit_events WHERE action_code = 'communication.text_sender.set' AND school_id = $1", [ids.schoolC])).rows[0].n === 1, 'setting a sender is audited once');
+  await admin.query('UPDATE hon.communication_deliveries SET next_attempt_at = now() WHERE message_id = $1', [message.noSender]);
+  const released = (await claim(['SMS'])).find((row) => row.message_id === message.noSender);
+  check(released?.sender_address === '+15555559003', 'once the sender is ACTIVE the held text is leased from that number');
+  await record(released, 'ACCEPTED', { providerMessageId: 'fake-sms-carl', sentAs: 'SMS', segments: 1, encoding: 'GSM7' });
+  check((await setSender(1, '+15555559003', 'DISABLED')).rows[0].data.status === 'DISABLED', 'the HQ owner can disable a sender');
+
+  const keyword = (to, from, word, sidSuffix) => worker.query('SELECT * FROM hon.record_inbound_text_keyword($1,$2,$3,$4,now())', [to, from, word, `SM${sidSuffix.padEnd(32, '0')}`]).then((r) => r.rows[0]);
+  await addPerson('adaTwin', ids.schoolB, 'ada-b@example.test', '+15555550101');
+  await consent('adaTwin', ids.schoolB, 'SMS', 'OPTED_IN');
+  await consent('ada', ids.schoolA, 'SMS', 'OPTED_IN');
+  const stop = await keyword('+15555559001', '+15555550101', 'STOP', 'a1');
+  check(stop.outcome === 'RECORDED' && stop.consents_changed === 1 && stop.school_name === 'Day School', 'STOP to school A records one opt-out');
+  const smsConsent = async (key) => (await admin.query("SELECT status::text, source::text FROM hon.communication_consents WHERE person_id = $1 AND channel = 'SMS'", [person[key]])).rows[0];
+  check((await smsConsent('ada')).status === 'OPTED_OUT' && (await smsConsent('ada')).source === 'RECIPIENT', 'STOP records OPTED_OUT/RECIPIENT for that school person');
+  check((await smsConsent('adaTwin')).status === 'OPTED_IN', 'the same number in another school is not changed');
+  check((await keyword('+15555559001', '+15555550101', 'STOP', 'a1')).outcome === 'REPLAYED', 'a redelivered keyword is a replay');
+  check((await keyword('+15555559001', '+15555550101', 'HELP', 'a2')).consents_changed === 0, 'HELP changes nothing');
+  const start = await keyword('+15555559001', '+15555550101', 'START', 'a3');
+  check(start.consents_changed === 1 && (await smsConsent('ada')).status === 'OPTED_IN', 'START re-opens consent the person withdrew by text');
+  await consent('ada', ids.schoolA, 'SMS', 'OPTED_OUT'); // staff-recorded opt-out (source STAFF)
+  check((await keyword('+15555559001', '+15555550101', 'START', 'a4')).consents_changed === 0 && (await smsConsent('ada')).status === 'OPTED_OUT', 'START never re-opens a staff-recorded opt-out');
+  check((await keyword('+15555559999', '+15555550101', 'STOP', 'a5')).outcome === 'UNROUTED', 'a keyword to an unknown number is UNROUTED');
+  check((await keyword('+15555559003', '+15555550105', 'STOP', 'a6')).outcome === 'UNROUTED', 'a keyword to a DISABLED number is UNROUTED');
+  check((await admin.query('SELECT count(*)::int AS n FROM hon.inbound_text_keywords WHERE organization_id = $1', [ids.org])).rows[0].n === 4, 'only routed keywords are stored, without the sender number');
+  await expectError('42501', () => runtime.query("SELECT * FROM hon.record_inbound_text_keyword('+15555559001','+15555550101','STOP',$1,now())", [`SM${'b'.repeat(32)}`]), 'runtime cannot record inbound keywords');
+
+  // 14. Twilio end to end with a stub transport and signed callbacks through the controller.
+  const { TwilioTextProvider, TwilioWebhookVerifier } = await import('../../../apps/api/dist/communication/delivery/twilio-text-provider.js');
+  const { createHmac } = await import('node:crypto');
+  const twEnv = () => ({ TWILIO_ACCOUNT_SID: `AC${'c'.repeat(32)}`, TWILIO_AUTH_TOKEN: 'test-token', HON_PUBLIC_API_ORIGIN: 'https://api.hon.example', HON_SMS_SEND_APPROVED: 'true' });
+  await consent('ada', ids.schoolA, 'SMS', 'OPTED_IN');
+  await queued('twilio', ids.schoolA, 'ada', 'SMS', '내일 오후 5시 수업이 있습니다. 늦지 마세요! 도복과 띠를 꼭 챙겨 오세요. 질문이 있으시면 언제든지 연락 주세요. 감사합니다. 오늘도 좋은 하루 되세요!');
+  const twCalls = [];
+  const twSid = `SM${'d'.repeat(32)}`;
+  const twilio = new TwilioTextProvider(twEnv, async (url, init) => { twCalls.push({ url, form: new URLSearchParams(init.body) }); return { status: 201, json: async () => ({ sid: twSid, num_segments: '2' }) }; });
+  const twWorker = new CommunicationWorkerDatabase();
+  if (hourIn(dayZone) >= 10 && hourIn(dayZone) <= 19) {
+    await new CommunicationDispatcher(twWorker, [twilio]).runOnce(100);
+    const twRow = await delivery('twilio');
+    check(twRow.status === 'ACCEPTED' && twRow.provider === 'TWILIO' && twRow.encoding === 'UCS2' && twRow.segments === 2, 'a Korean text is sent through Twilio and measured as UCS-2 pieces');
+    check(twCalls[0].form.get('MessagingServiceSid') === sid(1) && twCalls[0].form.get('StatusCallback') === 'https://api.hon.example/v1/communications/webhooks/twilio/status', 'Twilio gets the school Messaging Service and the HON status callback');
+    const controller = new CommunicationWebhookController(twWorker, new SendGridEventWebhookVerifier(() => ({})), new TwilioWebhookVerifier(twEnv));
+    const signedForm = (path, fields) => {
+      const params = new URLSearchParams(fields);
+      const data = [...new Set(params.keys())].sort().reduce((acc, name) => acc + name + params.get(name), `https://api.hon.example${path}`);
+      return { body: Buffer.from(params.toString()), signature: createHmac('sha1', 'test-token').update(data).digest('base64') };
+    };
+    const status = signedForm('/v1/communications/webhooks/twilio/status', { AccountSid: `AC${'c'.repeat(32)}`, MessageSid: twSid, MessageStatus: 'delivered' });
+    check((await controller.twilioStatus({ body: status.body }, status.signature)).recorded === 1 && (await delivery('twilio')).status === 'DELIVERED', 'a signed Twilio delivered callback marks the text DELIVERED');
+    let forged = false;
+    try { await controller.twilioStatus({ body: status.body }, 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=') } catch (error) { forged = error?.getStatus?.() === 400; }
+    check(forged, 'an unsigned Twilio callback is refused');
+    const inbound = signedForm('/v1/communications/webhooks/twilio/inbound', { AccountSid: `AC${'c'.repeat(32)}`, MessageSid: `SM${'e'.repeat(32)}`, From: '+15555550101', To: '+15555559001', Body: ' stop ' });
+    const twiml = await controller.twilioInbound({ body: inbound.body }, inbound.signature);
+    check(twiml.includes('<Response></Response>') && (await smsConsent('ada')).status === 'OPTED_OUT', 'a signed inbound STOP through the controller opts the person out and answers empty TwiML');
+  } else {
+    console.log('Twilio end-to-end skipped: the day zone left sending hours during the run.');
+  }
+  await twWorker.onModuleDestroy();
 
   console.log(`PASS: communication delivery integrity (${passed} checks; day zone ${dayZone}, night zone ${nightZone}).`);
 } finally {
