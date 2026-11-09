@@ -1,4 +1,4 @@
-import { CAMPAIGN_CHANNELS, CAMPAIGN_CURRENCIES, CAMPAIGN_STATUSES, validateCampaignWindow, type CampaignFunnel, type CampaignSummary } from '@hon/contracts';
+import { CAMPAIGN_CHANNELS, CAMPAIGN_CURRENCIES, CAMPAIGN_STATUSES, validateCampaignWindow, type CampaignFunnel, type CampaignReadSummary } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
@@ -15,7 +15,7 @@ const BASE = '/api/v1/marketing/campaigns';
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UTC = /^20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-const SUMMARY_KEYS = ['id', 'version', 'code', 'name', 'goal', 'offerLabel', 'channel', 'status', 'startsAt', 'endsAt', 'plannedBudgetMinor', 'currency', 'createdAt', 'updatedAt', 'planningOnly'];
+const SUMMARY_KEYS = ['id', 'schoolId', 'version', 'code', 'name', 'goal', 'offerLabel', 'channel', 'status', 'startsAt', 'endsAt', 'plannedBudgetMinor', 'currency', 'createdAt', 'updatedAt', 'planningOnly'];
 const FUNNEL_KEYS = ['campaign', 'from', 'to', 'asOf', 'leads', 'trialLeads', 'trialAppointments', 'completedTrialAppointments', 'wonLeads', 'lostLeads', 'archivedLeads', 'enrollmentLinkage', 'revenueLinkage'];
 const COUNT_KEYS = ['leads', 'trialLeads', 'trialAppointments', 'completedTrialAppointments', 'wonLeads', 'lostLeads', 'archivedLeads'] as const;
 
@@ -28,23 +28,25 @@ function closed(value: unknown, keys: readonly string[]): Record<string, unknown
 }
 const text = (v: unknown, min: number, max: number) => typeof v === 'string' && v.length >= min && v.length <= max;
 const instant = (v: unknown) => typeof v === 'string' && v.length <= 40 && Number.isFinite(Date.parse(v));
-export function verifyCampaign(value: unknown): CampaignSummary {
+/** One campaign as the live reads return it (0227): it must belong to the school this page shows. */
+export function verifyCampaign(value: unknown, schoolId: string): CampaignReadSummary {
   const c = closed(value, SUMMARY_KEYS);
+  if (typeof c.schoolId !== 'string' || !UUID.test(c.schoolId) || c.schoolId.toLowerCase() !== schoolId.toLowerCase()) fail();
   if (typeof c.id !== 'string' || !UUID.test(c.id) || !Number.isSafeInteger(c.version) || (c.version as number) < 1 || !text(c.code, 1, 40) || !text(c.name, 1, 120)
     || !text(c.goal, 1, 500) || !text(c.offerLabel, 0, 120) || !(CAMPAIGN_CHANNELS as readonly unknown[]).includes(c.channel)
     || !(CAMPAIGN_STATUSES as readonly unknown[]).includes(c.status) || typeof c.startsAt !== 'string' || !UTC.test(c.startsAt) || typeof c.endsAt !== 'string' || !UTC.test(c.endsAt)
     || !Number.isSafeInteger(c.plannedBudgetMinor) || (c.plannedBudgetMinor as number) < 0 || !(CAMPAIGN_CURRENCIES as readonly unknown[]).includes(c.currency)
     || !instant(c.createdAt) || !instant(c.updatedAt) || c.planningOnly !== true) fail();
-  return c as unknown as CampaignSummary;
+  return c as unknown as CampaignReadSummary;
 }
-export function verifyCampaignList(value: unknown): CampaignSummary[] {
+export function verifyCampaignList(value: unknown, schoolId: string): CampaignReadSummary[] {
   if (!Array.isArray(value) || value.length > CAMPAIGN_LIST_MAX) return fail();
-  const items = value.map(verifyCampaign);
+  const items = value.map((item) => verifyCampaign(item, schoolId));
   if (new Set(items.map((c) => c.id.toLowerCase())).size !== items.length) fail();
   return items;
 }
-export function verifyFunnel(value: unknown, campaignId: string, from: string, to: string): CampaignFunnel {
-  const f = closed(value, FUNNEL_KEYS), campaign = verifyCampaign(f.campaign);
+export function verifyFunnel(value: unknown, schoolId: string, campaignId: string, from: string, to: string): CampaignFunnel {
+  const f = closed(value, FUNNEL_KEYS), campaign = verifyCampaign(f.campaign, schoolId);
   if (campaign.id.toLowerCase() !== campaignId.toLowerCase() || f.from !== from || f.to !== to || !instant(f.asOf)
     || f.enrollmentLinkage !== 'UNAVAILABLE' || f.revenueLinkage !== 'UNAVAILABLE'
     || COUNT_KEYS.some((k) => !Number.isSafeInteger(f[k]) || (f[k] as number) < 0)) fail();
@@ -80,18 +82,20 @@ async function read(path: string, signal: AbortSignal, owned: Owned): Promise<un
 }
 
 export interface MarketingApi {
-  campaigns(signal: AbortSignal, owned: Owned): Promise<CampaignSummary[]>;
-  funnel(campaignId: string, signal: AbortSignal, owned: Owned, now?: number): Promise<CampaignFunnel>;
+  /** The school's campaigns; every one must name the school this page shows (the server resolves the school from the session). */
+  campaigns(schoolId: string, signal: AbortSignal, owned: Owned): Promise<CampaignReadSummary[]>;
+  funnel(schoolId: string, campaignId: string, signal: AbortSignal, owned: Owned, now?: number): Promise<CampaignFunnel>;
 }
 export const marketingApi: MarketingApi = {
-  async campaigns(signal, owned) {
+  async campaigns(schoolId, signal, owned) {
+    if (!UUID.test(schoolId)) throw new MarketingError('UNAVAILABLE');
     const data = await read(BASE, signal, owned);
-    try { return verifyCampaignList(data); } catch { throw new MarketingError('UNAVAILABLE'); }
+    try { return verifyCampaignList(data, schoolId); } catch { throw new MarketingError('UNAVAILABLE'); }
   },
-  async funnel(campaignId, signal, owned, now = Date.now()) {
-    if (!UUID.test(campaignId)) throw new MarketingError('UNAVAILABLE');
+  async funnel(schoolId, campaignId, signal, owned, now = Date.now()) {
+    if (!UUID.test(campaignId) || !UUID.test(schoolId)) throw new MarketingError('UNAVAILABLE');
     const { from, to } = funnelWindow(now);
     const data = await read(`${BASE}/${campaignId.toLowerCase()}/funnel?${new URLSearchParams({ from, to })}`, signal, owned);
-    try { return verifyFunnel(data, campaignId, from, to); } catch { throw new MarketingError('UNAVAILABLE'); }
+    try { return verifyFunnel(data, schoolId, campaignId, from, to); } catch { throw new MarketingError('UNAVAILABLE'); }
   },
 };
