@@ -171,3 +171,26 @@ it('is a protected dynamic noindex page in the classes menu and the route manife
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
   expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/schedule/timetable')).toEqual([{ path: '/staff/schedule/timetable', title: 'HON | Weekly timetable' }]);
 });
+
+it('shows the timetable and series page in Korean and Spanish, with dates in that language and no English left behind', () => {
+  const ko = renderToStaticMarkup(<ClassSeriesView {...props({ language: 'ko' })}/>);
+  expect(ko).toContain('주간 시간표');
+  expect(ko).toContain('(오늘)');
+  expect(ko).toContain('3/20명 예약');
+  expect(ko).toContain('월, 수 18:00, 60분');
+  expect(ko).toContain('최대 12주 후');
+  expect(ko).toContain('예정된 수업 8개');
+  expect(ko).not.toMatch(/Weekly timetable|booked|upcoming|No classes|Refresh/);
+  const es = renderToStaticMarkup(<ClassSeriesView {...props({ language: 'es-MX', form: { kind: 'fill', seriesId } })}/>);
+  expect(es).toContain('Horario semanal');
+  expect(es).toContain('(hoy)');
+  expect(es).toContain('3/20 reservadas');
+  expect(es).toContain('lun, mié a las 18:00 durante 60 min');
+  expect(es).toContain('como máximo 12 semanas por adelantado');
+  expect(es).not.toMatch(/Weekly timetable|booked|upcoming|Create through|Refresh/);
+  expect(effectText('revise', { created: 0, updated: 1, cancelled: 2, keptBooked: 1, skippedDates: [] }, 'es'))
+    .toBe('Guardado. 1 sesión actualizada; 2 sesiones sin reservas canceladas; 1 sesión con reservas se mantuvo igual. La página se volvió a leer del servidor.');
+  expect(effectText('fill', { created: 0, updated: 0, cancelled: 0, keptBooked: 0, skippedDates: [] }, 'ko')).toBe('저장했습니다. 새로 만들 수업이 없었습니다. 서버에서 페이지를 다시 읽었습니다.');
+  const unknownKo = renderToStaticMarkup(<ClassSeriesView {...props({ language: 'ko', outcome: { kind: 'TOO_FAR', action: 'fill' } })}/>);
+  expect(unknownKo).toContain('최대 12주 후까지');
+});
