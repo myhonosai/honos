@@ -5,7 +5,9 @@
 # the chosen GitHub environment, using that environment's secrets:
 #   DATABASE_URL          migration role (postgres.<ref>) via the Session Pooler, port 5432, no sslmode
 #   HON_DATABASE_CA_CERT  PEM text of the Supabase project CA
-# Create the environments in Settings > Environments. Give `production` a required reviewer.
+# Create the environments in Settings > Environments. On BOTH staging and production set
+# "Deployment branches" to the main branch only and add David as a Required reviewer: without a
+# branch policy, a workflow on any pushed branch could request the environment and read its secrets.
 # Runbook: docs/operations/RENDER_DEPLOYMENT.md and docs/operations/BACKUP_RESTORE_AND_RECOVERY.md.
 # Guarded by .github/scripts/database-migrate-workflow.test.mjs.
 name: Database migrate (manual)
@@ -50,8 +52,10 @@ jobs:
     steps:
       - name: Refuse migrate without matching confirmation
         if: inputs.action == 'migrate' && inputs.confirm != inputs.target
+        env:
+          TARGET: ${{ inputs.target }}
         run: |
-          echo "::error::To migrate, type the target name ('${{ inputs.target }}') in the confirm box."
+          echo "::error::To migrate, type the target name ($TARGET) in the confirm box."
           exit 1
 
       - uses: actions/checkout@v4

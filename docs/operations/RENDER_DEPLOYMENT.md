@@ -83,7 +83,11 @@ One-time setup (GitHub → repository **Settings → Environments**):
      (`postgresql://postgres.<ref>:<db password>@aws-0-us-east-1.pooler.supabase.com:5432/postgres`),
      without any `?sslmode=...`.
    - `HON_DATABASE_CA_CERT`: full PEM text of the project CA.
-2. Later, create `production` the same way and add yourself under **Required reviewers**.
+2. Still on the `staging` environment page, **before adding the secrets**:
+   - **Deployment branches and tags** → *Selected branches and tags* → add rule `main` (only `main`).
+     Without this, a workflow on any pushed branch could ask for this environment and read its secrets.
+   - **Required reviewers** → add yourself, so every run waits for your approval.
+3. Later, create `production` the same way, with the same branch rule and required reviewer.
 
 Use: choose the target, then `status` (read-only), `migrate` (type the target name again in
 *confirm*), or `verify` (read-only security verifier, after `infra/postgres/010` has been run).
