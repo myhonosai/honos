@@ -417,6 +417,18 @@ try {
   ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND action_code='schedule.series.ongoing' AND source='HUMAN_UI'", [G.seriesId])).rows[0].n === 1
     && (await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='schedule.series.ongoing_set'", [G.seriesId])).rows[0].n === 1, 'one audit row and one inert outbox event for the switch');
   ok((await success(() => list(MANAGER), 'list after the switch')).data.topUpDue === false, 'a freshly filled ongoing series is not due');
+  // Revising an ongoing series to add a weekday fills that weekday through the last filled date (only missing dates).
+  const added = await success(() => revise(MANAGER, G.seriesId, { expectedVersion: on.data.series.version, name: ongoingBase.name, capacity: ongoingBase.capacity,
+    bookingPolicy: ongoingBase.bookingPolicy, weekdays: [2, 4, 5], localStartTime: ongoingBase.localStartTime, durationMinutes: ongoingBase.durationMinutes }), 'revise the ongoing series to add Thursday');
+  const thursdays = (await sessionsOf(G.seriesId)).filter((r) => isoDay(r.local_date) === 4 && r.status === 'SCHEDULED').map((r) => r.local_date);
+  const thursdaysExpected = datesBetween(today, addDays(today, 84), [4]);
+  ok(added.data.series.generatedThrough === addDays(today, 84) && added.data.sessions.created === thursdays.length && thursdays.length >= thursdaysExpected.length - 1
+    && thursdays.every((d) => thursdaysExpected.includes(d)) && thursdays.at(-1) === thursdaysExpected.at(-1),
+    `the added weekday is on the timetable through the last filled date: ${thursdays.length} of ${thursdaysExpected.length}`);
+  const plainAdded = (await sessionsOf(G.seriesId)).length;
+  const readded = await success(() => revise(MANAGER, G.seriesId, { expectedVersion: added.data.series.version, name: ongoingBase.name, capacity: ongoingBase.capacity,
+    bookingPolicy: ongoingBase.bookingPolicy, weekdays: [2, 4, 5], localStartTime: ongoingBase.localStartTime, durationMinutes: ongoingBase.durationMinutes, roomName: 'Mat 2' }), 'revise again with the same weekdays');
+  ok(readded.data.sessions.created === 0 && (await sessionsOf(G.seriesId)).length === plainAdded, 'a revise with no new weekday creates nothing');
   // A week passes: model a series filled only 14 days ahead that is ongoing (owner write within the version rule), one that is
   // not ongoing, and one that is ongoing but ended. Only the first is due and topped up.
   const make = async (name) => (await success(() => create(MANAGER, { ...ongoingBase, name }), `create ${name}`)).data.series;
@@ -452,6 +464,7 @@ try {
   const again = await success(() => topUp(MANAGER), 'second top-up');
   ok(again.data.series === 0 && again.data.created === 0 && JSON.stringify(await counts()) === JSON.stringify(afterTopUp), 'a second top-up has nothing to do');
   const offNow = (await success(() => list(MANAGER), 'list before off')).data.series.find((x) => x.seriesId === G.seriesId);
+  ok(offNow.weekdays.join() === '2,4,5', 'the revised pattern is kept');
   const off = await success(() => setOngoing(MANAGER, G.seriesId, { expectedVersion: offNow.version, ongoing: false }), 'turn ongoing off');
   ok(off.data.series.ongoing === false && off.data.sessions.created === 0 && (await sessionsOf(G.seriesId)).length === afterTopUp['Ongoing Karate'], 'turning it off keeps every session');
   const endedRead = (await success(() => list(MANAGER), 'list ended')).data.series.find((x) => x.seriesId === closed.seriesId);

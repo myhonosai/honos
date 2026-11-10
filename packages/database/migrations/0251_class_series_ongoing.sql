@@ -9,6 +9,7 @@ BEGIN;
 --       The top-up is its own direct human command, sent by the staff page when a manager opens it and the read says a
 --       top-up is due; nothing here runs on a timer. Each top-up continues after the last filled date, so a date skipped
 --       for a daylight-saving gap is reported once, and a date already filled is never created twice.
+--   O4  Revising an ongoing series also fills any newly added weekday from today through its last filled date.
 --   O3  Everything else is the 0239 rule: never past the series' last date, booked or attended sessions are never touched,
 --       ended series are never topped up, and no family is contacted and nobody is charged.
 -- The runtime gains no table privilege; two new direct-human SECURITY DEFINER entry points are its only new grants.
@@ -135,6 +136,37 @@ BEGIN
   RETURN jsonb_build_object('receipt',result,'replayed',false);
 END $$;
 
+-- 0239 S3 revise, plus O4: an ongoing series also gets any newly added weekday filled from today through its last filled
+-- date, so a changed pattern is on the timetable as far ahead as before (only missing dates are created).
+CREATE OR REPLACE FUNCTION hon.revise_class_series(subject text,selected uuid,p jsonb,key text,request uuid,correlation uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
+DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid; fp text; replay jsonb; x hon.class_series%ROWTYPE;
+  new_last date; prior jsonb; effect jsonb; filled jsonb:=jsonb_build_object('created',0,'skippedDates','[]'::jsonb); result jsonb;
+BEGIN
+  IF selected IS NULL OR hon.class_series_pattern(p,true) IS NULL OR NOT hon.membership_command_args_ok(subject,key,request,correlation) THEN
+    RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
+  IF p ? 'endsOn' AND p->'endsOn'<>'null'::jsonb THEN new_last:=hon.membership_pause_date(p->'endsOn'); END IF;
+  fp:=encode(sha256(convert_to(jsonb_build_object('operation','schedule.series.revise','seriesId',selected,'input',p)::text,'UTF8')),'hex');
+  replay:=hon.class_series_command_begin(subject,key,fp);
+  actor:=hon.require_class_series_actor(subject);
+  IF replay IS NOT NULL THEN RETURN jsonb_build_object('receipt',replay,'replayed',true); END IF;
+  SELECT * INTO x FROM hon.class_series s WHERE s.id=selected AND s.organization_id=org AND s.school_id=school FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'CLASS_SERIES_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  IF x.version<>(p->>'expectedVersion')::integer THEN RAISE EXCEPTION 'VERSION_CONFLICT' USING ERRCODE='40001'; END IF;
+  IF x.status<>'ACTIVE' THEN RAISE EXCEPTION 'CLASS_SERIES_ENDED' USING ERRCODE='40001'; END IF;
+  IF new_last IS NOT NULL AND (new_last<x.starts_on OR new_last<hon.membership_school_today()) THEN RAISE EXCEPTION 'VALIDATION_FAILED' USING ERRCODE='22023'; END IF;
+  prior:=hon.class_series_json(x);
+  UPDATE hon.class_series SET name=p->>'name',room_name=nullif(p->>'roomName',''),capacity=(p->>'capacity')::integer,booking_policy=p->>'bookingPolicy',
+      weekdays=ARRAY(SELECT d::text::smallint FROM jsonb_array_elements(p->'weekdays') d ORDER BY 1),local_start_time=(p->>'localStartTime')::time,
+      duration_minutes=(p->>'durationMinutes')::integer,ends_on=new_last,version=version+1,updated_at=clock_timestamp()
+    WHERE id=x.id RETURNING * INTO x;
+  effect:=hon.class_series_apply_future(x,'The class series changed');
+  IF x.ongoing AND x.generated_through IS NOT NULL THEN filled:=hon.class_series_fill_dates(x,hon.membership_school_today(),x.generated_through); END IF;
+  result:=jsonb_build_object('series',hon.class_series_json(x),'sessions',effect||filled);
+  PERFORM hon.class_series_command_finish(subject,key,actor,result,'schedule.series.revise',x.id,prior,result,'schedule.series.revised',x.version,request,correlation);
+  RETURN jsonb_build_object('receipt',result,'replayed',false);
+END $$;
+
 -- 0239's series read plus whether a top-up is due (the same condition the top-up uses).
 CREATE OR REPLACE FUNCTION hon.read_school_class_series(subject text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
@@ -162,7 +194,7 @@ COMMENT ON FUNCTION hon.top_up_class_series(text,jsonb,text,uuid,uuid) IS
 'Direct HUMAN_UI top-up of the current school''s due ongoing class series to 84 days ahead (B-SCH-2 O2), sent by the staff page. Not a timer. No communication or payment effect.';
 
 DO $$ DECLARE r text; f text; fns text[]:=ARRAY['hon.class_series_json(hon.class_series)','hon.class_series_fill_dates(hon.class_series,date,date)',
-    'hon.set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid)','hon.top_up_class_series(text,jsonb,text,uuid,uuid)','hon.read_school_class_series(text)']; BEGIN
+    'hon.set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid)','hon.top_up_class_series(text,jsonb,text,uuid,uuid)','hon.read_school_class_series(text)','hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid)']; BEGIN
   EXECUTE 'REVOKE ALL (ongoing) ON hon.class_series FROM PUBLIC';
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (ongoing) ON hon.class_series FROM %I',r); END LOOP;
   FOREACH f IN ARRAY fns LOOP
@@ -171,7 +203,7 @@ DO $$ DECLARE r text; f text; fns text[]:=ARRAY['hon.class_series_json(hon.class
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid),hon.top_up_class_series(text,jsonb,text,uuid,uuid),
-      hon.read_school_class_series(text) TO hon_runtime;
+      hon.read_school_class_series(text),hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
 DO $$ BEGIN
