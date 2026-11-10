@@ -2,9 +2,9 @@ import {
   BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException, UnprocessableEntityException,
 } from '@nestjs/common';
 import {
-  validateCreateClassSeriesInput, validateEndClassSeriesInput, validateFillClassSeriesInput, validateReviseClassSeriesInput, validateTimetableQuery,
-  verifyClassSeriesReceipt, verifySchoolClassSeries, verifyWeeklyTimetable,
-  type ClassSeriesReceipt, type SchoolClassSeries, type WeeklyTimetable,
+  validateCreateClassSeriesInput, validateEndClassSeriesInput, validateFillClassSeriesInput, validateReviseClassSeriesInput, validateSetClassSeriesOngoingInput,
+  validateTimetableQuery, validateTopUpClassSeriesInput, verifyClassSeriesReceipt, verifyClassSeriesTopUpReceipt, verifySchoolClassSeries, verifyWeeklyTimetable,
+  type ClassSeriesReceipt, type ClassSeriesTopUpReceipt, type SchoolClassSeries, type WeeklyTimetable,
 } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -44,8 +44,8 @@ function translate(error: unknown, forbidden: string): never {
 /**
  * B-SCH-1 (0239): weekly class series in school time and the weekly timetable. Each call runs one protected definer function
  * that re-proves the direct human subject and the live school-scoped permission; the runtime has no privilege on the series
- * tables and no UPDATE on class sessions. Sessions are created only by an explicit staff fill; nothing here runs on a timer,
- * contacts anyone, or charges.
+ * tables and no UPDATE on class sessions. Sessions are created only by an explicit staff fill, an ongoing switch or the
+ * page's top-up of ongoing series (0251); nothing here runs on a timer, contacts anyone, or charges.
  */
 @Injectable()
 export class ClassSeriesService {
@@ -80,8 +80,16 @@ export class ClassSeriesService {
   async revise(context: MembershipLifecycleContext, seriesId: string, value: unknown) { return this.seriesCommand(context, 'revise_class_series', seriesId, () => validateReviseClassSeriesInput(value)); }
   async end(context: MembershipLifecycleContext, seriesId: string, value: unknown) { return this.seriesCommand(context, 'end_class_series', seriesId, () => validateEndClassSeriesInput(value)); }
   async fill(context: MembershipLifecycleContext, seriesId: string, value: unknown) { return this.seriesCommand(context, 'fill_class_series', seriesId, () => validateFillClassSeriesInput(value)); }
+  async setOngoing(context: MembershipLifecycleContext, seriesId: string, value: unknown) { return this.seriesCommand(context, 'set_class_series_ongoing', seriesId, () => validateSetClassSeriesOngoingInput(value)); }
 
-  private async seriesCommand(context: MembershipLifecycleContext, fn: 'revise_class_series' | 'end_class_series' | 'fill_class_series', seriesId: string,
+  async topUp(context: MembershipLifecycleContext, value: unknown): Promise<{ receipt: ClassSeriesTopUpReceipt; replayed: boolean }> {
+    this.assertHumanContext(context, 'CLASS_SERIES_FORBIDDEN', true);
+    const input = this.validated(() => validateTopUpClassSeriesInput(value));
+    return this.write(context, 'SELECT hon.top_up_class_series($1,$2::jsonb,$3,$4::uuid,$5::uuid) AS data',
+      [context.externalSubject, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId], verifyClassSeriesTopUpReceipt);
+  }
+
+  private async seriesCommand(context: MembershipLifecycleContext, fn: 'revise_class_series' | 'end_class_series' | 'fill_class_series' | 'set_class_series_ongoing', seriesId: string,
     validate: () => unknown): Promise<{ receipt: ClassSeriesReceipt; replayed: boolean }> {
     this.assertHumanContext(context, 'CLASS_SERIES_FORBIDDEN', true);
     if (!UUID.test(seriesId)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
@@ -101,8 +109,8 @@ export class ClassSeriesService {
     } catch (error) { return translate(error, forbidden); }
   }
 
-  private async write(context: MembershipLifecycleContext, statement: string, values: unknown[],
-    verify: (data: unknown) => ClassSeriesReceipt): Promise<{ receipt: ClassSeriesReceipt; replayed: boolean }> {
+  private async write<R>(context: MembershipLifecycleContext, statement: string, values: unknown[],
+    verify: (data: unknown) => R): Promise<{ receipt: R; replayed: boolean }> {
     try {
       return await this.database.withTenantTransaction(context, async client => {
         await client.query(WRITE_LIMITS);

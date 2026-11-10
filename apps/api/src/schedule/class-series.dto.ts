@@ -11,3 +11,6 @@ export class ReviseClassSeriesDto {
 }
 export class EndClassSeriesDto { @Allow() expectedVersion?: unknown; @Allow() lastDate?: unknown; @Allow() reason?: unknown }
 export class FillClassSeriesDto { @Allow() expectedVersion?: unknown; @Allow() throughDate?: unknown }
+export class SetClassSeriesOngoingDto { @Allow() expectedVersion?: unknown; @Allow() ongoing?: unknown }
+/** 0251 top-up takes an empty body. */
+export class TopUpClassSeriesDto {}

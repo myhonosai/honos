@@ -4,8 +4,8 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
-import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard } from './class-series-human-ui.guard.js';
-import { CreateClassSeriesDto, EndClassSeriesDto, FillClassSeriesDto, ReviseClassSeriesDto } from './class-series.dto.js';
+import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './class-series-human-ui.guard.js';
+import { CreateClassSeriesDto, EndClassSeriesDto, FillClassSeriesDto, ReviseClassSeriesDto, SetClassSeriesOngoingDto, TopUpClassSeriesDto } from './class-series.dto.js';
 import { ClassSeriesService } from './class-series.service.js';
 
 const MANAGE = 'schedule.session.manage';
@@ -18,7 +18,8 @@ function definedFields(input: object): Record<string, unknown> {
 /**
  * B-SCH-1 (0239): weekly class series and the weekly timetable. Route identifiers are never authority: the guarded boundary
  * resolves the route scope from the verified session, and each protected database function re-proves the direct human subject
- * and the live school-scoped permission. No automation, communication, charge or AI is reachable from these routes.
+ * and the live school-scoped permission. No timer, communication, charge or AI is reachable from these routes: the 0251 top-up
+ * runs only when a manager's browser sends it.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/schedule')
 @UseGuards(HonIdentityGuard)
@@ -92,6 +93,28 @@ export class ClassSeriesController {
     this.noQuery(request);
     const context = await this.context(request, organizationId, schoolId, MANAGE, this.key(idempotencyKey));
     return this.receipt(context, await this.series.fill(context, seriesId, definedFields(input)));
+  }
+
+  @Post('class-series/:seriesId/ongoing')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(ClassSeriesOngoingHumanUiGuard)
+  async ongoing(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('seriesId', new ParseUUIDPipe()) seriesId: string, @Headers('idempotency-key') idempotencyKey: string | undefined, @Body() input: SetClassSeriesOngoingDto, @Req() request: HonRequest) {
+    this.noQuery(request);
+    const context = await this.context(request, organizationId, schoolId, MANAGE, this.key(idempotencyKey));
+    return this.receipt(context, await this.series.setOngoing(context, seriesId, definedFields(input)));
+  }
+
+  @Post('class-series/top-up')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(ClassSeriesTopUpHumanUiGuard)
+  async topUp(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined, @Body() input: TopUpClassSeriesDto, @Req() request: HonRequest) {
+    this.noQuery(request);
+    const context = await this.context(request, organizationId, schoolId, MANAGE, this.key(idempotencyKey));
+    return this.receipt(context, await this.series.topUp(context, definedFields(input)));
   }
 
   private receipt(context: MembershipLifecycleContext, result: { receipt: unknown; replayed: boolean }) {

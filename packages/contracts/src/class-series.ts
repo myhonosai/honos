@@ -1,11 +1,14 @@
 /**
  * B-SCH-1 (0239): recurring weekly classes in school time and the school's weekly timetable. Sessions are created only when
  * a staff member fills a series through a date (at most 12 weeks ahead); revising or ending a series changes only future
- * sessions with no booking or attendance.
+ * sessions with no booking or attendance. B-SCH-2 (0251): a series can be marked ongoing; the staff page then tops it up
+ * to 12 weeks ahead about once a week (when fewer than 11 weeks remain).
  */
 export const CLASS_SERIES_BOOKING_POLICIES = ['WALK_IN', 'OPTIONAL_BOOKING', 'REQUIRED_BOOKING'] as const;
 export type ClassSeriesBookingPolicy = (typeof CLASS_SERIES_BOOKING_POLICIES)[number];
 export const CLASS_SERIES_FILL_DAYS = 84;
+/** An ongoing series is topped up once fewer than this many days are filled ahead. */
+export const CLASS_SERIES_TOP_UP_BELOW_DAYS = 77;
 
 export interface ClassSeriesPattern {
   name: string; roomName?: string | null; capacity: number; bookingPolicy: ClassSeriesBookingPolicy; weekdays: number[];
@@ -15,16 +18,19 @@ export interface CreateClassSeriesInput extends ClassSeriesPattern { programId: 
 export interface ReviseClassSeriesInput extends ClassSeriesPattern { expectedVersion: number }
 export interface EndClassSeriesInput { expectedVersion: number; lastDate: string; reason: string }
 export interface FillClassSeriesInput { expectedVersion: number; throughDate: string }
+export interface SetClassSeriesOngoingInput { expectedVersion: number; ongoing: boolean }
+export type TopUpClassSeriesInput = Record<string, never>;
 export interface TimetableQuery { weekOf?: string }
 
 export interface ClassSeries {
   seriesId: string; programId: string; name: string; roomName: string | null; capacity: number; bookingPolicy: ClassSeriesBookingPolicy;
   weekdays: number[]; localStartTime: string; durationMinutes: number; startsOn: string; endsOn: string | null; generatedThrough: string | null;
-  status: 'ACTIVE' | 'ENDED'; endReason: string | null; version: number; futureSessions: number; createdAt: string;
+  status: 'ACTIVE' | 'ENDED'; endReason: string | null; version: number; ongoing: boolean; futureSessions: number; createdAt: string;
 }
 export interface ClassSeriesSessionEffect { created: number; updated: number; cancelled: number; keptBooked: number; skippedDates: string[] }
 export interface ClassSeriesReceipt { series: ClassSeries; sessions: ClassSeriesSessionEffect }
-export interface SchoolClassSeries { localToday: string; timezone: string; fillLimit: string; series: ClassSeries[]; programs: { programId: string; name: string }[] }
+export interface ClassSeriesTopUpReceipt { series: number; created: number; skippedDates: string[] }
+export interface SchoolClassSeries { localToday: string; timezone: string; fillLimit: string; topUpDue: boolean; series: ClassSeries[]; programs: { programId: string; name: string }[] }
 export interface TimetableSession {
   sessionId: string; seriesId: string | null; name: string; roomName: string | null; startsAt: string; endsAt: string; localDate: string;
   localStart: string; localEnd: string; capacity: number; bookingPolicy: ClassSeriesBookingPolicy; status: 'DRAFT' | 'SCHEDULED' | 'CANCELLED' | 'COMPLETED'; booked: number;
@@ -100,6 +106,15 @@ export function validateFillClassSeriesInput(value: unknown): FillClassSeriesInp
   const row = record(value, ['expectedVersion', 'throughDate']);
   return { expectedVersion: count(row.expectedVersion, 1), throughDate: classSeriesDate(row.throughDate) };
 }
+export function validateSetClassSeriesOngoingInput(value: unknown): SetClassSeriesOngoingInput {
+  const row = record(value, ['expectedVersion', 'ongoing']);
+  if (typeof row.ongoing !== 'boolean') invalid();
+  return { expectedVersion: count(row.expectedVersion, 1), ongoing: row.ongoing };
+}
+export function validateTopUpClassSeriesInput(value: unknown): TopUpClassSeriesInput {
+  record(value, []);
+  return {};
+}
 export function validateTimetableQuery(value: unknown): TimetableQuery {
   const row = record(value, [], ['weekOf']);
   return 'weekOf' in row ? { weekOf: classSeriesDate(row.weekOf) } : {};
@@ -108,13 +123,14 @@ export function validateTimetableQuery(value: unknown): TimetableQuery {
 // Output verifiers: every database response is checked strictly before it reaches a client.
 export function verifyClassSeries(value: unknown): ClassSeries {
   const row = record(value, ['seriesId', 'programId', 'name', 'roomName', 'capacity', 'bookingPolicy', 'weekdays', 'localStartTime', 'durationMinutes',
-    'startsOn', 'endsOn', 'generatedThrough', 'status', 'endReason', 'version', 'futureSessions', 'createdAt']);
+    'startsOn', 'endsOn', 'generatedThrough', 'status', 'endReason', 'version', 'ongoing', 'futureSessions', 'createdAt']);
+  if (typeof row.ongoing !== 'boolean') invalid();
   const series: ClassSeries = {
     seriesId: uuid(row.seriesId), programId: uuid(row.programId), name: text(row.name, 120), roomName: nullable(row.roomName, v => text(v, 120)),
     capacity: count(row.capacity, 1, 1000), bookingPolicy: oneOf(row.bookingPolicy, CLASS_SERIES_BOOKING_POLICIES), weekdays: weekdays(row.weekdays),
     localStartTime: clock(row.localStartTime), durationMinutes: count(row.durationMinutes, 5, 600), startsOn: classSeriesDate(row.startsOn),
     endsOn: nullable(row.endsOn, classSeriesDate), generatedThrough: nullable(row.generatedThrough, classSeriesDate), status: oneOf(row.status, ['ACTIVE', 'ENDED'] as const),
-    endReason: nullable(row.endReason, v => text(v)), version: count(row.version, 1), futureSessions: count(row.futureSessions, 0), createdAt: instant(row.createdAt),
+    endReason: nullable(row.endReason, v => text(v)), version: count(row.version, 1), ongoing: row.ongoing as boolean, futureSessions: count(row.futureSessions, 0), createdAt: instant(row.createdAt),
   };
   if ((series.status === 'ENDED') !== (series.endReason !== null) || (series.status === 'ENDED' && series.endsOn === null)
     || (series.endsOn !== null && series.endsOn < series.startsOn) || series.weekdays.some((d, n) => n > 0 && d <= series.weekdays[n - 1]!)) invalid();
@@ -130,13 +146,19 @@ export function verifyClassSeriesReceipt(value: unknown, expect: { seriesId?: st
   if (expect.seriesId !== undefined && series.seriesId !== expect.seriesId.toLowerCase()) invalid();
   return { series, sessions };
 }
+export function verifyClassSeriesTopUpReceipt(value: unknown): ClassSeriesTopUpReceipt {
+  const row = record(value, ['series', 'created', 'skippedDates']);
+  if (!Array.isArray(row.skippedDates) || row.skippedDates.length > 100) invalid();
+  return { series: count(row.series, 0, 50), created: count(row.created, 0, 5000), skippedDates: row.skippedDates.map(classSeriesDate) };
+}
 export function verifySchoolClassSeries(value: unknown): SchoolClassSeries {
-  const row = record(value, ['localToday', 'timezone', 'fillLimit', 'series', 'programs']);
+  const row = record(value, ['localToday', 'timezone', 'fillLimit', 'topUpDue', 'series', 'programs']);
+  if (typeof row.topUpDue !== 'boolean') invalid();
   if (!Array.isArray(row.series) || row.series.length > 200 || !Array.isArray(row.programs) || row.programs.length > 200) invalid();
   const series = row.series.map(verifyClassSeries);
   const programs = row.programs.map(entry => { const p = record(entry, ['programId', 'name']); return { programId: uuid(p.programId), name: text(p.name, 500) }; });
   if (new Set(series.map(s => s.seriesId)).size !== series.length || typeof row.timezone !== 'string' || !row.timezone || row.timezone.length > 64) invalid();
-  return { localToday: classSeriesDate(row.localToday), timezone: row.timezone, fillLimit: classSeriesDate(row.fillLimit), series, programs };
+  return { localToday: classSeriesDate(row.localToday), timezone: row.timezone, fillLimit: classSeriesDate(row.fillLimit), topUpDue: row.topUpDue, series, programs };
 }
 export function verifyWeeklyTimetable(value: unknown, query: TimetableQuery): WeeklyTimetable {
   const row = record(value, ['timezone', 'localToday', 'weekStart', 'weekEnd', 'truncated', 'sessions']);

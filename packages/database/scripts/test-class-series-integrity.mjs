@@ -64,7 +64,8 @@ async function startApp() {
   process.env.HON_PUBLIC_ORIGIN = origin;
 }
 
-const COMMAND = { create: 'schedule.series.create', revise: 'schedule.series.revise', end: 'schedule.series.end', fill: 'schedule.series.fill' };
+const COMMAND = { create: 'schedule.series.create', revise: 'schedule.series.revise', end: 'schedule.series.end', fill: 'schedule.series.fill',
+  ongoing: 'schedule.series.ongoing', topUp: 'schedule.series.top_up' };
 function call(actor, method, path, { body, key = randomUUID(), command, headers = {}, school = actor.school, organization = actor.org } = {}) {
   const target = new URL(`${origin}/v1/organizations/${organization}/schools/${school}/schedule/${path}`);
   const payload = body === undefined ? undefined : JSON.stringify(body);
@@ -93,6 +94,8 @@ const create = (actor, body, options = {}) => call(actor, 'POST', 'class-series'
 const revise = (actor, id, body, options = {}) => call(actor, 'POST', `class-series/${id}/revise`, { body, command: COMMAND.revise, ...options });
 const end = (actor, id, body, options = {}) => call(actor, 'POST', `class-series/${id}/end`, { body, command: COMMAND.end, ...options });
 const fill = (actor, id, body, options = {}) => call(actor, 'POST', `class-series/${id}/fill`, { body, command: COMMAND.fill, ...options });
+const setOngoing = (actor, id, body, options = {}) => call(actor, 'POST', `class-series/${id}/ongoing`, { body, command: COMMAND.ongoing, ...options });
+const topUp = (actor, body = {}, options = {}) => call(actor, 'POST', 'class-series/top-up', { body, command: COMMAND.topUp, ...options });
 
 async function success(read, label) {
   const { status, body, headers } = await read();
@@ -387,6 +390,86 @@ try {
   ok(after.status === 'SCHEDULED' && after.local_start === '16:30', 'the session attended during the end is not cancelled');
   await racer.end();
 
+  {
+  // 7b. Ongoing series (0251): a manager-only switch, off by default; turning it on fills 84 days ahead; the page's top-up
+  // refills due ongoing series (fewer than 77 days ahead) from the day after the last filled date, and nothing else.
+  const listed = await success(() => list(MANAGER), 'list before any ongoing series');
+  ok(listed.data.topUpDue === false && listed.data.series.every((x) => x.ongoing === false), 'every series starts with ongoing off and no top-up is due');
+  const ongoingBase = { programId: programs.a, name: 'Ongoing Karate', capacity: 20, bookingPolicy: 'WALK_IN', weekdays: [2, 5], localStartTime: '19:00', durationMinutes: 45, startsOn: today };
+  const G = (await success(() => create(MANAGER, ongoingBase), 'create the series to make ongoing')).data.series;
+  for (const actor of [READER, NONE, MIXED]) await refused(() => setOngoing(actor, G.seriesId, { expectedVersion: G.version, ongoing: true }), 403, undefined, `ongoing refused for ${actor.subject.split('-').pop()}`);
+  await refused(() => setOngoing(OTHER_SCHOOL, G.seriesId, { expectedVersion: G.version, ongoing: true }, { school: ids.schoolA }), 403, undefined, 'ongoing from another school');
+  for (const [label, body] of [['no switch', { expectedVersion: G.version }], ['text switch', { expectedVersion: G.version, ongoing: 'yes' }],
+    ['extra key', { expectedVersion: G.version, ongoing: true, weeks: 26 }], ['no version', { ongoing: true }]]) {
+    await refused(() => setOngoing(MANAGER, G.seriesId, body), 400, undefined, `ongoing validation: ${label}`);
+  }
+  await refused(() => setOngoing(MANAGER, G.seriesId, { expectedVersion: G.version, ongoing: true }, { command: COMMAND.fill }), 403, undefined, 'ongoing under another command header');
+  await refused(() => setOngoing(MANAGER, G.seriesId, { expectedVersion: G.version + 1, ongoing: true }), 409, 'VERSION_CONFLICT', 'ongoing with a stale version');
+  const onKey = randomUUID();
+  const on = await success(() => setOngoing(MANAGER, G.seriesId, { expectedVersion: G.version, ongoing: true }, { key: onKey }), 'turn ongoing on');
+  const gRows = await sessionsOf(G.seriesId);
+  const gExpected = datesBetween(today, addDays(today, 84), [2, 5]);
+  ok(on.data.series.ongoing === true && on.data.series.generatedThrough === addDays(today, 84) && on.data.series.version === G.version + 1
+    && on.data.sessions.created === gRows.length && gRows.length >= gExpected.length - 1 && gRows.every((r) => gExpected.includes(r.local_date)),
+    `turning ongoing on filled 84 days ahead: ${on.data.sessions.created} of ${gExpected.length}`);
+  const onReplay = await success(() => setOngoing(MANAGER, G.seriesId, { expectedVersion: G.version, ongoing: true }, { key: onKey }), 'ongoing replay');
+  ok(onReplay.meta.replayed === true && JSON.stringify(onReplay.data) === JSON.stringify(on.data) && (await sessionsOf(G.seriesId)).length === gRows.length, 'exact replay creates nothing');
+  ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND action_code='schedule.series.ongoing' AND source='HUMAN_UI'", [G.seriesId])).rows[0].n === 1
+    && (await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='schedule.series.ongoing_set'", [G.seriesId])).rows[0].n === 1, 'one audit row and one inert outbox event for the switch');
+  ok((await success(() => list(MANAGER), 'list after the switch')).data.topUpDue === false, 'a freshly filled ongoing series is not due');
+  // Revising an ongoing series to add a weekday fills that weekday through the last filled date (only missing dates).
+  const added = await success(() => revise(MANAGER, G.seriesId, { expectedVersion: on.data.series.version, name: ongoingBase.name, capacity: ongoingBase.capacity,
+    bookingPolicy: ongoingBase.bookingPolicy, weekdays: [2, 4, 5], localStartTime: ongoingBase.localStartTime, durationMinutes: ongoingBase.durationMinutes }), 'revise the ongoing series to add Thursday');
+  const thursdays = (await sessionsOf(G.seriesId)).filter((r) => isoDay(r.local_date) === 4 && r.status === 'SCHEDULED').map((r) => r.local_date);
+  const thursdaysExpected = datesBetween(today, addDays(today, 84), [4]);
+  ok(added.data.series.generatedThrough === addDays(today, 84) && added.data.sessions.created === thursdays.length && thursdays.length >= thursdaysExpected.length - 1
+    && thursdays.every((d) => thursdaysExpected.includes(d)) && thursdays.at(-1) === thursdaysExpected.at(-1),
+    `the added weekday is on the timetable through the last filled date: ${thursdays.length} of ${thursdaysExpected.length}`);
+  const plainAdded = (await sessionsOf(G.seriesId)).length;
+  const readded = await success(() => revise(MANAGER, G.seriesId, { expectedVersion: added.data.series.version, name: ongoingBase.name, capacity: ongoingBase.capacity,
+    bookingPolicy: ongoingBase.bookingPolicy, weekdays: [2, 4, 5], localStartTime: ongoingBase.localStartTime, durationMinutes: ongoingBase.durationMinutes, roomName: 'Mat 2' }), 'revise again with the same weekdays');
+  ok(readded.data.sessions.created === 0 && (await sessionsOf(G.seriesId)).length === plainAdded, 'a revise with no new weekday creates nothing');
+  // A week passes: model a series filled only 14 days ahead that is ongoing (owner write within the version rule), one that is
+  // not ongoing, and one that is ongoing but ended. Only the first is due and topped up.
+  const make = async (name) => (await success(() => create(MANAGER, { ...ongoingBase, name }), `create ${name}`)).data.series;
+  const due = await make('Due Karate'), plain = await make('Plain Karate'), closed = await make('Ended Karate');
+  for (const x of [due, plain, closed]) await success(() => fill(MANAGER, x.seriesId, { expectedVersion: x.version, throughDate: addDays(today, 14) }), `fill ${x.name} two weeks`);
+  await sql("UPDATE hon.class_series SET ongoing=true,version=version+1 WHERE id = ANY($1::uuid[])", [[due.seriesId, closed.seriesId]]);
+  const endedNow = (await success(() => list(MANAGER), 'list before ending')).data.series.find((x) => x.seriesId === closed.seriesId);
+  await success(() => end(MANAGER, closed.seriesId, { expectedVersion: endedNow.version, lastDate: addDays(today, 60), reason: 'Season ends' }), 'end the ongoing series');
+  const dueList = await success(() => list(MANAGER), 'list with a due series');
+  ok(dueList.data.topUpDue === true, 'the read says a top-up is due');
+  const counts = async () => { const out = {}; for (const x of [due, plain, closed, G]) out[x.name] = (await sessionsOf(x.seriesId)).length; return out; };
+  const beforeTopUp = await counts();
+  for (const actor of [READER, NONE, MIXED]) await refused(() => topUp(actor), 403, undefined, `top-up refused for ${actor.subject.split('-').pop()}`);
+  await refused(() => topUp(MANAGER, { weeks: 26 }), 400, undefined, 'top-up with a body');
+  await refused(() => topUp(MANAGER, {}, { key: null }), 409, 'IDEMPOTENCY_KEY_REQUIRED', 'top-up without a key');
+  await refused(() => topUp(MANAGER, {}, { command: COMMAND.fill }), 403, undefined, 'top-up under another command header');
+  const topKey = randomUUID();
+  const topped = await success(() => topUp(MANAGER, {}, { key: topKey }), 'top up');
+  const afterTopUp = await counts();
+  const dueExpected = datesBetween(addDays(today, 15), addDays(today, 84), [2, 5]).length;
+  ok(topped.meta.replayed === false && topped.data.series === 1 && topped.data.created === dueExpected && topped.data.skippedDates.length === 0
+    && afterTopUp['Due Karate'] === beforeTopUp['Due Karate'] + dueExpected, `one series topped up with ${dueExpected} new sessions: ${JSON.stringify(topped.data)}`);
+  ok(afterTopUp['Plain Karate'] === beforeTopUp['Plain Karate'] && afterTopUp['Ended Karate'] === beforeTopUp['Ended Karate'] && afterTopUp['Ongoing Karate'] === beforeTopUp['Ongoing Karate'],
+    'a series that is not ongoing, an ended one and a fully filled one are untouched');
+  const seriesNow = (await success(() => list(MANAGER), 'list after top-up')).data;
+  ok(seriesNow.topUpDue === false && seriesNow.series.find((x) => x.seriesId === due.seriesId).generatedThrough === addDays(today, 84)
+    && seriesNow.series.find((x) => x.seriesId === plain.seriesId).generatedThrough === addDays(today, 14), 'nothing is due after the top-up; the plain series kept its last filled date');
+  ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE entity_id=$1 AND action_code='schedule.series.top_up' AND source='HUMAN_UI' AND actor_principal_id=$2", [due.seriesId, MANAGER.principal])).rows[0].n === 1
+    && (await sql("SELECT count(*)::int n FROM hon.outbox_events WHERE event_type='schedule.series.topped_up' AND organization_id=$1", [ids.organization])).rows[0].n === 1,
+    'the top-up is audited as the manager who sent it, with one inert outbox event for the one series');
+  const topReplay = await success(() => topUp(MANAGER, {}, { key: topKey }), 'top-up replay');
+  ok(topReplay.meta.replayed === true && JSON.stringify(topReplay.data) === JSON.stringify(topped.data) && JSON.stringify(await counts()) === JSON.stringify(afterTopUp), 'exact replay creates nothing');
+  const again = await success(() => topUp(MANAGER), 'second top-up');
+  ok(again.data.series === 0 && again.data.created === 0 && JSON.stringify(await counts()) === JSON.stringify(afterTopUp), 'a second top-up has nothing to do');
+  const offNow = (await success(() => list(MANAGER), 'list before off')).data.series.find((x) => x.seriesId === G.seriesId);
+  ok(offNow.weekdays.join() === '2,4,5', 'the revised pattern is kept');
+  const off = await success(() => setOngoing(MANAGER, G.seriesId, { expectedVersion: offNow.version, ongoing: false }), 'turn ongoing off');
+  ok(off.data.series.ongoing === false && off.data.sessions.created === 0 && (await sessionsOf(G.seriesId)).length === afterTopUp['Ongoing Karate'], 'turning it off keeps every session');
+  const endedRead = (await success(() => list(MANAGER), 'list ended')).data.series.find((x) => x.seriesId === closed.seriesId);
+  await refused(() => setOngoing(MANAGER, closed.seriesId, { expectedVersion: endedRead.version, ongoing: true }), 409, 'CLASS_SERIES_ENDED', 'ongoing on an ended series');
+  }
 
   // 8. Settings-free guards: no owner write can rewrite a series outside the version rule or touch an occurrence.
   await sql('BEGIN');
@@ -410,10 +493,11 @@ try {
   ok(JSON.stringify(await untouched()) === JSON.stringify(before), 'no session outside a series changed');
 
   // 10. Runtime ACL: EXECUTE on the six entry points only; no table privilege, no helper, no UPDATE on class sessions.
-  const entry = ['create_class_series(text,jsonb,text,uuid,uuid)', 'revise_class_series(text,uuid,jsonb,text,uuid,uuid)', 'end_class_series(text,uuid,jsonb,text,uuid,uuid)',
+  const entry = ['set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid)', 'top_up_class_series(text,jsonb,text,uuid,uuid)', 'create_class_series(text,jsonb,text,uuid,uuid)', 'revise_class_series(text,uuid,jsonb,text,uuid,uuid)', 'end_class_series(text,uuid,jsonb,text,uuid,uuid)',
     'fill_class_series(text,uuid,jsonb,text,uuid,uuid)', 'read_school_class_series(text)', 'read_school_weekly_timetable(text,jsonb)'];
   const helpers = ['guard_class_series()', 'require_class_series_actor(text)', 'class_series_json(hon.class_series)', 'class_series_pattern(jsonb,boolean)',
-    'class_series_command_begin(text,text,text)', 'class_series_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)', 'class_series_apply_future(hon.class_series,text)'];
+    'class_series_command_begin(text,text,text)', 'class_series_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)', 'class_series_apply_future(hon.class_series,text)',
+    'class_series_fill_dates(hon.class_series,date,date)'];
   for (const fn of entry) {
     const row = (await sql(`SELECT has_function_privilege($1,$2,'EXECUTE') runtime, p.prosecdef, EXISTS(SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee=0) public
       FROM pg_proc p WHERE p.oid=$2::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0];
@@ -436,9 +520,13 @@ try {
     const startMark = '-- Recurring class series exact verification (B-SCH-1 0239)', endMark = '-- End recurring class series exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
-    await sql(section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
+    await sql(section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1;
+    const ongoingStart = '-- Ongoing class series exact verification (B-SCH-2 0251)', ongoingEnd = '-- End ongoing class series exact verification.';
+    const ongoingSection = verify.split(ongoingStart)[1]?.split(ongoingEnd)[0];
+    ok(ongoingSection, ongoingStart);
+    await sql(ongoingSection.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: recurring class series (0239): ${checks} checks.`);
+  console.log(`PASS: recurring class series (0239) and ongoing series (0251): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

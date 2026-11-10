@@ -53,6 +53,14 @@ const en = {
   pageTitle: 'Weekly timetable', pageIntro: 'Recurring classes in school time. Nothing here contacts families or charges anyone.',
   concealed: 'Hidden while this window is not in use.', waiting: 'Checking your school…',
   noSchool: 'Choose a school to see its timetable.', tryAgain: 'Try again',
+  actOngoingOn: 'Make the series ongoing', actOngoingOff: 'Stop the series being ongoing',
+  btnOngoingOn: 'Make ongoing', btnOngoingOff: 'Stop ongoing', ongoingTag: 'ongoing',
+  ongoingIntro: 'An ongoing series fills itself: each time a manager opens this page and fewer than 11 weeks are created, it creates them up to {weeks} weeks ahead.',
+  ongoingOnHelp: 'Creates this series\' sessions up to {weeks} weeks ahead now, and keeps them created that far ahead whenever a manager opens this page. Sessions that already exist are not created twice. Nothing contacts families or charges anyone.',
+  ongoingOffHelp: 'No more sessions are created automatically. Every session already created stays as it is.',
+  topUpSending: 'Creating the next sessions of ongoing classes…', topUpDone1: '{n} new session was created for ongoing classes.',
+  topUpDoneN: '{n} new sessions were created for ongoing classes.',
+  topUpFailed: 'The next sessions of ongoing classes could not be created just now. They will be tried again the next time this page opens.',
 };
 export type SeriesKey = keyof typeof en;
 
@@ -110,6 +118,14 @@ const ko: Record<SeriesKey, string> = {
   pageTitle: '주간 시간표', pageIntro: '학교 시간 기준의 반복 수업입니다. 여기서는 가족에게 연락하거나 요금을 청구하지 않습니다.',
   concealed: '이 창을 사용하지 않는 동안 숨겨집니다.', waiting: '학교를 확인하는 중…',
   noSchool: '시간표를 보려면 학교를 선택하세요.', tryAgain: '다시 시도',
+  actOngoingOn: '반복 수업 자동 유지', actOngoingOff: '반복 수업 자동 유지 중지',
+  btnOngoingOn: '자동 유지', btnOngoingOff: '자동 유지 중지', ongoingTag: '자동 유지',
+  ongoingIntro: '자동 유지 중인 반복 수업은 관리자가 이 페이지를 열 때 만든 수업이 11주보다 적으면 {weeks}주 후까지 자동으로 만듭니다.',
+  ongoingOnHelp: '지금 이 반복 수업의 수업을 {weeks}주 후까지 만들고, 관리자가 이 페이지를 열 때마다 그만큼 앞까지 계속 만들어 둡니다. 이미 있는 수업은 두 번 만들지 않습니다. 가족에게 연락하거나 요금을 청구하지 않습니다.',
+  ongoingOffHelp: '더 이상 수업을 자동으로 만들지 않습니다. 이미 만든 수업은 모두 그대로 유지됩니다.',
+  topUpSending: '자동 유지 수업의 다음 수업을 만드는 중…', topUpDone1: '자동 유지 수업의 새 수업 {n}개를 만들었습니다.',
+  topUpDoneN: '자동 유지 수업의 새 수업 {n}개를 만들었습니다.',
+  topUpFailed: '지금은 자동 유지 수업의 다음 수업을 만들 수 없습니다. 다음에 이 페이지를 열 때 다시 시도합니다.',
 };
 
 const es: Record<SeriesKey, string> = {
@@ -166,6 +182,14 @@ const es: Record<SeriesKey, string> = {
   pageTitle: 'Horario semanal', pageIntro: 'Clases recurrentes en hora de la escuela. Nada aquí contacta a las familias ni cobra a nadie.',
   concealed: 'Oculto mientras esta ventana no está en uso.', waiting: 'Comprobando tu escuela…',
   noSchool: 'Elige una escuela para ver su horario.', tryAgain: 'Intentar de nuevo',
+  actOngoingOn: 'Hacer la serie continua', actOngoingOff: 'Dejar de mantener la serie continua',
+  btnOngoingOn: 'Hacer continua', btnOngoingOff: 'Dejar de ser continua', ongoingTag: 'continua',
+  ongoingIntro: 'Una serie continua se llena sola: cada vez que un responsable abre esta página y hay menos de 11 semanas creadas, crea las sesiones hasta {weeks} semanas por adelantado.',
+  ongoingOnHelp: 'Crea ahora las sesiones de esta serie hasta {weeks} semanas por adelantado y las mantiene creadas hasta ese punto cada vez que un responsable abre esta página. Las sesiones que ya existen no se crean dos veces. No se contacta a las familias ni se cobra a nadie.',
+  ongoingOffHelp: 'No se crearán más sesiones automáticamente. Todas las sesiones ya creadas se quedan como están.',
+  topUpSending: 'Creando las próximas sesiones de las clases continuas…', topUpDone1: 'Se creó {n} sesión nueva para las clases continuas.',
+  topUpDoneN: 'Se crearon {n} sesiones nuevas para las clases continuas.',
+  topUpFailed: 'No se pudieron crear ahora las próximas sesiones de las clases continuas. Se volverá a intentar la próxima vez que se abra esta página.',
 };
 
 /** Picks wording by language prefix, so 'ko-KR' is Korean and 'en-US' or anything unknown is English. */
