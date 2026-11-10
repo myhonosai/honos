@@ -1,0 +1,104 @@
+# HON OS database migrations (manual, owner-run).
+#
+# The ONLY way this workflow runs is a person pressing "Run workflow" on main. It never runs on pull
+# requests, pushes or a schedule. It applies the repository's migrations to the Supabase database of
+# the chosen GitHub environment, using that environment's secrets:
+#   DATABASE_URL          migration role (postgres.<ref>) via the Session Pooler, port 5432, no sslmode
+#   HON_DATABASE_CA_CERT  PEM text of the Supabase project CA
+# Create the environments in Settings > Environments. Give `production` a required reviewer.
+# Runbook: docs/operations/RENDER_DEPLOYMENT.md and docs/operations/BACKUP_RESTORE_AND_RECOVERY.md.
+# Guarded by .github/scripts/database-migrate-workflow.test.mjs.
+name: Database migrate (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which database (GitHub environment)
+        type: choice
+        options: [staging, production]
+        required: true
+      action:
+        description: "status = read-only check; migrate = apply pending migrations; verify = read-only security verifier"
+        type: choice
+        options: [status, migrate, verify]
+        default: status
+        required: true
+      confirm:
+        description: "For migrate only: type the target name again (staging or production)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run per database at a time; never cancel a run that may be mid-migration.
+  group: database-migrate-${{ inputs.target }}
+  cancel-in-progress: false
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  database:
+    name: ${{ inputs.action }} ${{ inputs.target }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Refuse migrate without matching confirmation
+        if: inputs.action == 'migrate' && inputs.confirm != inputs.target
+        run: |
+          echo "::error::To migrate, type the target name ('${{ inputs.target }}') in the confirm box."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+          cache: pnpm
+
+      - name: Verify patched Node.js runtime
+        run: node .github/scripts/verify-node-runtime.mjs --expect 22.23.4
+
+      - name: Install and build the database package
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm prepare:workspace
+
+      - name: Migration files match the recorded checksums
+        run: pnpm db:check
+
+      - name: Status before (read-only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HON_DATABASE_CA_CERT: ${{ secrets.HON_DATABASE_CA_CERT }}
+        run: pnpm --filter @hon/database db:status
+
+      - name: Apply pending migrations
+        if: inputs.action == 'migrate'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HON_DATABASE_CA_CERT: ${{ secrets.HON_DATABASE_CA_CERT }}
+        run: pnpm db:migrate
+
+      - name: Status after (must be current)
+        if: inputs.action == 'migrate'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HON_DATABASE_CA_CERT: ${{ secrets.HON_DATABASE_CA_CERT }}
+        run: pnpm --filter @hon/database db:status --require-current
+
+      - name: Security verifier (forced RLS, least privilege)
+        if: inputs.action == 'verify'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HON_DATABASE_CA_CERT: ${{ secrets.HON_DATABASE_CA_CERT }}
+        run: pnpm db:verify-rls
