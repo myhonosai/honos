@@ -78,15 +78,15 @@ runs when someone presses **Actions → Database migrate (manual) → Run workfl
 
 One-time setup (GitHub → repository **Settings → Environments**):
 
-1. Create environment `staging`. Add two **environment secrets**:
+1. Create environment `staging`. On its page, **before adding any secret**:
+   - **Deployment branches and tags** → *Selected branches and tags* → add rule `main` (only `main`).
+     Without this, a workflow on any pushed branch could ask for this environment and read its secrets.
+   - **Required reviewers** → add yourself, so every run waits for your approval.
+2. Then add two **environment secrets**:
    - `DATABASE_URL`: the Supabase **Session pooler** string for the `postgres` role
      (`postgresql://postgres.<ref>:<db password>@aws-0-us-east-1.pooler.supabase.com:5432/postgres`),
      without any `?sslmode=...`.
    - `HON_DATABASE_CA_CERT`: full PEM text of the project CA.
-2. Still on the `staging` environment page, **before adding the secrets**:
-   - **Deployment branches and tags** → *Selected branches and tags* → add rule `main` (only `main`).
-     Without this, a workflow on any pushed branch could ask for this environment and read its secrets.
-   - **Required reviewers** → add yourself, so every run waits for your approval.
 3. Later, create `production` the same way, with the same branch rule and required reviewer.
 
 Use: choose the target, then `status` (read-only), `migrate` (type the target name again in
