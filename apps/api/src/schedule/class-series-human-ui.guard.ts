@@ -22,3 +22,12 @@ export class ClassSeriesFillHumanUiGuard extends MembershipActivationHumanUiGuar
 export class ClassSeriesReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'schedule.series.read';
 }
+/** B-SCH-2 (0251): switching a series to ongoing and the page's top-up are their own same-origin browser commands. */
+@Injectable()
+export class ClassSeriesOngoingHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'schedule.series.ongoing';
+}
+@Injectable()
+export class ClassSeriesTopUpHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'schedule.series.top_up';
+}

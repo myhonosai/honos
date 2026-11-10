@@ -4,7 +4,8 @@ import type { SeriesAction, SeriesErrorKind } from './http';
 import { seriesText, type SeriesKey } from './copy';
 import styles from '../membership-changes/membership-changes.module.css';
 
-export type SeriesForm = null | Readonly<{ kind: 'create' }> | Readonly<{ kind: 'revise' | 'end' | 'fill'; seriesId: string }>;
+export type SeriesForm = null | Readonly<{ kind: 'create' }> | Readonly<{ kind: 'revise' | 'end' | 'fill' | 'ongoing'; seriesId: string }>;
+export type TopUpState = Readonly<{ state: 'IDLE' | 'SENDING' | 'FAILED' }> | Readonly<{ state: 'DONE'; created: number }>;
 export type ReadState<T> = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' | 'TIMEZONE' } | { state: 'READY'; read: T };
 export type SeriesOutcome = null | Readonly<{ kind: 'SENDING' | SeriesErrorKind; action: SeriesAction }> | Readonly<{ kind: 'DONE'; action: SeriesAction; sessions: ClassSeriesSessionEffect }>;
 export type SeriesFields = Readonly<Record<string, string>>;
@@ -12,6 +13,7 @@ export type SeriesFields = Readonly<Record<string, string>>;
 export type ClassSeriesViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   week: ReadState<WeeklyTimetable>; series: ReadState<SchoolClassSeries>; form: SeriesForm; outcome: SeriesOutcome; locked: boolean; canRetry: boolean;
+  topUp?: TopUpState | undefined;
   onWeek?: ((weekOf: string | null) => void) | undefined; onRefresh?: (() => void) | undefined; onOpen?: ((form: SeriesForm) => void) | undefined;
   onClose?: (() => void) | undefined; onSubmit?: ((action: SeriesAction, fields: SeriesFields) => void) | undefined; onTryAgain?: (() => void) | undefined;
 }>;
@@ -20,7 +22,7 @@ const WEEKDAY_KEYS = ['wd1', 'wd2', 'wd3', 'wd4', 'wd5', 'wd6', 'wd7'] as const 
 const FILL_WEEKS = Math.round(CLASS_SERIES_FILL_DAYS / 7);
 type T = (key: SeriesKey, vars?: Readonly<Record<string, string | number>>) => string;
 const textFor = (language: string): T => (key, vars) => seriesText(language, key, vars);
-const ACTION_KEY: Record<SeriesAction, SeriesKey> = { create: 'actCreate', revise: 'actRevise', end: 'actEnd', fill: 'actFill' };
+const ACTION_KEY: Record<Exclude<SeriesAction, 'ongoing'>, SeriesKey> = { create: 'actCreate', revise: 'actRevise', end: 'actEnd', fill: 'actFill' };
 type OutcomeKind = Exclude<NonNullable<SeriesOutcome>['kind'], 'DONE'>;
 const outcomeText = (t: T, kind: OutcomeKind) => t(`o${kind}` as SeriesKey, { weeks: FILL_WEEKS });
 // School-local calendar dates are shown as dates, never shifted by the viewer's time zone.
@@ -89,16 +91,20 @@ function SeriesList({ p }: { p: ClassSeriesViewProps }) {
       : list.state === 'TIMEZONE' ? <p className={styles.meta} role="status">{t('seriesTimezone')}</p>
       : list.state !== 'READY' ? <p className={styles.meta} role="status">{t('seriesUnavailable')}</p>
       : <>
-        <p className={styles.meta}>{t('seriesIntro', { weeks: FILL_WEEKS, date: shortDay(p.language, list.read.fillLimit) })}</p>
+        <p className={styles.meta}>{t('seriesIntro', { weeks: FILL_WEEKS, date: shortDay(p.language, list.read.fillLimit) })} {t('ongoingIntro', { weeks: FILL_WEEKS })}</p>
+        {p.topUp?.state === 'SENDING' ? <p className={styles.meta} role="status" data-testid="series-top-up">{t('topUpSending')}</p>
+          : p.topUp?.state === 'DONE' && p.topUp.created > 0 ? <p className={styles.meta} role="status" data-testid="series-top-up">{count(t, p.topUp.created, 'topUpDone1', 'topUpDoneN')}</p>
+          : p.topUp?.state === 'FAILED' ? <p className={styles.warnText} role="status" data-testid="series-top-up">{t('topUpFailed')}</p> : null}
         {list.read.programs.length === 0 ? <p className={styles.meta}>{t('needProgram')}</p> : null}
         {list.read.series.length === 0 ? <p className={styles.meta}>{t('noSeries')}</p> : <ul className={styles.list}>
           {list.read.series.map((s) => <li key={s.seriesId} data-testid={`series-${s.seriesId}`}>
-            <strong>{s.name}</strong> · {t('pattern', { days: weekdaysText(s.weekdays, p.language), time: s.localStartTime, n: s.durationMinutes })}{s.roomName ? ` · ${s.roomName}` : ''} · {t('capacity', { n: s.capacity })} · {t(s.bookingPolicy)}
+            <strong>{s.name}</strong>{s.ongoing && s.status === 'ACTIVE' ? ` · ${t('ongoingTag')}` : ''} · {t('pattern', { days: weekdaysText(s.weekdays, p.language), time: s.localStartTime, n: s.durationMinutes })}{s.roomName ? ` · ${s.roomName}` : ''} · {t('capacity', { n: s.capacity })} · {t(s.bookingPolicy)}
             <span className={styles.meta}> · {t('from', { date: shortDay(p.language, s.startsOn) })}{s.endsOn ? ` ${t('to', { date: shortDay(p.language, s.endsOn) })}` : ''}
               {s.generatedThrough ? ` · ${t('through', { date: shortDay(p.language, s.generatedThrough) })}` : ` · ${t('noneYet')}`} · {count(t, s.futureSessions, 'upcoming1', 'upcomingN')}
               {s.status === 'ENDED' ? ` · ${t('ended', { reason: s.endReason ?? '' })}` : ''}</span>
             {s.status === 'ACTIVE' ? <div className={styles.actions}>
               <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onOpen?.({ kind: 'fill', seriesId: s.seriesId })}>{t('btnFill')}</button>
+              <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onOpen?.({ kind: 'ongoing', seriesId: s.seriesId })}>{t(s.ongoing ? 'btnOngoingOff' : 'btnOngoingOn')}</button>
               <button type="button" className={styles.secondary} disabled={p.locked} onClick={() => p.onOpen?.({ kind: 'revise', seriesId: s.seriesId })}>{t('btnChange')}</button>
               <button type="button" className={styles.danger} disabled={p.locked} onClick={() => p.onOpen?.({ kind: 'end', seriesId: s.seriesId })}>{t('btnEnd')}</button>
             </div> : null}
@@ -132,7 +138,7 @@ function Form({ p }: { p: ClassSeriesViewProps }) {
   const submit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); p.onSubmit?.(form.kind, fieldsOf(e.currentTarget)); };
   const today = list.read.localToday;
   return <article className={styles.card} aria-labelledby="series-form-title" data-testid="series-form">
-    <h2 id="series-form-title">{t(ACTION_KEY[form.kind])}{s ? `: ${s.name}` : ''}</h2>
+    <h2 id="series-form-title">{t(form.kind === 'ongoing' ? (s?.ongoing ? 'actOngoingOff' : 'actOngoingOn') : ACTION_KEY[form.kind])}{s ? `: ${s.name}` : ''}</h2>
     <form className={styles.form} onSubmit={submit}>
       {form.kind === 'create' ? <>
         <label className={styles.field}>{t('fProgram')}<select name="programId" required defaultValue="">
@@ -147,12 +153,15 @@ function Form({ p }: { p: ClassSeriesViewProps }) {
         <p className={styles.meta}>{t('endHelp')}</p>
         <label className={styles.field}>{t('fLastDate')}<input name="lastDate" type="date" required min={addDays(today, -1)} defaultValue={today}/></label>
         <label className={styles.field}>{t('fReason')}<input name="reason" required maxLength={500}/></label>
+      </> : form.kind === 'ongoing' ? <>
+        <p className={styles.meta}>{t(s?.ongoing ? 'ongoingOffHelp' : 'ongoingOnHelp', { weeks: FILL_WEEKS })}</p>
       </> : <>
         <p className={styles.meta}>{t('fillHelp', { weeks: FILL_WEEKS })}</p>
         <label className={styles.field}>{t('fThrough')}<input name="throughDate" type="date" required min={today} max={list.read.fillLimit} defaultValue={addDays(today, 27) > list.read.fillLimit ? list.read.fillLimit : addDays(today, 27)}/></label>
       </>}
       <div className={styles.actions}>
-        <button type="submit" className={form.kind === 'end' ? styles.danger : styles.primary} disabled={p.locked}>{t(form.kind === 'create' ? 'submitCreate' : form.kind === 'revise' ? 'submitRevise' : form.kind === 'end' ? 'submitEnd' : 'submitFill')}</button>
+        <button type="submit" className={form.kind === 'end' ? styles.danger : styles.primary} disabled={p.locked}>{t(form.kind === 'create' ? 'submitCreate' : form.kind === 'revise' ? 'submitRevise' : form.kind === 'end' ? 'submitEnd'
+          : form.kind === 'ongoing' ? (s?.ongoing ? 'btnOngoingOff' : 'btnOngoingOn') : 'submitFill')}</button>
         <button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onClose}>{t('cancel')}</button>
       </div>
     </form>

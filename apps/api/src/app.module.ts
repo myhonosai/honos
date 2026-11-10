@@ -185,7 +185,7 @@ import { ClassSessionsReadService } from './schedule/class-sessions-read.service
 import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
 import { ClassSeriesController } from './schedule/class-series.controller.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
-import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
+import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
 import { ClassSessionPagesService } from './schedule/class-session-pages.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
 import { AttendanceService } from './schedule/attendance.service.js';
@@ -530,6 +530,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesService,
     ClassSeriesCreateHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
+    ClassSeriesOngoingHumanUiGuard,
+    ClassSeriesTopUpHumanUiGuard,
     ClassSeriesEndHumanUiGuard,
     ClassSeriesFillHumanUiGuard,
     ClassSeriesReadHumanUiGuard,

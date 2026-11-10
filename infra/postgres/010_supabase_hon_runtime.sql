@@ -2542,3 +2542,21 @@ DO $$ DECLARE r text; col text; f text; BEGIN
       hon.read_invoice_payments(text,uuid),hon.read_school_receivables(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- B-SCH-2 0251 ongoing class series: one private helper and two runtime entry points; the new ongoing column stays private.
+DO $$ DECLARE r text; f text; BEGIN
+  EXECUTE 'REVOKE ALL (ongoing) ON hon.class_series FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL (ongoing) ON hon.class_series FROM %I',r);
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.class_series_fill_dates(hon.class_series,date,date)','hon.set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.top_up_class_series(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid),hon.top_up_class_series(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;

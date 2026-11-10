@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "570d9c2e90e88192b0b6b0e87ad9525ea37b3b7aa3bec3f357aa430f7bf9f7ba",
+  "chainSha256": "171e155ca4d51d14153ddda4e08ec0fb9b66a64850aa6cbdc364a56662cc0b88",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -217,6 +217,10 @@
     {
       "file": "0240_tuition_payment_records.sql",
       "sha256": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233"
+    },
+    {
+      "file": "0251_class_series_ongoing.sql",
+      "sha256": "39337d44a6ad494cf08ad2ec914ab36aac2f3abe5e4b6f06c3c772f54642b060"
     }
   ]
 }

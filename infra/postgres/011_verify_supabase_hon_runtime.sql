@@ -2922,6 +2922,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End CRM school clock exact verification.
 
+-- 0251 replaced the bodies of hon.class_series_json and hon.read_school_class_series (ongoing switch, topUpDue); their hashes below are the 0251 bodies.
 -- Recurring class series exact verification (B-SCH-1 0239): private forced-RLS series and occurrence tables, the series guard,
 -- private helpers, six runtime entry points; the runtime still has no UPDATE on hon.class_sessions.
 DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
@@ -2935,7 +2936,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_class_series()',true,false,'search_path=pg_catalog, hon','25279023919d330ac968de1abea2faed15b8d1241c3fe6bc8ca0497f37f1d9e2'),
 ('hon.require_class_series_actor(text)',true,false,'search_path=pg_catalog, hon','a91ef014ce4bb04d732d405ba53b5a0ec1be10267fe2efac6b5f504cdafec2bf'),
-('hon.class_series_json(hon.class_series)',true,false,'search_path=pg_catalog, hon','e884a7c10d007dc49c61648d36fc1299804e6aae680d37486662626fd1e20dee'),
+('hon.class_series_json(hon.class_series)',true,false,'search_path=pg_catalog, hon','ac63ec1bc183d40534a4623df595d4bb46b110f717861b58f08a281b372c82a8'),
 ('hon.class_series_pattern(jsonb,boolean)',false,false,'search_path=pg_catalog, hon','30abf7a726b2fb7c8c970b56b50a25be4239743474107f8954977279d0193bf5'),
 ('hon.class_series_command_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','7119e94378413589f6e0fc87777f10405147e5556cd4b047b0d38ce6e0b45944'),
 ('hon.class_series_command_finish(text,text,uuid,jsonb,text,uuid,jsonb,jsonb,text,integer,uuid,uuid)',true,false,'search_path=pg_catalog, hon','3fba076d7585bdac91002f2dc9ecf156debb50a5680d5899571361a1e99f902d'),
@@ -2944,7 +2945,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.revise_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','25f291e00be4a866c10d5c867b9e30227fe50bbdfe8be7a5f47f73d7ccfad3b9'),
 ('hon.end_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','874b8ab2922b59f0bca68e24a7dd87bb1955d023c790f1a8ec6ae5e4f9d6422c'),
 ('hon.fill_class_series(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','e06f110fa778c3c253a5a3e2b9451c5f70d4b114149cd74f252fb9d8a1935194'),
-('hon.read_school_class_series(text)',true,true,'search_path=pg_catalog, hon','a05c7180c5a3a1db1b605582efd6406af2f9efe3b83f1aaf423228e6f977a261'),
+('hon.read_school_class_series(text)',true,true,'search_path=pg_catalog, hon','12784704f06184407d4ebbfc478d84b769de7ec4683316ff57c8caa35ad4d4ea'),
 ('hon.read_school_weekly_timetable(text,jsonb)',true,true,'search_path=pg_catalog, hon','2ff7caf2c9a791b2d6a037be4a01c75016b564c197935add272f296fba936351')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
@@ -3009,3 +3010,26 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
   IF has_table_privilege('hon_runtime','hon.invoices','DELETE') THEN RAISE EXCEPTION 'Runtime must not delete invoices'; END IF;
 END $$;
 -- End tuition payment records exact verification.
+
+-- Ongoing class series exact verification (B-SCH-2 0251): the private ongoing column, one private helper and two runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  IF EXISTS(SELECT 1 FROM pg_attribute x CROSS JOIN LATERAL aclexplode(x.attacl) a JOIN pg_class c ON c.oid=x.attrelid
+      WHERE x.attrelid='hon.class_series'::regclass AND x.attname='ongoing' AND a.grantee<>c.relowner)
+    OR NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.class_series'::regclass AND attname='ongoing' AND atttypid='boolean'::regtype AND attnotnull) THEN
+    RAISE EXCEPTION 'hon.class_series.ongoing must be a private NOT NULL boolean'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+('hon.class_series_fill_dates(hon.class_series,date,date)',true,false,'search_path=pg_catalog, hon','7c320407a1bd2b05a7ca45c6d6bbc98182435abffb558f2f3079f58f1ae66a93'),
+('hon.set_class_series_ongoing(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','f34de3665727e1ec473ba75a72a3cc8e877bf4d5c67f4f0323554ffc3298462a'),
+('hon.top_up_class_series(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c7f36b277c3d47143b9c55c5e66658c270f895af9ef43d5ab3dc1c433ce851b3')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe ongoing class series function: %',f.signature; END IF;
+  END LOOP;
+  IF has_any_column_privilege('hon_runtime','hon.class_sessions','UPDATE') THEN RAISE EXCEPTION 'Runtime must not update class sessions'; END IF;
+END $$;
+-- End ongoing class series exact verification.
