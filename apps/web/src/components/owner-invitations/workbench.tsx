@@ -84,7 +84,7 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
           <label>Private invitation token<input type="password" value={token} onChange={e=>setToken(e.target.value)} autoComplete="off"/></label>
           <label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I am the invited school owner and explicitly accept this account invitation.</label>
           <button type="button" disabled={!confirmed||!invitation||!token} onClick={()=>start('accept',{invitationId:invitation,token,confirmation:OWNER_INVITATION_CONFIRMATION})}>Accept invitation</button>
-          {receipt&&<a href="/staff">Open staff workspace</a>}
+          {receipt&&<a href="/staff/entry">Open staff workspace</a>}
         </>}
       </fieldset>
     </>}
