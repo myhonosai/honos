@@ -14,7 +14,7 @@
     },
     {
       "path": "/",
-      "title": "HON Complete | AI Command Center"
+      "title": "HON OS | Sign in"
     },
     {
       "path": "/hq",
@@ -475,6 +475,10 @@
     {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/reference/complete",
+      "title": "HON Complete | Design reference"
     },
     {
       "path": "/account/owner-invitation",

@@ -28,6 +28,9 @@
 .growthNav a{font-size:11px;padding:9px 9px 9px 24px;min-height:40px;gap:8px}
 .railFooter{margin-top:auto;padding:25px 9px 0;display:flex;gap:9px;align-items:center;font-size:11px;color:var(--hon-text-muted)}
 .railFooter a{margin-left:auto;text-decoration:underline}
+.signOut{margin:0 0 0 auto}
+.signOut button{padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;text-decoration:underline}
+.signOut button:hover,.signOut button:focus-visible{color:var(--hon-text)}
 .ownerAvatar{height:40px;width:40px;flex-shrink:0;display:grid;place-items:center;border:1px solid #5fa4d1;background:linear-gradient(145deg,#183656,#122039);border-radius:50%;font-size:13px;color:#dceaff}
 .workspace{margin-left:240px;padding:28px 28px 22px;max-width:2000px}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}

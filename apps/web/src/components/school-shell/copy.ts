@@ -2,7 +2,7 @@
 const en = {
   brand: 'HON OS', brandTagline: 'For martial arts schools', skip: 'Skip to main content', primaryNav: 'School navigation', sectionNav: 'Pages in this section',
   openMenu: 'Open navigation', closeMenu: 'Close navigation', more: 'More', mobileNav: 'Quick navigation',
-  askHon: 'Ask HON', honLauncher: 'HON is ready to help on this page', menuTitle: 'Menu', menuLead: 'Every area of your school', search: 'Search students and families', account: 'Account', signIn: 'Sign in again', hq: 'HON HQ',
+  askHon: 'Ask HON', honLauncher: 'HON is ready to help on this page', menuTitle: 'Menu', menuLead: 'Every area of your school', search: 'Search students and families', account: 'Account', signOut: 'Sign out', signIn: 'Sign in again', hq: 'HON HQ',
   view: 'Platform view', modern: 'Modern', classic: 'Classic', 'big-button': 'Big Button', viewHelp: 'Presentation only. The same data, permissions and actions in every view.',
   viewSaved: 'Saved for you at this school', viewLocal: 'Applied on this device', viewSaving: 'Saving view…', viewError: 'Your view could not be saved. It is applied on this device only.',
   schoolLabel: 'School', schoolRegion: 'Current school', switchSchool: 'Switch school', showSchool: 'Show school', recheck: 'Check again', chooseSchool: 'Choose a school',
@@ -29,7 +29,7 @@ export type ShellKey = keyof typeof en;
 const ko: Record<ShellKey, string> = {
   brand: 'HON OS', brandTagline: '무술 도장을 위한 운영 시스템', skip: '본문으로 건너뛰기', primaryNav: '도장 메뉴', sectionNav: '이 메뉴의 페이지',
   openMenu: '메뉴 열기', closeMenu: '메뉴 닫기', more: '더보기', mobileNav: '빠른 메뉴',
-  askHon: 'HON에게 묻기', honLauncher: 'HON이 이 페이지에서 도와드릴 준비가 되어 있습니다', menuTitle: '메뉴', menuLead: '도장의 모든 영역', search: '학생 및 가족 검색', account: '계정', signIn: '다시 로그인', hq: 'HON HQ',
+  askHon: 'HON에게 묻기', honLauncher: 'HON이 이 페이지에서 도와드릴 준비가 되어 있습니다', menuTitle: '메뉴', menuLead: '도장의 모든 영역', search: '학생 및 가족 검색', account: '계정', signOut: '로그아웃', signIn: '다시 로그인', hq: 'HON HQ',
   view: '화면 모드', modern: '모던', classic: '클래식', 'big-button': '큰 버튼', viewHelp: '표시 방식만 바뀝니다. 모든 모드에서 데이터, 권한, 기능은 같습니다.',
   viewSaved: '이 도장에서 내 설정으로 저장됨', viewLocal: '이 기기에만 적용됨', viewSaving: '화면 모드 저장 중…', viewError: '화면 모드를 저장하지 못했습니다. 이 기기에만 적용됩니다.',
   schoolLabel: '도장', schoolRegion: '현재 도장', switchSchool: '도장 전환', showSchool: '도장 표시', recheck: '다시 확인', chooseSchool: '도장 선택',
@@ -55,7 +55,7 @@ const ko: Record<ShellKey, string> = {
 const es: Record<ShellKey, string> = {
   brand: 'HON OS', brandTagline: 'Para escuelas de artes marciales', skip: 'Saltar al contenido principal', primaryNav: 'Navegación de la escuela', sectionNav: 'Páginas de esta sección',
   openMenu: 'Abrir navegación', closeMenu: 'Cerrar navegación', more: 'Más', mobileNav: 'Navegación rápida',
-  askHon: 'Preguntar a HON', honLauncher: 'HON está listo para ayudarte en esta página', menuTitle: 'Menú', menuLead: 'Todas las áreas de tu escuela', search: 'Buscar alumnos y familias', account: 'Cuenta', signIn: 'Volver a iniciar sesión', hq: 'HON HQ',
+  askHon: 'Preguntar a HON', honLauncher: 'HON está listo para ayudarte en esta página', menuTitle: 'Menú', menuLead: 'Todas las áreas de tu escuela', search: 'Buscar alumnos y familias', account: 'Cuenta', signOut: 'Cerrar sesión', signIn: 'Volver a iniciar sesión', hq: 'HON HQ',
   view: 'Vista', modern: 'Moderna', classic: 'Clásica', 'big-button': 'Botones grandes', viewHelp: 'Solo presentación. Los mismos datos, permisos y acciones en cada vista.',
   viewSaved: 'Guardada para ti en esta escuela', viewLocal: 'Aplicada en este dispositivo', viewSaving: 'Guardando vista…', viewError: 'No se pudo guardar la vista. Solo se aplica en este dispositivo.',
   schoolLabel: 'Escuela', schoolRegion: 'Escuela actual', switchSchool: 'Cambiar escuela', showSchool: 'Mostrar escuela', recheck: 'Comprobar de nuevo', chooseSchool: 'Elegir una escuela',
