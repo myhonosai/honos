@@ -113,6 +113,9 @@ export const SAAS_COMMANDS = {
   createMarketingCampaign: 'hq-marketing-campaign-create',
   updateMarketingCampaign: 'hq-marketing-campaign-update',
   setMarketingCampaignStatus: 'hq-marketing-campaign-status',
+  createHqCreativeGeneration: 'hq-creative-generation-create',
+  setHqCreativeBudget: 'hq-creative-budget-set',
+  resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

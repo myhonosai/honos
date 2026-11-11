@@ -156,6 +156,7 @@ export function HqMarketingView(props: MarketingViewProps): React.ReactElement {
     {v.nextCursor && <div className={styles.actions}><button type="button" className={styles.secondary} disabled={state.loadingMore} onClick={props.onMore}>{t('more')}</button></div>}
     <h2>{t('creativeTitle')}</h2>
     <p className={styles.meta}>{t('creativeNext')}</p>
+    <div className={styles.actions}><a className={styles.secondary} href="/hq/marketing/creative" data-marketing-creative-link="">{t('creativeOpen')}</a></div>
     <p className={styles.meta}>{t('asOf', { time: formatTime(formattingLocale, v.asOf) })}</p>
   </section>;
 }

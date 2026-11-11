@@ -437,6 +437,10 @@
       "title": "HON HQ | Marketing & Creative"
     },
     {
+      "path": "/hq/marketing/creative",
+      "title": "HON HQ | Creative Studio"
+    },
+    {
       "path": "/hq/support/:caseId",
       "title": "HON HQ | Support case"
     },

@@ -17,14 +17,17 @@ export class MarketingError extends Error {
 export type Owned = () => boolean;
 const RESPONSE_MAX = 2_000_000;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
-const CHANGED = new Set(['SAAS_VERSION_CONFLICT', 'HQ_CAMPAIGN_ARCHIVED']);
-const REFUSED = new Set(['HQ_CAMPAIGN_CODE_TAKEN', 'HQ_CAMPAIGN_NO_CHANGE', 'HQ_CAMPAIGN_STATUS_NOT_ALLOWED']);
+const CHANGED = new Set(['SAAS_VERSION_CONFLICT', 'HQ_CAMPAIGN_ARCHIVED', 'SAAS_TRANSITION_NOT_ALLOWED']);
+// Definitive refusals: nothing was saved. HQ_CREATIVE_* are the HQ Creative Studio (M2, 0253) rules.
+const REFUSED = new Set(['HQ_CAMPAIGN_CODE_TAKEN', 'HQ_CAMPAIGN_NO_CHANGE', 'HQ_CAMPAIGN_STATUS_NOT_ALLOWED', 'HQ_CREATIVE_PERIOD_NOT_ALLOWED',
+  'HQ_CREATIVE_BUDGET_NO_CHANGE', 'HQ_CREATIVE_CAP_BELOW_USE', 'HQ_CREATIVE_PAUSED_BY_HQ', 'HQ_CREATIVE_PROVIDER_UNKNOWN', 'HQ_CREATIVE_OPERATION_NOT_PRICED',
+  'HQ_CREATIVE_UNITS_EXCEEDED', 'HQ_CREATIVE_BUDGET_NOT_SET', 'HQ_CREATIVE_TOO_MANY_IN_PROGRESS', 'HQ_CREATIVE_BUDGET_EXHAUSTED', 'HQ_CREATIVE_FINAL_EXCEEDS_RESERVATION']);
 
 export function marketingCampaignId(value: unknown): string | null {
   try { return saasUuid(value); } catch { return null; }
 }
 
-async function exchange(path: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ marker: string; body: string; key: string }>): Promise<{ status: number; value: unknown }> {
+export async function marketingExchange(path: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ marker: string; body: string; key: string }>): Promise<{ status: number; value: unknown }> {
   let r: Response;
   try {
     r = await fetch(path, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
@@ -55,22 +58,26 @@ export function marketingCommandError(status: number, code: string | null): Mark
   if (status === 403) return new MarketingError('DENIED', code);
   if (status === 400) return new MarketingError('INVALID', code);
   if (status === 404 && code === 'SAAS_UNAVAILABLE') return new MarketingError('GONE', code);
+  // The API refuses a creative request with no provider connected before anything is reserved or written.
+  if (status === 503 && code === 'CREATIVE_PROVIDER_NOT_CONNECTED') return new MarketingError('REFUSED', code);
   if ((status === 409 || status === 422) && code !== null && CHANGED.has(code)) return new MarketingError('CHANGED', code);
   if (status === 422 && code !== null && REFUSED.has(code)) return new MarketingError('REFUSED', code);
   if (status === 409 && code === 'IDEMPOTENCY_KEY_REUSED') return new MarketingError('KEY_REUSED', code);
   return new MarketingError('UNKNOWN', code);
 }
-async function read<T>(path: string, signal: AbortSignal, owned: Owned, validate: (v: unknown) => T): Promise<T> {
-  const { status, value } = await exchange(path, signal, owned);
+export async function marketingRead<T>(path: string, signal: AbortSignal, owned: Owned, validate: (v: unknown) => T): Promise<T> {
+  const { status, value } = await marketingExchange(path, signal, owned);
   if (status !== 200) throw readError(status, codeOf(value));
   try { return validate(data(value)); } catch { throw new MarketingError('UNKNOWN'); }
 }
-async function command(path: string, marker: string, body: object, key: string, signal: AbortSignal, owned: Owned): Promise<HqMarketingReceipt> {
+export async function marketingCommand<T>(path: string, marker: string, body: object, key: string, signal: AbortSignal, owned: Owned, validate: (v: unknown) => T): Promise<T> {
   const k = saasUuid(key);
-  const answer = await exchange(path, signal, owned, { marker, body: JSON.stringify(body), key: k });
+  const answer = await marketingExchange(path, signal, owned, { marker, body: JSON.stringify(body), key: k });
   if (answer.status !== 200) throw marketingCommandError(answer.status, codeOf(answer.value));
-  try { return validateHqMarketingReceipt(data(answer.value)); } catch { throw new MarketingError('UNKNOWN'); }
+  try { return validate(data(answer.value)); } catch { throw new MarketingError('UNKNOWN'); }
 }
+const command = (path: string, marker: string, body: object, key: string, signal: AbortSignal, owned: Owned): Promise<HqMarketingReceipt> =>
+  marketingCommand(path, marker, body, key, signal, owned, validateHqMarketingReceipt);
 const PLAN = ['name', 'goal', 'audience', 'offerLabel', 'channel', 'startsOn', 'endsOn', 'plannedBudgetMinor'] as const;
 const samePlan = (a: Record<string, unknown>, b: Record<string, unknown>) => PLAN.every(k => a[k] === b[k]);
 
@@ -82,7 +89,7 @@ export const marketingApi = {
     if (request.status) q.set('status', request.status);
     if (request.cursor) q.set('cursor', encodeHqMarketingCursor(request.cursor));
     q.set('limit', String(MARKETING_PAGE_SIZE));
-    const view = await read(`/api/v1/hq/marketing/campaigns?${q}`, signal, owned, validateHqMarketingCampaignList);
+    const view = await marketingRead(`/api/v1/hq/marketing/campaigns?${q}`, signal, owned, validateHqMarketingCampaignList);
     const fits = (s: string) => !request.status || (request.status === 'OPEN' ? s !== 'ARCHIVED' : s === request.status);
     if (view.limit !== MARKETING_PAGE_SIZE || view.campaigns.some(c => !fits(c.status))) throw new MarketingError('UNKNOWN');
     return view;
@@ -90,7 +97,7 @@ export const marketingApi = {
   async read(campaignId: string, signal: AbortSignal, owned: Owned): Promise<HqMarketingCampaignDetail> {
     const id = marketingCampaignId(campaignId);
     if (!id) throw new MarketingError('INVALID');
-    const view = await read(`/api/v1/hq/marketing/campaigns/${id}`, signal, owned, validateHqMarketingCampaignDetail);
+    const view = await marketingRead(`/api/v1/hq/marketing/campaigns/${id}`, signal, owned, validateHqMarketingCampaignDetail);
     if (view.campaign.campaignId.toLowerCase() !== id) throw new MarketingError('UNKNOWN');
     return view;
   },
