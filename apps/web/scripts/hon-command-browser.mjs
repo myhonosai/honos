@@ -124,6 +124,8 @@ async function honApi(route, path, method, prefix) {
     const items = [...(hon.groups.get(grouped[1]) ?? new Map()).values()].map((g) => ({ sourceTurnId: g.sourceTurnId, status: groupStatus(g.members.map((m) => m.status)), members: g.members }));
     return json(route, 200, { data: { items } });
   }
+  // 0255: the full workspace also reads what HON remembers (synthetic school fact, no person data).
+  if (path === `${base}/school-notes` && method === 'GET') return json(route, 200, { data: { notes: [{ id: id(690), text: 'We close the first week of August.', createdAt: iso(0) }], canManage: true, limits: { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200 } } });
   if (method !== 'POST') return json(route, 404, { code: 'NOT_FOUND' });
   const request = route.request();
   const headers = request.headers();

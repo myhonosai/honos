@@ -80,3 +80,6 @@
 .followUps { display: grid; gap: 6px; margin-top: 8px; }
 .followUpList { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .followUpList button { text-align: left; white-space: normal; }
+.notesList { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.notesList li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; color: #d4e2ef; font-size: 14px; line-height: 1.5; }
+.notesList li span { overflow-wrap: anywhere; }

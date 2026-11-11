@@ -191,6 +191,8 @@ const expectedRlsTables = [
   'hq_creative_generations',
   'hq_creative_generation_assets',
   'hq_creative_requests',
+  'hon_school_notes',
+  'hon_school_note_requests',
   'hq_onboarding_requests',
   'hq_operator_grants',
   'idempotency_records',

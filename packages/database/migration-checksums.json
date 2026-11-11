@@ -230,6 +230,7 @@
     "0251_class_series_ongoing.sql": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8",
     "0252_hq_marketing_campaigns.sql": "91e2b7833e4e0c040468fd2c94e375b559631d82951beb95772f95e3817d86a7",
     "0253_hq_creative_studio.sql": "9836f75224774349ac271864a3a9f83ebbb099cb90ab13d7a746c1684ff34d90",
-    "0254_hon_reply_follow_ups_and_sources.sql": "8ec55653207d7dd060468f1fa11173a3ea382a3d284d6f7ffc8d28487bbf3f42"
+    "0254_hon_reply_follow_ups_and_sources.sql": "8ec55653207d7dd060468f1fa11173a3ea382a3d284d6f7ffc8d28487bbf3f42",
+    "0255_hon_school_notes.sql": "311b606d7c0fb06e43daee215f181418e7e47a47cf9069cab3da327ffa1cb23c"
   }
 }

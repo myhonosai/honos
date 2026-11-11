@@ -2798,6 +2798,87 @@ try {
   pass('INV-32', '0254: follow-up questions (at most three, bounded plain text, unique) and cited sources (closed set, at most five, only fact areas the server recorded as sent: AVAILABLE metrics, the earlier conversation, group results) are stored with a whole answer only, shown only on a visible COMPLETED answer (concealed and cut-off answers show none; the table refuses others), malformed values are refused before any write, Claire may give them (no suggestions), and they add no provider call or usage beyond the answer');
   }
 
+  // ---- INV-33 (0255): What HON remembers: school notes are saved on purpose, visible to every HON user, erasable ----
+  {
+  const o = await makeOrg('inv-33');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const call = (fn, input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query(`SELECT hon.${fn}($1,$2::jsonb,$3,$4::uuid,$5::uuid) r`, [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_hon_school_notes($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_notes.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, true], 'staff-assignable permission');
+  // 1. A note is saved, listed for HON users, and replayed by key; a reused key with other input is refused.
+  const key = K();
+  const a = await call('add_hon_school_note', { text: 'We close the first week of August.' }, key);
+  assert.deepEqual([a.replayed, a.record.note.text], [false, 'We close the first week of August.'], JSON.stringify(a));
+  assert.equal((await call('add_hon_school_note', { text: 'We close the first week of August.' }, key)).replayed, true);
+  assert.equal(await code(call('add_hon_school_note', { text: 'Something else entirely.' }, key)), '23505');
+  const r1 = await read();
+  assert.deepEqual([r1.notes.map((n) => n.text), r1.canManage, r1.limits], [['We close the first week of August.'], true, { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200 }]);
+  // 2. Never about a person, never a link: refused before any write.
+  const before = (await row('SELECT count(*)::int n FROM hon.hon_school_notes WHERE organization_id=$1', [o.id])).n;
+  for (const input of [{ text: 'Email coach@example.test for help' }, { text: 'Call 555 123 4567 after six' }, { text: 'Ring (555)123-4567' }, { text: 'See https://example.test' },
+    { text: 'Visit www.example.test' }, { text: 'Use <b>bold</b>' }, { text: 'ab' }, { text: 'x'.repeat(201) }, { text: 'Two\nlines here' }, { text: ' padded note ' }, { text: 7 }, { text: 'ok note', extra: 1 }, {}]) {
+    assert.equal(await code(call('add_hon_school_note', input)), '22023', JSON.stringify(input));
+  }
+  assert.equal((await row('SELECT count(*)::int n FROM hon.hon_school_notes WHERE organization_id=$1', [o.id])).n, before, 'nothing stored');
+  // The rule is the contract's character for character: code points, C1 controls, line separators, Unicode spaces.
+  for (const [text, ok] of [['\u{1F600}'.repeat(200), true], ['\u{1F600}'.repeat(201), false], ['Caf\u00e9 hours are 9 to 5.', true], ['Next\u0085step here', false],
+    ['\u00a0padded note', false], ['padded note\u3000', false], ['Line\u2028break', false], ['555\u00a0123\u00a04567 is the line', false], ['mail a@b\u00a0x', false]]) {
+    assert.equal((await row('SELECT hon.hon_school_note_ok($1) ok', [text])).ok, ok, JSON.stringify(text));
+  }
+  // 3. HON's context carries the notes (newest first) and may cite them; Claire's does not.
+  await call('add_hon_school_note', { text: 'Kids classes are 45 minutes long.' });
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = []; fakes.hon.followUps = []; fakes.hon.sources = ['schoolNotes'];
+  const conv = await hon.create(scope, { title: 'Summer' }, K());
+  const t1 = await hon.sendTurn(scope, conv.id, { text: 'When are we closed?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, ['Kids classes are 45 minutes long.', 'We close the first week of August.']);
+  assert.deepEqual(t1.replyDetail.sources, ['schoolNotes']);
+  await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.equal(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, undefined, 'Claire gets metrics only');
+  // 4. Deleting erases the text at once (evidence keeps ids and times); HON no longer sees it; audit never holds text.
+  const del = await call('delete_hon_school_note', { noteId: a.record.note.id });
+  assert.deepEqual([del.replayed, del.record.noteId, del.record.deleted], [false, a.record.note.id, true]);
+  const gone = await row('SELECT body, deleted_at IS NOT NULL d, deleted_by FROM hon.hon_school_notes WHERE id=$1', [a.record.note.id]);
+  assert.deepEqual([gone.body, gone.d, gone.deleted_by], [null, true, o.principal]);
+  assert.equal(await code(call('delete_hon_school_note', { noteId: a.record.note.id })), 'P0002', 'already deleted');
+  assert.equal(await code(call('delete_hon_school_note', { noteId: K() })), 'P0002');
+  assert.deepEqual((await read()).notes.map((n) => n.text), ['Kids classes are 45 minutes long.']);
+  fakes.hon.sources = [];
+  await hon.sendTurn(scope, conv.id, { text: 'Anything else?', delegation: null }, K());
+  assert.deepEqual(JSON.parse(fakes.hon.inputs.at(-1).facts).schoolNotes, ['Kids classes are 45 minutes long.']);
+  const leaked = (await row("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND (coalesce(next_state::text,'') LIKE '%August%' OR coalesce(next_state::text,'') LIKE '%45 minutes%')", [o.id])).n;
+  const outboxLeak = (await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND (payload::text LIKE '%August%' OR payload::text LIKE '%45 minutes%')", [o.id])).n;
+  assert.deepEqual([leaked, outboxLeak], [0, 0], 'ids only in audit and outbox');
+  assert.equal((await row("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'hon.school_note.%'", [o.id])).n, 3);
+  // 5. Limits: at most 20 notes and 2,000 characters per school.
+  for (let i = (await read()).notes.length; i < 20; i++) await call('add_hon_school_note', { text: `Note number ${String.fromCharCode(65 + i)} for the school.` });
+  assert.equal(await code(call('add_hon_school_note', { text: 'One note too many.' })), '23514', 'at most 20');
+  for (const n of (await read()).notes) await call('delete_hon_school_note', { noteId: n.id });
+  for (let i = 0; i < 10; i++) await call('add_hon_school_note', { text: `${String.fromCharCode(65 + i)}${'a'.repeat(199)}` });
+  assert.equal(await code(call('add_hon_school_note', { text: 'Too long now.' })), '23514', 'at most 2000 characters');
+  // 6. Authority: manage needs ai.school_notes.manage; reading needs HON (ai.invocation.plan) or manage.
+  await drop('ai.school_notes.manage');
+  assert.equal(await code(call('add_hon_school_note', { text: 'Not allowed here.' })), '42501');
+  assert.equal(await code(call('delete_hon_school_note', { noteId: (await read()).notes[0].id })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('ai.invocation.plan');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('ai.school_notes.manage');
+  // 7. The tables are reached only through the three entry points; rows are never removed or rewritten except the erase.
+  for (const t of ['hon_school_notes', 'hon_school_note_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_hon_school_notes(text)', 'hon.add_hon_school_note(text,jsonb,text,uuid,uuid)', 'hon.delete_hon_school_note(text,jsonb,text,uuid,uuid)']) {
+    assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  }
+  const live = (await read()).notes[0].id;
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_notes WHERE id=$1', [live]))).error?.code, '42501');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_school_notes SET body='Changed text here' WHERE id=$1", [live]))).error?.code, '42501');
+  pass('INV-33', "0255: school notes are saved only by a human with ai.school_notes.manage (staff-assignable), listed for every HON user at the school, idempotent by key, refused when they look like a person's contact, a link or markup, limited to 20 notes and 2,000 characters, given to HON's context newest first and citable as schoolNotes (never to Claire), erased on delete (evidence keeps ids and times), audited and announced by id only, and reachable only through three runtime entry points");
+  }
+
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
   // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter

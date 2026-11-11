@@ -39,7 +39,7 @@ export class HonReplyProviderRuntimeError extends Error {
 export const HON_REPLY_TRAILER_GUIDANCE = [
   'After the answer you may add two optional closing lines, each at most once.',
   `"SOURCES: key, key" names up to ${HON_REPLY_MAX_SOURCES} fact areas you actually used, only from: ${HON_REPLY_SOURCE_KEYS.join(', ')}`,
-  '(conversation means the earlier conversation; specialistResults means recorded specialist outcomes).',
+  '(conversation means the earlier conversation; specialistResults means recorded specialist outcomes; schoolNotes means notes the school saved for you).',
   `"ASK: question | question" gives up to ${HON_REPLY_MAX_FOLLOW_UPS} short follow-up questions the person might ask you next, plain text, no links.`,
 ].join(' ');
 
