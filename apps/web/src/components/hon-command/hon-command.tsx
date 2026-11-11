@@ -6,6 +6,7 @@ import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, ty
 import { HonConversation } from './hon-conversation-panel';
 import { HonSchoolNotes } from './hon-school-notes';
 import { HonSchoolTone } from './hon-school-tone';
+import { HonWeeklyBriefing } from './hon-weekly-briefing';
 import { HON_COMMAND_ROSTER, honAgent, safeHonReturnPath } from './roster';
 import { AgentPortrait, AvailabilityBadge, HonMark, HonWorkspaceView, type HonTab } from './hon-workspace-view';
 import styles from './hon-command.module.css';
@@ -50,7 +51,7 @@ function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: 
   const conversation = <HonConversation key={key} school={school} presentation={presentation} />;
   // 0255: the full workspace also shows what HON remembers about this school.
   // 0256: and how HON talks at this school.
-  return presentation === 'full' ? <>{conversation}<HonSchoolNotes key={`${key}/notes`} school={school} /><HonSchoolTone key={`${key}/tone`} school={school} /></> : conversation;
+  return presentation === 'full' ? <>{conversation}<HonSchoolNotes key={`${key}/notes`} school={school} /><HonSchoolTone key={`${key}/tone`} school={school} /><HonWeeklyBriefing key={`${key}/briefing`} school={school} /></> : conversation;
 }
 
 /** Expandable HON panel: a modal side sheet that keeps the page underneath intact. */

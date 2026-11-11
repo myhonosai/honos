@@ -3,6 +3,8 @@ import {
   validateHonSchoolTone, validateHonSchoolToneInput, validateHonSchoolToneReceipt, validateHonConversationSummary, validateHonConversationThread, validateHonTurnReceipt, validateHonTurnRequest,
   type HonConversationPage, type HonConversationReadiness, type HonConversationSummary, type HonConversationThread, type HonTurnReceipt,
   type HonSchoolNoteReceipt, type HonSchoolNotes, type HonAiTone, type HonSchoolTone, type HonSchoolToneReceipt, type HonTurnRequest,
+  validateSchoolBriefing, validateSchoolBriefingPreview, validateSchoolBriefingReceipt, validateSchoolBriefingSettingsInput, validateMySchoolBriefingInput,
+  type SchoolBriefing, type SchoolBriefingPreview, type SchoolBriefingReceipt,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { crmLeadListPath } from '../crm-leads-http';
@@ -206,4 +208,30 @@ export const HON_SCHOOL_TONE_API: HonSchoolToneApi = {
     try { return validateHonSchoolTone(closed(body, ['data']).data); } catch { return drift(); }
   }, signal, owned),
   send: (prepared, owned) => send(prepared, validateHonSchoolToneReceipt, owned),
+};
+
+/** 0257 Weekly briefing: the owner's switch and hour, "Email me" for oneself, and a preview. The server decides who may. */
+export function prepareBriefingSettings(school: HonSchool, enabled: boolean, sendHour: number): PreparedHonCommand {
+  let checked: { enabled: boolean; sendHour: number };
+  try { checked = validateSchoolBriefingSettingsInput({ enabled, sendHour }); } catch { throw new HonConversationError('INVALID'); }
+  return Object.freeze({ path: `${honConversationBase(school)}/briefing/settings`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
+}
+export function prepareMyBriefing(school: HonSchool, email: boolean): PreparedHonCommand {
+  let checked: { email: boolean };
+  try { checked = validateMySchoolBriefingInput({ email }); } catch { throw new HonConversationError('INVALID'); }
+  return Object.freeze({ path: `${honConversationBase(school)}/briefing/me`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
+}
+export interface HonSchoolBriefingApi {
+  read(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<SchoolBriefing>;
+  preview(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<SchoolBriefingPreview>;
+  send(prepared: PreparedHonCommand, owned?: Owned): Promise<SchoolBriefingReceipt>;
+}
+export const HON_SCHOOL_BRIEFING_API: HonSchoolBriefingApi = {
+  read: (school, signal, owned) => read(`${honConversationBase(school)}/briefing`, (body) => {
+    try { return validateSchoolBriefing(closed(body, ['data']).data); } catch { return drift(); }
+  }, signal, owned),
+  preview: (school, signal, owned) => read(`${honConversationBase(school)}/briefing/preview`, (body) => {
+    try { return validateSchoolBriefingPreview(closed(body, ['data']).data); } catch { return drift(); }
+  }, signal, owned),
+  send: (prepared, owned) => send(prepared, validateSchoolBriefingReceipt, owned),
 };

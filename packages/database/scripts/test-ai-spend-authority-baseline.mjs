@@ -2941,6 +2941,71 @@ try {
   pass('INV-34', "0256: each school's tone is a closed key (Standard by default) set only by a human with the owner-only ai.school_tone.manage, idempotent by key, audited with keys only, read by HON, Kai or manage users, sent to HON and Kai (never Claire), and reachable only through three runtime entry points");
   }
 
+  // ---- INV-35 (0257): weekly briefing part 1: off by default, owner switch, "email me" for oneself, preview, no AI ----
+  {
+  const o = await makeOrg('inv-35');
+  const call = (fn, input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query(`SELECT hon.${fn}($1,$2::jsonb,$3,$4::uuid,$5::uuid) r`, [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_school_briefing($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const preview = () => tenant(context(o), (client) => client.query('SELECT hon.read_school_briefing_preview($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_briefing.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, false], 'owner-only permission');
+  const calls0 = providerCalls;
+  // 1. Off by default; nobody is subscribed.
+  assert.deepEqual(await read(), { enabled: false, sendHour: 8, canManage: true, me: { email: false, canSubscribe: true } });
+  // 2. Owner switch: replay by key, reused key refused, closed input.
+  const key = K();
+  const on = await call('set_school_briefing_settings', { enabled: true, sendHour: 7 }, key);
+  assert.deepEqual([on.replayed, on.record.enabled, on.record.sendHour], [false, true, 7]);
+  assert.equal((await call('set_school_briefing_settings', { enabled: true, sendHour: 7 }, key)).replayed, true);
+  assert.equal(await code(call('set_school_briefing_settings', { enabled: false, sendHour: 7 }, key)), '23505');
+  for (const input of [{ enabled: true, sendHour: 5 }, { enabled: true, sendHour: 12 }, { enabled: 'yes', sendHour: 8 }, { enabled: true }, { enabled: true, sendHour: 8, extra: 1 }, { enabled: true, sendHour: 8.5 }]) {
+    assert.equal(await code(call('set_school_briefing_settings', input)), '22023', JSON.stringify(input));
+  }
+  // 3. Email me: for oneself only, closed input, replay.
+  const me = await call('set_my_school_briefing', { email: true });
+  assert.deepEqual(me.record.me, { email: true, canSubscribe: true });
+  for (const input of [{ email: 'yes' }, { email: true, sms: true }, { sms: true }, {}]) assert.equal(await code(call('set_my_school_briefing', input)), '22023', JSON.stringify(input));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.school_briefing_subscriptions WHERE organization_id=$1 AND email_enabled', [o.id])).n, 1);
+  // 4. Preview: fixed template over Command Center counts, the school name, how to stop; no provider call.
+  const pv = await preview();
+  assert.equal(pv.subject, 'HON weekly briefing: AI-0 synthetic school');
+  assert.match(pv.text, /^New leads in the last 24 hours: \d+$/m);
+  assert.match(pv.text, /Unanswered inquiries: not available yet/);
+  assert.match(pv.text, /turn off "Email me" under Weekly briefing/);
+  assert.doesNotMatch(pv.text, /Synthetic Lead|synthetic-lead@example\.test/, 'counts only, never names or addresses');
+  assert.equal(providerCalls, calls0, 'no AI call');
+  // 5. Audit and outbox carry values only (no address); the outbox is internal only.
+  const audits = (await admin.query("SELECT action_code, next_state FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'hon.school_briefing.%' ORDER BY occurred_at", [o.id])).rows;
+  assert.deepEqual(audits.map((a) => a.action_code), ['hon.school_briefing.settings', 'hon.school_briefing.me']);
+  assert.doesNotMatch(JSON.stringify(audits), /@example\.test/);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND event_type LIKE 'hon.school_briefing.%' AND payload->>'internalOnly'='true'", [o.id])).n, 2);
+  // 6. Authority: settings need the owner permission; email me and the preview need reporting.view.
+  await drop('ai.school_briefing.manage');
+  assert.equal(await code(call('set_school_briefing_settings', { enabled: false, sendHour: 8 })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('reporting.view');
+  assert.deepEqual((await read()).me, { email: true, canSubscribe: false });
+  assert.equal(await code(call('set_my_school_briefing', { email: true })), '42501');
+  assert.equal(await code(preview()), '42501');
+  assert.equal((await call('set_my_school_briefing', { email: false })).record.me.email, false, 'anyone may always turn their own email off');
+  await drop('ai.invocation.plan');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('reporting.view'); await add('ai.school_briefing.manage');
+  // 7. Grants and guards: four runtime entry points (plus the read), tables never removed, values checked.
+  for (const t of ['school_briefing_settings', 'school_briefing_subscriptions', 'school_briefing_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_school_briefing(text)', 'hon.read_school_briefing_preview(text)', 'hon.set_school_briefing_settings(text,jsonb,text,uuid,uuid)', 'hon.set_my_school_briefing(text,jsonb,text,uuid,uuid)']) {
+    assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  }
+  assert.equal((await row("SELECT has_function_privilege($1,'hon.school_briefing_email(jsonb,text)','EXECUTE') p", [runtimeRole])).p, false);
+  assert.equal((await settle(admin.query('DELETE FROM hon.school_briefing_settings WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query('UPDATE hon.school_briefing_settings SET send_hour=3 WHERE school_id=$1', [o.school]))).error?.code, '23514');
+  assert.equal((await settle(admin.query('UPDATE hon.school_briefing_subscriptions SET sms_enabled=true WHERE school_id=$1', [o.school]))).error?.code, '23514', 'SMS is reserved for 0258');
+  pass('INV-35', '0257: the weekly briefing is off by default, switched on and timed only by the owner (ai.school_briefing.manage), subscribed by email for oneself only with reporting.view (always possible to turn off), previewed from Command Center counts with no AI call and no names, audited without addresses, idempotent by key, and reachable only through four runtime entry points; SMS stays reserved for 0258');
+  }
+
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
   // A blocker transaction holds ai.budget:<org>. Two prepares (same agent, and every agent pair) must both be seen
   // WAITING on an advisory lock (pg_locks), not racing. Room fits exactly one of the pair. On release each waiter
