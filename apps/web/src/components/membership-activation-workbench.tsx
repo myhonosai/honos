@@ -15,13 +15,16 @@ import { verifyEnrollmentSession } from './crm-enrollment-privacy';
 import { PlanAccessError } from './membership-plans/http';
 import { CrmEnrollmentDiscard } from './crm-enrollment-discard';
 import { useLocale } from './localization/provider';
+import { MembershipActivationPicker } from './membership-activation-picker';
 import { activationText, activationWarning, activationBlock, activationRequirement, activationSource, activationReason, type ActivationTextKey, type ActivationVariables } from './membership-activation-catalog';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from './session-invalidation';
 import styles from './membership-activation-workbench.module.css';
 
 type Dates = { startDate: string; endDate: string | null };
-export function MembershipActivationWorkbench({ sessionSubject, initialMembership, initialPresentation = 'modern', onReturnLabel, onReturn, onManageDates }: { sessionSubject?: string; initialMembership?: KnownMembership; initialPresentation?: 'modern' | 'classic' | 'big'; onReturnLabel?: string; onReturn?(): void; onManageDates?(selection: KnownMembership): void }): React.ReactElement {
+export function MembershipActivationWorkbench({ shellScope: shellSchool = null, sessionSubject, initialMembership, initialPresentation = 'modern', onReturnLabel, onReturn, onManageDates }: { sessionSubject?: string; initialMembership?: KnownMembership; initialPresentation?: 'modern' | 'classic' | 'big'; onReturnLabel?: string; onReturn?(): void; onManageDates?(selection: KnownMembership): void; shellScope?: Readonly<{ organizationId: string; schoolId: string }> | null }): React.ReactElement {
   const { preferences, date } = useLocale();
+  // The school the shell verified supplies the selectors, so staff pick a membership instead of typing IDs.
+  const shellScope = !initialMembership && shellSchool ? shellSchool : null;
   const t = (key: string, vars?: ActivationVariables) => activationText(preferences.language, key as ActivationTextKey, vars);
   const calendar = (value: string | null) => value === null ? t('Open-ended · no last day') : formatLocaleCalendarDate(preferences, value);
   const [presentation, setPresentation] = useState<'modern' | 'classic' | 'big'>(initialPresentation);
@@ -65,6 +68,11 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
   function editScope(key: keyof KnownMembership, value: string): void {
     if (initialMembership || activeCommand.current || retained.current || concealed.current) return;
     invalidateRead(); setPreview(null); setDates(null); setSaved(null); setObserved(null); resetReview(); setError(''); setNotice(''); setScope(old => ({ ...old, [key]: value }));
+  }
+  function pickMembership(membershipId: string): void {
+    if (!shellScope || activeCommand.current || retained.current || concealed.current) return;
+    invalidateRead(); setPreview(null); setDates(null); setSaved(null); setObserved(null); resetReview(); setError(''); setNotice('');
+    setScope({ organizationId: shellScope.organizationId, schoolId: shellScope.schoolId, membershipId });
   }
   async function review(input: Dates | Record<string, never> = {}): Promise<void> {
     if (activeCommand.current || retained.current || concealed.current) return;
@@ -202,10 +210,11 @@ export function MembershipActivationWorkbench({ sessionSubject, initialMembershi
       <a href="/auth/login">{t("Sign in again")}</a>
       <CrmEnrollmentDiscard disabled={commandBusy || reading} onDiscard={discard} label={t("Discard local activation view")} copy={discardCopy} />
     </section> : <div ref={privateArea} data-activation-private>
-      <section><h2>{t("One already-known membership")}</h2><p>{t(initialMembership ? 'Membership reference selected from CRM; review current facts before confirming.' : 'Enter known IDs. Every read and command independently verifies current school authority. No record is loaded or activated from URL parameters.')}</p>
+      <section><h2>{t("One already-known membership")}</h2><p>{t(initialMembership ? 'Membership reference selected from CRM; review current facts before confirming.' : shellScope ? 'Choose a membership waiting for activation at your school. Every read and command checks your access again.' : 'Enter known IDs. Every read and command independently verifies current school authority. No record is loaded or activated from URL parameters.')}</p>
         <form onSubmit={event => { event.preventDefault(); void review(); }}><fieldset disabled={locked}>
-          <div className={styles.row}>{(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{t(key === 'organizationId' ? 'Organization ID' : key === 'schoolId' ? 'School ID' : 'Already-known membership ID')}<input required maxLength={36} autoComplete="off" readOnly={Boolean(initialMembership)} value={scope[key]} onChange={event => editScope(key, event.target.value)} /></label>)}</div>
-          <button type="submit" disabled={reading}>{t("Review activation")}</button>
+          {shellScope ? <MembershipActivationPicker scope={shellScope} value={scope.schoolId.toLowerCase() === shellScope.schoolId.toLowerCase() ? scope.membershipId : ''} disabled={locked}
+            refresh={saved ? 1 : 0} t={t} language={preferences.language} onPick={pickMembership}/> : <div className={styles.row}>{(['organizationId', 'schoolId', 'membershipId'] as const).map(key => <label key={key}>{t(key === 'organizationId' ? 'Organization ID' : key === 'schoolId' ? 'School ID' : 'Already-known membership ID')}<input required maxLength={36} autoComplete="off" readOnly={Boolean(initialMembership)} value={scope[key]} onChange={event => editScope(key, event.target.value)} /></label>)}</div>}
+          <button type="submit" disabled={reading || (shellScope !== null && !scope.membershipId)}>{t("Review activation")}</button>
         </fieldset></form>
       </section>
       {observed && <section><h2>{t("Current membership observation")}</h2><p>{t(observed.state)} · {t('version {version}', { version: observed.version })}. {t('This live observation is separate from any historical confirmation receipt. ACTIVE alone does not prove current effective dates, payment or agreement.')}</p>
