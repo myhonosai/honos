@@ -117,6 +117,8 @@ import { MembershipStatusReportController } from './reports/membership-status-re
 import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
 import { TuitionPaymentService } from './billing/tuition-payment.service.js';
+import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
+import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -396,6 +398,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseController,
     StudentImportController,
     TuitionPaymentController,
+    MayaAtRiskController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -540,6 +543,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesFillHumanUiGuard,
     ClassSeriesReadHumanUiGuard,
     TuitionPaymentService,
+    MayaAtRiskService,
+    MayaAtRiskReadHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,
