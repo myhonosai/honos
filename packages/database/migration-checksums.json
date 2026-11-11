@@ -235,6 +235,7 @@
     "0256_hon_school_tone.sql": "d9066ce79b17801845b4561cb3cbf1dc201db602edeab050e4cb6886b832818f",
     "0257_school_weekly_briefing.sql": "1e2ab22ae912fdc417dafb8cf6ddd10569d09aa89b93c5cc12c4fa2957e501e9",
     "0258_school_payment_connections.sql": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17",
-    "0261_school_event_booking.sql": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675"
+    "0261_school_event_booking.sql": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675",
+    "0267_hq_usage_claire_attribution.sql": "00b679d61d39febf7adee22105cbdfe4ecd95423b6b423064f3a6c09f3905861"
   }
 }
