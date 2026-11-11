@@ -389,3 +389,40 @@ export function validateHonSchoolToneReceipt(value: unknown): HonSchoolToneRecei
   if (!isHonAiTone(r.tone) || !isHonAiTone(r.previousTone) || typeof r.replayed !== 'boolean') drift();
   return { tone: r.tone as HonAiTone, previousTone: r.previousTone as HonAiTone, replayed: r.replayed as boolean };
 }
+
+/**
+ * 0257 weekly briefing, part 1. The owner turns it on for the school and picks the Monday hour (school time); each staff
+ * member with the Command Center permission chooses "email me" for themselves. Built from the Command Center facts with
+ * no AI call. SMS and sending arrive in 0258; nothing is sent by this part.
+ */
+export const SCHOOL_BRIEFING_HOURS = { min: 6, max: 11, default: 8 } as const;
+export interface SchoolBriefing { enabled: boolean; sendHour: number; canManage: boolean; me: { email: boolean; canSubscribe: boolean } }
+export interface SchoolBriefingReceipt { record: SchoolBriefing; replayed: boolean }
+export interface SchoolBriefingPreview { subject: string; text: string }
+const isBriefingHour = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= SCHOOL_BRIEFING_HOURS.min && (v as number) <= SCHOOL_BRIEFING_HOURS.max;
+export function validateSchoolBriefingSettingsInput(value: unknown): { enabled: boolean; sendHour: number } {
+  const r = record(value, invalid); exactKeys(r, ['enabled', 'sendHour'], invalid);
+  if (typeof r.enabled !== 'boolean' || !isBriefingHour(r.sendHour)) invalid();
+  return { enabled: r.enabled as boolean, sendHour: r.sendHour as number };
+}
+export function validateMySchoolBriefingInput(value: unknown): { email: boolean } {
+  const r = record(value, invalid); exactKeys(r, ['email'], invalid);
+  if (typeof r.email !== 'boolean') invalid();
+  return { email: r.email as boolean };
+}
+export function validateSchoolBriefing(value: unknown): SchoolBriefing {
+  const r = record(value, drift); exactKeys(r, ['canManage', 'enabled', 'me', 'sendHour'], drift);
+  const me = record(r.me, drift); exactKeys(me, ['canSubscribe', 'email'], drift);
+  if (typeof r.enabled !== 'boolean' || !isBriefingHour(r.sendHour) || typeof r.canManage !== 'boolean' || typeof me.email !== 'boolean' || typeof me.canSubscribe !== 'boolean') drift();
+  return { enabled: r.enabled as boolean, sendHour: r.sendHour as number, canManage: r.canManage as boolean, me: { email: me.email as boolean, canSubscribe: me.canSubscribe as boolean } };
+}
+export function validateSchoolBriefingReceipt(value: unknown): SchoolBriefingReceipt {
+  const r = record(value, drift); exactKeys(r, ['record', 'replayed'], drift);
+  if (typeof r.replayed !== 'boolean') drift();
+  return { record: validateSchoolBriefing(r.record), replayed: r.replayed as boolean };
+}
+export function validateSchoolBriefingPreview(value: unknown): SchoolBriefingPreview {
+  const r = record(value, drift); exactKeys(r, ['subject', 'text'], drift);
+  if (typeof r.subject !== 'string' || r.subject.length < 1 || r.subject.length > 200 || typeof r.text !== 'string' || r.text.length < 1 || r.text.length > 4000) drift();
+  return { subject: r.subject as string, text: r.text as string };
+}

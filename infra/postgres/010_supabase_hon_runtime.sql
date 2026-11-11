@@ -2670,3 +2670,28 @@ DO $$ DECLARE r text; t text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hon_school_tone(text),hon.set_hon_school_tone(text,jsonb,text,uuid,uuid),hon.hon_ai_tone() TO hon_runtime;
   END IF;
 END $$;
+
+-- 0257 HON weekly briefing (part 1, nothing sent): tables reached only through four runtime entry points; the template
+-- and helpers are private.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  IF to_regclass('hon.school_briefing_settings') IS NULL THEN RAISE EXCEPTION 'Apply migration 0257 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_briefing_settings','hon.school_briefing_subscriptions','hon.school_briefing_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_school_briefing()','hon.school_briefing_actor(text,text)','hon.school_briefing_view(uuid)',
+    'hon.school_briefing_email(jsonb,text)','hon.read_school_briefing(text)','hon.read_school_briefing_preview(text)',
+    'hon.school_briefing_claim(text,text,jsonb,text,uuid,uuid,text)','hon.school_briefing_finish(text,text,text,uuid)',
+    'hon.set_school_briefing_settings(text,jsonb,text,uuid,uuid)','hon.set_my_school_briefing(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_briefing(text),hon.read_school_briefing_preview(text),
+      hon.set_school_briefing_settings(text,jsonb,text,uuid,uuid),hon.set_my_school_briefing(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
