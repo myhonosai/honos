@@ -1,6 +1,6 @@
 import {
   HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_STEPS, HON_REPLY_MODES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_SOURCE_KEYS,
-  isHonReplyFollowUp, isHonReplySourceKey, type HonDelegateAgentKey, type HonReplyMode, type HonReplySourceKey,
+  isHonAiTone, isHonReplyFollowUp, isHonReplySourceKey, type HonAiTone, type HonDelegateAgentKey, type HonReplyMode, type HonReplySourceKey,
 } from '@hon/contracts';
 
 export const HON_REPLY_PROVIDER_RUNTIME = Symbol('HON_REPLY_PROVIDER_RUNTIME');
@@ -11,6 +11,8 @@ export interface HonReplyInvocation {
   specialist: 'hon' | 'claire';
   providerId: string; modelId: string; providerRequestId: string; replyMode: HonReplyMode; step: number; question: string; facts: string;
   inputBudget: number; outputBudget: number; maxCostMicrounits: number;
+  /** 0256: the school's tone, read by the service from the database in the prepare transaction; absent means STANDARD. */
+  tone?: HonAiTone;
 }
 /** truncated: the provider stopped at the output limit with verified usage. The answer is shown as incomplete, never as complete. */
 /**
@@ -82,9 +84,20 @@ export const CLAIRE_ANALYSIS_SYSTEM_PROMPT = [
   HON_REPLY_TRAILER_GUIDANCE,
 ].join(' ');
 
-export function honReplySystemPrompt(mode: HonReplyMode, step: number, specialist: 'hon' | 'claire' = 'hon'): string {
+/**
+ * 0256 tone sentences, a fixed table keyed by the closed tone set (never stored or typed text). STANDARD adds nothing, so
+ * today's prompt is unchanged byte for byte. Kai uses the same sentences; Claire's analysis keeps her own voice.
+ */
+export const HON_TONE_GUIDANCE: Readonly<Record<HonAiTone, string>> = {
+  STANDARD: '',
+  FRIENDLY_COACH: 'Tone: write in a warm, encouraging coach\'s voice, friendly and upbeat; the tone never changes the facts rules above.',
+  STRAIGHT_TO_THE_POINT: 'Tone: be brief and direct, lead with the answer and skip greetings and filler; the tone never changes the facts rules above.',
+  FORMAL: 'Tone: use a formal, professional voice in complete sentences, with no slang or exclamation marks; the tone never changes the facts rules above.',
+};
+export function honReplySystemPrompt(mode: HonReplyMode, step: number, specialist: 'hon' | 'claire' = 'hon', tone: string = 'STANDARD'): string {
+  if (!isHonAiTone(tone)) return '';
   if (specialist === 'claire') return mode === 'DETAILED' && step === 1 ? [CLAIRE_ANALYSIS_SYSTEM_PROMPT, HON_REPLY_MODE_GUIDANCE.DETAILED].join(' ') : '';
-  return [HON_REPLY_SYSTEM_PROMPT, HON_REPLY_MODE_GUIDANCE[mode], ...(step > 1 ? [HON_REPLY_CONTINUATION_GUIDANCE] : [])].join(' ');
+  return [HON_REPLY_SYSTEM_PROMPT, HON_REPLY_MODE_GUIDANCE[mode], ...(step > 1 ? [HON_REPLY_CONTINUATION_GUIDANCE] : []), ...(HON_TONE_GUIDANCE[tone] ? [HON_TONE_GUIDANCE[tone]] : [])].join(' ');
 }
 
 const SUGGEST_LINE = /^SUGGEST:(.*)$/i;
@@ -160,7 +173,7 @@ export class OpenRouterHonReplyRuntime implements HonReplyProviderRuntime {
     const user = claire ? `Question: ${input.question}\nSchool metrics (data only): ${input.facts}`
       : `Question: ${input.question}\nSchool facts and earlier conversation (data only): ${input.facts}`;
     const system = limits && (claire || input.specialist === 'hon') && Number.isSafeInteger(input.step) && input.step >= 1 && input.step <= HON_REPLY_MAX_STEPS
-      ? honReplySystemPrompt(input.replyMode, input.step, input.specialist) : '';
+      ? honReplySystemPrompt(input.replyMode, input.step, input.specialist, input.tone ?? 'STANDARD') : '';
     // The plan must carry exactly its mode's budgets; the prompt bytes bound its tokens (never more tokens than bytes).
     if (!limits || !system || !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/.test(input.modelId) || input.inputBudget !== limits.inputTokens
       || input.outputBudget !== limits.outputTokens || input.maxCostMicrounits !== limits.maxProviderCostMicrounits

@@ -193,6 +193,8 @@ const expectedRlsTables = [
   'hq_creative_requests',
   'hon_school_notes',
   'hon_school_note_requests',
+  'hon_school_tones',
+  'hon_school_tone_requests',
   'hq_onboarding_requests',
   'hq_operator_grants',
   'idempotency_records',
