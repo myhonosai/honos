@@ -233,6 +233,10 @@
       "title": "HON | Tuition balances"
     },
     {
+      "path": "/staff/billing/payment-processors",
+      "title": "HON | Payment processors"
+    },
+    {
       "path": "/staff/champions-club",
       "title": "HON | Champions Club"
     },

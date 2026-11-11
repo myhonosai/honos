@@ -63,8 +63,9 @@ payments recorded outside HON, `docs/architecture/TUITION_PAYMENTS.md`).
 | P6 | Family notices | ask | Card-expiry and failed-payment notices through the existing message delivery path (consent and quiet-hours rules apply). |
 | P7 | Paid booking fee | ask | One-time hosted payment linked to a booking, after the free booking feature exists. |
 | P8 | Web screens for P3-P6 | — | Family autopay setup, failed payments, expiring cards. |
+| P9 | Customizable checkout pages (owner, 2026-11-11) | ask | Per-school checkout page for enrollment and tuition. Branding (logo, color, cover image, footer) is one shared school setting owned by the booking thread (0268, `read_public_school_branding`); the checkout only reads it. The checkout owns its content: plans shown and their order, add-ons (uniform, registration fee), promo codes, sibling discount shown clearly, custom fields, waiver/agreement checkbox, receipt and thank-you text, link/QR/embed snippet, EN/KO/ES. Card entry stays in the provider's hosted fields. |
 
-Order: P1 → P1-web → P2 → P3 → P4 → P5 → P6 → P7/P8. P2 can wait on credentials without blocking P3/P4 design, which
+Order: P1 → P1-web → P2 → P3 → P4 → P9 (checkout) → P5 → P6 → P7/P8. P2 can wait on credentials without blocking P3/P4 design, which
 run on the simulators.
 
 ## 5. Piece 1 design (0258)
@@ -159,3 +160,22 @@ Status: source only, not deployed. Test mode only; the API uses in-process simul
   exchange it persists.
 - Replace the simulators with real Stripe Connect test-mode and Square sandbox clients behind the same interface, using
   credentials separate from HON's SaaS Stripe account.
+
+## 8. Piece 1-web as built
+
+Status: source only, not deployed. Staff page `/staff/billing/payment-processors` (Memberships & Billing menu) over the
+seven piece 1 routes.
+
+- One card per provider: connect, continue setup, check status, make default, disconnect (with a reason). Only staff with
+  `school_pay.connection.manage` see the actions; `school_pay.read` sees status only. The account id is shown by its last
+  four characters only.
+- **Provider return:** the page reads `connection`, `state` and `code` once, removes the whole query from the address bar
+  at once (`history.replaceState`), keeps the values in memory only, and sends them only when the owner chooses
+  *Finish connecting*. The page sets `referrer: no-referrer` and every request uses `referrerPolicy: 'no-referrer'`.
+  A session end or a school change drops the kept return; a blur or hidden tab only hides the page.
+- **Leaving HON:** the browser is sent only to an https onboarding URL without credentials (or a loopback URL for the
+  local simulators). A replayed link answer (no URL) asks for a new link.
+- Unknown outcomes keep the exact request and key for *Try again*; a finish retry that answers
+  `SCHOOL_PAY_CONNECTION_STATE` re-reads and shows the connection as connected. Disconnect reports whether the provider
+  confirmed the revoke.
+- Evidence: `apps/web/test/payment-processors-ui.test.tsx` (8 tests).
