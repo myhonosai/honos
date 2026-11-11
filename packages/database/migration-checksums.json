@@ -223,6 +223,17 @@
     "0228_hon_group_summary.sql": "dac3557a4cab512c9c4ca6b59646f401689b7e58e88ad02804f08d33f43f12db",
     "0229_claire_business_performance.sql": "f318322679ffb9e5594ddd7d088d38cb3b4c9e42fc6d36592ea18793bce58dac",
     "0231_membership_pause_rolling_year.sql": "97bcb50f32def69d43da7ca9fa497c8d5b291393a33060d788cd7209c77867bc",
-    "0238_hq_usage_claire_attribution.sql": "221c4c27d5ab7c6c4e0f151a62d7b0d63382c1bfe920e6d8e1c1fd6ecc33c3fb"
+    "0232_hq_support_cases.sql": "8f3decac8ed134e1deae12e239b8c1b9398506ae7d0b654fda6f42139165aedf",
+    "0236_crm_school_clock.sql": "a2afddbb3fe92a127e246af79bb168c1083678c4a689ea7e2f0a4f06a2b3d213",
+    "0239_recurring_class_series.sql": "13ff43e331e0019b8cd0fc2cbf485fce84a79c2cba89fa177f46b858c50a9b95",
+    "0240_tuition_payment_records.sql": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233",
+    "0251_class_series_ongoing.sql": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8",
+    "0252_hq_marketing_campaigns.sql": "91e2b7833e4e0c040468fd2c94e375b559631d82951beb95772f95e3817d86a7",
+    "0253_hq_creative_studio.sql": "9836f75224774349ac271864a3a9f83ebbb099cb90ab13d7a746c1684ff34d90",
+    "0254_hon_reply_follow_ups_and_sources.sql": "8ec55653207d7dd060468f1fa11173a3ea382a3d284d6f7ffc8d28487bbf3f42",
+    "0255_hon_school_notes.sql": "311b606d7c0fb06e43daee215f181418e7e47a47cf9069cab3da327ffa1cb23c",
+    "0256_hon_school_tone.sql": "d9066ce79b17801845b4561cb3cbf1dc201db602edeab050e4cb6886b832818f",
+    "0257_school_weekly_briefing.sql": "1e2ab22ae912fdc417dafb8cf6ddd10569d09aa89b93c5cc12c4fa2957e501e9",
+    "0267_hq_usage_claire_attribution.sql": "00b679d61d39febf7adee22105cbdfe4ecd95423b6b423064f3a6c09f3905861"
   }
 }

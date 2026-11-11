@@ -215,7 +215,7 @@ it('has every phrase in English, Korean and Spanish, and puts both screens in th
   expect(JSON.stringify(routes)).toContain('"/hq/ai-safety"');
 });
 
-it("names Claire's Business Performance calls as their own AI team member in every language (0238)", () => {
+it("names Claire's Business Performance calls as their own AI team member in every language (0267)", () => {
   const claire = usage({ schools: [{ organizationId: org, schoolId: school, ...zero, providerReportedCostMicrounits: 41_500, entries: 3, unreconciledInvocations: 0, byClass: {
     AGENT_INFERENCE: { ...amount(), byAgent: { BUSINESS_PERFORMANCE: amount() } } } }] });
   const labels = { en: 'Claire, Business Performance', ko: 'Claire, 비즈니스 성과', es: 'Claire, Rendimiento del negocio' } as const;

@@ -1,6 +1,6 @@
 BEGIN;
 
--- HQ usage attribution for Claire (migration 0238, allocated 2026-11-09).
+-- HQ usage attribution for Claire (migration 0267, allocated 2026-11-11; first drafted as 0238). Built on the latest body (0210).
 -- 0229 runs Claire's Business Performance analyses through HON's reply table (hon_reply_invocations.specialist =
 -- 'claire'), so the HQ per-school usage read (0210 body) counted her calls under HON_REPLY. This replaces that read
 -- only to attribute them to their own agent, BUSINESS_PERFORMANCE (the name readiness already uses for Claire):
@@ -26,7 +26,7 @@ BEGIN
            WHEN EXISTS (SELECT 1 FROM hon.marketing_ai_invocations i WHERE i.id = u.source_invocation_id) THEN 'MARKETING'
            WHEN EXISTS (SELECT 1 FROM hon.teaching_ai_invocations i WHERE i.id = u.source_invocation_id) THEN 'TEACHING'
            WHEN EXISTS (SELECT 1 FROM hon.chad_follow_up_invocations i WHERE i.id = u.source_invocation_id) THEN 'CHAD_FOLLOW_UP'
-           -- 0238: Claire's analysis turns share HON's reply table (0229); they count under her own agent.
+           -- 0267: Claire's analysis turns share HON's reply table (0229); they count under her own agent.
            WHEN EXISTS (SELECT 1 FROM hon.hon_reply_invocations i WHERE i.id = u.source_invocation_id AND i.specialist = 'claire') THEN 'BUSINESS_PERFORMANCE'
            WHEN EXISTS (SELECT 1 FROM hon.hon_reply_invocations i WHERE i.id = u.source_invocation_id) THEN 'HON_REPLY'
            ELSE 'UNATTRIBUTED' END AS agent,
