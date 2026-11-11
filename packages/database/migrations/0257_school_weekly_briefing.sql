@@ -136,7 +136,7 @@ BEGIN
     ['newLeads24h', 'New leads in the last 24 hours'],
     ['upcomingTrials24h', 'Trial classes in the next 24 hours'],
     ['upcomingTestingEvents30d', 'Testing events in the next 30 days'],
-    ['membershipTermsEnding30d', 'Memberships due for renewal in the next 30 days'],
+    ['membershipTermsEnding30d', 'Renewals due in the next 30 days'],
     ['paidInvoicesCreated30d', 'Paid invoices in the last 30 days'],
     ['pendingActionApprovals', 'Actions waiting for approval'],
     ['outstandingWorkItems', 'Open HON work items'],

@@ -233,6 +233,6 @@
     "0254_hon_reply_follow_ups_and_sources.sql": "8ec55653207d7dd060468f1fa11173a3ea382a3d284d6f7ffc8d28487bbf3f42",
     "0255_hon_school_notes.sql": "311b606d7c0fb06e43daee215f181418e7e47a47cf9069cab3da327ffa1cb23c",
     "0256_hon_school_tone.sql": "d9066ce79b17801845b4561cb3cbf1dc201db602edeab050e4cb6886b832818f",
-    "0257_school_weekly_briefing.sql": "dd9873d5840229a4ec25cbc1f221ac65d7b3bd856ef03c26cd2ce278dc6706e4"
+    "0257_school_weekly_briefing.sql": "1e2ab22ae912fdc417dafb8cf6ddd10569d09aa89b93c5cc12c4fa2957e501e9"
   }
 }
