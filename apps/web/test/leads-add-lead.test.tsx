@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ADD_LEAD_LANGUAGES } from '../src/components/leads/add-lead-copy';
 import { addLeadApi, buildLeadInput, normalizePhone, openStageChoices, type PipelineOption } from '../src/components/leads/add-lead-http';
 import { AddLeadView, type AddLeadViewProps } from '../src/components/leads/add-lead-view';
+import { LeadsError } from '../src/components/leads/http';
 import { id, scope } from './account-status-fixtures';
 
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -103,4 +104,28 @@ it('has wording for every key in Korean and Spanish', () => {
   expect(Object.keys(ADD_LEAD_LANGUAGES.ko).sort()).toEqual(keys);
   expect(Object.keys(ADD_LEAD_LANGUAGES.es).sort()).toEqual(keys);
   expect(render({ language: 'es', pipelines: { state: 'READY', items: [] } })).not.toContain('Set up lead stages');
+});
+
+it('review P3: Close stays disabled while a save is uncertain, and reopening keeps the retained state', async () => {
+  const { saveAfterOpen } = await import('../src/components/leads/add-lead');
+  expect(render({ save: { state: 'UNCERTAIN' } })).toMatch(/<button[^>]*disabled=""[^>]*>Close<\/button>/);
+  expect(render({ save: { state: 'IDLE' } })).not.toMatch(/<button[^>]*disabled=""[^>]*>Close<\/button>/);
+  expect(saveAfterOpen({ state: 'UNCERTAIN' }, true)).toEqual({ state: 'UNCERTAIN' });
+  expect(saveAfterOpen({ state: 'SAVED', name: 'x' }, false)).toEqual({ state: 'IDLE' });
+});
+
+it('review P3: a definite starter refusal drops the key; only an unknown outcome keeps it for the same retry', async () => {
+  const { starterKeyAfter } = await import('../src/components/leads/add-lead');
+  const { StarterRefusedError } = await import('../src/components/leads/add-lead-http');
+  stub(json({ code: 'IDEMPOTENCY_KEY_REUSED' }, 409));
+  const refused = await addLeadApi.setUpStarter(scope, id(99)).catch((e: unknown) => e);
+  expect(refused).toBeInstanceOf(StarterRefusedError);
+  expect(starterKeyAfter(refused)).toBe('clear');
+  stub(json({}, 400));
+  expect(starterKeyAfter(await addLeadApi.setUpStarter(scope, id(99)).catch((e: unknown) => e))).toBe('clear');
+  expect(starterKeyAfter(new LeadsError('DENIED'))).toBe('clear');
+  expect(starterKeyAfter(new LeadsError('SESSION'))).toBe('clear');
+  expect(starterKeyAfter(new LeadsError('UNAVAILABLE'))).toBe('keep');
+  vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network'); }));
+  expect(starterKeyAfter(await addLeadApi.setUpStarter(scope, id(99)).catch((e: unknown) => e))).toBe('keep');
 });
