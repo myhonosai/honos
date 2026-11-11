@@ -49,7 +49,7 @@ inbound replies routed to HQ support (STOP/START/HELP are handled), attachments 
 
 ## 4. Design
 
-### 4.1 Records (one new migration, number from the coordinator)
+### 4.1 Records (migration 0271)
 
 - `hon.hq_messages`: organization, school, purpose, channel, content (1 to 4,000; SMS 1 to 1,600), optional support
   case link (0232, must be the same organization/school), status `DRAFT` / `QUEUED` / `CANCELLED`, created by,
@@ -121,9 +121,9 @@ webhook side.
 
 | PR | Piece | Migration |
 | --- | --- | --- |
-| A | HQ sender, messages, deliveries, receipts, owner recipients, email consent, worker functions, API, fake provider proof | ask coordinator |
+| A | HQ sender, messages, deliveries, receipts, owner recipients, email consent, worker functions, API, fake provider proof | 0271 |
 | B | HQ screens: Message the owners (school detail + support case), `/hq/communications` | none |
-| C | Own phone + code confirmation + HQ texting switch (school app), STOP/START/HELP on the HQ number | ask coordinator |
+| C | Own phone + code confirmation + HQ texting switch (school app), STOP/START/HELP on the HQ number | 0272 |
 | D | Webhook routing for HQ receipts (comms thread) | none planned |
 
 A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker role, dispatcher and adapter.
