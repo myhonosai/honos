@@ -147,7 +147,7 @@ HON's own prospects: people who signed up, started a trial or asked about HON OS
 | B | HQ screens: Message the owners (school detail + support case), `/hq/communications` | none |
 | C | Own phone + code confirmation + HQ texting switch (school app), STOP/START/HELP on the HQ number | 0272 |
 | D | Webhook routing for HQ receipts (comms thread) | none planned |
-| E | HON prospects, prospect consent, campaign sends with HQ owner approval, prospect screens | ask coordinator |
+| E | HON prospects, prospect consent, campaign sends with HQ owner approval, prospect screens | 0273 |
 
 A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker role, dispatcher and adapter.
 
