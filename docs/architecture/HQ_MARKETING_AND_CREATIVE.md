@@ -1,6 +1,6 @@
 # HQ Marketing & Creative (HON's own marketing)
 
-Status: M1 built (2026-11-11), M2 next. Owner request (David, 2026-11-11): "in HQ also have its own marketing and
+Status: M1 built (2026-11-11), M2 built (2026-11-11), M3 is a stop point. Owner request (David, 2026-11-11): "in HQ also have its own marketing and
 creative section to market HON OS. Google and Meta just like inside HON OS CRM."
 
 ## 1. Goal
@@ -79,6 +79,28 @@ Two readings were possible:
 - Production provider runtime stays `UnconfiguredCreativeProviderRuntime` → 503
   `CREATIVE_PROVIDER_NOT_CONNECTED` **before any DB write**. A real image/video provider is a stop point.
 - UI: `/hq/marketing/creative` (create request, list, budget meter "HQ budget, separate from schools").
+
+As built (M2):
+
+- Tables: `hq_creative_budget_periods`, `hq_creative_budget_changes`, `hq_creative_generations`,
+  `hq_creative_generation_assets` (SYNTHETIC only), `hq_creative_requests`. Forced RLS, no table grants;
+  update rules and immutability enforced by triggers; truncate blocked.
+- Entry points: `read_hq_creative_studio`, `read_hq_creative_generation`, `set_hq_creative_budget` (HQ owner only;
+  current month or up to 12 months ahead), `create_hq_creative_generation`, `record_hq_creative_generation_result`
+  (requester only), `resolve_hq_creative_generation` (HQ owner only, evidence reference required).
+- Budget: used = charged credits of SUCCEEDED/RESOLVED_CHARGED; held = reserved credits of GENERATING/UNDER_REVIEW;
+  available = max(cap − used − held, 0). The cap can never be set below used + held. Rates come only from the
+  published `saas_creative_rates`. A platform-wide `ai_spend_pauses` row (CREATIVE_MEDIA or ALL) blocks new requests;
+  the request first takes the S4 platform pause gate shared (`ai.pause:platform:CREATIVE_MEDIA` and `:ALL`), so a pause
+  being recorded at the same moment is always seen. A request still GENERATING can be resolved only after 120 s.
+- API: `GET /v1/hq/marketing/creative`, `GET /v1/hq/marketing/creative/generations/:id`,
+  `POST /v1/hq/marketing/creative/generations`, `POST /v1/hq/marketing/creative/generations/:id/resolution`,
+  `POST /v1/hq/marketing/creative/budget`. All commands need the human-command header and an Idempotency-Key.
+- The owner page sets only the current month's cap; future months stay API-only for now.
+- Follow-up: a FAILED request whose provider cost is unknown keeps `cost_status = UNKNOWN`; recording that cost
+  later from provider evidence is not built yet (no provider is connected, so nothing can reach it today).
+- Proofs: `test-hq-creative-studio.mjs` (database), `apps/api/test/hq-creative.test.cjs`,
+  `apps/web/test/hq-creative-ui.test.tsx`, `apps/web/scripts/hq-creative-browser.mjs` (mounted page, synthetic fixtures).
 
 ### M3 — Connect HON's Google and Meta ad accounts — STOP POINT
 

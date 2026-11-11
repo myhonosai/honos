@@ -7,10 +7,10 @@ import { MarketingError, type Owned } from './http';
 export { useConcealment } from '../hq-support/model';
 
 /** What the last command attempt means. Only DONE saved something; UNKNOWN may have. */
-export type MarketingOutcome = null
-  | { kind: 'SENDING' } | { kind: 'DONE'; receipt: HqMarketingReceipt } | { kind: 'UNKNOWN' } | { kind: 'CHANGED' }
+export type MarketingOutcome<R = HqMarketingReceipt> = null
+  | { kind: 'SENDING' } | { kind: 'DONE'; receipt: R } | { kind: 'UNKNOWN' } | { kind: 'CHANGED' }
   | { kind: 'REFUSED'; code: string | null } | { kind: 'KEY_REUSED' } | { kind: 'DENIED' } | { kind: 'INVALID' } | { kind: 'GONE' } | { kind: 'LOCAL_INVALID' };
-export type Run = (key: string, signal: AbortSignal, owned: Owned) => Promise<HqMarketingReceipt>;
+export type Run<R = HqMarketingReceipt> = (key: string, signal: AbortSignal, owned: Owned) => Promise<R>;
 
 /** The person's typed form, as strings. */
 export type PlanDraft = Readonly<{ code: string; name: string; goal: string; audience: string; offerLabel: string; channel: string;
@@ -53,7 +53,7 @@ export function updateInputFrom(d: PlanDraft, expectedVersion: number): HqMarket
 }
 
 /** Map a command failure to what it means for the person. Anything not definitive is UNKNOWN, and the request is kept. */
-export function marketingOutcomeFor(error: unknown): { outcome: MarketingOutcome; keep: boolean } {
+export function marketingOutcomeFor(error: unknown): { outcome: MarketingOutcome<never>; keep: boolean } {
   const kind = error instanceof MarketingError ? error.kind : 'UNKNOWN';
   switch (kind) {
     case 'CHANGED': return { outcome: { kind: 'CHANGED' }, keep: false };
@@ -68,16 +68,16 @@ export function marketingOutcomeFor(error: unknown): { outcome: MarketingOutcome
 }
 
 const newKey = () => globalThis.crypto.randomUUID();
-type Pending = Readonly<{ key: string; run: Run }>;
+type Pending<R> = Readonly<{ key: string; run: Run<R> }>;
 
 /**
  * One command at a time. A command whose outcome is unknown is kept in memory (exact body and key) so Try again replays
  * it; the database answers a replay with the saved result and never saves it twice. Concealing or unmounting drops it.
  */
-export function useMarketingCommand(privacy: React.MutableRefObject<number>, after: (outcome: MarketingOutcome) => void) {
-  const [outcome, setOutcome] = useState<MarketingOutcome>(null);
+export function useMarketingCommand<R = HqMarketingReceipt>(privacy: React.MutableRefObject<number>, after: (outcome: MarketingOutcome<R>) => void) {
+  const [outcome, setOutcome] = useState<MarketingOutcome<R>>(null);
   const [lock, setLock] = useState<'NONE' | 'SENDING' | 'KEPT'>('NONE');
-  const pending = useRef<Pending | null>(null), sending = useRef(false), mounted = useRef(false), afterRef = useRef(after);
+  const pending = useRef<Pending<R> | null>(null), sending = useRef(false), mounted = useRef(false), afterRef = useRef(after);
   afterRef.current = after;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; pending.current = null; }; }, []);
   const send = useCallback(async () => {
@@ -85,7 +85,7 @@ export function useMarketingCommand(privacy: React.MutableRefObject<number>, aft
     if (!request || sending.current) return;
     sending.current = true; const shown = privacy.current;
     setLock('SENDING'); setOutcome({ kind: 'SENDING' });
-    let next: MarketingOutcome, keep: boolean;
+    let next: MarketingOutcome<R>, keep: boolean;
     try {
       const owned = () => mounted.current && shown === privacy.current && pending.current?.key === request.key;
       next = { kind: 'DONE', receipt: await request.run(request.key, AbortSignal.timeout(30000), owned) }; keep = false;
@@ -97,7 +97,7 @@ export function useMarketingCommand(privacy: React.MutableRefObject<number>, aft
     if (shown !== privacy.current) { setOutcome(null); return; }
     setOutcome(next); afterRef.current(next);
   }, [privacy]);
-  const start = useCallback((run: Run): boolean => {
+  const start = useCallback((run: Run<R>): boolean => {
     if (pending.current || sending.current) return false;
     pending.current = { key: newKey(), run }; void send(); return true;
   }, [send]);

@@ -31,7 +31,7 @@ const en = {
   keyReused: 'This request could not be matched to the one sent before. Nothing new was saved. Start again.',
   deniedCommand: 'Your HQ access does not allow this. Nothing was saved.', invalidCommand: 'The request was not accepted as sent. Nothing was saved.',
   goneCommand: 'That campaign was not found. Nothing was saved.',
-  creativeTitle: 'Creative Studio', creativeNext: 'HQ Creative Studio, with its own HQ budget separate from school credits, is the next piece.',
+  creativeTitle: 'Creative Studio', creativeNext: 'Images and short videos for HQ campaigns, paid from HQ’s own monthly credit budget, separate from school credits.', creativeOpen: 'Open HQ Creative Studio',
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
@@ -66,7 +66,7 @@ const ko: Record<Key, string> = {
   keyReused: '이 요청을 이전 요청과 맞출 수 없습니다. 새로 저장된 것은 없습니다. 다시 시작하세요.',
   deniedCommand: 'HQ 권한으로 이 작업을 할 수 없습니다. 아무것도 저장되지 않았습니다.', invalidCommand: '요청이 전송된 그대로 수락되지 않았습니다. 아무것도 저장되지 않았습니다.',
   goneCommand: '해당 캠페인을 찾을 수 없습니다. 아무것도 저장되지 않았습니다.',
-  creativeTitle: '크리에이티브 스튜디오', creativeNext: '학교 크레딧과 분리된 자체 HQ 예산을 가진 HQ 크리에이티브 스튜디오가 다음 단계입니다.',
+  creativeTitle: '크리에이티브 스튜디오', creativeNext: '학교 크레딧과 분리된 HQ 자체 월간 크레딧 예산으로 HQ 캠페인용 이미지와 짧은 동영상을 만듭니다.', creativeOpen: 'HQ 크리에이티브 스튜디오 열기',
 };
 const es: Record<Key, string> = {
   title: 'Marketing y creatividad', refresh: 'Actualizar',
@@ -100,7 +100,7 @@ const es: Record<Key, string> = {
   keyReused: 'Esta solicitud no coincide con la enviada antes. No se guardó nada nuevo. Empieza de nuevo.',
   deniedCommand: 'Tu acceso de HQ no permite esto. No se guardó nada.', invalidCommand: 'La solicitud no se aceptó tal como se envió. No se guardó nada.',
   goneCommand: 'No se encontró esa campaña. No se guardó nada.',
-  creativeTitle: 'Estudio creativo', creativeNext: 'El Estudio creativo de HQ, con su propio presupuesto de HQ separado de los créditos de las escuelas, es la siguiente parte.',
+  creativeTitle: 'Estudio creativo', creativeNext: 'Imágenes y videos cortos para campañas de HQ, pagados con el presupuesto mensual de créditos de HQ, separado de los créditos de las escuelas.', creativeOpen: 'Abrir el Estudio creativo de HQ',
 };
 export type MarketingKey = Key;
 export function marketingText(language: string, key: Key, vars: Record<string, string> = {}): string {

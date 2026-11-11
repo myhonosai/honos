@@ -1044,6 +1044,7 @@ export * from './school-person-records.js';
 export * from './membership-pauses.js';
 export * from './hq-support.js';
 export * from './hq-marketing.js';
+export * from './hq-creative.js';
 export * from './student-imports.js';
 export * from './class-series.js';
 export * from './tuition-payments.js';
