@@ -186,6 +186,22 @@ describe('sign-out route', () => {
       expect(response.headers.get('set-cookie')).toBeNull();
     }
   });
+  it('accepts a null or missing Origin only when Fetch Metadata says same-origin (no-referrer pages)', async () => {
+    for (const headers of [{ origin: 'null', 'sec-fetch-site': 'same-origin' }, { 'sec-fetch-site': 'same-origin' }]) {
+      const response = await post(headers);
+      expect(response.status).toBe(303);
+      expect(response.cookies.get(HON_SESSION_COOKIE)!.maxAge).toBe(0);
+    }
+    for (const site of ['cross-site', 'same-site', 'none']) {
+      for (const headers of [{ origin: 'null', 'sec-fetch-site': site }, { 'sec-fetch-site': site }]) {
+        const response = await post(headers);
+        expect(response.status).toBe(403);
+        expect(response.headers.get('set-cookie')).toBeNull();
+      }
+    }
+    const mismatched = await post({ origin: 'https://evil.example', 'sec-fetch-site': 'same-origin' });
+    expect(mismatched.status).toBe(403);
+  });
   it('trusts the configured OIDC origin, not forwarding headers', async () => {
     const response = await post({ origin: 'https://evil.example', 'x-forwarded-host': 'evil.example' });
     expect(response.status).toBe(403);

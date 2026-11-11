@@ -18,7 +18,8 @@ function applicationOrigin(request: NextRequest): string {
 
 /**
  * Ends the HON session in this browser by expiring the session cookies. POST only (a link or image
- * cannot sign someone out) and only from HON's own pages: the browser-set Origin must match.
+ * cannot sign someone out) and only from HON's own pages: the browser-set Origin must match, or be
+ * null/absent with Sec-Fetch-Site: same-origin (no-referrer pages).
  * The identity provider's own session is left alone; the next sign-in may skip the provider prompt.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -28,7 +29,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch {
     return authError('SIGN_OUT_REJECTED', 'HON could not verify this sign-out request.', 400);
   }
-  if (request.headers.get('origin') !== origin) {
+  // Pages with Referrer-Policy no-referrer make the browser send `Origin: null` even for same-origin
+  // form posts. Fetch Metadata is browser-set and unaffected by referrer policy, so accept a null or
+  // missing Origin only when the browser itself reports the request as same-origin.
+  const requestOrigin = request.headers.get('origin');
+  const sameOrigin = requestOrigin === origin
+    || ((requestOrigin === null || requestOrigin === 'null') && request.headers.get('sec-fetch-site') === 'same-origin');
+  if (!sameOrigin) {
     return authError('SIGN_OUT_REJECTED', 'Sign out from a HON page.', 403);
   }
   // A fixed relative Location cannot be influenced by Host, forwarding headers or query input.
