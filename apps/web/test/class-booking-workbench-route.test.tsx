@@ -5,7 +5,7 @@ const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<{ externalSubje
 vi.mock('../src/server/require-web-session', () => ({ requireVerifiedWebSession: session.require }));
 import StaffLayout from '../src/app/staff/layout';
 import StaffClassBookingsPage, { dynamic, metadata } from '../src/app/staff/schedule/bookings/page';
-import { ClassBookingWorkbench } from '../src/components/class-booking-workbench';
+import { ClassBookingEntry } from '../src/components/class-booking-entry';
 afterEach(() => vi.restoreAllMocks());
 const id = (n: string) => `${n.repeat(8)}-${n.repeat(4)}-4${n.repeat(3)}-8${n.repeat(3)}-${n.repeat(12)}`;
 const selectors = { organizationId: id('1'), schoolId: id('2'), sessionId: id('3') };
@@ -23,7 +23,7 @@ describe('protected staff manual class-booking page', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     const key = vi.spyOn(crypto, 'randomUUID');
     const page = await StaffClassBookingsPage({ searchParams: Promise.resolve(selectors) });
-    expect(page.type).toBe(ClassBookingWorkbench); expect(page.props).toEqual({ initialPrefill: selectors });
+    expect(page.type).toBe(ClassBookingEntry); expect(page.props).toEqual({ initialPrefill: selectors });
     expect(dynamic).toBe('force-dynamic'); expect(metadata.robots).toEqual({ index: false, follow: false });
     expect(fetcher).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
     const source = readFileSync('src/app/staff/schedule/bookings/page.tsx', 'utf8');
