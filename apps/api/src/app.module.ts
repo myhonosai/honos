@@ -117,6 +117,13 @@ import { MembershipStatusReportController } from './reports/membership-status-re
 import { MembershipActivationHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
 import { TuitionPaymentService } from './billing/tuition-payment.service.js';
+import { SchoolPaymentController } from './school-payments/school-payment.controller.js';
+import { SchoolPaymentService } from './school-payments/school-payment.service.js';
+import { SCHOOL_PAYMENT_ADAPTERS, schoolPaymentAdaptersFromEnvironment } from './school-payments/school-payment-adapter.js';
+import {
+  SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard, SchoolPayFinishHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard,
+  SchoolPayReadHumanUiGuard, SchoolPayRefreshHumanUiGuard, SchoolPayStartHumanUiGuard,
+} from './school-payments/school-payment-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -401,6 +408,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseController,
     StudentImportController,
     TuitionPaymentController,
+    SchoolPaymentController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -550,6 +558,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSeriesFillHumanUiGuard,
     ClassSeriesReadHumanUiGuard,
     TuitionPaymentService,
+    SchoolPaymentService,
+    { provide: SCHOOL_PAYMENT_ADAPTERS, useFactory: () => schoolPaymentAdaptersFromEnvironment() },
+    SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
+    SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,
