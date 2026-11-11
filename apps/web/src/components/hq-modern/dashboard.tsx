@@ -19,7 +19,7 @@ export function ExecutivePortrait({ index, executiveKey, name }: { index: number
   const { t,text,number,money,date,formattingLocale } = useLocale();
   const { art } = useHqModern();
   if (art === 'anime') return <span className={styles.portraitFallback} role="img" aria-label={t("{name}: Anime artwork pending",{name})}>{name[0]}</span>;
-  // Chibi portraits are whole, centred crops of the approved chibi set (one file per executive).
+  // Chibi portraits: one full-art file per executive, in the owner-approved hoodie, glowing-aura chibi style.
   if (art === 'chibi') return <span role="img" aria-label={t("{name}, {style} portrait",{name,style:text('Chibi')})} className={`${styles.portrait} ${styles.chibiPortrait}`} style={{ backgroundImage: `url('/hq-assets/chibi/${executiveKey}.webp')` }}/>;
   const position = REALISTIC[index] ?? REALISTIC[0]!;
   return <span role="img" aria-label={t("{name}, {style} portrait",{name,style:text('Realistic')})} className={styles.portrait} style={{ '--portrait-x': position[0]!, '--portrait-y': position[1]! } as CSSProperties}/>;

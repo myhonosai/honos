@@ -6,13 +6,13 @@ Owner request (David, 2026-11-11): the six executive cards around HON on the HQ 
 
 1. All six cards share one top edge, one height, one name row and one Workspace button row at every breakpoint (desktop, tablet, phone).
 2. No per-card vertical offset or 3D turn on the stage.
-3. Chibi portraits show each executive's whole face, centred, in the circular style of the approved chibi concept (`public/hq-assets/approved-chibi.png`, "HQ executive team" row).
+3. Chibi portraits show each executive whole, keeping the face and hair of the approved chibi concept (`public/hq-assets/approved-chibi.png`), drawn in the owner's preferred casual hoodie, glowing-aura chibi style (`docs/design/hon-chibi-style-reference.jpg`, owner direction 2026-11-11: "styles like this instead of suit up type").
 4. Realistic portraits and the anime fallback are unchanged.
 5. Frontend only. No API, data, permission or business-state change.
 
 ## Plan
 
 - CSS: remove the `nth-child` lift/turn offsets; give the role and responsibility lines fixed two-line boxes (clamped) and keep names on one line, so card height is identical; pin the Workspace button to the card bottom.
-- Assets: one centred crop per executive from the approved chibi concept, redrawn at high resolution with Higgsfield (crop as reference, same character and style; owner-authorized 2026-11-11), saved as `public/hq-assets/chibi/<executiveKey>.webp` (512 px, circular alpha). Replaces the sprite offsets, which had drifted (Ryan and Sophia were cut off).
+- Assets: one 512 px square per executive at `public/hq-assets/chibi/<executiveKey>.webp`, generated with Higgsfield from the approved chibi crop (identity) plus the owner style sheet (style); owner-authorized 2026-11-11. Replaces the sprite offsets, which had drifted (Ryan and Sophia were cut off).
 - `ExecutivePortrait` takes `executiveKey` and uses the per-executive file when the chibi style is selected.
 - Tests: `apps/web/test/hq-command-stage-layout.test.tsx` (portrait source per executive, files exist, realistic unchanged, no offsets, fixed text boxes, pinned button). Browser measurement of card boxes at 1920/1440/1024/390.

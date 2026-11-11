@@ -1,7 +1,9 @@
 # HQ executive chibi portraits
 
-One centred, circular portrait per HQ executive (`<executiveKey>.webp`, 512 px).
+One square portrait per HQ executive (`<executiveKey>.webp`, 512 px).
 
-Provenance: each executive was first cropped from the approved chibi concept `../approved-chibi.png` ("HQ executive team" row), then redrawn at high resolution with Higgsfield (GPT Image 2.6, the crop as the reference image) keeping the same character, hair, outfit and style. Owner David authorized Higgsfield for character art on 2026-11-11.
+Style: owner direction (David, 2026-11-11) to follow the casual hoodie, glowing-aura "Chibi / Cute" row of the HON AI team concept (`docs/design/hon-chibi-style-reference.jpg`) instead of suits. Each executive keeps the face and hair from the earlier approved chibi concept (`../approved-chibi.png`). Generated with Higgsfield (GPT Image 2.6, both images as references); owner authorized Higgsfield for character art on 2026-11-11.
+
+Theme colours: Chase cyan (growth), Mia pink (customer success), Ethan violet (product), Olivia gold (finance), Ryan green (revenue), Sophia blue (operations).
 
 Display art only: no identity, permission or service state.

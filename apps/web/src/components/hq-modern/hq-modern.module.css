@@ -412,9 +412,9 @@
 .stageIdentity p{color:#e0eff7;font-size:11px;text-shadow:0 1px 4px #000,0 0 9px #00131b;line-height:1.4;height:2.8em;min-height:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .stageIdentity small{color:#d0e1ec;font-size:9px;text-shadow:0 1px 4px #000,0 0 8px #00131b;line-height:1.4;height:2.8em;min-height:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .stageExecutive>.workspaceEntry{margin-top:auto}
-/* Chibi portraits: whole, centred circles from the approved chibi set. */
-.portrait.chibiPortrait{background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:50%;aspect-ratio:1}
-.stageExecutive>.portrait.chibiPortrait{width:82%;height:auto;align-self:center;margin:8px auto 14px;border-radius:50%;mask-image:none;box-shadow:0 0 0 1px #8cdeec59,0 0 18px #2acbdd26,0 12px 22px -10px #000d}
+/* Chibi portraits: full-art squares in the owner-approved hoodie, glowing-aura chibi style. */
+.portrait.chibiPortrait{background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:14px;aspect-ratio:1}
+.stageExecutive>.portrait.chibiPortrait{width:100%;height:auto;align-self:center;margin:0 0 12px;border-radius:13px;mask-image:none;box-shadow:0 0 0 1px #8cdeec40,0 12px 22px -10px #000d}
 .workspaceEntry{border-color:#539eac55;border-radius:999px;background:linear-gradient(100deg,#14566a66,#0b354944);color:#bff6f8;box-shadow:inset 0 1px #d0ffff09;min-height:34px}
 .commandCore{justify-content:center;gap:10px;padding-bottom:8px;z-index:1}
 .commandCore:before{content:'';position:absolute;inset:-30px 0;background:radial-gradient(ellipse at 50% 40%,#2acbdd21,transparent 67%);pointer-events:none;z-index:-2}
