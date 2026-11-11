@@ -109,6 +109,10 @@ export const SAAS_COMMANDS = {
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',
   changeSupportCase: 'hq-support-case-change',
+  // M1 (0252): HQ marketing campaigns; same values as HQ_MARKETING_COMMANDS.
+  createMarketingCampaign: 'hq-marketing-campaign-create',
+  updateMarketingCampaign: 'hq-marketing-campaign-update',
+  setMarketingCampaignStatus: 'hq-marketing-campaign-status',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

@@ -2432,6 +2432,34 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hq_support_schools(text) TO hon_runtime;
   END IF;
 END $$;
+-- M1 0252 HQ marketing campaigns: no table privileges; three commands and two reads are the only runtime boundary.
+DO $$ DECLARE r text; t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['hq_marketing_campaigns','hq_marketing_campaign_versions','hq_marketing_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r); END LOOP;
+  END LOOP;
+END $$;
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['guard_hq_marketing_campaign()','guard_hq_marketing_evidence()','hq_marketing_principal_eligible(uuid,boolean)',
+    'require_hq_marketing_actor(text,boolean)','hq_marketing_person_json(uuid)','hq_marketing_campaign_json(hon.hq_marketing_campaigns)',
+    'hq_marketing_snapshot(hon.hq_marketing_campaigns)','hq_marketing_claim(uuid,uuid,text,text)','hq_marketing_text(jsonb,text,integer,integer)',
+    'hq_marketing_date(jsonb,text)','hq_marketing_expected(jsonb)','hq_marketing_plan(jsonb)','hq_marketing_lock(uuid,integer)',
+    'create_hq_marketing_campaign(text,jsonb,uuid)','update_hq_marketing_campaign(text,uuid,jsonb,uuid)',
+    'set_hq_marketing_campaign_status(text,uuid,jsonb,uuid)','read_hq_marketing_campaigns(text,text,timestamptz,uuid,integer)',
+    'read_hq_marketing_campaign(text,uuid)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.create_hq_marketing_campaign(text,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.update_hq_marketing_campaign(text,uuid,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.set_hq_marketing_campaign_status(text,uuid,jsonb,uuid) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_marketing_campaigns(text,text,timestamptz,uuid,integer) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.read_hq_marketing_campaign(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
 -- C3b 0228 HON group summary: the group-facts helper is internal; summaries use the existing turn and reply
 -- entry points (begin_hon_turn, prepare_hon_reply), whose grants are unchanged.
 DO $$ DECLARE r text; BEGIN
