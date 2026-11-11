@@ -433,6 +433,10 @@
       "title": "HON HQ | Support"
     },
     {
+      "path": "/hq/marketing",
+      "title": "HON HQ | Marketing & Creative"
+    },
+    {
       "path": "/hq/support/:caseId",
       "title": "HON HQ | Support case"
     },
