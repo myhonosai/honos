@@ -111,7 +111,7 @@ async function honTargets(route, kind) {
   if (kind === 'kai') return json(route, 200, { data: honCurricula() });
   return json(route, 200, { data: honLeads(), meta: { requestId: 'synthetic' } });
 }
-const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], ...over });
+const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [], ...over });
 let honSeq = 700;
 async function honApi(route, path, method, prefix) {
   const base = `${prefix}/hon`;

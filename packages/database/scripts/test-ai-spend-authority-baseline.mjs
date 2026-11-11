@@ -163,7 +163,10 @@ function fakeHonProvider() {
   const provider = { calls: 0, mode: 'RESULT', held: [], inputs: [], ready: 'READY', reply: 'Focus on the two trials booked for tomorrow and review new leads.' };
   // suggestions (C3a): what the model's closing SUGGEST line named, already parsed to the closed delegate set.
   provider.suggestions = [];
-  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions] });
+  // followUps / sources (0254): the closing ASK and SOURCES lines, already parsed to their closed rules.
+  provider.followUps = []; provider.sources = [];
+  const result = () => ({ reply: provider.reply, inputTokens: 300, outputTokens: 120, providerCostMicrounits: 900, truncated: false, suggestions: [...provider.suggestions],
+    followUps: [...provider.followUps], sources: [...provider.sources] });
   provider.readiness = () => provider.ready;
   provider.generate = async (input) => {
     provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
@@ -172,7 +175,7 @@ function fakeHonProvider() {
     if (provider.mode === 'FAILED') throw new HonReplyProviderRuntimeError('FAILED', 'PROVIDER_REJECTED');
     if (provider.mode === 'OVER') return { ...result(), outputTokens: 5000 };
     // Stopped at the plan's output limit with verified usage (finish_reason 'length').
-    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true, suggestions: [] };
+    if (provider.mode === 'TRUNCATED') return { ...result(), reply: `${provider.reply} Part ${provider.calls} continues`, outputTokens: input.outputBudget, truncated: true, suggestions: [], followUps: [], sources: [] };
     return result();
   };
   provider.complete = () => { for (const h of provider.held.splice(0)) h.resolve(result()); };
@@ -1807,7 +1810,7 @@ try {
   // STANDARD (default): SUMMARIZE route, 8000/1500 tokens, the owner's $0.08 ceiling; 10 credits reserved, settled to 1.
   assert.deepEqual([i1.status, i1.reserved_credits, i1.agent_key, i1.task_class, i1.work_type, i1.input_budget, i1.output_budget, Number(i1.max_provider_cost_microunits), i1.customer_credit_estimate, i1.reply_mode, i1.step, i1.truncated],
     ['COMPLETED', 0, 'hon', 'SUMMARIZE', 'AI_SUMMARIZE', 8000, 1500, 80000, 10, 'STANDARD', 1, false]);
-  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] });
+  assert.deepEqual(r1.replyDetail, { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] });
   assert.match(i1.context_digest, /^[a-f0-9]{64}$/);
   const l1 = await row('SELECT customer_credits::int c, provider_cost_microunits::int cost, spend_class, school_id FROM hon.ai_usage_ledger WHERE id=$1 AND source_invocation_id=$2', [i1.usage_id, i1.id]);
   assert.deepEqual([l1.c, l1.cost, l1.spend_class, l1.school_id], [1, 900, 'AGENT_INFERENCE', o.school], 'one AGENT_INFERENCE ledger row at the provider-reported cost; a short answer settles to 1 credit, not the 10 reserved');
@@ -1905,7 +1908,7 @@ try {
   const di1 = await reply(d1.turnId);
   assert.deepEqual([d1.status, di1.task_class, di1.work_type, di1.input_budget, di1.output_budget, Number(di1.max_provider_cost_microunits), di1.customer_credit_estimate, di1.reserved_credits],
     ['COMPLETED', 'ANALYZE', 'AI_ANALYZE', 11000, 4000, 80000, 15, 0], JSON.stringify(d1));
-  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null, suggestions: [] });
+  assert.deepEqual(d1.replyDetail, { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: null, suggestions: [], followUps: [], sources: [] });
   assert.equal((await row('SELECT customer_credits::int c FROM hon.ai_usage_ledger WHERE id=$1', [di1.usage_id])).c, 5, 'settled to ceil((300+4000)/1000), not the 15 reserved');
   assert.deepEqual([fakes.hon.inputs.at(-1).replyMode, fakes.hon.inputs.at(-1).outputBudget], ['DETAILED', 4000]);
   // Mode and continuation belong to questions only; a continuation keeps its answer's mode; a full answer is not continued.
@@ -1914,13 +1917,13 @@ try {
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Draft it', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }, K())), 'INVALID_HON_TURN');
   assert.equal((await settle(tenant(context(o), (c) => c.query('SELECT hon.begin_hon_turn($1,$2,$3::jsonb,$4)', [o.subject, conv.id, JSON.stringify({ text: 'x', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, replyMode: 'DETAILED' }), K()])))).error?.code, '22023', 'the database refuses a reply mode on a delegation too');
   const d2 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d1.turnId }, K());
-  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId, suggestions: [] });
+  assert.deepEqual(d2.replyDetail, { mode: 'DETAILED', step: 2, maxSteps: 3, truncated: true, canContinue: true, continuesTurnId: d1.turnId, suggestions: [], followUps: [], sources: [] });
   const cont = JSON.parse(fakes.hon.inputs.at(-1).facts).continuation;
   assert.deepEqual([cont.step, cont.maxSteps, cont.originalQuestion, cont.previousAnswerEnd, fakes.hon.inputs.at(-1).step], [2, 3, 'Give me a detailed enrollment growth analysis.', d1.reply.slice(-2500), 2]);
   assert.equal((await hon.receipt(scope, d1.turnId)).replyDetail.canContinue, false, 'an answer is continued once');
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue again', delegation: null, continueTurnId: d1.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   const d3 = await hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d2.turnId }, K());
-  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId, suggestions: [] }, 'still cut off at the last step: shown as incomplete, no further step');
+  assert.deepEqual(d3.replyDetail, { mode: 'DETAILED', step: 3, maxSteps: 3, truncated: true, canContinue: false, continuesTurnId: d2.turnId, suggestions: [], followUps: [], sources: [] }, 'still cut off at the last step: shown as incomplete, no further step');
   const n4c = fakes.hon.calls;
   assert.equal(await code(hon.sendTurn(scope, conv.id, { text: 'Continue', delegation: null, continueTurnId: d3.turnId }, K())), 'HON_REPLY_NOT_CONTINUABLE');
   assert.deepEqual([fakes.hon.calls - n4c, fakes.hon.calls - n4b.calls, (await ledgerRows(o)) - n4b.ledger], [0, 3, 3], 'three bounded steps, three calls, three ledger rows');
@@ -2705,6 +2708,82 @@ try {
   assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'claire').blockedBy, 'NOT_AUTHORIZED');
   await addRep();
   pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or confirmed as suggestions; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view");
+  }
+
+  // ---- INV-32 (0254): "Ask next" follow-ups and "Based on" sources are presentation data only ----
+  {
+  const o = await makeOrg('inv-32');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const conv = await hon.create(scope, { title: 'Follow-ups' }, K());
+  const ask = (text, extra = {}) => hon.sendTurn(scope, conv.id, { text, delegation: null, ...extra }, K());
+  const stored = async (turnId) => row('SELECT follow_up_questions f, available_sources a, cited_sources c FROM hon.hon_reply_invocations WHERE turn_id=$1', [turnId]);
+  const dropRep = () => admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='reporting.view'", [o.role]);
+  const addRep = () => admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'reporting.view')", [o.role, o.id]);
+  const set = (f, src) => { fakes.hon.followUps = f; fakes.hon.sources = src; };
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = [];
+  const metricKeys = ['newLeads24h', 'upcomingTrials24h', 'upcomingTestingEvents30d', 'pendingActionApprovals', 'outstandingWorkItems', 'membershipTermsEnding30d', 'paidInvoicesCreated30d'];
+  // 1. First question: the server records the fact areas it sent (AVAILABLE metrics only, no conversation yet) and keeps only
+  //    cited areas among them; follow-ups are stored and shown on the receipt and after reload.
+  const usageBefore = Number((await row('SELECT coalesce(sum(customer_credits),0) n FROM hon.ai_usage_ledger WHERE organization_id=$1', [o.id])).n);
+  const callsBefore = fakes.hon.calls;
+  set(['Who should call the new leads?', 'How many trials are booked?'], ['revenue', 'newLeads24h', 'conversation']);
+  const r1 = await ask('How are leads?');
+  const s1 = await stored(r1.turnId);
+  assert.deepEqual([r1.status, r1.replyDetail.followUps, r1.replyDetail.sources], ['COMPLETED', ['Who should call the new leads?', 'How many trials are booked?'], ['newLeads24h']], JSON.stringify(r1));
+  assert.deepEqual([s1.a, s1.c], [metricKeys, ['newLeads24h']], 'only AVAILABLE metrics sent; UNAVAILABLE revenue and absent conversation are never cited');
+  assert.deepEqual((await hon.read(scope, conv.id)).turns.at(-1).replyDetail.followUps, ['Who should call the new leads?', 'How many trials are booked?'], 'persisted');
+  // Presentation data only: one provider call, the usual usage row, nothing else runs.
+  assert.equal(fakes.hon.calls - callsBefore, 1);
+  assert.equal(Number((await row('SELECT coalesce(sum(customer_credits),0) n FROM hon.ai_usage_ledger WHERE organization_id=$1', [o.id])).n) - usageBefore, 1, 'same usage as any answer');
+  // 2. A later question sent the earlier conversation: it may be cited.
+  set([], ['conversation', 'upcomingTrials24h']);
+  const r2 = await ask('And what about trials?');
+  assert.deepEqual([r2.replyDetail.followUps, r2.replyDetail.sources, (await stored(r2.turnId)).a], [[], ['conversation', 'upcomingTrials24h'], [...metricKeys, 'conversation']]);
+  // 3. A concealed answer shows neither (stored evidence unchanged).
+  await dropRep();
+  const hidden = await hon.receipt(scope, r1.turnId);
+  assert.deepEqual([hidden.reason, hidden.replyDetail.followUps, hidden.replyDetail.sources, (await stored(r1.turnId)).c], ['RESULT_CONCEALED', [], [], ['newLeads24h']]);
+  // Without reporting.view no metrics are sent: a new answer can cite only the conversation.
+  set(['Anything else?'], ['newLeads24h', 'conversation']);
+  const r3 = await ask('What should I do today?');
+  assert.deepEqual([r3.replyDetail.sources, (await stored(r3.turnId)).a], [['conversation'], ['conversation']]);
+  await addRep();
+  // 4. A cut-off answer keeps none, and the table refuses them on it; cited must be a subset of available; bad text refused.
+  fakes.hon.mode = 'TRUNCATED'; set(['More?'], ['newLeads24h']);
+  const r4 = await ask('Write the full plan.', { replyMode: 'DETAILED' });
+  fakes.hon.mode = 'RESULT';
+  assert.deepEqual([r4.replyDetail.truncated, r4.replyDetail.followUps, r4.replyDetail.sources], [true, [], []]);
+  for (const [sql, args, why] of [
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions='{\"More please?\"}' WHERE turn_id=$1", [r4.turnId], 'no follow-ups on a cut-off answer'],
+    ["UPDATE hon.hon_reply_invocations SET cited_sources='{newLeads24h}' WHERE turn_id=$1", [r4.turnId], 'no sources on a cut-off answer'],
+    ["UPDATE hon.hon_reply_invocations SET cited_sources='{revenue}' WHERE turn_id=$1", [r1.turnId], 'cited must have been sent'],
+    ["UPDATE hon.hon_reply_invocations SET available_sources='{website}' WHERE turn_id=$1", [r1.turnId], 'closed source set'],
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions=ARRAY['a','b','c','d']||'{}'::text[] WHERE turn_id=$1", [r2.turnId], 'at most three'],
+    ["UPDATE hon.hon_reply_invocations SET follow_up_questions=ARRAY[E'Line\\nbreak?'] WHERE turn_id=$1", [r2.turnId], 'no newline'],
+  ]) assert.equal((await settle(admin.query(sql, args))).error?.code, '23514', why);
+  // 5. The database refuses malformed values from the API before any write.
+  fakes.hon.mode = 'HOLD';
+  const pending = settle(ask('Hold for malformed follow-ups.'));
+  for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
+  const sending = (await row("SELECT turn_id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).turn_id;
+  const base = { reply: 'x', inputTokens: 1, outputTokens: 1, providerCostMicrounits: 0 };
+  for (const bad of [{ followUps: 'Why?' }, { followUps: ['a', 'b', 'c', 'd'].map((x) => `${x} question?`) }, { followUps: ['Hi'] }, { followUps: ['x'.repeat(151)] }, { followUps: ['Same?', 'same?'] },
+    { followUps: ['See http://x?'] }, { followUps: [1] }, { sources: ['website'] }, { sources: ['revenue', 'revenue'] }, { sources: 'revenue' },
+    { sources: ['newLeads24h', 'upcomingTrials24h', 'revenue', 'trialConversion', 'conversation', 'specialistResults'] }]) {
+    const r = await settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, ...bad })])));
+    assert.equal(r.error?.code, '22023', `${JSON.stringify(bad)} refused`);
+  }
+  set(['What next?'], ['pendingActionApprovals']);
+  fakes.hon.complete(); fakes.hon.mode = 'RESULT';
+  const r5 = (await pending).value;
+  assert.deepEqual([r5?.status, r5?.replyDetail?.followUps, r5?.replyDetail?.sources], ['COMPLETED', ['What next?'], ['pendingActionApprovals']], JSON.stringify(r5 ?? (await pending).error));
+  // 6. Claire may give follow-ups and cite metrics (never the conversation she is not sent).
+  set(['What changed this month?'], ['conversation', 'outstandingWorkItems']);
+  const c1 = await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.deepEqual([c1.status, c1.replyDetail.followUps, c1.replyDetail.sources, c1.replyDetail.suggestions], ['COMPLETED', ['What changed this month?'], ['outstandingWorkItems'], []], JSON.stringify(c1));
+  set([], []);
+  pass('INV-32', '0254: follow-up questions (at most three, bounded plain text, unique) and cited sources (closed set, at most five, only fact areas the server recorded as sent: AVAILABLE metrics, the earlier conversation, group results) are stored with a whole answer only, shown only on a visible COMPLETED answer (concealed and cut-off answers show none; the table refuses others), malformed values are refused before any write, Claire may give them (no suggestions), and they add no provider call or usage beyond the answer');
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
