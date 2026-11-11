@@ -101,7 +101,7 @@ export class HqHonService {
 
   private async invoke(i: HqHonInvocation): Promise<Outcome> {
     try {
-      const result = await this.provider.generate({ specialist: 'hq_hon', providerId: i.providerId, modelId: i.modelId, providerRequestId: i.providerRequestId,
+      const result = await this.provider.generate({ specialist: 'hq_hon', hqAgent: i.agentKey, providerId: i.providerId, modelId: i.modelId, providerRequestId: i.providerRequestId,
         replyMode: i.replyMode, step: 1, question: i.question, facts: i.facts, inputBudget: i.inputBudget, outputBudget: i.outputBudget,
         maxCostMicrounits: i.maxCostMicrounits });
       return verified(result, i);

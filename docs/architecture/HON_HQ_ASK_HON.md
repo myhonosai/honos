@@ -1,4 +1,4 @@
-# HQ Ask HON and the HQ AI text budget (migration 0263, B1)
+# HQ Ask HON, the HQ executives and the HQ AI text budget (migrations 0263 B1, 0264 B2)
 
 Status: source only, not deployed. Fake providers only in tests; the real runtime stays behind
 `OPENROUTER_PAID_CALL_APPROVED`. Nothing here turns it on.
@@ -59,11 +59,29 @@ authority never reaches HQ, and nothing in HQ HON reads or writes a school's dat
 Each turn stores the permissions its facts used (`source_permissions`, B1: `hq.dashboard.view`). An answer is shown
 only while the reader still holds every one; otherwise `reply` is null and `concealed` is true.
 
-## Plug-in points for the executives (B2, 0264)
+## The six HQ executives (B2, 0264)
 
-- `hon.hq_hon_agent_permission(agent)`: the one HQ permission an agent's facts need (B1: `hon`).
-- `hon.hq_hon_agent_facts(subject, agent)`: the agent's aggregate facts, read with the asker's own authority.
-- `hq_hon_turns.agent_key` CHECK and `source_permissions` CHECK are widened in 0264.
+The executives of the locked HQ catalog (`packages/contracts/src/hq-overview.ts`) answer in the same conversation, on the
+same budget and S4 path. Each reads aggregate facts under one HQ permission; the HQ owner holds them all.
+
+| Agent | Catalog role | Permission | Facts (counts and sums only) |
+|---|---|---|---|
+| HON | Executive AI Coordinator | `hq.dashboard.view` | HQ platform overview, HQ AI text budget |
+| Chase | Growth | `hq.marketing.read` (or `hq.marketing.manage`) | HQ campaigns by status, running and ending soon, active planned budget; HQ creative budget |
+| Mia | Customer Success | `hq.support.manage` | HQ support cases by status, open by priority, open over 7 days, opened and closed this month |
+| Ethan | Product | `hq.billing.manage` | provider connection states, active text models, platform and school AI pauses, HQ AI text and creative budgets |
+| Olivia | Finance | `hq.billing.manage` | HON OS invoices by status and issued this month; refund requests by status and awaiting decision |
+| Ryan | Revenue | `hq.billing.manage` | subscriptions by status, in service by plan and offer, recorded this month, monthly list price total; paid-access states |
+| Sophia | Operations | `hq.onboarding.manage` | organizations by status, onboarding requests, HQ access exceptions active, scheduled and expiring in 14 days |
+
+- No organization, school, person, case subject, invoice number or note ever enters a prompt. Nothing reads a school's
+  AI budget, `ai_usage_ledger`, `ai_invocation_plans` or conversation tables.
+- Olivia's and Ryan's facts carry a note, and every executive prompt says, that HON OS does not collect payments yet:
+  recorded prices and invoices are records, never collected revenue.
+- `read_hq_hon_conversation` adds `availableAgents`: the agents the reader may ask now, in catalog order, HON first.
+- An answer whose permission the reader no longer holds is concealed (`source_permissions`), as in B1.
+- Each executive has its own system prompt (`HQ_EXECUTIVE_PROMPTS`); the API passes the turn's agent as `hqAgent`.
+  HON's B1 prompt is unchanged byte for byte.
 
 ## Evidence
 
@@ -73,5 +91,8 @@ only while the reader still holds every one; otherwise `reply` is null and `conc
   immutability and nothing written school-side.
 - AI-0: the new spend table and functions are pinned in `ai-spend-entrypoints.json` (`spendTables`,
   `spendReferences`, runtime privileges, triggers). They are pinned the same way as `hq_creative_generations`.
+- B2: the same proof asks every executive as the HQ owner (facts shape, no identity, the agent's permission stored, one
+  call with `hqAgent`), checks `availableAgents` for each operator kind, refuses every executive the asker may not use
+  without writing, and conceals an answer after the operator's permission is removed.
 - `apps/api/test/hq-hon.test.cjs`: closed contracts, the HQ prompt, 503 before any write without the paid-call
   approval, one call per turn, every outcome mapping, replay, refusals and rule codes.

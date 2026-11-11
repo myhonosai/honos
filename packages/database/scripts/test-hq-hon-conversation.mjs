@@ -38,9 +38,10 @@ const deny=(p,n,code)=>assert.rejects(p,http(n,code));
 const sqlDeny=(p,code)=>assert.rejects(p,e=>{assert.equal(e.code,code,e.stack);return true;});
 const K=()=>randomUUID();
 const ORG=randomUUID(),S=randomUUID(),ROLE=randomUUID(),CATALOG=randomUUID(),SCHOOL_NAME=`HQHON Secret School ${randomUUID().slice(0,8)}`;
-const humans=Object.fromEntries(['owner','exowner','viewer','marketer','supportOp','schoolOwner','stranger','leaver']
+const humans=Object.fromEntries(['owner','exowner','viewer','marketer','supportOp','schoolOwner','stranger','leaver','finance','ops','supportMgr','mkt2']
  .map(k=>[k,{id:randomUUID(),user:randomUUID(),subject:`hqhon-${k}-${randomUUID()}`,name:`Fixture ${k}`}]));
 const H=k=>humans[k].subject,P=k=>humans[k].id;
+const CASE_SUBJECT=`HQHON secret case ${randomUUID().slice(0,8)}`;
 const tables=['hq_hon_requests','hq_hon_turns','hq_hon_budget_changes','hq_hon_budget_periods'];
 let providerRow=null;
 async function cleanup(){
@@ -56,6 +57,9 @@ async function cleanup(){
   await admin.query('ALTER TABLE hon.ai_spend_pauses DISABLE TRIGGER USER');
   await admin.query('DELETE FROM hon.ai_spend_pauses WHERE paused_by_principal_id=ANY($1::uuid[])',[ps]);
   await admin.query('ALTER TABLE hon.ai_spend_pauses ENABLE TRIGGER USER');
+  await admin.query('ALTER TABLE hon.hq_support_cases DISABLE TRIGGER USER');
+  await admin.query('DELETE FROM hon.hq_support_cases WHERE organization_id=$1',[ORG]);
+  await admin.query('ALTER TABLE hon.hq_support_cases ENABLE TRIGGER USER');
   await admin.query('DELETE FROM hon.hq_ai_model_catalog WHERE catalog_id=$1',[CATALOG]);
   if(providerRow==='CREATED')await admin.query("DELETE FROM hon.hq_ai_provider_connections WHERE provider_id='OPENROUTER'");
   else if(providerRow)await admin.query("UPDATE hon.hq_ai_provider_connections SET state=$1,credential_secret_ref=$2 WHERE provider_id='OPENROUTER'",[providerRow.state,providerRow.credential_secret_ref]);
@@ -94,7 +98,7 @@ try{
  for(const[sig,allowed]of [['set_hq_hon_budget(text,jsonb,uuid)',true],['ask_hq_hon(text,jsonb,uuid)',true],['record_hq_hon_result(text,uuid,jsonb)',true],
   ['resolve_hq_hon_turn(text,uuid,jsonb,uuid)',true],['read_hq_hon_conversation(text)',true],['require_hq_hon_actor(text,boolean)',false],
   ['hq_hon_permission_held(uuid,text)',false],['hq_hon_owner_eligible(uuid)',false],['hq_hon_agent_facts(text,text)',false],['hq_hon_claim(uuid,uuid,text,text)',false],
-  ['hq_hon_lock_period(date)',false],['hq_hon_budget_json(date)',false],['hq_hon_turn_json(hon.hq_hon_turns,uuid)',false],['hq_hon_agent_permission(text)',false]])
+  ['hq_hon_lock_period(date)',false],['hq_hon_budget_json(date)',false],['hq_hon_turn_json(hon.hq_hon_turns,uuid)',false],['hq_hon_agent_permission(text)',false],['hq_hon_counts(text[],text[])',false]])
   assert.equal((await restricted.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') a",['hon.'+sig])).rows[0].a,allowed,sig);
  for(const t of tables)for(const priv of ['SELECT','INSERT','UPDATE','DELETE'])
   assert.equal((await restricted.query('SELECT has_table_privilege(current_user,$1,$2) a',['hon.'+t,priv])).rows[0].a,false,`${t} ${priv}`);
@@ -107,7 +111,9 @@ try{
  for(const h of Object.values(humans)){await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,$4)",[h.user,h.subject,`${h.user}@example.test`,h.name]);await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER',$3,true)",[h.id,h.user,h.name]);}
  for(const[who,role,perms,until]of [['owner','HON_HQ_OWNER',[],null],['exowner','HON_HQ_OWNER',[],'1 minute'],['viewer','HON_HQ_OPERATOR',['hq.dashboard.view'],null],
   ['marketer','HON_HQ_OPERATOR',['hq.marketing.read','hq.marketing.manage'],null],['supportOp','HON_HQ_SUPPORT',['hq.dashboard.view','hq.support.manage'],null],
-  ['leaver','HON_HQ_OPERATOR',['hq.dashboard.view'],null]])
+  ['leaver','HON_HQ_OPERATOR',['hq.dashboard.view'],null],['finance','HON_HQ_OPERATOR',['hq.dashboard.view','hq.billing.manage'],null],
+  ['ops','HON_HQ_OPERATOR',['hq.dashboard.view','hq.onboarding.manage'],null],['supportMgr','HON_HQ_OPERATOR',['hq.dashboard.view','hq.support.manage'],null],
+  ['mkt2','HON_HQ_OPERATOR',['hq.dashboard.view','hq.marketing.manage'],null]])
   await admin.query(`INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from,effective_until) VALUES($1,$2,$3,clock_timestamp()-interval '1 hour',${until?`clock_timestamp()-interval '${until}'`:'NULL'})`,[P(who),role,perms]);
  await admin.query("INSERT INTO hon.organizations(id,legal_name,display_name,status,created_at) VALUES($1,$2,$2,'ACTIVE',clock_timestamp())",[ORG,SCHOOL_NAME]);
  await admin.query("INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1::uuid,$2,$3,$1::text,'UTC')",[S,ORG,SCHOOL_NAME]);
@@ -119,6 +125,7 @@ try{
  if(providerRow==='CREATED')await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state,credential_secret_ref) VALUES('OPENROUTER','Fixture OpenRouter','HEALTHY',$1)",[secret]);
  else await admin.query("UPDATE hon.hq_ai_provider_connections SET state='HEALTHY',credential_secret_ref=coalesce(credential_secret_ref,$1) WHERE provider_id='OPENROUTER'",[secret]);
  await admin.query('COMMIT');
+ await admin.query("INSERT INTO hon.hq_support_cases(organization_id,school_id,subject,category,priority,status,opened_by,opened_at,updated_at) VALUES($1,$2,$3,'BILLING','URGENT','OPEN',$4,clock_timestamp()-interval '10 days',clock_timestamp())",[ORG,S,CASE_SUBJECT,P('owner')]);
  const start=await counts(),school=await schoolSide();
 
  // ---------- 1. authority ----------
@@ -166,9 +173,9 @@ try{
 
  // ---------- 3. ask ----------
  for(const bad of [ask({question:''}),ask({question:' padded'}),ask({question:'x'.repeat(2001)}),ask({question:'bell\u0007'}),ask({agentKey:'claire'}),
-  ask({agentKey:'chase'}),ask({replyMode:'LONG'}),{...ask(),organizationId:ORG},(({agentKey,...r})=>r)(ask())])
+  ask({agentKey:'kai'}),ask({agentKey:'Chase'}),ask({replyMode:'LONG'}),{...ask(),organizationId:ORG},(({agentKey,...r})=>r)(ask())])
   await deny(hon.ask(H('owner'),bad,K()),400,'INVALID_SAAS_INPUT');
- await sqlDeny(restricted.query('SELECT hon.ask_hq_hon($1,$2::jsonb,$3)',[H('owner'),JSON.stringify(ask({agentKey:'chase'})),K()]),'22023');
+ await sqlDeny(restricted.query('SELECT hon.ask_hq_hon($1,$2::jsonb,$3)',[H('owner'),JSON.stringify(ask({agentKey:'kai'})),K()]),'22023');
  // A platform-wide AI pause stops HQ turns; an organization's own pause does not.
  await admin.query("INSERT INTO hon.ai_spend_pauses(organization_id,spend_class,reason,pause_key,pause_fingerprint,paused_by_principal_id) VALUES($1,'ALL','Fixture school pause reason',$2,'f',$3)",[ORG,K(),P('owner')]);
  for(const cls of ['AGENT_INFERENCE','ALL']){
@@ -277,7 +284,54 @@ try{
  await deny(hon.conversation(H('leaver')),403,'SAAS_FORBIDDEN');
  await deny(hon.ask(H('leaver'),ask(),K()),403,'SAAS_FORBIDDEN');
 
- // ---------- 8. immutability and isolation ----------
+ // ---------- 8. the six HQ executives (0264) ----------
+ const EXEC=['chase','mia','ethan','olivia','ryan','sophia'];
+ assert.deepEqual((await hon.conversation(H('owner'))).availableAgents,['hon',...EXEC],'the HQ owner may ask every executive');
+ assert.deepEqual((await hon.conversation(H('viewer'))).availableAgents,['hon']);
+ assert.deepEqual((await hon.conversation(H('finance'))).availableAgents,['hon','ethan','olivia','ryan']);
+ assert.deepEqual((await hon.conversation(H('ops'))).availableAgents,['hon','sophia']);
+ assert.deepEqual((await hon.conversation(H('supportMgr'))).availableAgents,['hon','mia']);
+ assert.deepEqual((await hon.conversation(H('mkt2'))).availableAgents,['hon','chase'],'hq.marketing.manage reads HQ marketing');
+ await deny(hon.conversation(H('supportOp')),403,'SAAS_FORBIDDEN');
+ const before8=await counts();
+ for(const[who,agentKey]of [['viewer','chase'],['viewer','olivia'],['ops','mia'],['supportMgr','ryan'],['finance','sophia'],['mkt2','ethan']])
+  await deny(hon.ask(H(who),ask({agentKey}),K()),403,'SAAS_FORBIDDEN');
+ assert.deepEqual(await counts(),before8,'an executive refusal writes nothing');
+ const cur=(await hon.conversation(H('owner'))).budget;
+ await hon.setBudget(H('owner'),budgetIn({creditCap:cur.usedCredits+cur.heldCredits+200,expectedVersion:cur.version,reason:'Room for the executive checks'}),K());
+ const shapes={chase:['hqCreativeBudget','hqMarketingCampaigns'],mia:['hqSupportCases'],ethan:['hqAiPlatform','hqAiTextBudget','hqCreativeBudget'],
+  olivia:['hqAiTextBudget','note','saasInvoices','saasRefundRequests'],ryan:['note','saasAccessStates','saasSubscriptions'],sophia:['hqOnboardingRequests','organizations','saasAccessExceptions']};
+ const perms={chase:'hq.marketing.read',mia:'hq.support.manage',ethan:'hq.billing.manage',olivia:'hq.billing.manage',ryan:'hq.billing.manage',sophia:'hq.onboarding.manage'};
+ for(const agentKey of EXEC){
+  const n=provider.calls.length,r=await hon.ask(H('owner'),ask({agentKey,question:`What should HQ know from ${agentKey} today?`}),K());
+  assert.deepEqual([r.turn.agentKey,r.turn.status,r.turn.concealed,provider.calls.length],[agentKey,'ANSWERED',false,n+1],agentKey);
+  const call=provider.calls.at(-1),facts=JSON.parse(call.facts);
+  assert.deepEqual([call.specialist,call.hqAgent,call.step],['hq_hon',agentKey,1],agentKey);
+  assert.deepEqual(Object.keys(facts).sort(),shapes[agentKey],agentKey);
+  for(const secret of [SCHOOL_NAME,ORG,S,CASE_SUBJECT,...Object.values(humans).map(h=>h.name)])
+   assert(!call.facts.includes(secret),`${agentKey} facts carry no school, organization, case or person identity`);
+  assert.deepEqual(await row('SELECT source_permissions s,reserved_credits c FROM hon.hq_hon_turns WHERE id=$1',[r.turn.turnId]),{s:[perms[agentKey]],c:10},agentKey);
+  if(agentKey==='mia'){
+   assert(facts.hqSupportCases.openByPriority.URGENT>=1&&facts.hqSupportCases.openOlderThan7Days>=1,'the fixture case is counted');
+   assert.deepEqual(Object.keys(facts.hqSupportCases.byStatus).sort(),['CLOSED','OPEN','RESOLVED','WAITING_ON_SCHOOL']);
+  }
+  if(agentKey==='ethan')assert.equal(facts.hqAiPlatform.providerConnections.OPENROUTER,'HEALTHY');
+  if(agentKey==='sophia')assert(facts.organizations.total>=1&&facts.organizations.byStatus.ACTIVE>=1);
+ }
+ // An operator whose billing permission ends keeps the record, but the answer is concealed and the executive is gone.
+ const fin=await hon.ask(H('finance'),ask({agentKey:'olivia',question:'Any refunds waiting on a decision?'}),K());
+ assert.deepEqual([fin.turn.status,fin.turn.concealed],['ANSWERED',false]);
+ await admin.query("UPDATE hon.hq_operator_grants SET permission_codes=ARRAY['hq.dashboard.view'] WHERE principal_id=$1",[P('finance')]);
+ const finView=await hon.conversation(H('finance'));
+ assert.deepEqual(finView.availableAgents,['hon']);
+ assert.deepEqual(finView.turns.filter(t=>t.turnId===fin.turn.turnId).map(t=>[t.status,t.reply,t.concealed]),[['ANSWERED',null,true]]);
+ await deny(hon.ask(H('finance'),ask({agentKey:'ryan'}),K()),403,'SAAS_FORBIDDEN');
+ // The widened checks still refuse anything outside the catalog.
+ await sqlDeny(admin.query("UPDATE hon.hq_hon_turns SET agent_key='claire' WHERE id=$1",[fin.turn.turnId]),'42501');
+ assert.deepEqual(await row("SELECT hon.hq_hon_agent_permission('claire') c,hon.hq_hon_agent_permission('kai') k"),{c:null,k:null});
+ await deny(hon.ask(H('owner'),ask({agentKey:'claire'}),K()),400,'INVALID_SAAS_INPUT');
+
+ // ---------- 9. immutability and isolation ----------
  await sqlDeny(admin.query("UPDATE hon.hq_hon_turns SET question='changed', version=version+1 WHERE id=$1",[a1.turn.turnId]),'42501');
  await sqlDeny(admin.query("UPDATE hon.hq_hon_turns SET reply='changed', version=version+1 WHERE id=$1",[a1.turn.turnId]),'42501');
  await sqlDeny(admin.query('DELETE FROM hon.hq_hon_turns WHERE id=$1',[a1.turn.turnId]),'42501');
@@ -286,7 +340,7 @@ try{
  await sqlDeny(admin.query("UPDATE hon.hq_hon_budget_periods SET credit_cap=1 WHERE period_start=$1",[NOW]),'42501');
  assert.deepEqual(await schoolSide(),school,'no school AI usage, plan, turn, invocation or creative row was written');
  assert.equal((await row("SELECT count(*)::int n FROM hon.hq_hon_turns WHERE status='ANSWERING'")).n,0);
- console.log('HQ Ask HON proof passed (posture, authority incl. owner-only cap and review, provider-not-connected before any write, route/pause/budget/in-progress refusals, HQ overview facts without school identity, one provider call per turn with idempotent replay and key reuse, measured settlement never above the reservation, failed/not-sent/unknown/out-of-bounds outcomes, interrupted only after 120 s, owner resolution, lapsed grant keeps the result and conceals the answer, immutability, nothing school-side).');
+ console.log('HQ Ask HON proof passed (posture, authority incl. owner-only cap and review, provider-not-connected before any write, route/pause/budget/in-progress refusals, HQ overview facts without school identity, one provider call per turn with idempotent replay and key reuse, measured settlement never above the reservation, failed/not-sent/unknown/out-of-bounds outcomes, interrupted only after 120 s, owner resolution, lapsed grant keeps the result and conceals the answer, six HQ executives with per-agent permission, aggregate facts without identity and concealment when a permission ends, immutability, nothing school-side).');
 }finally{
  await cleanup().catch(e=>console.error('cleanup failed',e));
  await Promise.allSettled([admin.end(),restricted.end(),database.onModuleDestroy?.()]);

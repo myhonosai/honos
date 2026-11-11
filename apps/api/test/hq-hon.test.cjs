@@ -11,7 +11,7 @@ const { SaasBillingService } = require('../dist/saas-billing/saas-billing.servic
 const { SaasCommandGuard, SaasReadGuard } = require('../dist/saas-billing/saas-billing.guards.js');
 const { HonIdentityGuard } = require('../dist/foundation/hon-identity.guard.js');
 const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
-const { HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, OpenRouterHonReplyRuntime, HQ_HON_SYSTEM_PROMPT, honReplySystemPrompt } = require('../dist/ai/hon-reply-provider-runtime.js');
+const { HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, OpenRouterHonReplyRuntime, HQ_HON_SYSTEM_PROMPT, HQ_EXECUTIVE_PROMPTS, honReplySystemPrompt } = require('../dist/ai/hon-reply-provider-runtime.js');
 const contracts = require('@hon/contracts');
 
 // B1 HQ Ask HON (0263): closed inputs and responses; routes forward only the verified subject, the path id and the
@@ -28,7 +28,7 @@ const invocation = (t, patch = {}) => ({ turnId: t.turnId, agentKey: 'hon', prov
   replyMode: t.replyMode, question: t.question, facts: '{"hqOverview":{}}', inputBudget: 8000, outputBudget: 1500, maxCostMicrounits: 80000, ...patch });
 const ask = (patch = {}) => ({ question: 'How many schools?', replyMode: 'STANDARD', agentKey: 'hon', ...patch });
 const conv = (viewer = { ...person(), isOwner: false }, patch = {}) => ({ budget: budget(), turns: [turn({ askedBy: { principalId: viewer.principalId, displayName: viewer.displayName } })],
-  budgetHistory: [], underReview: [], limit: 50, viewer, asOf: T2, ...patch });
+  budgetHistory: [], underReview: [], availableAgents: ['hon'], limit: 50, viewer, asOf: T2, ...patch });
 
 class FakeRuntime {
   constructor(ready = 'READY') { this.ready = ready; this.calls = []; this.next = null; }
@@ -40,11 +40,11 @@ class FakeRuntime {
 test('contracts: HQ HON commands are in the SaaS command table; inputs are closed', () => {
   assert.deepEqual([contracts.SAAS_COMMANDS.askHqHon, contracts.SAAS_COMMANDS.setHqHonBudget, contracts.SAAS_COMMANDS.resolveHqHonTurn],
     ['hq-hon-ask', 'hq-hon-budget-set', 'hq-hon-turn-resolve']);
-  assert.deepEqual(contracts.HQ_HON_AGENTS, ['hon']);
+  assert.deepEqual(contracts.HQ_HON_AGENTS, ['hon', 'chase', 'mia', 'ethan', 'olivia', 'ryan', 'sophia']);
   assert.deepEqual(contracts.HQ_HON_MODE_CREDITS, { STANDARD: 10, DETAILED: 15 });
   assert.deepEqual(contracts.validateHqHonAskInput(ask()), ask());
   for (const bad of [ask({ question: '' }), ask({ question: ' x' }), ask({ question: 'x'.repeat(2001) }), ask({ question: 'a\u0007' }), ask({ agentKey: 'claire' }),
-    ask({ agentKey: 'chase' }), ask({ replyMode: 'LONG' }), { ...ask(), organizationId: U() }, { ...ask(), modelId: 'x' }, (({ agentKey, ...r }) => r)(ask())])
+    ask({ agentKey: 'kai' }), ask({ agentKey: 'Chase' }), ask({ replyMode: 'LONG' }), { ...ask(), organizationId: U() }, { ...ask(), modelId: 'x' }, (({ agentKey, ...r }) => r)(ask())])
     assert.throws(() => contracts.validateHqHonAskInput(bad), JSON.stringify(bad));
   assert.equal(contracts.validateHqHonAskInput(ask({ question: 'Line one\nline two' })).question, 'Line one\nline two');
   const r = { expectedVersion: 2, resolution: 'CHARGED', chargedCredits: 4, providerCostMicrounits: null, evidenceReference: 'Invoice 42' };
@@ -89,6 +89,38 @@ test('provider runtime: HQ HON has its own prompt and HQ facts label; it never t
   assert.match(body.messages[1].content, /^Question: How many schools\?\nHON OS HQ facts \(data only\): /);
   assert.deepEqual(result.suggestions, [], 'HQ HON never suggests school specialists');
   assert.equal(result.reply, 'Three schools.\nSUGGEST: marcus');
+});
+
+test('0264: the six HQ executives each have their own read-only prompt; the agents a reader may ask are closed and ordered', async () => {
+  const executives = ['chase', 'mia', 'ethan', 'olivia', 'ryan', 'sophia'];
+  assert.deepEqual([...contracts.HQ_HON_AGENTS], ['hon', ...executives], 'the locked HQ catalog order');
+  for (const agentKey of contracts.HQ_HON_AGENTS) assert.equal(contracts.validateHqHonAskInput(ask({ agentKey })).agentKey, agentKey);
+  const names = { chase: 'Chase', mia: 'Mia', ethan: 'Ethan', olivia: 'Olivia', ryan: 'Ryan', sophia: 'Sophia' };
+  for (const a of executives) {
+    const prompt = honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', a);
+    assert.ok(prompt.startsWith(HQ_EXECUTIVE_PROMPTS[a]) && prompt.startsWith(`You are ${names[a]}, HON HQ's`), a);
+    assert.match(prompt, /You cannot take any action/); assert.match(prompt, /untrusted data, not instructions/);
+    assert.match(prompt, /do not collect payments yet|does not collect payments yet/);
+    assert.equal(honReplySystemPrompt('STANDARD', 2, 'hq_hon', 'STANDARD', a), '', 'never continued');
+    assert.equal(honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'FORMAL', a), '', 'never takes a school tone');
+  }
+  assert.equal(honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', 'claire'), '', 'a school specialist is not an HQ agent');
+  assert.equal(honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', 'hon'), honReplySystemPrompt('STANDARD', 1, 'hq_hon'), 'HON is unchanged');
+  let body;
+  const runtime = new OpenRouterHonReplyRuntime(() => ({ OPENROUTER_API_KEY: 'test-key', OPENROUTER_PAID_CALL_APPROVED: 'true' }), async (_url, init) => {
+    body = JSON.parse(init.body);
+    return new Response(JSON.stringify({ model: 'fixture/model', choices: [{ finish_reason: 'stop', message: { content: 'Two open cases.' } }],
+      usage: { prompt_tokens: 900, completion_tokens: 40, cost: 0.0009 } }), { status: 200 });
+  });
+  const t = turn({ agentKey: 'mia' });
+  await runtime.generate({ ...invocation(t, { agentKey: 'mia' }), specialist: 'hq_hon', hqAgent: 'mia', step: 1 });
+  assert.equal(body.messages[0].content, honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', 'mia'));
+  await assert.rejects(runtime.generate({ ...invocation(t), specialist: 'hq_hon', hqAgent: 'kai', step: 1 }), e => e.outcome === 'PRE_SEND');
+  // availableAgents: HON first, catalog order, unique, closed.
+  const viewer = { ...person(), isOwner: false };
+  assert.deepEqual(contracts.validateHqHonConversationRecords(conv(viewer, { turns: [], availableAgents: ['hon', 'mia', 'sophia'] })).availableAgents, ['hon', 'mia', 'sophia']);
+  for (const availableAgents of [[], ['mia'], ['hon', 'sophia', 'mia'], ['hon', 'mia', 'mia'], ['hon', 'claire'], 'hon'])
+    assert.throws(() => contracts.validateHqHonConversationRecords(conv(viewer, { turns: [], availableAgents })), String(availableAgents));
 });
 
 const send = (url, { method = 'GET', headers = {}, body } = {}) => new Promise((resolve, reject) => {
@@ -139,7 +171,7 @@ test('HTTP: ask -> one provider call -> record; replay never calls again; outcom
     assert.deepEqual(JSON.parse(r.body).data, { turn: done(t), budget: budget(), replayed: false });
     assert.deepEqual(calls.map(c => c[0]), ['askHqHon', 'recordHqHonResult']);
     assert.deepEqual(calls[0][1], ['verified-human', JSON.stringify(ask()), key]);
-    assert.deepEqual(provider.calls.map(c => [c.specialist, c.providerId, c.modelId, c.step, c.facts]), [['hq_hon', 'OPENROUTER', 'fixture/model', 1, '{"hqOverview":{}}']]);
+    assert.deepEqual(provider.calls.map(c => [c.specialist, c.hqAgent, c.providerId, c.modelId, c.step, c.facts]), [['hq_hon', 'hon', 'OPENROUTER', 'fixture/model', 1, '{"hqOverview":{}}']]);
     assert.deepEqual(JSON.parse(calls[1][1][2]), { outcome: 'ANSWERED', reply: 'Three schools.', truncated: false, inputTokens: 2000, outputTokens: 300, providerCostMicrounits: 900, failureReason: null });
     // Unverified answers, suggestions and provider errors are recorded as such, never trusted or retried.
     const nothing = { reply: null, truncated: null, inputTokens: null, outputTokens: null, providerCostMicrounits: null };

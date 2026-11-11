@@ -8,8 +8,8 @@ import { HON_REPLY_LIMITS, HON_REPLY_MODES, HON_REPLY_MODE_KEYS, type HonReplyMo
 import { isHqMarketingDate, type HqMarketingPerson } from './hq-marketing.js';
 import type { HqCreativeBudget, HqCreativeBudgetChange, HqCreativeProviderState } from './hq-creative.js';
 
-/** B1: HON only. B2 (0264) adds the six HQ executives. */
-export const HQ_HON_AGENTS = ['hon'] as const;
+/** HON (0263) and the six HQ executives of the locked HQ catalog (0264), in catalog order. */
+export const HQ_HON_AGENTS = ['hon', 'chase', 'mia', 'ethan', 'olivia', 'ryan', 'sophia'] as const;
 export type HqHonAgentKey = typeof HQ_HON_AGENTS[number];
 export const HQ_HON_STATUSES = ['ANSWERING', 'ANSWERED', 'FAILED', 'UNDER_REVIEW', 'RESOLVED_CHARGED', 'RESOLVED_NOT_CHARGED'] as const;
 export type HqHonStatus = typeof HQ_HON_STATUSES[number];
@@ -67,7 +67,9 @@ export interface HqHonTurn {
   askedBy: HqMarketingPerson; version: number; createdAt: string; completedAt: string | null;
 }
 export interface HqHonConversationRecords {
-  budget: HqHonBudget; turns: HqHonTurn[]; budgetHistory: HqHonBudgetChange[]; underReview: HqHonTurn[]; limit: 50; viewer: HqHonViewer; asOf: string;
+  budget: HqHonBudget; turns: HqHonTurn[]; budgetHistory: HqHonBudgetChange[]; underReview: HqHonTurn[];
+  /** 0264: the agents this reader may ask now, in catalog order, HON first. */
+  availableAgents: HqHonAgentKey[]; limit: 50; viewer: HqHonViewer; asOf: string;
 }
 export interface HqHonConversation extends HqHonConversationRecords { provider: HqCreativeProviderState }
 /** What the database hands the API once, from the call that created the turn: the server-built facts and fixed budgets. */
@@ -133,6 +135,10 @@ function turns(value: unknown): HqHonTurn[] {
   return list;
 }
 function records(r: Record<string, unknown>): void {
+  // The agents this reader may ask now (0264): unique, in catalog order, HON always first (every reader holds hq.dashboard.view).
+  const agents = r.availableAgents;
+  if (!Array.isArray(agents) || agents[0] !== 'hon' || !agents.every(isHqHonAgent)
+    || agents.some((a, i) => i > 0 && HQ_HON_AGENTS.indexOf(a as HqHonAgentKey) <= HQ_HON_AGENTS.indexOf(agents[i - 1] as HqHonAgentKey))) drift();
   if (r.limit !== HQ_HON_LIMITS.listLimit || !isTimestamp(r.asOf) || !Array.isArray(r.budgetHistory) || r.budgetHistory.length > HQ_HON_LIMITS.historyLimit) drift();
   budget(r.budget);
   const v = record(r.viewer, drift); exactKeys(v, ['principalId', 'displayName', 'isOwner'], drift);
@@ -151,12 +157,12 @@ function records(r: Record<string, unknown>): void {
 }
 /** The database read (0263). */
 export function validateHqHonConversationRecords(value: unknown): HqHonConversationRecords {
-  const r = record(value, drift); exactKeys(r, ['budget', 'turns', 'budgetHistory', 'underReview', 'limit', 'viewer', 'asOf'], drift);
+  const r = record(value, drift); exactKeys(r, ['budget', 'turns', 'budgetHistory', 'underReview', 'availableAgents', 'limit', 'viewer', 'asOf'], drift);
   records(r); return r as unknown as HqHonConversationRecords;
 }
 /** The API view: the records plus whether the text provider runtime is connected (server runtime, never a client choice). */
 export function validateHqHonConversation(value: unknown): HqHonConversation {
-  const r = record(value, drift); exactKeys(r, ['provider', 'budget', 'turns', 'budgetHistory', 'underReview', 'limit', 'viewer', 'asOf'], drift);
+  const r = record(value, drift); exactKeys(r, ['provider', 'budget', 'turns', 'budgetHistory', 'underReview', 'availableAgents', 'limit', 'viewer', 'asOf'], drift);
   if (!has(['CONNECTED', 'NOT_CONNECTED'], r.provider)) drift();
   records(r); return r as unknown as HqHonConversation;
 }
