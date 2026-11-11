@@ -248,6 +248,7 @@
     "0261_school_event_booking.sql": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675",
     "0259_maya_at_risk_students.sql": "6b8267f54f694799c387fdf34b8848a6d8bf041161095d9e00e171587c32293c",
     "0260_hon_analysis_specialists.sql": "01177f4f95e03cf451500d8063dcc690d3b9f9e4bcf625be727260a9fcd0d410",
-    "0278_ai_team_readiness_reconcile.sql": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e"
+    "0278_ai_team_readiness_reconcile.sql": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e",
+    "0263_hq_hon_conversation.sql": "1adef62d0a5af2388977da5fc979dac83efc4bd8a7d0a39feefe7cc554721d9c"
   }
 }

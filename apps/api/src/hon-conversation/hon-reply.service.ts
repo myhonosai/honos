@@ -8,7 +8,7 @@ import {
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
 import {
-  HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, type HonReplyInvocation, type HonReplyProviderRuntime, type HonReplyResult,
+  HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, type HonReplyInvocation, type HonReplyProviderRuntime, type HonReplyResult, type HonReplySpecialist,
 } from '../ai/hon-reply-provider-runtime.js';
 
 type Scope = ResolvedPrincipalScope & { externalSubject: string };
@@ -41,7 +41,7 @@ function sourcesValid(v: unknown, truncated: boolean): boolean {
   if (v === undefined) return true;
   return Array.isArray(v) && v.length <= HON_REPLY_MAX_SOURCES && (!truncated || v.length === 0) && v.every(isHonReplySourceKey) && new Set(v).size === v.length;
 }
-function verified(result: HonReplyResult, specialist: 'hon' | HonAnalystAgentKey): HonReplyResult {
+function verified(result: HonReplyResult, specialist: HonReplySpecialist): HonReplyResult {
   // An analysis specialist (K2, 0260) never suggests specialists; any suggestion from its runtime is unverified output.
   if (specialist !== 'hon' && (result?.suggestions ?? []).length > 0) throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
