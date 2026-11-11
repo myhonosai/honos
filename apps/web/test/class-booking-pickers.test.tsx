@@ -27,7 +27,9 @@ it('offers only scheduled sessions that have not ended, soonest first, labelled 
   const now = Date.parse('2026-11-12T00:00:00.000Z');
   const list = bookableSessions([session(5), session(4), session(3, { status: 'CANCELLED' } as never), session(1)], now);
   expect(list.map((s) => s.sessionId)).toEqual([id(604), id(605)]);
-  expect(sessionLabel(session(4), 'en')).toMatch(/^Kids Karate · .+ · Main mat$/);
+  expect(sessionLabel(session(4), 'en')).toMatch(/^Kids Karate · .+ UTC · Main mat$/);
+  // 2026-11-14T01:00Z is 5:00 PM on Friday the 13th in Los Angeles.
+  expect(sessionLabel(session(4), 'en', 'America/Los_Angeles')).toBe('Kids Karate · Fri, Nov 13, 5:00 PM · Main mat');
   expect(sessionLabel(session(4), 'en')).not.toContain(id(604));
 });
 

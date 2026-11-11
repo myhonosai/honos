@@ -3,6 +3,7 @@ import React, { useEffect, useId, useState } from 'react';
 import type { CurrentSchoolClassSession } from '@hon/contracts';
 import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from './class-sessions-read-http';
 import { reportConfirmedSessionInvalidation } from './session-invalidation';
+import { readSchoolClock, validTimeZone } from './school-time';
 
 /**
  * Booking pickers for the school the shell verified: upcoming scheduled classes from the existing class-session read,
@@ -41,13 +42,15 @@ export async function loadBookableStudents(scope: BookingScope, search: string, 
 export function bookableSessions(items: readonly CurrentSchoolClassSession[], now: number): CurrentSchoolClassSession[] {
   return items.filter((s) => s.status === 'SCHEDULED' && Date.parse(s.endsAt) > now).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
-export function sessionLabel(s: CurrentSchoolClassSession, language: string): string {
-  const when = new Date(s.startsAt).toLocaleString(language, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+/** Times are shown in the school's timezone when it is known; otherwise they say UTC rather than guess. */
+export function sessionLabel(s: CurrentSchoolClassSession, language: string, schoolTimezone: string | null = null): string {
+  const zone = schoolTimezone && validTimeZone(schoolTimezone) ? schoolTimezone : 'UTC';
+  const when = new Date(s.startsAt).toLocaleString(language, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: zone }) + (zone === 'UTC' ? ' UTC' : '');
   return [s.name, when, s.roomName].filter(Boolean).join(' · ');
 }
 
-export function BookingPickersView({ language, sessions, students, sessionId, studentProfileId, search, disabled, onSession, onStudent, onSearch }: {
-  language: string; sessions: ListState<CurrentSchoolClassSession>; students: ListState<BookableStudent>; sessionId: string; studentProfileId: string; search: string; disabled: boolean;
+export function BookingPickersView({ language, schoolTimezone = null, sessions, students, sessionId, studentProfileId, search, disabled, onSession, onStudent, onSearch }: {
+  language: string; schoolTimezone?: string | null; sessions: ListState<CurrentSchoolClassSession>; students: ListState<BookableStudent>; sessionId: string; studentProfileId: string; search: string; disabled: boolean;
   onSession?: (id: string) => void; onStudent?: (id: string) => void; onSearch?: (text: string) => void;
 }): React.ReactElement {
   const ids = { session: useId(), search: useId(), student: useId() };
@@ -55,7 +58,7 @@ export function BookingPickersView({ language, sessions, students, sessionId, st
     {sessions.state === 'READY' ? (sessions.items.length ? <label htmlFor={ids.session}>Class</label> : <p role="status">No upcoming classes are scheduled. Add classes on the timetable first.</p>)
       : <p role="status">{sessions.state === 'LOADING' ? 'Reading upcoming classes…' : sessions.state === 'DENIED' ? 'Your access does not include this school’s classes.' : 'Classes could not be loaded. Nothing is shown.'}</p>}
     {sessions.state === 'READY' && sessions.items.length ? <select id={ids.session} required value={sessionId} disabled={disabled} onChange={(e) => onSession?.(e.target.value)}>
-      <option value="">Choose a class</option>{sessions.items.map((s) => <option key={s.sessionId} value={s.sessionId}>{sessionLabel(s, language)}</option>)}</select> : null}
+      <option value="">Choose a class</option>{sessions.items.map((s) => <option key={s.sessionId} value={s.sessionId}>{sessionLabel(s, language, schoolTimezone)}</option>)}</select> : null}
     {students.state === 'DENIED' ? <p role="status">Your access does not include booking students at this school.</p> : <>
       <label htmlFor={ids.search}>Find a student</label>
       <input id={ids.search} type="search" maxLength={120} autoComplete="off" value={search} disabled={disabled} onChange={(e) => onSearch?.(e.target.value)}/>
@@ -74,6 +77,12 @@ export function ClassBookingPickers({ scope, sessionId, studentProfileId, disabl
   const [sessions, setSessions] = useState<ListState<CurrentSchoolClassSession>>({ state: 'LOADING' });
   const [students, setStudents] = useState<ListState<BookableStudent>>({ state: 'LOADING' });
   const [search, setSearch] = useState('');
+  const [zone, setZone] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true; const abort = new AbortController();
+    readSchoolClock(scope, abort.signal).then((read) => { if (current && read.state === 'READY') setZone(read.clock.schoolTimezone); }, () => { /* labels say UTC */ });
+    return () => { current = false; abort.abort(); };
+  }, [scope.organizationId, scope.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let current = true; const abort = new AbortController();
     loadCurrentSchoolClassSessions(scope.organizationId, scope.schoolId, abort.signal).then(
@@ -88,6 +97,6 @@ export function ClassBookingPickers({ scope, sessionId, studentProfileId, disabl
       (error) => { if (current && !abort.signal.aborted) setStudents({ state: error instanceof BookingPickerError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); }), search ? 250 : 0);
     return () => { current = false; clearTimeout(timer); abort.abort(); };
   }, [scope.organizationId, scope.schoolId, search]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <BookingPickersView language={typeof navigator === 'undefined' ? 'en' : navigator.language} sessions={sessions} students={students} sessionId={sessionId}
+  return <BookingPickersView language={typeof navigator === 'undefined' ? 'en' : navigator.language} schoolTimezone={zone} sessions={sessions} students={students} sessionId={sessionId}
     studentProfileId={studentProfileId} search={search} disabled={disabled} onSession={onSession} onStudent={onStudent} onSearch={setSearch}/>;
 }
