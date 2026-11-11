@@ -3037,7 +3037,7 @@ END $$;
 -- Maya at-risk students exact verification (M1 0259): two private helpers and one read-only runtime entry point.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.require_maya_actor(text,text)',true,false,'search_path=pg_catalog, hon','713c9debb22370cbd8db15acec1ba9643b2414a764772445c47808e20e996b56'),
+('hon.require_maya_actor(text,text)',true,false,'search_path=pg_catalog, hon','3ec3ab3ace09cba647c0ef6a7849baca7960f89d64e457893de9cf17fe916151'),
 ('hon.maya_reader_sees_tuition(text)',true,false,'search_path=pg_catalog, hon','16334235a565a92419cacb6472b0324fe185928c20bfea2782c93a7235b221af'),
 ('hon.read_maya_at_risk_students(text,jsonb)',true,true,'search_path=pg_catalog, hon','fef4486ea9a901293e41231c3ad82a86c002d5bd47e609b22fbac0e78871e3c4')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]

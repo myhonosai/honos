@@ -12,7 +12,8 @@ outreach draft that staff approve.
 - Browser only (`MayaAtRiskReadHumanUiGuard`): no `X-Hon-Source`, Action Engine or delegation headers, no cross-site
   fetch, no Idempotency-Key. The scope comes from the verified session for `retention.review.read` at the route school.
 - `hon.read_maya_at_risk_students(subject, {after?})` re-proves the direct human, the live permission at the exact
-  school, active organization/school and paid entitlement before and after the read.
+  school, active organization/school and an active COMPLETE entitlement (HON OS, which includes the AI team; the same
+  gate as Claire 0229 and the 0210-0212 agents; a legacy Essential/Core-only school is refused) before and after the read.
 
 ## Rules
 

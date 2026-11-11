@@ -199,7 +199,7 @@ let OWN, READER, BILLING_READER, BILLING_ONLY, MIXED, OTHER_SCHOOL, OTHER_ORG, R
 const s = {};
 async function seed() {
   await sql("INSERT INTO hon.organizations(id,legal_name,display_name) VALUES($1,'Maya Org','Maya Org'),($2,'Maya Other Org','Maya Other Org')", [ids.organization, ids.otherOrganization]);
-  await sql("INSERT INTO hon.organization_entitlements(organization_id,tier,effective_from) VALUES($1,'CORE',clock_timestamp()-interval '1 day'),($2,'CORE',clock_timestamp()-interval '1 day')", [ids.organization, ids.otherOrganization]);
+  await sql("INSERT INTO hon.organization_entitlements(organization_id,tier,effective_from) VALUES($1,'COMPLETE',clock_timestamp()-interval '1 day'),($2,'COMPLETE',clock_timestamp()-interval '1 day')", [ids.organization, ids.otherOrganization]);
   for (const [school, org, slug] of [[ids.schoolA, ids.organization, 'a'], [ids.schoolB, ids.organization, 'b'], [ids.otherSchool, ids.otherOrganization, 'o']]) {
     await sql('INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1,$2,$3,$4,$5)', [school, org, `Maya ${slug}`, `maya-${slug}-${school.slice(0, 8)}`, LA]);
     await schoolFixtures(school, org);
@@ -323,7 +323,10 @@ try {
   await sql("UPDATE hon.schools SET status='ACTIVE' WHERE id=$1", [ids.schoolA]);
   await sql("UPDATE hon.organization_entitlements SET effective_until=clock_timestamp() WHERE organization_id=$1", [ids.organization]);
   await refused(READER, '', 403, undefined, 'no paid entitlement');
-  await sql("UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1", [ids.organization]);
+  // Maya is part of the included AI team: a legacy Core-only school (no active COMPLETE / HON OS entitlement) is refused.
+  await sql("UPDATE hon.organization_entitlements SET effective_until=NULL, tier='CORE' WHERE organization_id=$1", [ids.organization]);
+  await refused(READER, '', 403, undefined, 'Core-only entitlement (AI team needs COMPLETE)');
+  await sql("UPDATE hon.organization_entitlements SET effective_until=NULL, tier='COMPLETE' WHERE organization_id=$1", [ids.organization]);
   ok((await success(READER, '', 'restored reader')).items.length === plain.items.length, 'access restored once the entitlement is back');
 
   // 6. Direct database calls: only the direct human with the session settings.

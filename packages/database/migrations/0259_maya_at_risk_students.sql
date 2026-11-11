@@ -21,8 +21,8 @@ BEGIN;
 --   TUITION_OVERDUE and TERM_ENDING before ATTENDANCE_DROP): CALL_TO_CHECK_IN, INVITE_BACK_TO_CLASS,
 --   PLAN_PROGRESS_TALK, REVIEW_TUITION_BALANCE, DISCUSS_RENEWAL.
 -- Who: a direct human staff member (browser session, no Action Engine request, no delegation, not HQ, no family role)
--- with retention.review.read live at this exact school, active organization and school, and an active paid
--- entitlement; re-checked after the read. Output: names and record-derived numbers only, no contact details, family,
+-- with retention.review.read live at this exact school, active organization and school, and an active COMPLETE
+-- entitlement (HON OS with the included AI team, the same gate as Claire 0229 and the 0210-0212 agents); re-checked after the read. Output: names and record-derived numbers only, no contact details, family,
 -- notes or amounts. No table is written and the runtime gains EXECUTE on the single read only. No AI is called.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
@@ -69,7 +69,7 @@ BEGIN
         AND r.code !~* '^(PARENT|GUARDIAN|STUDENT|FAMILY|HQ|HON_|PLATFORM|SYSTEM)'
         AND x.code=permission AND x.is_staff_assignable)
     AND EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=org AND e.status='ACTIVE'
-      AND e.tier IN ('ESSENTIAL','CORE','COMPLETE') AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()));
+      AND e.tier='COMPLETE' AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp()));
   IF actor IS NULL THEN RAISE EXCEPTION 'MAYA_AT_RISK_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN actor;
 END $$;
