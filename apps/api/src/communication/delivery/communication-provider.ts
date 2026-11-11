@@ -18,6 +18,11 @@ export interface CommunicationSendRequest {
   content: string;
   schoolName: string;
   attempt: number;
+  /**
+   * Who the mail is for. Omitted or SCHOOL: a 0243 school delivery. INTERNAL (staff notices such as the weekly
+   * briefing) and HQ (HQ messages) are tagged so the school receipt webhooks acknowledge and ignore them.
+   */
+  purpose?: 'SCHOOL' | 'INTERNAL' | 'HQ';
 }
 
 export interface CommunicationSendAccepted {

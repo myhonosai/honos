@@ -39,7 +39,9 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
     const from = this.environment().HON_EMAIL_FROM ?? '';
     const schoolName = request.schoolName.replace(/[\r\n"<>]/g, ' ').trim().slice(0, 80) || 'Your school';
     return {
-      personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: { hon_delivery_id: request.deliveryId } }],
+      personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: {
+        hon_delivery_id: request.deliveryId, ...(request.purpose && request.purpose !== 'SCHOOL' ? { hon_purpose: request.purpose } : {}),
+      } }],
       from: { email: from, name: `${schoolName} via HON` },
       subject: `A message from ${schoolName}`,
       content: [{ type: 'text/plain', value: request.content }],
@@ -100,7 +102,9 @@ const TOLERANCE_SECONDS = 600;
 /**
  * SendGrid Signed Event Webhook: ECDSA P-256 / SHA-256 over timestamp header + exact raw body, verified with
  * SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY (base64 DER SPKI, as SendGrid shows it). Returns only HON-sent events
- * (those carrying hon_delivery_id) mapped to the closed receipt vocabulary; opens and clicks are dropped.
+ * (those carrying hon_delivery_id) mapped to the closed receipt vocabulary; opens and clicks are dropped. Mail tagged with any
+ * hon_purpose other than SCHOOL (internal staff notices, HQ messages, or a purpose this build does not know) is acknowledged
+ * and ignored here, so it never makes SendGrid retry the whole batch.
  */
 export class SendGridEventWebhookVerifier {
   private key: KeyObject | undefined;
@@ -132,6 +136,7 @@ export class SendGridEventWebhookVerifier {
     for (const item of parsed) {
       if (!item || typeof item !== 'object') continue;
       const event = item as Record<string, unknown>;
+      if (event.hon_purpose !== undefined && event.hon_purpose !== 'SCHOOL') continue;
       const eventType = typeof event.event === 'string' ? EVENT_MAP[event.event] : undefined;
       const delivery = typeof event.hon_delivery_id === 'string' && UUID.test(event.hon_delivery_id) ? event.hon_delivery_id.toLowerCase() : undefined;
       const eventId = typeof event.sg_event_id === 'string' && PROVIDER_ID.test(event.sg_event_id) ? event.sg_event_id : undefined;

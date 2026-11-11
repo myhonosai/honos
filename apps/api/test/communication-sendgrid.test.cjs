@@ -41,6 +41,8 @@ test('SendGrid request: sandbox on by default, HON delivery id as custom argumen
   const live = new SendGridEmailProvider(() => approved({ HON_EMAIL_SANDBOX_MODE: 'false' }));
   assert.equal(live.requestBody(request()).mail_settings.sandbox_mode.enable, false);
   assert.equal(new SendGridEmailProvider(() => approved({ HON_EMAIL_SANDBOX_MODE: 'FALSE' })).sandbox(), true);
+  assert.deepEqual(live.requestBody({ ...request(), purpose: 'INTERNAL' }).personalizations[0].custom_args, { hon_delivery_id: request().deliveryId, hon_purpose: 'INTERNAL' });
+  assert.deepEqual(live.requestBody({ ...request(), purpose: 'HQ' }).personalizations[0].custom_args, { hon_delivery_id: request().deliveryId, hon_purpose: 'HQ' });
 });
 
 test('SendGrid outcomes: sandbox 200, rate limit, auth, rejection, server error and network failures', async () => {
@@ -77,6 +79,13 @@ test('SendGrid signed webhook: valid signature maps HON events, drops opens, cli
   assert.deepEqual(receipts.map((r) => r.eventType), ['DELIVERED', 'BOUNCED', 'UNSUBSCRIBED', 'SPAM_REPORT', 'SENT']);
   assert.deepEqual(receipts[0], { provider: 'SENDGRID', providerEventId: 'evt-1', providerMessageId: 'abcDEF123', honDeliveryId: delivery, eventType: 'DELIVERED', occurredAt: new Date((Math.floor(now / 1000) - 5) * 1000).toISOString() });
   assert.equal(JSON.stringify(receipts).includes('ada@example.test'), false);
+});
+
+test('SendGrid signed webhook acknowledges and ignores internal, HQ and unknown-purpose mail, so it never asks SendGrid to retry them', () => {
+  const batch = [event({ hon_purpose: 'INTERNAL', sg_event_id: 'i1' }), event({ hon_purpose: 'HQ', sg_event_id: 'i2' }), event({ hon_purpose: 'SOMETHING_NEW', sg_event_id: 'i3' }),
+    event({ hon_purpose: 'SCHOOL', sg_event_id: 'i4' }), event({ sg_event_id: 'i5' })];
+  const { body, signature, timestamp } = signed(batch);
+  assert.deepEqual(verifier().verify(body, signature, timestamp).map((r) => r.providerEventId), ['i4', 'i5']);
 });
 
 test('SendGrid signed webhook refuses a tampered body, another key, a stale timestamp, a missing key and malformed JSON', () => {
