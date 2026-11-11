@@ -165,3 +165,20 @@ A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker
 2. Must-receive notices: may `BILLING` and `ACCOUNT` emails go to an owner who opted out of HQ emails? (Recommended
    yes, as service messages; texts never ignore opt-out.)
 3. Who pays for HQ texting: HON (recommended; it is HON's own messaging, never billed to the school).
+
+## 8. Plan for PR A (0271)
+
+Starts from main once #223 (0243) and the SendGrid PR are merged. Tests first for each step.
+
+1. Contracts: HQ message purpose, status, delivery and sender enums; reuse `countTextPieces`; `TEXT_TOO_LONG` above
+   1,600 for SMS. Unit tests in contracts.
+2. Migration 0271: the tables in §4.1 (without `hq_contact_channels` SMS confirmation, which is 0272), forced RLS,
+   append-only triggers, definer functions `hq_communication_sender_set/retire`, `hq_message_draft/queue/cancel`,
+   reads, and worker functions `claim_hq_message_deliveries` / `record_hq_message_send_result` /
+   `record_hq_message_provider_event`. Mirror grants in infra 010 and 013. Write the DB proof
+   `test-hq-communications.mjs` first (§6), watch it fail, then make it pass. Pin the AI-0 and staging inventories.
+3. API: `/v1/hq/communications/*` controller and service with the SaaS read and command guards; the dispatcher gets an
+   HQ claim pass that sends with the HQ sender's service id through the existing adapter. API tests for guards,
+   permission per purpose, response shape and the fake-provider end-to-end run.
+4. Verify: `pnpm test`, `pnpm check`, `pnpm build`, `git diff --check`, the new proof and the existing communication
+   proofs. Then `/agent-skills:review`, open the PR, ask the "Review PRs independently" thread.
