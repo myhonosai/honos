@@ -1048,4 +1048,5 @@ export * from './hq-creative.js';
 export * from './student-imports.js';
 export * from './class-series.js';
 export * from './tuition-payments.js';
+export * from './school-payments.js';
 export * from './maya-at-risk.js';

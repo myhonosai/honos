@@ -2696,6 +2696,42 @@ DO $$ DECLARE r text; t text; f text; BEGIN
   END IF;
 END $$;
 
+-- B-TUI-2 piece 1 0258 school payment connections (test mode only): three private tables reached only through six runtime
+-- entry points; guards and helpers are private.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  IF to_regclass('hon.school_pay_connections') IS NULL THEN RAISE EXCEPTION 'Apply migration 0258 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_pay_providers','hon.school_pay_connections','hon.school_pay_connection_events'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=t::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON %s FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON %s FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.school_pay_capabilities_ok(jsonb)','hon.guard_school_pay_connection()','hon.require_school_pay_actor(text,text)',
+    'hon.require_school_pay_reader(text)','hon.school_pay_connection_json(hon.school_pay_connections)','hon.school_pay_observation_ok(jsonb)',
+    'hon.school_pay_command_begin(text,text,text)','hon.school_pay_command_finish(text,text,uuid,hon.school_pay_connections,text,text,jsonb,uuid,uuid)',
+    'hon.school_pay_args_ok(text,uuid,jsonb,text,uuid,uuid,text[],text[])','hon.school_pay_lock_connection(uuid,integer)',
+    'hon.school_pay_account_free(hon.school_pay_connections,text)','hon.read_school_payment_processors(text)',
+    'hon.start_school_payment_connection(text,jsonb,text,uuid,uuid)','hon.set_school_payment_onboarding_link(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.record_school_payment_status(text,uuid,jsonb,text,uuid,uuid)','hon.set_default_school_payment_connection(text,uuid,jsonb,text,uuid,uuid)',
+    'hon.disconnect_school_payment_connection(text,uuid,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_payment_processors(text),hon.start_school_payment_connection(text,jsonb,text,uuid,uuid),
+      hon.set_school_payment_onboarding_link(text,uuid,jsonb,text,uuid,uuid),hon.record_school_payment_status(text,uuid,jsonb,text,uuid,uuid),
+      hon.set_default_school_payment_connection(text,uuid,jsonb,text,uuid,uuid),hon.disconnect_school_payment_connection(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0259 Maya at-risk students (M1, read-only): one runtime entry point; the actor and tuition helpers are private.
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.read_maya_at_risk_students(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0259 first'; END IF;
