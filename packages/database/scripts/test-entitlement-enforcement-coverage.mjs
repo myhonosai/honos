@@ -46,6 +46,8 @@ const OPEN_BY_DESIGN={
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',
  'hon.submit_kiosk_handoff(text,text)':'public kiosk route; B6B decides suspended-school behaviour',
+ 'hon.book_public_school_event(text,jsonb,text)':'public event booking link (0261), same rule as submit_public_form; B6B decides suspended-school intake',
+ 'hon.cancel_public_school_event_booking(text,jsonb)':'family cancels their own event booking (0261); must keep working for a suspended school',
  'hon.chad_follow_up_draft_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.crm_lead_target_is_current(uuid,uuid)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.marketing_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
