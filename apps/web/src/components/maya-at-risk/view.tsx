@@ -28,7 +28,7 @@ export function factorText(language: string, factor: MayaRiskFactor): string {
       : `No class attended in ${plural(factor.daysSinceLastAttendance ?? 0, 'day', 'days')}.`;
     case 'ATTENDANCE_DROP': return `Attendance dropped: ${plural(factor.last28Days, 'class', 'classes')} in the last 4 weeks, ${factor.previous28Days} in the 4 weeks before.`;
     case 'NO_RANK_PROGRESS': return `No rank promotion in ${plural(factor.daysSinceProgress, 'day', 'days')}.`;
-    case 'TUITION_OVERDUE': return `${plural(factor.overdueInvoiceCount, 'invoice is', 'invoices are')} overdue.`;
+    case 'TUITION_OVERDUE': return `${plural(factor.overdueInvoiceCount, 'invoice is', 'invoices are')} overdue on this student's membership or family billing account.`;
     case 'TERM_ENDING': return factor.cancellationPending ? 'A cancellation is pending.' : `Membership term ends ${day(language, factor.termEndsOn ?? '')}.`;
   }
 }

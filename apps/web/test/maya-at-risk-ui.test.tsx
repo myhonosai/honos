@@ -70,7 +70,7 @@ it('shows each student with plain reasons and one suggested next step', () => {
   expect(noBilling).toContain('Tuition is not included');
   expect(factorText('en', { code: 'TERM_ENDING', points: 20, cancellationPending: false, termEndsOn: '2026-12-01' })).toContain('Dec 1, 2026');
   expect(factorText('en', { code: 'LONG_ABSENCE', points: 30, daysSinceLastAttendance: null, neverAttended: true })).toBe('Has not attended a class since joining.');
-  expect(factorText('en', { code: 'TUITION_OVERDUE', points: 20, overdueInvoiceCount: 2 })).toBe('2 invoices are overdue.');
+  expect(factorText('en', { code: 'TUITION_OVERDUE', points: 20, overdueInvoiceCount: 2 })).toBe("2 invoices are overdue on this student's membership or family billing account.");
 });
 
 it('hides names when concealed, denied or unavailable', () => {
