@@ -13,6 +13,6 @@ Owner request (David, 2026-11-11): the six executive cards around HON on the HQ 
 ## Plan
 
 - CSS: remove the `nth-child` lift/turn offsets; give the role and responsibility lines fixed two-line boxes (clamped) and keep names on one line, so card height is identical; pin the Workspace button to the card bottom.
-- Assets: one centred crop per executive from the approved chibi concept, saved as `public/hq-assets/chibi/<executiveKey>.webp` (circular alpha). Replaces the sprite offsets, which had drifted (Ryan and Sophia were cut off).
+- Assets: one centred crop per executive from the approved chibi concept, redrawn at high resolution with Higgsfield (crop as reference, same character and style; owner-authorized 2026-11-11), saved as `public/hq-assets/chibi/<executiveKey>.webp` (512 px, circular alpha). Replaces the sprite offsets, which had drifted (Ryan and Sophia were cut off).
 - `ExecutivePortrait` takes `executiveKey` and uses the per-executive file when the chibi style is selected.
 - Tests: `apps/web/test/hq-command-stage-layout.test.tsx` (portrait source per executive, files exist, realistic unchanged, no offsets, fixed text boxes, pinned button). Browser measurement of card boxes at 1920/1440/1024/390.
