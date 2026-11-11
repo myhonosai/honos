@@ -2712,9 +2712,9 @@ try {
   pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or used as a suggestion source; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view");
   }
 
-  // ---- INV-32 (K2c, 0266): HON may suggest Claire; confirming her is an ordinary K2 analysis grouped under the answer ----
+  // ---- INV-40 (K2c, 0266): HON may suggest Claire; confirming her is an ordinary K2 analysis grouped under the answer ----
   {
-  const o = await makeOrg('inv-32');
+  const o = await makeOrg('inv-40');
   const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
   const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
   const code = async (p) => { const r = await settle(p); return r.error?.getResponse?.().code ?? r.error?.code ?? r.error?.message ?? 'OK'; };
@@ -2764,6 +2764,10 @@ try {
   assert.equal(await code(claireFrom(onlyMarcus.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'not suggested');
   assert.equal(await code(claireFrom(c1.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'a Claire answer is not a source');
   assert.equal(await code(claireFrom(noRep.turnId)), 'HON_SUGGESTION_NOT_CONFIRMABLE', 'never stored without reporting.view');
+  // 0260 specialists are not in HON's suggestion set: Alex, Jordan or Lena are never confirmed from a suggestion.
+  for (const agentKey of ['alex', 'jordan', 'lena']) {
+    assert.notEqual(await code(hon.sendTurn(scope, conv.id, { text: 'How are we doing?', delegation: { agentKey }, fromSuggestionTurnId: src.turnId }, K())), 'OK', agentKey);
+  }
   assert.equal(await turnsOf(conv.id), n, 'refusals record no turn');
   // Without reporting.view now, Claire is refused (her own capability) before anything is recorded.
   const src2 = await ask(['claire'], 'Where are we losing students?');
@@ -2807,10 +2811,11 @@ try {
   assert.ok(!facts.includes('CLAIRE-ONLY-ANALYSIS-TEXT'), 'Claire text never reaches HON');
   // 7. Table rules: members and suggestions accept claire; Claire's own rows still carry no suggestions.
   assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{maya}' WHERE turn_id=$1", [src.turnId]))).error?.code, '23514');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{alex}' WHERE turn_id=$1", [src.turnId]))).error?.code, '23514', 'alex not suggestable');
   assert.equal((await settle(admin.query("UPDATE hon.hon_reply_invocations SET suggested_agents='{kai}' WHERE turn_id=$1", [c1.turnId]))).error?.code, '23514', 'Claire never suggests');
   assert.equal((await row("SELECT has_function_privilege($1,'hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])','EXECUTE') s", [runtimeRole])).s, false, 'internal helper');
   void m1;
-  pass('INV-32', "K2c: HON may suggest Claire (closed set marcus, kai, chad, claire), stored and shown only for a reporting.view holder; confirming her from this human's own whole, visible HON answer is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only, resend replays) grouped under that answer with a status derived from her reply; she is confirmed once, only where suggested and never from a Claire answer; the source is re-checked after the group and work writes wait (a lapse persists no turn, member or reply and calls nothing); a C3b summary sees her agent, status and reason but never her text; Claire rows still never suggest");
+  pass('INV-40', "K2c: HON may suggest Claire (closed set marcus, kai, chad, claire), stored and shown only for a reporting.view holder; confirming her from this human's own whole, visible HON answer is an ordinary K2 analysis (one call, claire/ANALYZE, metrics only, resend replays) grouped under that answer with a status derived from her reply; she is confirmed once, only where suggested and never from a Claire answer; the source is re-checked after the group and work writes wait (a lapse persists no turn, member or reply and calls nothing); a C3b summary sees her agent, status and reason but never her text; Claire rows still never suggest; Alex, Jordan and Lena (0260) are neither suggested nor confirmed from a suggestion");
   }
 
   // ---- INV-32 (0254): "Ask next" follow-ups and "Based on" sources are presentation data only ----
