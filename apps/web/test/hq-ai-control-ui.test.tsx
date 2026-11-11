@@ -214,3 +214,14 @@ it('has every phrase in English, Korean and Spanish, and puts both screens in th
   const routes = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')) as { routes?: { path: string }[] } | { path: string }[];
   expect(JSON.stringify(routes)).toContain('"/hq/ai-safety"');
 });
+
+it("names Claire's Business Performance calls as their own AI team member in every language (0267)", () => {
+  const claire = usage({ schools: [{ organizationId: org, schoolId: school, ...zero, providerReportedCostMicrounits: 41_500, entries: 3, unreconciledInvocations: 0, byClass: {
+    AGENT_INFERENCE: { ...amount(), byAgent: { BUSINESS_PERFORMANCE: amount() } } } }] });
+  const labels = { en: 'Claire, Business Performance', ko: 'Claire, 비즈니스 성과', es: 'Claire, Rendimiento del negocio' } as const;
+  for (const language of ['en', 'ko', 'es'] as const) {
+    const html = renderToStaticMarkup(<AiCostsView language={language} concealed={false} range="r30" usage={{ state: 'READY', view: claire } as never} names={names}/>);
+    expect(html).toContain(labels[language]);
+    expect(html).not.toContain('a_BUSINESS_PERFORMANCE');
+  }
+});
