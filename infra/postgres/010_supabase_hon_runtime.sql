@@ -2627,3 +2627,25 @@ DO $$ DECLARE r text; f text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- 0255 What HON remembers: tables reached only through three runtime entry points; helpers private.
+DO $$ DECLARE r text; t text; f text; BEGIN
+  IF to_regclass('hon.hon_school_notes') IS NULL THEN RAISE EXCEPTION 'Apply migration 0255 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.hon_school_notes','hon.hon_school_note_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.hon_school_note_ok(text)','hon.guard_hon_school_notes()','hon.hon_school_notes_actor(text,boolean)',
+    'hon.hon_school_note_view(hon.hon_school_notes)','hon.read_hon_school_notes(text)','hon.hon_school_note_command(text,text,jsonb,text,uuid,uuid)',
+    'hon.add_hon_school_note(text,jsonb,text,uuid,uuid)','hon.delete_hon_school_note(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_hon_school_notes(text),hon.add_hon_school_note(text,jsonb,text,uuid,uuid),hon.delete_hon_school_note(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;

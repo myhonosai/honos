@@ -18,7 +18,7 @@ const run = (content, over = {}, finish = 'stop') => new OpenRouterHonReplyRunti
 
 test('0254 source keys are a closed set: the Command Center metrics plus earlier conversation and specialist results, each with a label', () => {
   assert.deepEqual([...HON_REPLY_SOURCE_KEYS], ['newLeads24h', 'upcomingTrials24h', 'upcomingTestingEvents30d', 'pendingActionApprovals', 'outstandingWorkItems',
-    'membershipTermsEnding30d', 'paidInvoicesCreated30d', 'unansweredInquiries', 'attendanceDecline', 'trialConversion', 'revenue', 'conversation', 'specialistResults']);
+    'membershipTermsEnding30d', 'paidInvoicesCreated30d', 'unansweredInquiries', 'attendanceDecline', 'trialConversion', 'revenue', 'conversation', 'specialistResults', 'schoolNotes']);
   for (const key of HON_REPLY_SOURCE_KEYS) assert.match(HON_REPLY_SOURCE_LABELS[key], /^[A-Z][A-Za-z0-9 ()]+$/);
   assert.equal(HON_REPLY_MAX_FOLLOW_UPS, 3);
   assert.equal(HON_REPLY_MAX_SOURCES, 5);

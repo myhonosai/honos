@@ -29,13 +29,14 @@ export const HON_REPLY_MAX_SUGGESTIONS = 3;
  * conversation and the recorded specialist results. The database keeps only areas actually sent with that answer.
  */
 export const HON_REPLY_SOURCE_KEYS = ['newLeads24h', 'upcomingTrials24h', 'upcomingTestingEvents30d', 'pendingActionApprovals', 'outstandingWorkItems',
-  'membershipTermsEnding30d', 'paidInvoicesCreated30d', 'unansweredInquiries', 'attendanceDecline', 'trialConversion', 'revenue', 'conversation', 'specialistResults'] as const;
+  'membershipTermsEnding30d', 'paidInvoicesCreated30d', 'unansweredInquiries', 'attendanceDecline', 'trialConversion', 'revenue', 'conversation', 'specialistResults', 'schoolNotes'] as const;
 export type HonReplySourceKey = typeof HON_REPLY_SOURCE_KEYS[number];
 export const HON_REPLY_SOURCE_LABELS: Readonly<Record<HonReplySourceKey, string>> = {
   newLeads24h: 'New leads (24h)', upcomingTrials24h: 'Trials in the next 24h', upcomingTestingEvents30d: 'Testing events (30 days)',
   pendingActionApprovals: 'Pending approvals', outstandingWorkItems: 'Open work items', membershipTermsEnding30d: 'Memberships ending (30 days)',
   paidInvoicesCreated30d: 'Paid invoices (30 days)', unansweredInquiries: 'Unanswered inquiries', attendanceDecline: 'Attendance decline',
   trialConversion: 'Trial conversion', revenue: 'Revenue', conversation: 'Earlier conversation', specialistResults: 'Specialist results',
+  schoolNotes: 'School notes',
 };
 export const HON_REPLY_MAX_SOURCES = 5;
 /** 0254: "Ask next" follow-up questions. Plain text only; tapping one fills the composer and runs nothing. */
@@ -311,4 +312,52 @@ export function validateHonOrchestrationList(value: unknown): HonOrchestrationLi
     if (o.status !== deriveHonOrchestrationStatus((o.members as HonOrchestrationMember[]).map((m) => m.status))) drift();
   }
   return r as unknown as HonOrchestrationList;
+}
+
+/**
+ * 0255: What HON remembers. Notes a person with ai.school_notes.manage saves on purpose; every HON user at the school sees
+ * them; HON's answers use them. Never about a student, family or staff member (contacts, links and markup are refused).
+ */
+export const HON_SCHOOL_NOTE_LIMITS = { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200, minCharacters: 3 } as const;
+export interface HonSchoolNote { id: string; text: string; createdAt: string }
+export interface HonSchoolNotes { notes: HonSchoolNote[]; canManage: boolean; limits: { maxNotes: number; maxCharacters: number; noteCharacters: number } }
+export interface HonSchoolNoteReceipt { record: { note: HonSchoolNote } | { noteId: string; deleted: true }; replayed: boolean }
+/** Same rule as the database's hon_school_note_ok. */
+/** Spaces as the database spells them out (no locale classes), so both sides refuse exactly the same text. */
+const NOTE_SPACE = ' \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
+const NOTE_EDGE = new RegExp(`^[${NOTE_SPACE}]|[${NOTE_SPACE}]$`);
+const NOTE_EMAIL = new RegExp(`[^${NOTE_SPACE}@]+@[^${NOTE_SPACE}@]+`);
+const NOTE_PHONE_STRIP = new RegExp(`[${NOTE_SPACE}().+-]`, 'g');
+export function isHonSchoolNoteText(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const length = [...value].length;
+  return length >= HON_SCHOOL_NOTE_LIMITS.minCharacters && length <= HON_SCHOOL_NOTE_LIMITS.noteCharacters && !NOTE_EDGE.test(value)
+    && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029<>]|https?|www\.|:\/\//i.test(value) && !NOTE_EMAIL.test(value) && !/[0-9]{7,}/.test(value.replace(NOTE_PHONE_STRIP, ''));
+}
+export function validateHonSchoolNoteInput(value: unknown): { text: string } {
+  const r = record(value, invalid); exactKeys(r, ['text'], invalid);
+  if (!isHonSchoolNoteText(r.text)) invalid();
+  return { text: r.text as string };
+}
+const isNote = (v: unknown): v is HonSchoolNote => {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
+  const n = v as Record<string, unknown>;
+  return Object.keys(n).sort().join(',') === 'createdAt,id,text' && isUuid(n.id) && isHonSchoolNoteText(n.text) && isTimestamp(n.createdAt);
+};
+export function validateHonSchoolNotes(value: unknown): HonSchoolNotes {
+  const r = record(value, drift); exactKeys(r, ['canManage', 'limits', 'notes'], drift);
+  const l = record(r.limits, drift); exactKeys(l, ['maxCharacters', 'maxNotes', 'noteCharacters'], drift);
+  if (typeof r.canManage !== 'boolean' || !Array.isArray(r.notes) || !r.notes.every(isNote) || r.notes.length > HON_SCHOOL_NOTE_LIMITS.maxNotes
+    || new Set((r.notes as HonSchoolNote[]).map((n) => n.id)).size !== r.notes.length
+    || l.maxNotes !== HON_SCHOOL_NOTE_LIMITS.maxNotes || l.maxCharacters !== HON_SCHOOL_NOTE_LIMITS.maxCharacters || l.noteCharacters !== HON_SCHOOL_NOTE_LIMITS.noteCharacters) drift();
+  return { notes: (r.notes as HonSchoolNote[]).map((n) => ({ ...n })), canManage: r.canManage as boolean, limits: { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200 } };
+}
+export function validateHonSchoolNoteReceipt(value: unknown): HonSchoolNoteReceipt {
+  const r = record(value, drift); exactKeys(r, ['record', 'replayed'], drift);
+  const rec = record(r.record, drift);
+  if (typeof r.replayed !== 'boolean') drift();
+  if ('note' in rec) { exactKeys(rec, ['note'], drift); if (!isNote(rec.note)) drift(); return { record: { note: { ...(rec.note as HonSchoolNote) } }, replayed: r.replayed as boolean }; }
+  exactKeys(rec, ['deleted', 'noteId'], drift);
+  if (rec.deleted !== true || !isUuid(rec.noteId)) drift();
+  return { record: { noteId: rec.noteId as string, deleted: true }, replayed: r.replayed as boolean };
 }
