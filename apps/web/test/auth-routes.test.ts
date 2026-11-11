@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { AUTH_TRANSACTION_COOKIE, HON_SESSION_COOKIE, MANUS_SESSION_COOKIE, createTransaction, issueTransaction, issueSession, issueManusSession, manusConfig, oidcConfig, sessionConfig, verifySession } from '@hon/auth';
 import { GET as login } from '../src/app/auth/login/route';
 import { GET as callback } from '../src/app/auth/callback/route';
+import { POST as logout } from '../src/app/auth/logout/route';
 import { GET as me } from '../src/app/api/identity/me/route';
 import { GET as readiness } from '../src/app/api/identity/readiness/route';
 
@@ -161,5 +162,38 @@ describe('explicit Manus development adapter compatibility', () => {
         expect((await me(req('/api/identity/me', `${HON_SESSION_COOKIE}=${token}`))).status).toBe(401);
       }
     }
+  });
+});
+
+describe('sign-out route', () => {
+  const post = (headers: Record<string, string>) => logout(new NextRequest('https://hon.example/auth/logout', { method: 'POST', headers: { host: 'hon.example', ...headers } }));
+  it('expires the HON and Manus session cookies and sends the browser to a fixed home path', async () => {
+    const session = issueSession(identity, sessionConfig());
+    const response = await post({ origin: 'https://hon.example', cookie: `${HON_SESSION_COOKIE}=${session}` });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    for (const name of [HON_SESSION_COOKIE, MANUS_SESSION_COOKIE]) {
+      const cookie = response.cookies.get(name)!;
+      expect(cookie.value).toBe(''); expect(cookie.maxAge).toBe(0); expect(cookie.path).toBe('/'); expect(cookie.secure).toBe(true); expect(cookie.httpOnly).toBe(true);
+    }
+    expect(response.cookies.get(AUTH_TRANSACTION_COOKIE)!.path).toBe('/auth');
+  });
+  it('refuses cross-site or origin-less requests and never clears cookies for them', async () => {
+    for (const headers of [{ origin: 'https://evil.example' }, {}, { origin: 'null' }, { origin: 'http://hon.example' }]) {
+      const response = await post(headers);
+      expect(response.status).toBe(403);
+      expect(response.headers.get('set-cookie')).toBeNull();
+    }
+  });
+  it('trusts the configured OIDC origin, not forwarding headers', async () => {
+    const response = await post({ origin: 'https://evil.example', 'x-forwarded-host': 'evil.example' });
+    expect(response.status).toBe(403);
+  });
+  it('still signs out when sign-in configuration is broken', async () => {
+    delete process.env.HON_OIDC_CLIENT_ID;
+    const response = await post({ origin: 'https://hon.example' });
+    expect(response.status).toBe(303);
+    expect(response.cookies.get(HON_SESSION_COOKIE)!.maxAge).toBe(0);
   });
 });
