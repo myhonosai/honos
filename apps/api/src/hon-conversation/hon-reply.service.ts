@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
   HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, isHonReplyFollowUp, isHonReplySourceKey,
-  type HonReplyMode,
+  type HonAiTone, type HonReplyMode,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
@@ -102,7 +102,12 @@ export class HonReplyService {
       if (!(error instanceof ForbiddenException)) throw error;
     }
     const ready = this.provider.readiness('OPENROUTER') === 'READY';
-    const invocation = await this.transaction(scope, async (client) => (await client.query<{ data: HonReplyInvocation | null }>('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,$4) data', [scope.externalSubject, turnId, planId, ready])).rows[0]!.data);
+    const invocation = await this.transaction(scope, async (client) => {
+      const prepared = (await client.query<{ data: HonReplyInvocation | null }>('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,$4) data', [scope.externalSubject, turnId, planId, ready])).rows[0]!.data;
+      // 0256: HON answers in the school's tone (a closed key from the database, read in the same transaction); Claire keeps her own voice.
+      if (!prepared || prepared.specialist !== 'hon') return prepared;
+      return { ...prepared, tone: (await client.query<{ tone: HonAiTone }>('SELECT hon.hon_ai_tone() tone')).rows[0]!.tone };
+    });
     if (!invocation) return;
     let result: HonReplyResult;
     try {

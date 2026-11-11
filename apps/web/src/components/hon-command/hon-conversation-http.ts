@@ -1,7 +1,8 @@
 import {
-  HON_DELEGATE_AGENTS, validateHonConversationCreate, validateHonSchoolNoteInput, validateHonSchoolNoteReceipt, validateHonSchoolNotes, validateHonConversationSummary, validateHonConversationThread, validateHonTurnReceipt, validateHonTurnRequest,
+  HON_DELEGATE_AGENTS, validateHonConversationCreate, validateHonSchoolNoteInput, validateHonSchoolNoteReceipt, validateHonSchoolNotes,
+  validateHonSchoolTone, validateHonSchoolToneInput, validateHonSchoolToneReceipt, validateHonConversationSummary, validateHonConversationThread, validateHonTurnReceipt, validateHonTurnRequest,
   type HonConversationPage, type HonConversationReadiness, type HonConversationSummary, type HonConversationThread, type HonTurnReceipt,
-  type HonSchoolNoteReceipt, type HonSchoolNotes, type HonTurnRequest,
+  type HonSchoolNoteReceipt, type HonSchoolNotes, type HonAiTone, type HonSchoolTone, type HonSchoolToneReceipt, type HonTurnRequest,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { crmLeadListPath } from '../crm-leads-http';
@@ -188,4 +189,21 @@ export const HON_SCHOOL_NOTES_API: HonSchoolNotesApi = {
     try { return validateHonSchoolNotes(closed(body, ['data']).data); } catch { return drift(); }
   }, signal, owned),
   send: (prepared, owned) => send(prepared, validateHonSchoolNoteReceipt, owned),
+};
+
+/** 0256 How HON talks: one closed tone per school; only the owner changes it (the server decides). */
+export function prepareSchoolTone(school: HonSchool, tone: string): PreparedHonCommand {
+  let checked: { tone: HonAiTone };
+  try { checked = validateHonSchoolToneInput({ tone }); } catch { throw new HonConversationError('INVALID'); }
+  return Object.freeze({ path: `${honConversationBase(school)}/tone`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
+}
+export interface HonSchoolToneApi {
+  read(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<HonSchoolTone>;
+  send(prepared: PreparedHonCommand, owned?: Owned): Promise<HonSchoolToneReceipt>;
+}
+export const HON_SCHOOL_TONE_API: HonSchoolToneApi = {
+  read: (school, signal, owned) => read(`${honConversationBase(school)}/tone`, (body) => {
+    try { return validateHonSchoolTone(closed(body, ['data']).data); } catch { return drift(); }
+  }, signal, owned),
+  send: (prepared, owned) => send(prepared, validateHonSchoolToneReceipt, owned),
 };

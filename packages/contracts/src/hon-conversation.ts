@@ -361,3 +361,31 @@ export function validateHonSchoolNoteReceipt(value: unknown): HonSchoolNoteRecei
   if (rec.deleted !== true || !isUuid(rec.noteId)) drift();
   return { record: { noteId: rec.noteId as string, deleted: true }, replayed: r.replayed as boolean };
 }
+
+/**
+ * 0256 HON tone per school. A closed key picks one fixed prompt sentence in the API; STANDARD adds nothing (today's
+ * wording). The owner picks it; HON and Kai use it; Claire keeps her own voice. Tone never changes the facts rules.
+ */
+export const HON_AI_TONES = ['STANDARD', 'FRIENDLY_COACH', 'STRAIGHT_TO_THE_POINT', 'FORMAL'] as const;
+export type HonAiTone = (typeof HON_AI_TONES)[number];
+export const HON_AI_TONE_LABELS: Readonly<Record<HonAiTone, string>> = {
+  STANDARD: 'Standard', FRIENDLY_COACH: 'Friendly coach', STRAIGHT_TO_THE_POINT: 'Straight to the point', FORMAL: 'Formal',
+};
+export const isHonAiTone = (value: unknown): value is HonAiTone => typeof value === 'string' && (HON_AI_TONES as readonly string[]).includes(value);
+export interface HonSchoolTone { tone: HonAiTone; canManage: boolean; updatedAt: string | null }
+export interface HonSchoolToneReceipt { tone: HonAiTone; previousTone: HonAiTone; replayed: boolean }
+export function validateHonSchoolToneInput(value: unknown): { tone: HonAiTone } {
+  const r = record(value, invalid); exactKeys(r, ['tone'], invalid);
+  if (!isHonAiTone(r.tone)) invalid();
+  return { tone: r.tone as HonAiTone };
+}
+export function validateHonSchoolTone(value: unknown): HonSchoolTone {
+  const r = record(value, drift); exactKeys(r, ['canManage', 'tone', 'updatedAt'], drift);
+  if (!isHonAiTone(r.tone) || typeof r.canManage !== 'boolean' || !(r.updatedAt === null || isTimestamp(r.updatedAt))) drift();
+  return { tone: r.tone as HonAiTone, canManage: r.canManage as boolean, updatedAt: r.updatedAt as string | null };
+}
+export function validateHonSchoolToneReceipt(value: unknown): HonSchoolToneReceipt {
+  const r = record(value, drift); exactKeys(r, ['previousTone', 'replayed', 'tone'], drift);
+  if (!isHonAiTone(r.tone) || !isHonAiTone(r.previousTone) || typeof r.replayed !== 'boolean') drift();
+  return { tone: r.tone as HonAiTone, previousTone: r.previousTone as HonAiTone, replayed: r.replayed as boolean };
+}

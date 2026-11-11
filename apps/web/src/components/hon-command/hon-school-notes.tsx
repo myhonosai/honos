@@ -71,7 +71,7 @@ export function HonSchoolNotesView(props: HonSchoolNotesViewProps): React.ReactE
         <textarea id="hon-notes-text" rows={2} maxLength={HON_SCHOOL_NOTE_LIMITS.noteCharacters} value={props.draft} disabled={busy} onChange={(event) => props.onDraft(event.target.value)}
           aria-describedby="hon-notes-help" placeholder="We close the first week of August." />
         <div className={styles.composerRow}><button type="submit" disabled={full || busy || draftLength < HON_SCHOOL_NOTE_LIMITS.minCharacters}>Save note</button></div>
-        <p id="hon-notes-help" className={styles.meta}>3 to 200 characters. No emails, phone numbers or links. {full ? 'The list is full: delete a note first.' : ''}</p>
+        <p id="hon-notes-help" className={styles.meta}>3 to 200 characters. No personal details: nothing about a student, family or staff member, and no emails, phone numbers or links. {full ? 'The list is full: delete a note first.' : ''}</p>
       </form> : <p className={styles.meta}>Only an owner, or staff given permission, can change these notes.</p>}
     </> : null}
   </section>;

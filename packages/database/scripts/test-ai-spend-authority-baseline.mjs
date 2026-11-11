@@ -140,8 +140,10 @@ let providerCalls = 0;
 function fakeProvider(ErrorType, draft) {
   const provider = { calls: 0, mode: 'RESULT', held: [] };
   provider.readiness = () => 'READY';
-  provider.generate = async () => {
-    provider.calls += 1; providerCalls += 1;
+  // 0256: each input is kept so a proof can see what the server sent (for Kai: the school's tone).
+  provider.inputs = [];
+  provider.generate = async (input) => {
+    provider.calls += 1; providerCalls += 1; provider.inputs.push(input);
     if (provider.mode === 'HOLD') return new Promise((resolve, reject) => provider.held.push({ resolve, reject }));
     if (provider.mode === 'UNKNOWN') throw new ErrorType('UNKNOWN', 'PROVIDER_UNKNOWN');
     if (provider.mode === 'FAILED') throw new ErrorType('FAILED', 'PROVIDER_REJECTED');
@@ -2877,6 +2879,66 @@ try {
   assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_notes WHERE id=$1', [live]))).error?.code, '42501');
   assert.equal((await settle(admin.query("UPDATE hon.hon_school_notes SET body='Changed text here' WHERE id=$1", [live]))).error?.code, '42501');
   pass('INV-33', "0255: school notes are saved only by a human with ai.school_notes.manage (staff-assignable), listed for every HON user at the school, idempotent by key, refused when they look like a person's contact, a link or markup, limited to 20 notes and 2,000 characters, given to HON's context newest first and citable as schoolNotes (never to Claire), erased on delete (evidence keeps ids and times), audited and announced by id only, and reachable only through three runtime entry points");
+  }
+
+  // ---- INV-34 (0256): HON tone per school: the owner picks a closed key; HON and Kai receive it; Claire does not ----
+  {
+  const o = await makeOrg('inv-34');
+  const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
+  const hon = new HonConversationService(db, agents.marcus.service, agents.claire.service, agents.chad.service, new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon), honReplies);
+  const set = (input, key = K()) => { const c = context(o); return tenant(c, (client) => client.query('SELECT hon.set_hon_school_tone($1,$2::jsonb,$3,$4::uuid,$5::uuid) r', [o.subject, JSON.stringify(input), key, c.requestId, c.correlationId])).then((r) => r.rows[0].r); };
+  const read = () => tenant(context(o), (client) => client.query('SELECT hon.read_hon_school_tone($1) r', [o.subject])).then((r) => r.rows[0].r);
+  const code = async (p) => (await settle(p)).error?.code ?? 'OK';
+  const drop = (c) => admin.query('DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code=$2', [o.role, c]);
+  const add = (c) => admin.query('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [o.role, o.id, c]);
+  const perm = await row("SELECT is_sensitive, is_staff_assignable FROM hon.permissions WHERE code='ai.school_tone.manage'");
+  assert.deepEqual([perm.is_sensitive, perm.is_staff_assignable], [false, false], 'owner-only permission');
+  // 1. Default STANDARD; HON receives STANDARD.
+  assert.deepEqual(await read(), { tone: 'STANDARD', canManage: true, updatedAt: null });
+  fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY'; fakes.hon.suggestions = []; fakes.hon.followUps = []; fakes.hon.sources = [];
+  const conv = await hon.create(scope, { title: 'Tone' }, K());
+  await hon.sendTurn(scope, conv.id, { text: 'How are leads?', delegation: null }, K());
+  assert.equal(fakes.hon.inputs.at(-1).tone, 'STANDARD');
+  // 2. Set, replay by key, reused key refused, same tone again is a no-op receipt; closed input only.
+  const key = K();
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }, key), { tone: 'FRIENDLY_COACH', previousTone: 'STANDARD', replayed: false });
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }, key), { tone: 'FRIENDLY_COACH', previousTone: 'STANDARD', replayed: true });
+  assert.equal(await code(set({ tone: 'FORMAL' }, key)), '23505');
+  assert.deepEqual(await set({ tone: 'FRIENDLY_COACH' }), { tone: 'FRIENDLY_COACH', previousTone: 'FRIENDLY_COACH', replayed: false });
+  for (const input of [{ tone: 'friendly_coach' }, { tone: 'PIRATE' }, { tone: 'FORMAL', extra: 1 }, {}, { tone: 7 }]) assert.equal(await code(set(input)), '22023', JSON.stringify(input));
+  const r1 = await read();
+  assert.deepEqual([r1.tone, r1.canManage, typeof r1.updatedAt], ['FRIENDLY_COACH', true, 'string']);
+  // 3. HON and Kai receive the school's tone; Claire's analysis does not carry one.
+  await hon.sendTurn(scope, conv.id, { text: 'How are trials?', delegation: null }, K());
+  assert.equal(fakes.hon.inputs.at(-1).tone, 'FRIENDLY_COACH');
+  await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());
+  assert.equal(fakes.hon.inputs.at(-1).specialist, 'claire');
+  assert.equal(fakes.hon.inputs.at(-1).tone, undefined, 'Claire keeps her own voice');
+  fakes.claire.mode = 'RESULT';
+  const nKai = fakes.claire.inputs.length;
+  await agents.claire.service.submit(context(o), agents.claire.input(o));
+  assert.equal(fakes.claire.inputs.length, nKai + 1, 'Kai called once');
+  assert.equal(fakes.claire.inputs.at(-1).tone, 'FRIENDLY_COACH');
+  // 4. Audit carries the keys only; the outbox is internal only.
+  const audits = (await admin.query("SELECT next_state FROM hon.audit_events WHERE organization_id=$1 AND action_code='hon.school_tone.set' ORDER BY occurred_at", [o.id])).rows;
+  assert.deepEqual(audits.map((a) => a.next_state), [{ tone: 'FRIENDLY_COACH', previousTone: 'STANDARD' }, { tone: 'FRIENDLY_COACH', previousTone: 'FRIENDLY_COACH' }]);
+  assert.equal((await row("SELECT count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 AND event_type='hon.school_tone.set' AND payload->>'internalOnly'='true'", [o.id])).n, 2);
+  // 5. Authority: setting needs ai.school_tone.manage; reading needs HON, Kai or manage.
+  await drop('ai.school_tone.manage');
+  assert.equal(await code(set({ tone: 'FORMAL' })), '42501');
+  assert.equal((await read()).canManage, false);
+  await drop('ai.invocation.plan');
+  assert.equal((await read()).tone, 'FRIENDLY_COACH', 'Kai users read it');
+  await drop('teaching.assistant.use');
+  assert.equal(await code(read()), '42501');
+  await add('ai.invocation.plan'); await add('teaching.assistant.use'); await add('ai.school_tone.manage');
+  // 6. Grants: runtime reaches the tables only through the three entry points; rows are never removed.
+  for (const t of ['hon_school_tones', 'hon_school_tone_requests']) assert.equal((await row("SELECT has_table_privilege($1,$2,'SELECT,INSERT,UPDATE,DELETE') p", [runtimeRole, `hon.${t}`])).p, false, t);
+  for (const f of ['hon.read_hon_school_tone(text)', 'hon.set_hon_school_tone(text,jsonb,text,uuid,uuid)', 'hon.hon_ai_tone()']) assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') p", [runtimeRole, f])).p, true, f);
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_tones WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query('DELETE FROM hon.hon_school_tone_requests WHERE school_id=$1', [o.school]))).error?.code, '42501');
+  assert.equal((await settle(admin.query("UPDATE hon.hon_school_tones SET tone='PIRATE' WHERE school_id=$1", [o.school]))).error?.code, '23514');
+  pass('INV-34', "0256: each school's tone is a closed key (Standard by default) set only by a human with the owner-only ai.school_tone.manage, idempotent by key, audited with keys only, read by HON, Kai or manage users, sent to HON and Kai (never Claire), and reachable only through three runtime entry points");
   }
 
   // ---- INV-15 (S4-b, replaces KF-AI3): deterministic serialization on the ai.budget advisory lock ----
