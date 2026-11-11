@@ -2709,7 +2709,36 @@ try {
   await dropRep();
   assert.equal((await new AiTeamReadinessService(db, fakes.marcus, fakes.claire, fakes.chad, fakes.hon).read(scope)).data.agents.find((x) => x.agentKey === 'claire').blockedBy, 'NOT_AUTHORIZED');
   await addRep();
-  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or confirmed as suggestions; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view");
+  // 8. HQ usage (0267): Claire's calls count under BUSINESS_PERFORMANCE, never HON_REPLY, including a late provider
+  //    expense recorded after an HQ write-off of her UNKNOWN call; a HON answer in the same school stays HON_REPLY.
+  {
+    const usageOf = async () => (await row('SELECT hon.read_ai_school_usage_from_hq($1,$2::timestamptz,$3::timestamptz) r',
+      [hq.subject, new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() + 3_600_000).toISOString()])).r.schools.find((x) => x.schoolId === o.school);
+    const claireLedger = (await row("SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist='claire' AND u.organization_id=$1", [o.id])).n;
+    assert.ok(claireLedger >= 1);
+    const honLedger = (await row("SELECT count(*)::int n FROM hon.ai_usage_ledger u JOIN hon.hon_reply_invocations i ON i.id = u.source_invocation_id WHERE i.specialist='hon' AND u.organization_id=$1", [o.id])).n;
+    let by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.HON_REPLY?.entries ?? 0], [claireLedger, honLedger], JSON.stringify(by));
+    fakes.hon.mode = 'UNKNOWN';
+    let lostTurn;
+    try { lostTurn = await claire('Usage attribution probe'); } finally { fakes.hon.mode = 'RESULT'; }
+    assert.equal(lostTurn.status, 'UNKNOWN', JSON.stringify(lostTurn));
+    const lost = await row('SELECT id FROM hon.hon_reply_invocations WHERE turn_id=$1', [lostTurn.turnId]);
+    const off = await settle(admin.query('SELECT hon.resolve_ai_unknown_invocation($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r',
+      [hq.subject, 'HON_REPLY', lost.id, JSON.stringify({ decision: 'WRITE_OFF', reason: 'Synthetic AI-0 K2 provider lookup unavailable', evidence: { estimatedProviderCostMicrounits: 700 } }), K(), K(), K()]));
+    assert.ok(off.value, off.error?.message);
+    const lateRec = await settle(admin.query('SELECT hon.record_ai_late_provider_expense($1,$2,$3::uuid,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) r',
+      [hq.subject, 'HON_REPLY', lost.id, JSON.stringify({ reason: 'Provider usage export showed the actual charge', evidence: { providerGenerationId: 'gen-ai0-claire-late', inputTokens: 900, outputTokens: 400, providerCostMicrounits: 650 } }), K(), K(), K()]));
+    assert.ok(lateRec.value, lateRec.error?.message);
+    by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.BUSINESS_PERFORMANCE?.writeOffEntries, by.BUSINESS_PERFORMANCE?.lateProviderExpenseEntries,
+      by.BUSINESS_PERFORMANCE?.lateProviderCostMicrounits, by.HON_REPLY?.entries ?? 0, by.HON_REPLY?.lateProviderExpenseEntries ?? 0], [claireLedger + 1, 1, 1, 650, honLedger, 0], JSON.stringify(by));
+    const honAnswer = await hon.sendTurn(scope, conv.id, { text: 'And overall?', delegation: null }, K());
+    assert.equal(honAnswer.status, 'COMPLETED', JSON.stringify(honAnswer));
+    by = (await usageOf()).byClass.AGENT_INFERENCE.byAgent;
+    assert.deepEqual([by.BUSINESS_PERFORMANCE?.entries, by.HON_REPLY?.entries], [claireLedger + 1, honLedger + 1], 'a HON answer stays HON_REPLY');
+  }
+  pass('INV-31', "K2: Claire (Business Performance) answers a question in text from the school's aggregate metrics only (planned as claire/ANALYZE with the fixed DETAILED budgets, one call, no draft specialist, no history; resend replays); she needs reporting.view at begin (refused, nothing recorded, also when it lapses while the reply row write waits) and in prepare (a lapse reserves and calls nothing); her answer is concealed when reporting.view lapses while usage evidence stays; HON sees her turn as Claire's without her text; the legacy 'claire' teaching alias is refused; Claire answers are never continued, summarized from or confirmed as suggestions; rows are single DETAILED analyses without suggestions and 'claire' plans are ANALYZE only; readiness lists BUSINESS_PERFORMANCE gated on reporting.view; HQ usage counts her calls (and a late provider expense after an HQ write-off) under BUSINESS_PERFORMANCE, never HON_REPLY");
   }
 
   // ---- INV-32 (0254): "Ask next" follow-ups and "Based on" sources are presentation data only ----
