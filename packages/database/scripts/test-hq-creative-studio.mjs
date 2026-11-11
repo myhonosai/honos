@@ -180,6 +180,23 @@ try{
  const pauseId=(await row("INSERT INTO hon.ai_spend_pauses(organization_id,spend_class,reason,pause_key,pause_fingerprint,paused_by_principal_id) VALUES(NULL,'CREATIVE_MEDIA','Fixture platform pause reason',$1,'f',$2) RETURNING id",[K(),P('owner')])).id;
  await deny(creative.create(H('owner'),ask(),K()),422,'HQ_CREATIVE_PAUSED_BY_HQ');
  await admin.query("UPDATE hon.ai_spend_pauses SET ended_at=clock_timestamp(),end_key=$2,end_reason='Fixture platform pause ended',ended_by_principal_id=$3 WHERE id=$1",[pauseId,K(),P('owner')]);
+ // Pause race (S4 gate): while a platform pause command holds 'ai.pause:platform:CREATIVE_MEDIA' exclusively and has
+ // recorded its pause but not committed, an HQ request waits on the shared gate, then sees the pause and is refused.
+ {const pauser=new pg.Client(targets.owner);await pauser.connect();
+  try{
+   await pauser.query('BEGIN');
+   await pauser.query("SELECT pg_advisory_xact_lock(hashtextextended('ai.pause:platform:CREATIVE_MEDIA',0))");
+   const racedId=(await pauser.query("INSERT INTO hon.ai_spend_pauses(organization_id,spend_class,reason,pause_key,pause_fingerprint,paused_by_principal_id) VALUES(NULL,'CREATIVE_MEDIA','Fixture raced platform pause',$1,'f',$2) RETURNING id",[K(),P('owner')])).rows[0].id;
+   let settled=false;const raced=creative.create(H('owner'),ask(),K()).finally(()=>{settled=true;});
+   raced.catch(()=>{});
+   let waiting=false;
+   for(let i=0;i<100&&!waiting;i++){await new Promise(r=>setTimeout(r,50));
+    waiting=(await admin.query("SELECT count(*)::int n FROM pg_locks WHERE locktype='advisory' AND NOT granted")).rows[0].n>0;}
+   assert(waiting&&!settled,'the HQ request waits on the platform pause gate');
+   await pauser.query('COMMIT');
+   await deny(raced,422,'HQ_CREATIVE_PAUSED_BY_HQ');
+   await admin.query("UPDATE hon.ai_spend_pauses SET ended_at=clock_timestamp(),end_key=$2,end_reason='Fixture raced pause ended',ended_by_principal_id=$3 WHERE id=$1",[racedId,K(),P('owner')]);
+  }finally{await pauser.query('ROLLBACK').catch(()=>{});await pauser.end();}}
  const before=await counts();
  assert.equal(before.g,0,'no refused request wrote a generation');
 
@@ -256,8 +273,13 @@ try{
  assert.equal((await creative.resolve(H('owner'),uv.generation.generationId,resolveIn(uv.generation.version,{resolution:'SUCCEEDED',finalUnits:1,providerCostMicrounits:700}),rk)).replayed,true);
  const r2=await creative.resolve(H('owner'),unk.generation.generationId,resolveIn(unk.generation.version),K());
  assert.deepEqual([r2.generation.status,r2.generation.chargedCredits],['RESOLVED_NOT_CHARGED',null]);
- // The owner may also close a request still GENERATING (a lost API process); its late result is then refused.
+ // The owner may also close a request still GENERATING (a lost API process), but only once it is clearly interrupted
+ // (120 s), so a late provider result is never overtaken; after that its late result is refused.
  const p2=pending[2].g;
+ await deny(creative.resolve(H('owner'),p2.generationId,resolveIn(p2.version),K()),409,'SAAS_TRANSITION_NOT_ALLOWED');
+ await admin.query('ALTER TABLE hon.hq_creative_generations DISABLE TRIGGER guarded');
+ await admin.query("UPDATE hon.hq_creative_generations SET created_at=created_at-interval '3 minutes' WHERE id=$1",[p2.generationId]);
+ await admin.query('ALTER TABLE hon.hq_creative_generations ENABLE TRIGGER guarded');
  await creative.resolve(H('owner'),p2.generationId,resolveIn(p2.version),K());
  await deny(record('owner',p2.generationId,{outcome:'NOT_SENT',finalUnits:null,providerCostMicrounits:null,failureReason:'INVALID_REQUEST',assets:null}),409,'SAAS_TRANSITION_NOT_ALLOWED');
  const fin=(await creative.studio(H('owner'))).budget;
@@ -283,7 +305,7 @@ try{
  await deny(creative.studio(H('leaver')),403,'SAAS_FORBIDDEN');
  await deny(creative.create(H('leaver'),ask({units:1}),lk),403,'SAAS_FORBIDDEN');
  assert.equal((await row('SELECT count(*)::int n FROM hon.hq_creative_generations WHERE requested_by=$1',[P('leaver')])).n,0);
- console.log('HQ Creative Studio proof passed (posture, authority incl. read-only and owner-only, provider-not-connected before any write, budget periods/versions/history/floor, rates, request refusals incl. pause/campaign/cap/in-progress, idempotent replay and key reuse, outcomes recorded once, interrupted after 120 s, owner resolution, immutability, no school wallet rows, revocation).');
+ console.log('HQ Creative Studio proof passed (posture, authority incl. read-only and owner-only, provider-not-connected before any write, budget periods/versions/history/floor, rates, request refusals incl. pause (and the pause-gate race)/campaign/cap/in-progress, idempotent replay and key reuse, outcomes recorded once, interrupted after 120 s, owner resolution, immutability, no school wallet rows, revocation).');
 }finally{
  await cleanup().catch(e=>console.error('cleanup failed',e));
  await Promise.all([admin.end(),restricted.end(),database.onModuleDestroy?.()]);

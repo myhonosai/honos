@@ -229,6 +229,6 @@
     "0240_tuition_payment_records.sql": "750e56c78e8f74b91b5f7225e9a05ff4f1ab80a62dac823a7abb5fa6f1ddf233",
     "0251_class_series_ongoing.sql": "90532172b977efee9e3947d261f0ac20387a987cec14e7afeb4cf3d725e324e8",
     "0252_hq_marketing_campaigns.sql": "91e2b7833e4e0c040468fd2c94e375b559631d82951beb95772f95e3817d86a7",
-    "0253_hq_creative_studio.sql": "32e3d22f34f9db0d5c6c3fe4cad0ed517f92ec52c976109c51480836a9683df9"
+    "0253_hq_creative_studio.sql": "9836f75224774349ac271864a3a9f83ebbb099cb90ab13d7a746c1684ff34d90"
   }
 }

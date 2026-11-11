@@ -356,6 +356,11 @@ BEGIN
     PERFORM hon.require_hq_marketing_actor(p_subject, true);
     RETURN hon.hq_creative_receipt(existing, true);
   END IF;
+  -- S4 pause gate (0195): a platform pause command holds 'ai.pause:platform:<class>' exclusively while it records the
+  -- pause, so taking it shared here waits for that commit and the check below sees it. (saas_creative_pause_gate(NULL)
+  -- cannot be reused: its school scope would be NULL.) Order: key lock, pause gate, then the period lock.
+  PERFORM pg_advisory_xact_lock_shared(hashtextextended('ai.pause:platform:CREATIVE_MEDIA', 0));
+  PERFORM pg_advisory_xact_lock_shared(hashtextextended('ai.pause:platform:ALL', 0));
   IF EXISTS (SELECT 1 FROM hon.ai_spend_pauses p WHERE p.ended_at IS NULL AND p.organization_id IS NULL AND p.spend_class IN ('CREATIVE_MEDIA','ALL')) THEN
     RAISE EXCEPTION 'HQ_CREATIVE_PAUSED_BY_HQ' USING ERRCODE = '23514';
   END IF;
@@ -497,6 +502,11 @@ BEGIN
   SELECT * INTO g FROM hon.hq_creative_generations WHERE id = p_generation FOR UPDATE;
   IF g.version <> (p_input->>'expectedVersion')::integer THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
   IF g.status NOT IN ('GENERATING','UNDER_REVIEW') THEN RAISE EXCEPTION 'SAAS_TRANSITION_NOT_ALLOWED' USING ERRCODE = '40001'; END IF;
+  -- A request still GENERATING is resolvable only once it is clearly interrupted (120 s), so a late provider result
+  -- is never overtaken by a resolution.
+  IF g.status = 'GENERATING' AND g.created_at > clock_timestamp() - interval '120 seconds' THEN
+    RAISE EXCEPTION 'SAAS_TRANSITION_NOT_ALLOWED' USING ERRCODE = '40001';
+  END IF;
   at := greatest(clock_timestamp(), g.created_at);
   IF p_input->>'resolution' = 'SUCCEEDED' THEN
     v_units := (p_input->>'finalUnits')::integer;

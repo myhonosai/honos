@@ -1,6 +1,7 @@
 // CS1 Creative Studio generations (proposed 0216): private deny-all tables on the CW1 school wallet, reachable only
 // through four fixed SECURITY DEFINER entry points. Request fields are immutable (one SUBMITTING -> terminal move) and
-// results are append-only evidence.
+// results are append-only evidence. HQ's own Creative Studio (0253, hq_creative_*) is a separate system with its own
+// security proof (test-hq-creative-studio.mjs) and is excluded from this school inventory.
 export const creativeStudioTables = ['creative_generations', 'creative_generation_assets'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const creativeStudioFunctions = [
@@ -34,7 +35,7 @@ export async function verifyCreativeStudioSecurity(client, runtime) {
       AND tgfoid=$4::regprocedure AND tgenabled='O' AND NOT tgisinternal`, [`hon.${table}`, name, type, `hon.${fn}()`])).rows[0];
     if (t.safe !== true) throw new Error(`Unsafe Creative Studio trigger ${table}.${name}`);
   }
-  const total = (await client.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname ~ '(^|_)creative_(prompt|generation)|creative_generations?$|_creative_generation'")).rows[0].n;
+  const total = (await client.query("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname ~ '(^|_)creative_(prompt|generation)|creative_generations?$|_creative_generation' AND proname !~ '(^|_)hq_creative_'")).rows[0].n;
   if (total !== creativeStudioFunctions.length) throw new Error(`Untracked Creative Studio functions: ${total}`);
   for (const [signature, execute, definer] of creativeStudioFunctions) {
     const r = (await client.query(`SELECT p.prosecdef=$3 AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[] AND (o.rolsuper OR o.rolbypassrls) AND o.rolname<>$2

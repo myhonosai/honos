@@ -90,7 +90,9 @@ As built (M2):
   (requester only), `resolve_hq_creative_generation` (HQ owner only, evidence reference required).
 - Budget: used = charged credits of SUCCEEDED/RESOLVED_CHARGED; held = reserved credits of GENERATING/UNDER_REVIEW;
   available = max(cap − used − held, 0). The cap can never be set below used + held. Rates come only from the
-  published `saas_creative_rates`. A platform-wide `ai_spend_pauses` row (CREATIVE_MEDIA or ALL) blocks new requests.
+  published `saas_creative_rates`. A platform-wide `ai_spend_pauses` row (CREATIVE_MEDIA or ALL) blocks new requests;
+  the request first takes the S4 platform pause gate shared (`ai.pause:platform:CREATIVE_MEDIA` and `:ALL`), so a pause
+  being recorded at the same moment is always seen. A request still GENERATING can be resolved only after 120 s.
 - API: `GET /v1/hq/marketing/creative`, `GET /v1/hq/marketing/creative/generations/:id`,
   `POST /v1/hq/marketing/creative/generations`, `POST /v1/hq/marketing/creative/generations/:id/resolution`,
   `POST /v1/hq/marketing/creative/budget`. All commands need the human-command header and an Idempotency-Key.
