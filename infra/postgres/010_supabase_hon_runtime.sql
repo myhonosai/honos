@@ -2755,3 +2755,27 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
       hon.set_default_school_payment_connection(text,uuid,jsonb,text,uuid,uuid),hon.disconnect_school_payment_connection(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- D11-B 0246 HON OS free trial: two private forced-RLS tables; starting a trial and its read are the only runtime entry
+-- points. The trial program row has no runtime write path (TEST_MODE only by the migration owner of a test database).
+DO $$ DECLARE t text; r text; f text; c text; BEGIN
+  IF to_regprocedure('hon.start_hon_os_trial(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply free trial runtime migration 0246 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon_os_trial_program','hon_os_trial_enrollments'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon_os_trial_open()','hon_os_trial_live(uuid,timestamptz)','hon_os_trial_json(hon.hon_os_trial_enrollments)',
+    'hon_os_trial_campaign_offer(uuid,timestamptz)','start_hon_os_trial(text,jsonb,uuid)','read_hon_os_trial(text)','guard_hon_os_trial_checkout()',
+    'ai_spend_allowed(uuid,timestamptz,text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.start_hon_os_trial(text,jsonb,uuid),hon.read_hon_os_trial(text) TO hon_runtime;
+  END IF;
+END $$;
