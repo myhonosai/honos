@@ -2768,16 +2768,28 @@ try {
   for (const end = Date.now() + 15000; !(await row("SELECT count(*)::int n FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).n; await sleep(20)) assert.ok(Date.now() < end, 'reply never reached SENDING');
   const sending = (await row("SELECT turn_id FROM hon.hon_reply_invocations WHERE organization_id=$1 AND status='SENDING'", [o.id])).turn_id;
   const base = { reply: 'x', inputTokens: 1, outputTokens: 1, providerCostMicrounits: 0 };
-  for (const bad of [{ followUps: 'Why?' }, { followUps: ['a', 'b', 'c', 'd'].map((x) => `${x} question?`) }, { followUps: ['Hi'] }, { followUps: ['x'.repeat(151)] }, { followUps: ['Same?', 'same?'] },
-    { followUps: ['See http://x?'] }, { followUps: [1] }, { sources: ['website'] }, { sources: ['revenue', 'revenue'] }, { sources: 'revenue' },
+  const record = (result) => settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, ...result })])));
+  // Wrong shapes are refused: a list of more than three, a non-array, a non-string item; unknown, repeated or too many sources.
+  for (const bad of [{ followUps: 'Why?' }, { followUps: ['a', 'b', 'c', 'd'].map((x) => `${x} question?`) }, { followUps: [1] }, { followUps: [null] },
+    { sources: ['website'] }, { sources: ['revenue', 'revenue'] }, { sources: 'revenue' },
     { sources: ['newLeads24h', 'upcomingTrials24h', 'revenue', 'trialConversion', 'conversation', 'specialistResults'] }]) {
-    const r = await settle(tenant(context(o), (client) => client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [o.subject, sending, JSON.stringify({ ...base, ...bad })])));
-    assert.equal(r.error?.code, '22023', `${JSON.stringify(bad)} refused`);
+    assert.equal((await record(bad)).error?.code, '22023', `${JSON.stringify(bad)} refused`);
   }
-  set(['What next?'], ['pendingActionApprovals']);
+  // Items that fail the text rule are hints, not evidence: dropped (never raised), so the answer and its usage are kept.
+  // Lengths count code points and C1 controls fail, as in the API.
+  const kept = await record({ followUps: ['\u{1F600}?', 'Next\u0085step?', 'Good question?'], sources: ['pendingActionApprovals'] });
+  assert.equal(kept.error, undefined, String(kept.error));
   fakes.hon.complete(); fakes.hon.mode = 'RESULT';
-  const r5 = (await pending).value;
-  assert.deepEqual([r5?.status, r5?.replyDetail?.followUps, r5?.replyDetail?.sources], ['COMPLETED', ['What next?'], ['pendingActionApprovals']], JSON.stringify(r5 ?? (await pending).error));
+  await pending; // The provider's late result finds the row already recorded: nothing is recorded twice.
+  const s5 = await stored(sending);
+  assert.deepEqual([s5.f, s5.c], [['Good question?'], ['pendingActionApprovals']]);
+  const r5 = await hon.receipt(scope, sending);
+  assert.deepEqual([r5.status, r5.replyDetail.followUps, r5.replyDetail.sources], ['COMPLETED', ['Good question?'], ['pendingActionApprovals']], JSON.stringify(r5));
+  assert.equal((await row('SELECT count(*)::int n FROM hon.ai_usage_ledger WHERE source_invocation_id=(SELECT id FROM hon.hon_reply_invocations WHERE turn_id=$1)', [sending])).n, 1, 'one usage row');
+  // The table refuses an invalid or repeated item written any other way.
+  for (const bad of ['{"Hi"}', '{"Same?","Same?"}', `{"Next\u0085step?"}`]) {
+    assert.equal((await settle(admin.query('UPDATE hon.hon_reply_invocations SET follow_up_questions=$2::text[] WHERE turn_id=$1', [sending, bad]))).error?.code, '23514', bad);
+  }
   // 6. Claire may give follow-ups and cite metrics (never the conversation she is not sent).
   set(['What changed this month?'], ['conversation', 'outstandingWorkItems']);
   const c1 = await hon.sendTurn(scope, conv.id, { text: 'How is the school doing?', delegation: { agentKey: 'claire' } }, K());

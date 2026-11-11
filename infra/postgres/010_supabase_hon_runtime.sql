@@ -2617,10 +2617,10 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
--- 0254 HON follow-ups and sources: three private IMMUTABLE helpers used by table CHECKs and SECURITY DEFINER owners only.
+-- 0254 HON follow-ups and sources: four private IMMUTABLE helpers used by table CHECKs and SECURITY DEFINER owners only.
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regprocedure('hon.hon_reply_follow_ups_ok(text[])') IS NULL THEN RAISE EXCEPTION 'Apply migration 0254 first'; END IF;
-  FOREACH f IN ARRAY ARRAY['hon.hon_reply_source_keys()','hon.hon_reply_follow_ups_ok(text[])','hon.hon_reply_sources_distinct(text[])'] LOOP
+  FOREACH f IN ARRAY ARRAY['hon.hon_reply_source_keys()','hon.hon_reply_follow_up_ok(text)','hon.hon_reply_follow_ups_ok(text[])','hon.hon_reply_sources_distinct(text[])'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);

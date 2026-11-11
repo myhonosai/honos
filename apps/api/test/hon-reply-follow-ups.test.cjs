@@ -41,6 +41,11 @@ test('0254 follow-ups are bounded plain questions: bad items are dropped, never 
   assert.deepEqual(ask(`ok | ${'x'.repeat(151)} | Visit http://x.example? | See www.example.com | a://b | <b>bold</b> | Tab\there | Fine question?`), ['Fine question?']);
   assert.deepEqual(ask('  |  | '), []);
   assert.equal(ask(`${'y'.repeat(150)}`)[0].length, 150);
+  // Counted as code points (as PostgreSQL does) and C1 controls refused, so the API never keeps what the database refuses.
+  assert.deepEqual(ask('\u{1F600}? | \u{1F600}ok?'), ['\u{1F600}ok?'], 'an astral character counts once');
+  assert.deepEqual(ask(`Next\u0085step? | Fine?`), ['Fine?'], 'U+0085 is a control character');
+  assert.equal(contracts.isHonReplyFollowUp('\u{1F600}'.repeat(150)), true);
+  assert.equal(contracts.isHonReplyFollowUp('\u{1F600}'.repeat(151)), false);
 });
 
 test('0254 sources keep only the closed set, unique, at most five, in order', () => {

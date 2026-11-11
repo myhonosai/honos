@@ -41,10 +41,15 @@ export const HON_REPLY_MAX_SOURCES = 5;
 /** 0254: "Ask next" follow-up questions. Plain text only; tapping one fills the composer and runs nothing. */
 export const HON_REPLY_MAX_FOLLOW_UPS = 3;
 export const HON_REPLY_FOLLOW_UP_LIMITS = { minCharacters: 3, maxCharacters: 150 } as const;
-/** One follow-up question: trimmed, 3-150 characters, no control characters, markup or links. */
+/**
+ * One follow-up question: trimmed, 3-150 characters counted as code points (as PostgreSQL length() does), no control
+ * characters (C0, DEL or C1), markup or links. The database applies the same rule and drops, never raises, on a mismatch.
+ */
 export function isHonReplyFollowUp(value: unknown): value is string {
-  return typeof value === 'string' && value === value.trim() && value.length >= HON_REPLY_FOLLOW_UP_LIMITS.minCharacters
-    && value.length <= HON_REPLY_FOLLOW_UP_LIMITS.maxCharacters && !/[\u0000-\u001f\u007f<>]|https?|www\.|:\/\//i.test(value);
+  if (typeof value !== 'string' || value !== value.trim()) return false;
+  const points = [...value].length;
+  return points >= HON_REPLY_FOLLOW_UP_LIMITS.minCharacters && points <= HON_REPLY_FOLLOW_UP_LIMITS.maxCharacters
+    && !/[\u0000-\u001f\u007f-\u009f<>]|https?|www\.|:\/\//i.test(value);
 }
 export const isHonReplySourceKey = (value: unknown): value is HonReplySourceKey => (HON_REPLY_SOURCE_KEYS as readonly unknown[]).includes(value);
 const distinctFollowUps = (v: unknown[]): boolean => new Set(v.map((x) => String(x).toLowerCase())).size === v.length;

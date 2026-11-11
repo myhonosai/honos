@@ -2,8 +2,9 @@ BEGIN;
 
 -- 0254 (allocated by the coordinator 2026-11-11): HON and Claire answers may carry "Ask next" follow-up questions and
 -- "Based on" sources. Presentation data only (spec: docs/architecture/HON_FOLLOW_UPS_AND_SOURCES.md).
--- 1. Follow-ups: at most three, each 3-150 characters, trimmed, no control characters, markup or links, unique ignoring
---    case. Tapping one only fills the composer; it is an ordinary question with its own planning and S4 path.
+-- 1. Follow-ups: at most three, each 3-150 characters (code points), trimmed, no control characters, markup or links,
+--    distinct; invalid or repeated items are dropped at record time, wrong JSON types are refused. Tapping one only
+--    fills the composer; it is an ordinary question with its own planning and S4 path.
 -- 2. Sources: a closed set (the Command Center metric keys, 'conversation', 'specialistResults'). prepare records which
 --    areas the context actually carried (available_sources); a stored citation must be one of them, at most five.
 -- 3. Both are kept only for a whole, recorded answer (never FAILED or cut off) and shown only on a visible COMPLETED
@@ -16,12 +17,20 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
     'conversation', 'specialistResults']::text[];
 $$;
 
+-- One follow-up: no leading or trailing spaces (the API trims all whitespace, so it is stricter), 3-150 characters (code
+-- points), no control characters (C0 or C1), markup or links.
+CREATE FUNCTION hon.hon_reply_follow_up_ok(q text) RETURNS boolean
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+  SELECT q IS NOT NULL AND q = btrim(q) AND length(q) BETWEEN 3 AND 150 AND q !~ '[[:cntrl:]<>]' AND q !~* '(https?|www\.|://)';
+$$;
+
+-- The stored list: at most three valid items, exactly distinct. (Case-insensitive de-duplication is done by the API, which
+-- is stricter; the database never depends on two lower-casing rules agreeing.)
 CREATE FUNCTION hon.hon_reply_follow_ups_ok(p text[]) RETURNS boolean
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
   SELECT p IS NOT NULL AND cardinality(p) <= 3 AND array_position(p, NULL) IS NULL
-    AND NOT EXISTS (SELECT 1 FROM unnest(p) q WHERE q <> btrim(q) OR length(q) NOT BETWEEN 3 AND 150
-      OR q ~ '[[:cntrl:]<>]' OR q ~* '(https?|www\.|://)')
-    AND (SELECT count(DISTINCT lower(q)) FROM unnest(p) q) = cardinality(p);
+    AND NOT EXISTS (SELECT 1 FROM unnest(p) q WHERE NOT hon.hon_reply_follow_up_ok(q))
+    AND (SELECT count(DISTINCT q) FROM unnest(p) q) = cardinality(p);
 $$;
 
 CREATE FUNCTION hon.hon_reply_sources_distinct(p text[]) RETURNS boolean
@@ -184,8 +193,8 @@ BEGIN
        OR (SELECT count(DISTINCT e #>> '{}') FROM jsonb_array_elements(p_result->'suggestions') e) <> jsonb_array_length(p_result->'suggestions')))
      -- 0254: follow-ups (at most three bounded plain questions, unique ignoring case) and sources (closed set, unique, at most five).
      OR (p_result ? 'followUps' AND (jsonb_typeof(p_result->'followUps') <> 'array'
-       OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_result->'followUps') e WHERE jsonb_typeof(e) <> 'string')
-       OR NOT hon.hon_reply_follow_ups_ok(ARRAY(SELECT jsonb_array_elements_text(p_result->'followUps')))))
+       OR jsonb_array_length(p_result->'followUps') > 3
+       OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_result->'followUps') e WHERE jsonb_typeof(e) <> 'string')))
      OR (p_result ? 'sources' AND (jsonb_typeof(p_result->'sources') <> 'array' OR jsonb_array_length(p_result->'sources') > 5
        OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_result->'sources') e WHERE jsonb_typeof(e) <> 'string' OR NOT (e #>> '{}') = ANY (hon.hon_reply_source_keys()))
        OR (SELECT count(DISTINCT e #>> '{}') FROM jsonb_array_elements(p_result->'sources') e) <> jsonb_array_length(p_result->'sources')))
@@ -200,7 +209,13 @@ BEGIN
   IF p_result ? 'suggestions' THEN
     SELECT coalesce(array_agg(e ORDER BY n), '{}') INTO asked FROM jsonb_array_elements_text(p_result->'suggestions') WITH ORDINALITY x(e, n);
   END IF;
-  IF p_result ? 'followUps' THEN follow := ARRAY(SELECT jsonb_array_elements_text(p_result->'followUps')); END IF;
+  -- Follow-ups are presentation hints: an item that fails the text rule, or repeats an earlier one, is dropped (never
+  -- raised), so a rule difference between the API and the database can only drop a hint, never lose the answer.
+  IF p_result ? 'followUps' THEN
+    SELECT coalesce(array_agg(q ORDER BY n), '{}') INTO follow FROM (
+      SELECT DISTINCT ON (q) q, n FROM jsonb_array_elements_text(p_result->'followUps') WITH ORDINALITY x(q, n)
+      WHERE hon.hon_reply_follow_up_ok(q) ORDER BY q, n) d;
+  END IF;
   -- Only areas this answer's context carried (recorded by prepare), in the order given.
   IF p_result ? 'sources' THEN
     SELECT coalesce(array_agg(e ORDER BY n), '{}') INTO cited FROM jsonb_array_elements_text(p_result->'sources') WITH ORDINALITY x(e, n)
@@ -255,10 +270,12 @@ DECLARE v_role text;
 BEGIN
   REVOKE ALL ON FUNCTION hon.hon_reply_source_keys() FROM PUBLIC;
   REVOKE ALL ON FUNCTION hon.hon_reply_follow_ups_ok(text[]) FROM PUBLIC;
+  REVOKE ALL ON FUNCTION hon.hon_reply_follow_up_ok(text) FROM PUBLIC;
   REVOKE ALL ON FUNCTION hon.hon_reply_sources_distinct(text[]) FROM PUBLIC;
   FOR v_role IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime', 'anon', 'authenticated', 'service_role') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION hon.hon_reply_source_keys() FROM %I', v_role);
     EXECUTE format('REVOKE ALL ON FUNCTION hon.hon_reply_follow_ups_ok(text[]) FROM %I', v_role);
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.hon_reply_follow_up_ok(text) FROM %I', v_role);
     EXECUTE format('REVOKE ALL ON FUNCTION hon.hon_reply_sources_distinct(text[]) FROM %I', v_role);
   END LOOP;
 END $$;
