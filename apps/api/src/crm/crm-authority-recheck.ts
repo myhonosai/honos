@@ -36,4 +36,4 @@ export async function assertCurrentCrmAuthority(
   throw new ForbiddenException(refusal);
 }
 
-export type CrmPermission = 'crm.trial.schedule' | 'crm.trial.manage' | 'crm.lead.read';
+export type CrmPermission = 'crm.trial.schedule' | 'crm.trial.manage' | 'crm.lead.read' | 'crm.lead.create' | 'crm.pipeline.manage';

@@ -1,7 +1,10 @@
 import {
-  HON_DELEGATE_AGENTS, validateHonConversationCreate, validateHonConversationSummary, validateHonConversationThread, validateHonTurnReceipt, validateHonTurnRequest,
+  HON_DELEGATE_AGENTS, validateHonConversationCreate, validateHonSchoolNoteInput, validateHonSchoolNoteReceipt, validateHonSchoolNotes,
+  validateHonSchoolTone, validateHonSchoolToneInput, validateHonSchoolToneReceipt, validateHonConversationSummary, validateHonConversationThread, validateHonTurnReceipt, validateHonTurnRequest,
   type HonConversationPage, type HonConversationReadiness, type HonConversationSummary, type HonConversationThread, type HonTurnReceipt,
-  type HonTurnRequest,
+  type HonSchoolNoteReceipt, type HonSchoolNotes, type HonAiTone, type HonSchoolTone, type HonSchoolToneReceipt, type HonTurnRequest,
+  validateSchoolBriefing, validateSchoolBriefingPreview, validateSchoolBriefingReceipt, validateSchoolBriefingSettingsInput, validateMySchoolBriefingInput,
+  type SchoolBriefing, type SchoolBriefingPreview, type SchoolBriefingReceipt,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { crmLeadListPath } from '../crm-leads-http';
@@ -31,7 +34,7 @@ const always: Owned = () => true;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 const READ = { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer' } as const;
-const DEFINITIVE_CONFLICTS: ReadonlySet<string> = new Set(['HON_IDEMPOTENCY_CONFLICT', 'HON_CONVERSATION_FULL']);
+const DEFINITIVE_CONFLICTS: ReadonlySet<string> = new Set(['HON_IDEMPOTENCY_CONFLICT', 'HON_CONVERSATION_FULL', 'HON_SCHOOL_NOTES_FULL']);
 const drift = (): never => { throw new HonConversationError('UNAVAILABLE'); };
 
 export type HonSchool = Readonly<{ organizationId: string; schoolId: string }>;
@@ -113,7 +116,7 @@ async function send<T>(prepared: PreparedHonCommand, verify: (value: unknown) =>
   if (response.status === 400 || response.status === 404) throw new HonConversationError('INVALID', await errorCode(response));
   if (response.status === 409) {
     const code = await errorCode(response);
-    // Only a reused key or a full conversation is definitive (both roll back); any other 409 may have committed.
+    // Only a reused key, a full conversation or a full notes list is definitive (both roll back); any other 409 may have committed.
     throw new HonConversationError(code !== null && DEFINITIVE_CONFLICTS.has(code) ? 'CONFLICT' : 'UNKNOWN', code);
   }
   // Every other non-200 (including 5xx and timeouts) may have committed: keep the exact request for an explicit retry.
@@ -164,4 +167,71 @@ export const HON_CONVERSATION_API: HonConversationApi = {
   },
   targets: (agent, school, signal, owned) => read(honTargetPath(agent, school),
     verifyTargets(agent === 'marcus' ? verifyCampaignTargets : agent === 'kai' ? verifyCurriculumTargets : verifyLeadTargets), signal, owned),
+};
+
+/**
+ * 0255 What HON remembers. Notes are school facts the owner saves on purpose; the server re-derives who may read or change
+ * them. An add is validated by the same rule the database applies, so a refused note is never sent.
+ */
+export function prepareSchoolNote(school: HonSchool, text: string): PreparedHonCommand {
+  let checked: { text: string };
+  try { checked = validateHonSchoolNoteInput({ text: text.trim() }); } catch { throw new HonConversationError('INVALID'); }
+  return Object.freeze({ path: `${honConversationBase(school)}/school-notes`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
+}
+export function prepareSchoolNoteDelete(school: HonSchool, noteId: string): PreparedHonCommand {
+  if (!UUID.test(noteId)) throw new HonConversationError('INVALID');
+  return Object.freeze({ path: `${honConversationBase(school)}/school-notes/${noteId.toLowerCase()}/delete`, key: crypto.randomUUID(), body: '{}' });
+}
+export interface HonSchoolNotesApi {
+  read(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<HonSchoolNotes>;
+  send(prepared: PreparedHonCommand, owned?: Owned): Promise<HonSchoolNoteReceipt>;
+}
+export const HON_SCHOOL_NOTES_API: HonSchoolNotesApi = {
+  read: (school, signal, owned) => read(`${honConversationBase(school)}/school-notes`, (body) => {
+    try { return validateHonSchoolNotes(closed(body, ['data']).data); } catch { return drift(); }
+  }, signal, owned),
+  send: (prepared, owned) => send(prepared, validateHonSchoolNoteReceipt, owned),
+};
+
+/** 0256 How HON talks: one closed tone per school; only the owner changes it (the server decides). */
+export function prepareSchoolTone(school: HonSchool, tone: string): PreparedHonCommand {
+  let checked: { tone: HonAiTone };
+  try { checked = validateHonSchoolToneInput({ tone }); } catch { throw new HonConversationError('INVALID'); }
+  return Object.freeze({ path: `${honConversationBase(school)}/tone`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
+}
+export interface HonSchoolToneApi {
+  read(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<HonSchoolTone>;
+  send(prepared: PreparedHonCommand, owned?: Owned): Promise<HonSchoolToneReceipt>;
+}
+export const HON_SCHOOL_TONE_API: HonSchoolToneApi = {
+  read: (school, signal, owned) => read(`${honConversationBase(school)}/tone`, (body) => {
+    try { return validateHonSchoolTone(closed(body, ['data']).data); } catch { return drift(); }
+  }, signal, owned),
+  send: (prepared, owned) => send(prepared, validateHonSchoolToneReceipt, owned),
+};
+
+/** 0257 Weekly briefing: the owner's switch and hour, "Email me" for oneself, and a preview. The server decides who may. */
+export function prepareBriefingSettings(school: HonSchool, enabled: boolean, sendHour: number): PreparedHonCommand {
+  let checked: { enabled: boolean; sendHour: number };
+  try { checked = validateSchoolBriefingSettingsInput({ enabled, sendHour }); } catch { throw new HonConversationError('INVALID'); }
+  return Object.freeze({ path: `${honConversationBase(school)}/briefing/settings`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
+}
+export function prepareMyBriefing(school: HonSchool, email: boolean): PreparedHonCommand {
+  let checked: { email: boolean };
+  try { checked = validateMySchoolBriefingInput({ email }); } catch { throw new HonConversationError('INVALID'); }
+  return Object.freeze({ path: `${honConversationBase(school)}/briefing/me`, key: crypto.randomUUID(), body: JSON.stringify(checked) });
+}
+export interface HonSchoolBriefingApi {
+  read(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<SchoolBriefing>;
+  preview(school: HonSchool, signal: AbortSignal, owned?: Owned): Promise<SchoolBriefingPreview>;
+  send(prepared: PreparedHonCommand, owned?: Owned): Promise<SchoolBriefingReceipt>;
+}
+export const HON_SCHOOL_BRIEFING_API: HonSchoolBriefingApi = {
+  read: (school, signal, owned) => read(`${honConversationBase(school)}/briefing`, (body) => {
+    try { return validateSchoolBriefing(closed(body, ['data']).data); } catch { return drift(); }
+  }, signal, owned),
+  preview: (school, signal, owned) => read(`${honConversationBase(school)}/briefing/preview`, (body) => {
+    try { return validateSchoolBriefingPreview(closed(body, ['data']).data); } catch { return drift(); }
+  }, signal, owned),
+  send: (prepared, owned) => send(prepared, validateSchoolBriefingReceipt, owned),
 };

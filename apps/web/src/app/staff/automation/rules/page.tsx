@@ -1,5 +1,6 @@
 import React from 'react';
-import { AutomationRulesWorkbench, automationRuleTriggerPrefill } from '../../../../components/automation-rules-workbench';
+import { AutomationRulesWorkbench } from '../../../../components/automation-rules-workbench';
+import { automationRuleTriggerPrefill } from '../../../../components/automation-rules-prefill';
 
 export const dynamic = 'force-dynamic';
 

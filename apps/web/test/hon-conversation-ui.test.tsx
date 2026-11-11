@@ -5,7 +5,7 @@ import type { HonConversationThread, HonConversationTurn, HonOrchestration } fro
 import {
   HON_CONVERSATION_API, HON_CONVERSATION_COMMAND, HonConversationError, honConversationBase, prepareConversation, prepareTurn, verifyHonPage, verifyHonReadiness,
 } from '../src/components/hon-command/hon-conversation-http';
-import { HonConversationView, composerTurnRequest, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
+import { FollowUps, HonConversationView, composerTurnRequest, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { honTargetPath } from '../src/components/hon-command/hon-conversation-http';
@@ -26,7 +26,7 @@ const human = (turn: number, text: string): HonConversationTurn => ({ turnId: id
 const reply = (turn: number, over: Partial<HonConversationTurn> = {}, detail: Partial<NonNullable<HonConversationTurn['replyDetail']>> = {}): HonConversationTurn => ({
   turnId: id(turn), role: 'hon', text: 'You have 3 trial leads waiting for follow-up.', createdAt: AT, status: 'COMPLETED', reason: null,
   references: { workItemId: id(8), actionRequestId: null, invocationId: id(9) },
-  replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], ...detail }, ...over });
+  replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [], ...detail }, ...over });
 const thread = (turns: HonConversationTurn[]): HonConversationThread => ({ ...summary(5, turns.length / 2), turns });
 const noop = () => {};
 const props = (over: Partial<HonConversationViewProps> = {}): HonConversationViewProps => ({
@@ -67,7 +67,7 @@ describe('HON conversation transport', () => {
   });
   it('sends the human-command header, idempotency key and exact body, and verifies the receipt', async () => {
     const receipt = { turnId: id(6), conversationId: id(5), status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [id(8)], invocationId: id(9),
-      reply: 'Three trials.', replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] } };
+      reply: 'Three trials.', replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } };
     const fetchMock = vi.fn(async () => json(200, { data: receipt }));
     vi.stubGlobal('fetch', fetchMock);
     const prepared = prepareTurn(SCHOOL, id(5), { text: 'How many trials?', delegation: null });
@@ -346,5 +346,44 @@ describe('Ask Claire, Business Performance (K2)', () => {
     expect(composerTurnRequest('Who needs follow-up?', 'hon', 'DETAILED')).toEqual({ text: 'Who needs follow-up?', delegation: null, replyMode: 'DETAILED' });
     const prepared = prepareTurn(SCHOOL, id(5), composerTurnRequest('How are we doing?', 'claire', 'DETAILED'));
     expect(JSON.parse(prepared.body)).toEqual({ text: 'How are we doing?', delegation: { agentKey: 'claire' } });
+  });
+});
+
+describe('Ask next and Based on (0254)', () => {
+  const answer = (detail: Partial<NonNullable<HonConversationTurn['replyDetail']>>, over: Partial<HonConversationTurn> = {}) =>
+    thread([human(6, 'How are leads?'), reply(6, over, detail)]);
+  const full = { followUps: ['Who should call the new leads?', 'How many trials are booked?'], sources: ['newLeads24h' as const, 'conversation' as const] };
+  it('shows the fact areas an answer was based on, by name, and the follow-up questions as plain buttons', () => {
+    const html = render({ thread: answer(full), threadPhase: 'READY' });
+    expect(html).toContain('Based on: New leads (24h), Earlier conversation');
+    expect(html).toContain('Ask next');
+    expect(html).toMatch(/<button type="button"[^>]*data-hon-follow-up=""[^>]*>Who should call the new leads\?<\/button>/);
+    expect(html).toContain('>How many trials are booked?</button>');
+    expect(html).toContain('A question goes into your message box; nothing is sent until you press Send.');
+  });
+  it('shows neither for a concealed, failed or cut-off answer, or an answer without them', () => {
+    for (const [detail, over] of [[full, { reason: 'RESULT_CONCEALED', text: null }], [full, { status: 'FAILED' as const }], [{}, {}]] as const) {
+      const html = render({ thread: answer(detail, over as Partial<HonConversationTurn>), threadPhase: 'READY' });
+      expect(html).not.toContain('Based on:'); expect(html).not.toContain('Ask next');
+    }
+  });
+  it('also shows them under a Claire analysis', () => {
+    const html = render({ thread: thread([human(6, 'How is the school doing?'), reply(6, { role: 'claire' }, { mode: 'DETAILED', ...full })]), threadPhase: 'READY' });
+    expect(html).toContain('Based on: New leads (24h)'); expect(html).toContain('>Who should call the new leads?</button>');
+  });
+  it('picking a follow-up only fills the message box; it never sends', () => {
+    const picked: string[] = []; const sent: string[] = [];
+    const turn = reply(6, {}, full);
+    const element = FollowUps({ turn, locked: false, onPick: (q) => picked.push(q) }) as React.ReactElement<{ children: React.ReactNode }>;
+    const buttons: React.ReactElement<{ onClick: () => void; disabled: boolean }>[] = [];
+    const walk = (node: React.ReactNode): void => { React.Children.forEach(node, (child) => { if (!React.isValidElement(child)) return;
+      const el = child as React.ReactElement<{ children?: React.ReactNode; onClick?: () => void }>;
+      if (el.type === 'button') buttons.push(el as never); walk(el.props.children); }); };
+    walk(element);
+    expect(buttons).toHaveLength(2);
+    buttons[1]!.props.onClick();
+    expect([picked, sent]).toEqual([['How many trials are booked?'], []]);
+    const lockedEl = FollowUps({ turn, locked: true, onPick: () => {} });
+    expect(renderToStaticMarkup(<>{lockedEl}</>)).toMatch(/disabled=""/);
   });
 });

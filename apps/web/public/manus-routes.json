@@ -14,7 +14,7 @@
     },
     {
       "path": "/",
-      "title": "HON Complete | AI Command Center"
+      "title": "HON OS | Sign in"
     },
     {
       "path": "/hq",
@@ -165,6 +165,10 @@
       "title": "HON | Bounded Class Sessions"
     },
     {
+      "path": "/staff/schedule/timetable",
+      "title": "HON | Weekly timetable"
+    },
+    {
       "path": "/staff/schedule/sessions/create",
       "title": "HON | Human Class-session Creation"
     },
@@ -223,6 +227,14 @@
     {
       "path": "/staff/billing/membership-changes",
       "title": "HON | Pause, cancel & refunds"
+    },
+    {
+      "path": "/staff/billing/receivables",
+      "title": "HON | Tuition balances"
+    },
+    {
+      "path": "/staff/billing/payment-processors",
+      "title": "HON | Payment processors"
     },
     {
       "path": "/staff/champions-club",
@@ -425,6 +437,18 @@
       "title": "HON HQ | Support"
     },
     {
+      "path": "/hq/marketing",
+      "title": "HON HQ | Marketing & Creative"
+    },
+    {
+      "path": "/hq/marketing/creative",
+      "title": "HON HQ | Creative Studio"
+    },
+    {
+      "path": "/hq/support/:caseId",
+      "title": "HON HQ | Support case"
+    },
+    {
       "path": "/hq/growth/champions-club/schools",
       "title": "HON HQ | School referrals"
     },
@@ -463,6 +487,10 @@
     {
       "path": "/reference/classic-dashboard",
       "title": "HON Classic | School Dashboard (reference)"
+    },
+    {
+      "path": "/reference/complete",
+      "title": "HON Complete | Design reference"
     },
     {
       "path": "/account/owner-invitation",

@@ -4,15 +4,18 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
+import { AddLead } from './add-lead';
+import type { AddLeadApi } from './add-lead-http';
 import { LeadsError, leadsApi, type LeadsApi } from './http';
 import { LeadsView, tabStatus, type LeadTab, type ListState, type TrialState } from './view';
 
 /**
  * Leads for the school the shell verified (U4): a status-tabbed list, a local name filter, and one lead's contact,
- * trials and links into the existing CRM flows. Read-only. Blur, a hidden tab, page hide, a school change or a session
+ * trials and links into the existing CRM flows. Adding a lead (and the starter lead stages a new school needs first) goes
+ * through the existing human lead-create command; every other change happens in the CRM flows linked here. Blur, a hidden tab, page hide, a school change or a session
  * end hide the page at once and retire every read; reads start again only after the shell re-verifies the school.
  */
-export function Leads({ api = leadsApi }: { api?: LeadsApi }): React.ReactElement {
+export function Leads({ api = leadsApi, addLeadApi }: { api?: LeadsApi; addLeadApi?: AddLeadApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -65,11 +68,14 @@ export function Leads({ api = leadsApi }: { api?: LeadsApi }): React.ReactElemen
   const onOpen = useCallback((leadId: string) => { setSelectedId(leadId); setTrialsRefresh((n) => n + 1); }, []);
   const onRefresh = useCallback(() => { setListRefresh((n) => n + 1); setTrialsRefresh((n) => n + 1); }, []);
   const onReloadTrials = useCallback(() => setTrialsRefresh((n) => n + 1), []);
+  // A new lead is OPEN: show the Open tab so the person sees who they just added.
+  const onAdded = useCallback(() => { setTab('OPEN'); setFilter(''); setListRefresh((n) => n + 1); }, []);
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <LeadsView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       scope={selection ? { organizationId: selection.organizationId, schoolId: selection.schoolId } : null} tab={tab} list={list} filter={filter}
-      selectedId={selectedId} trials={trials} onTab={onTab} onFilter={setFilter} onOpen={onOpen} onRefresh={onRefresh} onReloadTrials={onReloadTrials}/>
+      selectedId={selectedId} trials={trials} onTab={onTab} onFilter={setFilter} onOpen={onOpen} onRefresh={onRefresh} onReloadTrials={onReloadTrials}
+      addLead={selection ? <AddLead key={selection.schoolId.toLowerCase()} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} language={preferences.language} onAdded={onAdded} {...(addLeadApi ? { api: addLeadApi } : {})}/> : null}/>
   </div>;
 }
