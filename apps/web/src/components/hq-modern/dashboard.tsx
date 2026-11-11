@@ -14,17 +14,15 @@ const REALISTIC = [
   ['17.95%', '74.15%'], ['40.18%', '74.15%'], ['60.78%', '74.15%'],
   ['17.95%', '88.65%'], ['40.18%', '88.65%'], ['60.78%', '88.65%'],
 ];
-const CHIBI = [
-  ['21.07%', '74.83%'], ['36.1%', '74.83%'], ['51.3%', '74.83%'],
-  ['66.4%', '74.83%'], ['81.5%', '74.83%'], ['96.6%', '74.83%'],
-];
 
-export function ExecutivePortrait({ index, name }: { index: number; name: string }): React.ReactElement {
+export function ExecutivePortrait({ index, executiveKey, name }: { index: number; executiveKey: string; name: string }): React.ReactElement {
   const { t,text,number,money,date,formattingLocale } = useLocale();
   const { art } = useHqModern();
   if (art === 'anime') return <span className={styles.portraitFallback} role="img" aria-label={t("{name}: Anime artwork pending",{name})}>{name[0]}</span>;
-  const position = (art === 'chibi' ? CHIBI : REALISTIC)[index] ?? REALISTIC[0]!;
-  return <span role="img" aria-label={t("{name}, {style} portrait",{name,style:text(art==='chibi'?'Chibi':'Realistic')})} className={styles.portrait} style={{ '--portrait-x': position[0]!, '--portrait-y': position[1]! } as CSSProperties}/>;
+  // Chibi portraits are whole, centred crops of the approved chibi set (one file per executive).
+  if (art === 'chibi') return <span role="img" aria-label={t("{name}, {style} portrait",{name,style:text('Chibi')})} className={`${styles.portrait} ${styles.chibiPortrait}`} style={{ backgroundImage: `url('/hq-assets/chibi/${executiveKey}.webp')` }}/>;
+  const position = REALISTIC[index] ?? REALISTIC[0]!;
+  return <span role="img" aria-label={t("{name}, {style} portrait",{name,style:text('Realistic')})} className={styles.portrait} style={{ '--portrait-x': position[0]!, '--portrait-y': position[1]! } as CSSProperties}/>;
 }
 
 export function ExecutiveCards(): React.ReactElement {
@@ -32,7 +30,7 @@ export function ExecutiveCards(): React.ReactElement {
   return <section className={`${styles.panel} ${styles.executiveSection}`} aria-labelledby="hq-team-title">
     <div className={styles.sectionHeader}><div><h2 id="hq-team-title">{t("Your executive team")}</h2><p>{t("Six specialists. One coordinated company.")}</p></div><Link href="/hq/executives">{t("View team")}{" "}<HqIcon name="chevron" size={16}/></Link></div>
     <div className={styles.executiveGrid}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.executiveCard} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={t("View {name}'s {role} workspace",{name:executive.displayName,role:text(executive.domain.replaceAll('_',' ').toLowerCase().replace(/\b\w/g,l=>l.toUpperCase()))})}>
-      <ExecutivePortrait index={index} name={executive.displayName}/><div><h3>{executive.displayName}</h3><p>{text(executive.domain.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()))}</p><small>{text(HQ_RESPONSIBILITIES[executive.executiveKey] ?? '')}</small><span>{t("View workspace")}{" "}<HqIcon name="arrow" size={15}/></span></div>
+      <ExecutivePortrait index={index} executiveKey={executive.executiveKey} name={executive.displayName}/><div><h3>{executive.displayName}</h3><p>{text(executive.domain.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()))}</p><small>{text(HQ_RESPONSIBILITIES[executive.executiveKey] ?? '')}</small><span>{t("View workspace")}{" "}<HqIcon name="arrow" size={15}/></span></div>
     </Link>)}</div>
     <p className={styles.finePrint}>{t("No recorded work. Executive task services are not active.")}</p>
   </section>;
@@ -83,7 +81,7 @@ function CommandStage(): React.ReactElement {
         </div>
       </div>
       <div className={styles.stageTeam}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.stageExecutive} style={{ '--stage-column': index < 3 ? index + 1 : index + 2 } as CSSProperties} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={t("View {name}'s {role} workspace",{name:executive.displayName,role:text(executive.domain.replaceAll('_',' ').toLowerCase().replace(/\b\w/g,l=>l.toUpperCase()))})}>
-        <ExecutivePortrait index={index} name={executive.displayName}/>
+        <ExecutivePortrait index={index} executiveKey={executive.executiveKey} name={executive.displayName}/>
         <div className={styles.stageIdentity}><h3>{executive.displayName}</h3><p>{text(executive.domain.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()))}</p><small>{text(HQ_RESPONSIBILITIES[executive.executiveKey] ?? '')}</small></div>
         <span className={styles.workspaceEntry}>{t("Workspace")}{" "}<HqIcon name="arrow" size={14}/></span>
       </Link>)}</div>
