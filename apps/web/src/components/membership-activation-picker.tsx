@@ -55,4 +55,3 @@ export function MembershipActivationPicker({ scope, value, disabled, refresh, t,
   }, [scope.organizationId, scope.schoolId, refresh, reload, api]); // eslint-disable-line react-hooks/exhaustive-deps
   return <MembershipPickerView state={state} value={value} disabled={disabled} t={t} language={language} onPick={onPick} onReload={() => setReload((n) => n + 1)}/>;
 }
-
