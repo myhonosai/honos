@@ -24,6 +24,35 @@ export const HON_ANALYST_AGENT = 'claire' as const;
 export type HonAnalystAgentKey = typeof HON_ANALYST_AGENT;
 /** At most this many specialists HON may suggest for one answer. A suggestion is never run without the human confirming it. */
 export const HON_REPLY_MAX_SUGGESTIONS = 3;
+/**
+ * 0254: "Based on" sources. The closed fact areas an answer may name: the Command Center metric keys, the earlier
+ * conversation and the recorded specialist results. The database keeps only areas actually sent with that answer.
+ */
+export const HON_REPLY_SOURCE_KEYS = ['newLeads24h', 'upcomingTrials24h', 'upcomingTestingEvents30d', 'pendingActionApprovals', 'outstandingWorkItems',
+  'membershipTermsEnding30d', 'paidInvoicesCreated30d', 'unansweredInquiries', 'attendanceDecline', 'trialConversion', 'revenue', 'conversation', 'specialistResults'] as const;
+export type HonReplySourceKey = typeof HON_REPLY_SOURCE_KEYS[number];
+export const HON_REPLY_SOURCE_LABELS: Readonly<Record<HonReplySourceKey, string>> = {
+  newLeads24h: 'New leads (24h)', upcomingTrials24h: 'Trials in the next 24h', upcomingTestingEvents30d: 'Testing events (30 days)',
+  pendingActionApprovals: 'Pending approvals', outstandingWorkItems: 'Open work items', membershipTermsEnding30d: 'Memberships ending (30 days)',
+  paidInvoicesCreated30d: 'Paid invoices (30 days)', unansweredInquiries: 'Unanswered inquiries', attendanceDecline: 'Attendance decline',
+  trialConversion: 'Trial conversion', revenue: 'Revenue', conversation: 'Earlier conversation', specialistResults: 'Specialist results',
+};
+export const HON_REPLY_MAX_SOURCES = 5;
+/** 0254: "Ask next" follow-up questions. Plain text only; tapping one fills the composer and runs nothing. */
+export const HON_REPLY_MAX_FOLLOW_UPS = 3;
+export const HON_REPLY_FOLLOW_UP_LIMITS = { minCharacters: 3, maxCharacters: 150 } as const;
+/**
+ * One follow-up question: trimmed, 3-150 characters counted as code points (as PostgreSQL length() does), no control
+ * characters (C0, DEL or C1), markup or links. The database applies the same rule and drops, never raises, on a mismatch.
+ */
+export function isHonReplyFollowUp(value: unknown): value is string {
+  if (typeof value !== 'string' || value !== value.trim()) return false;
+  const points = [...value].length;
+  return points >= HON_REPLY_FOLLOW_UP_LIMITS.minCharacters && points <= HON_REPLY_FOLLOW_UP_LIMITS.maxCharacters
+    && !/[\u0000-\u001f\u007f-\u009f<>]|https?|www\.|:\/\//i.test(value);
+}
+export const isHonReplySourceKey = (value: unknown): value is HonReplySourceKey => (HON_REPLY_SOURCE_KEYS as readonly unknown[]).includes(value);
+const distinctFollowUps = (v: unknown[]): boolean => new Set(v.map((x) => String(x).toLowerCase())).size === v.length;
 export const HON_TURN_TEXT_LIMITS: Readonly<Record<HonDelegateAgentKey, number>> = { marcus: 2000, kai: 1200, chad: 2000 };
 
 export type HonDelegation =
@@ -68,7 +97,11 @@ export const HON_REPLY_ROLE = 'hon' as const;
 /** How a HON reply was produced. truncated: cut off at the output limit (shown as incomplete, never as complete). */
 export interface HonReplyDetail { mode: HonReplyMode; step: number; maxSteps: number; truncated: boolean; canContinue: boolean; continuesTurnId: string | null;
   /** Specialists HON suggests for this answer: only READY delegates this reader may use, never for a cut-off or concealed answer. Suggestions do nothing until confirmed as a delegation turn. */
-  suggestions: HonDelegateAgentKey[] }
+  suggestions: HonDelegateAgentKey[];
+  /** 0254: up to three follow-up questions for a whole, shown, completed answer (else empty). Tapping one runs nothing. */
+  followUps: string[];
+  /** 0254: up to five fact areas this answer was based on, only areas the server sent with it (else empty). */
+  sources: HonReplySourceKey[] }
 export interface HonConversationCreate { title: string }
 
 export interface HonConversationSummary { id: string; title: string; createdAt: string; updatedAt: string; turnCount: number; status: HonTurnStatus }
@@ -106,11 +139,13 @@ const isReplyDetail = (v: unknown, completed: boolean): boolean => {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
   const d = v as Record<string, unknown>;
   const keys = Object.keys(d).sort().join(',');
-  const sug = d.suggestions;
-  return keys === 'canContinue,continuesTurnId,maxSteps,mode,step,suggestions,truncated'
+  const sug = d.suggestions, ask = d.followUps, src = d.sources;
+  return keys === 'canContinue,continuesTurnId,followUps,maxSteps,mode,sources,step,suggestions,truncated'
     && Array.isArray(sug) && sug.length <= HON_REPLY_MAX_SUGGESTIONS && sug.every(isAgent) && new Set(sug).size === sug.length
-    // Only a completed, whole answer can carry suggestions.
-    && (sug.length === 0 || (completed && d.truncated === false))
+    && Array.isArray(ask) && ask.length <= HON_REPLY_MAX_FOLLOW_UPS && ask.every(isHonReplyFollowUp) && distinctFollowUps(ask)
+    && Array.isArray(src) && src.length <= HON_REPLY_MAX_SOURCES && src.every(isHonReplySourceKey) && new Set(src).size === src.length
+    // Only a completed, whole answer can carry suggestions, follow-ups or sources.
+    && (sug.length + ask.length + src.length === 0 || (completed && d.truncated === false))
     && (HON_REPLY_MODE_KEYS as readonly unknown[]).includes(d.mode) && d.maxSteps === HON_REPLY_MAX_STEPS
     && Number.isSafeInteger(d.step) && (d.step as number) >= 1 && (d.step as number) <= HON_REPLY_MAX_STEPS
     && ((d.step === 1) === (d.continuesTurnId === null)) && (d.continuesTurnId === null || isUuid(d.continuesTurnId))
@@ -188,7 +223,8 @@ export function validateHonConversationThread(value: unknown): HonConversationTh
         // A specialist's draft never appears here; HON's own reply appears only when COMPLETED, with no Action Center link.
         || (t.role === HON_REPLY_ROLE || t.role === HON_ANALYST_AGENT ? (refs.actionRequestId !== null || (t.status === 'COMPLETED' ? !completedText(t.text, t.reason) : t.text !== null)
             || !(t.role === HON_ANALYST_AGENT ? isAnalystDetail : isReplyDetail)(t.replyDetail, t.status === 'COMPLETED')
-            || (t.reason === CONCEALED && ((t.replyDetail as HonReplyDetail).canContinue || (t.replyDetail as HonReplyDetail).suggestions.length > 0)))
+            || (t.reason === CONCEALED && ((t.replyDetail as HonReplyDetail).canContinue || (t.replyDetail as HonReplyDetail).suggestions.length > 0
+              || (t.replyDetail as HonReplyDetail).followUps.length > 0 || (t.replyDetail as HonReplyDetail).sources.length > 0)))
           : (!isAgent(t.role) || t.text !== null || t.replyDetail !== null)))) drift();
     if (human && t.replyDetail !== null) drift();
   });
@@ -210,7 +246,8 @@ export function validateHonTurnReceipt(value: unknown): HonTurnReceipt {
   if ((r.delegatedAgentKeys as unknown[]).length === 0 || analyst
     ? ((r.actionRequestIds as unknown[]).length !== 0 || r.status === 'AWAITING_APPROVAL' || (r.status === 'COMPLETED' ? !completedText(r.reply, r.reason) : r.reply !== null)
       || !(analyst ? isAnalystDetail : isReplyDetail)(r.replyDetail, r.status === 'COMPLETED')
-      || (r.reason === CONCEALED && ((r.replyDetail as HonReplyDetail).canContinue || (r.replyDetail as HonReplyDetail).suggestions.length > 0)))
+      || (r.reason === CONCEALED && ((r.replyDetail as HonReplyDetail).canContinue || (r.replyDetail as HonReplyDetail).suggestions.length > 0
+              || (r.replyDetail as HonReplyDetail).followUps.length > 0 || (r.replyDetail as HonReplyDetail).sources.length > 0)))
     : (r.reply !== null || r.replyDetail !== null)) drift();
   return r as unknown as HonTurnReceipt;
 }
