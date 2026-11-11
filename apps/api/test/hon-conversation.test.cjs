@@ -46,7 +46,7 @@ test('C1 contracts: one named specialist with its own target; receipts and threa
   assert.equal(contracts.validateHonTurnReceipt(receipt).status, 'AWAITING_APPROVAL');
   for (const bad of [{ ...receipt, actionRequestIds: [] }, { ...receipt, status: 'READY' }, { ...receipt, status: 'DONE' }, { ...receipt, delegatedAgentKeys: ['marcus', 'chad'] }, { ...receipt, extra: 1 },
     { ...receipt, reply: 'A specialist draft never rides on the receipt' }, (({ reply, ...rest }) => rest)(receipt),
-    { ...receipt, replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] } }]) {
+    { ...receipt, replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } }]) {
     assert.throws(() => contracts.validateHonTurnReceipt(bad), /INVALID_HON_CONVERSATION_RESPONSE/);
   }
   const turnId = ID();
@@ -81,7 +81,7 @@ test('C2 contracts: a question is delegation null with safe text; HON reply text
     assert.equal(m.reservedCredits, Math.ceil((m.inputTokens + m.outputTokens) / 1000), mode);
   }
   assert.deepEqual([contracts.HON_REPLY_MODES.STANDARD.taskClass, contracts.HON_REPLY_MODES.STANDARD.outputTokens, contracts.HON_REPLY_MODES.DETAILED.taskClass, contracts.HON_REPLY_MODES.DETAILED.outputTokens, contracts.HON_REPLY_MAX_STEPS], ['SUMMARIZE', 1500, 'ANALYZE', 4000, 3]);
-  const detail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] };
+  const detail = { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] };
   const q = { turnId: ID(), conversationId: ID(), status: 'COMPLETED', reason: null, delegatedAgentKeys: [], actionRequestIds: [], workItemIds: [ID()], invocationId: ID(), reply: 'You have two trials tomorrow.', replyDetail: detail };
   assert.equal(contracts.validateHonTurnReceipt({ ...q, replyDetail: { ...detail, mode: 'DETAILED', step: 2, truncated: true, canContinue: true, continuesTurnId: ID() } }).replyDetail.canContinue, true);
   // A completed answer whose source authority lapsed is concealed: no text and never continuable.
@@ -124,9 +124,9 @@ function harness({ begun, agentScope = { organizationId: ORG, schoolId: SCHOOL, 
   const turnId = begun?.turnId ?? ID();
   const receipt = { turnId, conversationId: ID(), status: 'DELEGATING', reason: null, delegatedAgentKeys: ['marcus'], actionRequestIds: [], workItemIds: [], invocationId: null, reply: null, replyDetail: null,
     ...(begun?.agentKey === 'claire' ? { status: 'COMPLETED', delegatedAgentKeys: ['claire'], workItemIds: [ID()], invocationId: ID(), reply: 'Recorded facts: 12 active students.',
-      replyDetail: { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] } } : {}),
+      replyDetail: { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } } : {}),
     ...(begun?.agentKey === 'hon' ? { status: 'COMPLETED', delegatedAgentKeys: [], workItemIds: [ID()], invocationId: ID(), reply: 'Two trials are booked tomorrow.',
-      replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] } } : {}) };
+      replyDetail: { mode: 'STANDARD', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] } } : {}) };
   const database = {
     async resolveCampaignScope(subject, permission) { calls.push(['scope:marcus', subject, permission]); return agentScope; },
     async resolveTeachingAssistantScope(subject) { calls.push(['scope:claire', subject]); return agentScope; },
@@ -282,7 +282,7 @@ test('C3b group summary contract: summarizeTurnId on fresh questions only', () =
 });
 
 test('K2 Claire contract and service: an analyst turn is answered like HON, never as a draft, and goes to the reply service', async () => {
-  const detail = { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [] };
+  const detail = { mode: 'DETAILED', step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [] };
   const q = { turnId: ID(), conversationId: ID(), status: 'COMPLETED', reason: null, delegatedAgentKeys: ['claire'], actionRequestIds: [], workItemIds: [ID()], invocationId: ID(), reply: 'Recorded facts: 12.', replyDetail: detail };
   assert.equal(contracts.validateHonTurnReceipt(q).reply, 'Recorded facts: 12.');
   assert.equal(contracts.validateHonTurnReceipt({ ...q, reason: 'RESULT_CONCEALED', reply: null }).reply, null, 'a lapsed reporting.view conceals the analysis');

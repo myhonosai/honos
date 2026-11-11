@@ -1,47 +1,58 @@
--- HON HQ owner bootstrap
--- Run with the privileged migration/admin connection AFTER the account has first
--- signed into HON and its human user/principal record exists. Replace the
--- placeholder with the exact verified external_subject for the intended owner.
--- This is an ownership/security binding, so it is deliberately not callable by
--- a normal runtime request.
+-- HON HQ owner bootstrap (first owner of a new environment)
+-- Run once in the Supabase SQL Editor / privileged admin connection, AFTER the owner has
+-- signed in through /auth/login. HON creates user records only through invitations, so the
+-- very first HQ owner is provisioned here (same semantics as `pnpm --filter @hon/database
+-- bootstrap:hq-owner`). This is an ownership/security binding: never expose it as a route.
+--
+-- Fill the three values from the signed-in browser's GET /api/identity/me response
+-- ("externalSubject", "email", "displayName"). Never guess a subject from an email address.
+-- Re-runnable: an existing user/principal is reused and no second active grant is created.
 
 BEGIN;
 
-WITH target AS (
-  SELECT principal.id AS principal_id
-  FROM hon.users AS app_user
-  JOIN hon.principals AS principal
-    ON principal.user_id = app_user.id
-   AND principal.principal_type = 'HUMAN_USER'
-   AND principal.is_active = true
-  WHERE app_user.external_subject = '<PASTE_VERIFIED_EXTERNAL_SUBJECT_HERE>'
-)
-INSERT INTO hon.hq_operator_grants (principal_id, hq_role, permission_codes)
-SELECT principal_id, 'HON_HQ_OWNER', ARRAY['hq.dashboard.view']::text[]
-FROM target
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM hon.hq_operator_grants AS hq_grant
-  WHERE hq_grant.principal_id = target.principal_id
-    AND hq_grant.hq_role = 'HON_HQ_OWNER'
-    AND hq_grant.effective_from <= now()
-    AND (hq_grant.effective_until IS NULL OR hq_grant.effective_until > now())
-);
-
 DO $$
+DECLARE
+  owner_subject text := '<PASTE_EXTERNAL_SUBJECT_FROM_API_IDENTITY_ME>';
+  owner_email   text := '<PASTE_EMAIL>';
+  owner_name    text := '<PASTE_DISPLAY_NAME>';
+  v_user uuid;
+  v_principal uuid;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM hon.hq_operator_grants AS hq_grant
-    JOIN hon.users AS app_user ON app_user.id = (
-      SELECT principal.user_id FROM hon.principals AS principal WHERE principal.id = hq_grant.principal_id
-    )
-    WHERE app_user.external_subject = '<PASTE_VERIFIED_EXTERNAL_SUBJECT_HERE>'
-      AND hq_grant.hq_role = 'HON_HQ_OWNER'
-  ) THEN
-    RAISE EXCEPTION 'No active human principal matched the supplied external subject. Sign in once first and verify the subject before retrying.';
+  IF owner_subject ~ '[<>\s]' OR owner_subject = '' THEN RAISE EXCEPTION 'Replace the external subject placeholder.'; END IF;
+  IF owner_email !~ '^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$' THEN RAISE EXCEPTION 'Replace the email placeholder.'; END IF;
+  IF owner_name ~ '[<>]' OR length(trim(owner_name)) = 0 THEN RAISE EXCEPTION 'Replace the display name placeholder.'; END IF;
+
+  SELECT id INTO v_user FROM hon.users WHERE external_subject = owner_subject;
+  IF v_user IS NULL THEN
+    -- Never link an existing identity just because its email matches.
+    IF EXISTS (SELECT 1 FROM hon.users WHERE lower(email::text) = lower(owner_email)) THEN
+      RAISE EXCEPTION 'Another HON user already has this email; review before binding HQ ownership.';
+    END IF;
+    INSERT INTO hon.users (external_subject, email, display_name)
+      VALUES (owner_subject, lower(owner_email), owner_name) RETURNING id INTO v_user;
+    INSERT INTO hon.principals (principal_type, user_id, display_name)
+      VALUES ('HUMAN_USER', v_user, owner_name) RETURNING id INTO v_principal;
+  ELSE
+    SELECT id INTO v_principal FROM hon.principals
+      WHERE user_id = v_user AND principal_type = 'HUMAN_USER' AND is_active;
+    IF v_principal IS NULL THEN RAISE EXCEPTION 'User exists without exactly one active human principal; review first.'; END IF;
   END IF;
-END;
-$$;
+
+  INSERT INTO hon.hq_operator_grants (principal_id, hq_role, permission_codes)
+  SELECT v_principal, 'HON_HQ_OWNER', ARRAY['hq.dashboard.view']::text[]
+  WHERE NOT EXISTS (
+    SELECT 1 FROM hon.hq_operator_grants g
+    WHERE g.principal_id = v_principal AND g.hq_role = 'HON_HQ_OWNER'
+      AND g.effective_from <= now() AND (g.effective_until IS NULL OR g.effective_until > now())
+  );
+
+  IF NOT EXISTS (
+    SELECT 1 FROM hon.hq_operator_grants g
+    WHERE g.principal_id = v_principal AND g.hq_role = 'HON_HQ_OWNER'
+      AND g.effective_from <= now() AND (g.effective_until IS NULL OR g.effective_until > now())
+  ) THEN
+    RAISE EXCEPTION 'HQ owner grant was not present after bootstrap.';
+  END IF;
+END $$;
 
 COMMIT;

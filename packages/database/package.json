@@ -88,6 +88,7 @@
     "db:status": "tsc -p tsconfig.json && node scripts/migration-status.mjs",
     "db:test-restore-drill": "node scripts/test-restore-drill.mjs",
     "check:migrations": "node scripts/verify-migrations.mjs",
+    "db:test-crm-school-clock": "node scripts/test-crm-school-clock-integrity.mjs",
     "db:record-migration-checksums": "node scripts/verify-migrations.mjs --record-new",
     "db:test-staff-roles": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-role-integrity.mjs",
     "db:test-ai-plans": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-invocation-plans.mjs",
@@ -155,6 +156,8 @@
     "db:test-class-session-pages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-session-pages-integrity.mjs",
     "db:test-membership-pause": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-pause-integrity.mjs",
     "db:test-student-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-student-import-integrity.mjs",
+    "db:test-class-series": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-series-integrity.mjs",
+    "db:test-tuition-payments": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-tuition-payment-integrity.mjs",
     "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs"
   },
   "dependencies": {

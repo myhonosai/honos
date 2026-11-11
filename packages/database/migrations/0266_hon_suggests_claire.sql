@@ -1,8 +1,10 @@
 BEGIN;
 
--- K2c (migration 0234, allocated 2026-11-09): HON may suggest Claire, Business Performance.
+-- K2c (migration 0266, allocated 2026-11-11; first drafted as 0234): HON may suggest Claire, Business Performance.
 -- Suggest, don't act. 0214 lets a whole HON answer suggest specialists from a closed set, filtered by the requester's
 -- capability; 0215 lets the human confirm one, which sends an ordinary delegation turn grouped under that answer.
+-- Built on the latest bodies: begin_hon_turn from 0260 (Alex, Jordan and Lena kept), record_hon_reply_result from
+-- 0254 (follow-ups and sources kept), hon_reply_allowed_suggestions from 0214.
 -- This adds 'claire' to that closed set:
 -- 1. A HON answer may suggest Claire. The suggestion is recorded and shown only while the requester holds reporting.view
 --    (0212 binding claire -> reporting.view), through the hon_reply_allowed_suggestions filter.
@@ -12,7 +14,7 @@ BEGIN;
 --    C3a rules, from a fresh read after every write; a refusal rolls everything back.
 -- 3. Group status reads the member through hon_turn_view, so a Claire member is PENDING while her answer runs and
 --    COMPLETED or FAILED with it. A C3b summary (0228) sees her agent, status and reason only, never her text.
--- Claire herself still never suggests (0229 hon_reply_invocations_claire_single_analysis), and the source of a
+-- Claire herself still never suggests (0260 hon_reply_invocations_analysis_single), and the source of a
 -- confirmation must be HON's own answer. Nothing activates a provider, spends credits or changes billing.
 
 ALTER TABLE hon.hon_reply_invocations DROP CONSTRAINT hon_reply_invocations_suggested_agents_check;
@@ -33,22 +35,29 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
     AND hon.principal_has_school_permission(p_principal, p_org, p_school, hon.ai_agent_capability_permission(a.agent));
 $$;
 
--- 0214 body; the provider result may name 'claire' among its suggestions (still at most three, distinct).
+-- 0254 body; the provider result may name 'claire' among its suggestions (still at most three, distinct).
 CREATE OR REPLACE FUNCTION hon.record_hon_reply_result(p_subject text, p_turn uuid, p_result jsonb) RETURNS text
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.ai_evidence_actor(p_subject); i hon.hon_reply_invocations%ROWTYPE; p hon.ai_invocation_plans%ROWTYPE;
-  uid uuid; credits integer; over boolean; reply text; outcome text; cut boolean; asked text[] := '{}';
+  uid uuid; credits integer; over boolean; reply text; outcome text; cut boolean; asked text[] := '{}'; follow text[] := '{}'; cited text[] := '{}';
 BEGIN
   SELECT * INTO i FROM hon.hon_reply_invocations WHERE turn_id = p_turn AND organization_id = hon.current_organization_id()
     AND school_id = hon.current_school_id() AND requested_by = actor FOR UPDATE;
   IF NOT FOUND OR i.status <> 'SENDING' OR i.usage_id IS NOT NULL THEN RAISE EXCEPTION 'HON_REPLY_OUTCOME_REPLAY' USING ERRCODE = '40001'; END IF;
   SELECT * INTO STRICT p FROM hon.ai_invocation_plans WHERE id = i.plan_id;
   IF p_result IS NULL OR jsonb_typeof(p_result) <> 'object' OR NOT p_result ?& ARRAY['reply', 'inputTokens', 'outputTokens', 'providerCostMicrounits']
-     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_result) k WHERE k NOT IN ('reply', 'inputTokens', 'outputTokens', 'providerCostMicrounits', 'truncated', 'suggestions'))
+     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_result) k WHERE k NOT IN ('reply', 'inputTokens', 'outputTokens', 'providerCostMicrounits', 'truncated', 'suggestions', 'followUps', 'sources'))
      OR (p_result ? 'truncated' AND jsonb_typeof(p_result->'truncated') <> 'boolean')
      OR (p_result ? 'suggestions' AND (jsonb_typeof(p_result->'suggestions') <> 'array' OR jsonb_array_length(p_result->'suggestions') > 3
        OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_result->'suggestions') e WHERE jsonb_typeof(e) <> 'string' OR e #>> '{}' NOT IN ('marcus', 'kai', 'chad', 'claire'))
        OR (SELECT count(DISTINCT e #>> '{}') FROM jsonb_array_elements(p_result->'suggestions') e) <> jsonb_array_length(p_result->'suggestions')))
+     -- 0254: follow-ups (at most three bounded plain questions, unique ignoring case) and sources (closed set, unique, at most five).
+     OR (p_result ? 'followUps' AND (jsonb_typeof(p_result->'followUps') <> 'array'
+       OR jsonb_array_length(p_result->'followUps') > 3
+       OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_result->'followUps') e WHERE jsonb_typeof(e) <> 'string')))
+     OR (p_result ? 'sources' AND (jsonb_typeof(p_result->'sources') <> 'array' OR jsonb_array_length(p_result->'sources') > 5
+       OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_result->'sources') e WHERE jsonb_typeof(e) <> 'string' OR NOT (e #>> '{}') = ANY (hon.hon_reply_source_keys()))
+       OR (SELECT count(DISTINCT e #>> '{}') FROM jsonb_array_elements(p_result->'sources') e) <> jsonb_array_length(p_result->'sources')))
      OR jsonb_typeof(p_result->'reply') <> 'string' OR length(btrim(p_result->>'reply')) NOT BETWEEN 1 AND 24000
      OR jsonb_typeof(p_result->'inputTokens') <> 'number' OR (p_result->>'inputTokens') !~ '^[1-9][0-9]{0,6}$'
      OR jsonb_typeof(p_result->'outputTokens') <> 'number' OR (p_result->>'outputTokens') !~ '^[1-9][0-9]{0,6}$'
@@ -59,6 +68,18 @@ BEGIN
   cut := coalesce((p_result->>'truncated')::boolean, false);
   IF p_result ? 'suggestions' THEN
     SELECT coalesce(array_agg(e ORDER BY n), '{}') INTO asked FROM jsonb_array_elements_text(p_result->'suggestions') WITH ORDINALITY x(e, n);
+  END IF;
+  -- Follow-ups are presentation hints: an item that fails the text rule, or repeats an earlier one, is dropped (never
+  -- raised), so a rule difference between the API and the database can only drop a hint, never lose the answer.
+  IF p_result ? 'followUps' THEN
+    SELECT coalesce(array_agg(q ORDER BY n), '{}') INTO follow FROM (
+      SELECT DISTINCT ON (q) q, n FROM jsonb_array_elements_text(p_result->'followUps') WITH ORDINALITY x(q, n)
+      WHERE hon.hon_reply_follow_up_ok(q) ORDER BY q, n) d;
+  END IF;
+  -- Only areas this answer's context carried (recorded by prepare), in the order given.
+  IF p_result ? 'sources' THEN
+    SELECT coalesce(array_agg(e ORDER BY n), '{}') INTO cited FROM jsonb_array_elements_text(p_result->'sources') WITH ORDINALITY x(e, n)
+    WHERE e = ANY (i.available_sources);
   END IF;
   credits := ((p_result->>'inputTokens')::integer + (p_result->>'outputTokens')::integer + 999) / 1000;
   over := (p_result->>'inputTokens')::integer > p.input_budget OR (p_result->>'outputTokens')::integer > p.output_budget
@@ -78,6 +99,9 @@ BEGIN
     -- Only a whole, recorded answer keeps suggestions, and only for agents this requester may use now.
     suggested_agents = CASE WHEN outcome = 'FAILED' OR cut THEN '{}'::text[]
       ELSE hon.hon_reply_allowed_suggestions(i.requested_by, i.organization_id, i.school_id, asked) END,
+    -- 0254: the same rule for follow-ups and cited sources: only on a whole, recorded answer.
+    follow_up_questions = CASE WHEN outcome = 'FAILED' OR cut THEN '{}'::text[] ELSE follow END,
+    cited_sources = CASE WHEN outcome = 'FAILED' OR cut THEN '{}'::text[] ELSE cited END,
     updated_at = clock_timestamp()
   WHERE id = i.id;
   UPDATE hon.work_items SET status = CASE outcome WHEN 'COMPLETED' THEN 'COMPLETED' ELSE 'NEEDS_ATTENTION' END, version = version + 1, updated_at = clock_timestamp()
@@ -85,7 +109,7 @@ BEGIN
   RETURN outcome;
 END $$;
 
--- 0229 body; K2c: a Claire question may confirm HON's suggestion and join that answer's group.
+-- 0260 body; K2c: a specialist question may confirm HON's suggestion and join that answer's group.
 CREATE OR REPLACE FUNCTION hon.begin_hon_turn(p_subject text, p_conversation uuid, p_input jsonb, p_key uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE actor uuid := hon.hon_conversation_actor(p_subject); c hon.hon_conversations%ROWTYPE; t hon.hon_conversation_turns%ROWTYPE;
@@ -125,9 +149,10 @@ BEGIN
      AND (d->>'curriculumId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' AND length(btrim(p_input->>'text')) <= 1200 THEN
     -- K2: teaching is Kai's only. The legacy 'claire' teaching alias (K1, one release) is retired and refused below.
     target := jsonb_build_object('curriculumId', lower(d->>'curriculumId'), 'brief', p_input->>'text');
-  ELSIF agent = 'claire' AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(d) k WHERE k <> 'agentKey') THEN
-    -- K2: Claire, Business Performance. A read-only analysis of the school's aggregate Command Center metrics; the
-    -- question is the turn's own text. Nothing is drafted, sent, approved or changed.
+  ELSIF hon.hon_analysis_specialist(agent) AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(d) k WHERE k <> 'agentKey') THEN
+    -- K2: Claire, Business Performance; 0260: Alex (general management), Jordan (operations), Lena (creative & commerce).
+    -- A read-only analysis of the school's own aggregate facts for that specialist; the question is the turn's own text.
+    -- Nothing is drafted, sent, approved or changed.
     target := jsonb_build_object('question', btrim(p_input->>'text'));
     IF length(target->>'question') = 0 THEN RAISE EXCEPTION 'INVALID_HON_TURN' USING ERRCODE = '22023'; END IF;
   ELSIF agent = 'chad' AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(d) k WHERE k NOT IN ('agentKey', 'leadId', 'expectedLeadVersion', 'purpose'))
@@ -194,17 +219,19 @@ BEGIN
          AND hon.hon_orchestration_summary_facts(p_subject, c.id, actor, lower(p_input->>'summarizeTurnId')::uuid) IS NULL THEN
         RAISE EXCEPTION 'HON_GROUP_NOT_SUMMARIZABLE' USING ERRCODE = '22023';
       END IF;
-    ELSIF agent = 'claire' THEN
-      -- Claire's capability is reporting.view (0212 binding), under the same AI planning gate and S4 start guard as HON.
-      -- Checked before the reply row and again after it (the work item and reply inserts can wait on locks); a refusal
-      -- rolls everything back, so no turn is recorded.
+    ELSIF hon.hon_analysis_specialist(agent) THEN
+      -- The specialist's capability (0212 binding: Claire and Alex reporting.view, Jordan schedule.session.manage, Lena
+      -- marketing.campaign.read), under the same AI planning gate and S4 start guard as HON. Checked before the reply row
+      -- and again after it (the work item and reply inserts can wait on locks); a refusal rolls everything back, so no
+      -- turn is recorded.
       PERFORM hon.require_ai_invocation_plan_access();
-      IF NOT hon.principal_has_school_permission(actor, c.organization_id, c.school_id, 'reporting.view') THEN
-        RAISE EXCEPTION 'CLAIRE_REPORTING_REQUIRED' USING ERRCODE = '42501';
+      IF NOT hon.principal_has_school_permission(actor, c.organization_id, c.school_id, hon.ai_agent_capability_permission(agent)) THEN
+        RAISE EXCEPTION '%', CASE WHEN agent = 'claire' THEN 'CLAIRE_REPORTING_REQUIRED' ELSE 'HON_SPECIALIST_CAPABILITY_REQUIRED' END USING ERRCODE = '42501';
       END IF;
-      -- K2c: a Claire question confirmed from HON's suggestion joins that answer's group under the same C3a rules: this
-      -- human's own whole COMPLETED HON answer in this conversation, visible now, still suggesting Claire for them
-      -- (reporting.view, 0214 filter), and Claire not already confirmed from it. Re-validated after every write below.
+      -- K2c: a specialist question confirmed from HON's suggestion joins that answer's group under the same C3a rules:
+      -- this human's own whole COMPLETED HON answer in this conversation, visible now, still suggesting this agent for
+      -- them (capability-filtered, 0214; of the specialists only Claire is in the closed set), and the agent not already
+      -- confirmed from it. Re-validated after every write below.
       IF p_input ? 'fromSuggestionTurnId' THEN
         SELECT * INTO src FROM hon.hon_reply_invocations WHERE turn_id = lower(p_input->>'fromSuggestionTurnId')::uuid AND conversation_id = c.id
           AND organization_id = c.organization_id AND school_id = c.school_id AND requested_by = actor;
@@ -225,11 +252,11 @@ BEGIN
         nullif(current_setting('app.hon_request_id', true), '')::uuid)
       RETURNING id INTO wid;
       INSERT INTO hon.hon_reply_invocations (organization_id, school_id, conversation_id, turn_id, requested_by, work_item_id, reply_mode, step, specialist)
-      VALUES (c.organization_id, c.school_id, c.id, t.id, actor, wid, 'DETAILED', 1, 'claire');
+      VALUES (c.organization_id, c.school_id, c.id, t.id, actor, wid, 'DETAILED', 1, agent);
       PERFORM hon.hon_conversation_hold_actor(p_subject, actor);
       PERFORM hon.require_ai_invocation_plan_access();
-      IF NOT hon.principal_has_school_permission(actor, c.organization_id, c.school_id, 'reporting.view') THEN
-        RAISE EXCEPTION 'CLAIRE_REPORTING_REQUIRED' USING ERRCODE = '42501';
+      IF NOT hon.principal_has_school_permission(actor, c.organization_id, c.school_id, hon.ai_agent_capability_permission(agent)) THEN
+        RAISE EXCEPTION '%', CASE WHEN agent = 'claire' THEN 'CLAIRE_REPORTING_REQUIRED' ELSE 'HON_SPECIALIST_CAPABILITY_REQUIRED' END USING ERRCODE = '42501';
       END IF;
       -- K2c: the confirmed source, from a fresh read after every write (group, member, work item and reply rows).
       IF p_input ? 'fromSuggestionTurnId'
@@ -272,7 +299,7 @@ BEGIN
     END IF;
   END IF;
   v := hon.hon_turn_view(t);
-  -- HON's own answer, or Claire's analysis (K2): both are reply invocations. A legacy 'claire' teaching turn has none.
+  -- HON's own answer, or an analysis specialist's (K2, 0260): both are reply invocations. A legacy 'claire' teaching turn has none.
   IF t.agent_key = 'hon' OR EXISTS (SELECT 1 FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id) THEN
     -- Only a reply that never left PENDING is handed to the reply service again; its prepare admits one caller.
     handoff := EXISTS (SELECT 1 FROM hon.hon_reply_invocations r WHERE r.turn_id = t.id AND r.status = 'PENDING');

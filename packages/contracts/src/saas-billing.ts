@@ -105,6 +105,17 @@ export const SAAS_COMMANDS = {
   openCreativeWindow: 'saas-creative-window-open',
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
   createCreativeGeneration: 'saas-creative-generation-create',
+  // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
+  openSupportCase: 'hq-support-case-open',
+  addSupportNote: 'hq-support-case-note',
+  changeSupportCase: 'hq-support-case-change',
+  // M1 (0252): HQ marketing campaigns; same values as HQ_MARKETING_COMMANDS.
+  createMarketingCampaign: 'hq-marketing-campaign-create',
+  updateMarketingCampaign: 'hq-marketing-campaign-update',
+  setMarketingCampaignStatus: 'hq-marketing-campaign-status',
+  createHqCreativeGeneration: 'hq-creative-generation-create',
+  setHqCreativeBudget: 'hq-creative-budget-set',
+  resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

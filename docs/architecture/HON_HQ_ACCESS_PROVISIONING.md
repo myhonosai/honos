@@ -5,9 +5,9 @@ HON HQ is a **separate privileged control plane**. A school owner, administrator
 ## Current owner test path
 
 1. Configure the non-privileged `HON_RUNTIME_DATABASE_URL` and start the application with verified session identity. The `/auth/login` and `/auth/callback` routes implement the Manus OAuth exchange and issue a validated, `SameSite=None; Secure` `webdev_app_session` cookie.
-2. Sign in once through HON so the account has a `hon.users` and linked human `hon.principals` record.
-3. Sign in through `/auth/login`. Retrieve the verified `external_subject`, name, and email from authenticated `GET /api/identity/me` (or the equivalent server endpoint); do not guess an identity from an email address.
-4. Execute [020_bootstrap_hq_owner.sql](../../infra/postgres/020_bootstrap_hq_owner.sql) through the **privileged migration/admin connection**, replacing its placeholder with that exact subject, or run the parameterized `bootstrap:hq-owner` administrator utility with `HON_HQ_OWNER_EXTERNAL_SUBJECT` set only from the verified endpoint.
+2. Sign in once through `/auth/login`. Signing in does **not** create a `hon.users` record: HON creates users only through invitations, so the first HQ owner of an environment is provisioned by the bootstrap below. Until then `/auth/access` shows "Access not verified".
+3. In the same browser, open `GET /api/identity/me` and copy the verified `externalSubject`, `email`, and `displayName` (for OIDC the subject is `oidc:<url-encoded issuer>:<url-encoded sub>`). Do not guess an identity from an email address.
+4. Execute [020_bootstrap_hq_owner.sql](../../infra/postgres/020_bootstrap_hq_owner.sql) through the **privileged migration/admin connection** (Supabase SQL Editor), replacing its three placeholders with those values, or run the parameterized `bootstrap:hq-owner` administrator utility with `HON_HQ_OWNER_EXTERNAL_SUBJECT`, `HON_HQ_OWNER_EMAIL` and `HON_HQ_OWNER_DISPLAY_NAME`. Both create the user and human principal if missing and add one `HON_HQ_OWNER` grant.
 5. Sign in again and call `GET /v1/hq/session`. It will return the resolved `HON_HQ_OWNER` scope only for the bound account.
 6. Visit `/hq` to test the control-plane surface.
 

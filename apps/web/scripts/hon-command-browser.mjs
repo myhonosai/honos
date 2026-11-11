@@ -111,7 +111,7 @@ async function honTargets(route, kind) {
   if (kind === 'kai') return json(route, 200, { data: honCurricula() });
   return json(route, 200, { data: honLeads(), meta: { requestId: 'synthetic' } });
 }
-const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], ...over });
+const replyDetail = (mode = 'STANDARD', over = {}) => ({ mode, step: 1, maxSteps: 3, truncated: false, canContinue: false, continuesTurnId: null, suggestions: [], followUps: [], sources: [], ...over });
 let honSeq = 700;
 async function honApi(route, path, method, prefix) {
   const base = `${prefix}/hon`;
@@ -124,6 +124,10 @@ async function honApi(route, path, method, prefix) {
     const items = [...(hon.groups.get(grouped[1]) ?? new Map()).values()].map((g) => ({ sourceTurnId: g.sourceTurnId, status: groupStatus(g.members.map((m) => m.status)), members: g.members }));
     return json(route, 200, { data: { items } });
   }
+  // 0255: the full workspace also reads what HON remembers (synthetic school fact, no person data).
+  if (path === `${base}/school-notes` && method === 'GET') return json(route, 200, { data: { notes: [{ id: id(690), text: 'We close the first week of August.', createdAt: iso(0) }], canManage: true, limits: { maxNotes: 20, maxCharacters: 2000, noteCharacters: 200 } } });
+  if (path === `${base}/tone` && method === 'GET') return json(route, 200, { data: { tone: 'STANDARD', canManage: true, updatedAt: null } });
+  if (path === `${base}/briefing` && method === 'GET') return json(route, 200, { data: { enabled: false, sendHour: 8, canManage: true, me: { email: false, canSubscribe: true } } });
   if (method !== 'POST') return json(route, 404, { code: 'NOT_FOUND' });
   const request = route.request();
   const headers = request.headers();
@@ -844,7 +848,7 @@ async function trialsApiRoute(route, path, method, url) {
   return json(route, 200, { data: { ...receipt, replayed: false } });
 }
 // ---------- HQ creative credits (read only, synthetic) ----------
-const ccx = { reads: [], denied: false, other: 0 };
+const ccx = { reads: [], denied: false, other: 0, posts: [], replies: [], byKey: new Map(), state: new Map() };
 const ccId = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ccPackages = [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({
   packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' }));
@@ -852,10 +856,6 @@ const ccRates = { rateVersionId: ccId(70), rateVersion: 1, termsReference: 'hon-
   rates: [{ operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 20, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL', costEvidenceId: null },
     { operationCode: 'video.short', mediaKind: 'VIDEO', displayName: 'Short video clip', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 10, rateBasis: 'PROVISIONAL', costEvidenceId: null }] };
 const ccOrg = ccId(1), ccNorth = ccId(2), ccSouth = ccId(3), ccLot = ccId(60), ccAdj = ccId(61);
-const ccRow = (over) => ({ schoolId: ccNorth, schoolName: 'Synthetic Dojo North', organizationId: ccOrg, organizationName: 'Synthetic Martial Arts LLC', availableCredits: 440, heldCredits: 20,
-  consumedCredits: 40, actualProviderCostMicrounits: 80000, outcomeUnknown: 1, unknownCostGenerations: 0, updatedAt: '2026-11-08T12:00:00.000Z', ...over });
-const ccList = () => ({ program: { status: 'INACTIVE', version: 1, monthlyIncludedCredits: 12000 }, rates: ccRates, packages: ccPackages,
-  wallets: [ccRow({}), ccRow({ schoolId: ccSouth, schoolName: 'Synthetic Dojo South', availableCredits: 0, heldCredits: 0, consumedCredits: 0, actualProviderCostMicrounits: 0, outcomeUnknown: 0 })] });
 const ccKinds = (promo) => ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'].map((kind) => ({ kind, grantedCredits: 0, availableCredits: 0, heldCredits: 0, consumedCredits: 0,
   expiredCredits: 0, debitedCredits: 0, ...(kind === 'PROMOTIONAL' ? promo : {}) }));
 const ccRes = (over) => ({ schoolId: ccNorth, organizationId: ccOrg, operationCode: 'image.standard', mediaKind: 'IMAGE', rateBasis: 'PROVISIONAL', creditsPerUnit: 20,
@@ -883,15 +883,104 @@ function ccWallet(schoolId) {
     providerExpense: { actualProviderCostMicrounits: empty ? 0 : 80000, finalizedProviderCostMicrounits: empty ? 0 : 80000, failedOrNotChargedProviderCostMicrounits: 0, consumedCredits: empty ? 0 : 40,
       unknownCostGenerations: 0, pendingCostGenerations: empty ? 0 : 1, spendClass: 'CREATIVE_MEDIA', generations: { finalized: empty ? 0 : 1, released: 0, reserved: 0, outcomeUnknown: empty ? 0 : 1 } } };
 }
+// Derived exactly as the database does: balances from lots, expense from generations, list rows from wallets.
+const ccLotKinds = ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'];
+function ccDerive(w) {
+  const byKind = ccLotKinds.map((kind) => { const lots = w.lots.filter((l) => l.kind === kind); const sum = (k) => lots.reduce((n, l) => n + l[k], 0);
+    return { kind, grantedCredits: sum('credits'), availableCredits: sum('availableCredits'), heldCredits: sum('heldCredits'), consumedCredits: sum('consumedCredits'),
+      expiredCredits: sum('expiredCredits'), debitedCredits: sum('debitedCredits') }; });
+  w.balance = { availableCredits: byKind.reduce((n, k) => n + k.availableCredits, 0), heldCredits: byKind.reduce((n, k) => n + k.heldCredits, 0), byKind };
+  const rec = (pred) => w.reservations.filter((r) => pred(r) && r.costStatus === 'RECORDED').reduce((n, r) => n + r.providerCostMicrounits, 0);
+  const count = (pred) => w.reservations.filter(pred).length;
+  w.providerExpense = { actualProviderCostMicrounits: rec(() => true), finalizedProviderCostMicrounits: rec((r) => r.status === 'FINALIZED'),
+    failedOrNotChargedProviderCostMicrounits: rec((r) => r.status === 'RELEASED'), consumedCredits: w.reservations.reduce((n, r) => n + (r.finalCredits ?? 0), 0),
+    unknownCostGenerations: count((r) => r.costStatus === 'UNKNOWN'), pendingCostGenerations: count((r) => r.costStatus === 'PENDING'), spendClass: 'CREATIVE_MEDIA',
+    generations: { finalized: count((r) => r.status === 'FINALIZED'), released: count((r) => r.status === 'RELEASED'), reserved: count((r) => r.status === 'RESERVED'),
+      outcomeUnknown: count((r) => r.status === 'OUTCOME_UNKNOWN') } };
+  return w;
+}
+const ccReset = () => { ccx.state = new Map([[ccNorth, ccDerive(ccWallet(ccNorth))], [ccSouth, ccDerive(ccWallet(ccSouth))]]); ccx.byKey = new Map(); ccx.posts = []; ccx.replies = []; };
+const ccNames = { [ccNorth]: 'Synthetic Dojo North', [ccSouth]: 'Synthetic Dojo South' };
+const ccList = () => ({ program: { status: 'INACTIVE', version: 1, monthlyIncludedCredits: 12000 }, rates: ccRates, packages: ccPackages,
+  wallets: [...ccx.state.values()].map((w) => ({ schoolId: w.schoolId, schoolName: ccNames[w.schoolId], organizationId: ccOrg, organizationName: 'Synthetic Martial Arts LLC',
+    availableCredits: w.balance.availableCredits, heldCredits: w.balance.heldCredits, consumedCredits: w.providerExpense.consumedCredits,
+    actualProviderCostMicrounits: w.providerExpense.actualProviderCostMicrounits, outcomeUnknown: w.providerExpense.generations.outcomeUnknown,
+    unknownCostGenerations: w.providerExpense.unknownCostGenerations, updatedAt: '2026-11-08T12:00:00.000Z' })) });
+const CC_COMMAND = { grants: 'saas-creative-grant', debits: 'saas-creative-debit', resolve: 'saas-creative-resolve', 'provider-cost': 'saas-creative-cost-record' };
+let ccSeq = 100;
+function ccCommand(kind, target, body) {
+  const at = '2026-11-09T06:30:00.000Z';
+  if (kind === 'grants') {
+    const w = ccx.state.get(target); if (!w) return [404, { code: 'SAAS_UNAVAILABLE' }];
+    const adjustmentId = ccId(ccSeq++), lotId = ccId(ccSeq++);
+    const lot = { lotId, kind: body.kind, credits: body.credits, baseCredits: null, bonusCredits: null, window: null, purchaseId: null, adjustmentId, expiresAt: null, expired: false,
+      availableCredits: body.credits, heldCredits: 0, consumedCredits: 0, expiredCredits: 0, debitedCredits: 0, grantedAt: at };
+    w.lots.push(lot); w.walletVersion = (w.walletVersion ?? 0) + 1;
+    w.adjustments.unshift({ adjustmentId, kind: body.kind === 'PROMOTIONAL' ? 'PROMOTIONAL_GRANT' : 'ADJUSTMENT_GRANT', credits: body.credits, lotId, reasonCode: body.reasonCode, occurredAt: at, note: body.note, actorPrincipalId: ccId(9) });
+    w.history.unshift({ entryId: ccId(ccSeq++), lotId, lotKind: body.kind, entryKind: 'GRANT', credits: body.credits, reservationId: null, adjustmentId, occurredAt: at });
+    ccDerive(w);
+    return [200, { data: { adjustment: { adjustmentId, schoolId: w.schoolId, lot: { ...lot }, reasonCode: body.reasonCode, note: body.note }, balance: w.balance, replayed: false } }];
+  }
+  const w = [...ccx.state.values()].find((x) => x.lots.some((l) => l.lotId === target) || x.reservations.some((r) => r.reservationId === target));
+  if (!w) return [404, { code: 'SAAS_UNAVAILABLE' }];
+  if (kind === 'debits') {
+    const lot = w.lots.find((l) => l.lotId === target);
+    if (lot.kind === 'PURCHASED_TOPUP') return [422, { code: 'SAAS_CREATIVE_PURCHASED_LOT_PROTECTED' }];
+    if (body.credits > lot.availableCredits) return [422, { code: 'SAAS_CREATIVE_DEBIT_EXCEEDS_AVAILABLE' }];
+    lot.availableCredits -= body.credits; lot.debitedCredits += body.credits;
+    const adjustmentId = ccId(ccSeq++);
+    w.adjustments.unshift({ adjustmentId, kind: 'CORRECTION_DEBIT', credits: body.credits, lotId: lot.lotId, reasonCode: body.reasonCode, occurredAt: at, note: body.note, actorPrincipalId: ccId(9) });
+    w.history.unshift({ entryId: ccId(ccSeq++), lotId: lot.lotId, lotKind: lot.kind, entryKind: 'DEBIT', credits: body.credits, reservationId: null, adjustmentId, occurredAt: at });
+    ccDerive(w);
+    return [200, { data: { adjustment: { adjustmentId, schoolId: w.schoolId, lot: { ...lot }, credits: body.credits, reasonCode: body.reasonCode, note: body.note }, balance: w.balance, replayed: false } }];
+  }
+  const r = w.reservations.find((x) => x.reservationId === target);
+  if (r.version !== body.expectedVersion) return [409, { code: 'SAAS_VERSION_CONFLICT' }];
+  if (kind === 'resolve') {
+    if (r.status !== 'OUTCOME_UNKNOWN' && r.status !== 'RESERVED') return [409, { code: 'SAAS_TRANSITION_NOT_ALLOWED' }];
+    const lot = w.lots.find((l) => l.lotId === r.lots[0].lotId), final = body.resolution === 'SUCCEEDED' ? body.finalUnits * r.creditsPerUnit : 0;
+    lot.heldCredits -= r.reservedCredits; lot.consumedCredits += final; lot.availableCredits += r.reservedCredits - final;
+    Object.assign(r, { status: body.resolution === 'SUCCEEDED' ? 'FINALIZED' : 'RELEASED', statusReason: body.resolution === 'SUCCEEDED' ? 'HQ_RESOLVED_SUCCEEDED' : 'HQ_RESOLVED_NOT_CHARGED',
+      version: r.version + 1, finalUnits: body.finalUnits, finalCredits: body.resolution === 'SUCCEEDED' ? final : null, settledAt: at, resolutionReference: body.evidenceReference,
+      costStatus: body.providerCostMicrounits === null ? 'UNKNOWN' : 'RECORDED', providerCostMicrounits: body.providerCostMicrounits,
+      costReference: body.providerCostMicrounits === null ? null : body.evidenceReference, costRecordedAt: body.providerCostMicrounits === null ? null : at,
+      usageId: body.resolution === 'SUCCEEDED' || body.providerCostMicrounits > 0 ? ccId(ccSeq++) : null });
+    ccDerive(w);
+    return [200, { data: { reservation: { ...r }, replayed: false } }];
+  }
+  if (r.status !== 'RELEASED' || r.costStatus !== 'UNKNOWN') return [409, { code: 'SAAS_TRANSITION_NOT_ALLOWED' }];
+  Object.assign(r, { version: r.version + 1, costStatus: 'RECORDED', providerCostMicrounits: body.providerCostMicrounits, costReference: body.evidenceReference, costRecordedAt: at,
+    usageId: body.providerCostMicrounits > 0 ? ccId(ccSeq++) : null });
+  ccDerive(w);
+  return [200, { data: { reservation: { ...r }, outcome: 'APPLIED', replayed: false } }];
+}
 async function creditsApiRoute(route, path, method, url) {
   const headers = route.request().headers();
-  // Read only: any write, command marker, key or query is refused.
+  if (method === 'POST') {
+    // HQ-owner corrections only: one marker per path, a key, JSON, no query. Replies queue: 'ok' (default), 'unknown' (503, nothing changed), 'denied' (403).
+    const m = /^\/api\/v1\/hq\/saas\/creative-credits\/(?:schools|lots|reservations)\/([0-9a-f-]{36})\/(grants|debits|resolve|provider-cost)$/.exec(path);
+    const key = headers['idempotency-key'] ?? '';
+    if (!m || url.search || headers['x-hon-human-command'] !== CC_COMMAND[m[2]] || !/^[0-9a-f-]{36}$/.test(key) || !/^application\/json/.test(headers['content-type'] ?? '')
+      || Object.keys(headers).some((k) => k.startsWith('x-hon-') && k !== 'x-hon-human-command')) { ccx.other++; return json(route, 400, { code: 'INVALID_SAAS_INPUT' }); }
+    const body = JSON.parse(route.request().postData() ?? 'null');
+    ccx.posts.push({ kind: m[2], target: m[1], key, body });
+    if (ccx.byKey.has(key)) { const [status, answer] = ccx.byKey.get(key); return json(route, status, status === 200 ? { data: { ...answer.data, replayed: true } } : answer); }
+    let reply = ccx.replies.shift() ?? 'ok';
+    // 'hold' answers only when the check calls ccx.release(), then as 'ok'.
+    if (reply === 'hold') { await new Promise((resolve) => { ccx.release = resolve; }); reply = 'ok'; }
+    if (reply === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (reply === 'denied') return json(route, 403, { code: 'SAAS_FORBIDDEN' });
+    const answer = ccCommand(m[2], m[1], body);
+    if (answer[0] === 200) ccx.byKey.set(key, answer);
+    return json(route, answer[0], answer[1]);
+  }
+  // Reads: any write method other than the corrections, command marker, key or query is refused.
   if (method !== 'GET' || url.search || Object.keys(headers).some((k) => k.startsWith('x-hon-') || k === 'idempotency-key')) { ccx.other++; return json(route, 400, { code: 'INVALID_SAAS_INPUT' }); }
   if (ccx.denied) return json(route, 403, { code: 'SAAS_FORBIDDEN' });
   ccx.reads.push(path.slice('/api/v1/hq/saas/creative-credits'.length) || '/');
   if (path === '/api/v1/hq/saas/creative-credits') return json(route, 200, { data: ccList() });
   const m = /^\/api\/v1\/hq\/saas\/creative-credits\/schools\/([0-9a-f-]{36})$/.exec(path);
-  if (m && (m[1] === ccNorth || m[1] === ccSouth)) return json(route, 200, { data: ccWallet(m[1]) });
+  if (m && ccx.state.has(m[1])) return json(route, 200, { data: ccx.state.get(m[1]) });
   return null;
 }
 const aix = { pauses: [], open: [], resolved: [], posts: [], replies: [], byKey: new Map(), usage: [], reads: [], denied: false };
@@ -3812,7 +3901,7 @@ const CC_TEXT = { en: ['Creative Credits', 'View wallet for Synthetic Dojo North
   es: ['Créditos creativos', 'Ver billetera de Synthetic Dojo North', 'Generaciones (2)', 'Resultado desconocido'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'es']]) {
   await check(`Creative Credits ${nextTheme} ${language} ${name}: program, rates, wallets, and one school's wallet read that changes nothing`, async () => {
-    Object.assign(ccx, { reads: [], denied: false, other: 0 });
+    Object.assign(ccx, { reads: [], denied: false, other: 0 }); ccReset();
     const [title, open, generations, unknown] = CC_TEXT[language];
     const { ctx, page } = await ownershipPage('/hq/creative-credits', viewport, { nextTheme, language });
     await creditsPage(page).getByTestId('credits-wallet').first().waitFor({ timeout: 20000 });
@@ -3825,19 +3914,21 @@ for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1
     await creditsPage(page).getByRole('button', { name: open }).click();
     const detail = creditsPage(page).getByTestId('credits-detail');
     await detail.and(page.locator('[data-state="READY"]')).waitFor();
-    await detail.getByText(generations).click();
+    await detail.getByText(generations).waitFor();
     await detail.getByText(unknown, { exact: true }).waitFor();
     await detail.scrollIntoViewIfNeeded();
     await noOverflow(page, `credits-detail-${nextTheme}-${language}-${name}`);
     await axe(page, `credits-detail-${nextTheme}-${language}-${name}`);
     await shot(page, `credits-detail-${nextTheme}-${language}-${name}`, true);
-    assert.deepEqual(ccx.reads, ['/', `/schools/${ccNorth}`]);
-    assert.equal(ccx.other, 0, 'no write, key or command marker was sent');
+    // Opening a school reads the list and that school's wallet again, fresh.
+    assert.deepEqual(ccx.reads, ['/', '/', `/schools/${ccNorth}`]);
+    assert.equal(ccx.other, 0, 'no stray write, key or command marker was sent');
+    assert.equal(ccx.posts.length, 0, 'opening a wallet sends no correction');
     await ctx.close();
   });
 }
-await check('Creative Credits: a refused read shows nothing; a session end hides everything until shown again', async () => {
-  Object.assign(ccx, { reads: [], denied: true, other: 0 });
+await check('Creative Credits: a refused read shows nothing; leaving the window or a session end hides everything until shown again', async () => {
+  Object.assign(ccx, { reads: [], denied: true, other: 0 }); ccReset();
   const { ctx, page } = await ownershipPage('/hq/creative-credits', { width: 1280, height: 900 });
   await creditsPage(page).getByText('does not include creative credits').waitFor({ timeout: 20000 });
   assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
@@ -3847,12 +3938,156 @@ await check('Creative Credits: a refused read shows nothing; a session end hides
   await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo South' }).click();
   await creditsPage(page).getByText('No wallet has been opened for this school yet.').waitFor();
   await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
-  await creditsPage(page).getByText('Hidden because your session ended.').waitFor();
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
   assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
   assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
   await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
   await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
   assert.equal(await creditsPage(page).getByTestId('credits-detail').count(), 0);
+  // Leaving the window hides per-school billing data too.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credits-wallet').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await creditsPage(page).getByTestId('credits-wallet').first().waitFor();
+  assert.equal(ccx.other, 0);
+  await ctx.close();
+});
+
+for (const [name, viewport, nextTheme] of [['desktop-1440', { width: 1440, height: 900 }, 'modern'], ['phone-390', { width: 390, height: 844 }, 'big-button']]) {
+  await check(`Creative Credits corrections ${nextTheme} ${name}: grant, settle not charged, record cost and remove, each read again`, async () => {
+    Object.assign(ccx, { reads: [], denied: false, other: 0 }); ccReset();
+    const { ctx, page } = await ownershipPage('/hq/creative-credits', viewport, { nextTheme, language: 'en' });
+    await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo North' }).click();
+    const detail = creditsPage(page).getByTestId('credits-detail');
+    await detail.and(page.locator('[data-state="READY"]')).waitFor({ timeout: 20000 });
+    const outcome = detail.getByTestId('credit-outcome');
+    // Grant: form in place, confirmation required.
+    await detail.getByRole('button', { name: 'Grant credits' }).click();
+    const grant = detail.locator('form[data-form="grant"]');
+    await grant.getByLabel('Credits', { exact: true }).fill('250');
+    await grant.getByLabel('Note (why, for the record)').fill('Service outage on Nov 7');
+    await noOverflow(page, `credits-grant-${nextTheme}-${name}`);
+    await axe(page, `credits-grant-${nextTheme}-${name}`);
+    await shot(page, `credits-grant-${nextTheme}-${name}`, true);
+    await grant.getByRole('button', { name: 'Grant credits' }).click();
+    assert.equal(ccx.posts.length, 0, 'nothing is sent before the confirmation is ticked');
+    await grant.getByRole('checkbox').check();
+    await grant.getByRole('button', { name: 'Grant credits' }).click();
+    await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
+    await detail.getByText('Credit lots (2)').waitFor();
+    assert.equal(await creditsPage(page).getByTestId('credits-wallet').first().locator('td').first().innerText(), '690');
+    // Settle the unknown generation as not charged, leaving the cost blank: it stays unknown, never zero.
+    await detail.getByRole('button', { name: 'Settle: not charged' }).click();
+    const settle = detail.locator('form[data-form="resolve-not-charged"]');
+    await settle.getByLabel(/Evidence reference/).fill('provider-ticket-7');
+    await settle.getByRole('checkbox').check();
+    await settle.getByRole('button', { name: 'Settle generation' }).click();
+    await outcome.getByText('The generation is settled.').waitFor();
+    await detail.getByText('Cost unknown (never counted as zero)').waitFor();
+    // Then record the provider cost once.
+    await detail.getByRole('button', { name: 'Record provider cost' }).click();
+    const cost = detail.locator('form[data-form="cost"]');
+    await cost.getByLabel('Provider cost (USD)').fill('0.03');
+    await cost.getByLabel(/Evidence reference/).fill('provider-invoice-4 line 2');
+    await cost.getByRole('checkbox').check();
+    await cost.getByRole('button', { name: 'Record cost' }).click();
+    await outcome.getByText('The provider cost is recorded.').waitFor();
+    await detail.getByText('Cost recorded: $0.03').waitFor();
+    // Remove credits from the original promotional lot.
+    await detail.getByTestId('credits-lot').first().getByRole('button', { name: 'Remove credits' }).click();
+    const debit = detail.locator('form[data-form="debit"]');
+    await debit.getByLabel('Credits', { exact: true }).fill('40');
+    await debit.getByLabel('Reason').selectOption('RECORDED_IN_ERROR');
+    await debit.getByLabel('Note (why, for the record)').fill('Granted twice by mistake');
+    await debit.getByRole('checkbox').check();
+    await noOverflow(page, `credits-debit-${nextTheme}-${name}`);
+    await axe(page, `credits-debit-${nextTheme}-${name}`);
+    await debit.getByRole('button', { name: 'Remove credits' }).click();
+    await outcome.getByText('The credits were removed.').waitFor();
+    await shot(page, `credits-after-${nextTheme}-${name}`, true);
+    assert.deepEqual(ccx.posts.map((p) => p.kind), ['grants', 'resolve', 'provider-cost', 'debits']);
+    assert.equal(new Set(ccx.posts.map((p) => p.key)).size, 4, 'each correction has its own key');
+    assert.deepEqual(ccx.posts[0].body, { kind: 'PROMOTIONAL', credits: 250, reasonCode: 'GOODWILL', note: 'Service outage on Nov 7' });
+    assert.deepEqual(ccx.posts[1].body, { resolution: 'NOT_CHARGED', expectedVersion: 2, finalUnits: null, providerCostMicrounits: null, evidenceReference: 'provider-ticket-7' });
+    assert.deepEqual(ccx.posts[2].body, { expectedVersion: 3, providerCostMicrounits: 30000, evidenceReference: 'provider-invoice-4 line 2' });
+    assert.equal(ccx.posts[3].target, ccLot);
+    assert.equal(ccx.other, 0);
+    await ctx.close();
+  });
+}
+await check('Creative Credits corrections: an unknown answer keeps the request and Try again replays the same key; a refusal says nothing changed', async () => {
+  Object.assign(ccx, { reads: [], denied: false, other: 0 }); ccReset(); ccx.replies = ['unknown'];
+  const { ctx, page } = await ownershipPage('/hq/creative-credits', { width: 1280, height: 900 });
+  await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo South' }).click();
+  const detail = creditsPage(page).getByTestId('credits-detail');
+  await detail.and(page.locator('[data-state="READY"]')).waitFor({ timeout: 20000 });
+  await detail.getByRole('button', { name: 'Grant credits' }).click();
+  const grant = detail.locator('form[data-form="grant"]');
+  await grant.getByLabel('Kind of credits').selectOption('ADJUSTMENT');
+  await grant.getByLabel('Credits', { exact: true }).fill('100');
+  await grant.getByLabel('Reason').selectOption('BILLING_CORRECTION');
+  await grant.getByLabel('Note (why, for the record)').fill('Correcting a missed adjustment');
+  await grant.getByRole('checkbox').check();
+  await grant.getByRole('button', { name: 'Grant credits' }).click();
+  const outcome = detail.getByTestId('credit-outcome');
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  assert.equal(await creditsPage(page).getByRole('button', { name: 'View wallet for Synthetic Dojo North' }).isDisabled(), true, 'nothing else opens while a request is kept');
+  await axe(page, 'credits-unknown');
+  // Leaving the window keeps the unconfirmed grant: Show again brings back its school, its outcome and Try again (same key).
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  assert.equal(await creditsPage(page).getByTestId('credit-outcome').count(), 0);
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  assert.equal(ccx.posts.length, 1);
+  await outcome.getByRole('button', { name: 'Try again' }).click();
+  await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
+  assert.equal(ccx.posts.length, 2);
+  assert.equal(ccx.posts[0].key, ccx.posts[1].key, 'Try again replays the identical request');
+  assert.deepEqual(ccx.posts[0].body, ccx.posts[1].body);
+  await detail.getByText('Adjustment: 100 credits').waitFor();
+  assert.equal(ccx.state.get(ccSouth).lots.length, 1, 'the grant applied once');
+  // A refusal (not the HQ owner) is final: nothing kept, nothing changed.
+  ccx.replies = ['denied'];
+  await detail.getByRole('button', { name: 'Remove credits' }).click();
+  const debit = detail.locator('form[data-form="debit"]');
+  await debit.getByLabel('Credits', { exact: true }).fill('10');
+  await debit.getByLabel('Note (why, for the record)').fill('Testing a refusal');
+  await debit.getByRole('checkbox').check();
+  await debit.getByRole('button', { name: 'Remove credits' }).click();
+  await outcome.getByText('Only the HQ owner can do this. Nothing changed.').waitFor();
+  assert.equal(await outcome.getByRole('button', { name: 'Try again' }).count(), 0);
+  // A grant still sending when the window is left: Show again shows it sending, and its late answer is applied on screen.
+  ccx.replies = ['hold'];
+  await detail.getByRole('button', { name: 'Grant credits' }).click();
+  await grant.getByLabel('Credits', { exact: true }).fill('30');
+  await grant.getByLabel('Note (why, for the record)').fill('Testing a late answer');
+  await grant.getByRole('checkbox').check();
+  await grant.getByRole('button', { name: 'Grant credits' }).click();
+  await outcome.and(page.locator('[data-kind="SENDING"]')).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.and(page.locator('[data-kind="SENDING"]')).waitFor();
+  ccx.release();
+  await outcome.and(page.locator('[data-kind="DONE"]')).waitFor();
+  await detail.getByText('Credit lots (2)').waitFor();
+  assert.equal(ccx.state.get(ccSouth).lots.length, 2, 'the late grant applied once');
+  assert.equal(await detail.getByRole('button', { name: 'Grant credits' }).isDisabled(), false, 'the lock is released');
+  // A session end drops an unconfirmed correction and says so after Show again, with no Try again.
+  ccx.replies = ['unknown'];
+  await detail.getByRole('button', { name: 'Remove credits' }).first().click();
+  await debit.getByLabel('Credits', { exact: true }).fill('10');
+  await debit.getByLabel('Note (why, for the record)').fill('Testing a session end');
+  await debit.getByRole('checkbox').check();
+  await debit.getByRole('button', { name: 'Remove credits' }).click();
+  await outcome.and(page.locator('[data-kind="UNKNOWN"]')).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
+  await creditsPage(page).getByText('Hidden while you were away or because your session ended.').waitFor();
+  await creditsPage(page).getByRole('button', { name: 'Show again' }).click();
+  await outcome.getByText('Check this school\'s wallet before sending it again.').waitFor();
+  assert.equal(await outcome.getByRole('button', { name: 'Try again' }).count(), 0);
   assert.equal(ccx.other, 0);
   await ctx.close();
 });

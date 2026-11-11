@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   HON_REPLY_CONCEALED_REASON, HON_REPLY_LIMITS, type FollowUpDraftPurpose, type HonConversationReadiness, type HonConversationSummary,
   type HonConversationThread, type HonConversationTurn, type HonOrchestration, type HonReplyMode, type HonSuggestedAgentKey, type HonTurnReceipt, type HonTurnRequest,
+  HON_REPLY_SOURCE_LABELS,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import {
@@ -202,6 +203,26 @@ function Suggestions({ turn, group, groupPhase, available, locked, canSummarize,
   </div>;
 }
 
+/**
+ * 0254: "Based on" (the fact areas the server sent with this answer and the answer named) and "Ask next" (follow-up
+ * questions). Shown only for a whole, visible, completed answer. Picking a question only fills the message box.
+ */
+export function FollowUps({ turn, locked, onPick }: { turn: HonConversationTurn; locked: boolean; onPick: (question: string) => void }): React.ReactElement | null {
+  const detail = turn.replyDetail;
+  const shown = turn.status === 'COMPLETED' && turn.reason !== HON_REPLY_CONCEALED_REASON && detail !== null && !detail.truncated;
+  const followUps = shown ? detail.followUps : [], sources = shown ? detail.sources : [];
+  if (followUps.length === 0 && sources.length === 0) return null;
+  return <div className={styles.followUps} data-hon-follow-ups={turn.turnId}>
+    {sources.length > 0 ? <p className={styles.meta} data-hon-sources="">Based on: {sources.map((key) => HON_REPLY_SOURCE_LABELS[key]).join(', ')}</p> : null}
+    {followUps.length > 0 ? <>
+      <p className={styles.meta}><strong>Ask next</strong></p>
+      <ul className={styles.followUpList} aria-label="Ask next">{followUps.map((question) => <li key={question}>
+        <button type="button" className={styles.secondary} data-hon-follow-up="" disabled={locked} onClick={() => onPick(question)}>{question}</button></li>)}</ul>
+      <p className={styles.meta}>A question goes into your message box; nothing is sent until you press Send.</p>
+    </> : null}
+  </div>;
+}
+
 function Turn({ turn, onContinue, locked, children }: { turn: HonConversationTurn; onContinue: (turn: HonConversationTurn) => void; locked: boolean; children?: React.ReactNode }): React.ReactElement {
   const status = honTurnStatusPresentation(turn.status);
   const human = turn.role === 'HUMAN';
@@ -266,6 +287,10 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
             {turn.role === 'hon' ? <Suggestions turn={turn} group={props.groups.get(turn.turnId.toLowerCase())} groupPhase={props.groupPhase} available={available} locked={suggestLocked}
               canSummarize={canAsk && !suggestLocked} onSummarize={props.onSummarize}
               confirm={props.confirm} onSuggest={props.onSuggest} onConfirmChange={props.onConfirmChange} onConfirmSend={props.onConfirmSend} onConfirmCancel={props.onConfirmCancel} /> : null}
+            {turn.role === 'hon' || turn.role === 'claire' ? <FollowUps turn={turn} locked={!canAsk || locked} onPick={(question) => {
+              props.onDraft(question);
+              if (typeof document !== 'undefined') document.getElementById(`${id}-text`)?.focus();
+            }} /> : null}
           </Turn>)}
         </ol> : null}
         {thread === null && props.threadPhase === 'NONE' ? <p className={styles.note}>Ask about leads, trials, memberships, attendance or what to do next. Your first message starts a new conversation.</p> : null}

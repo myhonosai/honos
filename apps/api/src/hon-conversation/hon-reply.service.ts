@@ -1,7 +1,10 @@
 import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { HON_REPLY_LIMITS, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, HON_SUGGESTED_AGENTS, type HonReplyMode } from '@hon/contracts';
+import {
+  HON_SUGGESTED_AGENTS, HON_REPLY_LIMITS, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, isHonReplyFollowUp, isHonReplySourceKey,
+  type HonAiTone, type HonReplyMode,
+} from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
 import {
@@ -28,16 +31,28 @@ function suggestionsValid(v: unknown, truncated: boolean): boolean {
   return Array.isArray(v) && v.length <= HON_REPLY_MAX_SUGGESTIONS && (!truncated || v.length === 0) && new Set(v).size === v.length
     && v.every((k) => (HON_SUGGESTED_AGENTS as readonly unknown[]).includes(k));
 }
+/** 0254: optional follow-ups (bounded plain text, unique ignoring case) and sources (closed set, unique); none on a cut-off answer. */
+function followUpsValid(v: unknown, truncated: boolean): boolean {
+  if (v === undefined) return true;
+  return Array.isArray(v) && v.length <= HON_REPLY_MAX_FOLLOW_UPS && (!truncated || v.length === 0) && v.every(isHonReplyFollowUp)
+    && new Set(v.map((x) => String(x).toLowerCase())).size === v.length;
+}
+function sourcesValid(v: unknown, truncated: boolean): boolean {
+  if (v === undefined) return true;
+  return Array.isArray(v) && v.length <= HON_REPLY_MAX_SOURCES && (!truncated || v.length === 0) && v.every(isHonReplySourceKey) && new Set(v).size === v.length;
+}
 function verified(result: HonReplyResult, specialist: 'hon' | 'claire'): HonReplyResult {
   // Claire (K2) never suggests specialists; any suggestion from her runtime is unverified output.
   if (specialist === 'claire' && (result?.suggestions ?? []).length > 0) throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
   if (reply.length < 1 || reply.length > HON_REPLY_LIMITS.replyCharacters || !tokens(result.inputTokens, 1_000_000) || !tokens(result.outputTokens, 1_000_000)
     || !Number.isSafeInteger(result.providerCostMicrounits) || result.providerCostMicrounits < 0 || result.providerCostMicrounits > 1_000_000_000
-    || typeof result.truncated !== 'boolean' || !suggestionsValid(result.suggestions, result.truncated)) {
+    || typeof result.truncated !== 'boolean' || !suggestionsValid(result.suggestions, result.truncated)
+    || !followUpsValid(result.followUps, result.truncated) || !sourcesValid(result.sources, result.truncated)) {
     throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   }
-  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits, truncated: result.truncated, suggestions: [...(result.suggestions ?? [])] };
+  return { reply, inputTokens: result.inputTokens, outputTokens: result.outputTokens, providerCostMicrounits: result.providerCostMicrounits, truncated: result.truncated, suggestions: [...(result.suggestions ?? [])],
+    followUps: [...(result.followUps ?? [])], sources: [...(result.sources ?? [])] };
 }
 
 /**
@@ -87,7 +102,12 @@ export class HonReplyService {
       if (!(error instanceof ForbiddenException)) throw error;
     }
     const ready = this.provider.readiness('OPENROUTER') === 'READY';
-    const invocation = await this.transaction(scope, async (client) => (await client.query<{ data: HonReplyInvocation | null }>('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,$4) data', [scope.externalSubject, turnId, planId, ready])).rows[0]!.data);
+    const invocation = await this.transaction(scope, async (client) => {
+      const prepared = (await client.query<{ data: HonReplyInvocation | null }>('SELECT hon.prepare_hon_reply($1,$2::uuid,$3::uuid,$4) data', [scope.externalSubject, turnId, planId, ready])).rows[0]!.data;
+      // 0256: HON answers in the school's tone (a closed key from the database, read in the same transaction); Claire keeps her own voice.
+      if (!prepared || prepared.specialist !== 'hon') return prepared;
+      return { ...prepared, tone: (await client.query<{ tone: HonAiTone }>('SELECT hon.hon_ai_tone() tone')).rows[0]!.tone };
+    });
     if (!invocation) return;
     let result: HonReplyResult;
     try {
