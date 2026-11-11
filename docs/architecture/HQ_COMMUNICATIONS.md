@@ -27,12 +27,14 @@ owners", and only the delivery worker reads the address, in memory, for one send
 
 In v1:
 
-- Recipients: the live owners of one school (non-HQ owner grants, as counted by 0225). Staff come later.
+- Recipients: the live owners of one school (non-HQ owner grants, as counted by 0225), and HON prospects (§4.8,
+  owner decision 2026-11-11 22:14Z). School staff come later.
 - Channels: EMAIL to the owner's account email; SMS to a phone the owner added and confirmed themselves (§4.3).
 - Purposes: `SUPPORT`, `BILLING`, `ONBOARDING`, `ACCOUNT`. Each needs the matching HQ permission (§4.2).
-- One school per message. No bulk sends, no marketing, no prospects (owner decision, §7).
+- Owner messages: one school per message. Prospect messages: one prospect, or one HQ marketing campaign audience with
+  an HQ owner's approval of that send (§4.8).
 
-Not in v1: messages to families, leads or students (those are the school's own messages), HQ marketing to prospects,
+Not in v1: messages to families, leads or students (those are the school's own messages),
 inbound replies routed to HQ support (STOP/START/HELP are handled), attachments or pictures.
 
 ## 3. HQ sender
@@ -117,6 +119,26 @@ webhook side.
 - School app account page: "Texts from HON" phone, code and switch.
 - English, Korean and Spanish.
 
+### 4.8 HON prospects (owner decision: in v1)
+
+HON's own prospects: people who signed up, started a trial or asked about HON OS, not schools' leads.
+
+- `hon.hq_prospects`: name, school name, email, phone (E.164), source (`PUBLIC_SIGN_UP`, `TRIAL`, `HQ_ENTERED`,
+  `IMPORT`, `INBOUND_TEXT`), optional HQ marketing campaign (0252), status, created by/at, version. HQ marketing
+  people (`hq.marketing.manage`) can add and read prospects; their address is shown to them, unlike owners'.
+- `hon.hq_prospect_consents`: per prospect and channel, append-only: `OPTED_IN` / `OPTED_OUT`, purpose
+  (`SERVICE`, `MARKETING`), source (`SIGN_UP_FORM`, `HQ_RECORDED`, `RECIPIENT`), the exact disclosure text version
+  shown, and when. Current state is the latest row.
+- Marketing texts need `MARKETING` `OPTED_IN` from the prospect themselves (sign-up checkbox with the disclosure, or
+  texting in). HQ cannot record SMS marketing consent on someone's behalf. Marketing emails need an opt-in or an
+  existing inquiry, and always carry an unsubscribe link and HON's postal address (CAN-SPAM).
+- Campaign sends: an HQ marketing person drafts a message for a 0252 campaign audience; the HQ owner approves that
+  exact message and audience count before anything is queued. The audience is re-checked against consent at claim
+  time. At most one approved bulk send per campaign per day.
+- Marketing SMS needs the HQ sender's A2P campaign registered for marketing use; until HQ records that, marketing
+  texts wait with `NO_PROVIDER` and only service texts can go.
+- Public sign-up (0241, 0247) feeds prospects when it lands; until then prospects are HQ-entered or imported.
+
 ## 5. Pieces and pull requests
 
 | PR | Piece | Migration |
@@ -125,6 +147,7 @@ webhook side.
 | B | HQ screens: Message the owners (school detail + support case), `/hq/communications` | none |
 | C | Own phone + code confirmation + HQ texting switch (school app), STOP/START/HELP on the HQ number | 0272 |
 | D | Webhook routing for HQ receipts (comms thread) | none planned |
+| E | HON prospects, prospect consent, campaign sends with HQ owner approval, prospect screens | ask coordinator |
 
 A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker role, dispatcher and adapter.
 
@@ -138,8 +161,7 @@ A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker
 
 ## 7. Owner decisions
 
-1. v1 recipients: school owners only (recommended), or also HON's prospects and trial sign-ups (needs marketing consent
-   rules and a marketing A2P campaign).
+1. v1 recipients: DECIDED 2026-11-11 22:14Z, owners plus HON prospects (§4.8).
 2. Must-receive notices: may `BILLING` and `ACCOUNT` emails go to an owner who opted out of HQ emails? (Recommended
    yes, as service messages; texts never ignore opt-out.)
 3. Who pays for HQ texting: HON (recommended; it is HON's own messaging, never billed to the school).
