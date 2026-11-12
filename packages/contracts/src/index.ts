@@ -1080,6 +1080,7 @@ export * from './membership-pauses.js';
 export * from './saas-schedule-billing.js';
 export * from './saas-paid-review.js';
 export * from './hq-support.js';
+export * from './hq-communications.js';
 export * from './hq-marketing.js';
 export * from './hq-creative.js';
 export * from './student-imports.js';
