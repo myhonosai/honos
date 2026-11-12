@@ -138,6 +138,8 @@ import {
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
+import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
+import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -206,6 +208,9 @@ import { ClassSessionsReadService } from './schedule/class-sessions-read.service
 import { ClassSessionPagesController, ClassSessionPagesHumanUiGuard } from './schedule/class-session-pages.controller.js';
 import { ClassSeriesController } from './schedule/class-series.controller.js';
 import { ClassSeriesService } from './schedule/class-series.service.js';
+import { PublicSchoolEventController, SchoolEventController } from './schedule/school-event.controller.js';
+import { SchoolEventService } from './schedule/school-event.service.js';
+import { SchoolEventBookingStatusHumanUiGuard, SchoolEventReadHumanUiGuard, SchoolEventSaveHumanUiGuard, SchoolEventStatusHumanUiGuard } from './schedule/school-event-human-ui.guard.js';
 import { ClassSeriesCreateHumanUiGuard, ClassSeriesEndHumanUiGuard, ClassSeriesFillHumanUiGuard, ClassSeriesOngoingHumanUiGuard, ClassSeriesReadHumanUiGuard, ClassSeriesReviseHumanUiGuard, ClassSeriesTopUpHumanUiGuard } from './schedule/class-series-human-ui.guard.js';
 import { ClassSessionPagesService } from './schedule/class-session-pages.service.js';
 import { AttendanceController } from './schedule/attendance.controller.js';
@@ -390,6 +395,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ClassSessionsReadController,
     ClassSessionPagesController,
     ClassSeriesController,
+    SchoolEventController,
+    PublicSchoolEventController,
     AttendanceController,
     ClassSessionRosterController,
     AttendancePolicyController,
@@ -429,6 +436,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     TuitionPaymentController,
     SchoolPaymentController,
     SchoolCheckoutController,
+    MayaAtRiskController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -576,6 +584,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipPauseService,
     StudentImportService,
     ClassSeriesService,
+    SchoolEventService,
+    SchoolEventReadHumanUiGuard,
+    SchoolEventSaveHumanUiGuard,
+    SchoolEventStatusHumanUiGuard,
+    SchoolEventBookingStatusHumanUiGuard,
     ClassSeriesCreateHumanUiGuard,
     ClassSeriesReviseHumanUiGuard,
     ClassSeriesOngoingHumanUiGuard,
@@ -589,6 +602,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayReadHumanUiGuard, SchoolPayStartHumanUiGuard, SchoolPayOnboardingLinkHumanUiGuard, SchoolPayFinishHumanUiGuard,
     SchoolPayRefreshHumanUiGuard, SchoolPayDefaultHumanUiGuard, SchoolPayDisconnectHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
+    MayaAtRiskService,
+    MayaAtRiskReadHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,

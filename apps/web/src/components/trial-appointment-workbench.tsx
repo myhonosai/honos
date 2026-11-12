@@ -117,7 +117,7 @@ export function TrialAppointmentWorkbench({ initialScope = {} }: { initialScope?
 
   const followUpHref = appointment ? terminalTrialFollowUpHref(appointment) : undefined;
   return <main className={styles.page}>
-    <nav aria-label="Staff navigation"><a href="/core">HON Core</a><a href="/staff/search">Staff search</a><a href="/staff/crm/leads">CRM leads</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
+    <nav aria-label="Staff navigation"><a href="/staff/dashboard">School dashboard</a><a href="/staff/search">Staff search</a><a href="/staff/crm/leads">CRM leads</a><a href="/staff/crm/follow-ups">CRM follow-ups</a><a href="/staff/command-center">School Command Center</a><a href="/auth/login">Sign in</a></nav>
     <header><p>HUMAN CRM / TRIAL APPOINTMENTS</p><h1>Schedule and record a trial</h1><p>One direct-human, exact-school CRM appointment at a time. Enter only IDs already known from an authorized staff workflow; any prefilled selector is untrusted and the server decides scope and permission.</p></header>
     <aside><strong>Appointment facts only.</strong><p>Scheduling creates one canonical CRM <code>TRIAL</code> appointment. It does not contact a lead, reserve a class seat, check anyone in, change a lead stage, create a student/family/enrollment/membership, accept consent, or make a financial, provider, AI, Action Engine, automation, calendar, or delivery claim.</p></aside>
     {error && <p role="alert" className={styles.error}>{error}</p>}

@@ -17,8 +17,8 @@ const visible = (html) => html.replace(/<(script|style)[\s\S]*?<\/\1>/g, ' ').re
 
 // Words each language uses for the status labels and for claims the owner has not approved.
 const WORDS = {
-  ko: { soon: /곧 제공/, launch: /출시와 함께|함께 출시/, banned: [/평생/, /환불/, /30일/, /무료 \d+개월/, /지금 이용 가능/] },
-  es: { soon: /próximamente/, launch: /en el lanzamiento|llega con hon os/, banned: [/de por vida/i, /reembolso/i, /30 días/i, /meses gratis/i, /disponible ahora/i] },
+  ko: { soon: /곧 제공/, launch: /출시와 함께|함께 출시/, banned: [/평생/, /무료 \d+개월/, /지금 이용 가능/, /\d+개의? (영상|이미지)/], guarantee: /30일 환불 보장/, texting: /문자 무제한 포함/ },
+  es: { soon: /próximamente/, launch: /en el lanzamiento|llega con hon os/, banned: [/de por vida/i, /meses gratis/i, /disponible ahora/i, /(?<![\d$.,])\d+ (videos|imágenes)/i], guarantee: /Garantía de devolución de 30 días/, texting: /Mensajes de texto ilimitados incluidos/ },
 };
 
 for (const lang of LANGUAGES) {
@@ -54,6 +54,8 @@ for (const lang of LANGUAGES) {
     }
     for (const bad of [/\$149\b/, /\bCore\b/, /\bComplete\b/, /\bEssential\b/, ...WORDS[lang].banned]) assert.doesNotMatch(text, bad);
     assert.doesNotMatch(html, /<form\b|<input\b/i);
+    assert.match(text, WORDS[lang].guarantee);
+    assert.match(text, WORDS[lang].texting);
   });
 }
 

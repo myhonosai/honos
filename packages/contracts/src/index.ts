@@ -1085,6 +1085,8 @@ export * from './hq-marketing.js';
 export * from './hq-creative.js';
 export * from './student-imports.js';
 export * from './class-series.js';
+export * from './school-events.js';
 export * from './tuition-payments.js';
 export * from './school-payments.js';
 export * from './school-checkout.js';
+export * from './maya-at-risk.js';
