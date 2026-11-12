@@ -20,14 +20,14 @@ const ids={registrationId:randomUUID(),organizationId:randomUUID(),schoolId:rand
 const terms={termsVersionId:ids.termsVersionId,version:1,status:'TEST_ONLY_DRAFT',title:'HON OS test sign-up terms',documentDigest:'a'.repeat(64)};
 const offer={campaignId:ids.campaignId,name:'Synthetic founding schools trial',durationDays:14,automaticCharge:false,paymentMethodRequired:false,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiryDays:7}};
 // The fixture is the server: every response it sends passes the same closed contract validators the API uses.
-const state={signup:'CLOSED',trial:'CLOSED',registration:null,enrollment:null,posts:[],dropNext:false};
+const state={signup:'CLOSED',trial:'CLOSED',registration:null,enrollment:null,posts:[],dropNext:false,language:'en'};
 function signupView(){return validateSignupStatus({signupStatus:state.signup,terms:state.signup==='TEST_MODE'?terms:null,eligibility:state.registration?'ALREADY_REGISTERED':'ELIGIBLE',registration:state.registration});}
 function trialView(){return validateTrialStatus({trialStatus:state.trial,schoolId:state.registration?.schoolId??null,available:state.trial==='TEST_MODE'&&!state.enrollment&&state.registration?offer:null,trial:state.enrollment});}
 const api=createServer(async(r,s)=>{
  const send=(status,body)=>{s.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store'});s.end(JSON.stringify(body));};
  let who;try{who=verifySession(cookieValue(r.headers.cookie,HON_SESSION_COOKIE)??'',session).externalSubject;}catch{send(401,{code:'SIGN_IN_REQUIRED'});return;}
  assert.equal(who,subject);
- if(r.url==='/v1/me/language-preference'){send(200,{data:{preference:{language:'en',version:1,updatedAt:'2026-10-28T00:00:00.000Z'},schoolDefault:null,effective:{language:'en',source:'PERSONAL'},supportedLanguages:['en','ko','es']}});return;}
+ if(r.url==='/v1/me/language-preference'){send(200,{data:{preference:{language:state.language,version:1,updatedAt:'2026-10-28T00:00:00.000Z'},schoolDefault:null,effective:{language:state.language,source:'PERSONAL'},supportedLanguages:['en','ko','es']}});return;}
  if(r.method==='GET'&&r.url==='/v1/account/sign-up'){send(200,{data:signupView()});return;}
  if(r.method==='GET'&&r.url==='/v1/account/trial'){send(200,{data:trialView()});return;}
  if(r.method==='POST'&&(r.url==='/v1/account/sign-up'||r.url==='/v1/account/trial')){
@@ -83,9 +83,23 @@ try{
   await page.getByRole('button',{name:'Start free trial'}).click();await page.getByText('Your free trial is on.',{exact:false}).waitFor();
   const trialPost=JSON.parse(state.posts.at(-1).body);assert.deepEqual(Object.keys(trialPost).sort(),['campaignId','confirmation','schoolId']);
   await page.getByRole('link',{name:'Continue to Founder Setup →'}).focus();assert(await page.getByRole('link',{name:'Continue to Founder Setup →'}).evaluate(e=>e.getAttribute('href')==='/staff/founder-setup'&&e===document.activeElement));
+  // Instants are shown with time and the school's zone (America/New_York is EST in November).
+  assert.match(await page.locator('[data-start-trial]').innerText(),/\d{1,2}:\d{2}\s?[AP]M EST/);
   await capture(page,size+'-trial-started');
   await page.evaluate(()=>window.dispatchEvent(new Event('hon:session-invalidated')));assert.equal(await page.getByText('Synthetic Dojo').count(),0);
   report.checks.push(size+': closed state, explicit sign-up with lost-response exact retry, trial closed, trial offer with AI credit, explicit start, Founder Setup link, invalidation, keyboard and axe');await context.close();
  }
+ // Korean and Spanish: the signed-in owner's language preference renders the whole page, including the trial receipt.
+ for(const [language,title,closed,active,first,again] of [['ko','HON OS에서 도장 시작하기','셀프 가입은 아직 열리지 않았습니다','무료 체험 중입니다.','내 계정 확인','다시 확인'],['es','Empiece su escuela en HON OS','El registro por cuenta propia aún no está abierto','Su prueba gratuita está activa.','Comprobar mi cuenta','Comprobar de nuevo']]){
+  Object.assign(state,{language,signup:'CLOSED',trial:'CLOSED',registration:null,enrollment:null});
+  const {page,context}=await open({width:390,height:844});await page.getByRole('heading',{name:title}).waitFor();
+  await page.getByRole('button',{name:first,exact:true}).click();await page.getByText(closed,{exact:false}).first().waitFor();await capture(page,language+'-closed');
+  state.registration=validateSignupRegistration({registrationId:ids.registrationId,organizationId:ids.organizationId,schoolId:ids.schoolId,schoolName:'Synthetic Dojo',timezone:'America/New_York',registeredAt:'2026-11-12T10:00:00.000Z',lifecycle:'REGISTERED',accessGranted:false,billingActivated:false,aiCreditsGranted:false});
+  state.enrollment=validateHonOsTrial({enrollmentId:ids.enrollmentId,organizationId:ids.organizationId,schoolId:ids.schoolId,campaignId:ids.campaignId,durationDays:14,startsAt:'2026-11-12T10:00:00.000Z',endsAt:'2026-11-26T10:00:00.000Z',status:'TRIAL_ACTIVE',automaticCharge:false,paymentMethodRequired:false,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiresAt:'2026-11-19T10:00:00.000Z',used:3},creativeCreditsIncluded:false});
+  state.signup='TEST_MODE';state.trial='TEST_MODE';await page.getByRole('button',{name:again,exact:true}).click();await page.getByText(active,{exact:false}).waitFor();
+  assert.match(await page.locator('[data-start-trial]').innerText(),/2026/);await capture(page,language+'-trial-started');
+  report.checks.push(language+': closed state and trial receipt in the owner language');await context.close();
+ }
+ state.language='en';
  console.log('PASS mounted HON OS start browser: '+report.checks.length+' desktop/mobile scenario groups, '+report.accessibility.length+' axe scans');
 }finally{await browser?.close();app?.kill('SIGTERM');await new Promise(done=>api.close(done));await writeFile(join(results,'browser-report.json'),JSON.stringify(report,null,2)+'\n');}
