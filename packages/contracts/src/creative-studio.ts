@@ -45,7 +45,8 @@ export function isCreativePrompt(value: unknown): value is string {
 // ---------- input (closed: clients never choose a provider, model, price or school) ----------
 export function validateCreativeGenerationInput(value: unknown): CreativeGenerationInput {
   const input = record(value, invalid); exactKeys(input, ['operationCode', 'units', 'format', 'prompt'], invalid);
-  if (typeof input.operationCode !== 'string' || !OPERATION.test(input.operationCode) || !isInt(input.units, 1, CREATIVE_GENERATION_LIMITS.maxUnits)
+  // avatar.* operations are reserved for the avatar routes (0276), which record the avatar with its generation.
+  if (typeof input.operationCode !== 'string' || !OPERATION.test(input.operationCode) || input.operationCode.startsWith('avatar.') || !isInt(input.units, 1, CREATIVE_GENERATION_LIMITS.maxUnits)
     || !has(CREATIVE_GENERATION_FORMATS, input.format) || !isCreativePrompt(input.prompt)) invalid();
   return { operationCode: input.operationCode as string, units: input.units as number, format: input.format as CreativeGenerationFormat, prompt: input.prompt as string };
 }
