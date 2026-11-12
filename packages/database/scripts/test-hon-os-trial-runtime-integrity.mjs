@@ -18,6 +18,7 @@ const {RuntimeDatabaseService}=require('./dist/foundation/runtime-database.servi
 const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
 const {HonOsTrialService}=require('./dist/accounts/hon-os-trial.service.js');
 const {HonOsTrialController,HonOsTrialHumanGuard}=require('./dist/accounts/hon-os-trial.controller.js');
+const {HonOsAdmissionService}=require('./dist/hon-os-admission/hon-os-admission.service.js');
 const {SaasBillingService}=require('./dist/saas-billing/saas-billing.service.js');
 const {SaasTrialsService}=require('./dist/saas-trials/saas-trials.service.js');
 const {SIGNUP_CONFIRMATION,TRIAL_CONFIRMATION,TRIAL_HUMAN_COMMAND}=require('@hon/contracts');
@@ -89,7 +90,7 @@ try{
  const campaign=await campaignOf({name:'Synthetic public 14-day trial',linkMode:'PUBLIC',maximumEnrollments:2,promotionalBudget:budget});
  const privateCampaign=await campaignOf({name:'Synthetic invitation trial',linkMode:'PRIVATE_INVITATION'});
 
- const module=await Test.createTestingModule({controllers:[HonOsTrialController],providers:[HonOsTrialService,HonOsTrialHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
+ const module=await Test.createTestingModule({controllers:[HonOsTrialController],providers:[HonOsTrialService,HonOsTrialHumanGuard,HonOsAdmissionService,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  const excluded=new Set([...tables,'users','principals','organizations','schools','roles','role_permissions','principal_role_grants','hon_os_school_registrations','hon_os_signup_program','hon_os_trial_program',
   'hq_operator_grants','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_requests','saas_audit','saas_outbox']);
@@ -272,16 +273,21 @@ try{
  assert.match(await body('ai_org_open_agent_holds'),/marketing_ai_invocations/,'the fixture replacement rolled back');
  pass('0272: campaign cost cap counts open holds at their plan maximum (no plan = whole cap); HQ usage and readiness show the trial credits left; lost holds from an earlier month inside the trial still use trial credits');
 
- // 0273. Global trial admission limit, enforced on the enrollment insert under one admission lock (any writer).
- const tl=(await q('SELECT trials_per_hour h,trials_per_day d,recorded_at::text rec FROM hon.hon_os_admission_limits'))[0];assert.deepEqual([tl.h,tl.d],[30,200]);
+ // 0273 (limits versioned in 0274). Global trial admission limit, enforced on the enrollment insert under one admission lock (any writer).
+ const tl=(await q('SELECT version v,signups_per_hour sh,signups_per_day sd,trials_per_hour h,trials_per_day d FROM hon.hon_os_admission_limit_versions ORDER BY version DESC LIMIT 1'))[0];assert.deepEqual([tl.h,tl.d],[30,200]);
  const gus=await register('gus');
+ const hourCount=Number((await q("SELECT count(*) n FROM hon.hon_os_trial_enrollments WHERE starts_at>clock_timestamp()-interval '1 hour'"))[0].n);assert(hourCount>0);
+ await admin.query('BEGIN');
  try{
-  const hourCount=Number((await q("SELECT count(*) n FROM hon.hon_os_trial_enrollments WHERE starts_at>clock_timestamp()-interval '1 hour'"))[0].n);assert(hourCount>0);
-  await q('UPDATE hon.hon_os_admission_limits SET trials_per_hour=$1',[hourCount]);
-  await admin.query('BEGIN');
-  try{await assert.rejects(()=>enroll(gus,{daysAgo:0}),e=>e.message==='TRIAL_CAPACITY_REACHED'&&e.code==='23514');}finally{await admin.query('ROLLBACK');}
-  assert.equal((await q('SELECT count(*) n FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[gus.reg.organizationId]))[0].n,'0');
- }finally{await q('UPDATE hon.hon_os_admission_limits SET trials_per_hour=$1,trials_per_day=$2,recorded_at=$3::timestamptz',[tl.h,tl.d,tl.rec]);}
+  // The latest version is the one in force; the whole change rolls back with the test transaction.
+  await admin.query('INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day) VALUES($1,$2,$3,$4,$5)',[tl.v+1,tl.sh,tl.sd,hourCount,tl.d]);
+  await admin.query('SAVEPOINT refused');
+  await assert.rejects(()=>enroll(gus,{daysAgo:0}),e=>e.message==='TRIAL_CAPACITY_REACHED'&&e.code==='23514');
+  await admin.query('ROLLBACK TO SAVEPOINT refused');
+  assert.equal((await admin.query("SELECT (hon.hon_os_admission_usage('TRIAL',clock_timestamp())).per_hour h")).rows[0].h,hourCount);
+ }finally{await admin.query('ROLLBACK');}
+ assert.equal((await q('SELECT count(*) n FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[gus.reg.organizationId]))[0].n,'0');
+ assert.equal((await q('SELECT max(version) v FROM hon.hon_os_admission_limit_versions'))[0].v,tl.v);
  pass('0273: once the hourly trial admission limit is reached, no further trial can be enrolled by any path');
 
  // 4 (0272). A replay is a read of the owner's own receipt: once their owner grant is revoked it is refused.
