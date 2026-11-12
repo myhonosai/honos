@@ -242,9 +242,12 @@ try{
  const display=async(org,at='clock_timestamp()')=>Number((await q(`SELECT hon.ai_org_display_ceiling($1,${at}) c`,[org]))[0].c);
  assert.equal(await display(ana.reg.organizationId),100,'HQ sees the trial credits left, not the per-request minimum');assert.equal(await room(ana.reg.organizationId),10);
  assert.equal(await display(eli.reg.organizationId),12000);assert.equal(await display(ana.reg.organizationId,startsAt+"+interval '7 days'"),0);
- const fay=await register('fay');await enroll(fay,{daysAgo:13,aiBudget:{...budget,creditExpiryDays:14}});
+ // A trial that crosses a UTC month boundary, always: evaluated 1 hour into next month, started 6-7 days before it.
+ const monthAt="(date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')+interval '1 month 1 hour') AT TIME ZONE 'UTC'";
+ const ahead=Number((await q(`SELECT ceil(extract(epoch from ${monthAt}-interval '7 days'-clock_timestamp())/86400) d`))[0].d);
+ const fay=await register('fay');await enroll(fay,{daysAgo:-ahead,aiBudget:{...budget,creditExpiryDays:14}});
  const fayStart=(await q('SELECT starts_at::text s FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[fay.reg.organizationId]))[0].s;
- const crossesMonth=(await q("SELECT date_trunc('month',$1::timestamptz AT TIME ZONE 'UTC')<>date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC') x",[fayStart]))[0].x;
+ assert.equal((await q(`SELECT date_trunc('month',$1::timestamptz AT TIME ZONE 'UTC')<date_trunc('month',${monthAt} AT TIME ZONE 'UTC') AND hon.hon_os_trial_live($2,${monthAt}) x`,[fayStart,fay.reg.organizationId]))[0].x,true);
  await admin.query('BEGIN');
  try{
   await q('CREATE TEMP TABLE fx_holds(org uuid,held_at timestamptz,status text,reserved_credits bigint,max_provider_cost_microunits bigint) ON COMMIT DROP');
@@ -259,15 +262,15 @@ try{
   await q('DELETE FROM pg_temp.fx_holds');await hold(ben,{at:"clock_timestamp()-interval '30 days'",cost:400*10000});assert.equal(await room(ana.reg.organizationId),10,'a hold from before that school\'s trial does not count');
   await q('DELETE FROM pg_temp.fx_holds');
   // 3. A lost hold from before this month (but inside the trial) still uses trial credits; one from before the trial does not.
-  assert.equal(await display(fay.reg.organizationId),100);
+  assert.equal(await display(fay.reg.organizationId,monthAt),100);
   await hold(fay,{at:`'${fayStart}'::timestamptz+interval '1 hour'`,status:'UNKNOWN',credits:30,cost:1});
   await hold(fay,{at:`'${fayStart}'::timestamptz-interval '1 hour'`,status:'UNKNOWN',credits:7,cost:1});
-  const lost=(await q("SELECT count(*) n FROM pg_temp.fx_holds f WHERE org=$1 AND NOT hon.ai_hold_counts(f.status,f.held_at,hon.ai_spend_window($1,clock_timestamp()),clock_timestamp())",[fay.reg.organizationId]))[0].n;
-  assert.equal(Number(lost),crossesMonth?2:0);
-  assert.equal(await display(fay.reg.organizationId),crossesMonth?70:100,'30 credits held and lost last month leave 70 (the hold from before the trial is not trial usage)');
+  const lost=(await q(`SELECT count(*) n FROM pg_temp.fx_holds f WHERE org=$1 AND NOT hon.ai_hold_counts(f.status,f.held_at,hon.ai_spend_window($1,${monthAt}),${monthAt})`,[fay.reg.organizationId]))[0].n;
+  assert.equal(Number(lost),2,'both lost holds are outside next month\'s window');
+  assert.equal(await display(fay.reg.organizationId,monthAt),70,'30 credits held and lost last month leave 70 (the hold from before the trial is not trial usage)');
  }finally{await admin.query('ROLLBACK');}
  assert.match(await body('ai_org_open_agent_holds'),/marketing_ai_invocations/,'the fixture replacement rolled back');
- pass('0272: campaign cost cap counts open holds at their plan maximum (no plan = whole cap); HQ usage and readiness show the trial credits left; lost holds from an earlier month inside the trial still use trial credits'+(crossesMonth?'':' (month-crossing case not reachable today; window arithmetic checked)'));
+ pass('0272: campaign cost cap counts open holds at their plan maximum (no plan = whole cap); HQ usage and readiness show the trial credits left; lost holds from an earlier month inside the trial still use trial credits');
 
  // 0273. Global trial admission limit, enforced on the enrollment insert under one admission lock (any writer).
  const tl=(await q('SELECT trials_per_hour h,trials_per_day d,recorded_at::text rec FROM hon.hon_os_admission_limits'))[0];assert.deepEqual([tl.h,tl.d],[30,200]);

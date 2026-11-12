@@ -12,6 +12,7 @@ BEGIN;
 -- 2. Disposable email domains: a sign-up whose verified email is at a listed domain (or a subdomain of one) is refused
 --    as SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED with no effects. The seeded list is a small set of well-known throwaway mail
 --    services; the migration owner can add rows. HON never contacts these services.
+-- 3. Partial hold indexes on three agent tables (see below).
 -- Both are triggers on the evidence tables, so register_hon_os_school and start_hon_os_trial are unchanged and a refusal
 -- rolls back every write of the same transaction.
 DO $$ BEGIN
@@ -81,6 +82,12 @@ BEGIN
   RETURN NEW;
 END $$;
 CREATE TRIGGER admission BEFORE INSERT ON hon.hon_os_trial_enrollments FOR EACH ROW EXECUTE FUNCTION hon.guard_hon_os_trial_admission();
+
+-- #256 review P3: the trial campaign cost (0272) and ai_org_committed_credits look up each organization's open holds on
+-- every agent prepare. hon_reply_invocations already has this partial index (0210); the other three agent tables get it.
+CREATE INDEX marketing_ai_invocations_hold_idx ON hon.marketing_ai_invocations (organization_id) WHERE reserved_credits > 0;
+CREATE INDEX teaching_ai_invocations_hold_idx ON hon.teaching_ai_invocations (organization_id) WHERE reserved_credits > 0;
+CREATE INDEX chad_follow_up_invocations_hold_idx ON hon.chad_follow_up_invocations (organization_id) WHERE reserved_credits > 0;
 
 DO $$ DECLARE t text; f text; r text; BEGIN
   FOREACH t IN ARRAY ARRAY['hon_os_admission_limits','hon_os_signup_blocked_email_domains'] LOOP
