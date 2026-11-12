@@ -2,7 +2,7 @@ import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } f
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
-  HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, isHonAnalystAgent, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, isHonReplyFollowUp, isHonReplySourceKey,
+  HON_SUGGESTED_AGENTS, HON_REPLY_LIMITS, isHonAnalystAgent, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, isHonReplyFollowUp, isHonReplySourceKey,
   type HonAiTone, type HonAnalystAgentKey, type HonReplyMode,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
@@ -25,11 +25,11 @@ function modeLimits(limits: Limits | undefined) {
 }
 
 const tokens = (n: unknown, max: number) => Number.isSafeInteger(n) && (n as number) >= 1 && (n as number) <= max;
-/** Optional closed list: delegate keys only, unique, at most HON_REPLY_MAX_SUGGESTIONS, never on a cut-off answer. */
+/** Optional closed list: delegate keys and Claire (K2c) only, unique, at most HON_REPLY_MAX_SUGGESTIONS, never on a cut-off answer. */
 function suggestionsValid(v: unknown, truncated: boolean): boolean {
   if (v === undefined) return true;
   return Array.isArray(v) && v.length <= HON_REPLY_MAX_SUGGESTIONS && (!truncated || v.length === 0) && new Set(v).size === v.length
-    && v.every((k) => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(k));
+    && v.every((k) => (HON_SUGGESTED_AGENTS as readonly unknown[]).includes(k));
 }
 /** 0254: optional follow-ups (bounded plain text, unique ignoring case) and sources (closed set, unique); none on a cut-off answer. */
 function followUpsValid(v: unknown, truncated: boolean): boolean {
