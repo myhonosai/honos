@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "058e765bc4182f00a0f4361edd0d08b2ced071e00acfd46f12259c37b6899fa4",
+  "chainSha256": "64b0dbfb3f316b42b48ad2d7c65ec86246a60894c3cd2f29341d6bd1392a4a93",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -235,8 +235,20 @@
       "sha256": "e1e8b8c8ef510a39b3aab1dd9168fe3b60006f4ccd66ebe18c7a127f77e90777"
     },
     {
+      "file": "0243_communication_delivery_receipts.sql",
+      "sha256": "0a94b2a8b94a1caf2622215318474e142eeb0faeb3ebbbc5fb2a771974c14a9f"
+    },
+    {
       "file": "0246_hon_os_trial_runtime.sql",
       "sha256": "d3a1bd35203bb465946bf316291b53d245e348777790e7e4491f62753a742f07"
+    },
+    {
+      "file": "0248_school_text_senders_and_keywords.sql",
+      "sha256": "0dec705df1cbdf169b5dbdf52b97cdf7933159bfffac3d95d368a0dd1b2149de"
+    },
+    {
+      "file": "0249_missed_call_text_back.sql",
+      "sha256": "7714b5cac10d99638b40998c6726cbb3dc3b0458be4f57061d266deed0118ef9"
     },
     {
       "file": "0251_class_series_ongoing.sql",
@@ -271,8 +283,28 @@
       "sha256": "bcbfedb05f739ba99872aa5467236cb050c2c078f53daa804681821c75f76a17"
     },
     {
+      "file": "0259_maya_at_risk_students.sql",
+      "sha256": "6b8267f54f694799c387fdf34b8848a6d8bf041161095d9e00e171587c32293c"
+    },
+    {
+      "file": "0260_hon_analysis_specialists.sql",
+      "sha256": "01177f4f95e03cf451500d8063dcc690d3b9f9e4bcf625be727260a9fcd0d410"
+    },
+    {
       "file": "0261_school_event_booking.sql",
       "sha256": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675"
+    },
+    {
+      "file": "0263_hq_hon_conversation.sql",
+      "sha256": "1adef62d0a5af2388977da5fc979dac83efc4bd8a7d0a39feefe7cc554721d9c"
+    },
+    {
+      "file": "0264_hq_hon_executives.sql",
+      "sha256": "5199d3cb6478f1508eac8316f649c021244d77e757a2ae66b06d8215428e713c"
+    },
+    {
+      "file": "0266_hon_suggests_claire.sql",
+      "sha256": "31213924c77fe44df684d1544d4f99e4fa9fc045aae91a1dc54f52f65e31fd2a"
     },
     {
       "file": "0267_hq_usage_claire_attribution.sql",
@@ -295,8 +327,36 @@
       "sha256": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc"
     },
     {
+      "file": "0276_creative_studio_avatars.sql",
+      "sha256": "38beda9afb3542ca65a4a4e6a91ed4288dfdb8025b90e6245435d04f0a51e934"
+    },
+    {
+      "file": "0277_creative_studio_avatar_videos.sql",
+      "sha256": "291d3e809eeadbb112ad603705d7fffa72f2aa826564e377b32f314ec43aeb74"
+    },
+    {
+      "file": "0278_ai_team_readiness_reconcile.sql",
+      "sha256": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e"
+    },
+    {
       "file": "0279_hon_os_founder_allocation.sql",
       "sha256": "72f31221d65fa35bbe31fe28cfe5de78d00258eee4adac0aa8f67c788fd1072a"
+    },
+    {
+      "file": "0280_school_invoice_list.sql",
+      "sha256": "ce54010d93d988fd9ea096e3c87a1aaaebced068a60e17eb786644044707292d"
+    },
+    {
+      "file": "0284_maya_retention_answers.sql",
+      "sha256": "8518211375aa88c5e8ddf4bb2881d63bd437e4c19b84925b6cdd5af6c1eddaba"
+    },
+    {
+      "file": "0285_school_page_branding.sql",
+      "sha256": "4cb98a54593a817a4f604a1ef2087c8d4cab4abd5031e7455e392c3a8dd9157f"
+    },
+    {
+      "file": "0304_hq_hon_schedule_billing_facts.sql",
+      "sha256": "32bc6ea5821c7f36b819db74a407e6466a3712d3700f513d1cd0d55d254e7365"
     }
   ]
 }

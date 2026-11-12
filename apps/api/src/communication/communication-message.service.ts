@@ -8,12 +8,14 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
+  COMMUNICATION_DELIVERY_STATUSES,
   COMMUNICATION_MESSAGE_CHANNELS,
   COMMUNICATION_MESSAGE_LIFECYCLES,
   type CommandContext,
   type CommunicationMessageChannel,
   type CommunicationMessageLifecycle,
   type CommunicationMessageSummary,
+  type CommunicationDeliveryView,
   type CreateCommunicationMessageInput,
   type QueueCommunicationMessageInput,
 } from '@hon/contracts';
@@ -301,6 +303,50 @@ export class CommunicationMessageService {
         [input.recipientPersonId ?? null, input.channel ?? null, input.lifecycle ?? null, limit],
       );
       return records.rows.map(toSummary);
+    });
+  }
+
+  /** 0243: the delivery status and receipt timeline of one message in this school. No address, provider IDs or cost. */
+  async readDelivery(
+    context: Pick<CommandContext, 'organizationId' | 'schoolId' | 'principalId' | 'principalType' | 'requestId'>,
+    messageId: string,
+  ): Promise<CommunicationDeliveryView> {
+    if (!UUID.test(messageId)) throw validationError('messageId must be a UUID.');
+    return this.database.withTenantTransaction(context, async (client) => {
+      const found = await client.query<{ channel: CommunicationMessageChannel; lifecycle: CommunicationMessageLifecycle }>(
+        'SELECT channel::text AS channel, lifecycle::text AS lifecycle FROM hon.communication_messages WHERE id = $1::uuid', [messageId]);
+      const message = found.rows[0];
+      if (!message) throw new NotFoundException('Communication message was not found in this school.');
+      const rows = await client.query<{
+        id: string; status: string; holdReason: string | null; nextAttemptAt: Date | string; attempts: number; sentAs: string | null;
+        segments: number | null; failureCode: string | null; acceptedAt: Date | string | null; finalAt: Date | string | null; updatedAt: Date | string;
+      }>(
+        `SELECT id, status::text AS status, hold_reason AS "holdReason", next_attempt_at AS "nextAttemptAt", attempt_count AS attempts,
+                sent_as AS "sentAs", segments, failure_code AS "failureCode", accepted_at AS "acceptedAt", final_at AS "finalAt",
+                updated_at AS "updatedAt"
+         FROM hon.communication_deliveries WHERE message_id = $1::uuid`, [messageId]);
+      const row = rows.rows[0];
+      if (!row) return { messageId, channel: message.channel, status: 'NOT_STARTED', attempts: 0, receipts: [] };
+      const receipts = await client.query<{ type: string; occurredAt: Date | string }>(
+        `SELECT event_type::text AS type, occurred_at AS "occurredAt" FROM hon.communication_delivery_events
+         WHERE delivery_id = $1::uuid ORDER BY occurred_at, id LIMIT 50`, [row.id]);
+      if (!(COMMUNICATION_DELIVERY_STATUSES as readonly string[]).includes(row.status)) {
+        throw new Error('HON communication delivery query returned an invalid status.');
+      }
+      return {
+        messageId,
+        channel: message.channel,
+        status: row.status as CommunicationDeliveryView['status'],
+        ...(row.holdReason === null ? {} : { holdReason: row.holdReason as NonNullable<CommunicationDeliveryView['holdReason']>, nextAttemptAt: asIso(row.nextAttemptAt) }),
+        attempts: row.attempts,
+        ...(row.sentAs === null ? {} : { sentAs: row.sentAs as NonNullable<CommunicationDeliveryView['sentAs']> }),
+        ...(row.segments === null ? {} : { segments: row.segments }),
+        ...(row.failureCode === null ? {} : { failureCode: row.failureCode as NonNullable<CommunicationDeliveryView['failureCode']> }),
+        ...(row.acceptedAt === null ? {} : { acceptedAt: asIso(row.acceptedAt) }),
+        ...(row.finalAt === null ? {} : { finalAt: asIso(row.finalAt) }),
+        updatedAt: asIso(row.updatedAt),
+        receipts: receipts.rows.map((event) => ({ type: event.type as CommunicationDeliveryView['receipts'][number]['type'], occurredAt: asIso(event.occurredAt) })),
+      };
     });
   }
 
