@@ -53,7 +53,7 @@ test('start passes only the session subject, the closed input and the key; a lyi
 test('database refusals map to closed codes; business refusals keep their own code; SQL never leaks',async()=>{
  for(const [code,message,status,closed]of [['55000','TRIAL_CLOSED',409,'TRIAL_CLOSED'],['23505','TRIAL_ALREADY_USED',409,'TRIAL_ALREADY_USED'],
    ['23514','TRIAL_CAMPAIGN_UNAVAILABLE',409,'TRIAL_CAMPAIGN_UNAVAILABLE'],['23514','TRIAL_CAMPAIGN_FULL',409,'TRIAL_CAMPAIGN_FULL'],['23514','TRIAL_NOT_ELIGIBLE',409,'TRIAL_NOT_ELIGIBLE'],
-   ['23505','TRIAL_KEY_REUSED',409,'TRIAL_KEY_REUSED'],['23514','SECRET SQL',409,'ACCOUNT_CONFLICT'],['42501','TRIAL_FORBIDDEN',403,'ACCOUNT_FORBIDDEN'],['55P03','SECRET',503,'TRIAL_BUSY'],
+   ['23505','TRIAL_KEY_REUSED',409,'TRIAL_KEY_REUSED'],['23514','TRIAL_CAPACITY_REACHED',409,'TRIAL_CAPACITY_REACHED'],['23514','SECRET SQL',409,'ACCOUNT_CONFLICT'],['42501','TRIAL_FORBIDDEN',403,'ACCOUNT_FORBIDDEN'],['55P03','SECRET',503,'TRIAL_BUSY'],
    ['22023','SECRET',400,'ACCOUNT_INPUT_INVALID'],['40001','SECRET',409,'ACCOUNT_CONFLICT'],['XX000','TRIAL_CLOSED',503,'ACCOUNT_UNAVAILABLE']]){
   const service=new HonOsTrialService({callHonOsTrial:async()=>{throw Object.assign(new Error(message),{code});}});
   await assert.rejects(()=>service.start(req,input,randomUUID()),e=>e.status===status&&e.getResponse().code===closed&&!JSON.stringify(e.getResponse()).includes('SECRET'));

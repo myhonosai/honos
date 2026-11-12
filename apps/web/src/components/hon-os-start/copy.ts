@@ -12,7 +12,7 @@ export type StartCopy = Readonly<{
   step1: string; step2: string;
   registered: (school: string, at: string) => string;
   signupClosed: string; verifiedRequired: string; hasOtherAccess: string; openWorkspace: string; termsUnavailable: string;
-  ownerName: string; schoolName: string; legalName: string; timezone: string;
+  ownerName: string; schoolName: string; legalName: string; timezone: string; chooseZone: string; commonZones: string; allZones: string;
   agree: (title: string, version: number, draft: boolean) => string;
   legalTermsPending: string; createButton: string;
   created: string; trialStarted: string;
@@ -36,6 +36,8 @@ const en: StartCopy = {
     SIGNUP_OWNER_NOT_ELIGIBLE: 'This account already has HON access, so it cannot create a new school here.',
     SIGNUP_KEY_REUSED: 'That request changed after it was sent. Start again.',
     SIGNUP_BUSY: 'HON is busy. Nothing was submitted; try again in a moment.',
+    SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED: 'HON cannot create a school for a temporary email address. Sign in with your school or personal email; nothing was created.',
+    SIGNUP_CAPACITY_REACHED: 'HON is taking a limited number of new schools right now. Nothing was created; please try again later.',
     TRIAL_CLOSED: 'Free trials are not open yet. Nothing was started.',
     TRIAL_ALREADY_USED: 'This school already used its free trial.',
     TRIAL_CAMPAIGN_UNAVAILABLE: 'That free trial is no longer offered. Check again.',
@@ -43,6 +45,7 @@ const en: StartCopy = {
     TRIAL_NOT_ELIGIBLE: 'This school already has access, so a free trial cannot start.',
     TRIAL_KEY_REUSED: 'That request changed after it was sent. Start again.',
     TRIAL_BUSY: 'HON is busy. Nothing was submitted; try again in a moment.',
+    TRIAL_CAPACITY_REACHED: 'HON is starting a limited number of free trials right now. Nothing was started; please try again later.',
     ACCOUNT_FORBIDDEN: 'This account cannot do that.',
     ACCOUNT_INPUT_INVALID: 'Check the details and try again.',
     ACCOUNT_RATE_LIMITED: 'Please wait up to a minute, then retry. This attempt was not submitted.',
@@ -63,7 +66,7 @@ const en: StartCopy = {
   verifiedRequired: 'Sign in with an account whose email address is verified to create a school.',
   hasOtherAccess: 'This account already has HON access.', openWorkspace: 'Open my workspace',
   termsUnavailable: 'Sign-up terms are not available. Check again later.',
-  ownerName: 'Your name', schoolName: 'School name', legalName: 'Legal business name', timezone: 'School time zone',
+  ownerName: 'Your name', schoolName: 'School name', legalName: 'Legal business name', timezone: 'School time zone', chooseZone: 'Choose your school\'s time zone', commonZones: 'Common time zones', allZones: 'All time zones',
   agree: (t, v, d) => `I agree to ${t} (version ${v}${d ? ', a test-only draft' : ''}) and confirm I own or run this school.`,
   legalTermsPending: 'The final legal terms are still being prepared and will be shown here before sign-up opens.',
   createButton: 'Create my school account',
@@ -90,6 +93,8 @@ const ko: StartCopy = {
     SIGNUP_OWNER_NOT_ELIGIBLE: '이 계정은 이미 HON 접근 권한이 있어 여기서 새 도장을 만들 수 없습니다.',
     SIGNUP_KEY_REUSED: '보낸 후 요청이 변경되었습니다. 처음부터 다시 시작하세요.',
     SIGNUP_BUSY: 'HON이 바쁩니다. 제출되지 않았습니다. 잠시 후 다시 시도하세요.',
+    SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED: '임시 이메일 주소로는 도장을 만들 수 없습니다. 도장 또는 개인 이메일로 로그인하세요. 아무것도 만들어지지 않았습니다.',
+    SIGNUP_CAPACITY_REACHED: '지금은 새 도장을 제한된 수만 받고 있습니다. 아무것도 만들어지지 않았습니다. 나중에 다시 시도하세요.',
     TRIAL_CLOSED: '무료 체험은 아직 열리지 않았습니다. 아무것도 시작되지 않았습니다.',
     TRIAL_ALREADY_USED: '이 도장은 이미 무료 체험을 사용했습니다.',
     TRIAL_CAMPAIGN_UNAVAILABLE: '해당 무료 체험은 더 이상 제공되지 않습니다. 다시 확인하세요.',
@@ -97,6 +102,7 @@ const ko: StartCopy = {
     TRIAL_NOT_ELIGIBLE: '이 도장은 이미 접근 권한이 있어 무료 체험을 시작할 수 없습니다.',
     TRIAL_KEY_REUSED: '보낸 후 요청이 변경되었습니다. 처음부터 다시 시작하세요.',
     TRIAL_BUSY: 'HON이 바쁩니다. 제출되지 않았습니다. 잠시 후 다시 시도하세요.',
+    TRIAL_CAPACITY_REACHED: '지금은 무료 체험을 제한된 수만 시작하고 있습니다. 아무것도 시작되지 않았습니다. 나중에 다시 시도하세요.',
     ACCOUNT_FORBIDDEN: '이 계정으로는 할 수 없습니다.',
     ACCOUNT_INPUT_INVALID: '입력 내용을 확인하고 다시 시도하세요.',
     ACCOUNT_RATE_LIMITED: '최대 1분 기다린 후 다시 시도하세요. 이번 시도는 제출되지 않았습니다.',
@@ -117,7 +123,7 @@ const ko: StartCopy = {
   verifiedRequired: '도장을 만들려면 이메일 주소가 인증된 계정으로 로그인하세요.',
   hasOtherAccess: '이 계정은 이미 HON 접근 권한이 있습니다.', openWorkspace: '내 업무 공간 열기',
   termsUnavailable: '가입 약관을 불러올 수 없습니다. 나중에 다시 확인하세요.',
-  ownerName: '이름', schoolName: '도장 이름', legalName: '법적 사업자명', timezone: '도장 시간대',
+  ownerName: '이름', schoolName: '도장 이름', legalName: '법적 사업자명', timezone: '도장 시간대', chooseZone: '도장 시간대를 선택하세요', commonZones: '자주 쓰는 시간대', allZones: '모든 시간대',
   agree: (t, v, d) => `${t}(버전 ${v}${d ? ', 테스트 전용 초안' : ''})에 동의하며 이 도장을 소유하거나 운영하고 있음을 확인합니다.`,
   legalTermsPending: '최종 법적 약관은 준비 중이며 가입이 열리기 전에 여기에 표시됩니다.',
   createButton: '내 도장 계정 만들기',
@@ -144,6 +150,8 @@ const es: StartCopy = {
     SIGNUP_OWNER_NOT_ELIGIBLE: 'Esta cuenta ya tiene acceso a HON, así que no puede crear una escuela nueva aquí.',
     SIGNUP_KEY_REUSED: 'Esa solicitud cambió después de enviarse. Empiece de nuevo.',
     SIGNUP_BUSY: 'HON está ocupado. No se envió nada; inténtelo de nuevo en un momento.',
+    SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED: 'HON no puede crear una escuela con un correo temporal. Inicie sesión con el correo de su escuela o personal; no se creó nada.',
+    SIGNUP_CAPACITY_REACHED: 'HON está aceptando un número limitado de escuelas nuevas ahora. No se creó nada; inténtelo más tarde.',
     TRIAL_CLOSED: 'Las pruebas gratuitas aún no están abiertas. No se inició nada.',
     TRIAL_ALREADY_USED: 'Esta escuela ya usó su prueba gratuita.',
     TRIAL_CAMPAIGN_UNAVAILABLE: 'Esa prueba gratuita ya no se ofrece. Vuelva a comprobar.',
@@ -151,6 +159,7 @@ const es: StartCopy = {
     TRIAL_NOT_ELIGIBLE: 'Esta escuela ya tiene acceso, así que no puede iniciar una prueba gratuita.',
     TRIAL_KEY_REUSED: 'Esa solicitud cambió después de enviarse. Empiece de nuevo.',
     TRIAL_BUSY: 'HON está ocupado. No se envió nada; inténtelo de nuevo en un momento.',
+    TRIAL_CAPACITY_REACHED: 'HON está iniciando un número limitado de pruebas gratuitas ahora. No se inició nada; inténtelo más tarde.',
     ACCOUNT_FORBIDDEN: 'Esta cuenta no puede hacer eso.',
     ACCOUNT_INPUT_INVALID: 'Revise los datos e inténtelo de nuevo.',
     ACCOUNT_RATE_LIMITED: 'Espere hasta un minuto y vuelva a intentarlo. Este intento no se envió.',
@@ -171,7 +180,7 @@ const es: StartCopy = {
   verifiedRequired: 'Inicie sesión con una cuenta cuyo correo esté verificado para crear una escuela.',
   hasOtherAccess: 'Esta cuenta ya tiene acceso a HON.', openWorkspace: 'Abrir mi espacio de trabajo',
   termsUnavailable: 'Los términos de registro no están disponibles. Vuelva a comprobar más tarde.',
-  ownerName: 'Su nombre', schoolName: 'Nombre de la escuela', legalName: 'Razón social', timezone: 'Zona horaria de la escuela',
+  ownerName: 'Su nombre', schoolName: 'Nombre de la escuela', legalName: 'Razón social', timezone: 'Zona horaria de la escuela', chooseZone: 'Elija la zona horaria de su escuela', commonZones: 'Zonas horarias comunes', allZones: 'Todas las zonas horarias',
   agree: (t, v, d) => `Acepto ${t} (versión ${v}${d ? ', un borrador solo de prueba' : ''}) y confirmo que soy dueño o dirijo esta escuela.`,
   legalTermsPending: 'Los términos legales definitivos aún se están preparando y se mostrarán aquí antes de abrir el registro.',
   createButton: 'Crear la cuenta de mi escuela',
@@ -200,4 +209,22 @@ export function instant(iso: string, locale: string, zone?: string): string {
   const at = new Date(iso);
   if (zone) { try { return new Intl.DateTimeFormat(locale, { ...options, timeZone: zone }).format(at); } catch { /* not a zone this browser knows */ } }
   try { return new Intl.DateTimeFormat(locale, options).format(at); } catch { return new Intl.DateTimeFormat('en-US', options).format(at); }
+}
+
+/** Zones most HON schools use, shown first in the picker (US first). Only zones this browser knows are listed. */
+export const COMMON_ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles',
+  'America/Anchorage', 'Pacific/Honolulu', 'America/Toronto', 'America/Mexico_City', 'Europe/London', 'Europe/Madrid', 'Asia/Seoul'] as const;
+
+/** Every IANA zone this browser supports, or the common ones when it cannot list them. */
+export function supportedZones(): string[] {
+  try { const all = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone'); if (all?.length) return [...all]; } catch { /* older browser */ }
+  return [...COMMON_ZONES];
+}
+
+/**
+ * The browser's own zone as the default, except UTC-like zones: a school is never really in "UTC", and a device or a
+ * server render reporting it would silently put every class and due date in UTC, so the owner must choose.
+ */
+export function defaultZone(): string {
+  try { const z = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; return /^(UTC|Etc\/.*|GMT|Universal|Zulu)$/.test(z) ? '' : z; } catch { return ''; }
 }

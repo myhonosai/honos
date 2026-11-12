@@ -5,7 +5,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { SchoolAccountRateLimit } from './school-account-rate-limit.js';
 
 // Refusals the owner can act on. Anything else is redacted to a closed code by SQLSTATE.
-const CONFLICTS = new Set(['TRIAL_CLOSED', 'TRIAL_ALREADY_USED', 'TRIAL_CAMPAIGN_UNAVAILABLE', 'TRIAL_CAMPAIGN_FULL', 'TRIAL_NOT_ELIGIBLE', 'TRIAL_KEY_REUSED']);
+const CONFLICTS = new Set(['TRIAL_CLOSED', 'TRIAL_ALREADY_USED', 'TRIAL_CAMPAIGN_UNAVAILABLE', 'TRIAL_CAMPAIGN_FULL', 'TRIAL_NOT_ELIGIBLE', 'TRIAL_KEY_REUSED', 'TRIAL_CAPACITY_REACHED']);
 
 /** The 14-day free trial. Subject comes only from the HON session; the database re-derives the school, owner and campaign. */
 @Injectable()

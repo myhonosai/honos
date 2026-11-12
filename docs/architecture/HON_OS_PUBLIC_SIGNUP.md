@@ -61,6 +61,22 @@ registration (or `null`) with an eligibility hint (`ELIGIBLE`, `ALREADY_REGISTER
 - The 0183 initializer stays private and unused; HQ provisioning (0185/0208) and invitations are untouched.
 - API rate limit per subject; database uniqueness per identity, subject and organization.
 
+### Abuse protection (0273)
+
+Self-hosted, in the database, no captcha or paid service, and no IP address stored or trusted:
+
+- Verified email at a listed disposable domain (or a subdomain of one) is refused as `SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED`
+  with no effects (`hon.hon_os_signup_blocked_email_domains`, seeded with well-known throwaway mail services; the
+  migration owner can add rows).
+- Global admission limits (`hon.hon_os_admission_limits`, migration owner only): at most 30 new registrations and 30
+  trial starts per rolling hour, 200 of each per rolling day. Counted under one admission lock per kind at insert, so a
+  burst cannot overshoot; a refusal (`SIGNUP_CAPACITY_REACHED`, `TRIAL_CAPACITY_REACHED`) writes nothing and can be
+  retried later.
+- Already in place: IdP-verified email, one school per identity, one trial per organization, campaign capacity, the
+  per-subject API rate limit and same-origin human-command checks.
+- Follow-ups: an HQ screen to change the limits and the domain list; IdP-side bot protection (the identity provider's own
+  sign-up challenge) is configured outside HON when David opens sign-up.
+
 ### Acceptance tests (proof `test-hon-os-public-signup-integrity.mjs`, real signed sessions → Nest → runtime SQL)
 
 1. Custody: forced RLS, no runtime table privileges, exactly two executable entry points.

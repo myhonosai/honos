@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "aabae3cce086f0653d46e3e80192ce490d0ca7b705c3b283ddc1edb29ef54248",
+  "chainSha256": "fef78d57021cc6bcb3349e72022789ef0154b32d3052bcb1fdd2ff60123a5cac",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -281,6 +281,10 @@
     {
       "file": "0272_hon_os_trial_ai_credit_fixes.sql",
       "sha256": "5f78a9ca625bf7459231ff6d8efde3f96630dfed1dd2d6d6736fd83a0e565e62"
+    },
+    {
+      "file": "0273_hon_os_signup_abuse_protection.sql",
+      "sha256": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887"
     }
   ]
 }

@@ -56,7 +56,7 @@ test('database refusals map to closed codes; business refusals keep their own co
  const req={honIdentity:identity,headers:{cookie:auth.HON_SESSION_COOKIE+'='+auth.issueSession({...identity,emailVerified:true},config)}};
  for(const [code,message,status,closed]of [['55000','SIGNUP_CLOSED',409,'SIGNUP_CLOSED'],['23505','SIGNUP_ALREADY_REGISTERED',409,'SIGNUP_ALREADY_REGISTERED'],
    ['23514','SIGNUP_TERMS_CHANGED',409,'SIGNUP_TERMS_CHANGED'],['23514','SIGNUP_REVIEW_REQUIRED',409,'SIGNUP_REVIEW_REQUIRED'],['23514','SIGNUP_OWNER_NOT_ELIGIBLE',409,'SIGNUP_OWNER_NOT_ELIGIBLE'],
-   ['23505','SIGNUP_KEY_REUSED',409,'SIGNUP_KEY_REUSED'],['23514','SECRET SQL',409,'ACCOUNT_CONFLICT'],['42501','SECRET SQL',403,'ACCOUNT_FORBIDDEN'],['55P03','SECRET',503,'SIGNUP_BUSY'],
+   ['23505','SIGNUP_KEY_REUSED',409,'SIGNUP_KEY_REUSED'],['23514','SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED',409,'SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED'],['23514','SIGNUP_CAPACITY_REACHED',409,'SIGNUP_CAPACITY_REACHED'],['23514','SECRET SQL',409,'ACCOUNT_CONFLICT'],['42501','SECRET SQL',403,'ACCOUNT_FORBIDDEN'],['55P03','SECRET',503,'SIGNUP_BUSY'],
    ['22023','SECRET',400,'ACCOUNT_INPUT_INVALID'],['XX000','SIGNUP_CLOSED',503,'ACCOUNT_UNAVAILABLE']]){
   const service=new HonOsSignupService({callHonOsSignup:async()=>{throw Object.assign(new Error(message),{code});}});
   await assert.rejects(()=>service.register(req,input,randomUUID()),e=>e.status===status&&e.getResponse().code===closed&&!JSON.stringify(e.getResponse()).includes('SECRET'));

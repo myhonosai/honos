@@ -48,7 +48,7 @@ const api=createServer(async(r,s)=>{
  send(404,{code:'NOT_FOUND'});
 });
 let app,browser;const origin='http://127.0.0.1:3100';
-async function open(size){const context=await browser.newContext({viewport:size,reducedMotion:'reduce',serviceWorkers:'block'});await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+async function open(size){const context=await browser.newContext({viewport:size,reducedMotion:'reduce',serviceWorkers:'block',timezoneId:'America/Chicago'});await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
  await context.addCookies([{name:HON_SESSION_COOKIE,value:issueSession({externalSubject:subject,email:'synthetic-new-owner@example.invalid',emailVerified:true},session),url:origin,httpOnly:true,sameSite:'Lax'}]);
  const page=await context.newPage();await page.goto(origin+'/account/start');return {context,page};}
 async function capture(page,name){assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),name+' scrolls sideways');await page.addScriptTag({content:axe});const a=await page.evaluate(()=>window.axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));report.accessibility.push({name,violations:a.violations.map(v=>({id:v.id,impact:v.impact}))});assert.equal(a.violations.length,0,JSON.stringify(a.violations.map(v=>v.id)));await page.screenshot({path:join(results,name+'.png'),fullPage:true});report.screenshots.push(name+'.png');}
@@ -69,7 +69,8 @@ try{
   assert.equal(await page.getByRole('textbox').count(),0);assert.equal(await page.getByRole('button',{name:'Create my school account'}).count(),0);await capture(page,size+'-closed');
   // Sign-up open (test mode only in this fixture): the owner creates their school; a lost response is retried with the same key and body.
   state.signup='TEST_MODE';await check(page);await page.getByLabel('Your name').fill('Synthetic Owner');await page.getByLabel('School name').fill('Synthetic Dojo');await page.getByLabel('Legal business name').fill('Synthetic Dojo LLC');
-  await page.getByLabel('School time zone').fill('America/New_York');assert(await page.getByRole('button',{name:'Create my school account'}).isDisabled());await page.getByRole('checkbox').check();
+  // The zone picker defaults to the browser's zone (never UTC); the owner can choose another.
+  assert.equal(await page.getByLabel('School time zone').inputValue(),'America/Chicago');await page.getByLabel('School time zone').selectOption('America/New_York');assert(await page.getByRole('button',{name:'Create my school account'}).isDisabled());await page.getByRole('checkbox').check();
   await capture(page,size+'-sign-up-form');
   state.dropNext=true;await page.getByRole('button',{name:'Create my school account'}).click();await page.getByText('The outcome is unknown.',{exact:false}).waitFor();
   await page.waitForTimeout(150);assert.equal(state.posts.length,posts+1,'never resent automatically');

@@ -6,7 +6,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { SchoolAccountRateLimit } from './school-account-rate-limit.js';
 
 // Business refusals the owner can act on. Anything else is redacted to a closed code by SQLSTATE.
-const CONFLICTS = new Set(['SIGNUP_CLOSED', 'SIGNUP_ALREADY_REGISTERED', 'SIGNUP_TERMS_CHANGED', 'SIGNUP_REVIEW_REQUIRED', 'SIGNUP_OWNER_NOT_ELIGIBLE', 'SIGNUP_KEY_REUSED']);
+const CONFLICTS = new Set(['SIGNUP_CLOSED', 'SIGNUP_ALREADY_REGISTERED', 'SIGNUP_TERMS_CHANGED', 'SIGNUP_REVIEW_REQUIRED', 'SIGNUP_OWNER_NOT_ELIGIBLE', 'SIGNUP_KEY_REUSED', 'SIGNUP_EMAIL_DOMAIN_NOT_ACCEPTED', 'SIGNUP_CAPACITY_REACHED']);
 
 @Injectable()
 export class HonOsSignupService {
