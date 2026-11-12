@@ -6,9 +6,11 @@ const school=randomUUID(),input={schoolId:school,campaignId:randomUUID(),confirm
 const start=new Date('2026-11-09T10:00:00.123456Z');
 const trial={enrollmentId:randomUUID(),organizationId:randomUUID(),schoolId:school,campaignId:input.campaignId,durationDays:14,
  startsAt:'2026-11-09T10:00:00.123456Z',endsAt:'2026-11-23T10:00:00.123456Z',status:'TRIAL_ACTIVE',
- automaticCharge:false,paymentMethodRequired:false,aiIncluded:false,aiCredits:null,creativeCreditsIncluded:false};
+ automaticCharge:false,paymentMethodRequired:false,aiIncluded:false,aiCredits:null,creativeCreditsIncluded:false,creativeCredits:null};
 const aiCredits={credits:100,dailyCap:20,perRequestCap:10,expiresAt:'2026-11-16T10:00:00.123456Z',used:7};
 const funded={...trial,aiIncluded:true,aiCredits};
+// 0275: the trial's own Creative Studio credits, ending with the trial.
+const creative={credits:1500,available:1200,expiresAt:trial.endsAt},withCreative={...funded,creativeCreditsIncluded:true,creativeCredits:creative};
 const offer={campaignId:input.campaignId,name:'Founding schools trial',durationDays:14,automaticCharge:false,paymentMethodRequired:false,aiIncluded:false,aiCredits:null};
 const fundedOffer={...offer,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiryDays:7}};
 const req={honIdentity:{externalSubject:'oidc:fixture:owner'}};
@@ -19,9 +21,13 @@ test('closed trial input: no organization, plan, duration, price, credits or AI 
  for(const patch of [{schoolId:'school'},{campaignId:''},{confirmation:'YES'},{confirmation:c.SIGNUP_CONFIRMATION}])assert.throws(()=>c.validateTrialStartInput({...input,...patch}));
  assert(start);
 });
-test('closed trial receipt: never claims a charge, a payment method or creative credits; AI only with its HQ-set credit; window matches its length',()=>{
+test('closed trial receipt: never claims a charge or a payment method; AI only with its HQ-set credit; creative credits only with their own grant ending with the trial; window matches its length',()=>{
  assert.deepEqual(c.validateHonOsTrial(trial),trial);
  assert.deepEqual(c.validateHonOsTrial(funded),funded);
+ assert.deepEqual(c.validateHonOsTrial(withCreative),withCreative);
+ for(const patch of [{creativeCreditsIncluded:false},{creativeCredits:null},{creativeCredits:{...creative,available:1501}},{creativeCredits:{...creative,credits:0}},
+   {creativeCredits:{...creative,expiresAt:'2026-11-22T10:00:00.123456Z'}},{creativeCredits:{...creative,costCapMinor:1500}},{creativeCredits:{...creative,available:-1}}])
+  assert.throws(()=>c.validateHonOsTrial({...withCreative,...patch}),JSON.stringify(patch));
  for(const patch of [{aiIncluded:false},{aiCredits:null},{aiCredits:{...aiCredits,dailyCap:101}},{aiCredits:{...aiCredits,perRequestCap:21}},{aiCredits:{...aiCredits,credits:0}},
    {aiCredits:{...aiCredits,used:-1}},{aiCredits:{...aiCredits,used:1.5}},{aiCredits:{...aiCredits,expiresAt:'2026-11-24T10:00:00.123456Z'}},{aiCredits:{...aiCredits,expiresAt:'2026-11-09T10:00:00.123456Z'}},
    {aiCredits:{...aiCredits,creative:1}},{creativeCreditsIncluded:true}]) assert.throws(()=>c.validateHonOsTrial({...funded,...patch}));

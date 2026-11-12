@@ -10,14 +10,15 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { saasUuid } from './saas-billing.js';
 
-export type SaasCreativeLotKind = 'INCLUDED_MONTHLY' | 'PROMOTIONAL' | 'ADJUSTMENT' | 'PURCHASED_TOPUP';
+/** TRIAL (0275): a free trial's own creative credits, granted at trial start and expiring when the trial ends. */
+export type SaasCreativeLotKind = 'INCLUDED_MONTHLY' | 'PROMOTIONAL' | 'ADJUSTMENT' | 'PURCHASED_TOPUP' | 'TRIAL';
 export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO';
 export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
 export type SaasCreativeRateBasis = 'PROVISIONAL' | 'VERIFIED_COST';
 export type SaasCreativePackageCode = 'STARTER' | 'GROWTH' | 'CREATOR';
 export type SaasCreativeEligibilityReason = 'PROGRAM_INACTIVE' | 'SCHOOL_NOT_ACTIVE' | 'PAID_ACCESS_REQUIRED' | 'ENTITLEMENT_NOT_IN_EFFECT'
   | 'HON_OS_SUBSCRIPTION_REQUIRED' | 'SUBSCRIPTION_NOT_IN_SERVICE' | 'VERIFIED_PAYMENT_REQUIRED' | 'WINDOW_UNAVAILABLE' | 'WINDOW_NOT_PAID';
-const LOT_KINDS: readonly SaasCreativeLotKind[] = ['INCLUDED_MONTHLY','PROMOTIONAL','ADJUSTMENT','PURCHASED_TOPUP'];
+const LOT_KINDS: readonly SaasCreativeLotKind[] = ['INCLUDED_MONTHLY','PROMOTIONAL','ADJUSTMENT','PURCHASED_TOPUP','TRIAL'];
 const MEDIA: readonly SaasCreativeMediaKind[] = ['IMAGE','VIDEO'];
 const UNITS: readonly SaasCreativeBillingUnit[] = ['IMAGE','VIDEO_SECOND','REQUEST'];
 const BASES: readonly SaasCreativeRateBasis[] = ['PROVISIONAL','VERIFIED_COST'];
@@ -246,7 +247,7 @@ function validateLot(value: unknown): void {
     || !isTimestamp(l.grantedAt) || (l.expired === true && l.availableCredits !== 0)
     || (l.availableCredits as number) + (l.heldCredits as number) + (l.consumedCredits as number) + (l.expiredCredits as number) + (l.debitedCredits as number) > (l.credits as number)
     || (l.kind === 'INCLUDED_MONTHLY') !== (l.window !== null) || (l.kind === 'PURCHASED_TOPUP') !== (l.purchaseId !== null)
-    || (l.kind === 'PROMOTIONAL' || l.kind === 'ADJUSTMENT') !== (l.adjustmentId !== null)
+    || (l.kind === 'PROMOTIONAL' || l.kind === 'ADJUSTMENT') !== (l.adjustmentId !== null) || (l.kind === 'TRIAL' && l.expiresAt === null)
     || (l.kind === 'PURCHASED_TOPUP' && l.credits !== (l.baseCredits as number) + (l.bonusCredits as number))) drift();
   if (l.window !== null) validateWindow(l.window);
 }
@@ -254,12 +255,14 @@ function validateLot(value: unknown): void {
 export function validateSaasCreativeBalance(value: unknown): void { validateBalance(value); }
 function validateBalance(value: unknown): void {
   const b = record(value, drift); exactKeys(b, ['availableCredits','heldCredits','byKind'], drift);
-  if (!count(b.availableCredits) || !count(b.heldCredits) || !Array.isArray(b.byKind) || b.byKind.length !== 4) drift();
+  if (!count(b.availableCredits) || !count(b.heldCredits) || !Array.isArray(b.byKind) || (b.byKind.length !== 4 && b.byKind.length !== 5)) drift();
+  // TRIAL is listed only for a school that has a trial lot (0275), in consumption order after included credits.
+  const order = b.byKind.length === 5 ? ['INCLUDED_MONTHLY','TRIAL','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'] : ['INCLUDED_MONTHLY','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'];
   let available = 0, held = 0;
   (b.byKind as unknown[]).forEach((value, i) => {
     const k = record(value, drift);
     exactKeys(k, ['kind','grantedCredits','availableCredits','heldCredits','consumedCredits','expiredCredits','debitedCredits'], drift);
-    if (k.kind !== ['INCLUDED_MONTHLY','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'][i] || !count(k.grantedCredits) || !count(k.availableCredits) || !count(k.heldCredits)
+    if (k.kind !== order[i] || !count(k.grantedCredits) || !count(k.availableCredits) || !count(k.heldCredits)
       || !count(k.consumedCredits) || !count(k.expiredCredits) || !count(k.debitedCredits)) drift();
     available += k.availableCredits as number; held += k.heldCredits as number;
   });

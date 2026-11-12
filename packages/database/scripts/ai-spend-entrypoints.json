@@ -97,6 +97,7 @@
     "hon.guard_saas_credits()",
     "hon.guard_teaching_assistant()",
     "hon.hon_os_trial_campaign_cost(uuid,bigint)",
+    "hon.hon_os_trial_creative_funded(uuid,timestamp with time zone)",
     "hon.hon_os_trial_json(hon.hon_os_trial_enrollments)",
     "hon.hq_creative_budget_json(date)",
     "hon.hq_creative_generation_json(hon.hq_creative_generations)",

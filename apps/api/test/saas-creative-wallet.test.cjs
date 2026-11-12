@@ -196,3 +196,19 @@ test('CW1 review refusals: S4 pause, access and school state refuse with stable 
   const pending = new SaasCreativeWalletService(new SaasBillingService({ callSaasBilling:async () => { throw Object.assign(new Error('SAAS_CREATIVE_OUTCOME_PENDING'), { code:'40001' }); } }));
   await assert.rejects(pending.readWallets('verified-human'), e => e.getStatus() === 409 && e.getResponse().code === 'SAAS_CREATIVE_OUTCOME_PENDING');
 });
+
+test('0275 trial lot: a TRIAL lot expires with the trial; byKind lists TRIAL after included credits only when the school has one', () => {
+  const trialLot = lot({ kind:'TRIAL', credits:1500, window:null, expiresAt:E, availableCredits:1200, heldCredits:100, consumedCredits:200 });
+  const byKind = ['INCLUDED_MONTHLY','TRIAL','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'].map((kind) => ({ kind, grantedCredits:kind === 'TRIAL' ? 1500 : 0,
+    availableCredits:kind === 'TRIAL' ? 1200 : 0, heldCredits:kind === 'TRIAL' ? 100 : 0, consumedCredits:kind === 'TRIAL' ? 200 : 0, expiredCredits:0, debitedCredits:0 }));
+  const trialWallet = schoolWallet({ lots:[trialLot], balance:{ availableCredits:1200, heldCredits:100, byKind } });
+  assert.doesNotThrow(() => contracts.validateSaasCreativeSchoolWallet(trialWallet));
+  assert.doesNotThrow(() => contracts.validateSaasCreativeSchoolWallet(schoolWallet()), 'a wallet with no trial lot still lists the four kinds');
+  for (const bad of [
+    { lots:[{ ...trialLot, expiresAt:null }] },
+    { lots:[{ ...trialLot, adjustmentId:U() }] },
+    { lots:[{ ...trialLot, window:{ index:0, startsAt:T, endsAt:E } }] },
+    { balance:{ availableCredits:1200, heldCredits:100, byKind:[byKind[1], byKind[0], ...byKind.slice(2)] } },
+    { balance:{ availableCredits:1200, heldCredits:100, byKind:[...byKind, byKind[1]] } },
+  ]) assert.throws(() => contracts.validateSaasCreativeSchoolWallet({ ...trialWallet, ...bad }), JSON.stringify(Object.keys(bad)));
+});
