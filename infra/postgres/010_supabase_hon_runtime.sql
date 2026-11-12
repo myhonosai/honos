@@ -2392,7 +2392,6 @@ DO $$ DECLARE r text; col text; t text; f text; BEGIN
       hon.record_membership_refund(text,uuid,jsonb,text,uuid,uuid),hon.read_membership_pauses_and_refunds(text,uuid) TO hon_runtime;
   END IF;
 END $$;
-
 -- C-HQ-3 0225 (proposed) HQ school detail: the HQ read is the only runtime boundary; its counts helper stays internal.
 DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['hq_school_invitation_counts(text,uuid,timestamptz)','read_hq_school_detail_from_hq(text,uuid)'] LOOP
@@ -2402,6 +2401,61 @@ DO $$ DECLARE r text; f text; BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_hq_school_detail_from_hq(text,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0230 HON OS schedule billing piece 1. Runs after every broader SaaS revocation above: restore only the eight fixed
+-- runtime procedures (school/HQ commands and reads, the observation, the school cancel-before-payment command, the two
+-- privileged worker records and evidence ingest). Tables, the access hooks, the conflict probe and every helper stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid)','record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid)',
+    'record_saas_schedule_binding_reconciliation(uuid,jsonb)','record_saas_schedule_binding_expiry(uuid,jsonb)',
+    'cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid)','read_saas_schedule_binding(text,uuid,uuid)','read_saas_schedule_binding_from_hq(text,uuid)','ingest_saas_schedule_evidence(jsonb,text)',
+    'saas_org_billing_conflict(uuid)','saas_schedule_period_matches(text,timestamp with time zone,timestamp with time zone)','saas_schedule_after_paid_period(uuid,uuid,timestamp with time zone)',
+    'saas_schedule_after_binding_terminal(uuid,timestamp with time zone)',
+    'saas_schedule_binding_transition(hon.saas_schedule_bindings,text,text,text,uuid,timestamp with time zone)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.start_saas_schedule_binding(text,uuid,jsonb,uuid,uuid,uuid),hon.record_saas_schedule_binding_observation(uuid,jsonb,uuid,uuid),
+      hon.record_saas_schedule_binding_reconciliation(uuid,jsonb),hon.record_saas_schedule_binding_expiry(uuid,jsonb),
+      hon.cancel_saas_schedule_binding(text,uuid,uuid,jsonb,uuid,uuid,uuid),
+      hon.read_saas_schedule_binding(text,uuid,uuid),hon.read_saas_schedule_binding_from_hq(text,uuid),hon.ingest_saas_schedule_evidence(jsonb,text) TO hon_runtime;
+  END IF;
+END $$;
+-- 0235 HON OS schedule billing piece 2 (access after the first verified payment). Runs after every broader revocation
+-- above: restore only the HQ-owner access retry (the two reads are restored by the 0230 block). The activation, the
+-- access hook, the grace interval and the access read helper stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid)','saas_schedule_access_grace()',
+    'saas_schedule_access_json(uuid)','saas_schedule_activate_access(uuid,uuid,timestamp with time zone)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.retry_saas_schedule_access(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0237 HON OS schedule billing piece 3 (HQ review queue for held payments and refunds). Runs after every broader
+-- revocation above: restore only the HQ queue read, the refund-owed record and the refund verification. The items,
+-- open/reviewed probes, JSON helpers and guards stay unreachable.
+DO $$ DECLARE r text; f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['read_saas_paid_reviews(text,text)','resolve_saas_paid_review(text,jsonb,uuid,uuid,uuid)',
+    'verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid)','saas_paid_review_items(text,uuid)','saas_paid_review_reviewed_count(uuid)',
+    'saas_paid_review_open(text,uuid)','saas_paid_review_resolution_json(hon.saas_paid_review_resolutions)','saas_paid_review_item_json(text,uuid)',
+    'guard_saas_hon_os_v1_offer_kind()','guard_saas_paid_review_resolutions()','guard_saas_checkout_refund_recorded()'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_paid_reviews(text,text),hon.resolve_saas_paid_review(text,jsonb,uuid,uuid,uuid),
+      hon.verify_saas_paid_review_refund(text,uuid,jsonb,uuid,uuid,uuid) TO hon_runtime;
   END IF;
 END $$;
 
@@ -2496,6 +2550,30 @@ DO $$ DECLARE r text; BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.hon_orchestration_summary_facts(text,uuid,uuid,uuid) FROM '||quote_ident(r);
   END LOOP;
+END $$;
+
+-- B-ID-5 0241 HON OS public sign-up: three private forced-RLS tables; the sign-up and its read are the only runtime
+-- entry points. The program row has no runtime write path (TEST_MODE only by the migration owner of a test database).
+DO $$ DECLARE t text; r text; f text; c text; BEGIN
+  IF to_regprocedure('hon.register_hon_os_school(text,text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply public sign-up migration 0241 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon_os_signup_program','hon_os_signup_terms_versions','hon_os_school_registrations'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['guard_hon_os_signup_program()','hon_os_signup_open()','hon_os_signup_terms_json(hon.hon_os_signup_terms_versions)',
+    'hon_os_registration_json(hon.hon_os_school_registrations)','hon_os_signup_name_valid(jsonb)','hon_os_signup_slug(text)',
+    'register_hon_os_school(text,text,jsonb,uuid)','read_hon_os_registration(text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.register_hon_os_school(text,text,jsonb,uuid),hon.read_hon_os_registration(text) TO hon_runtime;
+  END IF;
 END $$;
 
 -- 0226 school student CSV import: three private evidence tables, private helpers, five runtime entry points.
@@ -2729,6 +2807,59 @@ DO $$ DECLARE r text; t text; col text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_payment_processors(text),hon.start_school_payment_connection(text,jsonb,text,uuid,uuid),
       hon.set_school_payment_onboarding_link(text,uuid,jsonb,text,uuid,uuid),hon.record_school_payment_status(text,uuid,jsonb,text,uuid,uuid),
       hon.set_default_school_payment_connection(text,uuid,jsonb,text,uuid,uuid),hon.disconnect_school_payment_connection(text,uuid,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
+-- B-TUI-2 piece 9a 0269 school checkout page settings: two private tables reached only through two runtime entry points;
+-- guards, validators and helpers are private.
+DO $$ DECLARE r text; t text; col text; f text; BEGIN
+  IF to_regclass('hon.school_checkout_pages') IS NULL THEN RAISE EXCEPTION 'Apply migration 0269 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_checkout_pages','hon.school_checkout_page_versions'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r);
+    END LOOP;
+    FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=t::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON %s FROM PUBLIC',col,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+        EXECUTE format('REVOKE ALL (%I) ON %s FROM %I',col,t,r);
+      END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.checkout_text_ok(jsonb,integer,boolean)','hon.checkout_i18n_ok(jsonb,integer,boolean)','hon.checkout_content_ok(jsonb)',
+    'hon.guard_school_checkout_page()','hon.require_school_checkout_actor(text)','hon.school_checkout_page_json(hon.school_checkout_pages)',
+    'hon.read_school_checkout_pages(text)','hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_checkout_pages(text),hon.save_school_checkout_page(text,jsonb,text,uuid,uuid) TO hon_runtime;
+  END IF;
+END $$;
+
+-- D11-B 0246 HON OS free trial: two private forced-RLS tables; starting a trial and its read are the only runtime entry
+-- points. The trial program row has no runtime write path (TEST_MODE only by the migration owner of a test database).
+DO $$ DECLARE t text; r text; f text; c text; BEGIN
+  IF to_regprocedure('hon.start_hon_os_trial(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply free trial runtime migration 0246 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon_os_trial_program','hon_os_trial_enrollments'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+    FOR c IN SELECT attname FROM pg_attribute WHERE attrelid=('hon.'||t)::regclass AND attnum>0 AND NOT attisdropped LOOP
+      EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM PUBLIC',c,t);
+      FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL (%I) ON hon.%I FROM %I',c,t,r); END LOOP;
+    END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon_os_trial_open()','hon_os_trial_live(uuid,timestamptz)','hon_os_trial_json(hon.hon_os_trial_enrollments)',
+    'hon_os_trial_campaign_offer(uuid,timestamptz)','start_hon_os_trial(text,jsonb,uuid)','read_hon_os_trial(text)','guard_hon_os_trial_checkout()',
+    'ai_spend_allowed(uuid,timestamptz,text)'] LOOP
+    EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM '||quote_ident(r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.start_hon_os_trial(text,jsonb,uuid),hon.read_hon_os_trial(text) TO hon_runtime;
   END IF;
 END $$;
 

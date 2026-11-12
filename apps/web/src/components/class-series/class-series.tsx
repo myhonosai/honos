@@ -9,6 +9,7 @@ import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { SeriesError, classSeriesApi, keepForRetry, type ClassSeriesApi, type SeriesAction, type SeriesBody, type SeriesErrorKind, type SeriesScope } from './http';
+import { AddProgram, programApi, type ProgramApi } from './add-program';
 import { ClassSeriesView, addDays, type ReadState, type SeriesFields, type SeriesForm, type SeriesOutcome, type TopUpState } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
@@ -71,7 +72,7 @@ export function seriesBody(action: SeriesAction, fields: SeriesFields, read: Sch
  * at once, retire every read and drop any kept command. Every command answer is followed by fresh reads: the server, not this
  * tab, says what changed. Nothing here contacts anyone or charges.
  */
-export function ClassSeriesPage({ api = classSeriesApi }: { api?: ClassSeriesApi }): React.ReactElement {
+export function ClassSeriesPage({ api = classSeriesApi, programs = programApi }: { api?: ClassSeriesApi; programs?: ProgramApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -182,6 +183,8 @@ export function ClassSeriesPage({ api = classSeriesApi }: { api?: ClassSeriesApi
     <ClassSeriesView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={!!schoolId} week={week} series={series} form={form} outcome={outcome} locked={lock !== 'NONE' || topUp.state === 'SENDING'} canRetry={lock === 'KEPT'}
       topUp={topUp}
+      addProgram={orgId && schoolId
+        ? <AddProgram key={`${orgId}/${schoolId}`} language={preferences.language} scope={{ organizationId: orgId, schoolId }} locked={lock !== 'NONE'} onAdded={onRefresh} api={programs}/> : null}
       onWeek={onWeek} onRefresh={onRefresh} onOpen={onOpen} onClose={onClose} onSubmit={onSubmit} onTryAgain={onTryAgain}/>
   </div>;
 }
