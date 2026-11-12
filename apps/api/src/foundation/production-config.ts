@@ -42,6 +42,15 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
     try { verifiedDatabaseConnection(runtimeUrl, env); } catch { failures.push('RUNTIME_DATABASE_TLS_INVALID'); }
   }
 
+  const workerUrl = env.HON_COMMUNICATION_WORKER_DATABASE_URL;
+  if (workerUrl) {
+    try { verifiedDatabaseConnection(workerUrl, env); } catch { failures.push('COMMUNICATION_WORKER_DATABASE_TLS_INVALID'); }
+    const workerUser = databaseUser(workerUrl);
+    if ((runtimeUrl && workerUser === databaseUser(runtimeUrl)) || (env.DATABASE_URL && workerUser === databaseUser(env.DATABASE_URL))) {
+      failures.push('COMMUNICATION_WORKER_ROLE_REUSED');
+    }
+  }
+
   const strict = deployment === 'production' || deployment === 'staging' || (declared === undefined && env.NODE_ENV === 'production');
   if (strict) {
     if (!runtimeUrl) failures.push('RUNTIME_DATABASE_URL_REQUIRED');
@@ -52,6 +61,8 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
       failures.push('MIGRATION_CREDENTIAL_IN_API_PROCESS');
       if (runtimeUrl && databaseUser(env.DATABASE_URL) === databaseUser(runtimeUrl)) failures.push('RUNTIME_USES_MIGRATION_ROLE');
     }
+    // The deterministic fake message provider never runs in production or staging.
+    if (env.HON_COMMUNICATION_FAKE_PROVIDER !== undefined) failures.push('COMMUNICATION_FAKE_PROVIDER_FORBIDDEN');
     if (env.HON_AUTH_MODE !== 'OIDC') failures.push('OIDC_AUTH_REQUIRED');
     else {
       // The API verifies HON session cookies only; OIDC endpoints are web-server configuration.
