@@ -74,13 +74,15 @@
     "hon.settle_saas_premium_credits(text,uuid,jsonb,uuid,uuid,uuid)"
   ],
   "budgetCeilingLiteral12000": [
-    "hon.ai_org_ceiling(uuid,timestamp with time zone)"
+    "hon.ai_org_ceiling(uuid,timestamp with time zone)",
+    "hon.ai_org_display_ceiling(uuid,timestamp with time zone)"
   ],
   "spendReferences": [
-    "hon.ai_org_ceiling(uuid,timestamp with time zone)",
     "hon.ai_org_committed_credits(uuid,timestamp with time zone)",
+    "hon.ai_org_open_agent_holds(uuid)",
     "hon.ai_spend_reserve_guard()",
     "hon.ai_stamp_hold_origin()",
+    "hon.ai_trial_ceiling_terms(uuid,timestamp with time zone)",
     "hon.ai_unknown_receipt(hon.ai_unknown_resolutions,boolean)",
     "hon.command_saas_credit_allowance(text,jsonb,uuid,uuid,uuid)",
     "hon.create_hq_creative_generation(text,jsonb,jsonb,uuid)",
@@ -94,6 +96,7 @@
     "hon.guard_marketing_invocation()",
     "hon.guard_saas_credits()",
     "hon.guard_teaching_assistant()",
+    "hon.hon_os_trial_campaign_cost(uuid,bigint)",
     "hon.hon_os_trial_json(hon.hon_os_trial_enrollments)",
     "hon.hq_creative_budget_json(date)",
     "hon.hq_creative_generation_json(hon.hq_creative_generations)",
@@ -287,6 +290,11 @@
       "runtime": true,
       "public": false,
       "security_definer": true
+    },
+    "hon.ai_org_display_ceiling(uuid,timestamp with time zone)": {
+      "runtime": false,
+      "public": false,
+      "security_definer": false
     }
   },
   "runtimeSpendTablePrivileges": {
