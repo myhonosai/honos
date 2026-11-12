@@ -66,7 +66,7 @@ export type LeadIntakeCopy = {
 
 const copy: Record<Language, LeadIntakeCopy> = {
   en: {
-    navCore: 'HON Core', navForms: 'Lead forms', navLeads: 'CRM leads', navCampaigns: 'Campaign plans', navImports: 'Duplicate review', navChad: 'Chad drafts',
+    navCore: 'School dashboard', navForms: 'Lead forms', navLeads: 'CRM leads', navCampaigns: 'Campaign plans', navImports: 'Duplicate review', navChad: 'Chad drafts',
     staffNavigation: 'Staff navigation', signIn: 'Sign in', currentSchoolRead: 'CURRENT SCHOOL / EXPLICIT READ', presentationOnly: 'PRESENTATION ONLY', verifiedRead: 'VERIFIED READ', awaitingRead: 'AWAITING READ', notConnected: 'NOT CONNECTED', unavailableLabel: 'UNAVAILABLE', websiteResponseBacked: 'WEBSITE INTAKE / RESPONSE-BACKED', governedNextSteps: 'Governed next steps', noInferredFunnel: 'NO INFERRED FUNNEL', humanReview: 'HUMAN REVIEW', governedDraftsOnly: 'GOVERNED DRAFTS ONLY',
     eyebrow: 'SCHOOL GROWTH / VERIFIED FORM INTAKE', title: 'Lead Sources & Intake Monitor',
     introduction: 'A deliberate, read-only intake view. Load your current authorized form facts, then continue into the workflow that owns each next step.',
@@ -88,7 +88,7 @@ const copy: Record<Language, LeadIntakeCopy> = {
     formStatus: { DRAFT: 'Draft', PUBLISHED: 'Published', DISABLED: 'Disabled' }
   },
   ko: {
-    navCore: 'HON Core', navForms: '리드 양식', navLeads: 'CRM 리드', navCampaigns: '캠페인 계획', navImports: '중복 검토', navChad: 'Chad 초안',
+    navCore: '학교 대시보드', navForms: '리드 양식', navLeads: 'CRM 리드', navCampaigns: '캠페인 계획', navImports: '중복 검토', navChad: 'Chad 초안',
     staffNavigation: '직원 탐색', signIn: '로그인', currentSchoolRead: '현재 학교 / 명시적 조회', presentationOnly: '표시 전용', verifiedRead: '확인된 조회', awaitingRead: '조회 대기', notConnected: '연결되지 않음', unavailableLabel: '사용 불가', websiteResponseBacked: '웹사이트 유입 / 응답 기반', governedNextSteps: '통제된 다음 단계', noInferredFunnel: '추정 전환 없음', humanReview: '사람 검토', governedDraftsOnly: '통제된 초안만',
     eyebrow: '학교 성장 / 확인된 양식 유입', title: '리드 소스 및 유입 모니터',
     introduction: '의도적인 읽기 전용 유입 화면입니다. 현재 권한이 확인된 양식 정보를 불러온 뒤, 각 다음 단계를 담당하는 업무 화면으로 이동하세요.',
@@ -110,7 +110,7 @@ const copy: Record<Language, LeadIntakeCopy> = {
     formStatus: { DRAFT: '초안', PUBLISHED: '게시됨', DISABLED: '비활성화됨' }
   },
   es: {
-    navCore: 'HON Core', navForms: 'Formularios de leads', navLeads: 'Leads CRM', navCampaigns: 'Planes de campaña', navImports: 'Revisión de duplicados', navChad: 'Borradores de Chad',
+    navCore: 'Panel de la escuela', navForms: 'Formularios de leads', navLeads: 'Leads CRM', navCampaigns: 'Planes de campaña', navImports: 'Revisión de duplicados', navChad: 'Borradores de Chad',
     staffNavigation: 'Navegación del personal', signIn: 'Iniciar sesión', currentSchoolRead: 'ESCUELA ACTUAL / LECTURA EXPLÍCITA', presentationOnly: 'SOLO PRESENTACIÓN', verifiedRead: 'LECTURA VERIFICADA', awaitingRead: 'LECTURA PENDIENTE', notConnected: 'SIN CONEXIÓN', unavailableLabel: 'NO DISPONIBLE', websiteResponseBacked: 'ENTRADA WEB / RESPALDADA POR RESPUESTA', governedNextSteps: 'Siguientes pasos gobernados', noInferredFunnel: 'SIN EMBUDO INFERIDO', humanReview: 'REVISIÓN HUMANA', governedDraftsOnly: 'SOLO BORRADORES GOBERNADOS',
     eyebrow: 'CRECIMIENTO ESCOLAR / ENTRADA DE FORMULARIOS VERIFICADA', title: 'Monitor de fuentes y entrada de leads',
     introduction: 'Una vista de entrada deliberada y de solo lectura. Carga los datos actuales de formularios autorizados y continúa al flujo que gestiona cada paso siguiente.',
