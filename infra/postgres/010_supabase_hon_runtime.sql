@@ -2940,3 +2940,17 @@ DO $$ DECLARE r text; t text; f text; BEGIN
       hon.read_public_school_event(text),hon.book_public_school_event(text,jsonb,text),hon.cancel_public_school_event_booking(text,jsonb) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0259 Maya at-risk students (M1, read-only): one runtime entry point; the actor and tuition helpers are private.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.read_maya_at_risk_students(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0259 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.require_maya_actor(text,text)','hon.maya_reader_sees_tuition(text)','hon.read_maya_at_risk_students(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);
+    END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_maya_at_risk_students(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;

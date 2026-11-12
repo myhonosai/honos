@@ -142,6 +142,8 @@ import { SchoolPayMethodService } from './school-payments/school-pay-method.serv
 import { SchoolCheckoutController } from './school-checkout/school-checkout.controller.js';
 import { SchoolCheckoutService } from './school-checkout/school-checkout.service.js';
 import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout/school-checkout-human-ui.guard.js';
+import { MayaAtRiskController, MayaAtRiskReadHumanUiGuard } from './maya/maya-at-risk.controller.js';
+import { MayaAtRiskService } from './maya/maya-at-risk.service.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
 import { BillingAccountService } from './billing/billing-account.service.js';
 import { BillingAccountHumanUiGuard } from './billing/billing-account-human-ui.guard.js';
@@ -432,6 +434,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPaymentController,
     SchoolPayMethodController,
     SchoolCheckoutController,
+    MayaAtRiskController,
     SchoolMembershipListController,
     CrmSchoolClockController,
     CrmSessionSchoolClockController,
@@ -590,6 +593,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolPayMethodsReadHumanUiGuard, SchoolPayExpiringReadHumanUiGuard, SchoolPayMethodSetupHumanUiGuard, SchoolPayMethodFinishHumanUiGuard,
     SchoolPayMethodDefaultHumanUiGuard, SchoolPayMethodRemoveHumanUiGuard,
     SchoolCheckoutService, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard,
+    MayaAtRiskService,
+    MayaAtRiskReadHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,
     CrmSchoolClockService,

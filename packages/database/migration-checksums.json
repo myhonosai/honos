@@ -246,6 +246,9 @@
     "0273_hon_os_signup_abuse_protection.sql": "ef53fe56e765f926a0868bc6f2a86c8e6106ec0667ec971ea1889e3147836887",
     "0274_hon_os_admission_limits_hq.sql": "3f9b0d3a909005f190517ef193167ff0fca3032fa6ea35ed418d58dd6ce92adc",
     "0261_school_event_booking.sql": "3a8bfc78de0a42c61a59f3ff182bbbd792b68251223af6a68a89906f1848d675",
+    "0259_maya_at_risk_students.sql": "6b8267f54f694799c387fdf34b8848a6d8bf041161095d9e00e171587c32293c",
+    "0260_hon_analysis_specialists.sql": "01177f4f95e03cf451500d8063dcc690d3b9f9e4bcf625be727260a9fcd0d410",
+    "0278_ai_team_readiness_reconcile.sql": "f29d606e7ab0e1273d5ae41f2eeb105f14b3eb0fa930fcd194a5ad2439c5362e",
     "0290_school_payer_saved_methods.sql": "433130a03a3293e15a8a93c5dc43f507c4ce15edeef9f33e986cc5555ab31842"
   }
 }
