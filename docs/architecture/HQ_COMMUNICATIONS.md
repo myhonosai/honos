@@ -51,7 +51,7 @@ inbound replies routed to HQ support (STOP/START/HELP are handled), attachments 
 
 ## 4. Design
 
-### 4.1 Records (migration 0271)
+### 4.1 Records (migration 0281)
 
 - `hon.hq_messages`: organization, school, purpose, channel, content (1 to 4,000; SMS 1 to 1,600), optional support
   case link (0232, must be the same organization/school), status `DRAFT` / `QUEUED` / `CANCELLED`, created by,
@@ -143,11 +143,11 @@ HON's own prospects: people who signed up, started a trial or asked about HON OS
 
 | PR | Piece | Migration |
 | --- | --- | --- |
-| A | HQ sender, messages, deliveries, receipts, owner recipients, email consent, worker functions, API, fake provider proof | 0271 |
+| A | HQ sender, messages, deliveries, receipts, owner recipients, email consent, worker functions, API, fake provider proof | 0281 |
 | B | HQ screens: Message the owners (school detail + support case), `/hq/communications` | none |
-| C | Own phone + code confirmation + HQ texting switch (school app), STOP/START/HELP on the HQ number | 0272 |
+| C | Own phone + code confirmation + HQ texting switch (school app), STOP/START/HELP on the HQ number | 0282 |
 | D | Webhook routing for HQ receipts (comms thread) | none planned |
-| E | HON prospects, prospect consent, campaign sends with HQ owner approval, prospect screens | 0273 |
+| E | HON prospects, prospect consent, campaign sends with HQ owner approval, prospect screens | 0283 |
 
 A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker role, dispatcher and adapter.
 
@@ -166,13 +166,13 @@ A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker
    yes, as service messages; texts never ignore opt-out.)
 3. Who pays for HQ texting: HON (recommended; it is HON's own messaging, never billed to the school).
 
-## 8. Plan for PR A (0271)
+## 8. Plan for PR A (0281)
 
 Starts from main once #223 (0243) and the SendGrid PR are merged. Tests first for each step.
 
 1. Contracts: HQ message purpose, status, delivery and sender enums; reuse `countTextPieces`; `TEXT_TOO_LONG` above
    1,600 for SMS. Unit tests in contracts.
-2. Migration 0271: the tables in §4.1 (without `hq_contact_channels` SMS confirmation, which is 0272), forced RLS,
+2. Migration 0281: the tables in §4.1 (without `hq_contact_channels` SMS confirmation, which is 0282), forced RLS,
    append-only triggers, definer functions `hq_communication_sender_set/retire`, `hq_message_draft/queue/cancel`,
    reads, and worker functions `claim_hq_message_deliveries` / `record_hq_message_send_result` /
    `record_hq_message_provider_event`. Mirror grants in infra 010 and 013. Write the DB proof

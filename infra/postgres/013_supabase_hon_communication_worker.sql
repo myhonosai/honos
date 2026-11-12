@@ -43,4 +43,16 @@ GRANT EXECUTE ON FUNCTION hon.reconcile_expired_communication_leases(integer) TO
 GRANT EXECUTE ON FUNCTION hon.record_communication_send_result(uuid, uuid, text, text, text, text, integer, text, text, integer) TO hon_communication_worker;
 GRANT EXECUTE ON FUNCTION hon.record_communication_provider_event(text, text, text, uuid, text, timestamptz, bigint) TO hon_communication_worker;
 
+-- HQ-COMM 0281: the same worker delivers HQ messages through its own four fixed functions, when 0281 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.claim_hq_message_deliveries(text[],integer,integer)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_hq_message_deliveries(text[], integer, integer) TO hon_communication_worker;
+    GRANT EXECUTE ON FUNCTION hon.reconcile_expired_hq_message_leases(integer) TO hon_communication_worker;
+    GRANT EXECUTE ON FUNCTION hon.record_hq_message_send_result(uuid, uuid, text, text, text, text, integer, text, text, integer) TO hon_communication_worker;
+    GRANT EXECUTE ON FUNCTION hon.record_hq_message_provider_event(text, text, text, uuid, text, timestamptz, bigint) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;
